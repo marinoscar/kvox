@@ -1,0 +1,15 @@
+{
+  "name": "visual-regression-tests",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pixel-based visual regression tests (issue #107) for the settings/navigation surface. Separate from ../e2e, which is full-stack behavioural E2E against a running Docker Compose stack — this project boots only the Vite harness in apps/web/visual and never touches the API or a database.",
+  "scripts": {
+    "test": "playwright test",
+    "test:update": "playwright test --update-snapshots",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.62.1"
+  }
+}
