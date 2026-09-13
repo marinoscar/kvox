@@ -1,0 +1,346 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# =============================================================================
+# ONE job for typecheck + API/CLI test/build, not several concurrent ones —
+# but the web suite is pulled out into its own sharded matrix below. Read
+# both halves of this note before changing either.
+#
+# Historical finding, still true for typecheck/API/CLI: splitting *those*
+# into their own job was tried and measured, and it was slower. Across
+# measured runs they took 71-95s inside this job but 118-131s in a fresh
+# one — the likely cause is that here they inherit a filesystem page cache
+# already warmed by npm ci; `import` is the metric that inflated most
+# (54s -> 100s) when isolated. Ruled out along the way: the scoped install
+# is not the cause (a full install in a separate job is still 118s), and it
+# is not job contention (three jobs behaved the same as four).
+#
+# That finding no longer applies to the web suite itself. Measured on three
+# consecutive `main` runs (2026-09-07), `test:run --workspace=web` alone
+# took 202-218s — more than every other job in this workflow COMBINED
+# (openapi ~50s, smoke ~100s, visual ~90s), and it ran serially after
+# typecheck and the API suite, making `Build & Test` a ~6 minute job while
+# every sibling job finished in under 2 minutes. That was not true when the
+# note above was written (the suite was 71-95s then); it has roughly
+# tripled since. Losing the warm-cache benefit this note documents is a
+# real, small cost — but it no longer outweighs the win of running that
+# work on additional runners' CPUs in parallel instead of one runner's CPU
+# serially. See the `web-test` job below.
+# =============================================================================
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npx prisma generate
+        working-directory: apps/api
+
+      - run: npm run typecheck --workspace=api
+      - run: npm run typecheck --workspace=web
+      - run: npm run typecheck --workspace=cli
+
+      - run: npm test --workspace=api
+      - run: npm run test:run --workspace=cli
+
+      # The CLI is the one workspace whose BUILD is the deliverable — the `bin`
+      # points at dist/, so a package that typechecks but does not emit is
+      # broken for every user while looking green here. Cheap (tsc only) and it
+      # catches the ESM footguns this package is exposed to: a missing `.js`
+      # import extension, or a rootDir slip that emits dist/src/cli.js and
+      # leaves the `bin` path dangling. (issue #140, epic #110)
+      - run: npm run build --workspace=cli
+
+  web-test:
+    name: Web Tests (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    # No `needs:` — runs concurrently with `build`, like `openapi`/`smoke`/
+    # `visual` do. Split out of `Build & Test` and sharded across 4 runners
+    # (see the note atop this file) because this suite alone now costs more
+    # wall clock than every other job in the workflow combined, and each
+    # shard gets its own runner's CPUs rather than contending with
+    # typecheck/API-test on one. This job needs neither `prisma generate`
+    # nor any API build step — the web workspace never imports
+    # `@prisma/client` or compiled API output.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run test:run --workspace=web -- --shard=${{ matrix.shard }}/4
+
+  openapi:
+    name: OpenAPI
+    runs-on: ubuntu-latest
+    # No `needs:` — this reads decorator metadata only and shares nothing with
+    # the build job, so it runs concurrently rather than queueing behind it.
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # The dump imports AppModule, which imports @prisma/client. Preview mode
+      # never instantiates PrismaService, but the generated client still has to
+      # exist for the import to resolve.
+      - run: npx prisma generate
+        working-directory: apps/api
+
+      - run: npm run openapi:typecheck --workspace=api
+
+      # Boots the app in Nest preview mode: every module loaded and every
+      # controller's metadata read, no provider instantiated — so no database,
+      # no object storage and no credentials are needed here.
+      - run: npm run openapi:dump
+
+      - run: npm run openapi:lint
+
+  smoke:
+    name: Smoke (boot compiled API)
+    runs-on: ubuntu-latest
+    # No `needs:` — runs concurrently with `build`, like `openapi` does.
+    #
+    # WHY THIS IS A SEPARATE JOB, given the note at the top of this file
+    # -------------------------------------------------------------------------
+    # That note records a measured result: moving typecheck/API-test work into
+    # its own job made it slower (71-95s -> 118-131s), plausibly from losing a
+    # page cache the earlier steps had warmed. It is a real finding, and the
+    # default for that work should be one job. This job is the deliberate
+    # exception, because the measurement does not transfer:
+    #
+    #   - That split duplicated `npm ci` to run *the same* work somewhere else,
+    #     so its cost was pure overhead. This job runs work that exists nowhere
+    #     in CI today — `nest build`, `migrate deploy`, `db seed`, and booting
+    #     the artifact — so the comparison is not "same work, colder cache".
+    #   - Running concurrently, its cost to total wall clock is
+    #     max(build, smoke), not build + smoke. Appending these steps to
+    #     `Build & Test` would instead extend the longest job on the critical
+    #     path by the full build-plus-boot time.
+    #   - The dominant costs here are compilation and waiting on Postgres and
+    #     on bootstrap. Only the first is filesystem-bound, so the specific
+    #     effect the note measured has much less to bite on.
+    #
+    # There is also a correctness reason not to fold this into `Build & Test`:
+    # that job sets `NODE_ENV: test` for the whole job, while this one must run
+    # the artifact with `NODE_ENV=production` — the mode that actually deploys,
+    # and the only one in which `app.module.ts` leaves `TestAuthModule` out.
+    # A service container is job-scoped too, so folding it in would start
+    # Postgres for every unit-test run that has no use for it.
+    #
+    # If the assumption above turns out to be wrong, the thing to measure is
+    # total workflow wall clock, not this job's own duration.
+    services:
+      postgres:
+        # Matches infra/compose/test.compose.yml, which is the only Postgres
+        # version this repo pins (base.compose.yml expects an external database
+        # and declares no `db` service).
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: appdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # The API never reads DATABASE_URL from the environment — it builds the
+      # connection string from these at runtime (src/config/configuration.ts,
+      # src/prisma/prisma.service.ts) and the Prisma CLI does the same via
+      # scripts/prisma-env.js. Setting the POSTGRES_* variables is therefore
+      # what exercises the contract the application actually has.
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: appdb
+      POSTGRES_SSL: 'false'
+      # Obviously-fake values. GOOGLE_CLIENT_ID is the one that is genuinely
+      # mandatory: GoogleStrategy passes it straight to passport-google-oauth20,
+      # which throws `OAuth2Strategy requires a clientID option` on an empty
+      # string and takes bootstrap down with it. The rest are supplied because a
+      # real deployment has them, not because bootstrap fails without them.
+      JWT_SECRET: smoke-test-jwt-secret-not-a-real-secret-0000
+      COOKIE_SECRET: smoke-test-cookie-secret-not-a-real-secret
+      GOOGLE_CLIENT_ID: smoke-test-google-client-id
+      GOOGLE_CLIENT_SECRET: smoke-test-google-client-secret
+      GOOGLE_CALLBACK_URL: http://127.0.0.1:3001/api/auth/google/callback
+      INITIAL_ADMIN_EMAIL: smoke-admin@example.test
+      OTEL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # NODE_ENV is deliberately left unset for the install and build steps:
+      # `npm ci` skips devDependencies under NODE_ENV=production, which would
+      # remove @nestjs/cli (the build), the Prisma CLI (migrations) and ts-node
+      # (the seed). Only the final step runs as production.
+      - run: npm ci
+
+      - run: npx prisma generate
+        working-directory: apps/api
+
+      # The point of this job: the smoke test runs `dist/main.js`, the same
+      # artifact the Dockerfile runs, rather than a Test.createTestingModule
+      # stand-in that never executes main.ts.
+      - run: npm run build --workspace=api
+
+      # First time migrations and seeding run against a real database in CI.
+      # Both were previously exercised only by hand, which is how #56 (broken
+      # seeding) stayed hidden. These two steps — not the smoke test's readiness
+      # check — are what actually verify the schema: the readiness indicator
+      # issues a `SELECT 1`, which passes against an empty database, whereas the
+      # seed writes real rows and fails on a schema that does not match.
+      - run: npm run prisma:migrate --workspace=api
+
+      # The one place in CI a real Postgres is up: `*.db.spec.ts` (job-schema
+      # index/constraint assertions today, see apps/api/test/jobs/) are
+      # excluded from every other `npm test`/`test:unit`/`test:cov`/`test:ci`
+      # run precisely because no Postgres is reachable there, and would
+      # otherwise fail with a confusing connection error rather than a clear
+      # skip. NODE_ENV=test (not the job's ambient unset/production value)
+      # matches what these specs assume when they build their own connection
+      # string from the POSTGRES_* vars above.
+      - run: npm run test:db --workspace=api
+        env:
+          NODE_ENV: test
+
+      - run: npm run prisma:seed --workspace=api
+
+      # And again (#256, epic #254). Every write in prisma/seed.ts is an upsert
+      # keyed on a natural unique — role.name, permission.name,
+      # rolePermission.roleId_permissionId, systemSettings.key — so a second run
+      # must update the same rows rather than fail on a unique constraint or
+      # duplicate a grant. That is not a hypothetical property: `appctl deploy
+      # update` re-runs the seed on every upgrade, and it is how new permissions
+      # reach an existing database. A seed that is not idempotent therefore
+      # breaks on the SECOND deployment, in production, and never here. This
+      # step is the difference, and it costs a few seconds.
+      #
+      # The data's own self-consistency (no duplicate declarations, no role
+      # granting a permission that is not seeded, the seeded system-settings
+      # blob still equal to the API's defaults) is asserted without a database
+      # by apps/api/test/prisma/seed-data.spec.ts.
+      - run: npm run prisma:seed --workspace=api
+
+      # Boots the compiled app and asserts it serves /api/health/live,
+      # /api/health/ready and a valid /api/openapi.json. See the header of
+      # apps/api/scripts/smoke-test.mjs for what each assertion is protecting —
+      # in particular why a 200 on the OpenAPI document, and not merely a
+      # successful boot, is the assertion that matters.
+      - run: npm run smoke --workspace=api
+        env:
+          NODE_ENV: production
+          SMOKE_PORT: '3001'
+
+  visual:
+    name: Visual regression (issue #107)
+    runs-on: ubuntu-latest
+    # No `needs:` — runs concurrently with `build`, like `openapi` and `smoke`
+    # do, for the same reason: it shares no state with them (no database, no
+    # compiled API artifact) and gains nothing by queueing behind either.
+    #
+    # WHY A DEDICATED CONTAINER, PINNED TO AN EXACT PLAYWRIGHT BUILD
+    # -------------------------------------------------------------------------
+    # This job asserts PIXELS, not DOM state — the one kind of assertion
+    # nothing else in this workflow makes. `web-test` runs the Vitest+RTL
+    # suite against jsdom, which has no layout engine at all (no
+    # `offsetWidth`, no wrapping, no font metrics), so it structurally cannot
+    # catch a layout regression like #105 (a destination rendered in the wrong
+    # position; a caption clipped by 2px of padding) — see
+    # `apps/web/visual/main.tsx` for the full account of why this suite exists.
+    # A pixel baseline is sensitive to the exact browser BUILD, not just the
+    # Playwright *API* version, so this job runs inside the same
+    # `mcr.microsoft.com/playwright:v1.62.1-noble` image the baselines under
+    # `tests/visual/specs/**/*-snapshots/` were generated in, and
+    # `tests/visual/package.json` pins `@playwright/test` to that exact
+    # version with no caret — unlike `tests/e2e`'s `^1.40.0`, which only ever
+    # asserts DOM state and so is safe to float.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # The root install (workspaces: apps/*) gets `apps/web` and its Vite dev
+      # server — what the harness in `apps/web/visual` runs on. `tests/visual`
+      # is NOT an npm workspace (same reason `tests/e2e` isn't: these are
+      # test-runner packages, not application code), so its own
+      # `@playwright/test` install is separate.
+      - run: npm ci
+      - run: npm ci
+        working-directory: tests/visual
+
+      # Fails the job on ANY pixel diff (default `expect(page).toHaveScreenshot()`
+      # behavior) or on a missing baseline. `playwright.config.ts` boots
+      # `apps/web/visual`'s own Vite dev server itself (`webServer`) — no
+      # compose stack, no database, no API — so there is nothing else to start
+      # here.
+      #
+      # `tests/visual/node_modules/.bin/playwright` directly, NOT `npx
+      # playwright`: `npx` resolves the binary by walking up from the repo
+      # root, which has no local `playwright` install of its own (only
+      # `apps/web`'s dependencies are hoisted there), so it falls back to an
+      # ad-hoc download of whatever the latest published version is — a
+      # DIFFERENT `@playwright/test` module instance than the pinned one
+      # `tests/visual/specs/*.spec.ts` import, which throws "Playwright Test
+      # did not expect test() to be called here" (two copies of the module,
+      # two singletons). Verified by hitting exactly this failure while
+      # building the suite; the direct binary path is the fix, not a
+      # style preference.
+      - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts
+
+      # Uploaded unconditionally (`if: always()`) so a failing run is
+      # diagnosable from the Actions UI: the HTML report embeds the
+      # expected/actual/diff PNG for every failed assertion, which is far
+      # faster to read than reproducing the failure locally from scratch.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-playwright-report
+          path: tests/visual/playwright-report/
+          retention-days: 14

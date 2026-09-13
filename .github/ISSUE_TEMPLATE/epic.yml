@@ -1,0 +1,87 @@
+name: Epic
+description: Track a larger, multi-part initiative spanning multiple features
+title: "[Epic]: "
+labels: ["epic", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an epic! Please provide as much detail as possible so it can be broken down into individual feature issues.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal / Objective
+      description: The outcome this epic delivers.
+      placeholder: A clear and concise description of what this epic aims to achieve and why it matters.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What's in scope and what's explicitly out of scope for this epic.
+      placeholder: |
+        In scope:
+        - ...
+
+        Out of scope:
+        - ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: success_criteria
+    attributes:
+      label: Success Criteria
+      description: How we know the epic is done.
+      placeholder: A clear and concise description of the measurable outcomes that indicate completion.
+    validations:
+      required: true
+
+  - type: textarea
+    id: subissues
+    attributes:
+      label: Sub-issues / Tasks
+      description: Track child feature issues as they're created. Update this list as sub-issues are filed.
+      placeholder: |
+        - [ ] #124 Short task title
+        - [ ] #125 Another short task title
+    validations:
+      required: false
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component(s)
+      options:
+        - API (Backend)
+        - Web (Frontend)
+        - Database
+        - Authentication
+        - Infrastructure
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this epic?
+      options:
+        - Nice to have
+        - Important
+        - Critical
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, diagrams, or links about the epic here.
+    validations:
+      required: false

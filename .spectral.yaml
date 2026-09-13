@@ -1,0 +1,62 @@
+# =============================================================================
+# Spectral ruleset for apps/api's OpenAPI document (issue #53)
+# =============================================================================
+#
+# Run in CI against the dumped spec:
+#
+#     npm run openapi:dump && npm run openapi:lint
+#
+# The point is to stop the spec rotting: a new endpoint with no operation id, a
+# tag nobody declared, or a duplicated operation id fails the build rather than
+# quietly degrading the reference page.
+#
+# Rules are tuned rather than accepted wholesale, and every override records why
+# — an unexplained `off` is how a lint config stops meaning anything.
+# =============================================================================
+
+extends: ['spectral:oas']
+
+rules:
+  # --- The guarantees the reference page depends on ---------------------------
+
+  # Operation ids are the generated-SDK method names, so a missing or duplicated
+  # one is a real defect rather than a style nit.
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-operationId-valid-in-url: error
+
+  # A tag no `tags` entry declares renders ungrouped and undescribed — exactly
+  # the state this work set out to fix, so it must not be reachable again.
+  operation-tags: error
+  operation-tag-defined: error
+  tag-description: error
+  openapi-tags-uniqueness: error
+
+  info-contact: error
+  info-description: error
+  oas3-api-servers: error
+
+  # --- Deliberately relaxed ---------------------------------------------------
+
+  # `tags` is ordered by product area (see apps/api/src/openapi/tags.ts) and that
+  # order is what `x-tagGroups` renders. Alphabetical would throw the taxonomy away.
+  openapi-tags-alphabetical: off
+
+  # Prose per operation is worth having but is not uniformly present yet, and the
+  # generated "Requires:" line means no guarded operation is ever description-less.
+  # Kept visible as a warning rather than blocking.
+  operation-description: warn
+
+  # This project ships no license metadata; adding a claim just to satisfy a lint
+  # rule would be worse than omitting it.
+  info-license: off
+  license-url: off
+
+  # `ErrorDto` is referenced only from the `default` response the document pass
+  # writes, and several DTOs exist to be `$ref`'d from hand-written schemas.
+  # Worth seeing, not worth failing on.
+  oas3-unused-component: warn
+
+  # Examples are being added over time; a DTO without one should not block a build.
+  oas3-valid-media-example: warn
+  oas3-valid-schema-example: warn
