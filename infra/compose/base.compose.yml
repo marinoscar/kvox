@@ -81,7 +81,7 @@ services:
       - JWT_REFRESH_TTL_DAYS=${JWT_REFRESH_TTL_DAYS:-14}
       # Observability: off unless asked for, so the otel overlay is opt-in
       - OTEL_ENABLED=${OTEL_ENABLED:-false}
-      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-my-app-api}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-kvox-api}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     networks:
       - app-network

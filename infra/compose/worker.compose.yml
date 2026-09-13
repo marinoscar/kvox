@@ -18,7 +18,7 @@
 # server's `FOR UPDATE SKIP LOCKED` claim. Two replicas can never receive the
 # same job, and none of them is configured to know the others exist.
 #
-# Do NOT set APPCTL_NODE_NAME or APPCTL_NODE_ID when scaling: every replica
+# Do NOT set KVOX_NODE_NAME or KVOX_NODE_ID when scaling: every replica
 # would then reattach to the SAME node row, and the server's per-node claim cap
 # would be shared between processes that each think they own it.
 #
@@ -48,35 +48,35 @@ services:
 
     environment:
       # ---- Required ---------------------------------------------------------
-      # The server, and a `nod_` node credential from `appctl node enroll`.
+      # The server, and a `nod_` node credential from the CLI's `node enroll`.
       # These two alone are enough: with no config file the worker synthesises
       # its settings from the environment.
-      APPCTL_SERVER_URL: ${APPCTL_SERVER_URL:?set APPCTL_SERVER_URL}
-      APPCTL_TOKEN: ${APPCTL_TOKEN:?set APPCTL_TOKEN}
+      KVOX_SERVER_URL: ${KVOX_SERVER_URL:?set KVOX_SERVER_URL}
+      KVOX_TOKEN: ${KVOX_TOKEN:?set KVOX_TOKEN}
 
       # ---- Identity ---------------------------------------------------------
       # Leave both EMPTY when scaling. See the note above.
-      APPCTL_NODE_ID: ${APPCTL_NODE_ID:-}
-      APPCTL_NODE_NAME: ${APPCTL_NODE_NAME:-}
+      KVOX_NODE_ID: ${KVOX_NODE_ID:-}
+      KVOX_NODE_NAME: ${KVOX_NODE_NAME:-}
 
       # ---- Work -------------------------------------------------------------
-      APPCTL_CONCURRENCY: ${APPCTL_CONCURRENCY:-}
-      APPCTL_ELIGIBLE_TYPES: ${APPCTL_ELIGIBLE_TYPES:-}
-      APPCTL_POLL_INTERVAL_MS: ${APPCTL_POLL_INTERVAL_MS:-}
+      KVOX_CONCURRENCY: ${KVOX_CONCURRENCY:-}
+      KVOX_ELIGIBLE_TYPES: ${KVOX_ELIGIBLE_TYPES:-}
+      KVOX_POLL_INTERVAL_MS: ${KVOX_POLL_INTERVAL_MS:-}
 
       # ---- Runtime ----------------------------------------------------------
       # Baked into the image; restated so `docker compose config` shows the
       # whole surface in one place.
-      APPCTL_HEADLESS: ${APPCTL_HEADLESS:-true}
-      APPCTL_STATE_DIR: ${APPCTL_STATE_DIR:-/var/lib/worker}
+      KVOX_HEADLESS: ${KVOX_HEADLESS:-true}
+      KVOX_STATE_DIR: ${KVOX_STATE_DIR:-/var/lib/worker}
 
       # ---- Memory (#277) ----------------------------------------------------
-      APPCTL_HEAP_LIMIT_MB: ${APPCTL_HEAP_LIMIT_MB:-}
+      KVOX_HEAP_LIMIT_MB: ${KVOX_HEAP_LIMIT_MB:-}
       # Set by the re-exec on its own child; never set this by hand.
-      APPCTL_HEAP_TUNED: ${APPCTL_HEAP_TUNED:-}
-      APPCTL_MEMORY_WATCHDOG: ${APPCTL_MEMORY_WATCHDOG:-}
-      APPCTL_MEMORY_THRESHOLD: ${APPCTL_MEMORY_THRESHOLD:-}
-      APPCTL_HEAP_SNAPSHOTS: ${APPCTL_HEAP_SNAPSHOTS:-}
+      KVOX_HEAP_TUNED: ${KVOX_HEAP_TUNED:-}
+      KVOX_MEMORY_WATCHDOG: ${KVOX_MEMORY_WATCHDOG:-}
+      KVOX_MEMORY_THRESHOLD: ${KVOX_MEMORY_THRESHOLD:-}
+      KVOX_HEAP_SNAPSHOTS: ${KVOX_HEAP_SNAPSHOTS:-}
 
     volumes:
       # State survives a restart, so a replica re-attaches to its node row

@@ -73,9 +73,9 @@ COPY --from=build /app/apps/cli/dist ./apps/cli/dist
 
 # The worker's state directory. Mounted as a volume in the compose bundle so a
 # restart re-attaches to the same node row rather than registering a new one.
-ENV APPCTL_STATE_DIR=/var/lib/worker
+ENV KVOX_STATE_DIR=/var/lib/worker
 # Containers have no terminal and must drain on SIGTERM WITHOUT deregistering.
-ENV APPCTL_HEADLESS=true
+ENV KVOX_HEADLESS=true
 
 # ---------------------------------------------------------------------------
 # Everything the worker reads, declared for `docker inspect` and for the guard
@@ -83,18 +83,18 @@ ENV APPCTL_HEADLESS=true
 # Deliberately left EMPTY rather than given defaults: an empty variable is
 # treated as unset everywhere in the CLI, so these document the surface without
 # overriding anything a compose file or an orchestrator supplies.
-ENV APPCTL_SERVER_URL=""
-ENV APPCTL_TOKEN=""
-ENV APPCTL_NODE_ID=""
-ENV APPCTL_NODE_NAME=""
-ENV APPCTL_CONCURRENCY=""
-ENV APPCTL_ELIGIBLE_TYPES=""
-ENV APPCTL_POLL_INTERVAL_MS=""
-ENV APPCTL_HEAP_LIMIT_MB=""
-ENV APPCTL_HEAP_TUNED=""
-ENV APPCTL_MEMORY_WATCHDOG=""
-ENV APPCTL_MEMORY_THRESHOLD=""
-ENV APPCTL_HEAP_SNAPSHOTS=""
+ENV KVOX_SERVER_URL=""
+ENV KVOX_TOKEN=""
+ENV KVOX_NODE_ID=""
+ENV KVOX_NODE_NAME=""
+ENV KVOX_CONCURRENCY=""
+ENV KVOX_ELIGIBLE_TYPES=""
+ENV KVOX_POLL_INTERVAL_MS=""
+ENV KVOX_HEAP_LIMIT_MB=""
+ENV KVOX_HEAP_TUNED=""
+ENV KVOX_MEMORY_WATCHDOG=""
+ENV KVOX_MEMORY_THRESHOLD=""
+ENV KVOX_HEAP_SNAPSHOTS=""
 
 RUN mkdir -p /var/lib/worker && chown -R node:node /var/lib/worker /app
 # Non-root. A worker reads one config file and talks HTTPS to one server; it

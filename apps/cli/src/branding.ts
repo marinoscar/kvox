@@ -53,7 +53,7 @@ import { APP_NAME } from '@app/shared';
  * else (spaces, dots, uppercase) produces a dotfile directory that is awkward
  * to type on one side and an unusable variable name on the other.
  */
-export const CLI_NAME = 'appctl';
+export const CLI_NAME = 'kvox';
 
 /**
  * Human-readable product name for banners and `--help` output.

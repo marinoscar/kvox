@@ -133,11 +133,28 @@ describe('the worker container branding guard (issue #278)', () => {
     },
   );
 
-  it('neither file contains a product, app or repository name', () => {
+  it('neither file contains a product, app or repository name outside ENV_PREFIX', () => {
     // The service key is `worker` and the image is a build-time variable, so
     // there is nothing here for a fork to rename by hand.
+    //
+    // THE `ENV_PREFIX` EXCLUSION (issue #18). This assertion was written when
+    // the binary was called `appctl` — a name chosen to read as neutral rather
+    // than as a product name (see the rationale on `CLI_NAME` in branding.ts).
+    // Under that assumption the prefix could never collide with `APP_NAME` and
+    // a plain `not.toContain` was exact.
+    //
+    // A fork that names its binary after its product breaks that assumption:
+    // `ENV_PREFIX` is derived from `CLI_NAME`, so every one of the fourteen
+    // `KVOX_*` declarations legitimately contains the product name and the
+    // assertion becomes unsatisfiable rather than merely noisy. Stripping the
+    // prefixed tokens first keeps what this test is actually for — catching
+    // branding somebody typed in BY HAND, a `kvox-worker` service key or a
+    // hardcoded image name — which is exactly what directions (a) and (b)
+    // above cannot see.
+    const prefixed = new RegExp(`${ENV_PREFIX}[A-Z0-9_]+`, 'g');
+
     for (const [path, body] of contents) {
-      const lower = body.toLowerCase();
+      const lower = body.replace(prefixed, '').toLowerCase();
       expect(lower, path).not.toContain(APP_NAME.toLowerCase());
       expect(lower, path).not.toContain('enterpriseappbase');
     }

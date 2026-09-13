@@ -72,7 +72,7 @@ describe('evaluateTuiGate — stdout not a TTY (case 2)', () => {
 });
 
 describe('evaluateTuiGate — stdin not a TTY while stdout is (case 3)', () => {
-  // `echo | appctl` and `appctl < /dev/null`: stdout is a real terminal (the
+  // `echo | kvox` and `kvox < /dev/null`: stdout is a real terminal (the
   // menu would be drawn and would look fine), but ink cannot raw-mode a piped
   // stdin, so nothing could ever answer or exit it. This must be caught
   // SEPARATELY from the stdout check, with stdout still a TTY.
@@ -222,9 +222,9 @@ describe('evaluateTuiGate — CI, even with a real pty on both descriptors (case
   });
 });
 
-describe('evaluateTuiGate — APPCTL_NO_TUI, the explicit escape hatch (case 1)', () => {
-  it('exports the env var name as APPCTL_NO_TUI', () => {
-    expect(NO_TUI_ENV_VAR).toBe('APPCTL_NO_TUI');
+describe('evaluateTuiGate — KVOX_NO_TUI, the explicit escape hatch (case 1)', () => {
+  it('exports the env var name as KVOX_NO_TUI', () => {
+    expect(NO_TUI_ENV_VAR).toBe('KVOX_NO_TUI');
   });
 
   it('refuses unconditionally, even on an otherwise perfect terminal', () => {
@@ -243,7 +243,7 @@ describe('evaluateTuiGate — APPCTL_NO_TUI, the explicit escape hatch (case 1)'
     if (!decision.engage) expect(decision.refusal).toBe('disabled');
   });
 
-  it('APPCTL_NO_TUI=false does not disable it', () => {
+  it('KVOX_NO_TUI=false does not disable it', () => {
     const decision = evaluateTuiGate(
       interactiveCtx({ env: { TERM: 'xterm', [NO_TUI_ENV_VAR]: 'false' } }),
     );
