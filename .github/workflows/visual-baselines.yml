@@ -1,0 +1,130 @@
+name: Regenerate visual baselines
+
+# =============================================================================
+# The escape hatch for the one CI job nobody can fix from a laptop (issue #325)
+# =============================================================================
+#
+# THE PROBLEM THIS SOLVES. `ci.yml`'s `visual` job asserts PIXELS, and a pixel
+# baseline is sensitive to the exact browser BUILD rather than to the Playwright
+# API version — so the baselines under `tests/visual/specs/**/*-snapshots/` are
+# only valid when generated inside the SAME
+# `mcr.microsoft.com/playwright:v1.62.1-noble` image that job runs in. A
+# contributor whose change legitimately reflows a screen (adding a card to the
+# settings hub is the standard example — see the comment at
+# `apps/web/src/config/adminSections.tsx`) therefore cannot regenerate them
+# correctly on their own machine: a locally-installed Chromium is a different
+# build, and baselines produced from it are wrong in a way that looks right
+# locally and fails in CI. Environments without Docker cannot do it at all.
+#
+# Before this workflow the only routes were "have Docker and know the exact
+# image tag" or "land a red `visual` job and hope a reviewer regenerates them".
+# Both are how a stale or mis-generated baseline gets committed, which is worse
+# than a red job: it silently stops asserting the thing it exists to assert.
+#
+# WHY `workflow_dispatch` AND NOTHING ELSE. This workflow WRITES to the
+# repository, so it must never be reachable from `pull_request` (which would
+# run fork-authored code with a write token) or from `push` (which would make
+# every red `visual` job self-heal by overwriting the evidence — the exact
+# failure mode the suite exists to catch). Regenerating a baseline is a
+# deliberate act: a human decides the visual change is intended, then asks for
+# it. That is what a manual dispatch is.
+#
+# HOW TO USE IT. Actions → "Regenerate visual baselines" → Run workflow →
+# pick your branch. It force-updates every snapshot, then either commits the
+# result back to that branch (default) or, with `commit: false`, just publishes
+# them as an artifact to inspect first. Review the diff like any other: a
+# baseline changing on a screen your branch did not touch is a finding, not a
+# formality.
+# =============================================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Commit the regenerated baselines back to the branch'
+        type: boolean
+        default: true
+
+# Least privilege, and only when it is actually used — the checkout below is
+# read-only when `commit` is false.
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    name: Regenerate baselines (pinned Playwright image)
+    runs-on: ubuntu-latest
+
+    # ⚠ THIS TAG MUST MATCH `ci.yml`'s `visual` job AND
+    # `tests/visual/package.json`'s pinned `@playwright/test` EXACTLY. Three
+    # places, one version, no carets. Bumping one without the others produces
+    # baselines the verifying job cannot reproduce, which is the failure this
+    # whole workflow exists to prevent.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Check out the branch itself rather than the detached merge commit,
+          # so the commit below has somewhere to land.
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      # Two installs, exactly as the `visual` job does: the root workspace
+      # install provides `apps/web` and the Vite dev server the harness runs
+      # on, and `tests/visual` is not an npm workspace (it is a test-runner
+      # package, not application code), so its pinned `@playwright/test` is a
+      # separate install.
+      - run: npm ci
+      - run: npm ci
+        working-directory: tests/visual
+
+      # `--update-snapshots` rewrites every baseline rather than failing on a
+      # diff. The direct binary path, NOT `npx playwright`: `npx` resolves by
+      # walking up from the repo root, which has no local `playwright` install,
+      # so it would fetch whatever version is latest and load a DIFFERENT
+      # `@playwright/test` module instance than the specs import — which throws
+      # "Playwright Test did not expect test() to be called here". `ci.yml`
+      # carries the full account of that.
+      - run: tests/visual/node_modules/.bin/playwright test --config=tests/visual/playwright.config.ts --update-snapshots
+
+      # Uploaded unconditionally, including when the commit step runs: it is
+      # how you inspect what changed without checking out the branch, and the
+      # only output at all when `commit` is false.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-baselines
+          path: tests/visual/specs/**/*-snapshots/**
+          retention-days: 14
+
+      - name: Commit regenerated baselines
+        if: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # `git add -A` over the directory, not a `**` pathspec: git's default
+          # pathspec matching is not glob-magic, so a `**` pattern here silently
+          # matches nothing and the commit step becomes a no-op that looks like
+          # success. Nothing else under `specs/` is writable by this run.
+          git add -A -- tests/visual/specs
+          # A no-op run is the NORMAL outcome when the baselines were already
+          # correct, so it must not fail the job — `git commit` exits non-zero
+          # with nothing staged, and `set -e` would turn "nothing to do" into a
+          # red workflow.
+          if git diff --cached --quiet; then
+            echo 'Baselines are already up to date; nothing to commit.'
+            exit 0
+          fi
+          git commit -m 'chore(tests): regenerate visual regression baselines'
+          git push origin HEAD:"${GITHUB_REF_NAME}"
