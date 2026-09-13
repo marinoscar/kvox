@@ -92,10 +92,10 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    // The dev VPS proxies appbase.dev.marin.cr to this server; without this
+    // The dev VPS proxies kvox.dev.marin.cr to this server; without this
     // entry Vite 5+'s Host header check rejects the request and every page
     // load is blocked.
-    allowedHosts: ['appbase.dev.marin.cr', 'localhost', '.localhost'],
+    allowedHosts: ['kvox.dev.marin.cr', 'localhost', '.localhost'],
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
