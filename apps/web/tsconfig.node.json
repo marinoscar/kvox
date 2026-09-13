@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true
+  },
+  // `pwa/` is config-side code (issue #217): `vite.config.ts` imports
+  // `buildManifest()` from it and the React tree never does. It belongs here
+  // rather than under `tsconfig.json`'s `include: ["src"]`, which is what
+  // keeps `@app/shared` being read at build time instead of bundled into the
+  // browser to be read at runtime.
+  "include": ["vite.config.ts", "pwa/**/*.ts"]
+}

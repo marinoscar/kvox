@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      `%APP_NAME%` is substituted at build/serve time by the `appName()` plugin
+      in `vite.config.ts`, which reads the value from `@app/shared`. Static HTML
+      cannot import TypeScript, and neither of the two obvious alternatives is
+      acceptable here — see that plugin's comment for why not.
+    -->
+    <meta name="description" content="%APP_NAME%" />
+    <title>%APP_NAME%</title>
+    <!--
+      Installability and app icons (issue #217, epic #215).
+
+      `manifest.webmanifest` is not a file in `public/` — it is generated from
+      `@app/shared` by `buildManifest()` (`pwa/manifest.ts`) and emitted into
+      `dist/` and served in dev by the `VitePWA` plugin in `vite.config.ts`
+      (issue #218; before that, by a small hand-rolled emitter). A committed
+      copy would restate the app name and both brand colours, and a renamed
+      fork would then ship an installed app labelled with the old product.
+
+      That same plugin injects the <script> that registers the service worker,
+      so there is no registration tag written by hand here.
+
+      The theme-color token below is substituted by the same `appName()`
+      plugin that handles the name, for the same reason: a literal hex here
+      would be a third copy of the brand colour, visibly wrong in the browser
+      chrome drawn directly above an app painted in the new one. (Tokens are
+      spelled out only in the attributes, never in prose here — this comment
+      survives into `dist/`, and a token named inside it would be rewritten
+      too, which is why the note above this one reads oddly.)
+
+      The two `apple-mobile-web-app-*` metas are for iOS. Safari grants the
+      Notifications API only to a web app added to the Home Screen, so these
+      are load-bearing for this epic rather than decorative: `-title` names the
+      Home Screen icon, and `-capable` is the pre-16.4 spelling of the
+      standalone request that the manifest's `display` makes on newer versions.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+    <meta name="theme-color" content="%THEME_COLOR%" />
+    <meta name="apple-mobile-web-app-title" content="%APP_NAME%" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!--
+      Issue #111: `src/theme/index.ts` declares Inter as the first family in
+      `typography.fontFamily`, so the app has to actually LOAD it — before this
+      link existed it did not, and every user saw the Arial/Helvetica/DejaVu
+      fallback instead of the typeface the UI was designed in.
+
+      The @font-face itself lives in `public/fonts/inter.css` rather than in a
+      <style> block here, because it is shared verbatim with the visual
+      regression harness (`visual/index.html`, issue #107). One declaration,
+      one font file: a harness with its own copy would be screenshotting a
+      font-loading path the application does not use. See that file's header
+      for the full rationale on self-hosting, `font-display: swap`, and the
+      variable-weight range.
+
+      Served from `public/`, so Vite copies it into `dist/` untouched and
+      nginx's static-asset cache rule (`apps/web/nginx.conf`) already covers
+      both the .css and the .woff2.
+    -->
+    <link rel="stylesheet" href="/fonts/inter.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,178 @@
+import { ReactElement, ReactNode } from 'react';
+import { render, RenderOptions, RenderResult } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { CssBaseline } from '@mui/material';
+import { vi } from 'vitest';
+
+// Import AuthContext and ThemeContextProvider
+import { AuthContext } from '../../contexts/AuthContext';
+import { ThemeContextProvider } from '../../contexts/ThemeContext';
+import type { AuthProvider as AuthProviderType } from '../../types';
+
+interface WrapperOptions {
+  route?: string;
+  theme?: 'light' | 'dark';
+  authenticated?: boolean;
+  user?: MockUser | null;
+  isLoading?: boolean;
+  providers?: AuthProviderType[];
+}
+
+export interface MockUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  profileImageUrl: string | null;
+  /** The sign-in provider's picture, whatever the chosen source (#367). */
+  providerProfileImageUrl?: string | null;
+  /** Whether an uploaded picture is stored, whatever the chosen source (#367). */
+  hasUploadedProfileImage?: boolean;
+  roles: { name: string }[];
+  permissions: string[];
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const mockUser: MockUser = {
+  id: 'test-user-id',
+  email: 'test@example.com',
+  displayName: 'Test User',
+  profileImageUrl: null,
+  roles: [{ name: 'viewer' }],
+  permissions: ['user_settings:read', 'user_settings:write'],
+  isActive: true,
+  createdAt: new Date().toISOString(),
+};
+
+export const mockAdminUser: MockUser = {
+  id: 'admin-user-id',
+  email: 'admin@example.com',
+  displayName: 'Admin User',
+  profileImageUrl: null,
+  roles: [{ name: 'admin' }],
+  permissions: [
+    'user_settings:read',
+    'user_settings:write',
+    'system_settings:read',
+    'system_settings:write',
+    'users:read',
+    'users:write',
+    'rbac:manage',
+    // Present because the seeded `admin` role grants them
+    // (apps/api/prisma/seed.ts). The Allowlist tab gates on `allowlist:read`,
+    // so an admin fixture missing it would test a user that cannot exist.
+    'allowlist:read',
+    'allowlist:write',
+    // Present for the same reason as the allowlist pair above: the seeded
+    // `admin` role grants the whole operations set (#256, epic #254), so an
+    // admin fixture without them would be a user that cannot exist — and any
+    // test rendering the real Console surface with this fixture would silently
+    // be testing a hub with no `Operations` group.
+    'jobs:read',
+    'jobs:write',
+    'nodes:read',
+    'nodes:write',
+    'db_backup:read',
+    'db_backup:write',
+    'db_backup:restore',
+    // Present because the seeded `admin` role grants them (#320, epic #319).
+    // Without these, every test rendering the real Console surface would
+    // silently be testing a hub with no `Broadcasts` card — a user that cannot
+    // exist, asserted against as though it could.
+    'broadcasts:read',
+    'broadcasts:write',
+    // Present because the seeded `admin` role grants them (#355). Without
+    // these, every test rendering the real Console surface would silently be
+    // testing a hub with no `Web Push` card — a user that cannot exist.
+    'push:read',
+    'push:write',
+  ],
+  isActive: true,
+  createdAt: new Date().toISOString(),
+};
+
+// Default mock providers
+const defaultMockProviders: AuthProviderType[] = [
+  { name: 'google', authUrl: '/api/auth/google' },
+];
+
+// Mock Auth Provider for testing
+interface MockAuthProviderProps {
+  children: ReactNode;
+  authenticated?: boolean;
+  user?: MockUser | null;
+  isLoading?: boolean;
+  providers?: AuthProviderType[];
+}
+
+function MockAuthProvider({
+  children,
+  authenticated = true,
+  user = mockUser,
+  isLoading = false,
+  providers = defaultMockProviders,
+}: MockAuthProviderProps) {
+  const contextValue = {
+    user: authenticated ? user : null,
+    isLoading,
+    isAuthenticated: authenticated,
+    providers,
+    login: vi.fn(),
+    logout: vi.fn().mockResolvedValue(undefined),
+    refreshUser: vi.fn().mockResolvedValue(undefined),
+  };
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function createWrapper(options: WrapperOptions = {}) {
+  const {
+    route = '/',
+    authenticated = true,
+    user = mockUser,
+    isLoading = false,
+    providers = defaultMockProviders,
+  } = options;
+
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <MemoryRouter initialEntries={[route]}>
+        <ThemeContextProvider>
+          <CssBaseline />
+          <MockAuthProvider
+            authenticated={authenticated}
+            user={user}
+            isLoading={isLoading}
+            providers={providers}
+          >
+            {children}
+          </MockAuthProvider>
+        </ThemeContextProvider>
+      </MemoryRouter>
+    );
+  };
+}
+
+interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
+  wrapperOptions?: WrapperOptions;
+}
+
+export function renderWithProviders(
+  ui: ReactElement,
+  options: CustomRenderOptions = {},
+): RenderResult {
+  const { wrapperOptions, ...renderOptions } = options;
+
+  return render(ui, {
+    wrapper: createWrapper(wrapperOptions),
+    ...renderOptions,
+  });
+}
+
+// Re-export everything from testing library
+export * from '@testing-library/react';
+export { renderWithProviders as render };

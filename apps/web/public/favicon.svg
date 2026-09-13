@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The same mark as `icons/source.svg`, drawn on a 32 canvas with the tighter
+  favicon crop (mark at 80% of the canvas instead of 68%): at tab size the
+  padding costs whole pixels, and the three bars need those pixels to stay
+  three bars. `favicon.ico`'s frames use the identical crop, so the vector and
+  raster favicons agree.
+
+  Kept deliberately terse — no comments inside the markup, no metadata, no
+  editor cruft — because this is served on every page load.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7.04" fill="#1976d2"/>
+  <g fill="#fff">
+    <rect x="3.2" y="4.99" width="25.6" height="4.84" rx="2.42"/>
+    <rect x="6.4" y="13.58" width="19.2" height="4.84" rx="2.42"/>
+    <rect x="9.6" y="22.16" width="12.8" height="4.84" rx="2.42"/>
+  </g>
+</svg>

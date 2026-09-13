@@ -1,0 +1,50 @@
+{
+  // ===========================================================================
+  // The service worker's own compilation  (issue #218, epic #215)
+  // ===========================================================================
+  //
+  // `src/sw.ts` runs in a ServiceWorkerGlobalScope, not in a document. That is
+  // a genuinely different global: there is no `window`, no `document`, and
+  // `self` is a `ServiceWorkerGlobalScope` carrying `skipWaiting()`,
+  // `clients` and `registration`. None of those types exist under
+  // `tsconfig.json`'s `lib: ["ES2020", "DOM", "DOM.Iterable"]`, and — worse —
+  // DOM declares a `self` of its own, so compiling the worker with the app's
+  // config does not merely miss the worker API, it type-checks the file
+  // against the WRONG `self` and reports confident nonsense.
+  //
+  // The two configs therefore partition `src/`: `tsconfig.json` excludes
+  // `src/sw.ts`, and this file includes nothing else. `npm run typecheck`
+  // runs both, so neither half is unchecked.
+  //
+  // Note this config is for CHECKING only. The worker is BUILT by
+  // vite-plugin-pwa (esbuild/Rollup), which does not read it.
+  // ===========================================================================
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // `DOM` is deliberately absent, not forgotten — see above.
+    "lib": ["ESNext", "WebWorker"],
+    // `vite/client` for `import.meta.env`; `vite-plugin-pwa/client` for the
+    // `virtual:pwa-register` module declarations, which issue #219's UI half
+    // imports and which this config's `types` must already allow so the two
+    // halves are never checked against different ambient declarations.
+    // Deliberately no `vitest/globals` or `@testing-library/jest-dom`: nothing
+    // here is testable in jsdom (see `src/__tests__/pwa/service-worker.test.ts`
+    // for what is covered instead).
+    "types": ["vite/client", "vite-plugin-pwa/client"]
+  },
+  // `files`, NOT `include`, and this is a trap worth naming: `extends` inherits
+  // the base config's `exclude`, which now lists `src/sw.ts` — and `exclude`
+  // filters `include`. An `include: ["src/sw.ts"]` here therefore resolves to
+  // ZERO input files, and `tsc --noEmit` exits 0 having checked nothing, so
+  // `npm run typecheck` goes green over a worker that never compiled. `files`
+  // is not subject to `exclude`, which is what makes this actually run.
+  // (Verify with `npx tsc -p tsconfig.worker.json --noEmit --listFiles`: the
+  // list must contain `src/sw.ts`.)
+  "files": ["src/sw.ts"],
+  // And `include: []` is required for the mirror-image reason: an omitted
+  // `include` INHERITS the base's `["src"]`, which would drag the entire React
+  // tree into this DOM-less compilation. Both lines are load-bearing; neither
+  // is boilerplate.
+  "include": [],
+  "references": []
+}

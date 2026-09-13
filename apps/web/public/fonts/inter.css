@@ -1,0 +1,91 @@
+/*
+ * The application's ONLY @font-face declaration — issue #111.
+ * =============================================================================
+ * `src/theme/index.ts` has always declared
+ *   fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif'
+ * but until #111 nothing in `apps/web` ever LOADED Inter (or Roboto): no
+ * @font-face, no Google Fonts <link>, no @fontsource dependency, no CSS file
+ * at all. The first two entries of that stack were inert on virtually every
+ * machine, so the UI actually rendered in Arial (Windows) / Helvetica (macOS) /
+ * DejaVu or Liberation Sans (Linux) — three different sets of glyph metrics,
+ * hence three different wrapping and truncation points, in a repo whose entire
+ * purpose is to be a consistent baseline. The collapsed-rail caption
+ * truncation of #105 is exactly that class of bug.
+ *
+ * WHY SELF-HOSTED RATHER THAN GOOGLE FONTS
+ * -----------------------------------------------------------------------------
+ * A self-contained baseline should not require a third-party CDN round trip on
+ * every page load, and self-hosting sidesteps the privacy and availability
+ * questions that come with one. It is also what makes the deployed CSP in
+ * `infra/nginx/nginx.conf` work unchanged: that policy sets `font-src 'self'
+ * data:`, which permits this file's `url()` and would BLOCK a fonts.gstatic.com
+ * fetch outright.
+ *
+ * WHY THIS LIVES IN `public/` AND IS LOADED VIA <link>, NOT IMPORTED FROM TS
+ * -----------------------------------------------------------------------------
+ * Two mechanisms were available: a CSS file imported by `src/main.tsx`, or a
+ * plain stylesheet in `public/` referenced from `index.html`. `apps/web` had no
+ * CSS pipeline whatsoever before this file (zero .css files, no CSS import
+ * anywhere), so the <link> is the lighter touch of the two: it introduces no
+ * CSS-in-the-JS-graph concept to a codebase that styles exclusively through
+ * MUI/emotion, and `public/` is copied verbatim into `dist/` by Vite with no
+ * config change (`vite.config.ts` needs no `assetsInclude`, no loader rule).
+ *
+ * It is also strictly BETTER for font loading than the import would have been.
+ * A <link> in <head> is discovered by the browser's preload scanner in the
+ * first parse of the document, so the font request starts before the React
+ * bundle is even fetched. A CSS file imported from `main.tsx` is injected by
+ * JavaScript in dev, meaning the @font-face would not exist until after the
+ * module graph has executed — which is precisely the window in which the
+ * visual-regression harness (issue #107) takes its screenshots.
+ *
+ * The font URL appears in exactly ONE place — right here — deliberately. No
+ * <link rel="preload"> duplicate of it in the two index.html files: the saved
+ * round trip is not worth a second copy of the path that can silently rot out
+ * of sync with this one, which is the same single-source-of-truth argument
+ * that made `apps/web/visual/index.html` stop declaring its own @font-face.
+ *
+ * CONSUMERS (both reference this same file; there must never be a second copy):
+ *   - `apps/web/index.html`        — the real application
+ *   - `apps/web/visual/index.html` — the #107 visual-regression harness, which
+ *                                    must exercise the app's REAL font-loading
+ *                                    path or its baselines describe a rendering
+ *                                    no user ever gets.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  /*
+   * A WEIGHT RANGE, not a single value — Inter-latin-variable.woff2 is a
+   * VARIABLE font carrying a `wght` axis spanning 100–900 in one file.
+   * Declaring the full range is what lets the browser instantiate the real
+   * designed weight for every weight the theme asks for: MUI's body text at
+   * 400, `.MuiButton`/medium UI at 500, the h1–h6 overrides in
+   * `src/theme/index.ts` at 600, and 700 wherever bold is used. Had this said
+   * `font-weight: 400`, the browser would match this face for 400 only and
+   * SYNTHESISE the rest by algorithmically smearing the 400 outlines — visibly
+   * worse, and with different metrics from the real cut, which would defeat
+   * the point of loading Inter at all.
+   */
+  font-weight: 100 900;
+  /*
+   * `swap`, per #111: render immediately in the fallback and swap Inter in when
+   * it arrives, so text is never invisible while the font loads. The
+   * alternative, `block`, hides text for up to ~3s on a slow connection.
+   *
+   * The harness shares this value rather than overriding it to `block` for
+   * screenshot determinism — the tests are supposed to exercise what ships.
+   * Determinism is handled on the test side instead, by
+   * `tests/visual/support/harness.ts`'s `waitForInter()`, which awaits
+   * `document.fonts.load()` before any screenshot is taken.
+   */
+  font-display: swap;
+  /*
+   * Latin subset only (~48KB). Every string this application renders is ASCII;
+   * the full multi-script Inter is several hundred KB for glyphs nothing here
+   * would ever use. Sourced from Google Fonts' static CDN once and committed,
+   * SIL Open Font License 1.1.
+   */
+  src: url('/fonts/Inter-latin-variable.woff2') format('woff2');
+}
