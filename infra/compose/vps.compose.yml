@@ -1,0 +1,62 @@
+# =============================================================================
+# Docker Compose - VPS Overrides
+# =============================================================================
+# Applied AFTER prod.compose.yml, for a deployment that sits behind a shared
+# host reverse proxy (the /opt/infra/proxy model):
+#
+#   docker compose \
+#     -f base.compose.yml \
+#     -f prod.compose.yml \
+#     -f vps.compose.yml \
+#     up -d
+#
+# This file exists for one reason above all others: NOTHING IN THE STACK MAY
+# BE PUBLISHED ON A PUBLIC INTERFACE. Everything reaches the application
+# through the host proxy, which terminates TLS and holds the certificate.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Nginx - loopback only
+  # ---------------------------------------------------------------------------
+  nginx:
+    # `!override` REPLACES the inherited ports list instead of merging with it.
+    #
+    # This is the whole point of the file and the one line in it that fails
+    # silently when written wrong. Compose MERGES sequences across overlay
+    # files, so a plain `ports:` here would ADD this mapping and keep
+    # base.compose.yml's "3535:80" — leaving the application published on
+    # 0.0.0.0 exactly as before, while the file looks like it fixed it.
+    #
+    # Verify with `docker compose ... config`: there must be ONE entry, and it
+    # must carry host_ip 127.0.0.1.
+    ports: !override
+      - "127.0.0.1:${APP_BIND_PORT:-3535}:80"
+    # An unbounded json-file log is a slow-motion outage on a small VPS: the
+    # disk fills, and everything that writes fails at once, usually first
+    # showing up as Postgres or Docker itself refusing to work.
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # API - log rotation
+  # ---------------------------------------------------------------------------
+  api:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Web - log rotation
+  # ---------------------------------------------------------------------------
+  web:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

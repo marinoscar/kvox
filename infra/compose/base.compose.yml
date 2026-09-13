@@ -1,0 +1,117 @@
+# =============================================================================
+# Docker Compose - Base Services
+# =============================================================================
+# Usage (run from infra/compose folder):
+#   docker compose -f base.compose.yml -f dev.compose.yml up
+#
+# With observability:
+#   docker compose -f base.compose.yml -f dev.compose.yml -f otel.compose.yml up
+#
+# Production:
+#   docker compose -f base.compose.yml -f prod.compose.yml up
+#
+# Note: .env file is in this folder (infra/compose/)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Nginx - Reverse Proxy
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.30-alpine
+    ports:
+      # Overridable per deployment when several apps share one VPS host
+      # (each app picks its own slot in the shared nginx map). Defaults to
+      # 3535 for local development.
+      - "${NGINX_PORT:-3535}:80"
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/csp.conf:/etc/nginx/csp.conf:ro
+    depends_on:
+      - api
+      - web
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # API - NestJS Backend
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    # EVERY variable in .env reaches the container, not a hand-maintained subset.
+    #
+    # This block used to be an allow-list, and the keys it forgot were exactly
+    # the ones whose absence is silent: APP_URL, COOKIE_SECRET,
+    # SECRETS_ENCRYPTION_KEY, every DEVICE_* and every storage limit. An
+    # operator would set SECRETS_ENCRYPTION_KEY in .env, watch the app boot with
+    # the "no encryption key" warning anyway, and have nothing pointing at
+    # compose as the cause.
+    #
+    # It was also hostile to forks of this template: adding a variable to
+    # .env.example was not enough, you had to remember to add it here too, and
+    # nothing told you otherwise. With env_file, .env.example IS the contract.
+    #
+    # `required: false` keeps a missing .env a soft condition, as it was before
+    # this block existed: `docker compose config` and a fresh clone still work,
+    # falling back to the defaults below. Without it, every compose invocation
+    # fails outright until the file is created.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # ONLY keys that need a COMPOSE-LEVEL DEFAULT when .env omits them.
+      #
+      # Do not add a bare `- FOO=${FOO}` here. `environment` overrides
+      # `env_file`, and an unset FOO interpolates to an empty string — so the
+      # entry would blank out the value .env just supplied. Every line below
+      # therefore carries a `:-default`.
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT:-3000}
+      # Database connection (individual variables; DATABASE_URL is derived)
+      - POSTGRES_HOST=${POSTGRES_HOST:-db}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-appdb}
+      - POSTGRES_SSL=${POSTGRES_SSL:-false}
+      # JWT lifetimes (JWT_SECRET and COOKIE_SECRET arrive via env_file)
+      - JWT_ACCESS_TTL_MINUTES=${JWT_ACCESS_TTL_MINUTES:-15}
+      - JWT_REFRESH_TTL_DAYS=${JWT_REFRESH_TTL_DAYS:-14}
+      # Observability: off unless asked for, so the otel overlay is opt-in
+      - OTEL_ENABLED=${OTEL_ENABLED:-false}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-my-app-api}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    networks:
+      - app-network
+      # Shared external network carrying the central postgres container
+      # (reachable as hostname `postgres`) on VPS deployments where several
+      # apps share one Postgres instance. Required wherever .env sets
+      # POSTGRES_HOST=postgres. Unused for local development, where
+      # POSTGRES_HOST typically points elsewhere.
+      - devnet
+
+  # ---------------------------------------------------------------------------
+  # Web - React Frontend
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+    networks:
+      - app-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  app-network:
+    driver: bridge
+  # Created once per host with `docker network create devnet`. The central
+  # postgres container shared with other apps on that host lives here and
+  # resolves as hostname `postgres`.
+  devnet:
+    external: true
+    name: devnet
+
