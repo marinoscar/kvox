@@ -1,0 +1,51 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // NodeNext (inherited from tsconfig.base.json) plus `"type": "module"` in
+    // package.json is what makes this a real ESM package rather than a
+    // transpiled-to-CJS one. The visible consequence: every relative import in
+    // src/ MUST carry a `.js` extension, even though the file on disk is
+    // `.ts`. That is the runtime's rule, not TypeScript's — Node's ESM loader
+    // does no extension guessing — and omitting it produces a package that
+    // typechecks and then dies with ERR_MODULE_NOT_FOUND at run time.
+    // `outDir`/`rootDir` live in tsconfig.build.json, NOT here. This config
+    // deliberately also covers vitest.config.ts and the tests, which sit
+    // outside src/ — and a `rootDir` of ./src makes tsc reject exactly that
+    // (TS6059). Typechecking is `--noEmit`, so it has no use for either.
+    // `node` only. Deliberately no `dom`: this package runs in a terminal, and
+    // pulling DOM globals in is how a CLI ends up with a `localStorage` or a
+    // `window` reference that compiles and then throws on first use — exactly
+    // the reason apps/web/src/services/api.ts could not be reused here (#140).
+    "types": ["node"],
+
+    // The ink TUI (#145) is React, so this package compiles JSX. `react-jsx`
+    // — the automatic runtime — rather than the classic `"react"` transform,
+    // because the classic one emits `React.createElement` and therefore
+    // requires `import React from 'react'` in every .tsx file purely to
+    // satisfy a name the source never mentions. React 19 ships
+    // `react/jsx-runtime` and the automatic runtime imports it itself; under
+    // NodeNext that import is emitted with the correct specifier, so no
+    // `jsxImportSource` override is needed.
+    //
+    // This setting is INERT for every non-TUI file: the .ts modules compile
+    // exactly as before, and nothing outside src/tui/ imports React. The
+    // non-TTY path in program.ts must never load the reconciler at all — see
+    // the dynamic import there — which is why the TUI is .tsx files behind one
+    // `await import()` rather than a top-level import anywhere.
+    "jsx": "react-jsx",
+
+    // Stricter than the API's config on purpose. This package has no framework
+    // doing dependency injection for it and no test server to catch a stray
+    // unused parameter, and its output goes to somebody's shell.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    "resolveJsonModule": true,
+    "incremental": true
+  },
+  "include": ["src/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}

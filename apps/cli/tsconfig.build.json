@@ -1,0 +1,28 @@
+{
+  // Build config, mirroring apps/api's split: the editor/typecheck config
+  // (tsconfig.json) sees the tests and the vitest config, the emitted build
+  // does not. Shipping a `dist/` containing test files would put vitest — a
+  // devDependency, absent from a production install — on the import graph of
+  // an installed CLI.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Only the build pins the layout: src/ in, dist/ out, flat. If `rootDir`
+    // is ever dropped, a single import from outside src/ silently widens the
+    // root and tsc emits `dist/src/cli.js` — which does not match the `bin`
+    // path in package.json, so the installed command breaks while the build
+    // reports success.
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "incremental": false
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "vitest.config.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
+}
