@@ -1,5 +1,5 @@
 {
-  "name": "my-app",
+  "name": "kvox",
   "private": true,
   "workspaces": [
     "apps/*",

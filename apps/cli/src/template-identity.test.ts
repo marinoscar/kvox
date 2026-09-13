@@ -126,6 +126,44 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // why it must be a stable, globally-unique string, not why it happens to be
   // spelled like the product name.
   'apps/api/src/common/exceptions/verbatim-error-body.exception.ts',
+
+  // ---------------------------------------------------------------------
+  // Added when this fork rebranded to KVox (issue #18).
+  //
+  // All of the entries below became necessary at once, for ONE reason: this
+  // fork chose a CLI binary name equal to its repository name. In the
+  // template those were three distinct strings (`My App` / `EnterpriseAppBase`
+  // / `appctl`), so a legitimately-hardcoded binary name or service name could
+  // never collide with an identity pattern. Here `kvox` is all three at once,
+  // and the derive-don't-list design above means the guard now matches every
+  // one of them. None of these is new code hardcoding what it should import.
+  // ---------------------------------------------------------------------
+
+  // The product vision document. Prose about the product, by definition names
+  // the product; Markdown cannot import from `@app/shared`.
+  'VISION.md',
+  // The workspace root name. npm requires a literal here, and it is already a
+  // `scripts/rename.mjs` codemod target.
+  'package.json',
+  // The npm `bin` key — the one place `CLI_NAME` provably cannot reach, since
+  // npm reads this file before any code runs. See the comment in branding.ts;
+  // `branding.test.ts` asserts this key equals `CLI_NAME`.
+  'apps/cli/package.json',
+  // Where `CLI_NAME` is DEFINED. This is the binary's identity, not a copy of
+  // it, and it is a codemod target under `--cli-name`.
+  'apps/cli/src/branding.ts',
+  // Comments illustrating invocations (`kvox api GET ...`). Rewording them to
+  // dodge the guard would make them worse documentation, not safer code.
+  'apps/cli/src/tui/tty.ts',
+  // Compose/env files: not JavaScript, so importing the manifest is
+  // impossible. Each is an existing `scripts/rename.mjs` codemod target, the
+  // same standing as `install.sh` above.
+  'infra/compose/.env.example',
+  'infra/compose/base.compose.yml',
+  'infra/compose/test.compose.yml',
+  // Worker container env plus one prose comment naming the enroll command.
+  'infra/compose/.env.worker.example',
+  'infra/compose/worker.compose.yml',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this

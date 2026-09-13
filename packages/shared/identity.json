@@ -1,7 +1,7 @@
 {
-  "productName": "My App",
-  "tagline": "A production-grade full-stack application foundation built with React, NestJS, and PostgreSQL.",
-  "repoSlug": "marinoscar/EnterpriseAppBase",
+  "productName": "KVox",
+  "tagline": "From voice to knowledge.",
+  "repoSlug": "marinoscar/kvox",
   "themeColor": "#1976d2",
   "backgroundColor": "#ffffff"
 }

@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "bin": {
-    "appctl": "./dist/cli.js"
+    "kvox": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

@@ -1,8 +1,8 @@
-# My App
+# KVox
 
-[![CI](https://github.com/marinoscar/EnterpriseAppBase/actions/workflows/ci.yml/badge.svg)](https://github.com/marinoscar/EnterpriseAppBase/actions)
+[![CI](https://github.com/marinoscar/kvox/actions/workflows/ci.yml/badge.svg)](https://github.com/marinoscar/kvox/actions)
 
-A production-grade full-stack application foundation built with React, NestJS, and PostgreSQL.
+From voice to knowledge.
 
 OAuth authentication, RBAC authorization, a background job queue with a
 distributed worker fleet, and a flexible settings framework — wired together
@@ -22,8 +22,8 @@ and ready to build on.
 ## Getting started
 
 ```bash
-git clone https://github.com/marinoscar/EnterpriseAppBase.git
-cd EnterpriseAppBase
+git clone https://github.com/marinoscar/kvox.git
+cd kvox
 npm install
 cp infra/compose/.env.example infra/compose/.env
 ```
@@ -47,7 +47,7 @@ becomes the Admin account.
 ## Repository layout
 
 ```
-EnterpriseAppBase/
+kvox/
   apps/
     api/        Backend API, Prisma schema and migrations
     web/        React frontend

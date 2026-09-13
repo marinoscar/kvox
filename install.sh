@@ -2,14 +2,14 @@
 # install.sh — appctl CLI installer / updater  (issue #166, epic #110)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/marinoscar/EnterpriseAppBase/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
 #   # or, locally:
 #   bash install.sh
 #   bash install.sh --uninstall
 #   bash install.sh --help
 #
 # Configuration (set via environment variables before running):
-#   APPCTL_REPO     Git repo URL (default: https://github.com/marinoscar/EnterpriseAppBase.git)
+#   APPCTL_REPO     Git repo URL (default: https://github.com/marinoscar/kvox.git)
 #   APPCTL_REF      Branch/tag/commit to install (default: main)
 #   APPCTL_HOME     App install root (default: $HOME/.appctl — the same directory
 #                   the CLI itself already stores config.json in, see branding.ts)
@@ -113,7 +113,7 @@ detect_shell_rc() {
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-APPCTL_REPO="${APPCTL_REPO:-https://github.com/marinoscar/EnterpriseAppBase.git}"
+APPCTL_REPO="${APPCTL_REPO:-https://github.com/marinoscar/kvox.git}"
 APPCTL_REF="${APPCTL_REF:-main}"
 APPCTL_HOME="${APPCTL_HOME:-$HOME/.appctl}"
 APPCTL_BIN_DIR="${APPCTL_BIN_DIR:-$HOME/.local/bin}"

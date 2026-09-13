@@ -22,7 +22,7 @@ and deploys a standalone copy — you don't need a local clone to end up with
 a working `appctl` on your PATH.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marinoscar/EnterpriseAppBase/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
 ```
 
 It's safe to re-run: the installer detects an existing install at
@@ -48,7 +48,7 @@ the existing install and updates it in place.
 ### Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marinoscar/EnterpriseAppBase/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash -s -- --uninstall
 ```
 
 or, from a local clone:
@@ -114,7 +114,7 @@ Set these before running the installer to override its defaults:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APPCTL_REPO` | `https://github.com/marinoscar/EnterpriseAppBase.git` | Git clone URL |
+| `APPCTL_REPO` | `https://github.com/marinoscar/kvox.git` | Git clone URL |
 | `APPCTL_REF` | `main` | Branch/tag/commit to install |
 | `APPCTL_HOME` | `$HOME/.appctl` | App install root (same directory the CLI stores `config.json` in) |
 | `APPCTL_BIN_DIR` | `$HOME/.local/bin` | Directory for the `appctl` shim |
@@ -775,20 +775,20 @@ Run `npm run docs:worker-env --workspace=cli` to regenerate it after changing
 <!-- GENERATED:WORKER_ENV_TABLE:START -->
 | Variable | Description |
 | --- | --- |
-| `APPCTL_SERVER_URL` | `APPCTL_SERVER_URL` — reused from `config.ts`, never minted again. |
-| `APPCTL_TOKEN` | `APPCTL_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. |
-| `APPCTL_NODE_ID` | The node row this process re-attaches to, so a restart is not a new node. |
-| `APPCTL_NODE_NAME` | Display name; defaults to the hostname. Reattachment keys on it server-side. |
-| `APPCTL_CONCURRENCY` | How many jobs this process runs at once. 1–64, per the server's own cap. |
-| `APPCTL_ELIGIBLE_TYPES` | Comma-separated job types this node will claim. Empty means "all it can". |
-| `APPCTL_POLL_INTERVAL_MS` | Idle poll interval in milliseconds. |
-| `APPCTL_HEADLESS` | `true` to run without a TTY and drain on SIGTERM WITHOUT deregistering. |
-| `APPCTL_STATE_DIR` | Overrides the state directory. The one variable a container almost always sets. |
-| `APPCTL_HEAP_LIMIT_MB` | Old-space limit in MB for the re-exec (#277). `0` disables re-tuning entirely. |
-| `APPCTL_HEAP_TUNED` | The re-exec LATCH (#277). Set by the parent shim on the child it spawns. Not an operator knob — it exists so the re-exec cannot loop. It is still declared here rather than read as a literal, because the rule this map enforces has no exceptions: a variable the code reads is a variable a rename must reach. |
-| `APPCTL_MEMORY_WATCHDOG` | `false` to disable the memory watchdog and its pre-OOM valve (#277). |
-| `APPCTL_MEMORY_THRESHOLD` | heapUsed/heapLimit fraction at which the valve fires. Default ~0.9 (#277). |
-| `APPCTL_HEAP_SNAPSHOTS` | `false` to disable ALL THREE heap-snapshot paths (#277). |
+| `KVOX_SERVER_URL` | `APPCTL_SERVER_URL` — reused from `config.ts`, never minted again. |
+| `KVOX_TOKEN` | `APPCTL_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. |
+| `KVOX_NODE_ID` | The node row this process re-attaches to, so a restart is not a new node. |
+| `KVOX_NODE_NAME` | Display name; defaults to the hostname. Reattachment keys on it server-side. |
+| `KVOX_CONCURRENCY` | How many jobs this process runs at once. 1–64, per the server's own cap. |
+| `KVOX_ELIGIBLE_TYPES` | Comma-separated job types this node will claim. Empty means "all it can". |
+| `KVOX_POLL_INTERVAL_MS` | Idle poll interval in milliseconds. |
+| `KVOX_HEADLESS` | `true` to run without a TTY and drain on SIGTERM WITHOUT deregistering. |
+| `KVOX_STATE_DIR` | Overrides the state directory. The one variable a container almost always sets. |
+| `KVOX_HEAP_LIMIT_MB` | Old-space limit in MB for the re-exec (#277). `0` disables re-tuning entirely. |
+| `KVOX_HEAP_TUNED` | The re-exec LATCH (#277). Set by the parent shim on the child it spawns. Not an operator knob — it exists so the re-exec cannot loop. It is still declared here rather than read as a literal, because the rule this map enforces has no exceptions: a variable the code reads is a variable a rename must reach. |
+| `KVOX_MEMORY_WATCHDOG` | `false` to disable the memory watchdog and its pre-OOM valve (#277). |
+| `KVOX_MEMORY_THRESHOLD` | heapUsed/heapLimit fraction at which the valve fires. Default ~0.9 (#277). |
+| `KVOX_HEAP_SNAPSHOTS` | `false` to disable ALL THREE heap-snapshot paths (#277). |
 <!-- GENERATED:WORKER_ENV_TABLE:END -->
 
 With `APPCTL_SERVER_URL` and `APPCTL_TOKEN` set and no config file at all, the

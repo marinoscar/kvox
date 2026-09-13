@@ -211,6 +211,7 @@ function buildPlan(old, next) {
   add('install.sh', old.cloneUrl, next.cloneUrl, 2, 'the APPCTL_REPO default and its documentation');
   add('apps/cli/README.md', old.rawUrl, next.rawUrl, 2, 'the install and uninstall one-liners');
   add('apps/cli/README.md', old.cloneUrl, next.cloneUrl, 1, 'the APPCTL_REPO default in the env table');
+  add('README.md', old.cloneUrl, next.cloneUrl, 1, 'the git clone line in Getting started');
   add('README.md', `https://github.com/${old.repoSlug}/actions`, `https://github.com/${next.repoSlug}/actions`, 2,
       'the CI badge image and its link target');
   add('README.md', `cd ${old.repoName}\n`, `cd ${next.repoName}\n`, 1, 'the clone instructions');
