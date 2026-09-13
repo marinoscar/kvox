@@ -1,0 +1,9 @@
+# Playwright run output — regenerated every run, never committed.
+# Baselines (specs/**/*-snapshots/) are NOT covered by this and ARE committed.
+playwright-report/
+test-results/
+
+# This package's own (non-symlinked) node_modules — see the repo root
+# CLAUDE.md worktree conventions for why this one is real rather than a
+# symlink into the main checkout.
+node_modules/
