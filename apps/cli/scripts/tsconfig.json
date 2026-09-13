@@ -1,0 +1,14 @@
+{
+  // Mirrors apps/api/scripts/tsconfig.json. The CLI's own tsconfig.json is
+  // scoped to `src/**/*` (plus vitest.config.ts), so a script importing from
+  // `src/` sits outside that rootDir. Widening the root to the workspace and
+  // emitting nothing keeps this one-off script type-checked under the same
+  // settings as the code it imports, without adding it to the shipped build.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["./**/*.ts", "../src/**/*.ts"]
+}
