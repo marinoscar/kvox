@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Visual regression harness (issue #107) — not part of the shipped app." />
+    <title>Visual Regression Harness</title>
+    <!--
+      THE APPLICATION'S OWN FONT STYLESHEET — byte-identical to what
+      `apps/web/index.html` loads, not a harness-local copy of it.
+
+      This file used to carry its own inline @font-face pointing at its own
+      copy of the woff2 under `visual/assets/fonts/`, because at the time
+      (#107) the application loaded no font at all and the pinned Playwright
+      container ships neither Inter nor Roboto nor Helvetica — only Liberation
+      Sans, whose narrower metrics let "Console"/"Settings" fit the collapsed
+      rail's caption box under EITHER padding value, making the #105
+      regression this suite exists to catch produce a zero-pixel diff.
+
+      #111 fixed that at the root: the app now loads Inter itself, from
+      `apps/web/public/fonts/inter.css`. So the harness's private copy had to
+      go. A visual suite that loads the font by a different mechanism than the
+      app under test is producing baselines for a rendering nobody ships, and
+      drifts from the thing it is meant to be testing — the app could lose its
+      font entirely and every one of these pixel baselines would still pass.
+      Now it cannot: break `public/fonts/inter.css` or the <link> in
+      `apps/web/index.html`'s sibling and this harness renders in the fallback
+      too, which every spec catches twice over — as a pixel diff, and as an
+      explicit `waitForInter()` assertion (`tests/visual/support/harness.ts`).
+
+      `/fonts/...` resolves here only because `visual/vite.config.ts` points
+      its `publicDir` at `apps/web/public` — see the comment there.
+    -->
+    <link rel="stylesheet" href="/fonts/inter.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

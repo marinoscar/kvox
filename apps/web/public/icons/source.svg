@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  THE HUMAN-EDITABLE SOURCE FOR THE BRAND MARK.
+
+  Nothing loads this file at runtime — it is not referenced by index.html, by a
+  manifest, or by any component. It exists so a fork can open the mark in a
+  vector editor, replace it with a real logo, and have something to match the
+  raster icons against.
+
+  It is NOT rasterised by the build. `apps/web/scripts/generate-icons.py` draws
+  the same geometry in Pillow rather than converting this SVG, because rendering
+  an SVG needs rsvg / cairosvg / a headless browser — precisely the image
+  toolchain this template refuses to require of a fork's CI. The two therefore
+  describe the mark twice, and MUST be kept in step: edit here, mirror the
+  geometry constants in that script, re-run it.
+
+  Geometry, on a 512 canvas (all values derive from the script's constants):
+    plate      512 square, corner radius 0.22 x 512 = 112.64
+    mark width 0.68 x 512 = 348.16, stack height 0.86 x 348.16 = 299.42
+    bar height 0.22 x 299.42 = 65.87, gap 0.17 x 299.42 = 50.90
+    bars       100% / 75% / 50% of the mark width, each centred
+
+  The colour is `themeColor` from `packages/shared/identity.json`, which is the
+  source of truth. This file holds a COPY of it, because an SVG attribute cannot
+  read a manifest -- and unlike the generator script, which now loads the
+  manifest, nothing keeps this copy in step automatically. `scripts/rename.mjs`
+  rewrites it, and the template-identity guard fails if it ever drifts.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Application mark">
+  <rect width="512" height="512" rx="112.64" ry="112.64" fill="#1976d2"/>
+  <g fill="#ffffff">
+    <rect x="81.92" y="106.29" width="348.16" height="65.87" rx="32.94" ry="32.94"/>
+    <rect x="125.44" y="223.06" width="261.12" height="65.87" rx="32.94" ry="32.94"/>
+    <rect x="168.96" y="339.84" width="174.08" height="65.87" rx="32.94" ry="32.94"/>
+  </g>
+</svg>
