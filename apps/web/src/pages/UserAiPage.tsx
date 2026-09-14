@@ -58,6 +58,36 @@
  * unreachable" happened is the entire value of the control.
  *
  * =============================================================================
+ * #83: "NO PROVIDER" AND "NOT SWITCHED ON YET" ARE DIFFERENT SENTENCES
+ * =============================================================================
+ *
+ * This page used to disable the key field, `Save key`, `Replace key` and `Test
+ * key` on `provider === null` alone, under a notice reading "An administrator
+ * has not chosen an AI provider […] Your key is not the missing piece". On a
+ * default deployment `ai.provider` IS `'openai'` — an administrator HAS chosen
+ * one — so that sentence was false, and it sent the reader to the wrong person
+ * with the wrong request while a dead form sat in front of them.
+ *
+ * `GET /api/ai/config` reports the vendor and the deployment's readiness as two
+ * separate facts, and since #83 it reports the vendor even when AI is not usable
+ * yet. So this page says two different things:
+ *
+ *   • `provider === null` — NO vendor is chosen, or this build does not know the
+ *     one named. There is genuinely nothing to save a key FOR, so the form stays
+ *     disabled and the original warning stands unchanged: it is accurate here,
+ *     and only here.
+ *   • `provider !== null && !available` — a vendor IS chosen, but AI is switched
+ *     off or has no permitted model yet. ⚠ THE FORM STAYS FULLY USABLE. Saving
+ *     and verifying a key while an administrator finishes setup is exactly what
+ *     `ai-config.service.ts`'s header says the `available`/`keyConfigured` split
+ *     exists to allow, and here the user's key is half of what is missing rather
+ *     than beside the point. Telling them otherwise is how issue #83's loop
+ *     closed: each page's remediation pointed at the other one.
+ *
+ * Nothing else on this page gates on `available`. It is a statement about the
+ * deployment, never a reason to refuse a user their own credential.
+ *
+ * =============================================================================
  * NO PERMISSION IS CHECKED HERE, DELIBERATELY
  * =============================================================================
  *
@@ -133,6 +163,10 @@ function describeStoredKey(status: AiCredentialStatus | null): string {
 export default function UserAiPage() {
   const {
     config,
+    // The DEPLOYMENT's readiness, not this user's. Read here only to choose
+    // which of the two notices below is true — see the `#83` section of the
+    // file header for why it must never disable anything on this page.
+    available,
     isLoading: isConfigLoading,
     loadError: configError,
     refresh: refreshConfig,
@@ -259,12 +293,23 @@ export default function UserAiPage() {
           </Alert>
         )}
 
+        {/* ⚠ TWO SITUATIONS, TWO SENTENCES, AND ONLY ONE OF THEM DISABLES THE
+            FORM. See the `#83` section of the file header. */}
         {provider === null && !configError && (
           <Alert severity="warning" sx={{ mb: 3 }}>
             <AlertTitle>AI is not set up on this deployment yet</AlertTitle>
             An administrator has not chosen an AI provider, so there is nothing to add a key
             for right now. Your key is not the missing piece — nothing you do on this page
             would make AI features work until that is done.
+          </Alert>
+        )}
+        {provider !== null && !available && !configError && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <AlertTitle>AI is not switched on yet — your key is still worth adding</AlertTitle>
+            An administrator has chosen {providerLabel ?? 'a provider'} but has not finished
+            turning AI on for this deployment. You can save your key here now and check that
+            it works, and AI features will start working for your account as soon as they
+            finish — with nothing further to do on this page.
           </Alert>
         )}
 
