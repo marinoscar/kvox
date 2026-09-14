@@ -92,30 +92,9 @@ import { useUserData } from '../hooks/useUserData';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { UserDataDeleteDialog } from '../components/settings/UserDataDeleteDialog';
 import type { UserDataScope, UserDataSummary } from '../services/userData';
-import { formatBytes } from '../utils/transcriptDisplay';
-
-/**
- * A byte count from this API, rendered for a person.
- *
- * The API sends decimal STRINGS because it sums Postgres `BIGINT` columns (see
- * `services/userData.ts`'s header). `formatBytes` is reused rather than
- * reimplemented — a third copy of the unit loop in this repository is not worth
- * avoiding one `Number()` call — and the parse is the only thing added: a value
- * that is absent or unparseable renders as an em dash rather than a confident
- * "0 B", because a zero here would read as "you have nothing stored" next to a
- * button that deletes something.
- *
- * ⚠ The `Number()` can lose integer precision above 2^53, and that is accepted
- * deliberately: the loss lands far below the one significant decimal a
- * human-readable "9.2 EB" shows, and this value is never sent back, compared or
- * summed — it is formatted and discarded.
- */
-export function formatDataSize(value: string | null | undefined): string {
-  if (value === null || value === undefined || value === '') return '—';
-  const bytes = Number(value);
-  if (!Number.isFinite(bytes) || bytes < 0) return '—';
-  return formatBytes(bytes);
-}
+// Display helpers live in `utils/` rather than on this page because the dialog
+// below needs them too, and a child importing its own parent is a cycle.
+import { formatDataSize } from '../utils/userDataDisplay';
 
 /** One row of layer 1: what it is, which scope deletes it, and where to read its numbers. */
 interface CategoryRow {
@@ -381,6 +360,7 @@ export default function UserDangerZonePage() {
 
         <UserDataDeleteDialog
           scope={pendingScope}
+          summary={summary}
           isWorking={isDeleting}
           error={deleteError}
           onConfirm={() => void confirmDialog()}
