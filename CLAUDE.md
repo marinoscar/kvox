@@ -1121,6 +1121,30 @@ operator procedure, written to be usable with the application down, is
 [`docs/runbooks/database-restore.md`](docs/runbooks/database-restore.md).
 Extend those two rather than restating them here.
 
+### Audio Transcription
+
+Turning an uploaded recording into a speaker-aware, correctable, versioned,
+shareable, exportable transcript — *"AI proposes. The user controls the
+truth"* — is epic #19 (issues #20–#32): storage hardening for multi-GB
+resumable uploads, a `TranscriptionProvider` registry with AssemblyAI as the
+first implementation, the `transcripts`/`transcript_speakers`/
+`transcript_segments`/`transcript_versions`/`transcript_shares`/
+`transcript_exports` tables, an eight-job-type queue pipeline (submit → poll
+→ ingest, a node-eligible `media.audio.transcode`, snapshotting, export and
+purge), an operation-log correction model with full version history, and the
+`transcripts:read`/`write` permission pair seeded to all three roles. The
+design decisions this rests on — the three state machines, why each job
+type is or is not node-eligible against the CLAUDE.md rules above, the
+poll backoff schedule and why its re-enqueue must be `skipDedup: true`, the
+provider contract and its error taxonomy, the gap-based `ordinal` and
+LCS-based word-alignment scheme, the concurrency model's `rev`/`baseVersion`
+split, why there is no `transcripts:read_any` and no access ever answers
+403, and the full list of rejected alternatives — are documented in full in
+[`docs/specs/transcription.md`](docs/specs/transcription.md), with the
+public export contract published alongside it as
+[`docs/specs/kvox.transcript.v1.schema.json`](docs/specs/kvox.transcript.v1.schema.json).
+Don't restate any of that here; extend those two instead.
+
 ## Specialized Subagents (MANDATORY)
 
 **CRITICAL REQUIREMENT**: This project uses specialized subagents for all development work. You MUST delegate tasks to the appropriate subagent. Do NOT attempt to perform development tasks directly without using the designated agent.
