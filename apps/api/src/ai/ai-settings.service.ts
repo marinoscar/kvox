@@ -10,7 +10,11 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PatchSystemSettingsDto } from '../settings/dto/update-system-settings.dto';
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
-import { missingModelNumbers, resolveAllowedModel } from './ai-model-resolution';
+import {
+  missingModelNumbers,
+  modelKnowledgeOf,
+  resolveAllowedModel,
+} from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import type { SystemAiPatchValue, SystemAiValue } from './ai-settings.schema';
 import type { AiProviderDescription } from './providers/ai-provider.interface';
@@ -66,9 +70,16 @@ export interface AiSettingsAdminView {
    * An entry that carries its own `contextWindowTokens` and `maxOutputTokens`
    * is perfectly usable and is NOT listed here, even though no release of this
    * application has heard of the model — that is the whole point of the widened
-   * entry type. What remains listed is an entry with neither its own numbers
-   * nor a catalogue descriptor: a typo, or a model somebody added before the
-   * numbers were known.
+   * entry type.
+   *
+   * ⚠ AND SINCE #97 IT IS NORMALLY EMPTY. The resolver falls through to the
+   * active provider's family derivation and then to its conservative floor, so
+   * an ordinary typo (`gpt-4p`) now resolves to the floor and is listed as
+   * offered rather than as unknown. What is still reported here is an entry
+   * NOTHING can answer: a policy naming a provider this build does not
+   * implement, or one that declares no floor. The field is kept rather than
+   * removed because that case is real and silent — such a model is saved,
+   * listed back, and never offered to a single user.
    *
    * REPORTED RATHER THAN SILENTLY DROPPED. Such a model cannot be budgeted
    * (docs/specs/notes.md §3.3 needs `contextWindowTokens`), so
@@ -198,37 +209,52 @@ export class AiSettingsService {
       : undefined;
 
     if (provider && submittedModels) {
-      const catalogue = provider.capabilities.models;
+      const knowledge = modelKnowledgeOf(provider);
 
-      // ⚠ NARROWED BY #78: the test is no longer "is this id in the build
-      // catalogue" but "can this entry be BUDGETED AT ALL". An entry carrying
-      // its own `contextWindowTokens` and `maxOutputTokens` passes even though
-      // this build has never heard of the model — which is the entire point of
-      // model discovery, since a vendor's list is mostly models no release of
-      // this application knows about yet. Only an entry that resolves to
-      // NOTHING is refused, and `resolveAllowedModel` is the one place that
-      // precedence lives.
+      // ⚠ NARROWED BY #78 AND AGAIN BY #97: the test is not "is this id in the
+      // build catalogue" but "can this entry be BUDGETED AT ALL". An entry
+      // carrying its own numbers passes; since #97 so does one whose id the
+      // provider can place in a known family, and so does any id at all for a
+      // provider that declares a conservative floor. In practice that means
+      // this refusal NO LONGER FIRES for a registered provider — which is the
+      // point of #97: before it, adopting `gpt-5.4-mini-2026-03-17` meant
+      // hand-typing two numbers because the catalogue spells the family without
+      // the date.
+      //
+      // ⚠ THE PATH IS KEPT ANYWAY, AND MUST BE. It is still reachable and still
+      // correct for the case it was written for: a policy naming a provider
+      // this build does not implement (a rollback across a provider's
+      // addition), or one that declines to declare a floor. Deleting it would
+      // turn a 400 that names two fields into a model saved, listed back, and
+      // silently never offered to anybody — which is exactly the invisible
+      // failure it exists to prevent. `resolveAllowedModel` and
+      // `missingModelNumbers` share one precedence, so this can never refuse a
+      // field the config probe would have filled in.
       const unresolved = submittedModels
-        .map((entry) => ({ entry, missing: missingModelNumbers(entry, catalogue) }))
+        .map((entry) => ({
+          entry,
+          missing: missingModelNumbers(entry, knowledge),
+        }))
         .filter(({ missing }) => missing.length > 0);
 
       if (unresolved.length > 0) {
         // WORDED AS "SUPPLY THE NUMBERS", NOT "THIS MODEL IS FORBIDDEN". The
-        // old message read as a permission refusal and named the four ids this
-        // build ships with, which told an administrator adopting a new model
-        // that their only option was to wait for a release. It is not: the
-        // missing thing is a number they can read off the vendor's own
-        // documentation, and this sentence has to say so or the widened schema
-        // is undiscoverable.
+        // old message read as a permission refusal and named the ids this build
+        // ships with, which told an administrator adopting a new model that
+        // their only option was to wait for a release. It is not: the missing
+        // thing is a number they can read off the vendor's own documentation,
+        // and this sentence has to say so or the widened schema is
+        // undiscoverable.
         const detail = unresolved
           .map(({ entry, missing }) => `"${entry.id}" (${missing.join(', ')})`)
           .join(', ');
 
         throw new BadRequestException(
           `This deployment cannot budget requests for ${detail} on provider "${provider.id}". ` +
-            'These models are not forbidden — this build simply carries no context window for them, and the token budget has no number to check a prompt against. ' +
+            'These models are not forbidden — this build has no context window for them and no way to infer one, so the token budget has no number to check a prompt against. ' +
+            'That normally means the provider named by this policy is not implemented by this build. ' +
             'Add `contextWindowTokens` and `maxOutputTokens` to each entry (the vendor publishes both), or choose a model this build already knows: ' +
-            `${catalogue.map((model) => model.id).join(', ') || 'none'}.`,
+            `${knowledge.catalogue.map((model) => model.id).join(', ') || 'none'}.`,
         );
       }
     }
@@ -402,14 +428,15 @@ export class AiSettingsService {
 
     const provider = this.registry.get(providerId);
 
-    // An EMPTY catalogue rather than an early return for the provider this
-    // build does not implement (a rollback across its addition): entries
-    // carrying their own numbers still resolve, and refusing to acknowledge
-    // that would tell an administrator to fix a model that is already fine.
-    const catalogue = provider?.capabilities.models ?? [];
-
+    // EMPTY KNOWLEDGE rather than an early return for the provider this build
+    // does not implement (a rollback across its addition): entries carrying
+    // their own numbers still resolve, and refusing to acknowledge that would
+    // tell an administrator to fix a model that is already fine.
+    // `modelKnowledgeOf(undefined)` is exactly that state, and it is built by
+    // the same helper every other call site uses — so the day the bundle grows
+    // a fourth member this line does not silently keep passing three.
     return settings.providers[providerId].allowedModels
-      .filter((entry) => resolveAllowedModel(entry, catalogue) === null)
+      .filter((entry) => resolveAllowedModel(entry, modelKnowledgeOf(provider)) === null)
       .map((entry) => entry.id);
   }
 
