@@ -40,14 +40,13 @@
  * name that is never coming.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { getNote } from '../services/notes';
-import type { NoteListItem } from '../services/notes';
 import { getTranscript } from '../services/transcripts';
 import { api } from '../services/api';
 import { noteSourceRef } from '../utils/noteSource';
-import type { NoteSourceRef } from '../utils/noteSource';
+import type { NoteSourceFields, NoteSourceRef } from '../utils/noteSource';
 import { useIsMounted } from './useIsMounted';
 
 /**
@@ -115,7 +114,7 @@ async function resolveName(ref: NoteSourceRef): Promise<string | null> {
  * category noun instead — which is the correct thing to show both before the
  * lookup lands and forever after one that cannot.
  */
-export function useNoteSourceNames(notes: NoteListItem[]): NoteSourceNames {
+export function useNoteSourceNames(notes: NoteSourceFields[]): NoteSourceNames {
   const [names, setNames] = useState<NoteSourceNames>({});
   const isMounted = useIsMounted();
 
@@ -184,4 +183,33 @@ export function useNoteSourceNames(notes: NoteListItem[]): NoteSourceNames {
   }, [wanted, isMounted]);
 
   return names;
+}
+
+/**
+ * The same lookup for ONE note — what the detail page's provenance line needs.
+ *
+ * ⚠ A WRAPPER, NOT A SECOND IMPLEMENTATION. It shares the module-level cache,
+ * the in-flight deduplication and the resolved-negative rule above, so opening
+ * a note from the library resolves its source name from the cache the list
+ * already filled rather than issuing the request a second time. Returns `null`
+ * — never a uuid — when the name is not known, so every caller falls through to
+ * `noteSourceFallbackLabel` and renders the category noun instead.
+ *
+ * `notes` is memoised on the four source fields rather than on the note object,
+ * because `useNote` polls and hands back a new object identity every time even
+ * when nothing about the source has changed.
+ */
+export function useNoteSourceName(note: NoteSourceFields | null | undefined): string | null {
+  const rows = useMemo(() => (note ? [note] : []), [
+    note?.sourceType,
+    note?.sourceTranscriptId,
+    note?.sourceNoteId,
+    note?.sourceObjectId,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ]);
+
+  const names = useNoteSourceNames(rows);
+  const ref = note ? noteSourceRef(note) : null;
+
+  return ref ? (names[noteSourceKey(ref)] ?? null) : null;
 }
