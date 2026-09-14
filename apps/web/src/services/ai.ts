@@ -279,6 +279,30 @@ export const AI_MODEL_BOUNDS = {
 export const AI_ALLOWED_MODELS_MAX = 50;
 
 /**
+ * How hard a reasoning-capable model is asked to think before it answers (#87).
+ *
+ * Mirrors the API's `z.enum`, and a union here for the same reason `AiProviderId`
+ * is one: the admin page's `Select` writes straight into
+ * {@link UpdateAiSettingsInput}, so a typo should be a compile error rather than
+ * a 400 discovered on save.
+ *
+ * ⚠ `'none'` IS A VALUE, NOT AN ABSENCE. It is the stored default, and it means
+ * the API omits `reasoning_effort` from the provider request entirely — so the
+ * vendor applies its own default. There is deliberately no `null` here: "send
+ * nothing" already has a spelling, and two ways to say it is how one of them
+ * stops being handled.
+ *
+ * ⚠ THE COST OF RAISING THIS LANDS ON `maxOutputTokens`, NOT ON A BUDGET OF ITS
+ * OWN. Reasoning tokens are billed and counted as OUTPUT tokens, drawn from the
+ * same completion ceiling the visible answer is drawn from — which is why the
+ * admin control for this field sits in the Limits section beside
+ * {@link AiSettings.maxOutputTokens} rather than beside the provider choice, and
+ * why its helper text names that field explicitly. A generation that spends its
+ * whole ceiling thinking comes back truncated, not as an error.
+ */
+export type AiReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+
+/**
  * The stored AI policy.
  *
  * ⚠ NO FIELD HERE CAN HOLD AN API KEY, and that is the API's shape rather than
@@ -311,6 +335,14 @@ export interface AiSettings {
   requestTimeoutMs: number;
   /** Ceiling on one uploaded note source document, in bytes. An AI policy, not a storage one. */
   maxDocumentBytes: number;
+  /**
+   * How hard a reasoning-capable model thinks before answering (#87).
+   *
+   * Defaults to `'none'`, which omits the parameter from the provider request.
+   * See {@link AiReasoningEffort} for why raising it is a change to the output
+   * budget rather than a free quality dial.
+   */
+  reasoningEffort: AiReasoningEffort;
 }
 
 /** `GET /api/ai-settings`, and the body every write returns. */
@@ -373,6 +405,7 @@ export interface UpdateAiSettingsInput {
   maxOutputTokens?: number;
   requestTimeoutMs?: number;
   maxDocumentBytes?: number;
+  reasoningEffort?: AiReasoningEffort;
 }
 
 /** `POST /api/ai-settings/test` — probe a base URL, with no credential. */
