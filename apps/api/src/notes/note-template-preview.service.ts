@@ -1,30 +1,18 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { AiBudgetError } from '../ai/ai-errors';
-import { AiConfigService } from '../ai/ai-config.service';
-import { AiProviderRegistry } from '../ai/ai-provider.registry';
-import { AiSettingsService } from '../ai/ai-settings.service';
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { TranscriptAccessService } from '../transcripts/transcript-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
+import { NoteGenerationRequestService } from './generation/note-generation-request.service';
 import { NoteSourceService } from './generation/note-source.service';
 import { assemblePrompt, parseTemplateStructure } from './generation/prompt';
-import { assertWithinBudget, computeTokenBudget } from './generation/token-budget';
 import { NOTE_GENERATE_JOB_TYPE, NOTE_SUBJECT_TYPE } from './job-types';
 import { assertInstructionsFit } from './note-templates.service';
 import type {
   PreviewNoteTemplateDto,
   PreviewNoteTemplateResponse,
-  PreviewSourceDto,
 } from './dto/note-template.dto';
 import type { PayloadTemplateSnapshot } from './generation/note-generation.service';
 
@@ -80,6 +68,13 @@ import type { PayloadTemplateSnapshot } from './generation/note-generation.servi
 // THE REQUEST-TIME CHECKS, AND WHY THEY ARE HERE RATHER THAN ONLY IN THE JOB
 // -----------------------------------------------------------------------------
 //
+// ⚠ SINCE #53 THEY LIVE IN `NoteGenerationRequestService`, NOT IN THIS FILE —
+// because `POST /api/notes` asks exactly the same three questions and two
+// copies of "may this caller read that transcript" / "which model is permitted"
+// / "does this fit" would be two copies that agree today and disagree the first
+// time one of them is fixed. The reasoning below is unchanged; only the file it
+// lives in moved. See that service's header.
+//
 // Access to the SOURCE, and the token budget, are both checked synchronously,
 // before anything is created — spec §3.3's "refuse early with a number", and
 // §6.1's 404 posture. Neither is a duplicate of the job's own check:
@@ -125,10 +120,12 @@ export class NoteTemplatePreviewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: NoteTemplateAccessService,
-    private readonly transcriptAccess: TranscriptAccessService,
-    private readonly aiConfig: AiConfigService,
-    private readonly aiSettings: AiSettingsService,
-    private readonly providers: AiProviderRegistry,
+    // ⚠ THE SHARED RESOLVER, NOT A SECOND COPY OF ITS DECISIONS. `POST
+    // /api/notes` (#53) asks it the same three questions with the same three
+    // answers — see its header for why one preview and one real generation must
+    // never be able to disagree about which model is permitted or whether the
+    // caller may read the source.
+    private readonly requests: NoteGenerationRequestService,
     private readonly sources: NoteSourceService,
     private readonly jobs: JobsService,
   ) {}
@@ -141,11 +138,12 @@ export class NoteTemplatePreviewService {
 
     // The source, and whether this caller may read it. BEFORE anything is
     // created — see the header on why this check cannot be deferred to the job.
-    const selector = await this.resolveSource(dto.source, user);
+    const selector = await this.requests.resolveSource(dto.source, user);
 
-    const { provider, model, policy } = await this.resolveModel(
+    const { provider, model, policy } = await this.requests.resolveModel(
       user.id,
       dto.model ?? template.model ?? null,
+      'preview',
     );
 
     const contextText = dto.contextText?.trim() ? dto.contextText.trim() : null;
@@ -165,38 +163,13 @@ export class NoteTemplatePreviewService {
       sourceText: source.text,
     });
 
-    const descriptor = provider.capabilities.models.find((entry) => entry.id === model);
-
-    if (descriptor) {
-      const budget = computeTokenBudget({
-        contextWindowTokens: descriptor.contextWindowTokens,
-        modelMaxOutputTokens: descriptor.maxOutputTokens,
-        policyMaxOutputTokens: policy.maxOutputTokens,
-        policyMaxInputTokens: policy.maxInputTokens,
-      });
-
-      try {
-        assertWithinBudget({
-          promptTokens: provider.countTokens(
-            `${prompt.systemPrompt}\n${prompt.userContent}`,
-            model,
-          ),
-          availableInputTokens: budget.availableInputTokens,
-          model,
-          providerId: provider.id,
-        });
-      } catch (error) {
-        // ⚠ THE SAME SENTENCE THE JOB WOULD HAVE WRITTEN ONTO THE GENERATION,
-        // delivered as a 400 instead. `budgetRefusalMessage` is shared for
-        // exactly this reason: the failure is identical and the two surfaces
-        // differ only in how it is delivered.
-        if (error instanceof AiBudgetError) {
-          throw new BadRequestException(error.message);
-        }
-
-        throw error;
-      }
-    }
+    this.requests.assertPromptFits({
+      provider,
+      model,
+      policy,
+      systemPrompt: prompt.systemPrompt,
+      userContent: prompt.userContent,
+    });
 
     // -------------------------------------------------------------------------
     // Create the row and queue the job, together.
@@ -332,126 +305,5 @@ export class NoteTemplatePreviewService {
       },
       model: inline.model,
     };
-  }
-
-  /**
-   * The source, checked against THIS caller, as the four denormalized columns.
-   *
-   * ⚠ EVERY REFUSAL IS A 404 (spec §6.1). A transcript goes through
-   * `TranscriptAccessService`, which already answers 404 for both "gone" and
-   * "not yours" in the same words. A source note and a source document are
-   * checked here, owner-only, with the same posture — they are private rows and
-   * confirming one exists to somebody with no access to it is the leak the 404
-   * exists to close.
-   *
-   * There is no `NoteAccessService` yet (#53 owns it, spec §6.1). When it
-   * lands, the `note` branch becomes a call to it and nothing else here moves.
-   */
-  private async resolveSource(source: PreviewSourceDto, user: RequestUser) {
-    if (source.type === 'transcript') {
-      await this.transcriptAccess.require(
-        user.id,
-        source.transcriptId,
-        'view',
-        user.permissions,
-      );
-
-      return {
-        sourceType: 'transcript' as const,
-        sourceTranscriptId: source.transcriptId,
-        sourceNoteId: null,
-        sourceObjectId: null,
-      };
-    }
-
-    if (source.type === 'note') {
-      const note = await this.prisma.note.findFirst({
-        where: { id: source.noteId, ownerId: user.id, deletedAt: null },
-        select: { id: true },
-      });
-
-      if (!note) throw new NotFoundException('Note not found');
-
-      return {
-        sourceType: 'note' as const,
-        sourceTranscriptId: null,
-        sourceNoteId: source.noteId,
-        sourceObjectId: null,
-      };
-    }
-
-    const object = await this.prisma.storageObject.findFirst({
-      where: { id: source.objectId, uploadedById: user.id, managedBy: 'notes' },
-      select: { id: true },
-    });
-
-    if (!object) throw new NotFoundException('Document not found');
-
-    return {
-      sourceType: 'document' as const,
-      sourceTranscriptId: null,
-      sourceNoteId: null,
-      sourceObjectId: source.objectId,
-    };
-  }
-
-  /**
-   * Which provider and model this preview runs on, or a refusal that says which
-   * of the three things is missing.
-   *
-   * THREE DISTINCT ANSWERS, because they have three different fixes and three
-   * different people to talk to (the argument `AiConfigService` makes for
-   * keeping `available` and `keyConfigured` separate, applied to the refusal):
-   *
-   *   • the deployment has not enabled AI, or permits no model this build can
-   *     budget → **409**. The request was well formed; the deployment is not
-   *     ready. Same posture as `POST /api/transcripts`' 409.
-   *   • the CALLER has no API key → **409**, with a different sentence. It is
-   *     still "not ready", but the person who fixes it is the caller.
-   *   • the requested model is not permitted → **400**, naming the permitted
-   *     list. That one IS the caller's input.
-   */
-  private async resolveModel(userId: string, requested: string | null) {
-    const config = await this.aiConfig.getConfig(userId);
-
-    if (!config.available || !config.provider) {
-      throw new ConflictException(
-        'AI features are not configured for this deployment, so a template cannot be previewed. ' +
-          'An administrator can enable them in system settings.',
-      );
-    }
-
-    if (!config.keyConfigured) {
-      throw new ConflictException(
-        'You have not saved an AI API key. A preview is a real generation on your own provider ' +
-          'account, so it needs your key. Add one in your settings and try again.',
-      );
-    }
-
-    const permitted = config.models.map((entry) => entry.id);
-    const model = requested ?? config.defaultModel;
-
-    if (!model || !permitted.includes(model)) {
-      throw new BadRequestException(
-        `The model "${model ?? 'none'}" is not one this deployment permits. Choose one of: ` +
-          `${permitted.join(', ')}.`,
-      );
-    }
-
-    const provider = this.providers.get(config.provider);
-
-    if (!provider) {
-      // `AiConfigService.available` already required the provider to be
-      // registered, so this is unreachable in practice; it is a 409 rather than
-      // a thrown 500 because "this build does not have that provider" is a
-      // deployment state, not a bug in the request.
-      throw new ConflictException(
-        `This version of the application does not have the "${config.provider}" provider.`,
-      );
-    }
-
-    const policy = await this.aiSettings.get();
-
-    return { provider, model, policy };
   }
 }
