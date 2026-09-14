@@ -25,6 +25,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DescriptionIcon from '@mui/icons-material/Description';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -134,6 +135,43 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
         description: 'Create and revoke personal access tokens for API and CLI access.',
         Icon: VpnKeyIcon,
         path: '/settings/tokens',
+      },
+    ],
+  },
+  {
+    // Issue #80. A THIRD GROUP, LAST, AND ON ITS OWN — not a fourth card under
+    // `Account` and not a second one under `Security`. The hub renders groups
+    // as visually separated blocks with their own heading, and that separation
+    // is the only thing this registry can contribute to safety: a destination
+    // whose every action is permanent and unrecoverable must not sit one row
+    // under "pick a colour scheme", which is precisely the adjacency the
+    // `Security` group's own note above already objected to for a far milder
+    // reason (a revocable token this application issued). Last in the array so
+    // it is last on the hub and last in the Console rail, in both cases below
+    // everything a user has an ordinary reason to open.
+    //
+    // `Security` would have been the near miss. That group is about credentials
+    // — things that can be issued again after being destroyed. Nothing reached
+    // from here can be: there is no undo, and no restore a user can trigger.
+    //
+    // NO `permission`, like every card in this registry, and here the API's own
+    // shape is the argument rather than a convention this file follows:
+    // `apps/api/src/user-data/`'s controller gates `GET /api/user-data/summary`
+    // and `POST /api/user-data/deletions` on `@Auth()` with NO permission
+    // string, because the resource is the caller's OWN data, scoped by `userId`
+    // in the query itself — the identical posture `ai-credentials.controller.ts`
+    // and `/api/user-settings` take. Declaring a gate here would invent an
+    // authorization rule the API does not enforce, and it would fail in the
+    // worst available direction: a user unable to delete data this deployment
+    // is holding about them, because of a role somebody else assigned.
+    label: 'Danger Zone',
+    cards: [
+      {
+        title: 'Delete My Data',
+        description:
+          'Permanently delete your recordings, notes and files, or everything stored for your account.',
+        Icon: DeleteForeverIcon,
+        path: '/settings/danger-zone',
       },
     ],
   },

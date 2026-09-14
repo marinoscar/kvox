@@ -60,6 +60,10 @@ const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
 // Issue #126, epic #109 — the per-user event x channel notification matrix.
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
 const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
+// Issue #80. The one `/settings/*` destination whose every action is
+// permanent — its own `Danger Zone` group in `userSettingsSections.tsx`, and
+// ungated here like every sibling below.
+const UserDangerZonePage = lazy(() => import('./pages/UserDangerZonePage'));
 // Issue #55, epic #45 — the user's OWN AI provider key. Every AI surface in
 // that epic is unreachable until this page has been used once.
 const UserAiPage = lazy(() => import('./pages/UserAiPage'));
@@ -400,6 +404,19 @@ function AppRoutes() {
                       authorization and is therefore checked in the page. */}
                   <Route path="/settings/note-templates" element={<UserNoteTemplatesPage />} />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
+                  {/* Issue #80. Ungated like every `/settings/*` sibling, and
+                      with the same reason `/settings/ai` carries:
+                      `apps/api/src/user-data/`'s controller gates both of its
+                      routes on `@Auth()` and NO permission, because the
+                      resource is the caller's own data, scoped by `userId` in
+                      the query itself. A `RequirePermission` here would be a
+                      gate the API does not have, and it would fail in the worst
+                      direction — a user unable to delete data this deployment
+                      holds about them because of a role somebody else assigned.
+                      The real gate is the typed confirmation in the page's
+                      dialog, which is a deliberate act rather than an
+                      authorization. */}
+                  <Route path="/settings/danger-zone" element={<UserDangerZonePage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `ProtectedRoute` above only establishes that someone is
                       logged in — before this, a Viewer typing `/admin/settings`
