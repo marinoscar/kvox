@@ -109,6 +109,7 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'transcription.poll': 'Transcription poll',
   'transcription.ingest': 'Transcription ingest',
   'transcript.snapshot': 'Transcript snapshot',
+  'transcript.export': 'Transcript export',
   'transcript.purge': 'Transcript purge',
   'transcripts.housekeeping': 'Transcript housekeeping',
 };

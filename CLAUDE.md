@@ -622,6 +622,9 @@ here.
 - `GET /api/transcripts/{id}/versions?cursor` - The history, newest first. `author: null` **means the AI**, not a missing value
 - `GET /api/transcripts/{id}/versions/{v}` - One materialized version, without word timings
 - `POST /api/transcripts/{id}/versions/{v}/restore` - Appends a `restore` version; **history is never rewritten** and v1 is always retrievable. `baseVersion` here **must match** `currentVersion` (unlike `/operations`), because a restore carries no per-op expectations and a stale view would discard edits the caller never saw
+- `GET /api/transcripts/exporters` - Every registered export format with the options it accepts, so a client builds its export UI from the server's answer rather than from a list of formats compiled into it (`transcripts:read`)
+- `POST /api/transcripts/{id}/exports` - Render one version into one format. **202** when a render was queued, **200** when an identical unexpired export already exists — `reused` says which, for a client that cannot see the status line. Reuse is content-addressed on `sha256({format, version, options})` with the options **as parsed**, so an omitted option and an explicit default share one render; a `failed` row is never reused. Requires **view** access, which a `viewer` share satisfies: taking a conversation you were shown out of this application is a read
+- `GET /api/transcripts/{id}/exports/{exportId}` - Status, and once ready a short-lived signed `downloadUrl` serving the file as `<title> (v<n>).<ext>`. The `Content-Disposition` is signed **into** the URL, so a client cannot add the filename afterwards
 
 Three correction rules that are easy to break from a neighbouring file:
 
@@ -644,6 +647,29 @@ Three correction rules that are easy to break from a neighbouring file:
    actually saw — never to the one its payload named. Version 1 is the one
    version no sequence of ops can rebuild, which is why it is snapshotted
    unconditionally.
+
+Two export rules, in the same spirit:
+
+4. **Adding an export format must cost one class.** An exporter declares
+   `format`, `label`, `mimeType`, `extension`, an `options` field list and a
+   `render(doc, options, out: Writable)`, and registers itself with
+   `TranscriptExporterRegistry` from `onModuleInit` — the same self-registration
+   shape job handlers use. `GET /api/transcripts/exporters` publishes the
+   registry, the export dialog renders whatever it returns, and the Zod schema
+   that validates a request is **derived** from the `options` field list rather
+   than written beside it. Nothing in the controller, the job handler or
+   `apps/web` may branch on a format string; `apps/api/src/transcripts/export/`
+   is the whole surface.
+5. **`transcript.export` is server-only in v1, and not for one of rule 2's
+   reasons.** Its input is a materialized snapshot — pure data a node could be
+   handed with no database access — and rendering a PDF is exactly the
+   CPU-bound, secret-free work rule 2 says should default to node-eligible. It
+   stays server-only because **the renderers live in the API**: a second copy in
+   `apps/cli` would mean one export request producing byte-for-byte different
+   PDFs depending on which codebase claimed the job. That is a deliberate scope
+   line, not a structural limit — the handler carries the argument in full, and
+   nothing about spec §8 would have to change to add `nodeResultSchema` +
+   `persistNodeResult` once the renderers are a package both can import.
 
 ### Transcription Settings (Admin-only)
 Speech-to-text provider configuration (issue #23, epic #19) — which vendor, its
@@ -1176,8 +1202,11 @@ having here because they are easy to break from a neighbouring file:
 
 Job types, all labelled in `job-type-labels.ts`: `media.audio.transcode`,
 `transcription.submit`, `transcription.poll`, `transcription.ingest`,
-`transcript.snapshot`, `transcript.purge`, `transcripts.housekeeping` — the last
-enqueued by a ten-minute `@Cron` that only enqueues, like every other one.
+`transcript.snapshot`, `transcript.export`, `transcript.purge`,
+`transcripts.housekeeping` — the last enqueued by a ten-minute `@Cron` that only
+enqueues, like every other one. `transcript.export` runs at priority **−10**,
+the opposite end of the spectrum from `HOUSEKEEPING_PRIORITY = 100`: it is the
+one type in this epic where somebody is watching a spinner.
 
 ### Worker Node Fleet, Maintenance Mode
 

@@ -57,6 +57,19 @@ export const TRANSCRIPTION_INGEST_JOB_TYPE = 'transcription.ingest';
  */
 export const TRANSCRIPT_SNAPSHOT_JOB_TYPE = 'transcript.snapshot';
 
+/**
+ * Render one version of a transcript into one file, in one format.
+ *
+ * SERVER-ONLY IN v1, and spec §1.5.6 is explicit that this is NOT one of
+ * CLAUDE.md rule 2's three exemptions: its input is a materialized snapshot, so
+ * a node could be handed it with no database access at all. It stays here
+ * because THE RENDERERS LIVE IN THE API — a second copy in `apps/cli` would
+ * mean the same export request producing byte-for-byte different PDFs
+ * depending on which codebase claimed the job. The handler carries the same
+ * argument in full.
+ */
+export const TRANSCRIPT_EXPORT_JOB_TYPE = 'transcript.export';
+
 /** Remove every byte and every row a deleted transcript ever owned. */
 export const TRANSCRIPT_PURGE_JOB_TYPE = 'transcript.purge';
 

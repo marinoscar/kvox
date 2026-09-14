@@ -32,7 +32,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { StorageObject } from '@prisma/client';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable, Transform } from 'node:stream';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectsService } from '../storage/objects/objects.service';
@@ -127,6 +127,65 @@ export class TranscriptObjectsService {
   }
 
   /**
+   * Stream bytes into object storage, then record them — never buffering them.
+   *
+   * The counterpart to `put` for an artifact THIS PROCESS PRODUCES but must not
+   * hold: issue #28's PDF export, which spec §8.4 requires to stream precisely
+   * because a ten-hour recording's document runs to hundreds of pages. `put`
+   * takes a `Buffer`, which for that artifact would undo the streaming the
+   * exporter went to the trouble of doing.
+   *
+   * The caller is handed a `Writable` and a promise. It writes the document to
+   * the stream and ends it; the promise settles with the recorded row once the
+   * upload has finished. ⚠ BOTH MUST BE AWAITED BY THE CALLER, and the reason
+   * is the one `docs/specs/database-backup.md` states for `pg_dump`: awaiting
+   * only the producer reports success on a truncated object, and awaiting only
+   * the upload hides an error the producer raised. A failure on either side
+   * destroys the other, so neither can succeed alone.
+   *
+   * The size is METERED as the bytes pass rather than declared, because nothing
+   * knows it in advance — that is the whole point of not buffering.
+   */
+  putStream(input: Omit<PutManagedObjectInput, 'body'>): {
+    body: PassThrough;
+    done: Promise<StorageObject>;
+  } {
+    const body = new PassThrough();
+
+    let size = 0;
+
+    const meter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        callback(null, chunk);
+      },
+    });
+
+    const metered = body.pipe(meter);
+
+    const done = (async () => {
+      await this.storage.upload(input.storageKey, metered, { mimeType: input.mimeType });
+
+      const object = await this.createRow({ ...input, size });
+
+      this.logger.log(
+        `Streamed managed object ${object.id} (${size} bytes) to ${input.storageKey}`,
+      );
+
+      return object;
+    })();
+
+    // Nothing may reject unobserved here: the caller awaits `done`, but if the
+    // upload fails BEFORE the caller has finished writing, its writes would
+    // otherwise pile up against a stream nobody is reading.
+    done.catch((error: unknown) => {
+      body.destroy(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    return { body, done };
+  }
+
+  /**
    * Record bytes that are ALREADY in the bucket, after checking that they are.
    *
    * The counterpart to `put` for the one case `put` cannot serve: an artifact
@@ -209,6 +268,7 @@ export class TranscriptObjectsService {
   async signedUrlFor(
     objectId: string,
     expiresInSeconds: number,
+    contentDisposition?: string,
   ): Promise<{ url: string; expiresAt: Date; object: StorageObject } | null> {
     const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
 
@@ -216,6 +276,11 @@ export class TranscriptObjectsService {
 
     const url = await this.storage.getSignedDownloadUrl(object.storageKey, {
       expiresIn: expiresInSeconds,
+      // ⚠ PART OF THE SIGNATURE. A provider signs `response-content-disposition`
+      // into the URL, which is what makes an export download as a named
+      // attachment instead of rendering in the tab — and also why it cannot be
+      // added by the caller afterwards as a header.
+      responseContentDisposition: contentDisposition,
     });
 
     return {

@@ -146,6 +146,19 @@ COPY apps/api/prisma.config.ts ./apps/api/
 # REPOSITORY-ROOT scripts/ directory. The similar name is most likely why
 # this one was missed.
 COPY apps/api/scripts ./apps/api/scripts/
+# The bundled Noto faces the PDF export renders with (epic #19, issue #28).
+#
+# `node:24-alpine` ships NO fonts at all, so this is not a fallback for a
+# missing system family — it is the only typography the image has. The three
+# .ttf files are committed under apps/api/assets/fonts and resolved at runtime
+# as dist/transcripts/export/../../../assets/fonts, which is why they land at
+# apps/api/assets rather than beside dist/.
+#
+# WITHOUT THIS LINE THE IMAGE BUILDS GREEN, STARTS FINE, AND THROWS ON THE
+# FIRST PDF EXPORT ANYBODY ASKS FOR — the same class of failure the scripts/
+# copy above was added to fix, and the reason
+# test/transcripts/transcript-export-assets.spec.ts asserts it exists.
+COPY apps/api/assets ./apps/api/assets/
 COPY scripts ./scripts
 WORKDIR /app/apps/api
 EXPOSE 3000
