@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
-import { APP_NAME, THEME_COLOR } from '@app/shared';
+import { APP_NAME, APP_SLUG, THEME_COLOR } from '@app/shared';
 import { buildServiceWorkerOptions } from './pwa/service-worker';
 
 /**
@@ -92,10 +92,18 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
-    // The dev VPS proxies kvox.dev.marin.cr to this server; without this
-    // entry Vite 5+'s Host header check rejects the request and every page
-    // load is blocked.
-    allowedHosts: ['kvox.dev.marin.cr', 'localhost', '.localhost'],
+    // The dev VPS proxies `<app-slug>.dev.marin.cr` to this server; without
+    // this entry Vite 5+'s Host header check rejects the request and every
+    // page load is blocked.
+    //
+    // DERIVED FROM `APP_SLUG`, NOT WRITTEN OUT. The host is named after the
+    // product, so spelling it literally here is exactly the regression
+    // `apps/cli/src/template-identity.test.ts` exists to catch: a fork that
+    // renames would keep proxying to a hostname this file no longer allows,
+    // and the only symptom would be a blank dev page behind a Host-header
+    // rejection. The domain suffix is infrastructure, not identity, so it
+    // stays a literal.
+    allowedHosts: [`${APP_SLUG}.dev.marin.cr`, 'localhost', '.localhost'],
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
