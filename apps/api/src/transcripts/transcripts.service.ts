@@ -20,8 +20,11 @@
 //   • transcription not configured → 409. The request was well-formed; the
 //     DEPLOYMENT is not ready. A 400 would blame the caller for an
 //     administrator's unfinished setup.
-//   • file too large, or a type the provider will not take → 400. The caller
-//     can fix this by picking a different file, which is what 400 means.
+//   • file too large, or a file that is not audio or video at all → 400. The
+//     caller can fix this by picking a different file, which is what 400
+//     means. Note the second half is NOT "a type the provider will not take":
+//     the type gate is `TRANSCRIPT_SOURCE_MIME_TYPES`, deliberately wider than
+//     the provider's own accepted list — see the ⚠ above `initUpload` below.
 //   • no `transcripts:write` → 403, from the guard, before any of this runs.
 //
 // All three are checked BEFORE `initUpload`, so a rejected request leaves no
@@ -64,6 +67,28 @@ import {
 import { TranscriptObjectsService } from './transcript-objects.service';
 import { TranscriptPipelineService } from './transcript-pipeline.service';
 import { TranscriptionRuntimeService } from './transcription-runtime.service';
+
+/**
+ * The content-type allowlist `POST /api/transcripts` enforces, handed to
+ * `ObjectsService.initUpload` in place of the operator-configured
+ * `storage.allowedMimeTypes` (issue #79).
+ *
+ * ⚠ THE WHOLE AUDIO AND VIDEO FAMILIES, DELIBERATELY — not the active
+ * provider's `acceptedMimeTypes`, and not a hand-kept list of container
+ * extensions either. Narrowing this to what the provider takes directly would
+ * reject files this pipeline transcribes perfectly well, because
+ * `media.audio.transcode` exists precisely to produce a rendition the provider
+ * does accept; see the ⚠ at the call site for why that decision belongs later,
+ * once the rendition's existence is known. Video is here for the same reason a
+ * phone's `.mov` of a meeting is a recording: the pipeline extracts audio from
+ * it, the user does not care which of the two they pressed record in.
+ *
+ * It is a MODULE-LEVEL constant rather than an inline literal at the call site
+ * so that the thing this endpoint accepts can be read, cited and changed in one
+ * place — the same reason `job-types.ts` writes the pipeline's job names down
+ * once instead of spelling them at each enqueue.
+ */
+const TRANSCRIPT_SOURCE_MIME_TYPES = ['audio/*', 'video/*'];
 
 /** The list-row projection, as every read surface returns it. */
 export interface TranscriptListItem {
@@ -135,10 +160,18 @@ export class TranscriptsService {
     // OVERSIGHT. A file the provider will not take directly is not necessarily
     // untranscribable: `media.audio.transcode` produces a rendition the
     // provider does accept, and `selectTranscriptionInput` is what decides
-    // between them LATER, with the rendition's existence known. What is
-    // rejected here is a type `ObjectsService.initUpload` itself refuses (not
-    // audio at all) — which it does, with its own 400, using the same
-    // extension-aware resolution mobile browsers make necessary.
+    // between them LATER, with the rendition's existence known. So the check
+    // this endpoint enforces is `TRANSCRIPT_SOURCE_MIME_TYPES` — "is this audio
+    // or video at all" — PASSED INTO `initUpload` rather than left to whatever
+    // `storage.allowedMimeTypes` happens to say. That distinction is the whole
+    // of issue #79: this call used to inherit the operator's allowlist for
+    // arbitrary uploads, so a deployment whose `.env` predates #21 and never
+    // grew an `audio/*` entry rejected every Android recording with a message
+    // about images and PDFs — for a type (`audio/x-m4a`) the provider's own
+    // accepted list already contains. `initUpload` still applies its
+    // extension-aware resolution on top of the list it is given, which is what
+    // mobile browsers reporting `application/octet-stream` for a `.m4a` make
+    // necessary; it is only the LIST that this module supplies.
     const upload = await this.objects.initUpload(
       {
         name: dto.source.name,
@@ -146,11 +179,16 @@ export class TranscriptsService {
         mimeType: dto.source.mimeType,
       },
       user.id,
-      // ⚠ `managedBy` IS A SERVICE-LEVEL ARGUMENT AND UNREACHABLE OVER HTTP.
-      // It is what makes this object invisible to `GET /api/storage/objects`
-      // and undeletable through the generic `DELETE` — the ownership boundary
-      // spec §9.3 describes, claimed here by the module that will own it.
-      TRANSCRIPTS_MANAGED_BY,
+      {
+        // ⚠ BOTH OF THESE ARE SERVICE-LEVEL ARGUMENTS AND UNREACHABLE OVER
+        // HTTP, for the two reasons `initUpload`'s own block comment sets out:
+        // a client that could claim `managedBy` would mint a row the generic
+        // list hides and the generic `DELETE` refuses (the ownership boundary
+        // of spec §9.3), and a client that could name its own
+        // `allowedMimeTypes` would have defeated the allowlist entirely.
+        managedBy: TRANSCRIPTS_MANAGED_BY,
+        allowedMimeTypes: TRANSCRIPT_SOURCE_MIME_TYPES,
+      },
     );
 
     const transcript = await this.prisma.transcript.create({
