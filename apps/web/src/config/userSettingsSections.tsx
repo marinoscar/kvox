@@ -24,6 +24,7 @@ import PaletteIcon from '@mui/icons-material/Palette';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import DescriptionIcon from '@mui/icons-material/Description';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -99,6 +100,29 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Connect your own AI provider key. AI features run on your account, and the usage is billed to you.',
         Icon: AutoAwesomeIcon,
         path: '/settings/ai',
+      },
+      {
+        // Issue #56, epic #45. NO `permission`, like every card here:
+        // `note-templates.controller.ts` gates its routes on
+        // `note_templates:read` / `note_templates:write`, both of which are
+        // seeded to ALL THREE roles (Admin, Contributor, Viewer) — authoring
+        // the template for your own notes is the core product action, not an
+        // operational surface. Declaring a gate here would hide the card from
+        // nobody while inventing a rule the API does not enforce; leaving it
+        // off keeps this registry's single, consistent claim intact ("every
+        // authenticated user owns their own settings"), which
+        // `userSettingsSections.test.ts` asserts across the whole file.
+        //
+        // Under `Account` alongside `AI Provider`, not `Security`: a template
+        // is a preference about how this account's notes are written. It sits
+        // directly after the key it depends on — the page renders
+        // `AiKeyRequired` without one — so the hub reads in the order the
+        // setup actually happens.
+        title: 'Note Templates',
+        description:
+          'Describe the notes you want from a recording, and generate a sample to check the result before you rely on it.',
+        Icon: DescriptionIcon,
+        path: '/settings/note-templates',
       },
     ],
   },
