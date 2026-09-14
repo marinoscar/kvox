@@ -107,6 +107,10 @@ export type {
   BackupFailedEmailData,
   BackupFailureOutcome,
   RestoreCompletedEmailData,
+  // #25's two owner-addressed payloads (epic #19). Unlike the four above,
+  // these reach `notify(key, ownerId, …)` rather than a permission fan-out.
+  TranscriptReadyEmailData,
+  TranscriptFailedEmailData,
 } from './templates';
 export type { EmailProvider } from './providers/email-provider.interface';
 export type {
