@@ -185,7 +185,7 @@ describe('TranscriptsService', () => {
       expect(objects.initUpload).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'meeting.mp3' }),
         USER.id,
-        TRANSCRIPTS_MANAGED_BY,
+        expect.objectContaining({ managedBy: TRANSCRIPTS_MANAGED_BY }),
       );
     });
 
