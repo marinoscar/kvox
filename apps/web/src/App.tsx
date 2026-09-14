@@ -51,6 +51,9 @@ const UserAppearancePage = lazy(() => import('./pages/UserAppearancePage'));
 // Issue #126, epic #109 — the per-user event x channel notification matrix.
 const UserNotificationsPage = lazy(() => import('./pages/UserNotificationsPage'));
 const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
+// Issue #55, epic #45 — the user's OWN AI provider key. Every AI surface in
+// that epic is unreachable until this page has been used once.
+const UserAiPage = lazy(() => import('./pages/UserAiPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -66,6 +69,9 @@ const PushConfigPage = lazy(() => import('./pages/Admin/PushConfigPage'));
 const TranscriptionSettingsPage = lazy(
   () => import('./pages/Admin/TranscriptionSettingsPage'),
 );
+// Issue #55, epic #45 — the deployment's AI POLICY. Holds no key: every AI key
+// belongs to an individual user (`UserAiPage` above).
+const AiSettingsPage = lazy(() => import('./pages/Admin/AiSettingsPage'));
 // Issue #258, epic #254 — the maintenance window's switch and its layers.
 // `Admin`-prefixed locally to keep it distinct from `pages/MaintenancePage`,
 // which is the screen a BLOCKED user sees rather than the page that opens and
@@ -280,6 +286,14 @@ function AppRoutes() {
                       preferences, and the registry endpoint the page renders is
                       itself `@Auth()` with no permission for the same reason. */}
                   <Route path="/settings/notifications" element={<UserNotificationsPage />} />
+                  {/* Issue #55, epic #45. Unwrapped like its siblings, and
+                      with the strongest version of their reason:
+                      `ai-credentials.controller.ts` gates all four of its
+                      routes on `@Auth()` and NO permission, because the
+                      resource is the caller's own credential. A
+                      `RequirePermission` here would be a gate the API does not
+                      have. */}
+                  <Route path="/settings/ai" element={<UserAiPage />} />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `ProtectedRoute` above only establishes that someone is
@@ -434,6 +448,30 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <TranscriptionSettingsPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #55, epic #45. Same permission string the `AI` card
+                      declares in `config/adminSections.tsx`, which is the same
+                      string `ai-settings.controller.ts` enforces on its GET —
+                      the invariant `destinations.test.ts` asserts for every
+                      card. `system_settings:read` and not `:write`: saving the
+                      policy and probing the base URL both need write, which
+                      the page disables without it, but "which models may this
+                      deployment use, under what ceilings" is worth READING for
+                      anyone diagnosing why a note was refused.
+
+                      ⚠ This page holds NO API KEY — there is no deployment AI
+                      credential in epic #45 — so unlike the transcription
+                      route above, `:write` here never gates a secret. */}
+                  <Route
+                    path="/admin/settings/ai"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AiSettingsPage />
                       </RequirePermission>
                     }
                   />
