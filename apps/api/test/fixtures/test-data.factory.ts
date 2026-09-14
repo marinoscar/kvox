@@ -176,6 +176,31 @@ export const mockPermissions = {
     name: 'transcripts:write',
     description: 'Create, edit and delete your own transcripts',
   },
+  // Notes (#48, epic #45). Seeded to ALL THREE ROLES in `prisma/seed-data.ts`
+  // — the identical posture `transcripts:*` takes just above, and mirrored the
+  // same way below. A fixture that withheld these from Viewer would make an
+  // integration test asserting a viewer CAN reach `GET /api/ai/config` (which
+  // is gated on `notes:read`) fail for a reason the real seed does not have.
+  notesRead: {
+    id: randomUUID(),
+    name: 'notes:read',
+    description: 'View your own notes, versions and generations',
+  },
+  notesWrite: {
+    id: randomUUID(),
+    name: 'notes:write',
+    description: 'Create, regenerate, edit and delete your own notes',
+  },
+  noteTemplatesRead: {
+    id: randomUUID(),
+    name: 'note_templates:read',
+    description: 'View note templates',
+  },
+  noteTemplatesWrite: {
+    id: randomUUID(),
+    name: 'note_templates:write',
+    description: 'Create, edit and delete your own note templates',
+  },
 };
 
 export const mockRoles = {
@@ -492,6 +517,10 @@ export const rolePermissionsMap = {
     mockPermissions.pushWrite,
     mockPermissions.transcriptsRead,
     mockPermissions.transcriptsWrite,
+    mockPermissions.notesRead,
+    mockPermissions.notesWrite,
+    mockPermissions.noteTemplatesRead,
+    mockPermissions.noteTemplatesWrite,
   ],
   contributor: [
     mockPermissions.userSettingsRead,
@@ -500,6 +529,10 @@ export const rolePermissionsMap = {
     mockPermissions.storageWrite,
     mockPermissions.transcriptsRead,
     mockPermissions.transcriptsWrite,
+    mockPermissions.notesRead,
+    mockPermissions.notesWrite,
+    mockPermissions.noteTemplatesRead,
+    mockPermissions.noteTemplatesWrite,
   ],
   // Viewer gets storage:read and NOT storage:write, exactly as seeded — which
   // is what makes a 403 on a storage:write route testable.
@@ -510,6 +543,12 @@ export const rolePermissionsMap = {
     // Both, deliberately — see `transcriptsRead`'s note above.
     mockPermissions.transcriptsRead,
     mockPermissions.transcriptsWrite,
+    // All four, deliberately — see `notesRead`'s note above. `notes:read` in
+    // particular is what makes `GET /api/ai/config` reachable by a Viewer.
+    mockPermissions.notesRead,
+    mockPermissions.notesWrite,
+    mockPermissions.noteTemplatesRead,
+    mockPermissions.noteTemplatesWrite,
   ],
 };
 

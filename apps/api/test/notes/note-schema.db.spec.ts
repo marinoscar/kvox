@@ -178,6 +178,8 @@ describeWithDb('Notes schema (real Postgres)', () => {
           name: 'test-note-template-cascade',
           description: 'A custom template',
           instructions: 'Summarize the meeting.',
+          outputFormat: 'meeting_notes',
+          structure: ['Overview', 'Decisions'],
         },
       });
 
@@ -376,6 +378,10 @@ describeWithDb('Notes schema (real Postgres)', () => {
             name: template.name,
             description: template.description,
             instructions: template.instructions,
+            outputFormat: template.outputFormat,
+            structure: template.structure,
+            tone: template.tone,
+            length: template.length,
           },
           create: {
             id: template.id,
@@ -383,6 +389,10 @@ describeWithDb('Notes schema (real Postgres)', () => {
             name: template.name,
             description: template.description,
             instructions: template.instructions,
+            outputFormat: template.outputFormat,
+            structure: template.structure,
+            tone: template.tone,
+            length: template.length,
           },
         });
       }
@@ -419,6 +429,10 @@ describeWithDb('Notes schema (real Postgres)', () => {
           name: `${original.name} (copy)`,
           description: original.description,
           instructions: 'A customised version the user has since edited.',
+          outputFormat: original.outputFormat,
+          structure: original.structure,
+          tone: original.tone,
+          length: original.length,
         },
       });
 
