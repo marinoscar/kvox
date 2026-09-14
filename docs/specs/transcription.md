@@ -554,6 +554,39 @@ defensive classification function is written once so three job handlers do
 not each grow their own slightly different `catch` block that drifts from
 the others the first time one of them is patched.
 
+**When the "ordinary retryable failure" budget runs out with nothing left
+watching (issue #95).** The row above says `transcripts.transcription_status`
+moves to `failed` via the job's `job.settled` listener "so the transcript does
+not sit `processing` forever" — but that only happens for a failure the
+handler itself recognized as unclassifiable and rethrew *from inside its own
+`process()`*. It does nothing for a failure that IS an ordinary retryable
+failure on every individual attempt, none of which is ever unclassifiable,
+but whose retry budget still runs out: AssemblyAI's `speech_model` parameter
+change (§2.7) is the live example — `assertOk` reports the vendor's 400 as a
+plain `Error`, which is correctly retryable, and after `maxAttempts: 3` the
+**job** goes `failed` with no code path having ever decided the **transcript**
+should. `TranscriptJobFailureListener`
+(`apps/api/src/transcripts/listeners/transcript-job-failure.listener.ts`)
+closes that gap from outside the handler entirely: on `JOB_SETTLED_EVENT` with
+`status: 'failed'` for `transcription.submit`/`transcription.poll` (stage
+`transcription`), `transcription.ingest` (stage `ingest`), or
+`media.audio.transcode`, when the transcript is still `processing` and no
+other `pending`/`running` pipeline job exists for it (a fresh retry or a newer
+poll-chain link, if one exists, owns the outcome instead), it calls
+`markFailed` — retryable, for the transcription/ingest stages — with a reason
+that quotes the job's `lastError` (bounded to 500 characters). For
+`media.audio.transcode` it mirrors `MediaAudioTranscodeHandler
+.onTranscodeError`'s own last-attempt branch (`playback_status: failed`, and
+the transcript only fails if transcription was `waiting_input` on that
+rendition) — needed because that method runs inside the **server's**
+`process()` catch, which never executes when a worker node reports the
+exhaustion through `POST /api/nodes/:id/jobs/:jobId/failure`, or when the
+server process itself is killed mid-transcode and the reaper settles the last
+attempt. The listener is detached from the event dispatch, idempotent
+(`markFailed` guards in its own `UPDATE`), and never rethrows — a failure to
+reconcile is logged and left to `transcripts.housekeeping` as the backstop,
+never something that could affect the job's own terminal row.
+
 ## 2. The provider contract
 
 ### 2.1 `TranscriptionProvider`
@@ -724,8 +757,8 @@ already applied to every other outbound HTTP call in this repository.
 | Base URL, US | `https://api.assemblyai.com` |
 | Base URL, EU | `https://api.eu.assemblyai.com` |
 | Auth | `authorization: <api_key>` request header — **no** `Bearer` prefix |
-| Submit | `POST /v2/transcript` with `audio_url`, `speaker_labels: true`, optional `speakers_expected`, either `language_code` or `language_detection: true`, and the configured `speech_model` |
-| Poll / fetch | `GET /v2/transcript/{id}` — `status` ∈ `queued \| processing \| completed \| error`, plus `audio_duration` (**seconds**), `utterances[]` (`speaker`, `start`, `end`, `text`, `confidence`, `words[]`) and `words[]` (`text`, `start`, `end`, `confidence`) — **`start`/`end` are milliseconds** |
+| Submit | `POST /v2/transcript` with `audio_url`, `speaker_labels: true`, optional `speakers_expected`, either `language_code` or `language_detection: true`, and the configured `speech_models` (an ordered array — see below; **not** the singular `speech_model`) |
+| Poll / fetch | `GET /v2/transcript/{id}` — `status` ∈ `queued \| processing \| completed \| error`, plus `audio_duration` (**seconds**), `speech_model_used` (the model the vendor actually ran — falls back to the older `speech_model` field for a payload predating #95), `utterances[]` (`speaker`, `start`, `end`, `text`, `confidence`, `words[]`) and `words[]` (`text`, `start`, `end`, `confidence`) — **`start`/`end` are milliseconds** |
 | Delete | `DELETE /v2/transcript/{id}` — redacts/removes the stored transcript |
 | Auth probe | `GET /v2/transcript?limit=1` — `401` on an invalid key, used by `testConnection` |
 | Capabilities | `maxInputBytes`: 5 GB. `maxDurationMs`: 10 hours |
@@ -735,6 +768,27 @@ honouring `Retry-After` when present (through the same `parseRetryAfterMs`
 `docs/specs/job-queue.md` §5.2 already uses); a `status: error` result on an
 otherwise-`completed` poll → `ProviderInputError`; anything else defaults
 retryable, per §2.3.
+
+**RE-VERIFIED 2026-09-14 (issue #95):** the model selector. AssemblyAI now
+refuses the singular `speech_model` request parameter with an HTTP 400 ("The
+speech_model parameter is deprecated. Use speech_models: [...]"), which
+`assertOk` reports as a plain retryable error — every submission exhausted
+`transcription.submit`'s `maxAttempts: 3` and the transcript sat at
+`processing` forever with no visible error. The provider now sends
+`speech_models: string[]` (ordered; AssemblyAI falls back through the list by
+language support) and reads the model actually used back from the response's
+`speech_model_used` (falling back to the older `speech_model` field for a
+payload predating this change). Current documented ids:
+`universal-3-5-pro` (recommended, most accurate) and `universal-2` (broadest
+language coverage) — see
+https://www.assemblyai.com/docs/pre-recorded-audio/select-the-speech-model.
+The stored `transcription.providers.assemblyai.speechModel` setting is
+unchanged in shape (still a string) and is now read as a comma-separated,
+ordered list; the retired singular ids `universal`, `best`, `nano` and
+`slam-1` are dropped, and an empty result resolves to the default list
+`universal-3-5-pro, universal-2` — so an existing deployment's stored
+`"universal"` keeps working with no migration. See
+`resolveAssemblyAiSpeechModels` in `assemblyai.provider.ts`.
 
 **⚠ These parameter names, the speech-model identifiers, and the two
 capability numbers are the implementation target as of this document's
