@@ -115,7 +115,11 @@ export interface UploadManagerContextValue {
    * session was started for — the caller shows that message rather than
    * uploading part 7 of a different file into the same object.
    */
-  resumeFromSession: (session: UploadSessionRecord, file: File) => Promise<ManagedUpload>;
+  resumeFromSession: (
+    session: UploadSessionRecord,
+    file: File,
+    engineOptions?: ResumableUploadOptions,
+  ) => Promise<ManagedUpload>;
   refreshSessions: () => Promise<void>;
   getUpload: (id: string) => ManagedUpload | undefined;
 }
@@ -261,7 +265,11 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
   );
 
   const resumeFromSession = useCallback(
-    async (session: UploadSessionRecord, file: File) => {
+    async (
+      session: UploadSessionRecord,
+      file: File,
+      engineOptions?: ResumableUploadOptions,
+    ) => {
       // Throws `UploadSessionMismatchError` before anything is uploaded. See
       // `uploadSessions.ts` for why a mismatch is a hard stop rather than a
       // warning: the resulting object assembles cleanly and is corrupt.
@@ -271,7 +279,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       // record, which describes what this browser believed it sent before it
       // stopped being able to observe anything.
       const status = await fetchUploadStatus(session.objectId);
-      const upload = resumeUploadEngine(file, session.objectId, status);
+      const upload = resumeUploadEngine(file, session.objectId, status, engineOptions);
 
       const record: ManagedUpload = {
         id: session.objectId,
