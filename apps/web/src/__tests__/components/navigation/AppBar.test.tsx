@@ -384,6 +384,67 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/transcripts');
     });
 
+    it('shows Back + "Note" on a note, going up to the NOTES tab (#57)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/notes/abc-123' } });
+
+      expect(screen.getByText('Note')).toBeInTheDocument();
+      expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      // ⚠ `/notes`, NOT `/transcripts`. They are one destination, but the TAB
+      // is the URL (#57) — going up to `/transcripts` would silently switch
+      // which half of the library the reader is looking at.
+      expect(mockNavigate).toHaveBeenCalledWith('/notes');
+    });
+
+    it('goes up from a note’s version history to the NOTE, not to the library (#57)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/notes/abc-123/history' } });
+
+      // The more specific pattern wins: `/notes/:id` would otherwise claim this
+      // path and send Back one level too far.
+      expect(screen.getByText('Version history')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/notes/abc-123');
+    });
+
+    it('shows Back + "New note" on the create route (#57)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/notes/new' } });
+
+      expect(screen.getByText('New note')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/notes');
+    });
+
+    it('keeps the wordmark on /notes — it is the other TAB, not a page below one (#57)', () => {
+      // The same reasoning as `/transcripts` below: a back arrow on a tab of
+      // the current destination is a second, contradictory answer to "where am
+      // I", and the bottom bar is already answering it.
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/notes' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('does not claim a note look-alike path (#57)', () => {
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/notesfoo/abc' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
     it('keeps the wordmark on the LIBRARY itself — it is a destination, not a drill-down', () => {
       // `/transcripts` has a bottom-bar tab of its own, so a back arrow there
       // would be a second, contradictory answer to "where am I".
