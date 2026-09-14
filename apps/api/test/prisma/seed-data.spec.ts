@@ -94,6 +94,16 @@ describe('seed data', () => {
         expect(seeded.has(permission)).toBe(true);
       }
     });
+
+    it('seeds the transcripts permissions this epic introduces (#24)', () => {
+      const seeded = new Set<string>(
+        PERMISSIONS.map((permission) => permission.name),
+      );
+
+      for (const permission of ['transcripts:read', 'transcripts:write']) {
+        expect(seeded.has(permission)).toBe(true);
+      }
+    });
   });
 
   describe('role-permission mappings', () => {
@@ -184,6 +194,20 @@ describe('seed data', () => {
         );
 
       expect(leaked).toEqual([]);
+    });
+
+    it('grants the transcripts permissions to ALL THREE roles (#24) — the opposite posture from every operational pair above', () => {
+      // Unlike jobs/nodes/db_backup/broadcasts/push (Admin-only), transcripts
+      // is the core product action and this app's DEFAULT_ROLE is Viewer, so
+      // every role — including Viewer — must hold both permissions from the
+      // moment the seed runs.
+      const transcripts = ['transcripts:read', 'transcripts:write'];
+
+      for (const role of ['admin', 'contributor', 'viewer']) {
+        for (const permission of transcripts) {
+          expect(ROLE_PERMISSIONS[role]).toContain(permission);
+        }
+      }
     });
   });
 
