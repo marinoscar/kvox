@@ -115,6 +115,18 @@ export const PERMISSIONS = [
     name: 'push:write',
     description: 'Generate, rotate, enable/disable and remove Web Push VAPID keys',
   },
+
+  // Transcripts (#24, epic #19). Granted to ALL THREE roles below — the
+  // opposite of the operational pairs above — because creating a transcript
+  // is the core product action and a brand-new account's default role is
+  // Viewer. There is deliberately no `transcripts:read_any`: a transcript is
+  // a private recorded conversation, not shared infrastructure, and no
+  // permission string exists for reading someone else's (an admin included).
+  { name: 'transcripts:read', description: 'View your own transcripts and shares' },
+  {
+    name: 'transcripts:write',
+    description: 'Create, edit and delete your own transcripts',
+  },
 ] as const;
 
 // Role to permissions mapping
@@ -157,17 +169,33 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     // and can be widened later without a migration, since these are rows.
     'push:read',
     'push:write',
+    // #24, epic #19 — ALL THREE ROLES, the opposite of every operational
+    // pair just above. See ROLE_PERMISSIONS.viewer below for the reasoning;
+    // it is stated once there rather than three times.
+    'transcripts:read',
+    'transcripts:write',
   ],
   contributor: [
     'user_settings:read',
     'user_settings:write',
     'storage:read',
     'storage:write',
+    'transcripts:read',
+    'transcripts:write',
   ],
   viewer: [
     'user_settings:read',
     'user_settings:write',
     'storage:read',
+    // #24, epic #19. Granted to Viewer — this app's DEFAULT_ROLE — and
+    // therefore to every role, because recording and reading back a
+    // transcript is the core product action, not an operational surface a
+    // fresh account should have to be promoted into. Contrast every
+    // Admin-only grant above: those gate infrastructure and organisation-
+    // wide broadcast authority; this gates a private, per-user resource
+    // with no `read_any` counterpart anywhere in this codebase.
+    'transcripts:read',
+    'transcripts:write',
   ],
 };
 
