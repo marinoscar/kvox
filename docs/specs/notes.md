@@ -635,6 +635,24 @@ model may carry its own `contextWindowTokens`/`maxOutputTokens` on its
 check below, the job's re-check, and the config probe) resolves through the
 same function so none of them can disagree about a given model's window.
 
+**On a reasoning model, `requestedMaxOutputTokens` bounds thinking and the
+answer together, never the answer alone (#87).** `ai.reasoningEffort`
+(§2.5's sibling field in `ai-settings.schema.ts`) tells OpenAI how many
+tokens to spend deliberating before it writes anything the user sees — drawn
+from the *same* `maxOutputTokens` ceiling this budget already subtracts
+above for input purposes, never a separate allowance. At `'high'` or
+`'xhigh'` against the shipping `maxOutputTokens` of 16,384, a generation can
+spend most of that ceiling thinking and return a short or truncated note.
+This is not a case the "refuse early with a number" discipline below can
+catch: the provider reports no intended reasoning-token spend in advance, so
+there is nothing to check before the request is sent — the failure surfaces
+only after the fact, as an ordinary `length` finish reason indistinguishable
+from any other truncation. The fix is an administrator lowering
+`reasoningEffort` or raising `maxOutputTokens` deliberately — the schema
+field's own comment on `reasoningEffort` is explicit that raising the effort
+must never do this automatically — not a request-time refusal, because there
+is no number here to refuse with.
+
 **If the assembled prompt exceeds the budget, the request is refused before
 anything is created — no note, no draft row, no job.** `POST /api/notes` and
 `POST /api/notes/:id/regenerate` call `assemblePrompt` and the budget check
