@@ -799,6 +799,55 @@ because they are the fleet's rules and not the backup's:
 The full design, including the two opt-in settings and why they are two, is
 [`database-backup.md` §16](database-backup.md#16-running-the-dump-on-a-worker-node-352-epic-345).
 
+## 20.2 `media.audio.transcode`: the third node-eligible type, and the first with a native binary (#26)
+
+The playback rendition (epic #19, [`transcription.md` §1.5.1](transcription.md))
+is the third type this plane carries and the one that is *closest to the
+reference shape* — pure compute over bytes a presigned URL handed it, exactly
+like `example.checksum` — while adding the one dimension neither of the first
+two had: **a native dependency**.
+
+Three properties are the fleet's rules rather than the feature's:
+
+1. **A required binary is declared, not assumed.** `apps/cli/src/node
+   /capabilities.ts` gains `ffmpeg` and `ffprobe` in `PROBED_BINARIES` and both
+   as `required` for this type, so a worker without them **refuses to declare
+   the type at startup** instead of claiming transcodes and failing them one at
+   a time. Both are listed even though they ship in one package on every
+   distribution: the executor runs them as two programs, and a trimmed image
+   with only `ffmpeg` would satisfy a one-binary requirement and then die at
+   the probe step. There is deliberately **no degradable tier** here — unlike
+   `db.backup.run`'s `psql`, nothing about a rendition is best-effort.
+2. **Both container images install it, and so does `install-deps`.**
+   `apps/api/Dockerfile` and `apps/cli/Dockerfile` both `apk add ffmpeg` in
+   their base stage (the `postgresql17-client` precedent, §20.1), and
+   `appctl node install-deps` gained its first genuine package step for the
+   node that runs outside a container. A dependency present in only one of
+   those three is a dependency that works until somebody deploys differently.
+3. **The output key is the feature's, through `deriveOutputKey`** (§17.1):
+   `transcripts/<transcriptId>/renditions/<jobId>.m4a`, not the data plane's
+   default `node-outputs/<jobId>/<uuid>`, because `transcript.purge`
+   enumerates a transcript's own prefix and an artifact outside it would
+   outlive the transcript that owns it. It is idempotent because both inputs
+   are fixed on the job row before a node can ask.
+
+⚠ **The node does not stream its output.** `db.backup.run` pipes `pg_dump`
+straight into the signed PUT; this executor writes a temp file first and
+uploads it afterwards, and the difference is not a missed optimisation.
+`-movflags +faststart` — the flag that makes the rendition seekable, which is
+the whole point of the job — rewrites the MP4 header **after** the stream ends
+and therefore needs a seekable destination. On a socket ffmpeg warns and
+silently produces a `moov`-last file that uploads perfectly and cannot be
+scrubbed, and no check on either side of the wire would see it. The repository's
+one guard against that is `media-audio-transcode.ffmpeg.spec.ts`, which runs a
+real ffmpeg and reads the produced bytes.
+
+Whether the type is *offered* is the same three-way intersection §20.1
+describes, minus the broker: node eligibility, and the handler's own
+`nodeOffloadEnabled()` reading `transcription.transcodeNodeOffloadEnabled` —
+which defaults **true**, unlike the backup's, because transcoding needs a
+presigned URL and a CPU rather than a credential to this deployment's database.
+
 ## 21. `example.checksum`: the reference node-eligible type
 
 Before #269 this template shipped **no node-eligible handler**, and the

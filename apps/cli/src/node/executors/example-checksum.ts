@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 
 import { MissingJobInputError } from '../node-errors.js';
 import { DatabaseBackupRunExecutor } from './db-backup-run.js';
+import { MediaAudioTranscodeExecutor } from './media-audio-transcode.js';
 import type { JobExecutionContext, JobExecutor } from './index.js';
 
 // =============================================================================
@@ -81,7 +82,16 @@ export class ExampleChecksumExecutor implements JobExecutor {
  * usable. A node also declares the type only if `evaluateCapabilities` finds
  * `pg_dump` on this machine. Listing the executor unconditionally is what lets
  * all three of those decisions live where they belong.
+ *
+ * `media.audio.transcode` (#26) is here on the same terms and with one fewer
+ * gate: it needs no credential, so the only switches are the deployment's
+ * `transcription.transcodeNodeOffloadEnabled` and whether `evaluateCapabilities`
+ * finds `ffmpeg` and `ffprobe` on this machine.
  */
 export function defaultExecutors(): JobExecutor[] {
-  return [new ExampleChecksumExecutor(), new DatabaseBackupRunExecutor()];
+  return [
+    new ExampleChecksumExecutor(),
+    new DatabaseBackupRunExecutor(),
+    new MediaAudioTranscodeExecutor(),
+  ];
 }

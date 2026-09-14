@@ -4,7 +4,12 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { detectDistro, runInstallDeps, type InstallStep } from './install-deps.js';
+import {
+  DEFAULT_INSTALL_STEPS,
+  detectDistro,
+  runInstallDeps,
+  type InstallStep,
+} from './install-deps.js';
 
 let dir: string;
 
@@ -126,5 +131,79 @@ describe('runInstallDeps', () => {
 
     expect(existsSync(stateDir)).toBe(true);
     expect(report.ok).toBe(true);
+  });
+});
+
+// =============================================================================
+// The ffmpeg step (issue #26, epic #19)
+// =============================================================================
+//
+// The first GENUINE package step this command has shipped — #276 deliberately
+// shipped the structure with nothing domain-specific in it, and
+// `media.audio.transcode` is what gave it something real to install. A node
+// running outside a container has no image to have baked ffmpeg in, so this is
+// the only thing that puts it there.
+// =============================================================================
+describe('the ffmpeg install step', () => {
+  const ffmpegStep = (): InstallStep => {
+    const step = DEFAULT_INSTALL_STEPS.find((candidate) => candidate.id === 'ffmpeg');
+
+    expect(step).toBeDefined();
+
+    return step as InstallStep;
+  };
+
+  const context = (family: string, overrides: Record<string, unknown> = {}) =>
+    ({
+      distro: { id: family, versionId: undefined, family },
+      dryRun: false,
+      stateDir: dir,
+      run: vi.fn(),
+      log: vi.fn(),
+      ...overrides,
+    }) as never;
+
+  it('announces that it escalates, rather than escalating silently', () => {
+    expect(ffmpegStep().requiresSudo).toBe(true);
+  });
+
+  it('installs the distribution package on each family it knows', () => {
+    for (const [family, command] of [
+      ['debian', 'apt-get'],
+      ['rhel', 'dnf'],
+      ['alpine', 'apk'],
+    ] as const) {
+      const run = vi.fn();
+
+      ffmpegStep().install(context(family, { run }));
+
+      expect(run).toHaveBeenCalledWith(command, expect.arrayContaining(['ffmpeg']));
+    }
+  });
+
+  it('reports `unsupported` on macOS and Windows instead of guessing', () => {
+    // `brew`/`winget` install into a user's own environment and frequently
+    // need a prompt a subcommand must not answer on somebody's behalf.
+    expect(ffmpegStep().supported(context('darwin'))).toBe(false);
+    expect(ffmpegStep().supported(context('windows'))).toBe(false);
+    expect(ffmpegStep().supported(context('debian'))).toBe(true);
+  });
+
+  it('--dry-run prints the command and runs nothing', () => {
+    const run = vi.fn();
+    const log = vi.fn();
+
+    ffmpegStep().install(context('debian', { dryRun: true, run, log }));
+
+    expect(run).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('apt-get install -y ffmpeg'));
+  });
+
+  it('needs BOTH binaries before it reports itself satisfied', () => {
+    // They ship in one package, so a machine with only one is a trimmed image
+    // — and the executor runs ffprobe first, so it would fail every job.
+    const step = ffmpegStep();
+
+    expect(typeof step.detect(context('debian'))).toBe('boolean');
   });
 });

@@ -7,12 +7,14 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptionModule } from '../transcription/transcription.module';
+import { MediaAudioTranscodeHandler } from './handlers/media-audio-transcode.handler';
 import { TranscriptionIngestHandler } from './handlers/transcription-ingest.handler';
 import { TranscriptionPollHandler } from './handlers/transcription-poll.handler';
 import { TranscriptionSubmitHandler } from './handlers/transcription-submit.handler';
 import { TranscriptPurgeHandler } from './handlers/transcript-purge.handler';
 import { TranscriptsHousekeepingHandler } from './handlers/transcripts-housekeeping.handler';
 import { TranscriptsUploadListener } from './listeners/transcripts-upload.listener';
+import { FfmpegService } from './media/ffmpeg.service';
 import { TranscriptsHousekeepingTask } from './tasks/transcripts-housekeeping.task';
 import { TranscriptAccessService } from './transcript-access.service';
 import { TranscriptObjectsService } from './transcript-objects.service';
@@ -51,11 +53,17 @@ import { TranscriptsService } from './transcripts.service';
 // NOTHING IS EXPORTED YET, AND THAT IS ON PURPOSE
 // -----------------------------------------------------------------------------
 //
-// Issues #26–#30 extend this module rather than importing from it: #26 adds a
-// handler that lives here, #27 adds the snapshot handler, #28 adds the editing
-// surface. A service exported before anybody imports it is a public API nobody
-// asked for. When #26 needs `TranscriptPipelineService` from a handler in this
-// same module, it gets it through ordinary DI with no export at all.
+// Issues #27–#30 extend this module rather than importing from it: #27 adds
+// the snapshot handler, #28 adds the editing surface. A service exported
+// before anybody imports it is a public API nobody asked for. #26's
+// `MediaAudioTranscodeHandler` is the worked example: it needs
+// `TranscriptPipelineService`, `TranscriptObjectsService` and its own
+// `FfmpegService`, and gets all three through ordinary DI with no export at
+// all.
+//
+// ⚠ `FfmpegService` IS A PROVIDER OF THIS MODULE, NOT A GLOBAL. It spawns
+// binaries, and the list of modules that can reach it should stay exactly as
+// long as the list of modules that convert media — which is this one.
 // =============================================================================
 
 @Module({
@@ -76,6 +84,8 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptPipelineService,
     TranscriptionRuntimeService,
     TranscriptsUploadListener,
+    FfmpegService,
+    MediaAudioTranscodeHandler,
     TranscriptionSubmitHandler,
     TranscriptionPollHandler,
     TranscriptionIngestHandler,

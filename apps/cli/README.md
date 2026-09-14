@@ -540,6 +540,16 @@ of that job, and revoked when it settles. It is never written to
 Nothing about running this type requires you to put a database password on this
 machine.
 
+**`media.audio.transcode` — producing the playback rendition here.** The
+easiest type to offload: it needs no credential and no database route at all,
+only `ffmpeg` and `ffprobe` on `PATH` (the same startup self-test refuses to
+declare the type without *both* — they ship in one package, but the executor
+runs them as two programs). `appctl node install-deps` installs them on
+Debian/RHEL/Alpine; the container image already has them. It is offered
+whenever an administrator leaves `transcription.transcodeNodeOffloadEnabled`
+on, which is the default — there is no second switch, because there is no
+credential to broker.
+
 ### Inspecting the resolved settings
 
 ```bash

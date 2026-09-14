@@ -56,6 +56,15 @@ jobs:
       - run: npx prisma generate
         working-directory: apps/api
 
+      # `media.audio.transcode` (epic #19, issue #26) runs ffprobe and ffmpeg,
+      # and `media-audio-transcode.ffmpeg.spec.ts` deliberately has NO skip
+      # guard — a suite that skips itself when a binary is missing is the only
+      # proof in this repository that the playback rendition is really seekable
+      # (`+faststart` is a flag ffmpeg accepts and silently ignores on a
+      # non-seekable output), and proof that skips is not proof. Both container
+      # images install the same package; this is the runner's copy of that.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web
       - run: npm run typecheck --workspace=cli

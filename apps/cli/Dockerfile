@@ -12,14 +12,16 @@
 # every stage installs with `npm ci` rather than re-resolving the tree.
 #
 # -----------------------------------------------------------------------------
-# WHY THIS IMAGE IS SO SMALL
+# WHY THIS IMAGE IS STILL SMALL
 # -----------------------------------------------------------------------------
 # The application this design is ported from forces its worker onto a glibc
 # base because of a native ML runtime, then adds layers for ffmpeg, image
-# libraries and baked model files. NONE OF THAT APPLIES HERE: this worker has
-# no native dependencies at all — the example job type streams bytes and hashes
-# them. So the base is `node:24-alpine`, matching the API image, and the
-# Dockerfile is short. A fork that adds a native dependency adds it here.
+# libraries and baked model files. Only one of those applies here: `ffmpeg`,
+# for `media.audio.transcode` (epic #19, issue #26). Everything else this
+# worker runs is pure Node — the example job type streams bytes and hashes
+# them — so the base is `node:24-alpine`, matching the API image, and the
+# Dockerfile stays short. A fork that adds another native dependency adds it
+# beside the `apk add` below.
 #
 # -----------------------------------------------------------------------------
 # NO PRODUCT, APP OR REPOSITORY NAME APPEARS IN THIS FILE
@@ -36,6 +38,19 @@
 # -----------------------------------------------------------------------------
 FROM node:24-alpine AS base
 WORKDIR /app
+
+# `ffmpeg` (which ships `ffprobe`) for `media.audio.transcode`, epic #19.
+#
+# IN THE BASE STAGE, matching `apps/api/Dockerfile`, so `production` inherits
+# it. It has to be present in the RUNTIME image specifically: the node's
+# startup self-test (`src/node/capabilities.ts`) probes for both binaries and
+# refuses to declare this job type without them, so an image that built the
+# worker without ffmpeg would start, look healthy, and quietly never claim a
+# transcode.
+#
+# A node running OUTSIDE a container gets the same two binaries from
+# `appctl node install-deps`, which has a matching step.
+RUN apk add --no-cache ffmpeg
 
 # -----------------------------------------------------------------------------
 # Dependencies
