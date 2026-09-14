@@ -31,6 +31,9 @@ function stubProvider(overrides: Partial<AiProvider<unknown>> = {}): AiProvider<
         },
       ],
       streaming: true,
+      // The stub implements no `listModels`, so it must not claim to (#78) —
+      // the registry refuses that combination at boot.
+      modelDiscovery: false,
     },
     settingsSchema: z.object({}),
     fieldDescriptors: [
@@ -81,7 +84,9 @@ describe('AiProviderRegistry', () => {
     // so every model in the policy vanishes and nothing explains why.
     expect(() =>
       registry.register(
-        stubProvider({ capabilities: { models: [], streaming: true } }),
+        stubProvider({
+          capabilities: { models: [], streaming: true, modelDiscovery: false },
+        }),
       ),
     ).toThrow(/no models/i);
   });
@@ -122,6 +127,7 @@ describe('AiProviderRegistry', () => {
               },
             ],
             streaming: true,
+            modelDiscovery: false,
           },
           fieldDescriptors: [
             {
