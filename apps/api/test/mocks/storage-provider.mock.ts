@@ -4,6 +4,7 @@ import {
   StorageUploadResult,
   MultipartUploadInit,
   UploadPart,
+  UploadedPart,
   SignedUrlOptions,
   StorageUploadOptions,
 } from '../../src/storage/providers';
@@ -44,6 +45,11 @@ export const createMockStorageProvider = (): jest.Mocked<StorageProvider> => ({
   } as StorageUploadResult),
 
   abortMultipartUpload: jest.fn().mockResolvedValue(undefined),
+
+  // Provider-reported upload progress (#21). Defaults to "nothing uploaded
+  // yet" so a spec that never stubs it reads as a fresh upload rather than as
+  // a half-finished one.
+  listParts: jest.fn().mockResolvedValue([] as UploadedPart[]),
 
   download: jest.fn().mockResolvedValue(Readable.from(['mock content'])),
 
