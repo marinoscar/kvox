@@ -163,7 +163,16 @@ export class AiSettingsService {
     userId: string,
     expectedVersion?: number,
   ): Promise<AiSettingsAdminView> {
-    const provider = this.registry.get('openai');
+    // ⚠ THE PROVIDER THE SUBMITTED MODELS WILL BELONG TO — which is the one
+    // this PATCH is SWITCHING TO when it carries a `provider`, and the stored
+    // one otherwise (#78). Reading only the stored value would validate the new
+    // vendor's model ids against the old vendor's catalogue in the single
+    // request where the two differ, which is precisely the request an
+    // administrator makes when migrating.
+    const stored = await this.get();
+    const providerId =
+      patch.provider !== undefined ? patch.provider : stored.provider;
+    const provider = providerId ? this.registry.get(providerId) : undefined;
 
     // A model id the policy names but this build cannot budget is a 400 rather
     // than a silent save, because the failure it produces otherwise is
@@ -172,14 +181,21 @@ export class AiSettingsService {
     // than in the zod schema deliberately — it depends on the REGISTRY, which a
     // schema has no access to, and a fork registering its own models must not
     // have to edit a validation rule to make them acceptable.
-    const submittedModels = patch.providers?.openai?.allowedModels;
+    // Indexed by the resolved provider id rather than written `?.openai?.`:
+    // when `AI_PROVIDER_IDS` grows, this line keeps compiling only if
+    // `aiProvidersSchema` grew the matching block in the same edit, which is
+    // exactly the parallel change that must not be forgotten.
+    const submittedModels = providerId
+      ? patch.providers?.[providerId]?.allowedModels
+      : undefined;
+
     if (provider && submittedModels) {
       const known = new Set(provider.capabilities.models.map((m) => m.id));
       const unknown = submittedModels.filter((id) => !known.has(id));
 
       if (unknown.length > 0) {
         throw new BadRequestException(
-          `Unknown model id(s) for provider "openai": ${unknown.join(', ')}. ` +
+          `Unknown model id(s) for provider "${provider.id}": ${unknown.join(', ')}. ` +
             `This build can budget requests for: ${[...known].join(', ')}. ` +
             'A model it does not know the context window of cannot be offered to users, because the token budget has no number to check against.',
         );
@@ -234,8 +250,38 @@ export class AiSettingsService {
     baseUrlOverride?: string | null,
   ): Promise<AiReachabilityTest> {
     const settings = await this.get();
-    const baseUrl = (baseUrlOverride?.trim() || settings.providers.openai.baseUrl)
-      .replace(/\/+$/, '');
+
+    // THE ACTIVE PROVIDER'S BASE URL, not `providers.openai`'s (#78) — a probe
+    // that always read one vendor's block would silently test the wrong
+    // endpoint the moment a deployment switched vendors, and would report the
+    // old one healthy.
+    //
+    // A SUPPLIED `baseUrl` STILL WINS AND STILL WORKS WITH NO ACTIVE PROVIDER,
+    // deliberately: this endpoint exists to prove a URL an administrator has
+    // typed but not saved, and "type the URL, then choose the provider" is a
+    // legitimate order to do that in.
+    const storedBaseUrl = settings.provider
+      ? settings.providers[settings.provider].baseUrl
+      : null;
+
+    const resolved = baseUrlOverride?.trim() || storedBaseUrl;
+
+    if (!resolved) {
+      const detail =
+        'No provider is active for this deployment and no base URL was supplied, so there is nothing to probe. Choose a provider (or type a base URL) and try again.';
+
+      await this.audit(userId, 'ai_settings:test', {
+        baseUrl: null,
+        ok: false,
+        latencyMs: 0,
+        detail,
+        usedSuppliedBaseUrl: false,
+      });
+
+      return { ok: false, latencyMs: 0, detail };
+    }
+
+    const baseUrl = resolved.replace(/\/+$/, '');
 
     const startedAt = Date.now();
     let result: AiReachabilityTest;
@@ -305,13 +351,35 @@ export class AiSettingsService {
   // Internals
   // ---------------------------------------------------------------------------
 
-  /** Policy-named models no registered provider declares. See `unknownModels`. */
+  /**
+   * Policy-named models no registered provider declares. See `unknownModels`.
+   *
+   * READ THROUGH THE ACTIVE PROVIDER (#78). A deployment that has chosen no
+   * provider, or one this build does not implement, has NOTHING that can budget
+   * its permitted models — so every one of them is unknown, which is the honest
+   * answer and the one that puts the explanation on the admin page rather than
+   * leaving a silently empty model picker.
+   */
   private findUnknownModels(settings: SystemAiValue): string[] {
-    const provider = this.registry.get('openai');
-    if (!provider) return [...settings.providers.openai.allowedModels];
+    const providerId = settings.provider;
+
+    // No provider is active: there is no catalogue for a model to be unknown
+    // against, and reporting every permitted model as unknown would be noise on
+    // a page whose actual problem — nobody has chosen a vendor — the `provider`
+    // field states directly.
+    if (!providerId) return [];
+
+    const provider = this.registry.get(providerId);
+
+    // A provider named by the settings that this build does not implement (a
+    // rollback across its addition). Nothing can budget any of these models, so
+    // all of them are unknown.
+    if (!provider) return [...settings.providers[providerId].allowedModels];
 
     const known = new Set(provider.capabilities.models.map((model) => model.id));
-    return settings.providers.openai.allowedModels.filter((id) => !known.has(id));
+    return settings.providers[providerId].allowedModels.filter(
+      (id) => !known.has(id),
+    );
   }
 
   /**

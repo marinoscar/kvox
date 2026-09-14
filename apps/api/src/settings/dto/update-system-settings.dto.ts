@@ -155,6 +155,12 @@ const transcriptionSettingsSchema = z.object({
  */
 const aiSettingsSchema = z.object({
   enabled: z.boolean(),
+  // The ACTIVE provider (#78), nullable exactly as `transcription.provider`
+  // above is: `null` is the persisted "nobody has chosen one", not an absent
+  // key. Missing this line would make a full PUT silently drop the vendor
+  // choice, which `SystemSettingsService.replaceSettings` would then carry
+  // forward blind.
+  provider: z.enum(['openai']).nullable(),
   providers: z.object({
     openai: z.object({
       baseUrl: z.string().trim().url().max(512),
@@ -305,6 +311,11 @@ export const patchSystemSettingsSchema = z.object({
   ai: z
     .object({
       enabled: z.boolean().optional(),
+      // `.nullable().optional()` for the reason `transcription.provider` and
+      // `maintenance.startedAt` are (#78): `null` means "no provider is
+      // active" and absent means "leave the choice alone", and the service's
+      // merge distinguishes them with `!== undefined` rather than `??`.
+      provider: z.enum(['openai']).nullable().optional(),
       providers: z
         .object({
           openai: z

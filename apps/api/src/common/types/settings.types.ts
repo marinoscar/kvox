@@ -286,6 +286,22 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
   // (`src/ai/ai-settings.schema.ts`).
   ai: {
     enabled: false,
+    // `'openai'` RATHER THAN `null`, which is the one place this namespace's
+    // defaults deliberately diverge from `transcription` above (#78).
+    //
+    // The inertness a fresh deployment needs is already carried twice over, by
+    // `enabled: false` and by an empty `allowedModels` — so a null provider
+    // would buy no additional safety and would cost an administrator a second
+    // decision ("which vendor?") to turn on a feature this build has exactly
+    // one implementation of. Transcription defaults to `null` because choosing
+    // AssemblyAI commits a deployment to sending audio to a specific named
+    // company; choosing "the OpenAI-compatible provider" here commits it to
+    // nothing until a model is permitted and a user pastes their own key.
+    //
+    // The field is still nullable, and unsetting it is still meaningful — see
+    // `ai-settings.schema.ts`. This is a default, not a claim that `null`
+    // cannot happen.
+    provider: 'openai',
     providers: {
       openai: {
         // OpenAI's own API root, including the version segment. An
