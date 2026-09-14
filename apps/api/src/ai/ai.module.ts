@@ -5,6 +5,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { AiConfigController } from './ai-config.controller';
 import { AiConfigService } from './ai-config.service';
 import { AiCredentialsController } from './ai-credentials.controller';
+import { AiModelDiscoveryService } from './ai-model-discovery.service';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiSettingsController } from './ai-settings.controller';
 import { AiSettingsService } from './ai-settings.service';
@@ -68,6 +69,12 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
     AiSettingsService,
     UserAiCredentialsService,
     AiConfigService,
+    // #78. A LEAF, exactly like `AiConfigService` beside it: it composes the
+    // policy, the registry and the per-user credential service, and none of the
+    // three knows it exists. That is what keeps `GET /api/ai-settings/models`
+    // out of a `forwardRef` cycle with `UserAiCredentialsService`, which
+    // already injects `AiSettingsService` — see the service's own header.
+    AiModelDiscoveryService,
     // ⚠ THE `fetch` SEAM IS REGISTERED HERE, unlike `ASSEMBLYAI_FETCH` which
     // exists only as an `@Optional()` constructor default. The difference is
     // not stylistic: `Test.createTestingModule(...).overrideProvider(token)` is
