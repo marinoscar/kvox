@@ -87,6 +87,29 @@ export interface AiProviderCapabilities {
   /** Every registered provider streams. There is no non-streaming path. */
   streaming: true;
   /**
+   * The conservative floor for a chat model this provider has never heard of
+   * (#97) — the LAST rank of `ai-model-resolution.ts`'s precedence.
+   *
+   * WHY A FLOOR IS ALLOWED TO EXIST AT ALL, when {@link AiModelDescriptor}'s
+   * own comment says an unknown context window has no safe interpretation. It
+   * has no safe interpretation as a GUESS AT THE TRUTH, which is what that
+   * comment is about; it has a perfectly safe interpretation as a LOWER BOUND.
+   * The two mistakes are not symmetric: a number below the truth refuses a
+   * prompt that would have fit, which an administrator can see and correct by
+   * typing the real number, while a number above it submits a prompt the vendor
+   * rejects after billing the user, which nobody can undo. So this must be the
+   * smallest window every chat model from this vendor is known to meet, and it
+   * must be re-verified with the same care as `models` — see `MODELS` in
+   * `openai.provider.ts`.
+   *
+   * ⚠ OPTIONAL, AND "PRESENCE IS THE DECLARATION" (the `JobHandler` convention).
+   * A provider whose model range is too wide for any honest floor simply omits
+   * it, and ids it cannot otherwise resolve stay unresolvable — reported through
+   * `missingModelNumbers` as they always were. That is a legitimate posture, not
+   * a gap to be filled with a number somebody made up.
+   */
+  defaultModelLimits?: { contextWindowTokens: number; maxOutputTokens: number };
+  /**
    * Whether {@link AiProvider.listModels} is implemented (#78).
    *
    * ⚠ DECLARING IT TRUE WITHOUT THE METHOD IS REFUSED AT BOOT by
@@ -110,20 +133,28 @@ export interface AiProviderCapabilities {
 
 /**
  * One model a provider's LIVE API reports, as {@link AiProvider.listModels}
- * returns it (#78).
+ * returns it (#78, widened by #97).
  *
- * ⚠ NOT AN {@link AiModelDescriptor}, AND THE DIFFERENCE IS THE POINT. A
+ * ⚠ NOT AN {@link AiModelDescriptor}, AND THE DIFFERENCE IS STILL THE POINT. A
  * descriptor promises `contextWindowTokens` and `maxOutputTokens` because the
  * §3.3 token budget cannot run without them; a vendor's `GET /models` response
- * carries NEITHER for any provider this build talks to. Reusing the descriptor
- * type here would have forced this method to invent two numbers per model —
- * and an invented context window is how a prompt that would have fit gets
- * refused, or one that does not gets submitted and billed.
+ * carries NEITHER for any provider this build talks to. The two facts stay
+ * apart: the vendor says what EXISTS, this application says what can be
+ * BUDGETED.
  *
- * So the two facts are kept apart: the vendor says what EXISTS, the build
- * catalogue says what can be BUDGETED, and `known` is the join between them.
- * An administrator can still permit an unknown model — see
- * `aiAllowedModelSchema`, which is where they supply the missing numbers.
+ * WHAT #97 CHANGED. The two numbers used to be `null` for every id absent from
+ * the build catalogue, because the only alternative on offer was inventing
+ * them. They are now filled by the SAME resolution chain the save path and the
+ * generation path use (`resolveAllowedModel`) — a family derivation, then the
+ * provider's conservative floor — so they are null only when nothing at all can
+ * answer. `source` says which rank answered, so a client never has to present
+ * an inference as a verified number.
+ *
+ * ⚠ `known` IS UNCHANGED AND STILL MEANS "EXACT BUILD-CATALOGUE HIT". It is on
+ * the wire and clients branch on it; redefining it to mean "resolvable" would
+ * have made every model look verified. `source === 'catalogue'` is the same
+ * fact stated in the new vocabulary, and the two can never disagree because
+ * both are derived from one resolution.
  */
 export interface AiDiscoveredModel {
   /** The provider's own model id, exactly as its API spelled it. */
@@ -132,9 +163,44 @@ export interface AiDiscoveredModel {
   label: string;
   /** True when this build carries a descriptor for it and can budget against it. */
   known: boolean;
-  /** From the build catalogue when `known`, otherwise null — the vendor's list does not carry it. */
+  /**
+   * The effective context window: the catalogue's, the family's, or the
+   * provider's floor. `null` only when this provider can answer none of those.
+   */
   contextWindowTokens: number | null;
   maxOutputTokens: number | null;
+  /**
+   * Which rank of the resolution chain supplied the numbers above (#97) — the
+   * WEAKEST of the two, per {@link AiModelLimitSource}'s own rule.
+   *
+   * `'explicit'` is deliberately absent from this union: discovery resolves a
+   * bare id with no policy entry behind it, so the administrator-override rank
+   * is unreachable here by construction.
+   */
+  source: 'catalogue' | 'derived' | 'default';
+  /**
+   * The catalogue id the numbers were derived from, when `source` is
+   * `'derived'`; null otherwise. Lets the dialog say WHICH model was assumed.
+   */
+  derivedFrom: string | null;
+}
+
+/**
+ * Options for {@link AiProvider.listModels} (#97).
+ *
+ * ⚠ `includeAll` EXISTS BECAUSE THE CHAT-MODEL FILTER MUST NEVER BE THE THING
+ * THAT MAKES A MODEL UNREACHABLE. The filter is a convenience over a flat
+ * vendor list with no capability field (see `NON_CHAT_MODEL_MARKERS` in
+ * `openai.provider.ts`), and a heuristic over ids a vendor invents on its own
+ * schedule will eventually be wrong. Before this flag the only escape was
+ * typing the id by hand, which is exactly the "you must know the answer to ask
+ * the question" state #97 removes everywhere else; now the dialog can offer
+ * "show every model the provider listed" and the filter costs nothing when it
+ * is wrong.
+ */
+export interface AiListModelsOptions {
+  /** Skip the plausible-chat-model filter and return the vendor's whole list. */
+  includeAll?: boolean;
 }
 
 /**
@@ -371,8 +437,48 @@ export interface AiProvider<TSettings = unknown> {
    * `AiSettingsService.discoverModels`, which turns a throw into
    * `{ ok: false, detail, models: [] }`. Throw the narrowest type in
    * `../ai-errors.ts` that is true, exactly as `generate` does.
+   *
+   * ⚠ IT MUST FILL `contextWindowTokens`/`maxOutputTokens`/`source` THROUGH
+   * `resolveAllowedModel` (#97), never with a second copy of the precedence
+   * written here. A provider that resolved discovery differently from the way
+   * the settings save and the token budget resolve would show an administrator
+   * a number in the dialog and use a different one an hour later, with nothing
+   * anywhere to explain the difference.
    */
-  listModels?(ctx: AiProviderContext<TSettings>): Promise<AiDiscoveredModel[]>;
+  listModels?(
+    ctx: AiProviderContext<TSettings>,
+    opts?: AiListModelsOptions,
+  ): Promise<AiDiscoveredModel[]>;
+
+  /**
+   * Place a model id this build has no descriptor for in a KNOWN FAMILY (#97).
+   *
+   * OPTIONAL, AND "PRESENCE IS THE DECLARATION" — the same convention
+   * `capabilities.defaultModelLimits` and `JobHandler.nodeResultSchema` follow.
+   * A provider that cannot tell families apart from ids simply omits it, and
+   * resolution falls straight through to the floor.
+   *
+   * ⚠ THE RETURNED DESCRIPTOR DESCRIBES THE FAMILY, NOT THE REQUESTED MODEL.
+   * Its `id` is the CATALOGUE id the numbers came from — that is what becomes
+   * `AiResolvedModel.derivedFrom` and what lets a client say which model was
+   * assumed — and its `label` must be the RAW REQUESTED ID, never the family's
+   * human name: printing "GPT-5.4 mini" beside `gpt-5.4-mini-2026-03-17` claims
+   * a descriptor this build does not have. Return `null` when nothing matches,
+   * so the floor applies.
+   *
+   * ⚠ RETURN THE FAMILY'S FULL NUMBERS, NOT REDUCED ONES. A dated snapshot of
+   * `gpt-5.4-mini` has that model's whole window; shaving it "to be safe" would
+   * refuse prompts that fit and would quietly undo the performance point of
+   * deriving at all.
+   *
+   * SYNCHRONOUS AND PURE, for exactly the reason {@link AiProvider.countTokens}
+   * is: it runs inside the §3.3 budget check in `POST /api/notes`'s own request
+   * handler and inside a queue job, so a network call or a read of mutable
+   * state here would put a round trip in front of every note creation and let
+   * the request-time and job-time answers disagree for reasons that have
+   * nothing to do with the model.
+   */
+  deriveModelDescriptor?(id: string): AiModelDescriptor | null;
 
   /**
    * Approximate how many tokens a piece of text costs for a given model.

@@ -49,6 +49,17 @@ export const aiConfigModelSchema = z.object({
     .describe(
       "The EFFECTIVE output ceiling: the model's own, already narrowed by this deployment's policy.",
     ),
+  source: z
+    .enum(['explicit', 'catalogue', 'derived', 'default'])
+    .describe(
+      'How this deployment learnt the two numbers above (issue #97): `explicit` — an administrator typed them into the policy; `catalogue` — this build ships verified numbers for this exact model id; `derived` — the id was placed in a known family (a dated snapshot such as `gpt-5.4-mini-2026-03-17`) and took that family\'s numbers, with `derivedFrom` naming it; `default` — nothing better was available and the provider\'s conservative floor was used. **It is the WEAKEST source either number came from**, so a model whose window was derived but whose output ceiling fell back to the floor reports `default`. All four are usable; only the first two are knowledge, and a client showing an inference as a verified figure is the one thing this field exists to prevent. The effective ceilings are narrowed by deployment policy either way — that narrowing does not change this field.',
+    ),
+  derivedFrom: z
+    .string()
+    .nullable()
+    .describe(
+      'The catalogue model id the numbers were inferred from, non-null exactly when `source` is `derived` — so a client can say *which* model was assumed rather than only that one was.',
+    ),
 });
 
 export type AiConfigModel = z.infer<typeof aiConfigModelSchema>;
@@ -57,7 +68,7 @@ export const aiConfigSchema = z.object({
   available: z
     .boolean()
     .describe(
-      'True only when AI is enabled, the configured provider is registered in this build, at least one permitted model is one this build can budget requests for, and the token ceilings leave room for input. A client should not offer AI generation when this is false. **Independent of `keyConfigured` and of `provider`** — a non-null `provider` alongside `available: false` is the ordinary state of a deployment whose administrator has not finished setting AI up.',
+      'True only when AI is enabled, the configured provider is registered in this build, at least one permitted model can be budgeted for (its numbers typed, catalogued, derived from its family, or taken from the provider floor — issue #97), and the token ceilings leave room for input. A client should not offer AI generation when this is false. **Independent of `keyConfigured` and of `provider`** — a non-null `provider` alongside `available: false` is the ordinary state of a deployment whose administrator has not finished setting AI up.',
     ),
   provider: z
     .string()
@@ -74,7 +85,7 @@ export const aiConfigSchema = z.object({
   models: z
     .array(aiConfigModelSchema)
     .describe(
-      'Models this deployment permits AND this build can budget for, in the order an administrator listed them. Empty when nothing is usable.',
+      'Models this deployment permits AND can budget for, in the order an administrator listed them. Empty when nothing is usable. Since issue #97 a permitted model is almost always budgetable — an id this build carries no descriptor for takes its family\'s numbers, or the provider\'s conservative floor — so a model is omitted here only when nothing at all can supply a context window, which in practice means the policy names a provider this build does not implement. Read each entry\'s `source` to tell a verified number from an inferred one.',
     ),
   defaultModel: z
     .string()
