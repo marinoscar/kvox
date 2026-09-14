@@ -42,13 +42,12 @@ export interface RecentTranscriptsProps {
 export function RecentTranscripts({ items }: RecentTranscriptsProps) {
   const navigate = useNavigate();
 
-  // Rendered even when empty — unlike `InProgressSection` and `SharedWithMe`,
-  // which hide. An account WITH transcripts but none in this list does not
-  // exist (the API's `recent` is simply the newest eight of everything the
-  // caller owns), so the only way to get here empty is a brand-new account —
-  // and `HomePage` renders `JourneyEmptyState` instead of this in that case.
-  // The guard below is therefore belt-and-braces against a partial summary,
-  // not a state the product has.
+  // BELT AND BRACES, not a state the product reaches. `recent` is the newest
+  // eight of everything the caller owns, so the only account that gets here
+  // empty is a brand-new one — and `HomePage` renders `JourneyEmptyState`
+  // instead of this section for exactly that account. The guard exists so a
+  // partial or unexpected summary degrades to nothing rather than to a "Recent"
+  // heading with a "View all" button over an empty grid.
   if (items.length === 0) return null;
 
   return (
