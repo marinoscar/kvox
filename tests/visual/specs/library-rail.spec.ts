@@ -30,6 +30,10 @@ test.describe('Library rail — Console pinned at the foot', () => {
     const rail = page.locator('nav[aria-label="Main navigation"]');
     await expect(rail).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Home' })).toBeVisible();
+    // Asserted since #30 so this capture cannot silently lose the fourth
+    // destination: the rail row is the only surface at this width that shows
+    // it, and a baseline alone would not say WHICH row went missing.
+    await expect(rail.getByRole('link', { name: 'Transcripts' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'User Settings' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Console' })).toBeVisible();
 
@@ -45,6 +49,10 @@ test.describe('Library rail — Console pinned at the foot', () => {
     const rail = page.locator('nav[aria-label="Main navigation"]');
     await expect(rail).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Home' })).toBeVisible();
+    // Asserted since #30 so this capture cannot silently lose the fourth
+    // destination: the rail row is the only surface at this width that shows
+    // it, and a baseline alone would not say WHICH row went missing.
+    await expect(rail.getByRole('link', { name: 'Transcripts' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'User Settings' })).toBeVisible();
     await expect(rail.getByRole('link', { name: 'Console' })).toBeVisible();
 
