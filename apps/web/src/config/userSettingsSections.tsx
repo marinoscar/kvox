@@ -23,6 +23,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import PaletteIcon from '@mui/icons-material/Palette';
 import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -76,6 +77,28 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Choose which events notify you, and whether they arrive by email or in your browser.',
         Icon: NotificationsIcon,
         path: '/settings/notifications',
+      },
+      {
+        // Issue #55, epic #45. NO `permission`, like every card here — and
+        // here the reason is the strongest in the file:
+        // `ai-credentials.controller.ts` gates all four of its routes on
+        // `@Auth()` with NO permission, deliberately, because the resource is
+        // the caller's OWN credential (scoped by `userId` in the query itself)
+        // rather than a resource of this application. Declaring a gate here
+        // would invent an authorization rule the API does not enforce, and
+        // would leave a user unable to REMOVE their own key from a deployment
+        // that had since revoked their access to the feature it was for.
+        //
+        // Under `Account` rather than `Security`, even though it holds a
+        // credential. `Security` is for credentials THIS application issues
+        // and can revoke (a personal access token). This is a third party's
+        // credential, billed to the user's own provider account — it belongs
+        // with the other facts about who this account is and how it is set up.
+        title: 'AI Provider',
+        description:
+          'Connect your own AI provider key. AI features run on your account, and the usage is billed to you.',
+        Icon: AutoAwesomeIcon,
+        path: '/settings/ai',
       },
     ],
   },

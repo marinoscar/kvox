@@ -648,6 +648,11 @@ describe('the Operations group (#266)', () => {
         // `system_settings:read` its controller enforces, so it appears for
         // exactly the admin this assertion describes.
         'Transcription',
+        // #55, epic #45 — likewise, and for the same reason: the AI POLICY
+        // lives in the `ai` namespace of the same system_settings row. (There
+        // is no key on that page; the per-user key is `/settings/ai`, in the
+        // other registry entirely.)
+        'AI',
         'Maintenance',
         'Users & Allowlist',
       ]);
@@ -810,5 +815,178 @@ describe('the Transcription card (#23)', () => {
     const result = visibleSettingsSections(ADMIN_SECTIONS, () => true, 'transcri');
 
     expect(titlesOf(result)).toContain('Transcription');
+  });
+});
+
+/**
+ * The two AI cards (#55, epic #45) — one per registry, and the pair is worth
+ * testing TOGETHER because the interesting property is the SPLIT between them:
+ *
+ *   `/settings/ai`        the user's own key. No permission, because
+ *                         `ai-credentials.controller.ts` enforces none.
+ *   `/admin/settings/ai`  the deployment's policy, and NO key at all. Gated on
+ *                         `system_settings:read`, the string
+ *                         `ai-settings.controller.ts` enforces on its GET.
+ *
+ * Getting either gate wrong has a concrete, opposite failure: a permission on
+ * the user card would lock a Viewer out of managing a credential billed to
+ * their own account, and a missing (or invented) permission on the admin card
+ * would either publish the deployment's policy to everyone or hide it from the
+ * administrators who hold the real permission.
+ */
+describe('the AI cards (#55, epic #45)', () => {
+  const userCard = USER_SETTINGS_SECTIONS.flatMap((section) => section.cards).find(
+    (entry) => entry.path === '/settings/ai',
+  );
+  const adminCard = ADMIN_SECTIONS.flatMap((section) => section.cards).find(
+    (entry) => entry.path === '/admin/settings/ai',
+  );
+
+  describe('/settings/ai — the user’s own key', () => {
+    it('is declared in USER_SETTINGS_SECTIONS as "AI Provider"', () => {
+      expect(userCard).toBeDefined();
+      expect(userCard?.title).toBe('AI Provider');
+    });
+
+    it('declares NO permission — the API enforces none on this resource', () => {
+      // `ai-credentials.controller.ts` is `@Auth()` with no permission on all
+      // four of its routes, because the resource is the CALLER'S OWN
+      // credential, scoped by `userId` in the query itself. A gate here would
+      // be an authorization rule the API does not have — and would leave a
+      // user unable to REMOVE their own key from a deployment that had since
+      // revoked their access to the feature it was for.
+      expect(userCard?.permission).toBeUndefined();
+      expect('permission' in (userCard as object)).toBe(false);
+    });
+
+    it('lives under Account, not Security', () => {
+      // `Security` is for credentials THIS application issues and can revoke
+      // (a personal access token). This is a third party's credential, billed
+      // to the user's own provider account.
+      const owner = USER_SETTINGS_SECTIONS.find((section) =>
+        section.cards.some((entry) => entry.path === '/settings/ai'),
+      );
+
+      expect(owner?.label).toBe('Account');
+    });
+
+    it('is routed, not inert', () => {
+      expect(userCard?.disabled).toBeFalsy();
+      expect(userCard?.path).toBe('/settings/ai');
+    });
+
+    it('is visible to a user holding no permissions whatsoever', () => {
+      // The strongest form of "there is no gate to satisfy".
+      const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false);
+
+      expect(titlesOf(result)).toContain('AI Provider');
+    });
+
+    it('resolves its route to its own title, not the hub title', () => {
+      expect(
+        settingsPageTitle(
+          USER_SETTINGS_SECTIONS,
+          USER_HUB_PATH,
+          USER_HUB_TITLE,
+          '/settings/ai',
+        ),
+      ).toBe('AI Provider');
+    });
+
+    it('is findable by hub search on its title', () => {
+      const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false, 'ai prov');
+
+      expect(titlesOf(result)).toContain('AI Provider');
+    });
+  });
+
+  describe('/admin/settings/ai — the deployment’s policy', () => {
+    it('is declared in ADMIN_SECTIONS as "AI"', () => {
+      expect(adminCard).toBeDefined();
+      expect(adminCard?.title).toBe('AI');
+    });
+
+    it('declares the exact permission the API enforces on GET /api/ai-settings', () => {
+      expect(adminCard?.permission).toBe('system_settings:read');
+    });
+
+    it('is the string `ai-settings.controller.ts` actually enforces', () => {
+      // Read off the API workspace rather than restated, so a rename on either
+      // side fails here instead of in production — the mechanical half of
+      // CLAUDE.md Settings UI Pattern rule 3, same technique as the Operations
+      // group above.
+      const API_SRC = resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../../../api/src',
+      );
+      const controller = readFileSync(resolve(API_SRC, 'ai/ai-settings.controller.ts'), 'utf8');
+      const rolesConstants = readFileSync(
+        resolve(API_SRC, 'common/constants/roles.constants.ts'),
+        'utf8',
+      );
+
+      expect(controller).toContain('PERMISSIONS.SYSTEM_SETTINGS_READ');
+      expect(rolesConstants).toContain("SYSTEM_SETTINGS_READ: 'system_settings:read'");
+    });
+
+    it('lives under General, not Operations', () => {
+      // General is configuration an administrator SETS. This is a model
+      // allow-list and a set of ceilings, not a view onto the running system.
+      const owner = ADMIN_SECTIONS.find((section) =>
+        section.cards.some((entry) => entry.path === '/admin/settings/ai'),
+      );
+
+      expect(owner?.label).toBe('General');
+    });
+
+    it('is not an alwaysShow escape hatch — the gate must be able to deny it', () => {
+      expect(adminCard?.alwaysShow).toBeUndefined();
+    });
+
+    it('appears for an admin holding system_settings:read', () => {
+      const result = visibleSettingsSections(
+        ADMIN_SECTIONS,
+        (permission) => permission === 'system_settings:read',
+      );
+
+      expect(titlesOf(result)).toContain('AI');
+    });
+
+    it('appears in none of the three surfaces for a viewer', () => {
+      // One assertion covers the hub, the Console rail and the AppBar title
+      // resolver, because all three run this same function.
+      const viewerPermissions = ['user_settings:read', 'user_settings:write'];
+      const result = visibleSettingsSections(ADMIN_SECTIONS, (permission) =>
+        viewerPermissions.includes(permission),
+      );
+
+      expect(titlesOf(result)).not.toContain('AI');
+    });
+
+    it('resolves its route to its own title, not the hub title', () => {
+      expect(
+        settingsPageTitle(
+          ADMIN_SECTIONS,
+          ADMIN_HUB_PATH,
+          ADMIN_HUB_TITLE,
+          '/admin/settings/ai',
+        ),
+      ).toBe('AI');
+    });
+  });
+
+  it('keeps the two destinations distinct — neither shadows the other’s title', () => {
+    // Both hubs are titled 'Settings' and both resolve by longest prefix, so a
+    // path collision here would silently hand one page the other's name.
+    expect(
+      settingsPageTitle(USER_SETTINGS_SECTIONS, USER_HUB_PATH, USER_HUB_TITLE, '/settings/ai'),
+    ).toBe('AI Provider');
+    expect(
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/ai'),
+    ).toBe('AI');
+    // The admin registry knows nothing about the user route, and vice versa.
+    expect(
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/settings/ai'),
+    ).toBeNull();
   });
 });
