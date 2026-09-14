@@ -78,6 +78,46 @@
  * The settings type has exactly one provider block today, so a second one is a
  * compile error here rather than a silent mis-edit.
  *
+ * =============================================================================
+ * #83: THE SAVE BUTTON BLOCKS ONLY ON A REAL CONTRADICTION, AND SAYS WHY
+ * =============================================================================
+ *
+ * The shipping defaults of the `ai` namespace are `allowedModels: []` with
+ * `defaultModel: 'gpt-4o'`, so this page used to load ALREADY INVALID: the
+ * default named a model an empty list cannot contain, `defaultModelError` was
+ * non-null on first paint, and the single `hasError` gate greyed out `Save
+ * changes` before the administrator had touched anything — including the enable
+ * switch and the provider select, two controls with nothing to do with the model
+ * list. A fresh deployment could therefore never turn AI on from here, while the
+ * only other page that mentions the problem (`/settings/ai`) pointed back at
+ * this one.
+ *
+ * Two rules follow, and neither may be folded back into a single gate:
+ *
+ *   • A DEFAULT OUTSIDE A NON-EMPTY LIST IS A CONTRADICTION AND STILL BLOCKS;
+ *     AN EMPTY LIST IS NOT. `ai-settings.schema.ts` states the API's own rule:
+ *     the default "SHOULD be a member of `allowedModels`; that is checked at
+ *     the service boundary rather than here […] and a default outside the list
+ *     is reported to the admin page rather than silently corrected" — the save
+ *     is ACCEPTED there. Refusing it here made this page stricter than the API
+ *     it talks to, for nothing. The one default that genuinely cannot be saved
+ *     is the empty string, because that field's schema is `min(1)`.
+ *
+ *   • WHEN NOTHING IS PERMITTED, SAY WHAT TO DO NEXT INSTEAD OF BLOCKING. With
+ *     an empty list there is no contradiction to report — but there is also
+ *     nothing any user could generate with, and the way out that needs no API
+ *     key at all is `Add a model by hand` in the editor below, which
+ *     `AiPermittedModels`'s header calls "not a fallback, the guarantee".
+ *     Nothing on the blocked path pointed at it. It is ONE `info` notice in the
+ *     models section, deliberately not a fourth alert at the top of a page that
+ *     already carries three: stacking notices is how all of them stop being
+ *     read.
+ *
+ * And when `Save changes` IS disabled it now names what is unresolved and which
+ * section it is in. A greyed-out primary control whose reason is helper text
+ * three `Paper`s further down is indistinguishable from a broken page — which is
+ * exactly how issue #83 was reported: "it is not letting me".
+ *
  * Mobile-first like its siblings — every row stacks at `xs` and goes horizontal
  * at `sm`, and nothing here mounts, unmounts or re-gates on a breakpoint (there
  * is no `useMediaQuery` in this page or in the three components it renders), so
@@ -271,12 +311,22 @@ export default function AiSettingsPage() {
     'bytes',
   );
   const modelsError = permittedModelsHaveError(permittedModels, catalogue);
+  // ⚠ ONLY A REAL CONTRADICTION BLOCKS THE SAVE — see the `#83` section of the
+  // file header. An empty default cannot be saved at all (`ai-settings.schema
+  // .ts` is `min(1)` on this field), and a default naming none of the models
+  // that ARE permitted is a policy offering nobody anything. A default with no
+  // permitted models to belong to is neither: the API accepts that and reports
+  // it back rather than correcting it, so this page accepts it too.
   const defaultModelError =
     defaultModel.trim().length === 0
-      ? 'Choose which permitted model is offered first.'
-      : !modelIds.includes(defaultModel.trim())
+      ? 'Name the model to offer first — this cannot be left empty.'
+      : modelIds.length > 0 && !modelIds.includes(defaultModel.trim())
         ? 'This model is not in the permitted list, so nothing would be able to select it.'
         : null;
+  // GUIDANCE, NOT AN ERROR, and therefore deliberately absent from `hasError`:
+  // an empty allow-list is the state a fresh deployment starts in, and the fix
+  // is a control on this page rather than something to be refused over.
+  const noPermittedModels = modelIds.length === 0;
   const hasError =
     !!inputError ||
     !!outputError ||
@@ -284,6 +334,24 @@ export default function AiSettingsPage() {
     !!documentError ||
     modelsError ||
     !!defaultModelError;
+
+  // What a disabled `Save changes` is waiting on, named by the SECTION heading
+  // it is under so the reader can go straight to it. Built here rather than
+  // inline in the button because the button renders it as a sentence, and a
+  // sentence assembled in JSX is a sentence nobody can read in the source.
+  const saveBlockers: string[] = [];
+  if (modelsError && defaultModelError) {
+    saveBlockers.push('the permitted models and the default model, under “Permitted models”');
+  } else if (modelsError) {
+    saveBlockers.push(
+      'a permitted model that is missing its context window or output ceiling, under “Permitted models”',
+    );
+  } else if (defaultModelError) {
+    saveBlockers.push('the default model, under “Permitted models”');
+  }
+  if (inputError || outputError || timeoutError || documentError) {
+    saveBlockers.push('a value that is out of range, under “Limits”');
+  }
 
   const handleSave = async (event: FormEvent) => {
     event.preventDefault();
@@ -528,6 +596,23 @@ export default function AiSettingsPage() {
               this application needed.
             </Typography>
 
+            {/* ⚠ THE ONE STATEMENT OF THE EMPTY-LIST SITUATION, and `info`
+                rather than `error` on purpose: it does not block the save (see
+                the `#83` section of the file header) — it says what to do next.
+                It sits beside the two controls that fix it rather than as a
+                fourth alert at the top of the page. */}
+            {noPermittedModels && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                <AlertTitle>No models are permitted yet, so AI cannot run</AlertTitle>
+                Until this list names at least one model, nothing can be generated by
+                anyone — with the switch above on, a provider chosen, and users&apos; own
+                keys saved. Use <strong>Add a model by hand</strong> below to name one and
+                give it a context window and output ceiling: that path needs no API key, no
+                provider call and no release of this application, and it is the way out of
+                this state on a deployment where nobody has a key yet.
+              </Alert>
+            )}
+
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={2}
@@ -673,9 +758,29 @@ export default function AiSettingsPage() {
               gap: 2,
             }}
           >
-            <Button type="submit" variant="contained" disabled={!canWrite || isSaving || hasError}>
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={!canWrite || isSaving || hasError}
+              aria-describedby={hasError ? 'save-blocked-reason' : undefined}
+            >
               {isSaving ? 'Saving…' : 'Save changes'}
             </Button>
+            {/* ⚠ A DISABLED PRIMARY CONTROL MUST SAY WHY. Without this the only
+                signal is a grey button whose cause is a field in a different
+                `Paper`, which reads as a broken page rather than as unfinished
+                input — issue #83's actual report. */}
+            {hasError && (
+              <Typography
+                id="save-blocked-reason"
+                variant="body2"
+                color="error"
+                sx={{ flexGrow: 1 }}
+              >
+                Save is unavailable until you fix {saveBlockers.join(' and ')} — highlighted
+                in red above.
+              </Typography>
+            )}
           </Box>
         </Box>
 
