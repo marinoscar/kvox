@@ -43,7 +43,7 @@ import {
   NoteGenerateHandler,
   classify,
   describe as describeError,
-  readAllowedModels,
+  readAllowedModelEntries,
 } from './note-generate.handler';
 
 // -----------------------------------------------------------------------------
@@ -664,18 +664,24 @@ describe('classify / describe', () => {
   });
 });
 
-describe('readAllowedModels', () => {
+describe('readAllowedModelEntries', () => {
   it('reads the allow-list out of the settings blob', () => {
-    expect(readAllowedModels(policy.providers, 'openai')).toEqual(['gpt-4o']);
+    expect(readAllowedModelEntries(policy.providers, 'openai')).toEqual([
+      { id: 'gpt-4o', label: undefined, contextWindowTokens: undefined, maxOutputTokens: undefined },
+    ]);
   });
 
   it('permits NOTHING when the blob cannot be read — the safe direction is closed', () => {
-    expect(readAllowedModels(null, 'openai')).toEqual([]);
-    expect(readAllowedModels({}, 'openai')).toEqual([]);
-    expect(readAllowedModels({ openai: 'nope' }, 'openai')).toEqual([]);
-    expect(readAllowedModels({ openai: { allowedModels: 'gpt-4o' } }, 'openai')).toEqual([]);
-    expect(readAllowedModels({ openai: { allowedModels: [1, 'gpt-4o'] } }, 'openai')).toEqual([
-      'gpt-4o',
+    expect(readAllowedModelEntries(null, 'openai')).toEqual([]);
+    expect(readAllowedModelEntries({}, 'openai')).toEqual([]);
+    expect(readAllowedModelEntries({ openai: 'nope' }, 'openai')).toEqual([]);
+    expect(
+      readAllowedModelEntries({ openai: { allowedModels: 'gpt-4o' } }, 'openai'),
+    ).toEqual([]);
+    expect(
+      readAllowedModelEntries({ openai: { allowedModels: [1, 'gpt-4o'] } }, 'openai'),
+    ).toEqual([
+      { id: 'gpt-4o', label: undefined, contextWindowTokens: undefined, maxOutputTokens: undefined },
     ]);
   });
 });

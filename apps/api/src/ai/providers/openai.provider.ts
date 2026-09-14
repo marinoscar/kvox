@@ -467,8 +467,14 @@ export class OpenAiProvider
       label: 'Permitted models',
       type: 'string-list',
       helpText:
-        "Model ids users of this deployment may generate with. This is the deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An empty list permits nothing.",
+        "Models users of this deployment may generate with. This is the deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An empty list permits nothing. Load the live list from the provider, or type an id by hand; a model this build does not recognise also needs its context window and output ceiling, which the vendor publishes.",
       required: false,
+      // `[]` STILL, and still a `string-list`: an entry may now be an object
+      // (#78), but a bare id remains a legal way to write one and is what the
+      // normalising schema turns into `{ id }`. A descriptor type of its own
+      // would have to be understood by every provider's form; describing the
+      // simple case and letting the model dialog handle the rest costs nothing
+      // and keeps `AiProviderFieldDescriptor` a closed union.
       defaultValue: [],
     },
     {

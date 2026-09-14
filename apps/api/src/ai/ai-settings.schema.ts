@@ -53,6 +53,86 @@ export const AI_PROVIDER_IDS = ['openai'] as const;
 export type AiProviderId = (typeof AI_PROVIDER_IDS)[number];
 
 /**
+ * One entry of a provider's `allowedModels` list (#78).
+ *
+ * WHY AN OBJECT AND NOT A BARE ID ANY MORE. `allowedModels` used to be
+ * `string[]`, and every consumer resolved each id against this build's
+ * hardcoded `MODELS` catalogue to find the context window the §3.3 token budget
+ * needs. That made the deployment's model policy a SUBSET of a four-entry array
+ * compiled into the application: a model the vendor shipped last week could be
+ * saved but never offered to anyone, and adopting it required a release. It
+ * also made model DISCOVERY pointless — there is no use in listing the sixty
+ * models a key can reach if fifty-six of them cannot be permitted.
+ *
+ * So an entry may now carry the two numbers itself. The build catalogue remains
+ * the default and the convenience; the entry is the override; neither is
+ * mandatory as long as ONE of them can answer. See `resolveAllowedModel` in
+ * `ai-model-resolution.ts` — the single implementation of that precedence,
+ * which both the admin service and the capability probe call.
+ *
+ * ⚠ NO SECRET-BEARING FIELD MAY BE ADDED HERE EITHER, and the compile-time
+ * proof at the bottom of this file now checks this type too. A per-model
+ * `apiKey` is a plausible-looking idea ("this one model is on a different
+ * account") and would be the deployment-wide fallback credential
+ * docs/specs/notes.md §9 rejected, smuggled in one level deeper.
+ */
+export const aiAllowedModelSchema = z.object({
+  /** The provider's own model id. The only required field. */
+  id: z.string().trim().min(1).max(128),
+
+  /**
+   * What a model picker shows. Falls back to the build catalogue's label, then
+   * to the id — never to a prettified guess, which would look exactly like a
+   * model this application actually knows something about.
+   */
+  label: z.string().trim().min(1).max(128).optional(),
+
+  /**
+   * Total context window, in tokens. The §3.3 budget's starting number.
+   *
+   * Bounded at 1,024 below — a window smaller than that cannot hold a system
+   * prompt and a paragraph, so a value there is a typo rather than a policy —
+   * and at ten million above, which is far past any shipped model and is a
+   * bound on a MISTAKE (a byte count pasted into a token field), not on a
+   * vendor's ambition.
+   */
+  contextWindowTokens: z.number().int().min(1_024).max(10_000_000).optional(),
+
+  /** Most tokens this model will produce in one completion. */
+  maxOutputTokens: z.number().int().min(64).max(1_000_000).optional(),
+});
+
+export type AiAllowedModel = z.infer<typeof aiAllowedModelSchema>;
+
+/**
+ * One `allowedModels` entry as it may be WRITTEN: an object, or a bare id.
+ *
+ * ⚠ THE LEGACY STRING FORM IS LOAD-BEARING AND MUST NEVER BE REMOVED. Every
+ * deployment that has already saved an AI policy has `["gpt-4o", …]` sitting in
+ * the `global` row's JSONB right now. `SystemSettingsService.readKnownSettings`
+ * DEGRADES A NAMESPACE THAT FAILS TO PARSE TO `DEFAULT_SYSTEM_SETTINGS` — it
+ * does not error, it does not log an administrator can find later, it quietly
+ * substitutes the defaults. So a schema that rejected the string form would not
+ * produce a migration failure or a 500; it would silently reset every existing
+ * deployment's `allowedModels` to `[]` and its `enabled` to `false`, and the
+ * first anyone would know is users reporting that AI had stopped working. That
+ * is why this is a union with a normalising transform rather than a widened
+ * object type, and why there is no migration: the old shape stays readable
+ * forever.
+ *
+ * NORMALISED ON THE WAY IN, so every reader downstream sees objects only. The
+ * alternative — a union type every consumer narrows — would put the same
+ * `typeof entry === 'string'` branch in the config probe, the admin service,
+ * the generation handler and every future caller, and one of them would get it
+ * wrong.
+ */
+export const aiAllowedModelEntrySchema = z
+  .union([z.string().trim().min(1).max(128), aiAllowedModelSchema])
+  .transform((entry): AiAllowedModel =>
+    typeof entry === 'string' ? { id: entry } : entry,
+  );
+
+/**
  * Per-provider settings blocks.
  *
  * ONE KEY PER PROVIDER, ALL PRESENT, exactly as `transcriptionProvidersSchema`
@@ -82,17 +162,19 @@ export const aiProvidersSchema = z.object({
      * models its content may be sent to, and it is the only one, since the key
      * and the bill are the user's own.
      *
-     * FREE STRINGS RATHER THAN AN ENUM, for the identical reason
+     * FREE IDS RATHER THAN AN ENUM, for the identical reason
      * `transcription.providers.assemblyai.speechModel` is: vendors add and
      * retire model ids on their own schedule, and an enum here would mean a
      * deployment cannot adopt a new model without a release of this
-     * application.
+     * application. Since #78 an entry may also carry the numbers this build
+     * needs to budget with — see {@link aiAllowedModelEntrySchema}, and note
+     * that a BARE STRING is still accepted and always will be.
      *
      * An EMPTY list is legal and means "nothing is permitted" — a deliberately
      * representable state, so an administrator can close the feature by policy
      * without also flipping `enabled` and losing the rest of the configuration.
      */
-    allowedModels: z.array(z.string().trim().min(1).max(128)).max(50),
+    allowedModels: z.array(aiAllowedModelEntrySchema).max(50),
 
     /**
      * The model a client offers first. It SHOULD be a member of
@@ -236,10 +318,7 @@ export const systemAiPatchSchema = z.object({
       openai: z
         .object({
           baseUrl: z.string().trim().url().max(512).optional(),
-          allowedModels: z
-            .array(z.string().trim().min(1).max(128))
-            .max(50)
-            .optional(),
+          allowedModels: z.array(aiAllowedModelEntrySchema).max(50).optional(),
           defaultModel: z.string().trim().min(1).max(128).optional(),
         })
         .optional(),
@@ -257,10 +336,19 @@ export type SystemAiPatchValue = z.infer<typeof systemAiPatchSchema>;
 // Compile-time proof that no secret-bearing field crept in
 // -----------------------------------------------------------------------------
 //
-// The same technique `transcription-settings.schema.ts` uses, checked at BOTH
-// levels for the same reason it checks both: `providers.openai.apiKey` is by
-// far the most natural place for somebody to put a key, and a proof that only
-// looked at the top level would miss the exact mistake it exists to prevent.
+// The same technique `transcription-settings.schema.ts` uses, checked at ALL
+// THREE levels for the same reason it checks both of its two:
+// `providers.openai.apiKey` is by far the most natural place for somebody to
+// put a key, and a proof that only looked at the top level would miss the exact
+// mistake it exists to prevent.
+//
+// THE THIRD LEVEL ARRIVED WITH #78, and it is not a formality. Once an entry of
+// `allowedModels` became an OBJECT with its own optional fields, "this one
+// model lives on a different account, so give it its own key" became a
+// plausible-sounding change somebody could make in one line — and it would be
+// the deployment-wide fallback credential docs/specs/notes.md §9 rejected,
+// hidden two levels down in a settings blob that is returned wholesale to every
+// holder of `system_settings:read`.
 //
 // If one of these lines has gone red: you are trying to put a secret into a
 // settings blob — and in this epic, into a DEPLOYMENT-WIDE one, which is also
@@ -287,6 +375,12 @@ export type OpenAiSettingsCarryNoSecret = CarriesNoSecret<
   AiProvidersValue['openai']
 >;
 
+/** #78: one entry of `allowedModels` is an object now, so it is checked too. */
+export type AiAllowedModelCarriesNoSecret = CarriesNoSecret<AiAllowedModel>;
+
 export const AI_SETTINGS_CARRIES_NO_SECRET: AiSettingsCarriesNoSecret = true;
 
 export const OPENAI_SETTINGS_CARRY_NO_SECRET: OpenAiSettingsCarryNoSecret = true;
+
+export const AI_ALLOWED_MODEL_CARRIES_NO_SECRET: AiAllowedModelCarriesNoSecret =
+  true;

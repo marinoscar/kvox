@@ -92,7 +92,19 @@ export const systemSettingsResponseSchema = z.object({
     providers: z.object({
       openai: z.object({
         baseUrl: z.string(),
-        allowedModels: z.array(z.string()),
+        // #78: an entry may carry its own numbers, so this deployment can
+        // permit a model no release of this application knows about. The bare
+        // string form is still what every pre-#78 row contains, and this
+        // response echoes back whichever shape was stored — normalised to
+        // objects by the schema the service reads with.
+        allowedModels: z.array(
+          z.object({
+            id: z.string(),
+            label: z.string().optional(),
+            contextWindowTokens: z.number().optional(),
+            maxOutputTokens: z.number().optional(),
+          }),
+        ),
         defaultModel: z.string(),
       }),
     }),

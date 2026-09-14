@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiSettingsService } from './ai-settings.service';
 import { UserAiCredentialsService } from './user-ai-credentials.service';
@@ -51,9 +52,10 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 //      rolled back across the addition of a provider has a settings row naming
 //      one this process has never heard of. Both are ordinary, both are
 //      `available: false`, and neither is an error;
-//   3. at least one PERMITTED model is also a model this build can budget —
-//      the intersection of `allowedModels` and the provider's catalogue, per
-//      docs/specs/notes.md §3.3, which needs a context window to check against;
+//   3. at least one PERMITTED model can be BUDGETED — that is, `allowedModels`
+//      has an entry whose context window is known, either from the entry itself
+//      (#78) or from the provider's own catalogue, per docs/specs/notes.md
+//      §3.3, which needs a number to check a prompt against;
 //   4. the token ceilings are coherent (a `maxOutputTokens` at or above the
 //      smallest permitted model's whole context window leaves no room for
 //      input, so every generation would refuse).
@@ -119,18 +121,25 @@ export class AiConfigService {
       };
     }
 
-    // Fact 3: the INTERSECTION, in the policy's own order so an administrator's
-    // preferred ordering survives to the model picker. A permitted model this
-    // build cannot budget is omitted rather than published with a guessed
-    // context window — `GET /api/ai-settings`'s `unknownModels` is where an
-    // administrator is told about it.
-    const byId = new Map(
-      provider.capabilities.models.map((model) => [model.id, model]),
-    );
-
+    // Fact 3: every permitted model this deployment can BUDGET, in the policy's
+    // own order so an administrator's preferred ordering survives to the model
+    // picker.
+    //
+    // ⚠ NO LONGER A PLAIN INTERSECTION WITH THE BUILD CATALOGUE (#78). A policy
+    // entry may carry its own `contextWindowTokens` and `maxOutputTokens`, and
+    // such a model is published here even though no release of this application
+    // has heard of it — otherwise model discovery would list sixty models an
+    // administrator could permit and this endpoint would offer the four
+    // hardcoded ones. `resolveAllowedModel` is the ONE implementation of that
+    // precedence and `AiSettingsService` calls the same function to decide what
+    // to report as `unknownModels`, so the two answers cannot drift.
+    //
+    // An entry that resolves to NOTHING is still omitted rather than published
+    // with a guessed context window — see that function for why guessing is
+    // wrong in both directions.
     const models: AiConfigModel[] = policy.providers[providerId].allowedModels
-      .map((id) => byId.get(id))
-      .filter((model): model is NonNullable<typeof model> => model !== undefined)
+      .map((entry) => resolveAllowedModel(entry, provider.capabilities.models))
+      .filter((model): model is NonNullable<typeof model> => model !== null)
       .map((model) => ({
         id: model.id,
         label: model.label,
