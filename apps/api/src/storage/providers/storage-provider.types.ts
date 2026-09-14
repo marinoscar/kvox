@@ -28,6 +28,34 @@ export interface UploadPart {
 }
 
 /**
+ * A part that a provider reports as ALREADY UPLOADED for an in-progress
+ * multipart upload (issue #21).
+ *
+ * Distinct from `UploadPart` above, and deliberately not an extension of it.
+ * `UploadPart` is what a CLIENT asserts when finishing an upload — a part
+ * number and an ETag, nothing the server has verified. This is what the
+ * PROVIDER reports when asked what it is actually holding, which is the only
+ * trustworthy answer to "how far did this upload get?" and carries a `size`
+ * the client half has no way to state.
+ *
+ * WHY THIS EXISTS AT ALL: resume. `storage_object_chunks` rows are written
+ * only at completion time, so a status built from them reports zero progress
+ * for the entire lifetime of an upload and then jumps to 100% once the upload
+ * no longer needs resuming. Asking the provider is the only source that is
+ * correct while the answer still matters.
+ */
+export interface UploadedPart {
+  /** 1-based part number, as it was signed. */
+  partNumber: number;
+  /** Byte length the provider is holding for this part. */
+  size: number;
+  /** Provider ETag, usable verbatim in `completeMultipartUpload`. */
+  etag: string;
+  /** When the provider recorded the part, when it reports one. */
+  lastModified?: Date;
+}
+
+/**
  * Options for generating signed URLs
  */
 export interface SignedUrlOptions {

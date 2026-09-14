@@ -42,6 +42,7 @@ import type {
   StorageUploadOptions,
   StorageUploadResult,
   UploadPart,
+  UploadedPart,
 } from '../../src/storage/providers/storage-provider.types';
 
 function notSupported(method: string): never {
@@ -146,6 +147,13 @@ export class TmpDirStorageProvider implements StorageProvider {
 
   abortMultipartUpload(_key: string, _uploadId: string): Promise<void> {
     return notSupported('abortMultipartUpload');
+  }
+
+  // Issue #21 added this to the interface. This helper's multipart surface is
+  // uniformly unsupported, so it stays that way rather than growing a
+  // half-real implementation nothing here exercises.
+  listParts(_key: string, _uploadId: string): Promise<UploadedPart[]> {
+    return notSupported('listParts');
   }
 
   getSignedDownloadUrl(_key: string, _options?: SignedUrlOptions): Promise<string> {

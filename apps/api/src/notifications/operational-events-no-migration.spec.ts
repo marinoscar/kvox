@@ -50,6 +50,10 @@ const MIGRATIONS_AT_288 = [
   // wrote the archive, which only matters once a machine this API cannot
   // inspect can be the one that wrote it. Also not about notifications.
   '20260907160000_add_backup_run_pg_dump_version',
+  // #21: `storage_objects.part_size` / `managed_by` — the part size an upload
+  // was sliced with, and the module that owns the object. Multi-GB resumable
+  // uploads, and equally not about notifications.
+  '20260914120000_add_storage_part_size_and_managed_by',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

@@ -57,6 +57,13 @@ import {
 import {
   DownloadUrlResponseDto,
 } from './dto/download-url-response.dto';
+import {
+  PresignPartsBodyDto,
+  PresignPartsDto,
+  PresignPartsResponseDto,
+  presignPartsSchema,
+} from './dto/presign-parts.dto';
+import { PERMISSIONS } from '../../common/constants/roles.constants';
 
 @ApiTags('Storage')
 @Controller('storage/objects')
@@ -171,6 +178,11 @@ export class ObjectsController {
     status: 403,
     description: 'Access denied - you do not own this object',
   })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Object is managed by another module and must be deleted through it',
+  })
   async deleteObject(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser('id') userId: string,
@@ -246,12 +258,65 @@ export class ObjectsController {
   }
 
   /**
+   * Sign the next batch of part upload URLs
+   */
+  @Post(':id/upload/parts')
+  @HttpCode(HttpStatus.OK)
+  @Auth({ permissions: [PERMISSIONS.STORAGE_WRITE] })
+  @ApiOperation({
+    summary: 'Sign more upload part URLs',
+    description:
+      'Issue signed PUT URLs for a further batch of parts of an in-progress ' +
+      'multipart upload. Initialization returns only the first few URLs, and ' +
+      'signed URLs expire, so a large upload asks for batches as it goes. ' +
+      'Each call also marks the upload as still active, which is what keeps ' +
+      'it from being swept away as abandoned.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Object ID' })
+  @ApiBody({ type: PresignPartsBodyDto })
+  @ApiDataResponse(PresignPartsResponseDto, {
+    description: 'Part URLs signed successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Upload is no longer in progress, or a part number is duplicated, ' +
+      'out of range, or the batch exceeds 100 part numbers',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Upload not found',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Access denied - you do not own this upload',
+  })
+  async presignParts(
+    @Param('id', ParseUUIDPipe) objectId: string,
+    @Body(new ZodValidationPipe(presignPartsSchema)) dto: PresignPartsDto,
+    @CurrentUser('id') userId: string,
+  ): Promise<{ data: PresignPartsResponseDto }> {
+    const parts = await this.objectsService.presignParts(
+      userId,
+      objectId,
+      dto.partNumbers,
+    );
+
+    return { data: { parts } };
+  }
+
+  /**
    * Complete multipart upload
    */
   @Post(':id/upload/complete')
   @ApiOperation({
     summary: 'Complete resumable upload',
-    description: 'Finalize a multipart upload after all parts are uploaded',
+    description:
+      'Finalize a multipart upload after all parts are uploaded. The `parts` ' +
+      'body field is OPTIONAL: omit it and the server reads the uploaded ' +
+      'parts back from the storage provider, which is what a browser should ' +
+      'do — part ETags are cross-origin response headers a page cannot read ' +
+      'unless the bucket exposes them.',
   })
   @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Object ID' })
   @ApiBody({ type: CompleteUploadBodyDto })

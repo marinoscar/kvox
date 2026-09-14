@@ -483,15 +483,20 @@ above. Don't restate any of that here; extend those three instead.
 - `DELETE /api/allowlist/{id}` - Remove email from allowlist
 
 ### Storage Objects
-- `POST /api/storage/objects/upload/init` - Initialize resumable upload
-- `GET /api/storage/objects/:id/upload/status` - Get upload progress
-- `POST /api/storage/objects/:id/upload/complete` - Complete multipart upload
+An object whose `managed_by` is set belongs to another module (a transcript's
+source audio, its exports): it is **hidden from the list** and **409s on
+DELETE**, naming the module to delete it through. Reads, downloads and metadata
+edits stay available to the owner — see `docs/API.md` and issue #21.
+- `POST /api/storage/objects/upload/init` - Initialize resumable upload (adaptive `partSize`, persisted; first ten part URLs only)
+- `POST /api/storage/objects/:id/upload/parts` - Sign the next batch of part URLs (max 100, `storage:write`)
+- `GET /api/storage/objects/:id/upload/status` - Get upload progress, read from the provider's own part list
+- `POST /api/storage/objects/:id/upload/complete` - Complete multipart upload (`parts` optional; omit it and the server reads the ETags back)
 - `DELETE /api/storage/objects/:id/upload/abort` - Abort upload
 - `POST /api/storage/objects` - Simple file upload
-- `GET /api/storage/objects` - List objects (paginated)
+- `GET /api/storage/objects` - List objects (paginated; managed objects excluded)
 - `GET /api/storage/objects/:id` - Get object metadata
 - `GET /api/storage/objects/:id/download` - Get signed download URL
-- `DELETE /api/storage/objects/:id` - Delete object
+- `DELETE /api/storage/objects/:id` - Delete object (409 if managed by a module)
 - `PATCH /api/storage/objects/:id/metadata` - Update metadata
 
 ### Personal Access Tokens
@@ -637,7 +642,13 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
 - `refresh_tokens` - JWT refresh tokens (hashed)
 - `allowed_emails` - Allowlist for access control
 - `device_codes` - Device authorization codes (RFC 8628)
-- `storage_objects` - File metadata, status, storage references
+- `storage_objects` - File metadata, status, storage references. `part_size` (#21) is
+  the part size an upload was initialised with, **persisted rather than recomputed**:
+  re-deriving it from the current `STORAGE_PART_SIZE` renumbered the parts of every
+  upload in flight whenever an operator changed that setting, so a resuming client
+  completed a corrupt object. `managed_by` names the owning module (plain `text`, no
+  enum, no FK — same reasoning as `jobs.subject_type`) and is what hides an object
+  from the generic list and 409s its generic DELETE.
 - `storage_object_chunks` - Multipart upload chunk tracking
 - `personal_access_tokens` - User-created long-lived API tokens (hashed)
 - `jobs` - The background queue (epic #254). `subject_type`/`subject_id` are both plain

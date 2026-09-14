@@ -11,8 +11,10 @@ import {
   UploadPartCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
+  ListPartsCommand,
   NotFound,
 } from '@aws-sdk/client-s3';
+import type { ListPartsCommandOutput } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'node:stream';
@@ -24,6 +26,7 @@ import {
   UploadPart,
   SignedUrlOptions,
   SignedPutUrlOptions,
+  UploadedPart,
 } from '../storage-provider.types';
 
 /**
@@ -260,6 +263,85 @@ export class S3StorageProvider implements StorageProvider {
       const stack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
         `Failed to abort multipart upload for key ${key}: ${message}`,
+        stack,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * List every part S3 is currently holding for an in-progress multipart
+   * upload (issue #21).
+   *
+   * ⚠ PAGINATES. `ListParts` returns at most 1000 parts per response and sets
+   * `IsTruncated` with a `NextPartNumberMarker` when there are more. A 5 GB
+   * upload at the 10 MiB default part size is 500 parts, but the adaptive part
+   * size in `ObjectsService.initUpload` allows up to 10,000 — so a single
+   * unpaginated call would silently report an upload as 1000/10000 complete
+   * forever, and a resume would re-upload 9000 parts it did not need to.
+   *
+   * Errors propagate, matching every other method in this file: a provider
+   * that cannot answer "what have you got?" must not be reported as holding
+   * nothing, because the caller's next move on an empty answer is to upload
+   * the whole file again.
+   */
+  async listParts(key: string, uploadId: string): Promise<UploadedPart[]> {
+    this.logger.debug(`Listing parts for key: ${key}, uploadId: ${uploadId}`);
+
+    try {
+      const parts: UploadedPart[] = [];
+      let partNumberMarker: string | undefined = undefined;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const result: ListPartsCommandOutput = await this.s3Client.send(
+          new ListPartsCommand({
+            Bucket: this.bucket,
+            Key: key,
+            UploadId: uploadId,
+            PartNumberMarker: partNumberMarker,
+          }),
+        );
+
+        for (const part of result.Parts ?? []) {
+          // A part with no number is not addressable and cannot be completed
+          // with; skipping it is the only safe reading of a malformed entry.
+          if (part.PartNumber === undefined) {
+            continue;
+          }
+
+          parts.push({
+            partNumber: part.PartNumber,
+            size: part.Size ?? 0,
+            etag: part.ETag ?? '',
+            lastModified: part.LastModified,
+          });
+        }
+
+        if (!result.IsTruncated) {
+          break;
+        }
+
+        // A truncated page with no marker would loop forever re-reading page
+        // one. Treat it as the end rather than spinning.
+        if (!result.NextPartNumberMarker) {
+          break;
+        }
+
+        partNumberMarker = String(result.NextPartNumberMarker);
+      }
+
+      // S3 already returns ascending part numbers, but the interface PROMISES
+      // ordering to callers that feed this straight into
+      // `completeMultipartUpload`, so it is enforced here rather than assumed.
+      parts.sort((a, b) => a.partNumber - b.partNumber);
+
+      return parts;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to list parts for key ${key}: ${message}`,
         stack,
       );
       throw error;

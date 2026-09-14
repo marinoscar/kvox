@@ -302,6 +302,34 @@ model StorageObject {
   bucket          String?
   status          StorageObjectStatus @default(pending)
   s3UploadId      String?             @map("s3_upload_id") // S3 multipart upload ID
+
+  // The part size THIS upload was initialised with (issue #21). Nullable: it
+  // is meaningless for a simple upload and unknown for every row written
+  // before this column existed.
+  //
+  // ⚠ PERSISTED RATHER THAN RECOMPUTED, and that is the whole point. It used
+  // to be re-derived from `storage.partSize` on every status call, so an
+  // operator raising STORAGE_PART_SIZE silently renumbered the parts of every
+  // upload already in flight: a client resuming one would skip the wrong
+  // offsets and complete a corrupt object. A part size is a property of an
+  // upload, fixed the moment the first part is signed.
+  //
+  // `Int`, not `BigInt`: S3 caps a part at 5 GiB, comfortably inside int4.
+  partSize        Int?                @map("part_size")
+
+  // The module that owns this object, e.g. 'transcripts' (issue #21). NULL
+  // means the object is a plain user upload owned by nobody but its uploader.
+  //
+  // A managed object is excluded from `GET /api/storage/objects` and answers
+  // 409 on `DELETE /api/storage/objects/:id` — deleting a transcript's source
+  // audio out from under the transcript is a data-loss bug wearing a REST
+  // endpoint. The owning module deletes through its own surface.
+  //
+  // Plain `text`, no enum and no FK, for the same reason `jobs.subject_type`
+  // is plain text: the set of owning modules is open, and a fork's modules
+  // cannot be enumerated here.
+  managedBy       String?             @map("managed_by")
+
   metadata        Json? // JSONB for flexible metadata
   uploadedById    String?             @map("uploaded_by_id") @db.Uuid
   createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz

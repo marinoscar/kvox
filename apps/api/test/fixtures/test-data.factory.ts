@@ -59,6 +59,25 @@ export const mockPermissions = {
     name: 'allowlist:write',
     description: 'Modify allowlist',
   },
+  // Storage object access. Present in `prisma/seed-data.ts` since the storage
+  // module landed but absent from this mirror until #21 gave a storage route a
+  // permission to enforce (`POST /:id/upload/parts`, storage:write) — at which
+  // point every mocked user was silently a caller with NO storage rights.
+  storageRead: {
+    id: randomUUID(),
+    name: 'storage:read',
+    description: 'Read own storage objects',
+  },
+  storageWrite: {
+    id: randomUUID(),
+    name: 'storage:write',
+    description: 'Upload, update metadata',
+  },
+  storageDeleteAny: {
+    id: randomUUID(),
+    name: 'storage:delete_any',
+    description: 'Delete any storage object',
+  },
   // The background queue's admin surface (#264, epic #254). Seeded to Admin
   // only in `prisma/seed-data.ts`, and mirrored that way below.
   jobsRead: {
@@ -441,6 +460,9 @@ export const rolePermissionsMap = {
     mockPermissions.rbacManage,
     mockPermissions.allowlistRead,
     mockPermissions.allowlistWrite,
+    mockPermissions.storageRead,
+    mockPermissions.storageWrite,
+    mockPermissions.storageDeleteAny,
     mockPermissions.jobsRead,
     mockPermissions.jobsWrite,
     mockPermissions.nodesRead,
@@ -456,10 +478,15 @@ export const rolePermissionsMap = {
   contributor: [
     mockPermissions.userSettingsRead,
     mockPermissions.userSettingsWrite,
+    mockPermissions.storageRead,
+    mockPermissions.storageWrite,
   ],
+  // Viewer gets storage:read and NOT storage:write, exactly as seeded — which
+  // is what makes a 403 on a storage:write route testable.
   viewer: [
     mockPermissions.userSettingsRead,
     mockPermissions.userSettingsWrite,
+    mockPermissions.storageRead,
   ],
 };
 
