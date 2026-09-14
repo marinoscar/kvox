@@ -26,6 +26,10 @@ import {
   type TranscriptReadyEmailData,
   transcriptReadyEmail,
 } from './transcript-ready.email';
+import {
+  type TranscriptSharedEmailData,
+  transcriptSharedEmail,
+} from './transcript-shared.email';
 import { type TestEmailData, testEmail } from './test-email.email';
 import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.email';
 
@@ -110,6 +114,11 @@ export interface EmailTemplateDataMap {
   // recording and are sent to its owner alone.
   'transcript-ready': TranscriptReadyEmailData;
   'transcript-failed': TranscriptFailedEmailData;
+
+  // Sharing (#29, epic #19). The one transcript template addressed to somebody
+  // OTHER than the owner — the recipient of a share — which is why it carries
+  // nothing about the recording's content beyond the title.
+  'transcript-shared': TranscriptSharedEmailData;
 }
 
 /**
@@ -148,6 +157,7 @@ export const EMAIL_TEMPLATES: {
   'restore-completed': restoreCompletedEmail,
   'transcript-ready': transcriptReadyEmail,
   'transcript-failed': transcriptFailedEmail,
+  'transcript-shared': transcriptSharedEmail,
 };
 
 /**
@@ -268,6 +278,11 @@ export { restoreCompletedEmail } from './restore-completed.email';
 
 export { transcriptReadyEmail, formatDuration } from './transcript-ready.email';
 export { transcriptFailedEmail } from './transcript-failed.email';
+export {
+  transcriptSharedEmail,
+  shareRoleLabel,
+  shareRoleSentence,
+} from './transcript-shared.email';
 
 export type { PlainTextOptions, RenderLayoutOptions } from './layout';
 export type { EmailTemplate, RenderedEmail } from './email-template.types';
@@ -295,3 +310,4 @@ export type {
 export type { RestoreCompletedEmailData } from './restore-completed.email';
 export type { TranscriptReadyEmailData } from './transcript-ready.email';
 export type { TranscriptFailedEmailData } from './transcript-failed.email';
+export type { TranscriptSharedEmailData } from './transcript-shared.email';

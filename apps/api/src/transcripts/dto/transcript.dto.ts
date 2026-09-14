@@ -201,6 +201,25 @@ export const transcriptListItemSchema = z.object({
   failureReason: z.string().nullable(),
   /** How the CALLER reaches this row — not the owner's relationship to it. */
   access: z.enum(TRANSCRIPT_ACCESS_ROLES),
+  /**
+   * The owner's display name (issue #29).
+   *
+   * PRESENT ON EVERY ROW, not only shared ones, so a client never has to
+   * branch on `access` to know whether the field is meaningful — on an owned
+   * row it is simply the caller's own name. `"Shared with me"` renders it;
+   * `"Mine"` ignores it.
+   *
+   * ONE FIELD, NOT AN EMBEDDED OWNER OBJECT: the name is the whole of what a
+   * shared row needs, and a `{ id, email, imageUrl }` owner block would put the
+   * beginnings of a user directory on a list every user can call. It resolves
+   * `displayName` -> `providerDisplayName` -> the address, and the fallback to
+   * the address is a deliberate, bounded choice — it is reached only for an
+   * account that has never had a name, and only ever discloses the address of
+   * somebody who has already chosen to share a private recording with this
+   * exact caller. "Shared by (unknown)" on the one screen whose entire job is
+   * to say who shared it would be worse.
+   */
+  ownerName: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

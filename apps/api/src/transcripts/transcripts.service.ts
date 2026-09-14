@@ -79,6 +79,8 @@ export interface TranscriptListItem {
   currentVersion: number;
   failureReason: string | null;
   access: TranscriptAccessRole;
+  /** The owner's display name (#29), falling back to their address. */
+  ownerName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -617,7 +619,11 @@ export class TranscriptsService {
   // ===========================================================================
 
   /** The list-row projection. One definition, every surface. */
-  private listShape(transcript: Transcript, access: TranscriptAccessRole): TranscriptListItem {
+  private listShape(
+    transcript: Transcript,
+    access: TranscriptAccessRole,
+    ownerName: string,
+  ): TranscriptListItem {
     return {
       id: transcript.id,
       title: transcript.title,
@@ -631,6 +637,7 @@ export class TranscriptsService {
       currentVersion: transcript.currentVersion,
       failureReason: transcript.failureReason,
       access,
+      ownerName,
       createdAt: transcript.createdAt.toISOString(),
       updatedAt: transcript.updatedAt.toISOString(),
     };
@@ -638,7 +645,7 @@ export class TranscriptsService {
 
   /** The detail projection: the list row, plus speakers and source facts. */
   private async detailShape(transcript: Transcript, access: TranscriptAccessRole) {
-    const [speakers, source] = await Promise.all([
+    const [speakers, source, owner] = await Promise.all([
       this.prisma.transcriptSpeaker.findMany({
         where: { transcriptId: transcript.id },
         orderBy: { colorIndex: 'asc' },
@@ -648,10 +655,17 @@ export class TranscriptsService {
         where: { id: transcript.sourceObjectId },
         select: { name: true, mimeType: true, size: true },
       }),
+      // #29: the detail view carries the owner's name for the same reason the
+      // list rows do — a recipient opening a shared transcript is told who
+      // shared it without a second request.
+      this.prisma.user.findUnique({
+        where: { id: transcript.ownerId },
+        select: { displayName: true, providerDisplayName: true, email: true },
+      }),
     ]);
 
     return {
-      ...this.listShape(transcript, access),
+      ...this.listShape(transcript, access, ownerNameOf(owner)),
       speakers,
       provider: transcript.provider,
       remoteDeletedAt: transcript.remoteDeletedAt
@@ -675,12 +689,23 @@ export class TranscriptsService {
   ): Promise<TranscriptListItem[]> {
     if (rows.length === 0) return [];
 
-    const shares = await this.prisma.transcriptShare.findMany({
-      where: { userId, transcriptId: { in: rows.map((row) => row.id) } },
-      select: { transcriptId: true, role: true },
-    });
+    // TWO QUERIES FOR THE WHOLE PAGE, not two per row: the caller's shares
+    // across these ids, and every distinct owner behind them. A per-row lookup
+    // here would be the N+1 that makes a twenty-row list twenty-one round
+    // trips, and the "Shared with me" list is by definition all other people.
+    const [shares, owners] = await Promise.all([
+      this.prisma.transcriptShare.findMany({
+        where: { userId, transcriptId: { in: rows.map((row) => row.id) } },
+        select: { transcriptId: true, role: true },
+      }),
+      this.prisma.user.findMany({
+        where: { id: { in: [...new Set(rows.map((row) => row.ownerId))] } },
+        select: { id: true, displayName: true, providerDisplayName: true, email: true },
+      }),
+    ]);
 
     const byId = new Map(shares.map((share) => [share.transcriptId, share.role]));
+    const nameById = new Map(owners.map((owner) => [owner.id, ownerNameOf(owner)]));
 
     return rows.map((row) =>
       this.listShape(
@@ -690,6 +715,10 @@ export class TranscriptsService {
           : byId.get(row.id) === 'editor'
             ? 'editor'
             : 'viewer',
+        // `?? ''` is unreachable in practice — `transcripts.owner_id` is a
+        // non-null FK — but a name is a string on the wire, not a maybe-string,
+        // and a row whose owner vanished mid-query must not become a 500.
+        nameById.get(row.ownerId) ?? '',
       ),
     );
   }
@@ -748,6 +777,24 @@ export class TranscriptsService {
       },
     });
   }
+}
+
+/**
+ * The owner's name for a list row (#29): `displayName`, then the provider's,
+ * then the address.
+ *
+ * ONE DEFINITION, used by both the batch path and the detail path, so a
+ * transcript cannot be labelled "Ana" in a list and "ana@example.test" when
+ * opened. The address fallback is reached only for an account that has never
+ * had a name at all — see `transcriptListItemSchema.ownerName` for why that is
+ * an acceptable disclosure and an empty string is not.
+ */
+export function ownerNameOf(
+  owner: { displayName: string | null; providerDisplayName: string | null; email: string } | null,
+): string {
+  if (!owner) return '';
+
+  return owner.displayName || owner.providerDisplayName || owner.email;
 }
 
 /** A filename without its extension, trimmed to the title limit. */

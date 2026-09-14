@@ -74,6 +74,12 @@ export {
   nodeOfflineEmail,
   backupFailedEmail,
   restoreCompletedEmail,
+  // Sharing (#29, epic #19). `shareRoleLabel` is exported beside the template
+  // because the BROWSER channel renders the same "(Editor)" suffix the email's
+  // subject does, and two copies of that string would drift.
+  transcriptSharedEmail,
+  shareRoleLabel,
+  shareRoleSentence,
 } from './templates';
 export {
   SmtpEmailProvider,
@@ -111,6 +117,9 @@ export type {
   // these reach `notify(key, ownerId, …)` rather than a permission fan-out.
   TranscriptReadyEmailData,
   TranscriptFailedEmailData,
+  // #29's recipient-addressed payload (epic #19). The only transcript payload
+  // that reaches somebody who does not own the recording.
+  TranscriptSharedEmailData,
 } from './templates';
 export type { EmailProvider } from './providers/email-provider.interface';
 export type {

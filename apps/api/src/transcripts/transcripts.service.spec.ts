@@ -93,6 +93,24 @@ describe('TranscriptsService', () => {
       transcriptSpeaker: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptSegment: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptShare: { findMany: jest.fn().mockResolvedValue([]) },
+      // #29: every list and detail row carries the owner's display name, so
+      // both shapes read `users` — the batch path once per page, the detail
+      // path once per row.
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          displayName: 'Ana Rivera',
+          providerDisplayName: null,
+          email: 'ana@example.test',
+        }),
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: USER.id,
+            displayName: 'Ana Rivera',
+            providerDisplayName: null,
+            email: 'ana@example.test',
+          },
+        ]),
+      },
       storageObject: {
         findUnique: jest.fn().mockResolvedValue({
           name: 'meeting.mp3',

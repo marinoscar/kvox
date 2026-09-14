@@ -22,6 +22,8 @@ import { TranscriptEditingService } from './transcript-editing.service';
 import { TranscriptMaterializeService } from './transcript-materialize.service';
 import { TranscriptObjectsService } from './transcript-objects.service';
 import { TranscriptPipelineService } from './transcript-pipeline.service';
+import { TranscriptSharingService } from './transcript-sharing.service';
+import { ShareLookupThrottleService } from './share-lookup-throttle.service';
 import { TranscriptionRuntimeService } from './transcription-runtime.service';
 import { TranscriptsController } from './transcripts.controller';
 import { TranscriptsService } from './transcripts.service';
@@ -51,7 +53,8 @@ import { TranscriptsService } from './transcripts.service';
 //   • `StorageProvidersModule` — the `STORAGE_PROVIDER` token itself, which
 //     `StorageModule` does not re-export. Submit presigns with it; ingest
 //     writes the gzipped raw result through it.
-//   • `NotificationsModule` — the two owner-addressed events.
+//   • `NotificationsModule` — the two owner-addressed events, plus (#29) the
+//     one recipient-addressed one.
 //
 // -----------------------------------------------------------------------------
 // NOTHING IS EXPORTED YET, AND THAT IS ON PURPOSE
@@ -93,6 +96,12 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptAccessService,
     TranscriptEditingService,
     TranscriptMaterializeService,
+    // Sharing (#29). `ShareLookupThrottleService` holds its window in THIS
+    // PROCESS's memory, so it is a plain singleton of this module — see its own
+    // file for why that limit is acceptable and where the seam is if a shared
+    // limiter is ever wanted.
+    TranscriptSharingService,
+    ShareLookupThrottleService,
     TranscriptObjectsService,
     TranscriptPipelineService,
     TranscriptionRuntimeService,

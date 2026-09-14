@@ -1130,6 +1130,90 @@ share the same "answer identically for absent and for forbidden" posture.
 Revocation and role changes take effect on the **next request** — there is
 no cached grant anywhere for `TranscriptAccessService` to invalidate.
 
+The exact 404 text is **"No user with that email"**, with no product name in
+it. That is deliberate and is not a slip against the wording above: this
+repository is a renameable template, `apps/cli`'s `template-identity` test
+fails any hardcoded product-name literal, and a message that named the
+product would have to be re-derived from `APP_NAME` for no gain — the message
+must name *nothing*, and the product is one more thing it does not need to
+name.
+
+### 6.3.1 Four endpoints, and the one that is not owner-only
+
+| Endpoint | Who | Level asked of `TranscriptAccessService` |
+|---|---|---|
+| `GET /api/transcripts/:id/shares` | owner | `view`, plus an explicit owner check |
+| `POST /api/transcripts/:id/shares` | owner | `own` |
+| `PATCH /api/transcripts/:id/shares/:userId` | owner | `own` |
+| `DELETE /api/transcripts/:id/shares/:userId` | owner, **or the recipient leaving** | `own` / `view` |
+
+Two rows of that table are worth stating in words, because both are easy to
+get subtly wrong:
+
+**The list asks for `view`, not `own`.** `require` turns any level above
+`view` into a `transcripts:write` check — correctly, since both levels above
+it mutate — but *reading* the share list writes nothing, and an owner whose
+role lost `transcripts:write` must still be able to see who they shared with
+even though they can no longer change it. So the list asks for `view` and
+rejects a non-owner itself, with the same `TRANSCRIPT_NOT_FOUND_MESSAGE`. It
+is owner-only and **not** viewer-or-better: who else can read a recording is
+a fact about those other people, and a recipient enumerating the others would
+learn about people who never agreed to be visible to them.
+
+**`DELETE` is gated on `transcripts:read`, not `transcripts:write`.** Giving
+up your own access is not a write against somebody else's recording, and a
+role change that removed `transcripts:write` must not trap a recipient in a
+share they want out of. The leave path passes an empty permission list for
+the same reason.
+
+**Sharing with yourself is a 400, not the generic 404**, and costs no
+rate-limit budget. The 404 is generic because the caller must not learn
+whether a *stranger's* address has an account; there is nothing to conceal
+from somebody about their own, a generic answer there would read as "your
+account does not exist", and charging the limiter would punish a typo rather
+than a probe.
+
+Re-sharing with somebody who already holds a share **updates their role**
+rather than failing: the dialog's email field does not know who is already on
+the list, and a 409 would make the owner delete a row in order to type it
+again. `@@unique([transcript_id, user_id])` is what makes the upsert's
+"exactly one row per pair" a property of the database rather than of the
+service.
+
+### 6.3.2 Rate-limiting the lookup: per caller, misses only, in process
+
+There was **no rate-limiting precedent in this repository to reuse** when
+issue #29 landed, and the three things that look like one are all about
+something else: `jobs/provider-throttle.service.ts` shares an *outbound*
+bucket so a vendor is not hammered; `jobs/rate-limit.error.ts` classifies a
+429 a provider returned *to us*; and the device-authorization poll interval
+is a hint in a response body, not an enforced limit. So
+`ShareLookupThrottleService` is deliberately the simplest correct thing, with
+three properties stated rather than implied:
+
+- **Per authenticated caller, not per IP.** That is who the oracle answers
+  to: an attacker behind a thousand addresses is still one account, and an
+  office behind one NAT is many.
+- **Only a miss spends budget.** Sharing with eight colleagues in a row is
+  the feature working; it is the run of misses that is the enumeration.
+  Charging only failures makes the limit invisible to every honest user and
+  immediate for the attack it exists to stop.
+- **In process**, which is a real limit and not a hidden one: N replicas
+  permit N times the budget and a restart forgets everything. That is an
+  acceptable trade for a control whose job is to turn "ten thousand addresses
+  in a minute" into "ten thousand addresses in a week", and it is the honest
+  shape for a codebase with no shared cache — a Postgres-backed counter would
+  put a write on the hot path of every failed lookup, and a Redis-backed one
+  would add infrastructure this deployment does not have. The service is the
+  seam to replace if a shared limiter is ever wanted; nothing outside it
+  knows how the counting is done.
+
+Audit: `transcript:share:grant`, `transcript:share:update` and
+`transcript:share:revoke`, all `targetType: 'transcript'`. A **leave**
+records the revoke with the person leaving as the actor and `left: true` in
+its meta, so an audit reader does not have to compare two ids to tell the two
+shapes apart.
+
 ### 6.4 Why the admin card reuses `system_settings:*`, and not a new permission
 
 The Transcription settings card (`/admin/settings/transcription`, issue #23)
@@ -1542,7 +1626,29 @@ triggering write commits, outside any transaction:
   and the granted role. Default-enabled, **not** `mandatory: true` — unlike
   `security.role_changed`, being told about a share is a courtesy a
   recipient can reasonably choose to mute, not a security-relevant change to
-  their own privileges.
+  their own privileges. Three things it deliberately does **not** do:
+  - It is **not raised for a no-op re-share** (the same address at the same
+    role, from an owner clicking twice or a retried request): mailing
+    somebody again about access they already have is how a useful
+    notification becomes one people mute.
+  - It is **not raised for a demotion**. "*Owner* shared *Title* with you
+    (Viewer)" is simply the wrong message for "you can no longer correct
+    this", and there is no second event for it. A demotion is silent and
+    takes effect on the next request, exactly as a revocation does.
+  - There is **no `transcript_unshared` counterpart at all**. "Your access
+    was removed" is a message whose main effect is to tell somebody they were
+    discussed; an owner is entitled to un-share a private conversation
+    without composing an explanation.
+
+  The email template carries the **role**, not just a link — "someone shared
+  a recording with you" leaves the reader to click through to discover
+  whether they can fix the misheard name they are about to find. It carries
+  the title in the body and **deliberately not in the subject line**, which
+  is the one part of an email that renders on a lock screen and in a
+  notification preview: the title of somebody else's private conversation has
+  no business appearing there before the recipient has opened the message.
+  The browser template does carry it, because a toast is only shown to
+  somebody already inside the application.
 
 None of the three is a job-queue operational event in the sense
 `docs/specs/job-queue.md`'s own "Notifying somebody a job gave up" section
