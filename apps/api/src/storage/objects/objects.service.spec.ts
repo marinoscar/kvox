@@ -1559,6 +1559,161 @@ describe('ObjectsService', () => {
     });
   });
 
+  // ===========================================================================
+  // delete paths abort an active multipart upload (#101) — `delete` (generic,
+  // unmanaged objects) and `deleteManagedObject` (used by transcript/note
+  // purge) both must abort a still-in-progress multipart upload BEFORE the
+  // row is dropped, so the upload and its parts are never orphaned in the
+  // bucket. See `abortActiveMultipartUpload`/`isNoSuchUploadError` in
+  // objects.service.ts.
+  // ===========================================================================
+  describe('delete paths abort an active multipart upload (#101)', () => {
+    beforeEach(() => {
+      mockStorageProvider.delete.mockResolvedValue(undefined);
+      mockPrisma.storageObject.delete.mockResolvedValue({} as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+    });
+
+    const invokers: Array<
+      [string, (obj: Record<string, unknown>) => Promise<void>]
+    > = [
+      [
+        'delete',
+        async (obj) => {
+          mockPrisma.storageObject.findUnique.mockResolvedValue(obj as any);
+          await service.delete(obj.id as string, testUserId);
+        },
+      ],
+      [
+        'deleteManagedObject',
+        async (obj) => {
+          mockPrisma.storageObject.findUnique.mockResolvedValue({
+            ...obj,
+            managedBy: 'transcripts',
+          } as any);
+          await service.deleteManagedObject(
+            obj.id as string,
+            'transcripts',
+            testUserId,
+          );
+        },
+      ],
+    ];
+
+    describe.each(invokers)('%s', (_name, invoke) => {
+      it.each([['pending'], ['uploading']])(
+        'aborts the upload BEFORE deleting from storage and the database, for status %s',
+        async (status) => {
+          const obj = {
+            ...mockStorageObject,
+            status,
+            s3UploadId: 'upload-abc',
+          };
+
+          await invoke(obj);
+
+          expect(mockStorageProvider.abortMultipartUpload).toHaveBeenCalledWith(
+            obj.storageKey,
+            'upload-abc',
+          );
+          expect(mockStorageProvider.delete).toHaveBeenCalledWith(obj.storageKey);
+          expect(mockPrisma.storageObject.delete).toHaveBeenCalledWith({
+            where: { id: obj.id },
+          });
+
+          const abortOrder =
+            mockStorageProvider.abortMultipartUpload.mock.invocationCallOrder[0];
+          const providerDeleteOrder =
+            mockStorageProvider.delete.mock.invocationCallOrder[0];
+          const dbDeleteOrder =
+            mockPrisma.storageObject.delete.mock.invocationCallOrder[0];
+
+          expect(abortOrder).toBeLessThan(providerDeleteOrder);
+          expect(abortOrder).toBeLessThan(dbDeleteOrder);
+        },
+      );
+
+      it('does not abort a ready object even with a leftover s3UploadId, and still deletes', async () => {
+        const obj = {
+          ...mockStorageObject,
+          status: 'ready',
+          s3UploadId: 'stale-upload-id',
+        };
+
+        await invoke(obj);
+
+        expect(mockStorageProvider.abortMultipartUpload).not.toHaveBeenCalled();
+        expect(mockPrisma.storageObject.delete).toHaveBeenCalledWith({
+          where: { id: obj.id },
+        });
+      });
+
+      it('does not abort a pending object with no s3UploadId, and still deletes', async () => {
+        const obj = {
+          ...mockStorageObject,
+          status: 'pending',
+          s3UploadId: null,
+        };
+
+        await invoke(obj);
+
+        expect(mockStorageProvider.abortMultipartUpload).not.toHaveBeenCalled();
+        expect(mockPrisma.storageObject.delete).toHaveBeenCalledWith({
+          where: { id: obj.id },
+        });
+      });
+
+      it.each([
+        ['NoSuchUpload by name', { name: 'NoSuchUpload' }],
+        [
+          'NoSuchUpload by 404 status',
+          { $metadata: { httpStatusCode: 404 } },
+        ],
+      ])(
+        'treats an already-gone upload (%s) as success and still deletes',
+        async (_label, rejection) => {
+          const obj = {
+            ...mockStorageObject,
+            status: 'uploading',
+            s3UploadId: 'upload-abc',
+          };
+          mockStorageProvider.abortMultipartUpload.mockRejectedValueOnce(
+            rejection,
+          );
+
+          await invoke(obj);
+
+          expect(mockStorageProvider.delete).toHaveBeenCalledWith(obj.storageKey);
+          expect(mockPrisma.storageObject.delete).toHaveBeenCalledWith({
+            where: { id: obj.id },
+          });
+        },
+      );
+
+      it('rethrows a generic abort failure and leaves the row (and bytes) untouched', async () => {
+        const obj = {
+          ...mockStorageObject,
+          status: 'uploading',
+          s3UploadId: 'upload-abc',
+        };
+        const accessDenied = Object.assign(new Error('Access Denied'), {
+          name: 'AccessDenied',
+          $metadata: { httpStatusCode: 403 },
+        });
+        mockStorageProvider.abortMultipartUpload.mockRejectedValueOnce(
+          accessDenied,
+        );
+
+        await expect(invoke(obj)).rejects.toThrow(accessDenied);
+
+        // The row survives for the stale-upload sweep to retry.
+        expect(mockStorageProvider.delete).not.toHaveBeenCalled();
+        expect(mockPrisma.storageObject.delete).not.toHaveBeenCalled();
+        expect(mockPrisma.auditEvent.create).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   describe('updateMetadata', () => {
     it('should merge metadata and update record', async () => {
       const existingMetadata = { key1: 'value1' };
