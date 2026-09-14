@@ -37,7 +37,7 @@ import { buildServiceWorkerOptions } from '../../../pwa/service-worker';
 vi.mock('workbox-core', () => ({ clientsClaim: vi.fn() }));
 vi.mock('workbox-precaching', () => ({
   cleanupOutdatedCaches: vi.fn(),
-  createHandlerBoundToURL: vi.fn(() => vi.fn()),
+  matchPrecache: vi.fn(),
   precacheAndRoute: vi.fn(),
 }));
 vi.mock('workbox-routing', () => ({
@@ -143,7 +143,8 @@ describe('service worker build output', () => {
 
   it('precaches the app shell it needs to load offline', () => {
     // The point of the precache. `index.html` is what the NavigationRoute in
-    // `sw.ts` serves for every client-side route; the font is called out
+    // `sw.ts` falls back to for a client-side route when the network is
+    // unreachable (online navigations are network-first, issue #88); the font is called out
     // because losing it degrades the offline shell into a visibly different
     // application rather than failing outright.
     expect(precachedUrls).toContain('index.html');
@@ -226,9 +227,9 @@ describe('buildServiceWorkerOptions', () => {
     // ESM in dev: the un-bundled worker keeps its `workbox-*` imports, which a
     // classic worker cannot load.
     expect(devOptions?.type).toBe('module');
-    // Without a dev navigateFallback the injection point becomes `[]` and
-    // `createHandlerBoundToURL('/index.html')` throws `non-precached-url` on
-    // activation — in dev only.
+    // Without a dev navigateFallback the injection point becomes `[]`, the
+    // shell is never precached, and the offline navigation fallback
+    // (`matchPrecache('/index.html')`) has nothing to serve — in dev only.
     expect(devOptions?.navigateFallback).toBe('index.html');
   });
 });
@@ -260,7 +261,12 @@ describe('src/sw.ts', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-    expect(code).not.toMatch(/fetch\s*\(/);
+    // Exactly ONE `fetch` is legitimate: the network-first navigation handler
+    // (issue #88) forwarding the navigation request it was handed. It cannot
+    // reach the API because that route's `/api` denylist (asserted above)
+    // keeps every `/api/*` navigation away from it. Any other `fetch` — a
+    // second call, or one with a URL of its own — is still a violation.
+    expect(code.match(/fetch\s*\([^)]*\)/g)).toEqual(['fetch(request)']);
     expect(code).not.toMatch(/['"`]\/api\//);
   });
 });

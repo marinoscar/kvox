@@ -127,10 +127,11 @@ export function buildServiceWorkerOptions(): Partial<VitePWAOptions> {
       // load. The production build bundles it, so this is a dev-only concern.
       type: 'module',
       // In dev the injection point becomes `[{ url: 'index.html' }]` rather
-      // than a real precache list. Without this line it becomes `[]`, and
-      // `createHandlerBoundToURL('/index.html')` in `sw.ts` throws
-      // `non-precached-url` on activation — so the worker dies in dev only, for
-      // a reason that looks nothing like the config line that caused it.
+      // than a real precache list. Without this line it becomes `[]`: nothing
+      // is precached, `matchPrecache('/index.html')` in `sw.ts` resolves
+      // `undefined`, and the navigation handler's OFFLINE fallback silently
+      // does nothing in dev only. (Online navigations are network-first and
+      // unaffected — issue #88.)
       navigateFallback: 'index.html',
     },
   };
