@@ -228,7 +228,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     providers: {
       assemblyai: {
         region: 'us',
-        speechModel: 'universal',
+        // A comma-separated, ordered `speech_models` list (#95).
+        speechModel: 'universal-3-5-pro, universal-2',
       },
     },
     // The provider fetches the audio itself from a signed URL — the bytes
