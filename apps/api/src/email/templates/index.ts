@@ -13,6 +13,8 @@ import {
   type NodeOfflineEmailData,
   nodeOfflineEmail,
 } from './node-offline.email';
+import { type NoteFailedEmailData, noteFailedEmail } from './note-failed.email';
+import { type NoteReadyEmailData, noteReadyEmail } from './note-ready.email';
 import {
   type RestoreCompletedEmailData,
   restoreCompletedEmail,
@@ -119,6 +121,13 @@ export interface EmailTemplateDataMap {
   // OTHER than the owner — the recipient of a share — which is why it carries
   // nothing about the recording's content beyond the title.
   'transcript-shared': TranscriptSharedEmailData;
+
+  // The note pipeline's two owner-addressed events (#49, epic #45). Same
+  // posture as the two transcript templates above and for the same reason: a
+  // generation runs for minutes on somebody else's infrastructure, so the
+  // reader has usually closed the tab by the time there is anything to say.
+  'note-ready': NoteReadyEmailData;
+  'note-failed': NoteFailedEmailData;
 }
 
 /**
@@ -158,6 +167,8 @@ export const EMAIL_TEMPLATES: {
   'transcript-ready': transcriptReadyEmail,
   'transcript-failed': transcriptFailedEmail,
   'transcript-shared': transcriptSharedEmail,
+  'note-ready': noteReadyEmail,
+  'note-failed': noteFailedEmail,
 };
 
 /**
@@ -284,6 +295,10 @@ export {
   shareRoleSentence,
 } from './transcript-shared.email';
 
+// The note pipeline's two templates (#49, epic #45).
+export { noteReadyEmail } from './note-ready.email';
+export { noteFailedEmail } from './note-failed.email';
+
 export type { PlainTextOptions, RenderLayoutOptions } from './layout';
 export type { EmailTemplate, RenderedEmail } from './email-template.types';
 export type { TestEmailData } from './test-email.email';
@@ -311,3 +326,5 @@ export type { RestoreCompletedEmailData } from './restore-completed.email';
 export type { TranscriptReadyEmailData } from './transcript-ready.email';
 export type { TranscriptFailedEmailData } from './transcript-failed.email';
 export type { TranscriptSharedEmailData } from './transcript-shared.email';
+export type { NoteReadyEmailData } from './note-ready.email';
+export type { NoteFailedEmailData } from './note-failed.email';

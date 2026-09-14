@@ -113,6 +113,9 @@ export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
     'transcripts.transcript_failed': 'transcript-failed',
     // Sharing (#29) — the one transcript template addressed to the RECIPIENT.
     'transcripts.transcript_shared': 'transcript-shared',
+    // The note pipeline's two owner-addressed events (#49, epic #45).
+    'notes.note_ready': 'note-ready',
+    'notes.note_failed': 'note-failed',
   };
 
 @Injectable()
