@@ -35,7 +35,7 @@ import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import Menu from '@mui/material/Menu';
+import Popover from '@mui/material/Popover';
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
 import TextField from '@mui/material/TextField';
@@ -204,10 +204,23 @@ export function SpeakerActions({
     );
   }
 
+  // ⚠ `Popover`, NOT `Menu`. `Menu` renders its own `MenuList` — an actual
+  // `<ul>` — and puts `children` INSIDE it, so handing it the `<MenuList>` this
+  // component shares with the bottom sheet would nest `<ul>` directly in
+  // `<ul>`, which is invalid HTML and an axe `list` violation. The rename view
+  // is worse still: a `<div>` as a direct child of that `<ul>`. `Popover` is
+  // the same surface with no list of its own, so ONE body renders correctly in
+  // both presentations.
   return (
-    <Menu anchorEl={anchorEl} open={open} onClose={onClose}>
+    <Popover
+      anchorEl={anchorEl}
+      open={open}
+      onClose={onClose}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+    >
       {body}
-    </Menu>
+    </Popover>
   );
 }
 

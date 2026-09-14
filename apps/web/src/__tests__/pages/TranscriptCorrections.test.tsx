@@ -60,6 +60,19 @@ import type { OperationsResult } from '../../services/transcriptEditing';
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
+/**
+ * For a PORTALLED surface (a popover, a bottom sheet), checked against
+ * `document.body`.
+ *
+ * `region` is off because it is an artefact of the harness, not a defect: axe
+ * wants every top-level node inside a landmark, and a portal root is by
+ * definition a sibling of the app shell that owns the landmarks. The real page
+ * satisfies the rule; a test that renders one page into a bare body cannot.
+ */
+const AXE_PORTAL_OPTIONS = {
+  rules: { 'color-contrast': { enabled: false }, region: { enabled: false } },
+};
+
 const mockGetTranscript = vi.mocked(getTranscript);
 const mockGetSegments = vi.mocked(getTranscriptSegments);
 const mockGetAudio = vi.mocked(getTranscriptAudio);
@@ -374,6 +387,30 @@ describe('TranscriptPage — editing a segment', () => {
     await screen.findByRole('region', { name: 'Transcript' });
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('passes axe with the segment actions open', async () => {
+    // The open sheet is where the list nesting goes wrong if these menus are
+    // ever put back inside a MUI `Menu`, which renders its own `<ul>`.
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
+    await screen.findByRole('menuitem', { name: 'Change speaker' });
+
+    expect(await axe(document.body, AXE_PORTAL_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('passes axe with the speaker actions open', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Speaker 3' }));
+    await screen.findByRole('menuitem', { name: 'Rename' });
+
+    expect(await axe(document.body, AXE_PORTAL_OPTIONS)).toHaveNoViolations();
   });
 });
 
