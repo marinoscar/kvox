@@ -35,14 +35,23 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // User settings — the hub (#96) plus one route per card in
 // `config/userSettingsSections.tsx` (#91, epic #90). These replace the single
 // stacked `UserSettingsPage`, which is deleted rather than left unrouted.
-// Transcripts (#30, epic #19) — the library, the New-transcript flow, the
-// viewer, and #31's history placeholder. Lazy like every other page here, and
-// with more reason than most: the viewer alone pulls in the virtualizer and the
-// playback engine, neither of which a user who never opens a transcript needs.
-const TranscriptsLibraryPage = lazy(() => import('./pages/TranscriptsLibraryPage'));
+// The library (#30 epic #19, #57 epic #45) — ONE page at two routes,
+// `/transcripts` and `/notes`, rendering the tab the path names. Plus the
+// New-transcript flow, the viewer, and #31's history page. Lazy like every
+// other page here, and with more reason than most: the viewer alone pulls in
+// the virtualizer and the playback engine, neither of which a user who never
+// opens a transcript needs.
+const LibraryPage = lazy(() => import('./pages/LibraryPage'));
 const NewTranscriptPage = lazy(() => import('./pages/NewTranscriptPage'));
 const TranscriptPage = lazy(() => import('./pages/TranscriptPage'));
 const TranscriptHistoryPage = lazy(() => import('./pages/TranscriptHistoryPage'));
+// Notes (#57, epic #45) — the new-note flow, the generation view and the
+// version history. Lazy for the same reason and one of its own: the note
+// surfaces pull in `react-markdown` and `remark-gfm`, which nobody who never
+// opens a note should pay for.
+const NewNotePage = lazy(() => import('./pages/NewNotePage'));
+const NotePage = lazy(() => import('./pages/NotePage'));
+const NoteHistoryPage = lazy(() => import('./pages/NoteHistoryPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 // `User`-prefixed to make explicit that it edits the signed-in user's own
@@ -215,14 +224,26 @@ function AppRoutes() {
                       ORDER IS NOT SIGNIFICANT — React Router v6 ranks by
                       specificity, so `/transcripts/new` beats `/transcripts/:id`
                       wherever each is written. They are grouped for reading. */}
+                  {/* ⚠ THE FALLBACK IS `/notes`, NOT `/`, SINCE #57. The
+                      `library` destination is reachable on EITHER
+                      `transcripts:read` or `notes:read` (see its
+                      `anyPermission`) but its `path` is this one, so a user
+                      holding only `notes:read` who clicks Library — or follows
+                      an old bookmark — lands here without the permission to
+                      stay. Sending them to `/` would be the #92 bug in a new
+                      place: a nav row that says "you can go here" and a route
+                      that says "no you can't". Sending them one tab sideways
+                      lands them on the half of the library they CAN read. A
+                      user holding neither falls through `/notes`' own gate to
+                      `/`, so the chain still terminates. */}
                   <Route
                     path="/transcripts"
                     element={
                       <RequirePermission
                         permission="transcripts:read"
-                        fallback={<Navigate to="/" replace />}
+                        fallback={<Navigate to="/notes" replace />}
                       >
-                        <TranscriptsLibraryPage />
+                        <LibraryPage />
                       </RequirePermission>
                     }
                   />
@@ -259,6 +280,77 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <TranscriptHistoryPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Notes (#57, epic #45) — the OTHER half of the `library`
+                      destination, not a destination of its own. See
+                      `config/destinations.ts`: four is the bottom bar's
+                      ceiling, and `/notes` is a second prefix on the existing
+                      row rather than a fifth tab.
+
+                      GATED ON THE SAME STRINGS `notes.controller.ts` ENFORCES,
+                      verified against it rather than assumed: `notes:read` on
+                      every read route (`@Auth({ permissions:
+                      [PERMISSIONS.NOTES_READ] })`) and `notes:write` on the one
+                      that creates. Both are seeded to all three roles, for the
+                      identical reason the transcript pair is — producing a note
+                      is the action this epic exists to enable — so in practice
+                      nobody is refused, and the gate is here anyway for the
+                      deployment that revokes it.
+
+                      `/notes` renders the SAME `LibraryPage` `/transcripts`
+                      does: the tab is the route (`pages/libraryTabs.ts`), which
+                      is what makes a tab linkable, bookmarkable and able to
+                      survive a reload. */}
+                  <Route
+                    path="/notes"
+                    element={
+                      <RequirePermission
+                        permission="notes:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <LibraryPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* `:write`, and its fallback is `/notes` rather than `/` —
+                      the same asymmetry `/transcripts/new` has, for the same
+                      reason: a user who may read notes but not create one
+                      belongs on the library they can reach. */}
+                  <Route
+                    path="/notes/new"
+                    element={
+                      <RequirePermission
+                        permission="notes:write"
+                        fallback={<Navigate to="/notes" replace />}
+                      >
+                        <NewNotePage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/notes/:id"
+                    element={
+                      <RequirePermission
+                        permission="notes:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <NotePage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #58 builds this page out; the route, its gate and
+                      its AppBar drill-down entry are #57's and are meant to
+                      survive that. See the page's own header. */}
+                  <Route
+                    path="/notes/:id/history"
+                    element={
+                      <RequirePermission
+                        permission="notes:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <NoteHistoryPage />
                       </RequirePermission>
                     }
                   />
