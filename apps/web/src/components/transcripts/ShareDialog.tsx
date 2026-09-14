@@ -64,7 +64,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  MenuItem,
   Stack,
   TextField,
   Tooltip,
@@ -72,7 +71,7 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { ApiError } from '../../services/api';
 import {
@@ -310,8 +309,12 @@ export function ShareDialog({
                 // The helper text carries the shape of the rule rather than a
                 // list of who exists — there is no directory to browse here.
                 helperText="They need an account with this exact address."
-                inputProps={{ 'aria-label': 'Email address' }}
+                slotProps={{ htmlInput: { 'aria-label': 'Email address' } }}
               />
+              {/* NATIVE, not MUI's popover select. Two reasons, and both are
+                  about the people using this: a native control is what a phone
+                  renders as its own wheel picker, and it is operable by every
+                  assistive technology without MUI's listbox choreography. */}
               <TextField
                 select
                 label="Role"
@@ -319,13 +322,20 @@ export function ShareDialog({
                 onChange={(event) => setRole(event.target.value as TranscriptShareRole)}
                 size="small"
                 disabled={isSubmitting}
+                // ⚠ THE `aria-label` GOES THROUGH `slotProps.select.inputProps`,
+                // not through the TextField's own `inputProps`: with a native
+                // select there is no `input` element for the latter to land on,
+                // so it would silently label nothing.
+                slotProps={{
+                  select: { native: true, inputProps: { 'aria-label': 'Role' } },
+                  inputLabel: { shrink: true },
+                }}
                 sx={{ minWidth: { sm: 140 }, width: { xs: '100%', sm: 'auto' } }}
-                inputProps={{ 'aria-label': 'Role' }}
               >
                 {ROLE_OPTIONS.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
+                  <option key={option.value} value={option.value}>
                     {option.label}
-                  </MenuItem>
+                  </option>
                 ))}
               </TextField>
               <Button
@@ -413,15 +423,20 @@ export function ShareDialog({
                           )
                         }
                         disabled={busyUserId === share.userId}
-                        sx={{ minWidth: 120 }}
-                        inputProps={{
-                          'aria-label': `Role for ${shareDisplayLabel(share)}`,
+                        slotProps={{
+                          select: {
+                            native: true,
+                            inputProps: {
+                              'aria-label': `Role for ${shareDisplayLabel(share)}`,
+                            },
+                          },
                         }}
+                        sx={{ minWidth: 120 }}
                       >
                         {ROLE_OPTIONS.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>
+                          <option key={option.value} value={option.value}>
                             {option.label}
-                          </MenuItem>
+                          </option>
                         ))}
                       </TextField>
                       <Tooltip title="Remove access">
