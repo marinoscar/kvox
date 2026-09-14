@@ -95,19 +95,20 @@ const COPY: Record<UserDataScope, ScopeCopy> = {
     confirmLabel: 'Delete recordings',
   },
   notes: {
-    // ⚠ NOTE TEMPLATES TRAVEL WITH NOTES, and this dialog is the only place a
-    // user finds that out before it happens. `scopeIncludes` in
-    // `apps/api/src/user-data/job-types.ts` maps the `noteTemplates` category
-    // onto the `notes` scope deliberately — a template is the recipe a note was
-    // generated from — but nothing about the word "notes", or about the row
-    // this dialog opens from, implies it. Copy that omitted it would be
-    // accurate about the noun and wrong about the outcome.
+    // ⚠ SAYS NOTHING ABOUT NOTE TEMPLATES, because this scope does not touch
+    // them: `scopeIncludes` maps `noteTemplates` to `content`/`everything`
+    // ONLY. A template is reusable CONFIGURATION with its own settings
+    // destination, authored independently of any particular note and meant for
+    // notes that do not exist yet — so deleting notes must not empty a page the
+    // user never opened. Do not reintroduce a template clause here without
+    // re-reading `apps/api/src/user-data/job-types.ts`; it would be describing
+    // a deletion that does not happen, on the one screen where a user is
+    // deciding whether to proceed.
     title: 'Delete all notes?',
     consequence:
       'Every note you have is deleted, along with its full version history and any ' +
-      'exports of it — and so are your own custom note templates, which are the recipes ' +
-      'those notes were generated from. Built-in templates are not yours to delete and ' +
-      'are unaffected. The recordings and documents the notes came from are kept.',
+      'exports of it. The recordings and documents the notes were generated from are ' +
+      'kept, and so are your note templates.',
     confirmLabel: 'Delete notes',
   },
   files: {
@@ -115,7 +116,7 @@ const COPY: Record<UserDataScope, ScopeCopy> = {
     consequence:
       'Every file you uploaded to storage directly is deleted. Audio belonging to a ' +
       'recording, and documents a note was generated from, are managed by those features ' +
-      'and are not touched by this. Your note templates are not files and are kept.',
+      'and are not touched by this.',
     confirmLabel: 'Delete files',
   },
   content: {

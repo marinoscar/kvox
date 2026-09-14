@@ -126,11 +126,6 @@ interface CategoryRow {
   read: (summary: UserDataSummary) => { count: number; bytes: string };
   /** The noun to count, singular and plural — "1 recording", "4 recordings". */
   unit: [singular: string, plural: string];
-  /**
-   * A second line for something this scope also destroys that its own count
-   * does not cover. Exists for exactly one row — see the `notes` row below.
-   */
-  addendum?: (summary: UserDataSummary) => string | null;
 }
 
 /**
@@ -153,27 +148,22 @@ const CATEGORY_ROWS: CategoryRow[] = [
   {
     scope: 'notes',
     title: 'Notes',
-    // ⚠ TEMPLATES GO WITH THE NOTES. `scopeIncludes` in
-    // `apps/api/src/user-data/job-types.ts` maps the `noteTemplates` category
-    // onto the `notes` scope — a template is the recipe a note was generated
-    // from — and nothing about the word "Notes" says so. It is stated here, and
-    // again in the dialog, because this row's own count cannot show it.
-    description:
-      'Generated notes, their full version history, any exports of them, and your own custom note templates. Built-in templates are unaffected.',
+    // ⚠ NOTE TEMPLATES ARE NOT IN THIS ROW, and that is the API's semantics
+    // rather than an omission: `scopeIncludes` maps `noteTemplates` to
+    // `content`/`everything` only. Templates are reusable configuration with
+    // their own settings destination, so "Delete notes" must not empty
+    // `/settings/note-templates`. They appear in the two compound dialogs
+    // below, where the scope genuinely takes them, and nowhere else.
+    description: 'Generated notes, their full version history and any exports of them.',
     buttonLabel: 'Delete notes',
     read: (summary) => summary.notes,
     unit: ['note', 'notes'],
-    addendum: (summary) => {
-      const { count } = summary.noteTemplates;
-      if (count <= 0) return null;
-      return `Also deletes ${count} custom ${count === 1 ? 'template' : 'templates'}.`;
-    },
   },
   {
     scope: 'files',
     title: 'Uploaded files',
     description:
-      'Files you uploaded to storage directly. Audio and source documents belonging to a recording or a note are not included here, and neither are note templates.',
+      'Files you uploaded to storage directly. Audio and source documents belonging to a recording or a note are not included here.',
     buttonLabel: 'Delete files',
     read: (summary) => summary.files,
     unit: ['file', 'files'],
@@ -192,10 +182,11 @@ const SCOPE_LABELS: Record<UserDataScope, string> = {
 /**
  * "4 recordings · 1.2 GB", or "No notes stored" — never a bare "0".
  *
- * The empty case names the CATEGORY rather than saying "Nothing stored",
- * because the `notes` row can be empty and still have an addendum below it
- * ("Also deletes 3 custom templates"), and a flat "Nothing stored" directly
- * above that line would contradict it.
+ * The empty case names the CATEGORY rather than saying "Nothing stored". Three
+ * rows share this function and any two of them can be empty at once, so the
+ * generic phrasing would put the same sentence on screen two or three times
+ * with nothing tying each to the row it belongs to — ambiguous to read, and
+ * ambiguous to query by text in a test.
  */
 function describeCategory(
   count: number,
@@ -299,11 +290,10 @@ export default function UserDangerZonePage() {
           <Stack divider={<Divider />} spacing={0}>
             {CATEGORY_ROWS.map((row) => {
               const stats = summary ? row.read(summary) : { count: 0, bytes: '0' };
-              const addendum = summary ? (row.addendum?.(summary) ?? null) : null;
-              // "Nothing stored" is about THIS row's own count. A user with no
-              // notes but three templates still has something the `notes` scope
-              // would delete, so the button stays live when the addendum does.
-              const isEmpty = stats.count <= 0 && !addendum;
+              // Each narrow scope is exactly one category, so this row's own
+              // count is the whole question: zero means the button would be an
+              // action with no possible effect.
+              const isEmpty = stats.count <= 0;
 
               return (
                 <Box
@@ -330,11 +320,6 @@ export default function UserDangerZonePage() {
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       {row.description}
                     </Typography>
-                    {addendum && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {addendum}
-                      </Typography>
-                    )}
                   </Box>
                   <Button
                     variant="outlined"
