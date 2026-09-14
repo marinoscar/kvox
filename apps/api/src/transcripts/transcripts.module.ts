@@ -14,6 +14,12 @@ import { TranscriptionSubmitHandler } from './handlers/transcription-submit.hand
 import { TranscriptPurgeHandler } from './handlers/transcript-purge.handler';
 import { TranscriptSnapshotHandler } from './handlers/transcript-snapshot.handler';
 import { TranscriptsHousekeepingHandler } from './handlers/transcripts-housekeeping.handler';
+import { TranscriptExportHandler } from './handlers/transcript-export.handler';
+import { JsonTranscriptExporter } from './export/json.exporter';
+import { MarkdownTranscriptExporter } from './export/markdown.exporter';
+import { PdfTranscriptExporter } from './export/pdf.exporter';
+import { TranscriptExportService } from './export/transcript-export.service';
+import { TranscriptExporterRegistry } from './export/transcript-exporter.interface';
 import { TranscriptsUploadListener } from './listeners/transcripts-upload.listener';
 import { FfmpegService } from './media/ffmpeg.service';
 import { TranscriptsHousekeepingTask } from './tasks/transcripts-housekeeping.task';
@@ -32,9 +38,19 @@ import { TranscriptsService } from './transcripts.service';
 // TranscriptsModule (issue #25, epic #19)
 // =============================================================================
 //
-// The pipeline: create, upload listener, six job handlers, the reconciliation
-// cron, the ten read/lifecycle routes, and (issue #27) the five correction
-// routes with their pure editing core.
+// The pipeline: create, upload listener, seven job handlers, the reconciliation
+// cron, the ten read/lifecycle routes, (issue #27) the five correction routes
+// with their pure editing core, and (issue #28) the three export routes with
+// their exporter registry.
+//
+// ⚠ THE THREE EXPORTERS ARE PROVIDERS SO THEY CAN SELF-REGISTER, AND FOR NO
+// OTHER REASON. Nothing injects `JsonTranscriptExporter` by class — every
+// consumer goes through `TranscriptExporterRegistry.get(format)`, which is what
+// makes spec §8.1's promise ("a future `docx` exporter is one new class") true:
+// adding one means a new file and one more line in the list below, with no
+// change to the controller, the service or the job handler. Listing them here
+// is how Nest instantiates them at all, which is when their `onModuleInit`
+// registers them.
 //
 // -----------------------------------------------------------------------------
 // WHAT EACH IMPORT IS FOR, AND WHY NONE OF THEM IS INCIDENTAL
@@ -95,6 +111,8 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptsService,
     TranscriptAccessService,
     TranscriptEditingService,
+    TranscriptExportService,
+    TranscriptExporterRegistry,
     TranscriptMaterializeService,
     // Sharing (#29). `ShareLookupThrottleService` holds its window in THIS
     // PROCESS's memory, so it is a plain singleton of this module — see its own
@@ -113,6 +131,10 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptionIngestHandler,
     TranscriptPurgeHandler,
     TranscriptSnapshotHandler,
+    TranscriptExportHandler,
+    JsonTranscriptExporter,
+    MarkdownTranscriptExporter,
+    PdfTranscriptExporter,
     TranscriptsHousekeepingHandler,
     TranscriptsHousekeepingTask,
   ],
