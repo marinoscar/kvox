@@ -166,8 +166,18 @@ beforeEach(() => {
     available: true,
     provider: 'openai',
     providerLabel: 'OpenAI',
+    // #97: `source`/`derivedFrom` complete the `AiConfigModel` shape — absent,
+    // a provenance assertion elsewhere would silently pass against a fallback
+    // chip instead of the real one.
     models: [
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+      {
+        id: 'gpt-4o-mini',
+        label: 'GPT-4o mini',
+        contextWindowTokens: 128_000,
+        maxOutputTokens: 16_000,
+        source: 'catalogue',
+        derivedFrom: null,
+      },
     ],
     defaultModel: 'gpt-4o-mini',
     maxInputTokens: 100_000,

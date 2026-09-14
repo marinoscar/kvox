@@ -55,7 +55,17 @@ const baseConfig: AiConfig = {
   provider: 'openai',
   providerLabel: 'OpenAI',
   models: [
-    { id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 4_096 },
+    {
+      id: 'gpt-4o',
+      label: 'GPT-4o',
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 4_096,
+      // #97: `source`/`derivedFrom` are on `AiConfigModel` too — a fixture
+      // missing them renders a neutral fallback chip wherever provenance is
+      // shown, which would make a provenance assertion silently vacuous.
+      source: 'catalogue',
+      derivedFrom: null,
+    },
   ],
   defaultModel: 'gpt-4o',
   maxInputTokens: 100_000,
