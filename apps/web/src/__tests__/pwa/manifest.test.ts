@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { APP_NAME, THEME_COLOR, BACKGROUND_COLOR } from '@app/shared';
+import { APP_NAME, TAGLINE, THEME_COLOR, BACKGROUND_COLOR } from '@app/shared';
 import { buildManifest } from '../../../pwa/manifest';
 
 // =============================================================================
@@ -36,6 +36,34 @@ describe('buildManifest', () => {
 
     expect(manifest.name).toBe(APP_NAME);
     expect(manifest.short_name).toBe(APP_NAME);
+  });
+
+  // ---------------------------------------------------------------------------
+  // The description (issue #32, epic #19)
+  // ---------------------------------------------------------------------------
+  //
+  // This is the sentence an OS install prompt shows beside the icon, and until
+  // #32 it was the template's own ("sign in to manage your account and
+  // settings") — a description of a scaffold, offered to somebody deciding
+  // whether to install a product. The assertions below pin the two properties
+  // that matter and deliberately not the wording: it must DERIVE from the
+  // shared identity constants like every other branded field here, and it must
+  // not have drifted back to describing account management.
+
+  it('derives its description from the shared identity constants', () => {
+    const manifest = buildManifest();
+
+    expect(manifest.description).toContain(APP_NAME);
+    expect(manifest.description).toContain(TAGLINE);
+  });
+
+  it('describes the product rather than the template it was forked from', () => {
+    const manifest = buildManifest();
+
+    expect(manifest.description).not.toMatch(/manage your account and settings/i);
+    // Something about what the app actually does for a person, not about
+    // signing in to it.
+    expect(manifest.description).toMatch(/transcript/i);
   });
 
   it('declares standalone display, which is what iOS reads to allow installation', () => {

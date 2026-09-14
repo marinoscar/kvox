@@ -4,7 +4,7 @@
  * Issue #55, epic #51. This file is the SINGLE source of truth for the app's
  * navigation targets. Before it existed the same four menu paths were spelled
  * out in four places (`App.tsx`, `Sidebar.tsx`, `UserMenu.tsx`,
- * `home/QuickActions.tsx`), each with its own idea of who was allowed to see
+ * `home/QuickActions.tsx`, deleted by #32), each with its own idea of who was allowed to see
  * them — which is how a Contributor holding `system_settings:read` ended up
  * with a working System Settings page, a menu entry pointing at it, and no
  * sidebar row: three gates, three answers.

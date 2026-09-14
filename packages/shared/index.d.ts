@@ -11,6 +11,15 @@
 export declare const APP_NAME: string;
 
 /**
+ * The product's one-line positioning statement (issue #32, epic #19).
+ *
+ * Typed `string`, not a literal — see the note on `APP_NAME` above. A literal
+ * type would let the home page's own test pin today's wording at the type
+ * level, which is exactly the coupling this package exists to remove.
+ */
+export declare const TAGLINE: string;
+
+/**
  * Typed `string`, not `'#1976d2'`, for the same reason as `APP_NAME` above: a
  * literal type would let a consumer or a test pin the current colour at the
  * type level, and rebranding a fork would then fail the typecheck in some file

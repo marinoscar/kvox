@@ -109,6 +109,24 @@ const identity = require('./identity.json');
 exports.APP_NAME = identity.productName;
 
 /**
+ * The product's one-line positioning statement.
+ *
+ * ▲ THIS IS A REBRAND POINT: `tagline` in `identity.json`. It sits beside
+ * `productName` rather than being derived from it, because a name and a promise
+ * are two independent facts: a fork routinely keeps one and replaces the other.
+ *
+ * Exported (issue #32, epic #19) because the signed-in home page renders it as
+ * the subtitle under the greeting — the first sentence a user reads after
+ * signing in. Before this export the value existed in `identity.json` and had
+ * no runtime reader at all, so the only way to put it on screen was a second
+ * copy in a component, which is precisely the drift this package exists to
+ * prevent.
+ *
+ * Typed `string`, not a literal — see the note on `APP_NAME` in `index.d.ts`.
+ */
+exports.TAGLINE = identity.tagline;
+
+/**
  * The brand's primary colour, as a CSS hex string.
  *
  * ▲ THIS IS A REBRAND POINT: `themeColor` in `identity.json`. It lives here
