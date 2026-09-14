@@ -8,7 +8,9 @@ import type {
   RoleChangedEmailData,
   TranscriptFailedEmailData,
   TranscriptReadyEmailData,
+  TranscriptSharedEmailData,
 } from '../../email';
+import { shareRoleLabel } from '../../email';
 import { PrismaService } from '../../prisma/prisma.service';
 import { describeThrown } from '../describe-thrown';
 import type { NotificationChannel } from '../notification-events';
@@ -342,6 +344,20 @@ export const EVENT_BROWSER_TEMPLATES: Partial<
       body:
         `"${title}" could not be transcribed: ${reason}` +
         (retryable ? ' You can try again from the transcript page.' : ''),
+      link: `/transcripts/${transcriptId}`,
+    };
+  },
+
+  // Sharing (#29, epic #19). The body NAMES THE ROLE rather than leaving the
+  // reader to click through and find out whether they can correct what they are
+  // about to read — the same reason the email's subject carries it.
+  'transcripts.transcript_shared': (data: never): BrowserNotificationContent => {
+    const { transcriptId, title, role, ownerName } =
+      data as TranscriptSharedEmailData;
+
+    return {
+      title: 'A recording was shared with you',
+      body: `${ownerName} shared "${title}" with you (${shareRoleLabel(role)}).`,
       link: `/transcripts/${transcriptId}`,
     };
   },
