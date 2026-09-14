@@ -90,6 +90,9 @@ describe('TranscriptsService', () => {
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
       },
+      // #48 (epic #45): `remove` pre-checks the notes generated from this
+      // transcript, because `notes.source_transcript_id` is `Restrict`.
+      note: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptSpeaker: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptSegment: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptShare: { findMany: jest.fn().mockResolvedValue([]) },
