@@ -50,7 +50,25 @@ WORKDIR /app
 # src/db-backup/pg-version.util.ts by test/pg-client-version.spec.ts - moving
 # one without the other fails the suite. See
 # docs/runbooks/postgres-client-version.md for how to bump the pair.
-RUN apk add --no-cache openssl postgresql17-client
+#
+# `ffmpeg` is the playback transcode (epic #19, issue #26). The package ships
+# `ffprobe` too, which is why only one name appears here for two binaries the
+# handler runs separately.
+#
+# IT IS IN THE BASE STAGE FOR THE SAME REASON THE POSTGRES CLIENT IS: every
+# later stage descends from this one, and `media.audio.transcode` is claimed by
+# whichever worker is running - the API's own in-process worker in development
+# just as much as in production. A rendition that only worked in one of them is
+# a feature nobody exercises until the format that needs it turns up.
+#
+# NO MAJOR IS PINNED HERE, and the contrast with the line above is deliberate
+# rather than an oversight. `pg_dump` REFUSES to dump a server newer than
+# itself, so its major is a compatibility contract with an external database
+# that a base-image refresh can silently break. ffmpeg has no counterpart: it
+# reads whatever the upload is and writes AAC in an MP4, and every version in
+# any Alpine release does both. There is nothing for a floating version to
+# drift away from.
+RUN apk add --no-cache openssl postgresql17-client ffmpeg
 
 # -----------------------------------------------------------------------------
 # Dependencies stage
