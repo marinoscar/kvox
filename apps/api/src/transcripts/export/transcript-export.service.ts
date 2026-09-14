@@ -435,11 +435,15 @@ export class TranscriptExportService {
 /**
  * `<title> (v<n>).<ext>`, spec §8's own shape, made safe for a filename.
  *
- * Path separators, control characters and the Windows-reserved set are replaced
- * rather than stripped, so two differently-punctuated titles cannot collapse
- * onto one name. A title that reduces to nothing (all punctuation, or a name in
- * a script this replacement removes) falls back to `transcript`, because an
- * attachment called `(v3).pdf` is worse than a generic one.
+ * Path separators, control characters and the Windows-reserved set are REPLACED
+ * rather than stripped, so the name keeps the shape of what the user typed
+ * instead of silently losing characters. A title that reduces to nothing — all
+ * whitespace, or nothing but control characters — falls back to `transcript`,
+ * because an attachment called `(v3).pdf` is worse than a generic one.
+ *
+ * Non-ASCII is deliberately NOT touched here: the real name travels in the
+ * header's `filename*` parameter as UTF-8 (see `contentDisposition`), and it is
+ * that function's job, not this one's, to produce an ASCII fallback.
  */
 export function exportFilename(title: string, version: number, extension: string): string {
   const safe = title
