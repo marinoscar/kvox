@@ -1,4 +1,9 @@
 import { z } from 'zod';
+
+import {
+  systemTranscriptionSchema as transcriptionSchema,
+  systemTranscriptionPatchSchema as transcriptionPatchSchema,
+} from '../../transcription/transcription-settings.schema';
 import {
   dataTablesSchema,
   dataTablesPatchSchema,
@@ -354,6 +359,37 @@ export const systemMaintenanceSchema = z.object({
 
 export type SystemMaintenanceValue = z.infer<typeof systemMaintenanceSchema>;
 
+/**
+ * Transcription policy (`transcription`) — issue #23, epic #19.
+ *
+ * DEFINED IN `transcription/transcription-settings.schema.ts` AND RE-EXPORTED
+ * HERE, rather than written out inline like the four namespaces above. The
+ * shape is large (two nested blocks, a provider enum, a region enum) and it
+ * carries a COMPILE-TIME PROOF that no secret-bearing field exists — the same
+ * technique `email/email-settings.schema.ts` uses, and one that has to live
+ * next to the schema it proves something about. That file imports nothing but
+ * zod, so it is a leaf and this import cannot cycle.
+ *
+ * The provider API KEY is not in it, and must never be: it lives in the
+ * encrypted credential store at `(purpose 'transcription', name '<providerId>')`.
+ * See that file's header for why a secret in a settings blob is one careless
+ * response away from exposure.
+ */
+export {
+  systemTranscriptionSchema,
+  systemTranscriptionPatchSchema,
+  TRANSCRIPTION_PROVIDER_IDS,
+  ASSEMBLYAI_REGIONS,
+  AUDIO_DELIVERY_MODES,
+} from '../../transcription/transcription-settings.schema';
+
+export type {
+  SystemTranscriptionValue,
+  TranscriptionProviderId,
+  AssemblyAiRegion,
+  AudioDeliveryMode,
+} from '../../transcription/transcription-settings.schema';
+
 // -----------------------------------------------------------------------------
 // PATCH (deep-partial) counterparts
 // -----------------------------------------------------------------------------
@@ -421,6 +457,12 @@ export const systemSettingsSchema = z.object({
   nodes: systemNodesSchema,
   databaseBackup: systemDatabaseBackupSchema,
   maintenance: systemMaintenanceSchema,
+  // Transcription (#23, epic #19). Declared in its own leaf file and
+  // re-exported above; required here for the same reason every other
+  // namespace is — this schema describes the value as STORED, and
+  // `readKnownSettings` fills it from `DEFAULT_SYSTEM_SETTINGS` when storage
+  // has nothing.
+  transcription: transcriptionSchema,
 });
 
 export type SystemSettingsDto = z.infer<typeof systemSettingsSchema>;
@@ -448,4 +490,5 @@ export const systemSettingsPatchSchema = z.object({
   nodes: systemNodesPatchSchema.optional(),
   databaseBackup: systemDatabaseBackupPatchSchema.optional(),
   maintenance: systemMaintenancePatchSchema.optional(),
+  transcription: transcriptionPatchSchema.optional(),
 });

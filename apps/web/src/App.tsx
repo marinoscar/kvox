@@ -55,6 +55,9 @@ const NotificationSettingsPage = lazy(
 );
 // Issue #355 — runtime-configurable Web Push (VAPID) key management.
 const PushConfigPage = lazy(() => import('./pages/Admin/PushConfigPage'));
+const TranscriptionSettingsPage = lazy(
+  () => import('./pages/Admin/TranscriptionSettingsPage'),
+);
 // Issue #258, epic #254 — the maintenance window's switch and its layers.
 // `Admin`-prefixed locally to keep it distinct from `pages/MaintenancePage`,
 // which is the screen a BLOCKED user sees rather than the page that opens and
@@ -331,6 +334,27 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <PushConfigPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #23, epic #19. Same permission string the
+                      `Transcription` card declares in
+                      `config/adminSections.tsx`, which is the same string the
+                      API's transcription-settings controller enforces on its
+                      GET — the invariant `destinations.test.ts` asserts for
+                      every card. `system_settings:read` and not `:write`:
+                      saving, testing the credential and removing it all need
+                      write, which the page disables without it, but the
+                      configuration is worth READING for anyone diagnosing why
+                      a recording never came back. */}
+                  <Route
+                    path="/admin/settings/transcription"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <TranscriptionSettingsPage />
                       </RequirePermission>
                     }
                   />

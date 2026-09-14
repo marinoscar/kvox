@@ -11,6 +11,7 @@ import {
   type SystemNodesValue,
   type SystemDatabaseBackupValue,
   type SystemMaintenanceValue,
+  type SystemTranscriptionValue,
 } from '../schemas/settings.schema';
 
 // =============================================================================
@@ -103,6 +104,16 @@ export interface SystemSettingsValue {
   nodes: SystemNodesValue;
   databaseBackup: SystemDatabaseBackupValue;
   maintenance: SystemMaintenanceValue;
+  /**
+   * Transcription policy (#23, epic #19): the active provider, its region and
+   * model, how audio reaches it, and what happens to it afterwards.
+   *
+   * REQUIRED, like every namespace above, and for the same reason. The
+   * provider API KEY is deliberately NOT part of this type and cannot become
+   * so — `SystemTranscriptionValue` carries a compile-time proof that it has
+   * no secret-bearing field.
+   */
+  transcription: SystemTranscriptionValue;
 }
 
 /**
@@ -189,6 +200,48 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // Both switches must be on, and the credential broker must report itself
     // usable, before `db.backup.run` is offered to a node at all.
     nodeOffloadEnabled: false,
+  },
+  // ---------------------------------------------------------------------------
+  // Transcription (#23, epic #19)
+  // ---------------------------------------------------------------------------
+  //
+  // INERT, like every operations default above it: `enabled: false` and
+  // `provider: null` mean an upgrade changes nothing until an administrator
+  // chooses a vendor and saves a key. The per-provider block is still fully
+  // populated, so choosing AssemblyAI is one field rather than four.
+  transcription: {
+    enabled: false,
+    provider: null,
+    providers: {
+      assemblyai: {
+        region: 'us',
+        speechModel: 'universal',
+      },
+    },
+    // The provider fetches the audio itself from a signed URL — the bytes
+    // never pass through this API. `upload` is for storage the provider
+    // cannot reach, which is the exception rather than the default.
+    audioDelivery: 'presigned_url',
+    // Six hours. It has to outlive the vendor's whole queue-plus-processing
+    // time for a long recording; a URL that expires mid-fetch produces a
+    // failure that looks like a corrupt file.
+    presignedUrlTtlMinutes: 360,
+    // ON. Audio sent to a third party is this deployment's responsibility, and
+    // leaving it there indefinitely is a retention decision nobody made.
+    deleteRemoteAfterIngest: true,
+    // `null` means "ask the provider to detect it", which is the right default
+    // for a deployment that has not told us what language it works in.
+    defaultLanguage: null,
+    // ON, unlike `databaseBackup.nodeOffloadEnabled`. Transcoding needs a
+    // presigned URL and a CPU, not a credential to this deployment's database
+    // — so the trust question the backup's switch answers does not arise.
+    transcodeNodeOffloadEnabled: true,
+    playback: {
+      // 64 kbit/s mono is comfortably intelligible speech at roughly a
+      // twentieth the size of the source, which is what a proof-reading
+      // rendition is for.
+      bitrateKbps: 64,
+    },
   },
   maintenance: {
     enabled: false,

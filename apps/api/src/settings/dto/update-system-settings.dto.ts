@@ -101,6 +101,41 @@ const maintenanceSettingsSchema = z.object({
   startedById: z.string().uuid().nullable(),
 });
 
+/**
+ * Transcription (#23, epic #19).
+ *
+ * RESTATED HERE rather than imported from `transcription-settings.schema.ts`,
+ * exactly like the four blocks above and for the reason at the top of this
+ * file: these are the OpenAPI-visible request schemas that `createZodDto`
+ * reads, and the service validates against the shared schema again on the way
+ * in. The two copies must move together — `common/schemas/settings-parity.spec.ts`
+ * is what fails the build when they do not.
+ *
+ * NO `apiKey` FIELD, HERE OR ANYWHERE IN THIS NAMESPACE. The provider key is
+ * written through `PUT /api/transcription-settings` into the encrypted
+ * credential store; a key accepted by THIS body would be persisted into the
+ * settings blob, which is the exact failure
+ * `transcription-settings.schema.ts`'s compile-time proof exists to prevent.
+ */
+const transcriptionSettingsSchema = z.object({
+  enabled: z.boolean(),
+  provider: z.enum(['assemblyai']).nullable(),
+  providers: z.object({
+    assemblyai: z.object({
+      region: z.enum(['us', 'eu']),
+      speechModel: z.string().trim().min(1).max(64),
+    }),
+  }),
+  audioDelivery: z.enum(['presigned_url', 'upload']),
+  presignedUrlTtlMinutes: z.number().int().min(1).max(1440),
+  deleteRemoteAfterIngest: z.boolean(),
+  defaultLanguage: z.string().trim().min(2).max(16).nullable(),
+  transcodeNodeOffloadEnabled: z.boolean(),
+  playback: z.object({
+    bitrateKbps: z.number().int().min(16).max(320),
+  }),
+});
+
 // Full replacement (PUT)
 export const updateSystemSettingsSchema = z.object({
   // REQUIRED. A PUT that omits it is a 400 and
@@ -114,6 +149,7 @@ export const updateSystemSettingsSchema = z.object({
   nodes: nodesSettingsSchema.optional(),
   databaseBackup: databaseBackupSettingsSchema.optional(),
   maintenance: maintenanceSettingsSchema.optional(),
+  transcription: transcriptionSettingsSchema.optional(),
 });
 
 export class UpdateSystemSettingsDto extends createZodDto(
@@ -192,6 +228,36 @@ export const patchSystemSettingsSchema = z.object({
       allowAdmins: z.boolean().optional(),
       startedAt: z.iso.datetime().nullable().optional(),
       startedById: z.string().uuid().nullable().optional(),
+    })
+    .optional(),
+  // `defaultLanguage` is `.nullable().optional()` for the same reason
+  // `maintenance.startedAt` is: `null` means "detect the language", absent
+  // means "leave the setting alone", and the service's merge distinguishes
+  // them with `!== undefined` rather than `??`.
+  transcription: z
+    .object({
+      enabled: z.boolean().optional(),
+      provider: z.enum(['assemblyai']).nullable().optional(),
+      providers: z
+        .object({
+          assemblyai: z
+            .object({
+              region: z.enum(['us', 'eu']).optional(),
+              speechModel: z.string().trim().min(1).max(64).optional(),
+            })
+            .optional(),
+        })
+        .optional(),
+      audioDelivery: z.enum(['presigned_url', 'upload']).optional(),
+      presignedUrlTtlMinutes: z.number().int().min(1).max(1440).optional(),
+      deleteRemoteAfterIngest: z.boolean().optional(),
+      defaultLanguage: z.string().trim().min(2).max(16).nullable().optional(),
+      transcodeNodeOffloadEnabled: z.boolean().optional(),
+      playback: z
+        .object({
+          bitrateKbps: z.number().int().min(16).max(320).optional(),
+        })
+        .optional(),
     })
     .optional(),
 });

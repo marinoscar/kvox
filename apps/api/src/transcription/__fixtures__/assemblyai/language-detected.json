@@ -1,0 +1,71 @@
+{
+  "id": "6t9x-detected-language",
+  "status": "completed",
+  "audio_duration": 6.2,
+  "language_code": "fr",
+  "language_detection": true,
+  "language_confidence": 0.99,
+  "speech_model": "universal",
+  "text": "Bonjour tout le monde. Merci d'\u00eatre venus aujourd'hui.",
+  "confidence": 0.91,
+  "utterances": [
+    {
+      "speaker": "A",
+      "start": 800,
+      "end": 3160,
+      "text": "Bonjour tout le monde. Merci d'\u00eatre venus aujourd'hui.",
+      "confidence": 0.91,
+      "words": [
+        {
+          "text": "Bonjour",
+          "start": 800,
+          "end": 1060,
+          "confidence": 0.91
+        },
+        {
+          "text": "tout",
+          "start": 1100,
+          "end": 1360,
+          "confidence": 0.91
+        },
+        {
+          "text": "le",
+          "start": 1400,
+          "end": 1660,
+          "confidence": 0.91
+        },
+        {
+          "text": "monde.",
+          "start": 1700,
+          "end": 1960,
+          "confidence": 0.91
+        },
+        {
+          "text": "Merci",
+          "start": 2000,
+          "end": 2260,
+          "confidence": 0.91
+        },
+        {
+          "text": "d'\u00eatre",
+          "start": 2300,
+          "end": 2560,
+          "confidence": 0.91
+        },
+        {
+          "text": "venus",
+          "start": 2600,
+          "end": 2860,
+          "confidence": 0.91
+        },
+        {
+          "text": "aujourd'hui.",
+          "start": 2900,
+          "end": 3160,
+          "confidence": 0.91
+        }
+      ]
+    }
+  ],
+  "error": null
+}
