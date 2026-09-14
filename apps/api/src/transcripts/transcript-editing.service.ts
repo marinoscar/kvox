@@ -204,6 +204,16 @@ export class TranscriptEditingService {
 
     // ---- 3-5. The write, retried past a lost version race --------------------
     for (let attempt = 0; ; attempt += 1) {
+      if (attempt > 0) {
+        // Somebody may have committed THIS VERY BATCH while we were losing the
+        // race — two tabs of the same client, or a retry that overlapped the
+        // original. Re-checking before re-applying turns that into the
+        // idempotent answer instead of a conflict against our own write.
+        const raced = await this.findBatch(transcript.id, dto.clientBatchId);
+
+        if (raced) return this.replayResult(transcript.id, raced);
+      }
+
       try {
         const saved = await this.saveBatch(transcript.id, user, dto, expanded);
 
@@ -226,6 +236,18 @@ export class TranscriptEditingService {
         }
 
         if (error instanceof BatchConflictError) {
+          // ⚠ CHECK IDEMPOTENCY BEFORE REPORTING A CONFLICT. A concurrent,
+          // IDENTICAL batch that committed just before this transaction read
+          // the state leaves every one of its ops naming a rev this batch's
+          // own twin has already bumped — which looks exactly like a stale
+          // client and is in fact this client's own successful save. Reporting
+          // 409 there would tell a caller their save failed moments after it
+          // succeeded, and a well-behaved client would then re-fetch and
+          // re-apply the SAME edit a second time.
+          const original = await this.findBatch(transcript.id, dto.clientBatchId);
+
+          if (original) return this.replayResult(transcript.id, original);
+
           // ⚠ UNDER `details`, NOT AT THE TOP LEVEL. Spec §5 draws the body as
           // `{ currentVersion, conflicts }`, but this API's global
           // `HttpExceptionFilter` owns the envelope — it publishes `{ statusCode,
