@@ -2674,6 +2674,237 @@ refused rather than silently accepted.
 
 ---
 
+### Transcription
+
+Speech-to-text configuration — issue #23, epic #19. Two surfaces with two very
+different audiences:
+
+* `/transcription-settings` (Admin) is gated on `system_settings:read` /
+  `system_settings:write`. **Not a permission pair of its own**, and
+  deliberately so: this configuration IS a namespace (`transcription`) of the
+  `global` `system_settings` row that `system-settings.controller.ts` already
+  gates on exactly those strings, so a separate pair would make the same bytes
+  reachable under two different authorities. (Contrast `push:*`, which was
+  split out because rotating a VAPID key has a blast radius that should not
+  ride along with routine settings edits. Deleting a transcription API key
+  stops future jobs and destroys nothing already stored.)
+* `/transcription/config` is readable by **any authenticated user** — a narrow
+  capability probe, exactly like `GET /notifications/config`, because the users
+  the capability governs do not hold `system_settings:read`.
+
+**The provider API key is never returned by any endpoint below.** It lives in
+the encrypted credential store at `(purpose 'transcription', name '<providerId>')`
+— one row per provider, so switching vendors does not mean re-entering a key
+that already works. Every response carries only a masked `keyStatuses[]` entry
+(`configured`, `hint`, `updatedAt`, `updatedByUserId`). **Submitting `apiKey`
+empty, or omitting it, preserves the stored key**; erasing is the dedicated
+`DELETE` below and nothing else.
+
+#### GET /transcription-settings
+The stored policy, a masked key status for every registered provider, and the
+provider catalogue (capabilities and form-field descriptors) the admin page
+renders itself from — so adding a provider costs no frontend change.
+
+**Requires:** `system_settings:read`
+
+**Response:**
+```json
+{
+  "data": {
+    "settings": {
+      "enabled": true,
+      "provider": "assemblyai",
+      "providers": {
+        "assemblyai": { "region": "us", "speechModel": "universal" }
+      },
+      "audioDelivery": "presigned_url",
+      "presignedUrlTtlMinutes": 360,
+      "deleteRemoteAfterIngest": true,
+      "defaultLanguage": null,
+      "transcodeNodeOffloadEnabled": true,
+      "playback": { "bitrateKbps": 64 }
+    },
+    "keyStatuses": [
+      {
+        "providerId": "assemblyai",
+        "configured": true,
+        "hint": "••••2b3c",
+        "updatedAt": "2024-01-01T00:00:00.000Z",
+        "updatedByUserId": "uuid"
+      }
+    ],
+    "providers": [
+      {
+        "id": "assemblyai",
+        "label": "AssemblyAI",
+        "capabilities": {
+          "diarization": true,
+          "wordTimestamps": true,
+          "languageDetection": true,
+          "speakersExpectedHint": true,
+          "acceptsUrl": true,
+          "acceptsUpload": true,
+          "maxInputBytes": 5368709120,
+          "maxDurationMs": 36000000,
+          "acceptedMimeTypes": ["audio/mpeg", "audio/wav"],
+          "remoteDelete": true,
+          "cancel": false
+        },
+        "fieldDescriptors": [
+          {
+            "key": "region",
+            "label": "Region",
+            "type": "select",
+            "options": [
+              { "value": "us", "label": "United States" },
+              { "value": "eu", "label": "European Union" }
+            ],
+            "required": true,
+            "defaultValue": "us"
+          }
+        ]
+      }
+    ],
+    "version": 5,
+    "updatedAt": "2024-01-01T00:00:00.000Z",
+    "updatedBy": { "id": "uuid", "email": "admin@example.com" }
+  }
+}
+```
+
+---
+
+#### PUT /transcription-settings
+Updates the configuration. **Every settings field is optional** — send only
+what changed, including one field inside a nested block
+(`{ "playback": { "bitrateKbps": 96 } }` is a legal body). Writes go through
+`SystemSettingsService.patchSettings`, so the merge, the validation, the
+unknown-key preservation and the version counter are the `global` row's own.
+
+`apiKey` is **write-only**: send it to set or rotate the key for the provider
+being saved, and **omit it or send it empty to keep the stored one**. It never
+reaches `system_settings` and never appears in a response or an audit row.
+
+**Requires:** `system_settings:write`
+
+**Headers:** `If-Match: <version>` (optional) — expected `version` for
+optimistic concurrency; use `0` to assert nothing is stored yet, or omit to
+overwrite unconditionally.
+
+**Request Body:**
+```json
+{
+  "enabled": true,
+  "provider": "assemblyai",
+  "providers": { "assemblyai": { "region": "eu", "speechModel": "universal" } },
+  "deleteRemoteAfterIngest": true,
+  "defaultLanguage": null,
+  "apiKey": "..."
+}
+```
+
+**Response:** the settings, re-read from storage, in the `GET` shape above.
+
+**Error Cases:**
+- 400 Bad Request - Validation error, or an `apiKey` with no provider named and none stored (keys are stored per provider, so there would be nowhere to put it)
+- 409 Conflict - Version mismatch (`If-Match` did not match the stored version)
+
+---
+
+#### POST /transcription-settings/test
+Probes the provider with the supplied key, or with the stored key when none is
+supplied. **The supplied key does not need to have been saved** — proving a key
+before committing it is the workflow this endpoint exists for.
+
+⚠ **This returns HTTP 200 even when the probe failed.** A refused probe is a
+successful diagnosis, and it is the reason the endpoint exists: read `ok`, and
+show `detail`, which distinguishes "the key is wrong, or belongs to the other
+region", "the account is rate-limited" and "the endpoint was unreachable" —
+three different fixes. Treating 200 as "the credential works" reports success
+for every misconfiguration there is. The call is audited (outcome only, never
+the key).
+
+**Requires:** `system_settings:write` — probing is side-effecting (it spends a
+request against a third party using a credential), and `:read` is held by
+anyone who may look at settings. Looking is not probing.
+
+**Request Body:**
+```json
+{ "provider": "assemblyai", "region": "eu", "apiKey": "..." }
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "ok": false,
+    "latencyMs": 88,
+    "detail": "The EU endpoint rejected this API key (HTTP 401). Either the key is wrong, or it belongs to the other region — an AssemblyAI key is issued for one region and is refused by the other in exactly this way."
+  }
+}
+```
+
+**Error Cases:**
+- 400 Bad Request - Unknown provider, or no key supplied and none stored (which is a different thing from a failed probe)
+
+---
+
+#### DELETE /transcription-settings/credentials/{provider}
+Erases the stored API key for one provider. **The only way to remove a key** —
+submitting an empty `apiKey` on `PUT` preserves the stored one, deliberately,
+because the form renders that box empty.
+
+Idempotent: removing a key that is not there succeeds. **It does not change the
+settings** — removing the active provider's key leaves `enabled` and `provider`
+as they were, so a key rotation (delete, then paste the new one) is not an
+outage.
+
+**Requires:** `system_settings:write`
+
+**Response:** `204 No Content`
+
+**Error Cases:**
+- 400 Bad Request - Unknown provider
+
+---
+
+#### GET /transcription/config
+What this deployment can transcribe, for a client deciding whether to offer the
+feature and what file to let a user pick.
+
+`available` is `true` only when **all four** of these hold: transcription is
+enabled, a provider is chosen, that provider is registered in this build, and
+an API key is stored for it. Reporting anything less as available moves the
+failure from a disabled button to a failed job minutes later.
+
+The limits are still reported when a provider is chosen but has no key — so a
+disabled control can say what it *would* allow — and are zero/empty when no
+provider is chosen at all.
+
+**No configuration detail is published here**: not the region, not the model,
+not the delivery mode, and no part of the API key. A capability probe hands out
+the capability, not the configuration behind it.
+
+**Requires:** authentication only — no permission. (Issue #24 changes this to
+`transcripts:read` once that permission is seeded; the controller carries a
+`TODO(#24)` at that exact line.)
+
+**Response:**
+```json
+{
+  "data": {
+    "available": true,
+    "providerLabel": "AssemblyAI",
+    "maxUploadBytes": 5368709120,
+    "maxDurationMs": 36000000,
+    "acceptedExtensions": [".mp3", ".m4a", ".wav", ".flac", ".mov"],
+    "acceptedMimeTypes": ["audio/mpeg", "audio/m4a", "audio/wav", "audio/flac", "video/quicktime"]
+  }
+}
+```
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
