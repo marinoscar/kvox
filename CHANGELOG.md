@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Storage CSP origin**: `STORAGE_CSP_ORIGIN` now derives a default from `S3_BUCKET`/`S3_REGION` for plain AWS S3 instead of defaulting to empty, so a deployment that never set it no longer has every browser upload part silently blocked by `connect-src 'self'` (issue #84). Explicit values are still required for MinIO/LocalStack/any `S3_ENDPOINT`, dotted bucket names, and CDN/custom domains. See `docs/runbooks/s3-cors.md`.
 - **Transcription**: `POST /api/transcripts` no longer rejects Android `.m4a` recordings (and other audio/video files) on a deployment whose `.env` predates issue #21 and never picked up `audio/*` in `ALLOWED_MIME_TYPES`. The endpoint now enforces its own fixed `audio/*,video/*` allowlist instead of inheriting the operator-configured generic-upload setting — see `docs/specs/transcription.md` §9.6 (issue #79). `POST /api/storage/objects*` is unaffected and still governed by `ALLOWED_MIME_TYPES`; an existing deployment that wants audio accepted on that *generic* surface should still add `audio/*` there (see `docs/deployment/vps.md` § Troubleshooting).
 
 ## [1.1.0] - 2026-06-10
