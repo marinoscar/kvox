@@ -1,0 +1,50 @@
+-- =============================================================================
+-- `storage_objects.part_size` and `storage_objects.managed_by` (issue #21)
+-- =============================================================================
+-- Two columns, both nullable, both without a backfill, landing together
+-- because both exist to make multi-GB resumable uploads survivable.
+--
+-- 1. `part_size` — the part size THIS upload was initialised with.
+--
+--    Until now nothing recorded it, and `GET /:id/upload/status` re-derived
+--    `totalParts` from the deployment's CURRENT `STORAGE_PART_SIZE` on every
+--    call. That is a silent corruption bug, not an inefficiency: an operator
+--    raising the configured part size renumbers the parts of every upload
+--    already in flight, so a phone resuming one seeks to the wrong offsets and
+--    completes an object whose bytes are not the file. A part size is a
+--    property of an upload, fixed the moment its first part is signed, and it
+--    belongs on the row.
+--
+--    `int4`, not `int8`: S3 caps a single part at 5 GiB.
+--
+--    NO BACKFILL, and specifically NOT a backfill to the current configured
+--    value. Every pre-existing row is either a finished object (for which the
+--    part size is irrelevant) or an upload initialised under a part size
+--    nobody recorded — and writing today's configured value onto the second
+--    kind would manufacture exactly the wrong answer while making it look
+--    authoritative. NULL means "not recorded"; `ObjectsService` falls back to
+--    the configured size for those rows, which is the same guess it made
+--    before, now visibly a guess.
+--
+-- 2. `managed_by` — the module that owns this object (e.g. 'transcripts').
+--
+--    An object created on another module's behalf is still a `storage_objects`
+--    row owned by a user, so it was listable and DELETABLE through the generic
+--    `/api/storage/objects` endpoints. Deleting a transcript's source audio
+--    that way leaves the transcript pointing at bytes that no longer exist,
+--    with nothing to repair it from. With this column the generic list hides
+--    managed rows and the generic delete answers 409 naming the owning module;
+--    the module deletes through its own surface.
+--
+--    Plain `text`, no enum, no foreign key — the same choice as
+--    `jobs.subject_type`, for the same reason: the set of owning modules is
+--    open, a fork's modules cannot be enumerated in this schema, and an enum
+--    would turn "a new module owns objects" into a migration.
+--
+--    NULL means "not managed", which is the truth for every existing row: the
+--    feature did not exist when they were written.
+-- =============================================================================
+
+-- AlterTable
+ALTER TABLE "storage_objects" ADD COLUMN "part_size" INTEGER;
+ALTER TABLE "storage_objects" ADD COLUMN "managed_by" TEXT;
