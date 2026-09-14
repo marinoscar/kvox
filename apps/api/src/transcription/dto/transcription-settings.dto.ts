@@ -223,7 +223,9 @@ export const transcriptionSettingsResponseSchema = z.object({
             region: z.enum(['us', 'eu']).describe('Which AssemblyAI region to call.'),
             speechModel: z
               .string()
-              .describe("The provider's model identifier, e.g. `universal`."),
+              .describe(
+                'Comma-separated, ordered list of AssemblyAI speech model ids sent as `speech_models`, e.g. `universal-3-5-pro, universal-2`. The retired `universal`/`best`/`nano`/`slam-1` ids resolve to that default.',
+              ),
           }),
         })
         .describe('Per-provider configuration; every provider block is always present.'),
