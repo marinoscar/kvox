@@ -1529,6 +1529,12 @@ extension** — a concession to how inconsistently mobile browsers report
 MIME types for less common formats like `.m4a` and `.amr`, which several
 mobile OSes report generically or not at all.
 
+`storage.allowedMimeTypes` is `ObjectsService.initUpload`'s **default**, read
+when no caller supplies its own list — which, at the time this issue landed,
+every caller including the transcript endpoint did. §9.6 records why that
+stopped being true, and is not merely a restatement of this default gaining
+`audio/*`.
+
 **Stale-upload cleanup is measured from `updatedAt`, which the part-presign
 and status endpoints now both touch, not from `createdAt`.** The existing
 cleanup deletes `pending`/`uploading` objects 24 hours after creation — fine
@@ -1567,6 +1573,77 @@ be configured to answer, or the browser's Range request is refused by CORS
 before S3 ever sees it — the seekable playback §7.1 depends on failing
 silently as "seeking does nothing" with no error obviously pointing at a
 CORS configuration file.
+
+### 9.6 Content-type allowlist: `TRANSCRIPT_SOURCE_MIME_TYPES`, not `storage.allowedMimeTypes` (issue #79)
+
+§9.4 gave `initUpload`'s **default** `allowedMimeTypes` an `audio/*` entry —
+correct for new deployments, but silent for an existing one: `.env` is never
+migrated, so a deployment whose `ALLOWED_MIME_TYPES` predates issue #21 kept
+whatever it already had (commonly `image/*,application/pdf,video/*`, the
+pre-#21 default with no audio at all), and `POST /api/transcripts` inherited
+that operator setting unchanged. The result was every Android `.m4a`
+recording rejected with `Files of type "audio/x-m4a" are not accepted.
+Allowed types: image/*, application/pdf, video/*` — for a type AssemblyAI's
+own `ACCEPTED_MIME_TYPES` already contains, on a feature (`transcripts:*`)
+seeded to every role specifically because recording is meant to work for a
+brand-new account.
+
+The bug is not really about the default; it is about *whose policy the check
+was reading*. `storage.allowedMimeTypes` is an operator's answer to "what may
+an authenticated user upload as an arbitrary file," enforced at
+`POST /api/storage/objects*`. `POST /api/transcripts` is not that surface — it
+accepts exactly one purpose-built kind of input (a recording, or something
+close enough that the pipeline can turn it into one), and that acceptance
+criterion is a property of *this feature*, not of the operator's general
+upload policy. Letting one setting answer both questions means an operator
+narrowing what arbitrary uploads they trust (a reasonable, unrelated
+decision) can silently break every recording in the app, with no error
+anywhere that names transcription as the affected system.
+
+The fix gives `ObjectsService.initUpload` a service-level-only `options`
+argument — `{ managedBy?, allowedMimeTypes? }` — absent from `InitUploadDto`
+and therefore unreachable over HTTP, the same boundary `managedBy` already
+established for exactly the same reason: a client able to name its own
+allowlist has defeated the allowlist. `TranscriptsService.create` passes its
+own module-level constant, `TRANSCRIPT_SOURCE_MIME_TYPES = ['audio/*',
+'video/*']`, which **replaces** `storage.allowedMimeTypes` for this call
+rather than extending it — a narrow module list must not be widened by
+whatever a deployment permits generally, and the `??` in `initUpload` sits on
+`options.allowedMimeTypes`, not on a merge of the two, for exactly that
+reason. The 400 this endpoint raises on rejection names whichever list it
+actually enforced, never the configured operator default unconditionally —
+without that, a caller uploading a recording and told to pick one of
+`image/*, application/pdf` has been pointed at a setting they have no access
+to and that had no say in the rejection.
+
+**Why the whole `audio/*`/`video/*` families, and not AssemblyAI's own
+`acceptedMimeTypes` directly.** Narrowing the check to exactly what the
+active provider accepts would reject files this pipeline transcribes
+perfectly well: `media.audio.transcode` (§1.5.1) exists precisely to turn a
+file the provider will not take directly into a rendition it will, and
+`selectTranscriptionInput` (§2.4) is what decides between the original and
+the rendition — a decision this endpoint cannot make yet, because at
+`POST /api/transcripts` time the rendition does not exist. So the check here
+answers a narrower question than "will the provider take this file": it
+answers "is this audio or video at all." Video is included for the same
+reason a phone's `.mov` of a meeting counts as a recording — the pipeline
+extracts audio from it, and the person who pressed record does not think of
+that as a format decision.
+
+`initUpload` still applies its extension-aware `application/octet-stream`
+fallback (§9.4) on top of whichever list it is given — that concession to
+inconsistent mobile MIME reporting is orthogonal to *which* list is in force,
+and unchanged by this issue.
+
+**What did not change.** `POST /api/storage/objects*` is untouched and still
+governed by `storage.allowedMimeTypes`/`ALLOWED_MIME_TYPES` exactly as before
+— this issue narrows what one endpoint reads, not what the setting means. A
+deployment whose `.env` predates issue #21 still has no `audio/*` in its
+generic upload allowlist and should add one if it wants audio accepted
+through the *generic* storage surface; that gap no longer affects
+transcription, which is the point. See
+[`docs/deployment/vps.md` §9](../deployment/vps.md#9-troubleshooting) for the
+operator-facing version of this note.
 
 ## 10. Privacy
 
@@ -1775,6 +1852,17 @@ can see it, not an operational fact about the queue that anyone holding
   server-side audio slicing (more processing, more storage — one clip per
   segment, per transcript) for no benefit over seeking within one file the
   interval-skip approach (§7.2) already delivers with none of that cost.
+- **Fixing issue #79 by changing the default `storage.allowedMimeTypes` in
+  `configuration.ts`, or documenting that operators must add `audio/*` to
+  their `.env`.** Rejected: the default already included `audio/*` (§9.4,
+  since issue #21) — the bug was never the default, it was that an
+  *existing* deployment's `.env` is never migrated, so any operator setting
+  written before #21 shipped kept governing a pipeline it was never written
+  for. Telling operators to edit their `.env` would have "fixed" only
+  deployments created after the advice was read, left every existing
+  deployment broken until someone found the note, and done nothing about the
+  actual defect: one operator policy silently deciding two unrelated
+  questions. §9.6 replaces the endpoint's dependency on that setting instead.
 
 ## Verification
 
