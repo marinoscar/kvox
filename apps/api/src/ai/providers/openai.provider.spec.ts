@@ -16,6 +16,7 @@ import {
   type FetchLike,
   type FetchLikeResponse,
 } from './openai.provider';
+import type { AiGenerateRequest } from './ai-provider.interface';
 
 // =============================================================================
 // OpenAiProvider (issue #47, epic #45)
@@ -331,6 +332,80 @@ describe('OpenAiProvider.generate', () => {
       stream: true,
     });
   });
+});
+
+describe('OpenAiProvider.generate — reasoning_effort wire shape (#87)', () => {
+  // ⚠ THIS IS THE HIGH-VALUE COVERAGE IN THIS FILE. Getting the shape wrong is
+  // SILENT: `reasoning: { effort }` is the Responses API's spelling, not Chat
+  // Completions', so a body carrying it either does nothing (an administrator
+  // turns the dial and nothing changes, with no error to notice) or is rejected
+  // by a strict gateway as an unknown parameter. Every case below reads the
+  // parsed request body a stubbed `fetch` actually received, never the return
+  // value of `generate` — the bug this pins cannot be observed any other way.
+  async function bodyFor(
+    reasoningEffort: AiGenerateRequest['reasoningEffort'],
+  ): Promise<Record<string, unknown>> {
+    let body: Record<string, unknown> | null = null;
+
+    const provider = providerWith(async (_url, init) => {
+      body = JSON.parse((init as { body: string }).body) as Record<
+        string,
+        unknown
+      >;
+      return streamResponse(oneChunk(fixture('simple-completion')));
+    });
+
+    await collect(
+      provider.generate(ctx(), { ...REQUEST, reasoningEffort }),
+    );
+
+    return body as unknown as Record<string, unknown>;
+  }
+
+  it('sends a set effort as the FLAT top-level string `reasoning_effort`, not a nested `reasoning` object', async () => {
+    const body = await bodyFor('medium');
+
+    expect(body.reasoning_effort).toBe('medium');
+    // The Responses API shape this must never accidentally take.
+    expect(body).not.toHaveProperty('reasoning');
+  });
+
+  it("omits `reasoning_effort` entirely at 'none' — the key must not be serialised, not merely undefined", async () => {
+    const body = await bodyFor('none');
+
+    // `not.toHaveProperty`, deliberately, over `toBeUndefined()`: the point is
+    // that a gateway which rejects unknown parameters never sees the key at
+    // all, and `JSON.parse` already drops an actually-`undefined` value the
+    // same way — this assertion is the one that would catch
+    // `reasoning_effort: undefined` slipping into the body literal instead of
+    // being spread away.
+    expect(body).not.toHaveProperty('reasoning_effort');
+  });
+
+  it('omits `reasoning_effort` when unset, identically to the none case', async () => {
+    const body = await bodyFor(undefined);
+
+    expect(body).not.toHaveProperty('reasoning_effort');
+  });
+
+  it.each([
+    ['a set effort', 'medium'],
+    ["'none'", 'none'],
+    ['unset', undefined],
+  ] as const)(
+    'keeps max_completion_tokens and omits max_tokens and temperature (%s)',
+    async (_label, reasoningEffort) => {
+      const body = await bodyFor(reasoningEffort);
+
+      expect(body.max_completion_tokens).toBe(REQUEST.maxOutputTokens);
+      expect(body).not.toHaveProperty('max_tokens');
+      // A regression guard, not a formality: GPT-5-family reasoning models
+      // reject a non-default `temperature`, so anyone "helpfully" adding one
+      // back here silently breaks every reasoning model this provider talks
+      // to, whatever `reasoningEffort` was asked for.
+      expect(body).not.toHaveProperty('temperature');
+    },
+  );
 });
 
 describe('OpenAiProvider HTTP status mapping', () => {

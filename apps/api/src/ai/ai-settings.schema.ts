@@ -190,6 +190,25 @@ export const aiProvidersSchema = z.object({
 export type AiProvidersValue = z.infer<typeof aiProvidersSchema>;
 
 /**
+ * How hard a reasoning model may think before it answers (#87).
+ *
+ * ⚠ ORDERED FROM CHEAPEST TO MOST EXPENSIVE, and `'none'` is FIRST because it
+ * is the default — see {@link systemAiSchema.reasoningEffort}. The strings are
+ * the vendor's own `reasoning_effort` values and are sent verbatim, so this
+ * list is a wire vocabulary rather than a name this application chose.
+ */
+export const AI_REASONING_EFFORTS = [
+  'none',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+] as const;
+
+/** One reasoning effort. See {@link AI_REASONING_EFFORTS}. */
+export type AiReasoningEffort = (typeof AI_REASONING_EFFORTS)[number];
+
+/**
  * The `ai` system-settings namespace.
  *
  * `enabled` is a MASTER SWITCH separate from every other field, exactly as it
@@ -264,6 +283,44 @@ export const systemAiSchema = z.object({
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000),
 
   /**
+   * How hard a reasoning model may think before it answers (#87).
+   *
+   * `'none'` — THE DEFAULT, AND THE VENDOR'S OWN — means the parameter is not
+   * sent at all, so a deployment that never touches this field puts exactly the
+   * same bytes on the wire as it did before this field existed. That matters
+   * beyond tidiness: `providers.openai.baseUrl` is a setting precisely so an
+   * OpenAI-compatible gateway can be used, and plenty of them have never heard
+   * of `reasoning_effort` and will reject a request carrying it. Opting in is
+   * an administrator's decision, taken once, for a deployment whose endpoint
+   * they know supports it.
+   *
+   * ⚠ REASONING TOKENS ARE OUTPUT TOKENS. They are billed as output, counted as
+   * output, and drawn from the SAME `max_completion_tokens` ceiling the visible
+   * answer is drawn from — which, for this application, is
+   * `min(maxOutputTokens, the model's own ceiling)` (see
+   * `notes/generation/token-budget.ts`). So raising this field does not buy
+   * better answers for free; it spends a fixed budget on thinking instead of on
+   * prose. At `'high'`, against the default `maxOutputTokens` of 16,384, a
+   * generation can legitimately spend most of that budget deliberating and
+   * return a truncated note — or almost nothing at all. THAT ARRIVES AS A
+   * `length` FINISH REASON, NOT AS AN ERROR: the provider did what it was
+   * asked, and this application has no way to tell "the model thought for
+   * 15,000 tokens" apart from "the answer was long" after the fact.
+   *
+   * The fix, when it happens, is to raise `maxOutputTokens` deliberately — this
+   * field does not raise it, and must not: that ceiling is a separate policy
+   * decision about what one generation may cost on SOMEBODY ELSE'S BILL
+   * (docs/specs/notes.md §9), and quietly widening it because a reasoning
+   * effort was turned up would be this application spending a user's money on
+   * a decision an administrator did not take.
+   *
+   * IGNORED BY A PROVIDER THAT DOES NOT REASON, and by a model that does not:
+   * `AiGenerateRequest.reasoningEffort` is optional, and a non-reasoning model
+   * on a vendor that accepts the parameter simply does no thinking to bill for.
+   */
+  reasoningEffort: z.enum(AI_REASONING_EFFORTS),
+
+  /**
    * Ceiling on one uploaded source document, in bytes (issue #51).
    *
    * ⚠ IT LIVES HERE RATHER THAN IN `storage` BECAUSE IT IS AN AI POLICY, not a
@@ -327,6 +384,10 @@ export const systemAiPatchSchema = z.object({
   maxInputTokens: z.number().int().min(256).max(2_000_000).optional(),
   maxOutputTokens: z.number().int().min(64).max(200_000).optional(),
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000).optional(),
+  // #87. A plain optional enum: absent means "leave it alone", and unlike
+  // `provider` above there is no meaningful `null` — "do not reason" is a
+  // value in the enum (`'none'`), not an absence.
+  reasoningEffort: z.enum(AI_REASONING_EFFORTS).optional(),
   maxDocumentBytes: z.number().int().min(65_536).max(268_435_456).optional(),
 });
 

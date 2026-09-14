@@ -4131,10 +4131,11 @@ the admin page renders itself from.
     "settings": {
       "enabled": true,
       "provider": "openai",
-      "providers": { "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": [ "gpt-4o", { "id": "gpt-4o-mini" }, { "id": "o5-preview", "label": "O5 Preview", "contextWindowTokens": 300000, "maxOutputTokens": 32768 } ], "defaultModel": "gpt-4o" } },
+      "providers": { "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": [ "gpt-4o", { "id": "gpt-4o-mini" }, { "id": "o5-preview", "label": "O5 Preview", "contextWindowTokens": 300000, "maxOutputTokens": 32768 } ], "defaultModel": "gpt-5.4-mini" } },
       "maxInputTokens": 100000,
       "maxOutputTokens": 16384,
       "requestTimeoutMs": 600000,
+      "reasoningEffort": "none",
       "maxDocumentBytes": 26214400
     },
     "providers": [ { "id": "openai", "label": "OpenAI", "capabilities": { "models": [ "…" ], "streaming": true, "modelDiscovery": true }, "fieldDescriptors": [ "…" ] } ],
@@ -4404,6 +4405,20 @@ decrypting anything, and deliberately **independent of `available`**: a user
 can save and verify a key before an administrator finishes enabling the
 feature, and an enabled deployment still does nothing for a user with no key.
 
+⚠ **`provider`/`providerLabel` are independent of `available` for the same
+reason (issue #83)** — they answer *which vendor a key would belong to*, not
+*may AI be used right now*. `provider` is populated whenever this deployment
+names a provider this build recognises, including while AI is switched off
+or nothing is permitted yet, specifically so a user can save and verify
+their own key before an administrator finishes enabling the feature: a
+non-null `provider` alongside `available: false` is the ordinary state of a
+deployment mid-setup, not a bug. `provider: null` means only that there is
+genuinely no vendor to name — either none is configured, or the configured
+one is unknown to this build — **never** that AI is unavailable. A client
+that reads `provider: null` as "AI is unavailable," or that gates the
+key-entry form on `available` rather than on `provider`, reproduces exactly
+the setup deadlock #83 fixed.
+
 **No configuration detail is published here** — not the base URL, not the
 request timeout, and nothing derived from anyone's key beyond the boolean
 fact that the caller has one. `models`/`defaultModel` are already narrowed by
@@ -4417,9 +4432,9 @@ policy, so a client can offer them directly without re-checking.
     "provider": "openai",
     "providerLabel": "OpenAI",
     "models": [
-      { "id": "gpt-4o", "label": "GPT-4o", "contextWindowTokens": 100000, "maxOutputTokens": 16384 }
+      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000 }
     ],
-    "defaultModel": "gpt-4o",
+    "defaultModel": "gpt-5.4-mini",
     "maxInputTokens": 100000,
     "maxOutputTokens": 16384,
     "keyConfigured": false

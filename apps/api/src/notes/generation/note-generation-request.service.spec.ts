@@ -69,6 +69,7 @@ function policyPermitting(model: {
     maxInputTokens: 2_000_000,
     maxOutputTokens: 200_000,
     requestTimeoutMs: 60_000,
+    reasoningEffort: 'none',
     maxDocumentBytes: 1_000_000,
   };
 }
