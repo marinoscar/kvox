@@ -150,6 +150,18 @@ import { TranscriptsService } from './transcripts.service';
   // `TranscriptExporterRegistry`, deliberately: the consumer wants one named
   // projection it can depend on, not the ability to render a transcript into
   // whatever formats happen to be registered.
-  exports: [TranscriptMaterializeService, MarkdownTranscriptExporter],
+  exports: [
+    TranscriptMaterializeService,
+    MarkdownTranscriptExporter,
+    // ⚠ A THIRD, ADDED BY #50 FOR THE SAME REASON AS THE FIRST TWO: somebody
+    // now imports it. `POST /api/note-templates/preview` generates from a
+    // transcript the CALLER named, so it has to ask THIS module whether that
+    // caller may read it — with this module's own 404-never-403 posture and its
+    // one shared not-found sentence. Re-deriving the check inside the notes
+    // module would be a second, independently-maintained answer to "who may
+    // read this transcript", which is exactly the cross-feature disagreement
+    // epic #45 was scoped to avoid.
+    TranscriptAccessService,
+  ],
 })
 export class TranscriptsModule {}

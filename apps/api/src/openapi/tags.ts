@@ -193,6 +193,27 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'recorded as readable reasons rather than as request failures; optical character ' +
           'recognition is deliberately not supported.',
       },
+      {
+        name: 'Note Templates',
+        description:
+          'The object that makes AI notes adaptable without hard-coding every workflow: ' +
+          '"produce meeting notes" and "produce a follow-up email" are two **rows**, not two ' +
+          'code paths. List, read, create, edit, delete and duplicate your own templates, and ' +
+          '**preview** one — saved or unsaved — against a real source before trusting it with a ' +
+          'note. Gated on `note_templates:read`/`note_templates:write`, both seeded to every ' +
+          'role including Viewer.\n\n' +
+          'Every account sees its own templates **plus a set of seeded built-ins**, so a ' +
+          'brand-new account opens a full, usable catalogue. Built-ins are readable by everyone ' +
+          'and **editable by nobody**: a write against one answers **403** — deliberately ' +
+          'unlike the **404** another user\'s template answers, because a built-in is listed in ' +
+          'every account\'s own catalogue and hiding a row the caller can already see would ' +
+          'mislead rather than protect. Duplicate one to get an editable copy; that is what ' +
+          'keeps the seeded set a stable, re-runnable baseline.\n\n' +
+          '⚠ A **preview is a real generation on your own provider account** — the same ' +
+          '`note.generate` job, prompt assembly, token budget and error taxonomy a real note ' +
+          'uses, deliberately, because a second implementation would drift from the real one ' +
+          'exactly when it mattered. It creates no template and no note, and expires.',
+      },
     ],
   },
   {

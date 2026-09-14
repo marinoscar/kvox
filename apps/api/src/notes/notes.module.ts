@@ -8,6 +8,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { NoteTemplateAccessService } from './access/note-template-access.service';
 import { NoteGenerationService } from './generation/note-generation.service';
 import { NoteSourceService } from './generation/note-source.service';
 import { NoteGenerateHandler } from './handlers/note-generate.handler';
@@ -15,6 +16,9 @@ import { NoteSourceExtractHandler } from './handlers/note-source-extract.handler
 import { NoteObjectsService } from './note-objects.service';
 import { NoteSourcesController } from './note-sources.controller';
 import { NoteSourcesService } from './note-sources.service';
+import { NoteTemplatePreviewService } from './note-template-preview.service';
+import { NoteTemplatesController } from './note-templates.controller';
+import { NoteTemplatesService } from './note-templates.service';
 
 // =============================================================================
 // NotesModule (issue #49, epic #45)
@@ -69,9 +73,9 @@ import { NoteSourcesService } from './note-sources.service';
     StorageProvidersModule,
     SettingsModule,
   ],
-  // ⚠ #51's ONE ROUTE. `POST /api/notes/sources/documents` is the first thing
-  // this module puts on the wire; the note routes themselves are #53's.
-  controllers: [NoteSourcesController],
+  // #51's ONE ROUTE (`POST /api/notes/sources/documents`) plus #50's SEVEN
+  // (`/api/note-templates/*`). The NOTE routes themselves are still #53's.
+  controllers: [NoteSourcesController, NoteTemplatesController],
   providers: [
     NoteGenerationService,
     NoteSourceService,
@@ -82,6 +86,12 @@ import { NoteSourcesService } from './note-sources.service';
     NoteObjectsService,
     NoteSourcesService,
     NoteSourceExtractHandler,
+    // Note templates (#50). `NoteTemplateAccessService` is the ONE place that
+    // decides 403-for-a-built-in vs 404-for-somebody-else's — see its header
+    // for why those two answers are deliberately different.
+    NoteTemplateAccessService,
+    NoteTemplatesService,
+    NoteTemplatePreviewService,
   ],
 })
 export class NotesModule {}
