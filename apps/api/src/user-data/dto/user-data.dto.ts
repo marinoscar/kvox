@@ -123,8 +123,11 @@ export const userDataSummarySchema = z.object({
       "transcript's audio is NOT counted here — it belongs to the transcript.",
   ),
   noteTemplates: userDataCountOnlySchema.describe(
-    "The caller's own custom note templates. Built-ins are excluded: they belong to the " +
-      'deployment, are readable by everyone, and no user can delete one.',
+    "The caller's own custom note templates. Removed by `content` and `everything` only — " +
+      'the narrow `notes` scope leaves them alone, because a template is reusable ' +
+      'configuration with its own settings page rather than note content. Built-ins are ' +
+      'excluded from this count entirely: they belong to the deployment, are readable by ' +
+      'everyone, and no user can delete one.',
   ),
   credentials: userDataCredentialsSchema.describe(
     'What `scope: "everything"` additionally destroys.',
@@ -146,8 +149,9 @@ export const createUserDataDeletionSchema = z.object({
   scope: z
     .enum(USER_DATA_SCOPES)
     .describe(
-      'What to delete. `notes` also removes your own custom note templates. `content` is ' +
-        'every recording, note, note template and uploaded file; `everything` is that plus ' +
+      'What to delete. Each narrow scope removes exactly the category it names — `notes` ' +
+        'does **not** take your note templates with it. `content` is every recording, note, ' +
+        'uploaded file **and** your own custom note templates; `everything` is that plus ' +
         'your AI provider keys and your personal access tokens.',
     ),
   confirmation: z

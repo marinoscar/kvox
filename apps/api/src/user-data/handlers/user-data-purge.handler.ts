@@ -122,17 +122,20 @@
 // ORDER, AND WHY IT IS NOT STYLISTIC
 // -----------------------------------------------------------------------------
 //
-//   1. credentials (`everything` only)
+//   1. credentials      (`everything` only)
 //   2. notes            — clearing `source_note_id` first
 //   3. transcripts      — clearing `source_transcript_id` first
-//   4. note templates
+//   4. note templates   (`content`/`everything` only — never the narrow `notes`
+//                        scope; see `scopeIncludes`)
 //   5. unmanaged storage objects
 //
 // 2 before 3 because a note's `source_transcript_id` is `Restrict`: deleting
 // transcripts while the user's own notes still cite them would leave the
 // transcript purge blocked. 4 after 2 because `NoteTemplatesService.remove`
 // archives rather than deletes while notes still reference a template, so the
-// notes have to have gone first for a delete to be possible at all. 5 last
+// notes have to have gone first for a delete to be possible at all — and every
+// scope that reaches step 4 has already run step 2, so that ordering is never
+// vacuous. 5 last
 // because it is the only step whose rows nothing else can point at.
 //
 // Credentials go FIRST rather than in that chain, and they are the one step
@@ -466,6 +469,12 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
   /**
    * Delete the user's OWN custom templates, through the path that already knows
    * when a template must be archived instead.
+   *
+   * ⚠ REACHED BY `content` AND `everything` ONLY. The narrow `notes` scope
+   * deliberately does not come here — a template is reusable configuration with
+   * its own settings destination, not note content, and "Delete notes" silently
+   * emptying a page the user did not open is the surprise a Danger Zone can
+   * least afford. `scopeIncludes` carries the full argument.
    *
    * ⚠ BUILT-INS ARE UNREACHABLE HERE BY CONSTRUCTION: the query filters on
    * `ownerId: userId`, and a built-in has `ownerId IS NULL`. It is not that

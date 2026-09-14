@@ -41,9 +41,11 @@ export const USER_DATA_SUBJECT_TYPE = 'user';
  * What a deletion request may ask for.
  *
  * ORDERED NARROWEST-FIRST, and the order is the one the UI renders: three
- * single-category scopes, then the two composites. `content` is everything the
- * user MADE — transcripts, notes, the note templates that go with them, and
- * their plain uploads; `everything` is that plus their CREDENTIALS, which is
+ * single-category scopes, then the two composites. Each narrow scope deletes
+ * EXACTLY the category its row names and nothing else — see `scopeIncludes`,
+ * where `noteTemplates` is the case that rule had to be defended on. `content`
+ * is everything the user MADE: transcripts, notes, their own note templates and
+ * their plain uploads. `everything` is that plus their CREDENTIALS, which is
  * the only line the two composites differ on and deliberately the only one:
  * "delete my content" and "delete my content and revoke my keys" are two
  * decisions a person makes separately.
@@ -82,18 +84,38 @@ export function scopeIncludes(
   category: 'transcripts' | 'notes' | 'noteTemplates' | 'files' | 'credentials',
 ): boolean {
   switch (category) {
-    // Note templates travel with notes rather than being a scope of their own:
-    // a template is the recipe a note was generated from, and a user asking for
-    // their notes to be gone is not asking to keep the recipes that only make
-    // sense beside them. The narrow `files` scope deliberately does NOT drag
-    // them along — a template is not a file.
+    // ⚠ EVERY NARROW SCOPE MAPS TO EXACTLY ONE CATEGORY. Only the composites
+    // fan out. That symmetry is the rule the three cases below hold, and the
+    // `noteTemplates` case is the one that had to be argued for rather than
+    // assumed — see its own comment.
     case 'transcripts':
       return scope === 'transcripts' || scope === 'content' || scope === 'everything';
     case 'notes':
-    case 'noteTemplates':
       return scope === 'notes' || scope === 'content' || scope === 'everything';
     case 'files':
       return scope === 'files' || scope === 'content' || scope === 'everything';
+    // ⚠ NOTE TEMPLATES ARE `content`/`everything` ONLY — THE NARROW `notes`
+    // SCOPE DOES NOT TOUCH THEM.
+    //
+    // A template is not note CONTENT; it is reusable CONFIGURATION. It has its
+    // own settings destination (`/settings/note-templates`), it is authored
+    // deliberately and independently of any particular note, and its whole
+    // purpose is to be used by notes that DO NOT EXIST YET — so "the notes are
+    // gone, therefore the recipes are meaningless" is exactly backwards.
+    //
+    // The user-facing consequence is the argument. A person clicking "Delete
+    // notes" on a row whose inventory reads "12 notes · 340 MB" has been told
+    // they are deleting notes; silently emptying a different settings page they
+    // did not open is the kind of surprise a Danger Zone can least afford. And
+    // unlike the data itself, templates were HAND-WRITTEN and are recoverable
+    // from nowhere — there is no provider, no bucket and no source recording to
+    // rebuild one from.
+    //
+    // The composites still take them, and that is consistent rather than a
+    // compromise: `content` means "everything you made", and a template is
+    // something you made.
+    case 'noteTemplates':
+      return scope === 'content' || scope === 'everything';
     // ⚠ CREDENTIALS ARE `everything` ONLY. Revoking a user's API tokens is not
     // implied by "delete my recordings", and a `content` scope that silently
     // signed out their CLI would be a surprise with no way back.

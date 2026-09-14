@@ -111,13 +111,15 @@ export class UserDataController {
       'fans out across several tables and object storage and outlives this request.\n\n' +
       '⚠ **There is no path back.** Deleted transcripts, notes and files are not recoverable ' +
       'from this application.\n\n' +
-      '**Scopes.** `transcripts` removes your transcripts. `notes` removes your notes **and ' +
-      'your own custom note templates** — a template is the recipe a note was generated ' +
-      'from, and it has no meaning once the notes are gone. `files` removes your plain ' +
-      'uploads only: a transcript\'s audio and a note\'s export belong to those, not here. ' +
-      '`content` is all three — every recording, note, note template and uploaded file. ' +
-      '`everything` is `content` **plus your credentials**: your stored AI provider keys ' +
-      'and every personal access token you hold.\n\n' +
+      '**Scopes.** Each narrow scope deletes **exactly one category and nothing else**; only ' +
+      'the two composites fan out. `transcripts` removes your recordings and their ' +
+      'transcripts. `notes` removes your notes — **not** your note templates, which are ' +
+      'reusable configuration with their own settings page rather than note content. ' +
+      '`files` removes your plain uploads only: a transcript\'s audio and a note\'s export ' +
+      'belong to those, not here. `content` is everything you made — all three categories ' +
+      '**plus your own custom note templates**. `everything` is `content` **plus your ' +
+      'credentials**: your stored AI provider keys and every personal access token you ' +
+      'hold.\n\n' +
       '**Your account survives.** No scope deletes your user record, your settings, your ' +
       'roles or your session — you stay signed in. `everything` revokes your API tokens, so ' +
       'any CLI or script using one will need a new token.\n\n' +
