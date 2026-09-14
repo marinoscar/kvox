@@ -43,6 +43,46 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 //      different sentences with different fixes and different people to talk to.
 //
 // -----------------------------------------------------------------------------
+// `provider` IS INDEPENDENT OF `available` TOO — AND NOT NOTICING THAT WAS A BUG
+// -----------------------------------------------------------------------------
+//
+// The two fields answer different questions, and only one of them is about
+// permission:
+//
+//   • `provider`/`providerLabel` answer WHICH VENDOR A KEY WOULD BELONG TO. It
+//     is a naming question, and it has an answer the moment an administrator's
+//     settings row names a provider this build has a registry entry for.
+//   • `available` answers MAY AI BE USED RIGHT NOW. That is the four-fact
+//     conjunction below, and the master switch is one of the four.
+//
+// Issue #83 is what conflating them costs, and the loop is closed at both ends.
+// `DEFAULT_SYSTEM_SETTINGS.ai` ships `enabled: false` with `provider: 'openai'`,
+// so EVERY fresh deployment starts in the state where a provider is named but
+// the switch is off. This method used to blank `provider` in that state; the key
+// form on `/settings/ai` derives its whole enablement from `config.provider`, so
+// no user could save a key. An administrator could not break the tie either:
+// populating `allowedModels` through "Load models from provider" calls the
+// vendor with THEIR OWN key, which they were equally unable to save. Nobody
+// could go first. A field that exists to name a vendor had been made to also
+// mean "you are allowed to proceed", and the second meaning ate the first.
+//
+// So: `provider` is resolved ONCE, before any branch, and travels through BOTH
+// returns. `provider: null` is now reserved for the two cases where there
+// genuinely is no vendor to name, and those two remain indistinguishable to a
+// client on purpose (there is nothing useful it could do differently):
+//
+//   a. `ai.provider` is null — nobody has chosen a vendor;
+//   b. `ai.provider` names a provider THIS BUILD has never heard of — a
+//      deployment rolled back across the addition of a provider. Naming it
+//      anyway would hand a client a vendor id no code here can act on.
+//
+// "A real provider is chosen, but AI is switched off or nothing is permitted
+// yet" is NOT one of those cases and must never return null again. Nothing else
+// about the not-available branch changes: `available` stays `false`, and
+// `models: []` / `defaultModel: null` stay empty, because a client must not be
+// handed a model the server would refuse the moment it was used.
+//
+// -----------------------------------------------------------------------------
 // `available` IS A CONJUNCTION OF FOUR FACTS, AND ALL FOUR ARE NECESSARY
 // -----------------------------------------------------------------------------
 //
@@ -64,7 +104,8 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 // disabled control to a failed generation minutes later — which, here, is a
 // failure the user has already paid their own provider for.
 //
-// ⚠ IT DOES NOT DEPEND ON `keyConfigured`. See consequence 3 above.
+// ⚠ IT DOES NOT DEPEND ON `keyConfigured`, AND IT IS NOT WHAT `provider`
+// REPORTS. See the two sections above.
 // =============================================================================
 
 @Injectable()
@@ -104,15 +145,42 @@ export class AiConfigService {
     // to save and verify their key BEFORE an administrator finishes turning the
     // feature on, and a client rendering a disabled control still wants to say
     // "your key is set up" rather than nothing.
+    //
+    // ⚠ THE SAME ARGUMENT APPLIES WORD FOR WORD TO THE TWO LINES BELOW, and
+    // issue #83 is what it cost to have made it for only one of the three. A
+    // key belongs to a VENDOR; a form that cannot name the vendor cannot offer
+    // to save the key; so blanking `provider` while AI is switched off is
+    // exactly as breaking as blanking `keyConfigured` would be. These three
+    // values are resolved together, above every branch, so the next branch
+    // added here inherits the independence instead of having to remember it.
     const keyConfigured = provider
       ? await this.credentials.hasKey(userId, provider.id)
       : false;
+    const resolvedProvider = provider?.id ?? null;
+    const resolvedProviderLabel = provider?.label ?? null;
 
     if (!policy.enabled || !providerId || !provider) {
       return {
+        // Fact 1 or fact 2 has failed. Nothing may be generated right now, and
+        // this is the ordinary state of a deployment nobody has finished
+        // setting up — not an error.
         available: false,
-        provider: null,
-        providerLabel: null,
+        // ⚠ CARRIED THROUGH, NOT BLANKED (#83). Null here would mean "there is
+        // no vendor to name", which is false: an administrator named one and
+        // this build knows it. The key form reads this field to decide which
+        // vendor it is collecting a key FOR, and a user has to be able to get a
+        // key in place before the switch is flipped — otherwise the first
+        // administrator of a fresh deployment cannot load the model list their
+        // own key is needed to fetch, and setup deadlocks with no error
+        // anywhere. It stays null only in the two genuinely nameless cases,
+        // which is `provider === undefined` above.
+        provider: resolvedProvider,
+        providerLabel: resolvedProviderLabel,
+        // Empty on purpose, and NOT for the same reason. A model list is an
+        // offer, and every model on it here would be refused the moment it was
+        // used — either the master switch is off or nothing has been permitted
+        // yet. Naming the vendor costs a client nothing; handing it a model it
+        // cannot use costs it a failed generation.
         models: [],
         defaultModel: null,
         maxInputTokens: policy.maxInputTokens,
@@ -170,9 +238,12 @@ export class AiConfigService {
       null;
 
     return {
+      // Facts 1 and 2 held to get here; `usable` is facts 3 and 4. Note that
+      // this can still be `false` while `provider` below is non-null — that is
+      // the whole point of the two fields being separate.
       available: usable.length > 0,
-      provider: provider.id,
-      providerLabel: provider.label,
+      provider: resolvedProvider,
+      providerLabel: resolvedProviderLabel,
       models: usable,
       defaultModel,
       maxInputTokens: policy.maxInputTokens,
