@@ -172,6 +172,70 @@ describe('db.backup.run requirements', () => {
   });
 });
 
+describe('media.audio.transcode requirements (issue #26, epic #19)', () => {
+  it('REFUSES to declare the type on a machine with no ffmpeg', () => {
+    // ⚠ THE FAILURE THIS PREVENTS. A node that declares the type without the
+    // binary claims transcodes and fails them one at a time — looking healthy
+    // to every dashboard while each failure costs the job an attempt, so a
+    // single mis-built worker can permanently fail renditions that nothing was
+    // wrong with.
+    const result = evaluateCapabilities(
+      ['media.audio.transcode'],
+      probeOf({ ffmpeg: false, ffprobe: false }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired).toEqual([
+      { type: 'media.audio.transcode', capability: 'binary:ffmpeg' },
+      { type: 'media.audio.transcode', capability: 'binary:ffprobe' },
+    ]);
+  });
+
+  it('REFUSES it with ffmpeg but no ffprobe — the executor runs both', () => {
+    // They ship in one package everywhere, so this is a trimmed image or a
+    // hand-built static binary; either way the job dies at the probe step,
+    // which is the first thing the executor does.
+    const result = evaluateCapabilities(
+      ['media.audio.transcode'],
+      probeOf({ ffmpeg: true, ffprobe: false }),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.missingRequired).toEqual([
+      { type: 'media.audio.transcode', capability: 'binary:ffprobe' },
+    ]);
+  });
+
+  it('declares it when both are present, with nothing degraded', () => {
+    // NO DEGRADABLE TIER, unlike `db.backup.run`'s `psql`: nothing about a
+    // rendition is best-effort. Without ffmpeg there is no rendition, and a
+    // rendition is the whole job.
+    const result = evaluateCapabilities(
+      ['media.audio.transcode'],
+      probeOf({ ffmpeg: true, ffprobe: true }),
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.missingDegradable).toEqual([]);
+    expect(JOB_TYPE_REQUIREMENTS['media.audio.transcode']?.degradable).toEqual([]);
+  });
+
+  it('hard-fails the startup self-test, naming the capability and the type', () => {
+    const failures: string[] = [];
+
+    runStartupSelfTest({
+      types: ['media.audio.transcode'],
+      probe: probeOf({ ffmpeg: false, ffprobe: false }),
+      fail: (message) => failures.push(message),
+    });
+
+    expect(failures[0]).toContain('media.audio.transcode');
+    expect(failures[0]).toContain('binary:ffmpeg');
+    // The remedy, not just the diagnosis.
+    expect(failures[0]).toMatch(/Install it, or drop the type/);
+  });
+});
+
 /** A probe whose binaries are exactly these, with capabilities to match. */
 function probeOf(binaries: Record<string, boolean>): CapabilityProbe {
   return probeCapabilities({

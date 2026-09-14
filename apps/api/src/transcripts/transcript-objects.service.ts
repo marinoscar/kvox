@@ -42,6 +42,41 @@ import {
 } from '../storage/providers/storage-provider.interface';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 
+/**
+ * An object whose bytes are already in storage, about to be recorded.
+ *
+ * The same fields as {@link PutManagedObjectInput} except that the size is
+ * DECLARED rather than derived from a buffer — because there is no buffer:
+ * nothing in this process ever held these bytes.
+ */
+export interface RecordUploadedObjectInput {
+  storageKey: string;
+  name: string;
+  mimeType: string;
+  /** Byte length of the object in the bucket, as its producer reported it. */
+  size: number;
+  ownerId: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * A result names a storage key that holds nothing.
+ *
+ * A PERMANENT failure of that job attempt and a named one: "the node said it
+ * uploaded a rendition and the bucket disagrees" is a specific, actionable
+ * state, and it must not be reported as a Prisma foreign-key error three
+ * frames away from the cause.
+ */
+export class MissingUploadedObjectError extends Error {
+  constructor(readonly storageKey: string) {
+    super(
+      `No object exists at "${storageKey}". The executor reported a result for bytes that ` +
+        'never landed in storage, so there is nothing to record.',
+    );
+    this.name = 'MissingUploadedObjectError';
+  }
+}
+
 /** One object this module is about to create. */
 export interface PutManagedObjectInput {
   /** Storage key. Built by the caller so the prefix states what the file is. */
@@ -82,10 +117,76 @@ export class TranscriptObjectsService {
       mimeType: input.mimeType,
     });
 
-    const object = await this.prisma.storageObject.create({
+    const object = await this.createRow({ ...input, size: input.body.byteLength });
+
+    this.logger.log(
+      `Stored managed object ${object.id} (${input.body.byteLength} bytes) at ${input.storageKey}`,
+    );
+
+    return object;
+  }
+
+  /**
+   * Record bytes that are ALREADY in the bucket, after checking that they are.
+   *
+   * The counterpart to `put` for the one case `put` cannot serve: an artifact
+   * this process did not write. `media.audio.transcode`'s rendition is
+   * uploaded either by the API's own streaming upload or by a WORKER NODE
+   * PUTting straight to a presigned URL (issue #26), and in the second case
+   * the server never sees a byte of it — there is nothing to hand `put`.
+   *
+   * ⚠ THE `exists` CHECK IS THE WHOLE POINT, AND IT IS NOT A RE-COMPUTATION.
+   * `JobHandler.persistNodeResult` may not redo a node's work — no second
+   * ffprobe, no re-hash, no "correcting" a value it dislikes — but it may and
+   * must establish that the thing it is about to point a database column at
+   * actually landed. A node whose upload silently failed, or which reported a
+   * result for a job whose PUT it never made, would otherwise leave
+   * `playback_object_id` aimed at an empty key and a transcript whose audio
+   * element plays nothing. One HEAD request is what separates "a row that
+   * describes a file" from "a row".
+   *
+   * ⚠ IDEMPOTENT ON THE KEY. The queue is at-least-once and the rendition's
+   * key is a pure function of the job, so a retry after a successful record
+   * arrives at this method with a key that already has a row. Returning the
+   * existing row rather than creating a second is what stops a duplicate
+   * `storage_objects` row from being created for one file — of which the
+   * transcript would reference one and `transcript.purge` would delete by
+   * prefix, leaving an orphan.
+   */
+  async recordUploaded(input: RecordUploadedObjectInput): Promise<StorageObject> {
+    const existing = await this.prisma.storageObject.findFirst({
+      where: { storageKey: input.storageKey },
+    });
+
+    if (existing) {
+      this.logger.log(
+        `Managed object ${existing.id} already records ${input.storageKey}; reusing it`,
+      );
+
+      return existing;
+    }
+
+    const present = await this.storage.exists(input.storageKey);
+
+    if (!present) {
+      throw new MissingUploadedObjectError(input.storageKey);
+    }
+
+    const object = await this.createRow(input);
+
+    this.logger.log(
+      `Recorded managed object ${object.id} (${input.size} bytes) at ${input.storageKey}`,
+    );
+
+    return object;
+  }
+
+  /** The one `storage_objects` insert this module makes. Always `managedBy`. */
+  private createRow(input: RecordUploadedObjectInput): Promise<StorageObject> {
+    return this.prisma.storageObject.create({
       data: {
         name: input.name,
-        size: BigInt(input.body.byteLength),
+        size: BigInt(input.size),
         mimeType: input.mimeType,
         storageKey: input.storageKey,
         storageProvider: 's3',
@@ -96,12 +197,6 @@ export class TranscriptObjectsService {
         metadata: (input.metadata ?? undefined) as never,
       },
     });
-
-    this.logger.log(
-      `Stored managed object ${object.id} (${input.body.byteLength} bytes) at ${input.storageKey}`,
-    );
-
-    return object;
   }
 
   /**

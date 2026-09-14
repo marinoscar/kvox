@@ -88,6 +88,26 @@ export const JOB_TYPE_REQUIREMENTS: Record<string, JobTypeRequirements> = {
     required: [binaryCapability('pg_dump')],
     degradable: [binaryCapability('psql')],
   },
+  // ---------------------------------------------------------------------------
+  // `media.audio.transcode` (#26, epic #19) — two required binaries, no
+  // degradable tier at all.
+  // ---------------------------------------------------------------------------
+  //
+  // BOTH ARE REQUIRED AND BOTH ARE LISTED, even though `ffprobe` ships in the
+  // same package as `ffmpeg` on every distribution that packages either. The
+  // executor runs them as two separate programs, and a trimmed image or a
+  // hand-built static `ffmpeg` that omitted `ffprobe` would satisfy a
+  // one-binary requirement and then fail every job at the probe step — which
+  // is precisely the "starts fine, fails everything" outcome this self-test
+  // exists to prevent. Declaring what is actually executed costs one line.
+  //
+  // There is NO degradable entry, unlike `db.backup.run`'s `psql`: nothing
+  // about this type is best-effort. Without ffmpeg there is no rendition, and
+  // a rendition is the whole job.
+  'media.audio.transcode': {
+    required: [binaryCapability('ffmpeg'), binaryCapability('ffprobe')],
+    degradable: [],
+  },
 };
 
 /**
@@ -98,7 +118,7 @@ export const JOB_TYPE_REQUIREMENTS: Record<string, JobTypeRequirements> = {
  * binary missing from here would fail the self-test on every machine, however
  * complete its install.
  */
-export const PROBED_BINARIES: string[] = ['pg_dump', 'psql'];
+export const PROBED_BINARIES: string[] = ['pg_dump', 'psql', 'ffmpeg', 'ffprobe'];
 
 export interface CapabilityProbe {
   platform: string;

@@ -14,7 +14,7 @@
 > Planned locations: `apps/api/src/transcription/` (#23 — the provider
 > framework, AssemblyAI, admin settings), `apps/api/src/transcripts/` (#24–#29
 > — data model, pipeline, corrections, export, sharing), the `media.audio
-> .transcode` handler under `apps/api/src/transcripts/handlers/` (#26),
+> .transcode` handler under `apps/api/src/transcripts/handlers/` (#26, built),
 > `apps/web/src/pages/Transcripts/` and `apps/web/src/pages/Admin
 > /TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
 > schema companion, `docs/specs/transcript-export.v1.schema.json`.
@@ -227,8 +227,14 @@ types at once.
 
 #### 1.5.1 `media.audio.transcode`
 
-Full design in issue #26 and cross-referenced from `docs/specs/worker-nodes.md`
-once #26 lands. Converts whatever format was uploaded into a small, universally
+**Built (#26).** `apps/api/src/transcripts/handlers/media-audio-transcode.handler.ts`
+is the handler, `apps/api/src/transcripts/media/` holds the decisions
+(`audio-transcode.ts`) and the spawns (`ffmpeg.service.ts`),
+`apps/api/src/jobs/contracts/media-audio-transcode.contract.ts` is the node
+result contract, and `apps/cli/src/node/executors/media-audio-transcode.ts` is
+the node executor. It is written up as the fleet's third node-eligible type in
+[`worker-nodes.md` §20.2](worker-nodes.md). Converts whatever format was
+uploaded into a small, universally
 playable AAC/m4a mono file with the `moov` atom moved to the front
 (`+faststart`), so iOS Safari can play it and a phone on cellular data can
 seek into a multi-hour recording without downloading it first (§7.1).
@@ -287,6 +293,40 @@ use, and idempotent per job because it is derived purely from `jobId` and
 defaults **false** because a `pg_dump` needs a brokered database credential
 and epic #345 shipped that broker disabled by default; transcoding needs no
 credential at all, so there is no comparable trust boundary to default shut).
+
+**The target bitrate travels on the job**, in `payload.bitrateKbps`, beside
+`transcriptId`. A worker node reads no system settings — it has no database —
+so `transcription.playback.bitrateKbps` has to be told to it or a
+node-executed transcode silently falls back to the shipped default and two
+executors produce different files for one job. `TranscriptPipelineService
+.enqueueTranscode` reads the setting once at enqueue time; the handler prefers
+the payload's number over the live setting for the same reason, so the server
+path and the node path cannot disagree. A job enqueued by a build older than
+#26 carries no such field and falls back to reading the setting.
+
+**Two things about the encode are easy to get wrong and are worth stating
+here.** First, the output is a **temp file, never a pipe**, on both paths:
+`+faststart` rewrites the MP4 header *after* the stream ends and therefore
+needs a seekable destination, and on a socket ffmpeg warns and silently
+produces a `moov`-last file that uploads perfectly and cannot be scrubbed —
+the exact defect the flag exists to prevent, invisible to every check either
+side performs. `media-audio-transcode.ffmpeg.spec.ts` runs a real ffmpeg and
+reads the produced bytes precisely because no assertion about the *arguments*
+can see this. Second, **a permanently failed transcode writes
+`playback_status: failed`** on its last attempt rather than leaving
+`processing`, because `transcription.submit` reads exactly that column to
+decide whether a rendition is still coming (§2.4's `renditionExpected`); a
+column left at `processing` forever leaves every transcript whose original
+the provider cannot accept sitting in `waiting_input` with no error anywhere.
+
+**The duration ceiling is enforced here as well as in `transcription.submit`,
+and neither check subsumes the other.** This is the first moment the duration
+is known — nothing measured it before the probe — so it is the first moment
+the ceiling *can* be applied, and it is applied before the provider has been
+asked to do anything, which is when refusing is still free. The submit
+handler's own check covers the transcripts that never needed a rendition at
+all. Failing on duration fails the **transcript**, never the rendition: the
+audio is still worth playing back.
 
 #### 1.5.2–1.5.4 `transcription.submit`, `.poll`, `.ingest`
 

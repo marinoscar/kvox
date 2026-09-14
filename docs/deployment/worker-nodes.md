@@ -142,12 +142,13 @@ against what its eligible job types declare:
   everything.
 - A missing **degradable** capability → warn and continue.
 
-The template's example job type hashes a stream and needs nothing native. The
-one entry that is real is the database backup:
+The template's example job type hashes a stream and needs nothing native. Two
+entries are real:
 
 | Type | Required | Degradable |
 |---|---|---|
 | `db.backup.run` | `pg_dump` | `psql` |
+| `media.audio.transcode` | `ffmpeg`, `ffprobe` | — |
 
 A node without `pg_dump` therefore never declares `db.backup.run` — which
 matters more for this type than for any other, because it is configured never
@@ -156,13 +157,21 @@ to retry: a claim it cannot fulfil is a backup that simply did not happen.
 newest applied migration; without it the backup is taken, uploaded and verified
 with those two audit fields left `null`.
 
+`media.audio.transcode` (the playback rendition) requires **both** ffmpeg
+binaries and has no degradable tier at all. Both are listed even though they
+ship in one package everywhere: the executor runs them as two separate
+programs, and an image trimmed to `ffmpeg` alone would satisfy a one-binary
+requirement and then fail every job at the probe step, which is the first thing
+the executor does. Nothing about a rendition is best-effort — without ffmpeg
+there is no rendition, and the rendition is the whole job.
+
 A node also needs a **network route** to the database, which nothing on this
 machine can check for you at startup. `appctl node doctor --db-host
 db.internal:5432` probes it, as a warning rather than a failure — see
 "Health checks" in [`apps/cli/README.md`](../../apps/cli/README.md#running-a-worker-node).
 
 Beyond those, the **structure** is the deliverable, and it is the documented
-place a fork declares that its `video.transcode` type needs `ffmpeg`.
+place a fork declares what its own types need.
 
 ### Taking database backups on a node
 
@@ -199,20 +208,52 @@ Until all three are true, `db.backup.run` runs on the API server exactly as it
 did before node offload existed — nothing about turning this on is required
 to take backups at all.
 
+### Transcoding audio on a node
+
+`media.audio.transcode` converts an uploaded recording into the small,
+seekable AAC/m4a copy the player streams. It is the **easiest** type to offload
+and the one with the least to configure, because it needs no credential at all:
+the server hands it a presigned GET for the upload and a presigned PUT for the
+result, and everything in between is CPU.
+
+Two things to know:
+
+1. **One switch, on by default.** `transcription.transcodeNodeOffloadEnabled`
+   (admin UI, Settings → Transcription) decides whether a node may do this
+   work. It defaults to **on**, unlike `databaseBackup.nodeOffloadEnabled`,
+   because there is no trust boundary to hold shut — no database password, no
+   long-lived vendor key. Turning it off leaves transcoding on the API server,
+   where it was before you had a fleet.
+2. **Install ffmpeg.** The container image (`apps/cli/Dockerfile`) already has
+   it. A node running outside a container gets it from `appctl node
+   install-deps`, or from your distribution's own `ffmpeg` package. Without it
+   the node refuses to declare the type at startup and the transcodes stay on
+   the server — a visible, correct outcome rather than a silent one.
+
+A node doing this work needs **no route to your database**, which is what makes
+it a good first thing to move off the API server: throughput scales with CPUs
+you can add anywhere, and the blast radius of an untrusted machine is one audio
+file it was already given a URL for.
+
 ### Declaring a requirement in a fork
 
 In `apps/cli/src/node/capabilities.ts`:
 
 ```ts
-export const PROBED_BINARIES = ['ffmpeg'];
+export const PROBED_BINARIES = ['pg_dump', 'psql', 'ffmpeg', 'ffprobe', 'exiftool'];
 
 export const JOB_TYPE_REQUIREMENTS = {
-  'video.transcode': {
+  'video.thumbnail': {
     required: [binaryCapability('ffmpeg')],
     degradable: [binaryCapability('exiftool')],
   },
 };
 ```
+
+⚠️ **The two lists move together.** A capability that is never *probed* is a
+capability that is never satisfied, so a requirement naming a binary missing
+from `PROBED_BINARIES` fails the self-test on every machine, however complete
+the install. `capabilities.test.ts` asserts that in both directions.
 
 ## Installing dependencies
 
@@ -221,13 +262,24 @@ appctl node install-deps --dry-run   # print the plan, change nothing
 appctl node install-deps
 ```
 
-⚠️ **This ships as a framework, not as a set of real installs.** The template
-has no native dependencies to install, and inventing some would mean a fork had
-to work out which of the steps were real. What you get is the structure —
-ordered steps, per-step `skipped | installed | failed | unsupported`, distro
-detection, an explicit sudo announcement before anything runs, and a working
-`--dry-run`. Add your own steps in `apps/cli/src/node/install-deps.ts` beside
-the two generic ones.
+Three steps ship: the worker's state directory, a Node.js version check, and
+**ffmpeg** for `media.audio.transcode`. The first two are generic; ffmpeg is a
+real package install (`apt-get`/`dnf`/`apk` by detected family) and is the
+worked example a fork copies.
+
+It is still, first, a **framework**: ordered steps, per-step `skipped |
+installed | failed | unsupported`, distro detection, an explicit sudo
+announcement before anything runs, and a `--dry-run` that performs no mutation
+while still running every `detect`. Add your own steps in
+`apps/cli/src/node/install-deps.ts` beside the three.
+
+⚠️ The ffmpeg step runs **unconditionally**, not "only if this node declares
+the type" — `install-deps` is what you run *before* the worker has ever
+started, so there is no `--types` to consult. It reports `skipped` the moment
+both binaries are on PATH, so on a machine that will never transcode the cost
+is two `which` calls. macOS and Windows report `unsupported` with the command
+to run by hand: `brew`/`winget` install into your own environment and
+frequently need a prompt a subcommand must not answer for you.
 
 ## Memory
 

@@ -5,6 +5,7 @@ import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
 import {
   TRANSCODE_JOB_TYPE,
   TRANSCRIPT_SNAPSHOT_JOB_TYPE,
@@ -69,6 +70,12 @@ describe('TranscriptPipelineService', () => {
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('https://app.example.com/') },
+        },
+        {
+          provide: TranscriptionSettingsService,
+          useValue: {
+            get: jest.fn().mockResolvedValue({ playback: { bitrateKbps: 96 } }),
+          },
         },
       ],
     }).compile();
@@ -142,7 +149,11 @@ describe('TranscriptPipelineService', () => {
           type: TRANSCODE_JOB_TYPE,
           subjectType: 'storage_object',
           subjectId: 'obj-1',
-          payload: { transcriptId: TRANSCRIPT_ID },
+          // ⚠ `bitrateKbps` TRAVELS ON THE JOB (issue #26). A worker node reads
+          // no system settings, so the deployment's target has to be told to it
+          // — otherwise a node-executed transcode silently uses the default and
+          // two executors produce different files for one job.
+          payload: { transcriptId: TRANSCRIPT_ID, bitrateKbps: 96 },
         }),
       );
     });
