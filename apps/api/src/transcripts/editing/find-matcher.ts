@@ -45,7 +45,7 @@
 
 /** The options a caller may set on a search. */
 export interface FindOptions {
-  /** Distinguish `Kvox` from `kvox`. Default false. */
+  /** Distinguish `Dana` from `dana`. Default false. */
   matchCase?: boolean;
   /** Require a word boundary on both sides of the hit. Default false. */
   wholeWord?: boolean;

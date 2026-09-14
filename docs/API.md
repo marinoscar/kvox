@@ -3020,6 +3020,139 @@ abandoned remote job.
 
 **Requires:** `transcripts:write`, plus `own` access
 
+#### POST /transcripts/{id}/operations
+Apply up to **200 correction ops in one transaction** and record them as a new
+version. This is the write half of *"AI proposes. The user controls the truth."*
+
+**Body:** `{ baseVersion, clientBatchId, ops[] }` ·
+**Response:** `{ version, summary, idempotentReplay, speakers[], segments[], merges[] }`
+
+| Op | Payload |
+|---|---|
+| `segment.update_text` | `{ segmentId, rev, text }` |
+| `segment.set_speaker` | `{ segmentId, rev, speakerId }` |
+| `segment.split` | `{ segmentId, rev, atWordIndex \| atCharOffset, newSpeakerId? }` — exactly one of the two positions |
+| `segment.join` | `{ segmentIds: [a, b], revs: [ra, rb] }` — **adjacent only** |
+| `segment.delete` | `{ segmentId, rev }` |
+| `speaker.rename` | `{ speakerId, rev, displayName }` |
+| `speaker.create` | `{ displayName }` |
+| `speaker.merge` | `{ sourceIds[], targetId, keepName? }` |
+| `transcript.find_replace` | `{ find, replace, matchCase?, wholeWord?, speakerId? }` |
+
+**`transcript.find_replace` is expanded server-side into concrete
+`segment.update_text` ops before the version is recorded.** That is the
+load-bearing decision: a version that recorded the abstract call would replay
+through a *future* matcher, so a Unicode table update or a bug fix in
+word-boundary detection would silently change what a version from last year says
+happened. Matching is **literal — never a regular expression** (ReDoS, and the
+wrong tool for somebody correcting a misheard name), with optional case
+sensitivity and **Unicode-aware** whole-word boundaries: a search for `os` does
+not match inside `José`, which a `\b`-based implementation gets wrong.
+
+Server-assigned identity is chosen **before** recording, never at replay time —
+a split's `newSegmentId` and resolved `atWordIndex`, a `speaker.create`'s
+`speakerId` and `colorIndex` — so replaying a version produces the same ids at
+the same seams.
+
+**Concurrency.** `baseVersion` is *informational* and may be stale; what
+actually guards each write is the per-entity `rev` on every op, checked inside
+the same transaction that writes. Two editors correcting **different** lines
+both succeed. `current_version` is allocated by a conditional
+`UPDATE … WHERE current_version = $n`, which is also the lock — the loser blocks
+on the row, then re-applies against the winner's state.
+
+| Status | When |
+|---|---|
+| `400` | An op that can never apply — a split that would leave a half empty, a join of non-adjacent segments, a merge naming its own target |
+| `403` | The caller can view the transcript but does not hold `transcripts:write` |
+| `404` | No such transcript, no share, or a `viewer` share |
+| `409` | A stale `rev`. `details` carries `{ currentVersion, conflicts: [{ entity, id, current }] }`, naming **every** conflict at once so one re-fetch resolves them all; `current` is `null` for an entity another editor deleted |
+
+**Idempotency.** A repeated `clientBatchId` returns the **original** result with
+`idempotentReplay: true` and creates no second version, so a retry after a
+dropped connection or a backgrounded tab is always safe.
+
+**Word timings survive the edit.** Unchanged words keep the provider's own
+times; changed ones are re-aligned by token LCS (a substitution inherits the
+timing of the word it replaced, an insertion is interpolated between its
+neighbours) and the segment becomes `wordsAlignment: interpolated`. A split
+divides the word array and a join concatenates it, so both stay `exact` —
+nothing was invented. A full retype falls back to `none` with times spread
+evenly.
+
+**`merges[]`** carries, per `speaker.merge`, each source speaker and the segment
+ids that were on it — the half of an inverse merge a client cannot reconstruct
+once the merge has happened.
+
+**Requires:** `transcripts:write`, plus `edit` access
+
+#### GET /transcripts/{id}/search?q&matchCase&wholeWord&speakerId&limit
+Every occurrence of `q`, with the segment it is in, where in the media that
+segment starts, the offsets inside its text and a short excerpt. The same
+literal matcher `transcript.find_replace` uses, so the preview and the
+replacement can never disagree about what counts as a hit.
+
+`total` is always the **exact** number of occurrences even when `matches` was
+truncated to `limit` (default and maximum 500) — a preview that under-reported
+would understate what a replacement is about to rewrite.
+
+**Requires:** `transcripts:read`, plus `view` access
+
+#### GET /transcripts/{id}/versions?cursor&limit
+Every save, newest first, cursor-paginated: `{ version, kind, summary, author,
+restoredFromVersion, hasSnapshot, opCount, createdAt }`.
+
+**`author: null` means the AI**, not a missing value — version 1 is
+`kind: ai_original` and is the provider's own output. It is permanent for the
+life of the transcript; nothing in this API ever deletes a version row.
+
+**Requires:** `transcripts:read`, plus `view` access
+
+#### GET /transcripts/{id}/versions/{version}
+The transcript as it stood at that version: the nearest snapshot at or before
+it, with every later version's ops replayed through **the same pure reducers the
+live edit path uses**. Segments come back **without word timings**, exactly as
+`GET /transcripts/{id}/segments` does.
+
+**409** while a version older than the first snapshot is still unreachable:
+version 1 cannot be rebuilt from ops (it is what the provider *said*, not a
+change to anything), so it becomes reachable once its `transcript.snapshot` job
+has run.
+
+**Requires:** `transcripts:read`, plus `view` access
+
+#### POST /transcripts/{id}/versions/{version}/restore
+**History is never rewritten.** A restore records a *new* version
+(`kind: restore`, `ops: [{ op: "restore", fromVersion }]`,
+`restored_from_version`), replaces the current-state tables with that version's
+content in one transaction, and queues a snapshot. Every version in between —
+including the one that existed immediately before the call — stays exactly as it
+was, and **version 1, the AI original, is always retrievable**.
+
+**Body:** `{ baseVersion }`, and unlike `POST /operations` it **must equal the
+transcript's current version**: a correction batch carries a `rev` on every op
+that says what it expects, and a restore carries no such thing, so a stale view
+means asking to discard edits the caller has never seen. **409** otherwise, and
+**409** for restoring the version that is already current.
+
+**Requires:** `transcripts:write`, plus `edit` access
+
+#### Snapshots, and what they are for
+
+A snapshot is a **compaction of replay work, never a second source of truth**.
+`transcript.snapshot` writes a gzipped JSON copy of a version's materialized
+state to a managed object and links it from `snapshot_object_id`. Policy: always
+for version 1 and for every restore; otherwise after **50 versions or 1 MB of
+accumulated ops** since the last snapshot, whichever comes first. It is **never
+taken inline** — `POST /operations` enqueues it and returns as soon as its own
+transaction commits.
+
+The job reads `current_version` and the state together inside one
+`REPEATABLE READ` transaction and attaches the snapshot to the version that read
+actually saw, not to the one its payload named: a snapshot labelled v7
+containing v9's segments would be a lie `materialize()` would faithfully replay
+ops on top of.
+
 #### The pipeline behind these routes
 
 Completing the upload raises an event whose listener **only enqueues** — it
@@ -3035,7 +3168,7 @@ secret no per-job broker can narrow.
 | `transcription.submit` | `2h / 3 attempts` | Presigns the input **when the job runs**, submits, records the provider handle immediately. Idempotent on that handle |
 | `transcription.poll` | `2m / 5 attempts` | Re-enqueues itself with `skipDedup: true`. First delay `clamp(duration × 0.05, 30s, 5m)`, then ×1.5 to a 5-minute cap. Hard deadline `submittedAt + max(6h, 3 × duration)` |
 | `transcription.ingest` | `15m / 3 attempts` | Writes speakers, segments, version 1 (`ai_original`) and `status: ready` in **one transaction**; stores the raw provider JSON gzipped for provenance; deletes the provider's copy |
-| `transcript.snapshot` | issue #27 | A point-in-time copy of a version's materialized state |
+| `transcript.snapshot` | `10m / 3 attempts` | A point-in-time copy of a version's materialized state, read under `REPEATABLE READ`. Server-only: the whole job is a multi-table consistent read |
 | `transcript.purge` | deployment default | Everything a deleted transcript owned |
 | `transcripts.housekeeping` | deployment default | Restarts a lost poll chain, fails transcripts whose upload was cleaned up, expires exports. Enqueued by a ten-minute cron that only enqueues |
 
