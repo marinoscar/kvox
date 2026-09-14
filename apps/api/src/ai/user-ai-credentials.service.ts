@@ -397,6 +397,35 @@ export class UserAiCredentialsService {
     );
   }
 
+  /**
+   * Erase EVERY key this user has stored, whatever provider it names.
+   *
+   * ⚠ EXISTS BECAUSE `remove` CANNOT DO THIS, not as a convenience wrapper over
+   * it. `remove` starts with `requireProvider`, which throws for a provider id
+   * this build's registry no longer carries — correct for a caller naming one
+   * by hand, and fatal for a bulk erase, where a row left behind by a provider
+   * that was removed from the catalogue is precisely the row a user asking for
+   * all their keys to be gone most needs gone. Looping `list()` × `remove()`
+   * would skip exactly those rows and report success.
+   *
+   * IN-PROCESS ONLY — no controller reaches this. The Danger Zone
+   * (`user.data.purge`, issue #80) is its one caller; erasing every key at once
+   * is not an HTTP surface this application wants to own, because nothing over
+   * HTTP needs it and a route that exists can be reached by mistake.
+   *
+   * Idempotent, and audited even at zero: "this user asked for every key to be
+   * gone" is the event, the same reasoning `remove` states.
+   */
+  async removeAll(userId: string): Promise<number> {
+    const { count } = await this.prisma.userAiCredential.deleteMany({ where: { userId } });
+
+    await this.audit(userId, 'ai_credential:delete_all', userId, { removed: count });
+
+    this.logger.log(`User ${userId} removed all ${count} of their AI key(s)`);
+
+    return count;
+  }
+
   // ---------------------------------------------------------------------------
   // Probe
   // ---------------------------------------------------------------------------

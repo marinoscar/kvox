@@ -106,6 +106,38 @@ export class PatService {
   }
 
   /**
+   * Revoke EVERY token this user still holds, in one statement.
+   *
+   * ⚠ NOT A LOOP OVER `revokeToken`, and the difference is not efficiency.
+   * `revokeToken` throws `NotFoundException` for a token that is already
+   * revoked — correct for a caller naming one by id, and wrong here, where a
+   * previously-revoked token is simply a token that is already in the state the
+   * caller asked for. A loop would abort part-way through and leave live tokens
+   * behind for a user who asked for all of them to be gone.
+   *
+   * REVOKED, NOT DELETED, exactly as `revokeToken` is: the row is the evidence
+   * that the token existed and when it stopped working, and
+   * `cleanupExpiredTokens` already removes it thirty days later. A bulk erase
+   * that deleted the rows outright would destroy that trail at precisely the
+   * moment it is most worth having.
+   *
+   * IN-PROCESS ONLY — no controller reaches this. Its one caller is the Danger
+   * Zone's `user.data.purge` (issue #80); `POST /api/auth/logout-all` is the
+   * session-shaped surface, and revoking API tokens is deliberately not folded
+   * into it.
+   */
+  async revokeAllForUser(userId: string): Promise<number> {
+    const { count } = await this.prisma.personalAccessToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    this.logger.log(`Revoked all ${count} active PAT(s) for user: ${userId}`);
+
+    return count;
+  }
+
+  /**
    * Validate a raw PAT and return the associated user if valid
    */
   async validateToken(rawToken: string): Promise<AuthenticatedUser | null> {
