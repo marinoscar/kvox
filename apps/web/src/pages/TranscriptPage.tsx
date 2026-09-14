@@ -422,9 +422,12 @@ export function TranscriptPage() {
       {/* ⚠ Export… and Share… mount here, from #28 and #29 respectively:
           `<ExportDialog open onClose transcriptId currentVersion />` for every
           role, and `<ShareDialog open transcriptId transcriptTitle onClose />`
-          gated on `isOwner`. Neither component exists in this branch yet — see
-          the PR description — and a menu item that opens nothing is worse than
-          one that is not there. */}
+          gated on `isOwner`. Both landed on `main` AFTER this branch was cut
+          (PRs #44 and #43), so neither component exists on this base and a menu
+          item that opens nothing is worse than one that is not there. Their
+          real prop signatures are the ones written above, verified against the
+          merged files — adding the two menu items and the two mounts is the
+          whole of the integration. */}
       {isOwner ? (
         <MenuItem
           onClick={() => {

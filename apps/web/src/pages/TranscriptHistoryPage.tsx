@@ -277,8 +277,10 @@ export function TranscriptHistoryPage() {
           </Button>
           {/* ⚠ "Export this version" mounts here, from #28:
               `<ExportDialog open onClose transcriptId currentVersion={previewFor} />`.
-              That component does not exist in this branch yet — see the PR
-              description — and a button that opens nothing is worse than none. */}
+              That component landed on `main` (PR #44) after this branch was
+              cut, so it does not exist on this base — and a button that opens
+              nothing is worse than none. The prop signature above is the real
+              one, verified against the merged file. */}
           {canRestore && previewFor !== null && previewFor !== currentVersion && (
             <Button
               variant="contained"
