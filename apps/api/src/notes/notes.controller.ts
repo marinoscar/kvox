@@ -105,12 +105,25 @@ import {
   type RestoreNoteVersionDto,
   type UpdateNoteDto,
 } from './dto/note.dto';
+import {
+  CreateNoteExportBodyDto,
+  NoteExportDownloadDto,
+  NoteExportDto,
+  NoteExportListDto,
+  NoteExportersDto,
+  createNoteExportSchema,
+  type CreateNoteExportDto,
+} from './dto/note-export.dto';
+import { NoteExportService } from './export/note-export.service';
 import { NotesService } from './notes.service';
 
 @ApiTags('Notes')
 @Controller('notes')
 export class NotesController {
-  constructor(private readonly notes: NotesService) {}
+  constructor(
+    private readonly notes: NotesService,
+    private readonly exports: NoteExportService,
+  ) {}
 
   // ===========================================================================
   // Create
@@ -210,6 +223,53 @@ export class NotesController {
   @ApiDataResponse(NoteSummaryDto, { description: 'The caller\'s note summary' })
   async summary(@CurrentUser('id') userId: string) {
     return this.notes.summary(userId);
+  }
+
+  // ⚠ DECLARED BEFORE `@Get(':id')`, for the identical reason `summary` is.
+  @Get('exporters')
+  @Auth({ permissions: [PERMISSIONS.NOTES_READ] })
+  @ApiOperation({
+    summary: 'List the available export formats',
+    description:
+      'Every registered note exporter, with the options it accepts. The export dialog builds ' +
+      'itself from this response rather than from a list of formats compiled into the ' +
+      'client, so a deployment that registers a new exporter offers it immediately.\n\n' +
+      'Each option carries its `key`, a `label`, a `description` and a `default`. Send the ' +
+      'keys you want to change inside `options` on `POST /api/notes/{id}/exports`; an ' +
+      'unknown key is a **400**, never a silently ignored field.',
+  })
+  @ApiDataResponse(NoteExportersDto, { description: 'The registered export formats' })
+  exporters() {
+    return this.exports.listExporters();
+  }
+
+  // ⚠ ALSO BEFORE `@Get(':id')`. `notes/exports/:exportId/download` is four
+  // segments and cannot collide with the two-segment `:id` route, but it sits
+  // here beside its sibling so the literal-prefix rule is visible in one place.
+  @Get('exports/:exportId/download')
+  @Auth({ permissions: [PERMISSIONS.NOTES_READ] })
+  @ApiOperation({
+    summary: 'Download a rendered export',
+    description:
+      'A short-lived (15 minute) **signed URL** that serves the rendered file as an ' +
+      'attachment named `<title> (v<n>).<ext>`. The `Content-Disposition` is signed **into** ' +
+      'the URL, so a client cannot add the filename afterwards.\n\n' +
+      'No note id in the path: the export names its own note, and access is decided on that ' +
+      'note. An export belonging to somebody else\'s note answers **404** — the same answer ' +
+      'a non-existent export id gets, so an export id cannot be used to discover that ' +
+      'another user\'s note exists.\n\n' +
+      '**404** while the export is still rendering, and **404** once it has expired: there ' +
+      'is no file to hand back in either case. Request the identical export again and you ' +
+      'get the identical file.',
+  })
+  @ApiParam({ name: 'exportId', type: String, format: 'uuid' })
+  @ApiDataResponse(NoteExportDownloadDto, { description: 'The signed download' })
+  @ApiResponse({ status: 404, description: 'No such export, not ready, or no access to its note' })
+  async downloadExport(
+    @Param('exportId', ParseUUIDPipe) exportId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.exports.download(exportId, user);
   }
 
   @Get(':id')
@@ -427,6 +487,83 @@ export class NotesController {
     @CurrentUser() user: RequestUser,
   ): Promise<void> {
     await this.notes.remove(id, user);
+  }
+
+  // ===========================================================================
+  // Export (issue #54, spec §8)
+  // ===========================================================================
+
+  @Post(':id/exports')
+  @Auth({ permissions: [PERMISSIONS.NOTES_WRITE] })
+  @ApiOperation({
+    summary: 'Export a note',
+    description:
+      'Renders one version of this note into one format — `markdown`, `pdf` or `docx` — as a ' +
+      '**queue job**. There is no size threshold below which an export runs inside the ' +
+      'request, because a threshold is two code paths where the fast one breaks on the first ' +
+      'unusually long note.\n\n' +
+      '**202** with the new export when a render was queued. **200** when an export of the ' +
+      'same version, format and options already exists and has not expired: the identical ' +
+      'request produces the identical file, so it is returned rather than rendered again. ' +
+      'The `reused` field says which happened, for a client that cannot see the status ' +
+      'line.\n\n' +
+      '`version` defaults to the current version; **any version in the history may be ' +
+      'exported** and the export contains *that* version\'s body, so an exported document ' +
+      'names exactly what it contains. `options` are validated against the chosen format\'s ' +
+      'own schema from `GET /api/notes/exporters` — an unknown key is a 400.\n\n' +
+      'Every format carries a **provenance header** naming the source (the transcript and ' +
+      'its date, the source note, or the document filename), the template used, the version ' +
+      'exported and the generation timestamp. There is no option to suppress it: it is the ' +
+      'export\'s only carried memory of where the content came from once the file has left ' +
+      'this application.\n\n' +
+      'Exports expire after **7 days** and their files are deleted by the notes housekeeping ' +
+      'sweep. Nothing is lost — requesting the identical export again produces the identical ' +
+      'file.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiBody({ type: CreateNoteExportBodyDto })
+  @ApiDataResponse(NoteExportDto, {
+    status: 202,
+    description: 'A render was queued; poll `GET /api/notes/{id}/exports` for its status',
+  })
+  @ApiResponse({ status: 200, description: 'An identical, unexpired export already existed' })
+  @ApiResponse({
+    status: 400,
+    description: 'Unknown format, or an option that format does not accept',
+  })
+  @ApiResponse({ status: 404, description: 'No such note or version, or no access to it' })
+  async createExport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createNoteExportSchema)) dto: CreateNoteExportDto,
+    @CurrentUser() user: RequestUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.exports.requestExport(id, dto, user);
+
+    reply.status(result.created ? HttpStatus.ACCEPTED : HttpStatus.OK);
+
+    return result.export;
+  }
+
+  @Get(':id/exports')
+  @Auth({ permissions: [PERMISSIONS.NOTES_READ] })
+  @ApiOperation({
+    summary: "List a note's exports",
+    description:
+      'Every unexpired export of this note, newest first, each with its status and — once it ' +
+      'is `ready` — a short-lived signed `downloadUrl`.\n\n' +
+      'Poll this while an export is `pending`. A `failed` export carries the reason in ' +
+      '`error`; requesting the same export again queues a fresh render rather than returning ' +
+      'the failure, because a failed row is never reused.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiDataResponse(NoteExportListDto, { description: "The note's exports" })
+  @ApiResponse({ status: 404, description: 'No such note, or no access to it' })
+  async listExports(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.exports.listExports(id, user);
   }
 
   // ===========================================================================
