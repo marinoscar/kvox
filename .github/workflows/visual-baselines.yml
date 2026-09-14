@@ -109,6 +109,16 @@ jobs:
 
       - name: Commit regenerated baselines
         if: ${{ inputs.commit }}
+        # EXPLICIT `bash`, because the default is not one here. Inside a
+        # `container:` GitHub resolves the default shell to `sh -e {0}`, and
+        # this image's /bin/sh is dash, which has no `pipefail` — so
+        # `set -euo pipefail` below aborted the step with
+        # "set: Illegal option -o pipefail" before a single line of it ran.
+        # The whole workflow therefore generated correct baselines, uploaded
+        # them as an artifact, and then failed to commit them: the one thing
+        # it exists to do. Ubuntu-noble (this image) has bash, so naming it is
+        # enough.
+        shell: bash
         run: |
           set -euo pipefail
           git config user.name  'github-actions[bot]'
