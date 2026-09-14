@@ -49,7 +49,11 @@ function setPrefs(railCollapsed: boolean) {
   });
 }
 
-const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read'];
+// The seeded `admin` role's navigation-relevant permissions. `transcripts:read`
+// joined the set with #30: it is seeded to ALL THREE roles, so an admin fixture
+// without it would be a user that cannot exist — and the row-count assertions
+// below would silently be measuring a rail with one row missing.
+const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read', 'transcripts:read'];
 
 describe('NavigationRail', () => {
   beforeEach(() => {
@@ -59,19 +63,31 @@ describe('NavigationRail', () => {
   });
 
   describe('Destinations', () => {
-    it('renders all three destinations for a fully permitted user', () => {
-      // THREE, not four: issue #92 merged `User Management` and `System
-      // Settings` into one `Console` row, because two rows both matching
-      // `/admin/*` give the rail two active candidates on every admin route.
+    it('renders all four destinations for a fully permitted user', () => {
+      // FOUR since #30 added Transcripts. Still ONE admin row, not two: issue
+      // #92 merged `User Management` and `System Settings` into `Console`,
+      // because two rows both matching `/admin/*` give the rail two active
+      // candidates on every admin route.
       setPermissions(ADMIN_PERMISSIONS, true);
 
       render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      expect(within(nav).getAllByRole('link')).toHaveLength(3);
+      expect(within(nav).getAllByRole('link')).toHaveLength(4);
       expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Transcripts' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Console' })).toBeInTheDocument();
+    });
+
+    it('hides Transcripts from a user without transcripts:read (#30)', () => {
+      // `setPermissions([])` in the outer `beforeEach`, so this is the same
+      // "grants nothing" fixture the Console assertion below uses.
+      render(<NavigationRail />);
+
+      expect(
+        screen.queryByRole('link', { name: 'Transcripts' }),
+      ).not.toBeInTheDocument();
     });
 
     it('hides Console from a user holding neither admin permission', () => {
@@ -275,6 +291,7 @@ describe('NavigationRail', () => {
 
       expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
         '/',
+        '/transcripts',
         '/settings',
         '/admin/settings',
       ]);
@@ -516,6 +533,7 @@ describe('NavigationRail', () => {
 
       expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
         '/',
+        '/transcripts',
         '/settings',
         '/admin/settings',
       ]);

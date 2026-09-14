@@ -49,8 +49,10 @@ import {
   createTranscriptUpload,
   fetchUploadStatus,
   resumeUpload as resumeUploadEngine,
+  startUpload as startUploadEngine,
   type ResumableUpload,
   type ResumableUploadOptions,
+  type UploadInitResponse,
   type UploadProgress,
 } from '../services/resumableUpload';
 import {
@@ -80,6 +82,24 @@ export interface ManagedUpload {
 export interface StartUploadInput {
   file: File;
   transcriptId?: string | null;
+  /**
+   * An upload the server has ALREADY initialised — adopt it instead of calling
+   * `POST /storage/objects/upload/init`.
+   *
+   * Added by issue #30 for the New-transcript screen, and it is not an
+   * optional convenience there: `POST /api/transcripts` creates the transcript
+   * row AND initialises its multipart upload in ONE response, deliberately, so
+   * that a client cannot end up with a transcript in `uploading` that has no
+   * upload behind it. The object it creates is `managed_by: 'transcripts'`,
+   * which a client is not permitted to ask for — so the generic init endpoint
+   * cannot produce an equivalent one, and calling it as well would leave an
+   * orphaned object behind for housekeeping to fail later.
+   *
+   * Everything AFTER this point is unchanged: the same engine, the same
+   * progress records, the same session persistence, the same pause/resume/cancel.
+   * This only replaces where the first part URLs came from.
+   */
+  init?: UploadInitResponse;
   /** Escape hatch for tests; production never passes this. */
   engineOptions?: ResumableUploadOptions;
 }
@@ -228,11 +248,17 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
   );
 
   const startUpload = useCallback(
-    async ({ file, transcriptId = null, engineOptions }: StartUploadInput) => {
-      const { upload, init } = await createTranscriptUpload(file, {
-        ...engineOptions,
-        transcriptId,
-      });
+    async ({
+      file,
+      transcriptId = null,
+      init: providedInit,
+      engineOptions,
+    }: StartUploadInput) => {
+      // Two paths to the same engine: adopt an init the caller already has
+      // (#30's `POST /api/transcripts`), or ask the generic endpoint for one.
+      const { upload, init } = providedInit
+        ? { upload: startUploadEngine(file, providedInit, engineOptions), init: providedInit }
+        : await createTranscriptUpload(file, { ...engineOptions, transcriptId });
 
       const record: ManagedUpload = {
         id: init.objectId,
