@@ -74,7 +74,7 @@ import { Prisma } from '@prisma/client';
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
-import type { TranscriptSharedEmailData } from '../email/templates/transcript-shared.email';
+import type { TranscriptSharedEmailData } from '../email';
 import type {
   CreateTranscriptShareDto,
   TranscriptShareRoleName,
