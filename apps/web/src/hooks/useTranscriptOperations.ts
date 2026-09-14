@@ -380,6 +380,19 @@ export function useTranscriptOperations(
    * render-phase `setState` on the SAME component and commits only the second
    * result, so this costs a render pass and no frame.
    */
+  /**
+   * The working copy, mirrored for the CALLBACKS.
+   *
+   * ⚠ WRITTEN EAGERLY BY `commitWorking`, not only on re-render. Every action
+   * builds its ops from `workingRef.current` — `segment.delete` needs the `rev`
+   * the batch before it just returned — and React has not re-rendered yet at
+   * the moment an `await`ed flush resolves inside one user action. A ref that
+   * only caught up on render would hand the next op the `rev` the server has
+   * already moved past, which is a 409 the user did nothing to deserve.
+   */
+  const workingRef = useRef(working);
+  workingRef.current = working;
+
   const adoptedSource = useRef<{
     speakers: readonly TranscriptSpeaker[];
     segments: readonly TranscriptSegment[];
@@ -397,16 +410,15 @@ export function useTranscriptOperations(
     // Both conditions, and both are load-bearing — see the file header.
     const stale = version !== null && version < working.version;
     if (!dirty && !draining.current && !stale) {
-      setWorking({
+      const next: WorkingState = {
         speakers: [...speakers],
         segments: [...segments],
         version: version ?? working.version,
-      });
+      };
+      workingRef.current = next;
+      setWorking(next);
     }
   }
-
-  const workingRef = useRef(working);
-  workingRef.current = working;
 
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [pendingCount, setPendingCount] = useState(0);
@@ -426,6 +438,16 @@ export function useTranscriptOperations(
     setPendingCount(count);
     return count;
   }, []);
+
+  /** Write the working copy to BOTH the ref and the state — see `workingRef`. */
+  const commitWorking = useCallback(
+    (next: WorkingState | ((current: WorkingState) => WorkingState)) => {
+      const value = typeof next === 'function' ? next(workingRef.current) : next;
+      workingRef.current = value;
+      setWorking(value);
+    },
+    [],
+  );
 
   // ---------------------------------------------------------------------------
   // Offline
@@ -540,7 +562,7 @@ export function useTranscriptOperations(
         // path exists to keep. The server copy is still available inside the
         // card as "theirs", so nothing is lost either way.
         const conflicted = new Map(cards.map((card) => [card.id, card]));
-        setWorking({
+        commitWorking({
           ...fresh,
           segments: fresh.segments.map((segment) => {
             const card = conflicted.get(segment.id);
@@ -562,7 +584,7 @@ export function useTranscriptOperations(
         return [...merged, ...cards];
       });
     },
-    [isMounted, transcriptId],
+    [commitWorking, isMounted, transcriptId],
   );
 
   // ---------------------------------------------------------------------------
@@ -570,7 +592,7 @@ export function useTranscriptOperations(
   // ---------------------------------------------------------------------------
 
   const adoptResult = useCallback((result: OperationsResult) => {
-    setWorking({
+    commitWorking({
       speakers: result.speakers,
       segments: result.segments,
       version: result.version,
@@ -582,7 +604,7 @@ export function useTranscriptOperations(
         summary: result.summary,
       });
     }
-  }, []);
+  }, [commitWorking]);
 
   const drain = useCallback(async (): Promise<void> => {
     if (draining.current || !transcriptId) return;
@@ -736,12 +758,12 @@ export function useTranscriptOperations(
       const ops = build();
       if (!ops || ops.length === 0) return;
 
-      setWorking((current) => ops.reduce(applyLocally, current));
+      commitWorking((current) => ops.reduce(applyLocally, current));
       outbox.current.push({ clientBatchId: newClientBatchId(), ops, attempts: 0 });
       publishPending();
       await drain();
     },
-    [drain, enabled, isMounted, publishPending, queuePendingText, transcriptId],
+    [commitWorking, drain, enabled, isMounted, publishPending, queuePendingText, transcriptId],
   );
 
   // ---------------------------------------------------------------------------
@@ -757,7 +779,7 @@ export function useTranscriptOperations(
       // Coalesced per segment: a hundred keystrokes on one line is ONE op, not
       // a hundred, and a burst across three lines is one batch of three.
       pendingText.current.set(segmentId, text);
-      setWorking((current) =>
+      commitWorking((current) =>
         applyLocally(current, { op: OP_TYPES.UPDATE_TEXT, segmentId, rev: segment.rev, text }),
       );
       publishPending();
@@ -771,7 +793,7 @@ export function useTranscriptOperations(
         drainRef.current();
       }, debounceMs);
     },
-    [debounceMs, enabled, publishPending, queuePendingText],
+    [commitWorking, debounceMs, enabled, publishPending, queuePendingText],
   );
 
   const setSpeaker = useCallback(
@@ -928,7 +950,7 @@ export function useTranscriptOperations(
       if (choice === 'theirs') {
         // Adopt the server's copy locally. Nothing is sent: the transcript
         // already says this.
-        setWorking((current) => ({
+        commitWorking((current) => ({
           ...current,
           segments: current.segments.map((segment) =>
             segment.id === id && card.entity === 'segment'
@@ -968,7 +990,7 @@ export function useTranscriptOperations(
         ]);
       }
     },
-    [conflicts, runImmediate],
+    [commitWorking, conflicts, runImmediate],
   );
 
   /**
