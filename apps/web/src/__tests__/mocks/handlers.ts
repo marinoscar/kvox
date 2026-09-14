@@ -227,6 +227,46 @@ export const handlers = [
     return HttpResponse.json({ message: 'Not found' }, { status: 404 });
   }),
 
+  // ---------------------------------------------------------------------------
+  // Transcripts — the home page's two calls (issue #32, epic #19)
+  // ---------------------------------------------------------------------------
+  //
+  // DEFAULTS, not fixtures. Every suite that mounts `<App />` renders `/` and
+  // therefore `HomePage`, which fetches these two on mount. Without handlers
+  // here each of those suites logged two MSW "unhandled request" warnings and —
+  // worse — rendered the page's ERROR state into whatever it was actually
+  // asserting about, so an unrelated navigation test would be inspecting a home
+  // page carrying a red alert.
+  //
+  // The empty summary is deliberate: it is the quietest possible answer (the
+  // journey empty state, no polling, no rows), so it adds nothing to the DOM
+  // that another suite's query could accidentally match. A suite that cares
+  // about the home page's CONTENT overrides these with `server.use(...)`, which
+  // is exactly what `pages/HomePage.test.tsx` does.
+  http.get(`${API_BASE}/transcripts/summary`, () => {
+    return HttpResponse.json({
+      data: {
+        inProgress: [],
+        recent: [],
+        sharedWithMe: [],
+        counts: { owned: 0, shared: 0, inProgress: 0, failed: 0 },
+      },
+    });
+  }),
+
+  http.get(`${API_BASE}/transcription/config`, () => {
+    return HttpResponse.json({
+      data: {
+        available: true,
+        providerLabel: 'Test Provider',
+        maxUploadBytes: 100_000_000,
+        maxDurationMs: 7_200_000,
+        acceptedExtensions: ['.m4a', '.mp3'],
+        acceptedMimeTypes: ['audio/mp4', 'audio/mpeg'],
+      },
+    });
+  }),
+
   // Health endpoints
   http.get(`${API_BASE}/health/live`, () => {
     return HttpResponse.json({
