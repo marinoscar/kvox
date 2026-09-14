@@ -89,15 +89,20 @@ export function firstPollDelayMs(durationMs: number | null | undefined): number 
  * claims.
  */
 export function nextPollDelayMs(previousDelayMs: number | null | undefined): number {
-  const previous =
-    typeof previousDelayMs === 'number' &&
-    Number.isFinite(previousDelayMs) &&
-    previousDelayMs > 0
-      ? previousDelayMs
-      : MIN_POLL_DELAY_MS;
+  if (
+    typeof previousDelayMs !== 'number' ||
+    !Number.isFinite(previousDelayMs) ||
+    previousDelayMs <= 0
+  ) {
+    // RESTART AT THE FLOOR, not "the floor times 1.5". An unreadable previous
+    // delay means the chain's backoff state is gone, and the honest thing to
+    // do is begin a fresh schedule rather than resume one from a number nobody
+    // wrote down.
+    return MIN_POLL_DELAY_MS;
+  }
 
   return Math.round(
-    clamp(previous * POLL_BACKOFF_FACTOR, MIN_POLL_DELAY_MS, MAX_POLL_DELAY_MS),
+    clamp(previousDelayMs * POLL_BACKOFF_FACTOR, MIN_POLL_DELAY_MS, MAX_POLL_DELAY_MS),
   );
 }
 
