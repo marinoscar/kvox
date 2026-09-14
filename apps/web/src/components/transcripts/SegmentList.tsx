@@ -1,5 +1,6 @@
 /**
- * The transcript itself — virtualized, with dynamic row heights.
+ * The transcript itself — virtualized, with dynamic row heights, and (since
+ * issue #31) editable in place.
  *
  * Issue #30, epic #19. A ten-hour conversation is tens of thousands of
  * segments; rendering them all is tens of thousands of DOM nodes, and on a
@@ -14,7 +15,9 @@
  * caller-supplied) row size; supplying one here means either clipping long
  * segments or reserving a paragraph's height for every one-word interjection.
  * `useVirtualizer` measures each rendered row through `measureElement` and
- * corrects its offsets as it goes, which is exactly the dynamic case.
+ * corrects its offsets as it goes, which is exactly the dynamic case — and it
+ * is what lets a row GROW as it is typed into without the rows below it
+ * drifting out of place.
  *
  * =============================================================================
  * AUTO-FOLLOW, AND WHY IT HAS TO BE INTERRUPTIBLE
@@ -32,11 +35,29 @@
  * The user-scroll signal is `wheel`/`touchstart`/`keydown`, NOT the `scroll`
  * event: `scrollToIndex` fires `scroll` too, so following would switch itself
  * off on its own first move.
+ *
+ * EDITING DISENGAGES FOLLOWING TOO, for the same reason and more urgently: a
+ * list that scrolls itself while somebody is typing into one of its rows takes
+ * the caret off screen mid-sentence.
+ *
+ * =============================================================================
+ * EVERY EDITING PROP IS OPTIONAL, AND THE READ PATH IS UNCHANGED WITHOUT THEM
+ * =============================================================================
+ *
+ * A viewer (and the history page's read-only preview, and the visual harness's
+ * reader baselines) renders this component with none of them, and gets exactly
+ * the component #30 shipped: no buttons, no `role="button"` on the text, no
+ * edit affordance to tab through. `editable` is not a styling flag — it decides
+ * whether the interactive elements EXIST, because a disabled control a screen
+ * reader still announces is a control a viewer has to be told about.
  */
 
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
+import IconButton from '@mui/material/IconButton';
+import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -69,6 +90,50 @@ const ESTIMATED_ROW_HEIGHT = 96;
  */
 const OVERSCAN = 6;
 
+/** One highlighted range inside a segment's text, in UTF-16 code units. */
+export interface TextRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Split `text` into plain and highlighted runs.
+ *
+ * Exported and pure because the failure it prevents is invisible in a
+ * screenshot: overlapping or out-of-order ranges (which a server can legitimately
+ * return for an overlapping search) would otherwise drop or duplicate
+ * characters, and a find & replace preview that silently loses a letter is
+ * worse than one that highlights nothing.
+ */
+export function splitByRanges(
+  text: string,
+  ranges: readonly TextRange[],
+): { text: string; highlighted: boolean; start: number }[] {
+  if (ranges.length === 0) return [{ text, highlighted: false, start: 0 }];
+
+  const sorted = [...ranges]
+    .filter((range) => range.end > range.start)
+    .sort((a, b) => a.start - b.start);
+
+  const runs: { text: string; highlighted: boolean; start: number }[] = [];
+  let cursor = 0;
+  for (const range of sorted) {
+    const start = Math.max(cursor, Math.min(text.length, range.start));
+    const end = Math.max(start, Math.min(text.length, range.end));
+    if (start > cursor) {
+      runs.push({ text: text.slice(cursor, start), highlighted: false, start: cursor });
+    }
+    if (end > start) {
+      runs.push({ text: text.slice(start, end), highlighted: true, start });
+    }
+    cursor = Math.max(cursor, end);
+  }
+  if (cursor < text.length) {
+    runs.push({ text: text.slice(cursor), highlighted: false, start: cursor });
+  }
+  return runs;
+}
+
 interface SegmentListProps {
   segments: TranscriptSegment[];
   speakers: readonly TranscriptSpeaker[];
@@ -82,6 +147,28 @@ interface SegmentListProps {
   onPlayFrom: (ms: number) => void;
   /** Speaker ids playback is restricted to. Empty means "everybody". */
   selectedSpeakerIds: readonly string[];
+
+  // --- Editing (#31). All optional; absent means the read-only reader. -------
+  /** Mount the editing affordances at all. False for a viewer. */
+  editable?: boolean;
+  /** The segment whose text is currently an input, or null. */
+  editingSegmentId?: string | null;
+  onStartEdit?: (segmentId: string) => void;
+  /** Esc — the text is put back the way it was and the field closes. */
+  onCancelEdit?: () => void;
+  /** Every keystroke. The queue behind it is what debounces. */
+  onChangeText?: (segmentId: string, text: string) => void;
+  /** Blur, or Cmd/Ctrl+Enter. */
+  onCommitEdit?: () => void;
+  /** Where the caret is, so "Split here" can open there. */
+  onCaretChange?: (offset: number) => void;
+  onOpenActions?: (segmentId: string, anchor: HTMLElement) => void;
+
+  // --- Find & replace (#31) -------------------------------------------------
+  matchesBySegment?: ReadonlyMap<string, TextRange[]>;
+  activeMatch?: { segmentId: string; start: number; end: number } | null;
+  /** Scroll this segment into view. Changing it is what "Next" does. */
+  scrollToSegmentId?: string | null;
 }
 
 export function SegmentList({
@@ -92,11 +179,31 @@ export function SegmentList({
   wordsBySegment,
   onPlayFrom,
   selectedSpeakerIds,
+  editable = false,
+  editingSegmentId = null,
+  onStartEdit,
+  onCancelEdit,
+  onChangeText,
+  onCommitEdit,
+  onCaretChange,
+  onOpenActions,
+  matchesBySegment,
+  activeMatch = null,
+  scrollToSegmentId = null,
 }: SegmentListProps) {
   const theme = useTheme();
   const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [following, setFollowing] = useState(true);
+
+  /**
+   * The text as it stood when this edit began, for Esc.
+   *
+   * A REF, not state: it is written exactly once per edit and read exactly once,
+   * and re-rendering the list because a cancel buffer changed would be a
+   * re-render of a virtualized list per keystroke.
+   */
+  const editBaseline = useRef<{ id: string; text: string } | null>(null);
 
   const speakerById = useMemo(() => {
     const map = new Map<string, TranscriptSpeaker>();
@@ -133,6 +240,12 @@ export function SegmentList({
     };
   }, []);
 
+  // Editing takes the viewport: nothing may scroll the row being typed into off
+  // screen, and that includes the player's own auto-follow.
+  useEffect(() => {
+    if (editingSegmentId) setFollowing(false);
+  }, [editingSegmentId]);
+
   useEffect(() => {
     if (!following || currentSegmentIndex < 0) return;
     // `center`, not `start`: a reader following a conversation wants the
@@ -141,12 +254,42 @@ export function SegmentList({
     virtualizer.scrollToIndex(currentSegmentIndex, { align: 'center' });
   }, [currentSegmentIndex, following, virtualizer]);
 
+  // Find & replace navigation. Scrolling a VIRTUALIZED list to a match is the
+  // reason this has to go through the virtualizer at all: the row the user is
+  // being sent to usually does not exist in the DOM yet, so there is nothing to
+  // call `scrollIntoView` on.
+  useEffect(() => {
+    if (!scrollToSegmentId) return;
+    const index = segments.findIndex((segment) => segment.id === scrollToSegmentId);
+    if (index < 0) return;
+    setFollowing(false);
+    virtualizer.scrollToIndex(index, { align: 'center' });
+  }, [scrollToSegmentId, segments, virtualizer]);
+
   const jumpToCurrent = useCallback(() => {
     setFollowing(true);
     if (currentSegmentIndex >= 0) {
       virtualizer.scrollToIndex(currentSegmentIndex, { align: 'center' });
     }
   }, [currentSegmentIndex, virtualizer]);
+
+  const startEdit = useCallback(
+    (segment: TranscriptSegment) => {
+      editBaseline.current = { id: segment.id, text: segment.text };
+      onStartEdit?.(segment.id);
+    },
+    [onStartEdit],
+  );
+
+  const cancelEdit = useCallback(() => {
+    const baseline = editBaseline.current;
+    editBaseline.current = null;
+    // Esc puts the text back. The change has already been applied optimistically
+    // (and may already have been sent), so "cancel" is a revert, not a discard —
+    // pretending otherwise would leave the screen and the transcript disagreeing.
+    if (baseline) onChangeText?.(baseline.id, baseline.text);
+    onCancelEdit?.();
+  }, [onCancelEdit, onChangeText]);
 
   const virtualItems = virtualizer.getVirtualItems();
 
@@ -210,8 +353,10 @@ export function SegmentList({
             const color = speakerColor(speaker?.colorIndex ?? 0, mode);
             const isCurrent = virtualRow.index === currentSegmentIndex;
             const dimmed = selected.size > 0 && !selected.has(segment.speakerId);
-            const words = isCurrent ? wordsBySegment.get(segment.id) : undefined;
+            const isEditing = editable && editingSegmentId === segment.id;
+            const words = isCurrent && !isEditing ? wordsBySegment.get(segment.id) : undefined;
             const wordIndex = words ? findWordIndexAt(words, positionMs) : -1;
+            const ranges = matchesBySegment?.get(segment.id) ?? [];
 
             return (
               <Box
@@ -266,31 +411,155 @@ export function SegmentList({
                   >
                     {formatTimestamp(segment.startMs)}
                   </ButtonBase>
+
+                  {/* Provenance, and deliberately quiet: "edited" is useful
+                      context and must never compete with the words themselves. */}
+                  {segment.origin === 'user' && (
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontStyle: 'italic' }}
+                    >
+                      edited
+                    </Typography>
+                  )}
+
+                  <Box sx={{ flexGrow: 1 }} />
+
+                  {editable && (
+                    <IconButton
+                      size="small"
+                      aria-label={`Actions for the line at ${formatTimestamp(segment.startMs)}`}
+                      onClick={(event) => onOpenActions?.(segment.id, event.currentTarget)}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </IconButton>
+                  )}
                 </Box>
 
-                <Typography variant="body2" component="p" sx={{ mt: 0.25 }}>
-                  {words && words.length > 0 ? (
-                    words.map((word, index) => (
-                      <Box
-                        component="span"
-                        key={`${segment.id}-${index}`}
-                        sx={{
-                          backgroundColor:
-                            index === wordIndex ? 'action.selected' : 'transparent',
-                          // Weight rather than colour for the current word:
-                          // colour is already spoken for by speaker identity,
-                          // and a second colour meaning would make both weaker.
-                          fontWeight: index === wordIndex ? 700 : 400,
-                          borderRadius: 0.5,
-                        }}
-                      >
-                        {word.t}{' '}
-                      </Box>
-                    ))
-                  ) : (
-                    segment.text
-                  )}
-                </Typography>
+                {isEditing ? (
+                  <TextField
+                    autoFocus
+                    fullWidth
+                    multiline
+                    size="small"
+                    variant="outlined"
+                    value={segment.text}
+                    // Named by what it is, not by "Text field": a screen-reader
+                    // user arriving here mid-transcript needs to know which line
+                    // they are in.
+                    aria-label={`Edit the line at ${formatTimestamp(segment.startMs)}`}
+                    sx={{ mt: 0.5 }}
+                    onChange={(event) => onChangeText?.(segment.id, event.target.value)}
+                    onSelect={(event) =>
+                      onCaretChange?.(
+                        (event.target as HTMLTextAreaElement).selectionStart ?? 0,
+                      )
+                    }
+                    onBlur={() => {
+                      editBaseline.current = null;
+                      onCommitEdit?.();
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        // Stopped, or the page's own Esc handling (a dialog, a
+                        // drawer) would also fire and close something the user
+                        // was not cancelling.
+                        event.stopPropagation();
+                        cancelEdit();
+                        return;
+                      }
+                      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                        event.preventDefault();
+                        editBaseline.current = null;
+                        onCommitEdit?.();
+                      }
+                    }}
+                  />
+                ) : (
+                  <Typography
+                    variant="body2"
+                    component="p"
+                    sx={{ mt: 0.25 }}
+                    {...(editable
+                      ? {
+                          role: 'button',
+                          tabIndex: 0,
+                          'aria-label': `Edit the line at ${formatTimestamp(segment.startMs)}`,
+                          onClick: () => startEdit(segment),
+                          onKeyDown: (event: React.KeyboardEvent) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault();
+                              startEdit(segment);
+                            }
+                          },
+                          sx: {
+                            mt: 0.25,
+                            cursor: 'text',
+                            borderRadius: 0.5,
+                            // The affordance is a hover tint, not a border: a
+                            // box around every line turns a transcript into a
+                            // form.
+                            '&:hover': { backgroundColor: 'action.hover' },
+                          },
+                        }
+                      : {})}
+                  >
+                    {words && words.length > 0 ? (
+                      words.map((word, index) => (
+                        <Box
+                          component="span"
+                          key={`${segment.id}-${index}`}
+                          sx={{
+                            backgroundColor:
+                              index === wordIndex ? 'action.selected' : 'transparent',
+                            // Weight rather than colour for the current word:
+                            // colour is already spoken for by speaker identity,
+                            // and a second colour meaning would make both weaker.
+                            fontWeight: index === wordIndex ? 700 : 400,
+                            borderRadius: 0.5,
+                          }}
+                        >
+                          {word.t}{' '}
+                        </Box>
+                      ))
+                    ) : ranges.length > 0 ? (
+                      splitByRanges(segment.text, ranges).map((run, index) =>
+                        run.highlighted ? (
+                          <Box
+                            component="mark"
+                            key={`${segment.id}-run-${index}`}
+                            data-testid="search-match"
+                            sx={{
+                              // The ACTIVE match is the one "Next" just moved
+                              // to; the others are context. Two tints, so the
+                              // user can see both where they are and how many
+                              // more there are.
+                              backgroundColor:
+                                activeMatch &&
+                                activeMatch.segmentId === segment.id &&
+                                activeMatch.start === run.start
+                                  ? 'warning.main'
+                                  : 'action.selected',
+                              color: 'inherit',
+                              borderRadius: 0.5,
+                            }}
+                          >
+                            {run.text}
+                          </Box>
+                        ) : (
+                          <Box component="span" key={`${segment.id}-run-${index}`}>
+                            {run.text}
+                          </Box>
+                        ),
+                      )
+                    ) : (
+                      segment.text
+                    )}
+                  </Typography>
+                )}
               </Box>
             );
           })}
