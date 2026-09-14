@@ -16,6 +16,8 @@ import {
 } from '../helpers/auth-mock.helper';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
 import { OPENAI_FETCH } from '../../src/ai/providers/openai.provider';
+import { AiProviderRegistry } from '../../src/ai/ai-provider.registry';
+import type { AiProvider } from '../../src/ai/providers/ai-provider.interface';
 
 // =============================================================================
 // AI policy and capability probe over the wire (issue #47, epic #45)
@@ -150,7 +152,15 @@ describe('AI settings and config integration', () => {
       expect(res.text).not.toMatch(/apiKey|keyStatuses|"secret"/);
     });
 
-    it('reports a permitted model this build cannot budget as unknownModels', async () => {
+    it('reports NOTHING as unknownModels for an id this build has merely never heard of (#97)', async () => {
+      // Pre-#97 this was the refusal case: an id absent from the OpenAI
+      // catalogue was unresolvable and landed in `unknownModels`. Since #97
+      // it resolves at rank 3 (family derivation) or rank 4 (the provider's
+      // conservative floor) — the REAL `OpenAiProvider` always declares a
+      // floor, so `unknownModels` can no longer be produced by a mistyped or
+      // unrecognised id against a real, registered provider. The genuinely
+      // unresolvable case — a provider with NO knowledge at all — is covered
+      // below in its own describe block, against a test-double provider.
       const admin = await createMockAdminUser(context);
       prismaMock.systemSettings.findUnique.mockResolvedValue(
         storedSettings({
@@ -169,9 +179,7 @@ describe('AI settings and config integration', () => {
         .set(authHeader(admin.accessToken))
         .expect(200);
 
-      // Otherwise the mistyped id is saved, listed back, and quietly never
-      // offered to anyone, with nothing anywhere to explain why.
-      expect(res.body.data.unknownModels).toEqual(['gpt-9-imaginary']);
+      expect(res.body.data.unknownModels).toEqual([]);
     });
 
     it('is 403 for a Contributor and a Viewer', async () => {
@@ -247,17 +255,22 @@ describe('AI settings and config integration', () => {
       ]);
     });
 
-    it('rejects a model id no registered provider declares', async () => {
+    it('SAVES a model id no build catalogue entry matches, because the real provider still derives or floors it (#97)', async () => {
+      // Pre-#97 this was the refusal case this test's old name described. The
+      // REAL `OpenAiProvider` always declares `defaultModelLimits`, so a bare
+      // id it cannot place in a family still resolves at the floor — see
+      // `resolveAllowedModel`'s rank 4. The genuinely-refused case (a
+      // provider with NO knowledge at all) is covered below, against a
+      // test-double provider.
       const admin = await createMockAdminUser(context);
 
-      const res = await request(context.app.getHttpServer())
+      await request(context.app.getHttpServer())
         .put(SETTINGS)
         .set(authHeader(admin.accessToken))
         .send({ providers: { openai: { allowedModels: ['gpt-9-imaginary'] } } })
-        .expect(400);
+        .expect(200);
 
-      expect(res.text).toContain('gpt-9-imaginary');
-      expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
+      expect(prismaMock.systemSettings.update).toHaveBeenCalled();
     });
 
     // ==========================================================================
@@ -298,10 +311,16 @@ describe('AI settings and config integration', () => {
       ]);
     });
 
-    it('rejects an entry with NEITHER its own numbers nor a catalogue descriptor, naming the missing fields', async () => {
+    it('SAVES an entry with neither its own numbers nor a catalogue descriptor, once the provider floor can answer (#97)', async () => {
+      // Pre-#97 this was the refusal case this test's old name described:
+      // an entry naming ONLY an id, with no typed numbers and no catalogue
+      // hit, used to be unresolvable. The real `OpenAiProvider`'s floor
+      // (`defaultModelLimits`) now answers it — the genuinely-refused case
+      // (missing numbers AND no provider knowledge of any kind) is covered
+      // below, against a test-double provider that declares no floor.
       const admin = await createMockAdminUser(context);
 
-      const res = await request(context.app.getHttpServer())
+      await request(context.app.getHttpServer())
         .put(SETTINGS)
         .set(authHeader(admin.accessToken))
         .send({
@@ -309,14 +328,9 @@ describe('AI settings and config integration', () => {
             openai: { allowedModels: [{ id: 'gpt-9-imaginary' }] },
           },
         })
-        .expect(400);
+        .expect(200);
 
-      // Worded as "supply the numbers", not "this model is forbidden" — see
-      // `AiSettingsService.update`'s own comment on why.
-      expect(res.text).toContain('gpt-9-imaginary');
-      expect(res.text).toContain('contextWindowTokens');
-      expect(res.text).toContain('maxOutputTokens');
-      expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
+      expect(prismaMock.systemSettings.update).toHaveBeenCalled();
     });
 
     it('SAVES a partial entry once the catalogue supplies the field it is missing', async () => {
@@ -619,14 +633,58 @@ describe('AI settings and config integration', () => {
 
       expect(res.body.data.ok).toBe(true);
       expect(res.body.data.models).toEqual([
-        expect.objectContaining({ id: 'gpt-4o', known: true }),
+        expect.objectContaining({ id: 'gpt-4o', known: true, source: 'catalogue' }),
+        // `gpt-5-preview` is in neither the build catalogue nor a known
+        // family (#97: `deriveOpenAiModelDescriptor` needs a hyphen-boundary
+        // prefix match against `gpt-4o`/`gpt-4.1`/`gpt-5.4` etc., and this id
+        // matches none), so it falls through to
+        // `OPENAI_DEFAULT_MODEL_LIMITS` — the provider's conservative floor
+        // — rather than staying `null`.
         expect.objectContaining({
           id: 'gpt-5-preview',
           known: false,
-          contextWindowTokens: null,
-          maxOutputTokens: null,
+          contextWindowTokens: 128_000,
+          maxOutputTokens: 16_384,
+          source: 'default',
+          derivedFrom: null,
         }),
       ]);
+    });
+
+    it('includeAll=true bypasses the plausible-chat-model heuristic and returns a non-chat id (#97)', async () => {
+      const admin = await createMockAdminUser(context);
+      await withStoredKey();
+      openAiFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        text: async () => '{}',
+        json: async () => ({
+          data: [{ id: 'gpt-4o' }, { id: 'text-embedding-3-small' }],
+        }),
+      });
+
+      // Without `includeAll`, `text-embedding-3-small` is dropped by
+      // `NON_CHAT_MODEL_MARKERS` (it contains "embedding") before this
+      // caller's id list is even fetched.
+      const withoutIncludeAll = await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(
+        withoutIncludeAll.body.data.models.map((m: { id: string }) => m.id),
+      ).not.toContain('text-embedding-3-small');
+
+      const withIncludeAll = await request(context.app.getHttpServer())
+        .get(`${MODELS}?includeAll=true`)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(withIncludeAll.body.data.ok).toBe(true);
+      expect(
+        withIncludeAll.body.data.models.map((m: { id: string }) => m.id),
+      ).toEqual(expect.arrayContaining(['gpt-4o', 'text-embedding-3-small']));
     });
 
     it("resolves the credential scoped by THIS caller's own id, and sends it as the bearer token", async () => {
@@ -862,7 +920,7 @@ describe('AI settings and config integration', () => {
       expect(res.body.data).toMatchObject({ available: false, keyConfigured: true });
     });
 
-    it('publishes only permitted models this build can budget, narrowed by policy', async () => {
+    it('publishes every permitted model, narrowed by policy — including one this build has never heard of, at the provider floor (#97)', async () => {
       const viewer = await createMockViewerUser(context);
       prismaMock.systemSettings.findUnique.mockResolvedValue(
         storedSettings({
@@ -885,9 +943,109 @@ describe('AI settings and config integration', () => {
 
       expect(res.body.data.available).toBe(true);
       expect(res.body.data.models).toEqual([
-        expect.objectContaining({ id: 'gpt-4o-mini', maxOutputTokens: 4096 }),
+        expect.objectContaining({
+          id: 'gpt-4o-mini',
+          maxOutputTokens: 4096,
+          source: 'catalogue',
+        }),
+        // ⚠ SINCE #97: no longer dropped. `gpt-9-imaginary` is in neither the
+        // build catalogue nor a known family, so it falls through to
+        // `OPENAI_DEFAULT_MODEL_LIMITS` (128k/16.4k) — narrowed by this
+        // deployment's own ceilings exactly like every other model, the same
+        // way `gpt-4o-mini` above is.
+        expect.objectContaining({
+          id: 'gpt-9-imaginary',
+          contextWindowTokens: 100_000 + 4_096, // maxInputTokens + maxOutputTokens narrows the 128k floor
+          maxOutputTokens: 4_096,
+          source: 'default',
+          derivedFrom: null,
+        }),
       ]);
       expect(res.body.data.defaultModel).toBe('gpt-4o-mini');
+    });
+
+    it("publishes a dated snapshot at its family's FULL window, with source: 'derived' and derivedFrom naming the family (#97)", async () => {
+      const viewer = await createMockViewerUser(context);
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings({
+          ...ENABLED,
+          providers: {
+            openai: {
+              ...ENABLED.providers.openai,
+              allowedModels: ['gpt-5.4-mini-2026-03-17'],
+              defaultModel: 'gpt-5.4-mini-2026-03-17',
+            },
+          },
+          // Large enough that this deployment's own ceilings are not what is
+          // being asserted here — the point of this test is the FAMILY's
+          // numbers, not policy narrowing (which the test above already
+          // covers).
+          maxInputTokens: 2_000_000,
+          maxOutputTokens: 200_000,
+        }) as never,
+      );
+
+      const res = await request(context.app.getHttpServer())
+        .get(CONFIG)
+        .set(authHeader(viewer.accessToken))
+        .expect(200);
+
+      // `gpt-5.4-mini-2026-03-17` is a dated snapshot of `gpt-5.4-mini`
+      // (400k context / 128k output, per `MODELS` in `openai.provider.ts`).
+      // `deriveOpenAiModelDescriptor` strips the trailing date and takes the
+      // FAMILY's FULL window, never a reduced one.
+      expect(res.body.data.models).toEqual([
+        expect.objectContaining({
+          id: 'gpt-5.4-mini-2026-03-17',
+          contextWindowTokens: 400_000,
+          maxOutputTokens: 128_000,
+          source: 'derived',
+          derivedFrom: 'gpt-5.4-mini',
+        }),
+      ]);
+    });
+
+    it("an entry's own typed numbers outrank BOTH the family derivation and the provider floor (#97 rank 1)", async () => {
+      const viewer = await createMockViewerUser(context);
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings({
+          ...ENABLED,
+          providers: {
+            openai: {
+              ...ENABLED.providers.openai,
+              allowedModels: [
+                // The identical id the previous test derives to 400k/128k —
+                // an administrator who typed different numbers for THIS
+                // exact id knows more about it than the family derivation
+                // assumes, and rank 1 must still win.
+                {
+                  id: 'gpt-5.4-mini-2026-03-17',
+                  contextWindowTokens: 9_000,
+                  maxOutputTokens: 2_000,
+                },
+              ],
+              defaultModel: 'gpt-5.4-mini-2026-03-17',
+            },
+          },
+          maxInputTokens: 2_000_000,
+          maxOutputTokens: 200_000,
+        }) as never,
+      );
+
+      const res = await request(context.app.getHttpServer())
+        .get(CONFIG)
+        .set(authHeader(viewer.accessToken))
+        .expect(200);
+
+      expect(res.body.data.models).toEqual([
+        expect.objectContaining({
+          id: 'gpt-5.4-mini-2026-03-17',
+          contextWindowTokens: 9_000,
+          maxOutputTokens: 2_000,
+          source: 'explicit',
+          derivedFrom: null,
+        }),
+      ]);
     });
 
     it('falls back to the first usable model when the configured default is not permitted', async () => {
@@ -935,5 +1093,193 @@ describe('AI settings and config integration', () => {
     it('refuses an unauthenticated caller', async () => {
       await request(context.app.getHttpServer()).get(CONFIG).expect(401);
     });
+  });
+});
+
+// =============================================================================
+// The genuinely-unresolvable case (#97 rank 5): a provider with NO knowledge
+// at all
+// =============================================================================
+//
+// Every refusal test above this point was rewritten rather than deleted,
+// because `unknownModels` and the 400 on `PUT /api/ai-settings` both still
+// exist and are both still reachable — see `ai-model-resolution.ts`'s header,
+// rank 5. What changed is WHAT can trigger them: the real, registered
+// `OpenAiProvider` always declares `capabilities.defaultModelLimits` (its
+// conservative floor), so as of #97 it can resolve ANY id at all. The only
+// way left to reach "this deployment cannot budget for this model" is a
+// provider that supplies no catalogue hit, no family derivation AND no floor
+// — which no real provider in this build is, by design.
+//
+// So this block runs against a SEPARATE app instance with its own
+// `AiProviderRegistry`, into which a test-double "OpenAI" provider is
+// registered — one that declares a (non-empty, but otherwise irrelevant)
+// catalogue, no `deriveModelDescriptor`, and no `defaultModelLimits`. A
+// SEPARATE instance is required, not a mutation of the shared one `context`
+// above uses: `GET /api/ai-settings/models`'s own describe block already
+// documents why registering a second provider into the suite's shared,
+// singleton registry would leak into every test that runs after it in this
+// file. Building a fresh `createTestApp()` and overwriting `'openai'`'s
+// registration only in THIS app's own registry (registrations are per Nest
+// module instance) keeps the leak from ever happening rather than merely
+// cleaning up after it.
+//
+// `AiProviderRegistry.register` requires a NON-EMPTY `capabilities.models`
+// (an empty catalogue is refused at registration — see its own comment), so
+// "no catalogue knowledge" is expressed here as one entry whose id never
+// matches anything these tests submit, rather than as `models: []`.
+// =============================================================================
+
+describe('AI policy resolution when the active provider has no knowledge of a model at all (#97 rank 5)', () => {
+  let noKnowledgeContext: TestContext;
+
+  /** An id no test below ever names, so it never produces a catalogue hit. */
+  const UNRELATED_FIXTURE_MODEL_ID = '__unrelated_fixture_model_97__';
+
+  function knowledgeLessOpenAiProvider(): AiProvider<never> {
+    return {
+      id: 'openai',
+      label: 'OpenAI (test double — declares no model knowledge, #97 rank 5)',
+      capabilities: {
+        // Non-empty to satisfy `AiProviderRegistry.register`, but its one
+        // entry never matches an id these tests submit — see the file
+        // header for why this stands in for "no catalogue".
+        models: [
+          {
+            id: UNRELATED_FIXTURE_MODEL_ID,
+            label: 'Unrelated fixture model',
+            contextWindowTokens: 1,
+            maxOutputTokens: 1,
+          },
+        ],
+        streaming: true,
+        modelDiscovery: false,
+        // No `defaultModelLimits` — declines to have a floor (rank 4
+        // absent, exactly the posture `AiProviderCapabilities.defaultModelLimits`'s
+        // own doc comment describes as legitimate).
+      },
+      settingsSchema: {
+        safeParse: (value: unknown) => ({ success: true, data: value }),
+      } as never,
+      fieldDescriptors: [],
+      testConnection: jest.fn(),
+      countTokens: () => 0,
+      generate: (async function* () {})(),
+      // No `deriveModelDescriptor` — declines to derive (rank 3 absent).
+    } as unknown as AiProvider<never>;
+  }
+
+  beforeAll(async () => {
+    noKnowledgeContext = await createTestApp({ useMockDatabase: true });
+
+    // Overwrites the real `OpenAiProvider`'s registration for `'openai'` in
+    // THIS app's own `AiProviderRegistry` only — "the later registration
+    // wins" is the registry's own documented behaviour for a duplicate id,
+    // the same mechanism a fork shadowing a framework provider relies on.
+    const registry = noKnowledgeContext.module.get(AiProviderRegistry);
+    registry.register(knowledgeLessOpenAiProvider());
+  });
+
+  afterAll(async () => {
+    await closeTestApp(noKnowledgeContext);
+  });
+
+  beforeEach(() => {
+    resetPrismaMock();
+    setupBaseMocks();
+    jest.clearAllMocks();
+
+    prismaMock.auditEvent.create.mockResolvedValue({} as never);
+    prismaMock.systemSettings.findUnique.mockResolvedValue(storedSettings() as never);
+    prismaMock.userAiCredential.findUnique.mockResolvedValue(null as never);
+  });
+
+  it('GET /api/ai-settings reports a permitted model as unknownModels when the provider has no knowledge of it at all', async () => {
+    const admin = await createMockAdminUser(noKnowledgeContext);
+    prismaMock.systemSettings.findUnique.mockResolvedValue(
+      storedSettings({
+        ...ENABLED,
+        providers: {
+          openai: { ...ENABLED.providers.openai, allowedModels: ['gpt-9-imaginary'] },
+        },
+      }) as never,
+    );
+
+    const res = await request(noKnowledgeContext.app.getHttpServer())
+      .get(SETTINGS)
+      .set(authHeader(admin.accessToken))
+      .expect(200);
+
+    // No catalogue hit (the fixture's one entry is a different id), no
+    // derivation (the fixture declares none) and no floor (the fixture
+    // declares none either) — the entry is unresolvable, and that is still
+    // reported rather than silently dropped.
+    expect(res.body.data.unknownModels).toEqual(['gpt-9-imaginary']);
+  });
+
+  it('PUT /api/ai-settings rejects a model id the active provider has no knowledge of at all', async () => {
+    const admin = await createMockAdminUser(noKnowledgeContext);
+    prismaMock.systemSettings.update.mockResolvedValue({
+      ...storedSettings(),
+      id: 'settings-1',
+    } as never);
+
+    const res = await request(noKnowledgeContext.app.getHttpServer())
+      .put(SETTINGS)
+      .set(authHeader(admin.accessToken))
+      .send({ providers: { openai: { allowedModels: ['gpt-9-imaginary'] } } })
+      .expect(400);
+
+    expect(res.text).toContain('gpt-9-imaginary');
+    expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
+  });
+
+  it('PUT /api/ai-settings names the missing fields for an entry with neither its own numbers nor any provider knowledge', async () => {
+    const admin = await createMockAdminUser(noKnowledgeContext);
+    prismaMock.systemSettings.update.mockResolvedValue({
+      ...storedSettings(),
+      id: 'settings-1',
+    } as never);
+
+    const res = await request(noKnowledgeContext.app.getHttpServer())
+      .put(SETTINGS)
+      .set(authHeader(admin.accessToken))
+      .send({
+        providers: {
+          openai: { allowedModels: [{ id: 'gpt-9-imaginary' }] },
+        },
+      })
+      .expect(400);
+
+    // Worded as "supply the numbers", not "this model is forbidden" — see
+    // `AiSettingsService.update`'s own comment on why.
+    expect(res.text).toContain('gpt-9-imaginary');
+    expect(res.text).toContain('contextWindowTokens');
+    expect(res.text).toContain('maxOutputTokens');
+    expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
+  });
+
+  it('SAVES an entry that carries its OWN numbers even though the provider has no knowledge of the id at all (rank 1 still wins)', async () => {
+    const admin = await createMockAdminUser(noKnowledgeContext);
+    prismaMock.systemSettings.update.mockResolvedValue({
+      ...storedSettings(),
+      id: 'settings-1',
+    } as never);
+
+    await request(noKnowledgeContext.app.getHttpServer())
+      .put(SETTINGS)
+      .set(authHeader(admin.accessToken))
+      .send({
+        providers: {
+          openai: {
+            allowedModels: [
+              { id: 'gpt-9-imaginary', contextWindowTokens: 32_000, maxOutputTokens: 4_000 },
+            ],
+          },
+        },
+      })
+      .expect(200);
+
+    expect(prismaMock.systemSettings.update).toHaveBeenCalled();
   });
 });
