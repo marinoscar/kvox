@@ -7,13 +7,25 @@ import {
   HttpStatus,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiHeader,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import { Auth } from '../auth/decorators/auth.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../common/constants/roles.constants';
+import { AiModelDiscoveryService } from './ai-model-discovery.service';
 import { AiSettingsService } from './ai-settings.service';
+import {
+  AiModelDiscoveryDto,
+  AiModelDiscoveryQueryDto,
+} from './dto/ai-model-discovery.dto';
 import {
   AiReachabilityTestDto,
   AiSettingsResponseDto,
@@ -25,12 +37,13 @@ import {
 // AiSettingsController (issue #47, epic #45)
 // =============================================================================
 //
-// The DEPLOYMENT-POLICY surface. Three operations, gated exactly as
+// The DEPLOYMENT-POLICY surface. Four operations, gated exactly as
 // docs/specs/notes.md §6.4 requires:
 //
-//   GET  /api/ai-settings       system_settings:read
-//   PUT  /api/ai-settings       system_settings:write
-//   POST /api/ai-settings/test  system_settings:write
+//   GET  /api/ai-settings         system_settings:read
+//   GET  /api/ai-settings/models  system_settings:write   (#78)
+//   PUT  /api/ai-settings         system_settings:write
+//   POST /api/ai-settings/test    system_settings:write
 //
 // `system_settings:*` rather than a new `ai:*` pair, and §6.4 checks that
 // against the same four-way test CLAUDE.md applies to `push:*`, `nodes:*`,
@@ -54,9 +67,12 @@ import {
 // posture transcription already takes, with the credential moved further out of
 // reach.
 //
-// THE TEST ENDPOINT IS GATED ON WRITE, NOT READ. It is side-effecting — it
-// spends an outbound request — and `:read` is held by anyone who may look at
-// settings. Looking is not probing.
+// THE TEST AND MODELS ENDPOINTS ARE GATED ON WRITE, NOT READ, even though one
+// of them is a GET. Both are side-effecting — each spends an outbound request —
+// and `:read` is held by anyone who may look at settings. Looking is not
+// probing. `GET /api/ai-settings/models` additionally spends the CALLING
+// ADMINISTRATOR'S OWN API key, because this deployment holds none; see
+// `AiModelDiscoveryService`.
 //
 // A SEPARATE CONTROLLER, NOT A ROUTE ON SystemSettingsController, for the
 // reason `TranscriptionSettingsController` states: a namespace of the `global`
@@ -69,7 +85,15 @@ import {
 @ApiTags('AI')
 @Controller('ai-settings')
 export class AiSettingsController {
-  constructor(private readonly settings: AiSettingsService) {}
+  constructor(
+    private readonly settings: AiSettingsService,
+    // A SECOND SERVICE ON ONE CONTROLLER, deliberately: model discovery has to
+    // resolve the CALLER'S own credential, and a `discoverModels` method on
+    // `AiSettingsService` would close a dependency cycle with
+    // `UserAiCredentialsService` (which already injects the settings service)
+    // and force a `forwardRef` on both. See `AiModelDiscoveryService`'s header.
+    private readonly discovery: AiModelDiscoveryService,
+  ) {}
 
   @Get()
   @Auth({ permissions: [PERMISSIONS.SYSTEM_SETTINGS_READ] })
@@ -108,8 +132,16 @@ export class AiSettingsController {
       '`PUT /api/ai-credentials` by their owner.\n\n' +
       '`allowedModels` REPLACES the stored list wholesale rather than merging — that is RFC ' +
       '7396\'s rule for arrays and the only workable one here, since a merging list could ' +
-      'never express "stop permitting this model". A model id no registered provider declares ' +
-      'is a 400 naming the ids this build can budget for.',
+      'never express "stop permitting this model".\n\n' +
+      'An entry may be a **bare model id** (`"gpt-4o"`) or an **object** ' +
+      '(`{ "id": "…", "label": "…", "contextWindowTokens": 200000, "maxOutputTokens": 32768 }`). ' +
+      'Both forms are accepted for ever — every deployment that saved a policy before this ' +
+      'existed has bare strings stored — and both are read back as objects. The numbers on an ' +
+      'entry OVERRIDE this build\'s own catalogue, which is what lets a deployment permit a ' +
+      'model no release of this application knows about yet.\n\n' +
+      'A **400** is returned only for an entry this deployment could not budget for at all: ' +
+      'no context window on the entry and none in the build catalogue. The message names the ' +
+      'missing fields — it is not a statement that the model is forbidden.',
   })
   @ApiHeader({
     name: 'If-Match',
@@ -140,6 +172,57 @@ export class AiSettingsController {
     const expectedVersion = Number.isInteger(parsed) ? parsed : undefined;
 
     return this.settings.update(dto, userId, expectedVersion);
+  }
+
+  @Get('models')
+  @Auth({ permissions: [PERMISSIONS.SYSTEM_SETTINGS_WRITE] })
+  @ApiOperation({
+    summary: "List the provider's live models (Admin only)",
+    description:
+      "Asks the configured provider's own API which models are available, so the model policy " +
+      'can be chosen from a list instead of typed from memory. This is what makes ' +
+      '`allowedModels` independent of the four-model catalogue compiled into this build.\n\n' +
+      '⚠ **It spends a real vendor call, on YOUR OWN API key.** This deployment stores no AI ' +
+      'key of any kind — every key belongs to an individual user — so discovery has to ' +
+      'authenticate as the administrator making the request. That is also why this route is ' +
+      'gated on `system_settings:write` rather than `:read`: looking at settings is not ' +
+      'probing a third party.\n\n' +
+      'The list is the one **your** key can reach, which on OpenAI is project-scoped. Two ' +
+      'administrators can legitimately see different lists; the policy you save is checked ' +
+      "against neither, but against each user's own key at generation time.\n\n" +
+      '**This returns HTTP 200 even when the provider refused.** Read `ok` and show `detail`, ' +
+      'which distinguishes "the key is wrong", "the account has no credit" and "the endpoint ' +
+      'is unreachable". A model with `known: false` has `contextWindowTokens: null` — collect ' +
+      'that number from the administrator before permitting it, or it can never be offered to ' +
+      'anyone.',
+  })
+  @ApiQuery({
+    name: 'provider',
+    required: false,
+    description:
+      'Which provider to ask. Defaults to the active one, so an administrator can inspect a catalogue before switching to it.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'The model list, or — with `ok: false` — a diagnosis of why the provider would not give one.',
+    type: AiModelDiscoveryDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'No provider is active and none was named, the named provider is not implemented by this build, it cannot list models at all, or its stored configuration is invalid.',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      '`details.reason: ai_key_missing` — **you** have saved no API key for that provider. There is no deployment key to fall back to; add yours and retry.',
+  })
+  async listProviderModels(
+    @Query() query: AiModelDiscoveryQueryDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.discovery.discoverModels(userId, query.provider);
   }
 
   @Post('test')

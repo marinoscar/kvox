@@ -344,9 +344,20 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   // secret-bearing field (`src/ai/ai-settings.schema.ts`).
   ai: {
     enabled: false,
+    // The ACTIVE provider (#78). `'openai'` rather than `null` — unlike
+    // `transcription.provider` above — because the inertness of a fresh
+    // deployment is already carried by `enabled: false` and the empty
+    // `allowedModels`, and this build has exactly one AI provider to choose.
+    // See the same comment on `DEFAULT_SYSTEM_SETTINGS`, which this must equal
+    // exactly (`test/prisma/seed-data.spec.ts` asserts it).
+    provider: 'openai' as const,
     providers: {
       openai: {
         baseUrl: 'https://api.openai.com/v1',
+        // Empty, and typed as ids because that is the simplest legal way to
+        // write an entry — since #78 an entry may also be an object carrying
+        // its own context window, which is what lets a deployment permit a
+        // model this build does not know.
         allowedModels: [] as string[],
         defaultModel: 'gpt-4o',
       },

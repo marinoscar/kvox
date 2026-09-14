@@ -137,6 +137,31 @@ const transcriptionSettingsSchema = z.object({
 });
 
 /**
+ * One `allowedModels` entry, RESTATED from `ai/ai-settings.schema.ts` (#78).
+ *
+ * ⚠ THE BARE-STRING FORM IS NOT OPTIONAL POLISH. Every deployment that has
+ * already saved an AI policy has `["gpt-4o", …]` in the `global` row's JSONB,
+ * and a body schema that rejected it would make the settings page unable to
+ * echo back what it was just given. The transform normalises both forms to an
+ * object so the service's merge — and `SystemSettingsValue` — see one shape.
+ *
+ * Restated rather than imported for the reason at the top of this file: these
+ * are the OpenAPI-visible request schemas, and `settings-parity.spec.ts` is
+ * what fails the build when the two copies drift.
+ */
+const aiAllowedModelEntry = z
+  .union([
+    z.string().trim().min(1).max(128),
+    z.object({
+      id: z.string().trim().min(1).max(128),
+      label: z.string().trim().min(1).max(128).optional(),
+      contextWindowTokens: z.number().int().min(1_024).max(10_000_000).optional(),
+      maxOutputTokens: z.number().int().min(64).max(1_000_000).optional(),
+    }),
+  ])
+  .transform((entry) => (typeof entry === 'string' ? { id: entry } : entry));
+
+/**
  * AI policy (#47, epic #45).
  *
  * RESTATED HERE rather than imported from `ai/ai-settings.schema.ts`, exactly
@@ -155,10 +180,16 @@ const transcriptionSettingsSchema = z.object({
  */
 const aiSettingsSchema = z.object({
   enabled: z.boolean(),
+  // The ACTIVE provider (#78), nullable exactly as `transcription.provider`
+  // above is: `null` is the persisted "nobody has chosen one", not an absent
+  // key. Missing this line would make a full PUT silently drop the vendor
+  // choice, which `SystemSettingsService.replaceSettings` would then carry
+  // forward blind.
+  provider: z.enum(['openai']).nullable(),
   providers: z.object({
     openai: z.object({
       baseUrl: z.string().trim().url().max(512),
-      allowedModels: z.array(z.string().trim().min(1).max(128)).max(50),
+      allowedModels: z.array(aiAllowedModelEntry).max(50),
       defaultModel: z.string().trim().min(1).max(128),
     }),
   }),
@@ -305,15 +336,17 @@ export const patchSystemSettingsSchema = z.object({
   ai: z
     .object({
       enabled: z.boolean().optional(),
+      // `.nullable().optional()` for the reason `transcription.provider` and
+      // `maintenance.startedAt` are (#78): `null` means "no provider is
+      // active" and absent means "leave the choice alone", and the service's
+      // merge distinguishes them with `!== undefined` rather than `??`.
+      provider: z.enum(['openai']).nullable().optional(),
       providers: z
         .object({
           openai: z
             .object({
               baseUrl: z.string().trim().url().max(512).optional(),
-              allowedModels: z
-                .array(z.string().trim().min(1).max(128))
-                .max(50)
-                .optional(),
+              allowedModels: z.array(aiAllowedModelEntry).max(50).optional(),
               defaultModel: z.string().trim().min(1).max(128).optional(),
             })
             .optional(),
