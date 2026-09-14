@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PatchSystemSettingsDto } from '../settings/dto/update-system-settings.dto';
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { missingModelNumbers, resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import type { SystemAiPatchValue, SystemAiValue } from './ai-settings.schema';
 import type { AiProviderDescription } from './providers/ai-provider.interface';
@@ -59,12 +60,19 @@ export interface AiSettingsAdminView {
   /** Capabilities and field descriptors — see `registry.describeAll()`. */
   providers: AiProviderDescription[];
   /**
-   * Model ids named by the policy that no registered provider knows about.
+   * Model ids named by the policy that this deployment cannot budget for.
    *
-   * REPORTED RATHER THAN SILENTLY DROPPED. A model in `allowedModels` with no
-   * descriptor cannot be budgeted (docs/specs/notes.md §3.3 needs
-   * `contextWindowTokens`), so `GET /api/ai/config` omits it — and an
-   * administrator who typed a model id with a typo would otherwise see it
+   * ⚠ SINCE #78 THIS MEANS "UNRESOLVABLE", NOT "NOT IN THE BUILD CATALOGUE".
+   * An entry that carries its own `contextWindowTokens` and `maxOutputTokens`
+   * is perfectly usable and is NOT listed here, even though no release of this
+   * application has heard of the model — that is the whole point of the widened
+   * entry type. What remains listed is an entry with neither its own numbers
+   * nor a catalogue descriptor: a typo, or a model somebody added before the
+   * numbers were known.
+   *
+   * REPORTED RATHER THAN SILENTLY DROPPED. Such a model cannot be budgeted
+   * (docs/specs/notes.md §3.3 needs `contextWindowTokens`), so
+   * `GET /api/ai/config` omits it — and an administrator would otherwise see it
    * saved, listed back, and quietly never offered to anyone, with nothing
    * anywhere to explain why.
    */
@@ -190,14 +198,37 @@ export class AiSettingsService {
       : undefined;
 
     if (provider && submittedModels) {
-      const known = new Set(provider.capabilities.models.map((m) => m.id));
-      const unknown = submittedModels.filter((id) => !known.has(id));
+      const catalogue = provider.capabilities.models;
 
-      if (unknown.length > 0) {
+      // ⚠ NARROWED BY #78: the test is no longer "is this id in the build
+      // catalogue" but "can this entry be BUDGETED AT ALL". An entry carrying
+      // its own `contextWindowTokens` and `maxOutputTokens` passes even though
+      // this build has never heard of the model — which is the entire point of
+      // model discovery, since a vendor's list is mostly models no release of
+      // this application knows about yet. Only an entry that resolves to
+      // NOTHING is refused, and `resolveAllowedModel` is the one place that
+      // precedence lives.
+      const unresolved = submittedModels
+        .map((entry) => ({ entry, missing: missingModelNumbers(entry, catalogue) }))
+        .filter(({ missing }) => missing.length > 0);
+
+      if (unresolved.length > 0) {
+        // WORDED AS "SUPPLY THE NUMBERS", NOT "THIS MODEL IS FORBIDDEN". The
+        // old message read as a permission refusal and named the four ids this
+        // build ships with, which told an administrator adopting a new model
+        // that their only option was to wait for a release. It is not: the
+        // missing thing is a number they can read off the vendor's own
+        // documentation, and this sentence has to say so or the widened schema
+        // is undiscoverable.
+        const detail = unresolved
+          .map(({ entry, missing }) => `"${entry.id}" (${missing.join(', ')})`)
+          .join(', ');
+
         throw new BadRequestException(
-          `Unknown model id(s) for provider "${provider.id}": ${unknown.join(', ')}. ` +
-            `This build can budget requests for: ${[...known].join(', ')}. ` +
-            'A model it does not know the context window of cannot be offered to users, because the token budget has no number to check against.',
+          `This deployment cannot budget requests for ${detail} on provider "${provider.id}". ` +
+            'These models are not forbidden — this build simply carries no context window for them, and the token budget has no number to check a prompt against. ' +
+            'Add `contextWindowTokens` and `maxOutputTokens` to each entry (the vendor publishes both), or choose a model this build already knows: ' +
+            `${catalogue.map((model) => model.id).join(', ') || 'none'}.`,
         );
       }
     }
@@ -352,13 +383,13 @@ export class AiSettingsService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Policy-named models no registered provider declares. See `unknownModels`.
+   * Policy entries this deployment cannot budget for. See `unknownModels`.
    *
-   * READ THROUGH THE ACTIVE PROVIDER (#78). A deployment that has chosen no
-   * provider, or one this build does not implement, has NOTHING that can budget
-   * its permitted models — so every one of them is unknown, which is the honest
-   * answer and the one that puts the explanation on the admin page rather than
-   * leaving a silently empty model picker.
+   * READ THROUGH THE ACTIVE PROVIDER (#78), and resolved with the SAME function
+   * `AiConfigService` publishes with — `resolveAllowedModel`. If these two ever
+   * used different rules, a model would be listed as unknown on the admin page
+   * while being offered to users, or the reverse, and neither disagreement has
+   * any visible cause.
    */
   private findUnknownModels(settings: SystemAiValue): string[] {
     const providerId = settings.provider;
@@ -371,15 +402,15 @@ export class AiSettingsService {
 
     const provider = this.registry.get(providerId);
 
-    // A provider named by the settings that this build does not implement (a
-    // rollback across its addition). Nothing can budget any of these models, so
-    // all of them are unknown.
-    if (!provider) return [...settings.providers[providerId].allowedModels];
+    // An EMPTY catalogue rather than an early return for the provider this
+    // build does not implement (a rollback across its addition): entries
+    // carrying their own numbers still resolve, and refusing to acknowledge
+    // that would tell an administrator to fix a model that is already fine.
+    const catalogue = provider?.capabilities.models ?? [];
 
-    const known = new Set(provider.capabilities.models.map((model) => model.id));
-    return settings.providers[providerId].allowedModels.filter(
-      (id) => !known.has(id),
-    );
+    return settings.providers[providerId].allowedModels
+      .filter((entry) => resolveAllowedModel(entry, catalogue) === null)
+      .map((entry) => entry.id);
   }
 
   /**

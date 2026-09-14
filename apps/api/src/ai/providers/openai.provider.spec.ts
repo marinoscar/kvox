@@ -96,7 +96,10 @@ function errorResponse(
 
 const SETTINGS = {
   baseUrl: 'https://api.openai.com/v1',
-  allowedModels: ['gpt-4o'],
+  // #78: `allowedModels` entries are objects now; a bare string is still
+  // accepted on the wire and normalised by the schema before it ever reaches a
+  // provider, so the PARSED shape is what a provider context carries.
+  allowedModels: [{ id: 'gpt-4o' }],
   defaultModel: 'gpt-4o',
 };
 

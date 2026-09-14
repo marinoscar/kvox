@@ -108,8 +108,16 @@ export class AiSettingsController {
       '`PUT /api/ai-credentials` by their owner.\n\n' +
       '`allowedModels` REPLACES the stored list wholesale rather than merging — that is RFC ' +
       '7396\'s rule for arrays and the only workable one here, since a merging list could ' +
-      'never express "stop permitting this model". A model id no registered provider declares ' +
-      'is a 400 naming the ids this build can budget for.',
+      'never express "stop permitting this model".\n\n' +
+      'An entry may be a **bare model id** (`"gpt-4o"`) or an **object** ' +
+      '(`{ "id": "…", "label": "…", "contextWindowTokens": 200000, "maxOutputTokens": 32768 }`). ' +
+      'Both forms are accepted for ever — every deployment that saved a policy before this ' +
+      'existed has bare strings stored — and both are read back as objects. The numbers on an ' +
+      'entry OVERRIDE this build\'s own catalogue, which is what lets a deployment permit a ' +
+      'model no release of this application knows about yet.\n\n' +
+      'A **400** is returned only for an entry this deployment could not budget for at all: ' +
+      'no context window on the entry and none in the build catalogue. The message names the ' +
+      'missing fields — it is not a statement that the model is forbidden.',
   })
   @ApiHeader({
     name: 'If-Match',
