@@ -629,6 +629,19 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
   re-subscribes) that should not ride along with routine settings edits, mirroring why
   `broadcasts:*` and `nodes:*` were split out rather than folded into
   `system_settings:*`/`jobs:*`
+- `transcripts:read/write` - Audio transcription (issue #24, epic #19): read your own
+  transcripts and shares vs. create/edit/delete them. **Seeded to all three roles — Admin,
+  Contributor and Viewer** — the opposite posture from every pair above: recording and
+  correcting a transcript is the core product action, not an operational surface, and this
+  app's default role is Viewer. `transcripts:write` is the *additional* check
+  `TranscriptAccessService` applies for `edit`-level access on top of a share — a viewer
+  share can never grant editing no matter what a future role holds. **There is deliberately
+  no `transcripts:read_any`**, unlike every other "any"-scoped permission in this table: a
+  transcript is somebody's private recorded conversation, not shared infrastructure, so no
+  permission string exists for an admin (or anyone) to read one they do not own or hold a
+  share on — out of scope for this feature, not merely unused. No access answers **404,
+  never 403** (`docs/specs/transcription.md` §6.1) — a 403 would confirm the transcript
+  exists, which a stranger has no business learning about a private conversation.
 
 ## Database Tables
 
@@ -687,6 +700,58 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
   `running`) is enforced by `database_backup_runs_active_uniq_idx`, the same
   raw-SQL-only partial unique index pattern as `jobs` above — never by a `findFirst`
   before the insert, which cannot close the race a concurrent request needs closed.
+- `transcripts` - One row per uploaded recording (issue #24, epic #19). Three
+  independent status enums (`status`, `transcriptionStatus`, `playbackStatus`) rather than
+  one, because transcode and transcription run **concurrently** and a single enum would need
+  one member per combination of the two — the same `worker_nodes`-style split of "stated
+  intent" from "sub-pipeline progress." `ownerId` **cascades** on user deletion (a transcript
+  has no meaning, and this app grants no path to read it, once its owner is gone — there is
+  deliberately no `transcripts:read_any`); `sourceObjectId`/`playbackObjectId`/
+  `rawResultObjectId` all **restrict** instead, the opposite direction of ownership: they
+  point sideways into `storage_objects` (a different module's table), and only
+  `transcript.purge` deleting the transcript row first may ever free one, never an unrelated
+  storage cleanup. See `docs/specs/transcription.md` §3.1 and the block comment above the
+  `Transcript` model for the full reasoning, including the honestly-stated gap between a raw
+  cascading user delete (removes SQL rows only) and `transcript.purge` (also removes the
+  storage/provider data).
+- `transcript_speakers` - One row per diarized voice in a transcript. `label` is nullable —
+  the provider's own diarization letter (`"A"`) for an AI-detected speaker, `NULL` for one a
+  user created directly. Unique per transcript **among labelled rows only**, via the same
+  hand-written **partial** unique index pattern `jobs_active_dedup_uniq_idx` and
+  `database_backup_runs_active_uniq_idx` already establish (`transcript_speakers_transcript_
+  id_label_key`, `WHERE label IS NOT NULL`) — Prisma's `@@unique` DSL cannot express the
+  `WHERE` clause, so it lives hand-written in `migration.sql` only. This is the **one**
+  Prisma-inexpressible constraint issue #24 adds; every other uniqueness constraint on the
+  transcript tables is a plain `@@unique`.
+- `transcript_segments` - One row per line of transcript text. `id` is **stable across
+  edits** — a `segment.split` keeps it on the earlier half specifically so a bookmark, an
+  export reference, or a stale concurrent-editor `rev` still names something real.
+  `speakerId` **restricts**: a speaker cannot be deleted while a segment still names it,
+  `speaker.merge` re-points every segment away first. `ordinal` is a **gap-based float**, not
+  a dense integer sequence, so inserting a segment only needs the midpoint between its two
+  neighbours rather than renumbering every later row on every split. `wordsAlignment`
+  (`exact`/`interpolated`/`none`) records how much of the per-word timing survived the last
+  text edit — a token-level LCS diff, not a heuristic re-run on every read.
+- `transcript_versions` - The append-only correction history `materialize()` replays
+  (`docs/specs/transcription.md` §4.4): `ops` holds the **concrete** edits this version
+  applied (never the abstract `find_replace` call itself — §4.2 — so replaying history stays
+  correct even if the matching logic changes later), `authorId` is `NULL` **only** for the AI
+  ingest version, and nothing ever deletes a row here short of purging the whole transcript.
+  `@@unique([transcriptId, version])` is the sequence itself; `@@unique([transcriptId,
+  clientBatchId])` is a retried-save idempotency key that needs **no** hand-written partial
+  index — Postgres's standard NULLS-DISTINCT behaviour already lets any number of
+  `NULL`-`clientBatchId` versions (ingest, restore) coexist for free.
+- `transcript_shares` - `viewer`/`editor` grants, unique on `(transcriptId, userId)`.
+  `TranscriptAccessService` combines a share with `transcripts:write` for `edit`-level access
+  — a share alone can raise a viewer's ceiling, never grant authority this app's own RBAC
+  withholds from their role.
+- `transcript_exports` - One row per rendered export file, content-addressed by
+  `(transcriptId, version, format, optionsHash)` (the index this issue declares specifically
+  for `POST /:id/exports`'s reuse check, per `docs/specs/transcription.md` §8.5) so an
+  identical repeat request returns the existing file instead of re-rendering. `jobId` is
+  `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun.jobId` exactly: this row's own
+  7-day expiry is independent of `job.history.purge`'s retention schedule for the underlying
+  `jobs` row.
 
 ## Operations Admin Settings Group
 
