@@ -94,6 +94,16 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           '(`PUT`) and JSON Merge Patch (`PATCH`).',
       },
       {
+        name: 'User Data',
+        description:
+          'The Danger Zone: an inventory of the data this deployment holds for the calling user, ' +
+          'and bulk, irreversible deletion of it. Ownership-scoped rather than permission-gated ' +
+          '— both routes are `@Auth()` with no permission string, because the resource is the ' +
+          "caller's own data and no role should decide whether a person may delete it. Nothing " +
+          'here deletes the ACCOUNT: the user record, their settings, roles and session all ' +
+          'survive every scope.',
+      },
+      {
         name: 'System Settings',
         description:
           'Deployment-wide configuration, stored as a JSON document. Readable by any signed-in user; ' +

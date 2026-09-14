@@ -4522,6 +4522,137 @@ data: {"status":"succeeded","offset":812,"currentVersion":1}
 
 ---
 
+### User Data
+
+The "Danger Zone" — an authenticated user asking this deployment to forget
+some or all of the data it holds for them, in bulk — issue #80. The two-layer
+product design, the scope matrix, the FK-clearing order, the retry path, why
+the job is server-only, and the honest gaps are
+[`docs/specs/user-data-deletion.md`](specs/user-data-deletion.md); this
+section documents the wire contract only.
+
+Two routes, both `@Auth()` with **no permission string**, deliberately. The
+resource is not a feature of this application; it is the caller's **own
+data**, scoped by `userId` in the query itself — the identical posture
+`ai-credentials.controller.ts` takes (see `### AI Credentials` above), and
+the nearest precedent for the same reason: gating either route on a real
+permission (`transcripts:write` + `notes:write`, say) would strand exactly
+the user who needs this most. A deployment that has revoked someone's write
+permission — offboarding, a downgraded role, a misconfigured seed — would
+also have revoked their ability to remove the data it is still holding for
+them, while leaving the data there. **There is no admin surface here, for
+any role** — nobody but the owner can summarise or delete a user's data
+through this API.
+
+**Scope matrix.** `scopeIncludes` in `apps/api/src/user-data/job-types.ts` is
+the one definition; the table below is a rendering of it, not a second copy.
+Every narrow scope maps to exactly one category — only the two composites fan
+out:
+
+| Scope | Transcripts | Notes | Note Templates | Files | Credentials |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `transcripts` | ✓ | | | | |
+| `notes` | | ✓ | | | |
+| `files` | | | | ✓ | |
+| `content` | ✓ | ✓ | ✓ | ✓ | |
+| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+`content` is everything the user **made**; `everything` is `content` plus
+their **credentials** (AI provider keys and personal access tokens) — the
+only line the two composites differ on. ⚠ Note templates ride with
+`content`/`everything` **only** — the narrow `notes` scope does **not**
+remove them. A template is reusable configuration with its own settings
+page, not note content, and a user who clicked "Delete notes" was told they
+were deleting notes, not silently emptying a different settings page.
+
+**No scope deletes the account.** The `users` row, `user_settings`,
+`user_roles`, `refresh_tokens` and the caller's session are untouched by
+every scope, including `everything` — the caller stays signed in throughout
+and afterward. `everything` does revoke every AI provider key and personal
+access token the caller holds, so any CLI or script authenticating with one
+stops working immediately.
+
+#### GET /user-data/summary
+Per-category row counts and the storage bytes behind them, plus whatever
+deletion is already in flight for the caller. Scoped entirely to
+`@CurrentUser('id')` — there is no parameter naming a user, so there is no
+way to ask about anybody else.
+
+**Requires:** Authenticated, no permission
+
+`bytes` is a **decimal string**, not a number, the same convention the
+database backup's `bytes` uses: summing `storage_objects.size` (`BigInt`)
+for a large media library can exceed `Number.MAX_SAFE_INTEGER`, and a JSON
+number would silently round the figure shown in a confirmation dialog.
+Counts exclude anything already soft-deleted and awaiting purge — they
+shrink only when the caller acts, never on their own.
+
+**Response:**
+```json
+{
+  "data": {
+    "transcripts": { "count": 12, "bytes": "3821004521" },
+    "notes": { "count": 40, "bytes": "184220" },
+    "files": { "count": 3, "bytes": "552012" },
+    "noteTemplates": { "count": 2 },
+    "credentials": { "aiKeys": 1, "accessTokens": 2 },
+    "activeDeletion": null
+  }
+}
+```
+
+`activeDeletion` is non-null while a `user.data.purge` job is `pending` or
+`running` for this caller — `{ id, scope, status, requestedAt }`. A client
+uses it to disable its own buttons, but it is a courtesy, not the guard:
+`POST /user-data/deletions` answers 409 regardless of whether the client
+checked it first.
+
+---
+
+#### POST /user-data/deletions
+Queues a `user.data.purge` job that deletes, in bulk, the data the caller
+owns in the chosen `scope`. Returns **202** as soon as the job exists;
+nothing is deleted synchronously — the work fans out across several tables
+and object storage and outlives this request.
+
+**Requires:** Authenticated, no permission
+
+**Request:** `{ "scope": "everything", "confirmation": "EVERYTHING" }`
+
+`confirmation` must be **the scope, uppercased** — `TRANSCRIPTS`, `NOTES`,
+`FILES`, `CONTENT` or `EVERYTHING` — compared exactly, with no trimming and
+no case folding. ⚠ **The token is scope-specific on purpose**: a single
+constant like `DELETE` would let a confirmation typed into the "delete my
+files" dialog authorise whatever scope a second, unrelated click actually
+sent. A mismatch is a 400 naming the exact word required.
+
+⚠ **This scope ignores the per-item refusals.** `DELETE /notes/{id}` refuses
+(409) while a note is `generating` or while another note is derived from it;
+`DELETE /transcripts/{id}` refuses while a note cites the transcript. A bulk
+deletion honours neither — it clears the blocking references first (a note's
+`sourceNoteId`/`sourceTranscriptId`, including on **other users'** notes
+derived from a transcript the caller shared) and deletes anyway. A surviving
+note that cited a deleted transcript keeps its own text and loses only the
+provenance link.
+
+**Response:** `202`
+```json
+{
+  "data": {
+    "id": "…",
+    "scope": "everything",
+    "status": "pending",
+    "requestedAt": "2026-09-14T12:00:00.000Z"
+  }
+}
+```
+
+**Error Cases:**
+- `400` - `confirmation` did not exactly match the scope, uppercased
+- `409` - A deletion is already `pending` or `running` for this caller — the message names the scope already in flight
+
+---
+
 ### Health
 
 **Public endpoints** - Used for Kubernetes liveness/readiness probes.
