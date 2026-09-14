@@ -101,10 +101,29 @@ export const splitOpSchema = z.object({
   newSegmentId: uuid,
 });
 
+/**
+ * Join two adjacent segments into one.
+ *
+ * ⚠ `.array().length(2)` AND NOT `z.tuple([a, b])`, even though a tuple is the
+ * more precise description of "exactly two, in order". Zod 4 renders a tuple as
+ * JSON Schema 2020-12 `prefixItems`, with no sibling `items` — and the OpenAPI
+ * ruleset this repository lints its published document against
+ * (`.spectral.yaml`, run by CI's `openapi` job) rejects a `type: array` that has
+ * no `items`. A tuple therefore type-checks, validates correctly at runtime, and
+ * fails the build two jobs later with `array-items` pointing at a generated
+ * file, which is a hard error to read back to its cause.
+ *
+ * `.length(2)` is exactly as strict at runtime — a request carrying one id or
+ * three is still rejected — and emits `items` plus `minItems`/`maxItems`, which
+ * is both valid OpenAPI and a more useful description to a client generator.
+ * The cost is that TypeScript sees `string[]` rather than `[string, string]`;
+ * the reducer indexes `[0]` and `[1]` directly and does not need the narrower
+ * type.
+ */
 export const joinOpSchema = z.object({
   op: z.literal(OP_TYPES.JOIN),
-  segmentIds: z.tuple([uuid, uuid]),
-  revs: z.tuple([rev, rev]),
+  segmentIds: z.array(uuid).length(2),
+  revs: z.array(rev).length(2),
 });
 
 export const deleteOpSchema = z.object({
