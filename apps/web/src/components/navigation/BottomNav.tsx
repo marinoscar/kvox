@@ -6,10 +6,14 @@
  * Material 3 acknowledges it has no recommended drawer replacement at this
  * size, which is why the answer is a bottom bar and nothing else.
  *
- * FOUR ACTIONS IS THE CEILING, and this app has exactly four destinations —
- * which is what lets `showLabels` stay on. Five labelled tabs do not fit at
- * 360px, so a fifth destination would force a choice between labels and the
- * tab; do not add one here without resolving that first.
+ * FOUR ACTIONS IS THE CEILING, and since issue #30 added `transcripts` this app
+ * has exactly four destinations — the ceiling is REACHED, not approached, for an
+ * admin holding every permission. `showLabels` stays on only because of that;
+ * five labelled tabs do not fit at 360px, so a fifth destination is not an
+ * addition but a redesign (an overflow tab, or labels off). Do not add one here
+ * without resolving that first, and note that the tabs each user actually sees
+ * is permission-dependent: `transcripts` and `console` are both gated, so a
+ * Viewer who somehow holds neither sees two.
  *
  * ACTIVE STATE COMES FROM THE DESTINATION MODEL, NOT A PATH PREFIX
  * (`config/destinations.ts`). The `startsWith` chain this replaces would have
