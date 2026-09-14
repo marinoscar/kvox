@@ -662,3 +662,63 @@ describe('TranscriptPage — what the user is told about saving', () => {
     expect(screen.getByText('Their line')).toBeInTheDocument();
   });
 });
+
+describe('TranscriptPage — the Export and Share menu items', () => {
+  // Issues #28 and #29 shipped these two dialogs standalone, deliberately
+  // unwired, because this page belonged to another change at the time. These
+  // are the tests for the wiring itself: that each item is offered to exactly
+  // the roles the API will actually serve.
+
+  it('offers Export to a viewer, because a viewer share is a read-play-EXPORT grant', async () => {
+    const user = userEvent.setup();
+    mockGetTranscript.mockResolvedValue({
+      status: 'ok',
+      data: detail('viewer'),
+      etag: 'W/"v4"',
+    });
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Export…' })).toBeInTheDocument();
+  });
+
+  it('withholds Share from a viewer, because the share routes answer them a 404', async () => {
+    const user = userEvent.setup();
+    mockGetTranscript.mockResolvedValue({
+      status: 'ok',
+      data: detail('viewer'),
+      etag: 'W/"v4"',
+    });
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+    await screen.findByRole('menuitem', { name: 'Export…' });
+
+    expect(screen.queryByRole('menuitem', { name: 'Share…' })).toBeNull();
+  });
+
+  it('offers Share to the owner and opens the dialog on it', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('opens the export dialog from the menu', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Export…' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+});

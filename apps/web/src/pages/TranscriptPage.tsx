@@ -97,7 +97,10 @@ import type { FindQuery } from '../hooks/useTranscriptSearch';
 import { useTranscript, useTranscriptSegments } from '../hooks/useTranscripts';
 import { useTranscriptWords } from '../hooks/useTranscriptWords';
 import { ApiError } from '../services/api';
-import { deleteTranscript, removeShare, retryTranscript } from '../services/transcripts';
+import { deleteTranscript, retryTranscript } from '../services/transcripts';
+import { removeShare } from '../services/transcriptShares';
+import { ExportDialog } from '../components/transcripts/ExportDialog';
+import { ShareDialog } from '../components/transcripts/ShareDialog';
 import { formatDuration } from '../utils/playbackIntervals';
 import { hasPlaybackRendition } from '../utils/transcriptDisplay';
 
@@ -194,6 +197,8 @@ export function TranscriptPage() {
   const [newSpeakerFor, setNewSpeakerFor] = useState<string | null>(null);
   const [newSpeakerName, setNewSpeakerName] = useState('');
   const [pageMenuAnchor, setPageMenuAnchor] = useState<HTMLElement | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [confirm, setConfirm] = useState<'delete' | 'leave' | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -419,15 +424,31 @@ export function TranscriptPage() {
       >
         <ListItemText>Version history</ListItemText>
       </MenuItem>
-      {/* ⚠ Export… and Share… mount here, from #28 and #29 respectively:
-          `<ExportDialog open onClose transcriptId currentVersion />` for every
-          role, and `<ShareDialog open transcriptId transcriptTitle onClose />`
-          gated on `isOwner`. Both landed on `main` AFTER this branch was cut
-          (PRs #44 and #43), so neither component exists on this base and a menu
-          item that opens nothing is worse than one that is not there. Their
-          real prop signatures are the ones written above, verified against the
-          merged files — adding the two menu items and the two mounts is the
-          whole of the integration. */}
+      {/* Export is offered to EVERY role that can open this page. A viewer's
+          share is explicitly a read-play-export grant (issue #29), so gating
+          this on ownership would withhold something the API already allows. */}
+      <MenuItem
+        onClick={() => {
+          setPageMenuAnchor(null);
+          setExportOpen(true);
+        }}
+      >
+        <ListItemText>Export…</ListItemText>
+      </MenuItem>
+      {/* Share is owner-only, and the gate is not cosmetic: the four share
+          routes answer a stranger's 404 to anyone who is not the owner, so an
+          offered-but-failing menu item would be the UI promising something the
+          API refuses. */}
+      {isOwner ? (
+        <MenuItem
+          onClick={() => {
+            setPageMenuAnchor(null);
+            setShareOpen(true);
+          }}
+        >
+          <ListItemText>Share…</ListItemText>
+        </MenuItem>
+      ) : null}
       {isOwner ? (
         <MenuItem
           onClick={() => {
@@ -491,6 +512,25 @@ export function TranscriptPage() {
         )}
       </Box>
       {pageMenu}
+      {/* Mounted beside the menu that opens them, so they exist in every branch
+          that renders a header — including the processing and failed states,
+          where Export is still legitimate (an older version may well be ready
+          to take away even when the newest attempt failed). Both portal out of
+          this Box, so its layout is unaffected. */}
+      <ExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        transcriptId={transcript.id}
+        currentVersion={transcript.currentVersion}
+      />
+      {isOwner ? (
+        <ShareDialog
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          transcriptId={transcript.id}
+          transcriptTitle={transcript.title}
+        />
+      ) : null}
     </Box>
   );
 
