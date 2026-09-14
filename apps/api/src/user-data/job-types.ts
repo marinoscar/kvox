@@ -41,9 +41,12 @@ export const USER_DATA_SUBJECT_TYPE = 'user';
  * What a deletion request may ask for.
  *
  * ORDERED NARROWEST-FIRST, and the order is the one the UI renders: three
- * single-category scopes, then the two composites. `content` is
- * transcripts + notes + the note templates that go with them; `everything` is
- * that plus the caller's unmanaged files and their credentials.
+ * single-category scopes, then the two composites. `content` is everything the
+ * user MADE — transcripts, notes, the note templates that go with them, and
+ * their plain uploads; `everything` is that plus their CREDENTIALS, which is
+ * the only line the two composites differ on and deliberately the only one:
+ * "delete my content" and "delete my content and revoke my keys" are two
+ * decisions a person makes separately.
  *
  * ⚠ THESE STRINGS ARE PERMANENT ONCE A JOB CARRIES ONE. A `user.data.purge`
  * row's payload records the scope it was queued for, and a handler that ran
@@ -82,14 +85,15 @@ export function scopeIncludes(
     // Note templates travel with notes rather than being a scope of their own:
     // a template is the recipe a note was generated from, and a user asking for
     // their notes to be gone is not asking to keep the recipes that only make
-    // sense beside them. `files` deliberately does NOT drag them along.
+    // sense beside them. The narrow `files` scope deliberately does NOT drag
+    // them along — a template is not a file.
     case 'transcripts':
       return scope === 'transcripts' || scope === 'content' || scope === 'everything';
     case 'notes':
     case 'noteTemplates':
       return scope === 'notes' || scope === 'content' || scope === 'everything';
     case 'files':
-      return scope === 'files' || scope === 'everything';
+      return scope === 'files' || scope === 'content' || scope === 'everything';
     // ⚠ CREDENTIALS ARE `everything` ONLY. Revoking a user's API tokens is not
     // implied by "delete my recordings", and a `content` scope that silently
     // signed out their CLI would be a surprise with no way back.

@@ -115,8 +115,9 @@ export class UserDataController {
       'your own custom note templates** — a template is the recipe a note was generated ' +
       'from, and it has no meaning once the notes are gone. `files` removes your plain ' +
       'uploads only: a transcript\'s audio and a note\'s export belong to those, not here. ' +
-      '`content` is `transcripts` + `notes`. `everything` is `content` + `files` + your AI ' +
-      'provider keys + your personal access tokens.\n\n' +
+      '`content` is all three — every recording, note, note template and uploaded file. ' +
+      '`everything` is `content` **plus your credentials**: your stored AI provider keys ' +
+      'and every personal access token you hold.\n\n' +
       '**Your account survives.** No scope deletes your user record, your settings, your ' +
       'roles or your session — you stay signed in. `everything` revokes your API tokens, so ' +
       'any CLI or script using one will need a new token.\n\n' +
