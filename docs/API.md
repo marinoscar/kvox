@@ -1647,6 +1647,12 @@ lists its own.
 `DELETE /api/storage/objects/:id`
 
 **Requires Authentication** - Delete a storage object and its associated file.
+If the object's resumable upload never completed (`s3UploadId` set, status
+`pending`/`uploading`), the multipart upload is aborted first, freeing its
+uploaded parts, before the row is deleted (issue #101). An abort that fails
+for a reason other than the upload already being gone leaves the object in
+place so the stale-upload sweep can retry it later, rather than deleting the
+row and losing the only record of the upload to abort.
 
 **Response:** HTTP 204 No Content
 
