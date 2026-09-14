@@ -23,20 +23,25 @@
  * nothing makes that happen automatically just because the app is reopened.
  * Do not soften this copy to "reopening the app fixes it" without re-reading
  * that section first; it will be wrong again the moment it is written.
+ *
+ * =============================================================================
+ * THE MACHINERY MOVED OUT; THE COPY AND THE LITERALS STAYED
+ * =============================================================================
+ *
+ * Issue #80 needed a fourth type-to-confirm dialog and extracted the shared
+ * half into `components/common/ConfirmByTypingDialog` — the clear-on-open-AND-
+ * on-action-change effect, the exact `typed.trim() === literal` comparison, the
+ * disabled-until-match error button, the warning alert, the accessible label.
+ * What is left here is what was always feature-specific: WHICH literal each
+ * action requires, and the precisely-worded consequence above, which is the
+ * part of this file that took reading a runbook to get right. The rendered
+ * dialog is unchanged; `PushConfigPage.test.tsx` exercises it unmocked and is
+ * the check on that.
  */
 
-import { useEffect, useState } from 'react';
 import {
-  Alert,
-  AlertTitle,
-  Box,
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-} from '@mui/material';
+  ConfirmByTypingDialog,
+} from '../common/ConfirmByTypingDialog';
 import { REMOVE_CONFIRMATION, ROTATE_CONFIRMATION } from '../../services/pushConfig';
 
 export type PushConfigDialogAction = 'rotate' | 'remove';
@@ -83,62 +88,27 @@ export function PushConfigConfirmDialog({
   onConfirm,
   onClose,
 }: PushConfigConfirmDialogProps) {
-  const [typed, setTyped] = useState('');
-
-  // Every opening starts from nothing — cleared on open AND on a switch
-  // between actions, so a literal typed for one can never carry over and
-  // satisfy the other. Mirrors `DbBackupRestoreDialog`.
-  useEffect(() => {
-    if (!action) return;
-    setTyped('');
-  }, [action]);
-
   if (!action) return null;
 
   const literal = action === 'rotate' ? ROTATE_CONFIRMATION : REMOVE_CONFIRMATION;
   const copy = COPY[action];
-  const typedMatches = typed.trim() === literal;
 
   return (
-    <Dialog open={!!action} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{copy.title}</DialogTitle>
-      <DialogContent dividers>
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        <Alert severity="warning">
-          <AlertTitle>This cannot be undone</AlertTitle>
-          {copy.consequence}
-        </Alert>
-
-        <Box sx={{ mt: 3 }}>
-          <TextField
-            fullWidth
-            label={`Type ${literal} to confirm`}
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            autoComplete="off"
-            slotProps={{ htmlInput: { 'aria-label': `Type ${literal} to confirm` } }}
-            helperText="This must be typed exactly, in capitals. Nothing happens until it matches."
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={isWorking}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          color="error"
-          disabled={!typedMatches || isWorking}
-          onClick={onConfirm}
-        >
-          {isWorking ? 'Working…' : copy.confirmLabel}
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <ConfirmByTypingDialog
+      open
+      // `action` is what the shared dialog clears the typed text on, which is
+      // the whole reason the two literals being different words is enforceable
+      // rather than merely hoped for.
+      resetKey={action}
+      literal={literal}
+      title={copy.title}
+      consequence={copy.consequence}
+      confirmLabel={copy.confirmLabel}
+      isWorking={isWorking}
+      error={error}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    />
   );
 }
 
