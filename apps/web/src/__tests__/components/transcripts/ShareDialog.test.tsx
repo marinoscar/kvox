@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { render } from '../../utils/test-utils';
 
@@ -26,14 +26,8 @@ vi.mock('../../../services/transcriptShares', async () => {
   };
 });
 
-vi.mock('../../../services/api', async () => {
-  const actual = await vi.importActual<typeof import('../../../services/api')>(
-    '../../../services/api',
-  );
-
-  return { ...actual };
-});
-
+// `services/api` is NOT mocked: the dialog distinguishes an `ApiError` from
+// any other throw, so the tests below must construct the real class.
 import { ApiError } from '../../../services/api';
 import {
   addShare,
