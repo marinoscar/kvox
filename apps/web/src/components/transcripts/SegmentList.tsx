@@ -247,12 +247,18 @@ export function SegmentList({
   }, [editingSegmentId]);
 
   useEffect(() => {
-    if (!following || currentSegmentIndex < 0) return;
+    // ⚠ `editingSegmentId` IS CHECKED HERE AND NOT ONLY IN THE EFFECT ABOVE.
+    // That effect turns following off, but effects run in order and this one
+    // has already fired once by then — one scroll, on the exact frame the
+    // editor mounts, which moves focus out of the field the user just opened
+    // and closes it again on blur. Guarding here as well makes the ordering
+    // irrelevant.
+    if (!following || editingSegmentId || currentSegmentIndex < 0) return;
     // `center`, not `start`: a reader following a conversation wants the
     // preceding line visible too, and `start` puts the current segment at the
     // very top with everything said a moment ago already scrolled away.
     virtualizer.scrollToIndex(currentSegmentIndex, { align: 'center' });
-  }, [currentSegmentIndex, following, virtualizer]);
+  }, [currentSegmentIndex, editingSegmentId, following, virtualizer]);
 
   // Find & replace navigation. Scrolling a VIRTUALIZED list to a match is the
   // reason this has to go through the virtualizer at all: the row the user is
@@ -446,10 +452,20 @@ export function SegmentList({
                     size="small"
                     variant="outlined"
                     value={segment.text}
+                    // ⚠ THE LABEL GOES ON THE INPUT, NOT ON `TextField`. An
+                    // `aria-label` prop passed to `TextField` is forwarded to
+                    // its ROOT `FormControl` div — which leaves the textarea
+                    // itself unlabelled while the page looks correct, and makes
+                    // the field unfindable by its own name.
+                    //
                     // Named by what it is, not by "Text field": a screen-reader
                     // user arriving here mid-transcript needs to know which line
                     // they are in.
-                    aria-label={`Edit the line at ${formatTimestamp(segment.startMs)}`}
+                    slotProps={{
+                      htmlInput: {
+                        'aria-label': `Edit the line at ${formatTimestamp(segment.startMs)}`,
+                      },
+                    }}
                     sx={{ mt: 0.5 }}
                     onChange={(event) => onChangeText?.(segment.id, event.target.value)}
                     onSelect={(event) =>
