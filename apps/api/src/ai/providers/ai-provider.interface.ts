@@ -84,6 +84,55 @@ export interface AiProviderCapabilities {
   models: AiModelDescriptor[];
   /** Every registered provider streams. There is no non-streaming path. */
   streaming: true;
+  /**
+   * Whether {@link AiProvider.listModels} is implemented (#78).
+   *
+   * ⚠ DECLARING IT TRUE WITHOUT THE METHOD IS REFUSED AT BOOT by
+   * `AiProviderRegistry.register`, the same one-line check
+   * `TranscriptionProviderRegistry` makes for `capabilities.cancel` and for the
+   * same argument: an advertised capability with no method is a `TypeError` in
+   * the path LEAST LIKELY TO HAVE BEEN EXERCISED — here, an administrator
+   * pressing "load models from the provider" on a settings page that is opened
+   * once a quarter. One line at registration turns that into a boot failure
+   * naming the provider, where the fix is obvious.
+   *
+   * `boolean` RATHER THAN THE LITERAL `true` that `streaming` uses, and the
+   * difference is real: streaming is not a capability a provider may decline
+   * (§5's durable buffer has nothing to append without it), whereas discovery
+   * genuinely is optional. A vendor with no list endpoint, or a gateway that
+   * refuses one, is a perfectly registrable provider whose admin form simply
+   * falls back to typing model ids by hand.
+   */
+  modelDiscovery: boolean;
+}
+
+/**
+ * One model a provider's LIVE API reports, as {@link AiProvider.listModels}
+ * returns it (#78).
+ *
+ * ⚠ NOT AN {@link AiModelDescriptor}, AND THE DIFFERENCE IS THE POINT. A
+ * descriptor promises `contextWindowTokens` and `maxOutputTokens` because the
+ * §3.3 token budget cannot run without them; a vendor's `GET /models` response
+ * carries NEITHER for any provider this build talks to. Reusing the descriptor
+ * type here would have forced this method to invent two numbers per model —
+ * and an invented context window is how a prompt that would have fit gets
+ * refused, or one that does not gets submitted and billed.
+ *
+ * So the two facts are kept apart: the vendor says what EXISTS, the build
+ * catalogue says what can be BUDGETED, and `known` is the join between them.
+ * An administrator can still permit an unknown model — see
+ * `aiAllowedModelSchema`, which is where they supply the missing numbers.
+ */
+export interface AiDiscoveredModel {
+  /** The provider's own model id, exactly as its API spelled it. */
+  id: string;
+  /** A display name. Falls back to the id when the vendor offers nothing better. */
+  label: string;
+  /** True when this build carries a descriptor for it and can budget against it. */
+  known: boolean;
+  /** From the build catalogue when `known`, otherwise null — the vendor's list does not carry it. */
+  contextWindowTokens: number | null;
+  maxOutputTokens: number | null;
 }
 
 /**
@@ -280,6 +329,31 @@ export interface AiProvider<TSettings = unknown> {
    * proving a key before committing it.
    */
   testConnection(ctx: AiProviderContext<TSettings>): Promise<AiConnectionTest>;
+
+  /**
+   * Ask the provider's own API which models this credential can reach (#78).
+   *
+   * OPTIONAL, AND PRESENT EXACTLY WHEN `capabilities.modelDiscovery` IS TRUE —
+   * "presence is the declaration", the same rule `JobHandler`'s
+   * `nodeResultSchema`/`persistNodeResult` pair follows, except that here one
+   * of the two halves is a boolean a caller reads before spending a request, so
+   * the registry enforces the agreement at boot instead of the type system
+   * doing it. Implement both or neither.
+   *
+   * ⚠ IT SPENDS A REAL VENDOR CALL ON THE CALLER'S OWN ACCOUNT. `ctx.apiKey` is
+   * an individual person's key — there is no deployment key in this epic — so
+   * the route above this is gated on `system_settings:write` rather than
+   * `:read` for the same reason `POST /api/ai-settings/test` is: looking is not
+   * probing.
+   *
+   * THROWS on refusal, unlike `testConnection`. This method has an answer to
+   * give (a list) and no way to give a partial one, so the caller — not the
+   * provider — decides whether a refusal is a 200 diagnosis or a failure; see
+   * `AiSettingsService.discoverModels`, which turns a throw into
+   * `{ ok: false, detail, models: [] }`. Throw the narrowest type in
+   * `../ai-errors.ts` that is true, exactly as `generate` does.
+   */
+  listModels?(ctx: AiProviderContext<TSettings>): Promise<AiDiscoveredModel[]>;
 
   /**
    * Approximate how many tokens a piece of text costs for a given model.

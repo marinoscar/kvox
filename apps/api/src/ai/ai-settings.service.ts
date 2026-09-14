@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { PatchSystemSettingsDto } from '../settings/dto/update-system-settings.dto';
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
+import { missingModelNumbers, resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import type { SystemAiPatchValue, SystemAiValue } from './ai-settings.schema';
 import type { AiProviderDescription } from './providers/ai-provider.interface';
@@ -59,12 +60,19 @@ export interface AiSettingsAdminView {
   /** Capabilities and field descriptors — see `registry.describeAll()`. */
   providers: AiProviderDescription[];
   /**
-   * Model ids named by the policy that no registered provider knows about.
+   * Model ids named by the policy that this deployment cannot budget for.
    *
-   * REPORTED RATHER THAN SILENTLY DROPPED. A model in `allowedModels` with no
-   * descriptor cannot be budgeted (docs/specs/notes.md §3.3 needs
-   * `contextWindowTokens`), so `GET /api/ai/config` omits it — and an
-   * administrator who typed a model id with a typo would otherwise see it
+   * ⚠ SINCE #78 THIS MEANS "UNRESOLVABLE", NOT "NOT IN THE BUILD CATALOGUE".
+   * An entry that carries its own `contextWindowTokens` and `maxOutputTokens`
+   * is perfectly usable and is NOT listed here, even though no release of this
+   * application has heard of the model — that is the whole point of the widened
+   * entry type. What remains listed is an entry with neither its own numbers
+   * nor a catalogue descriptor: a typo, or a model somebody added before the
+   * numbers were known.
+   *
+   * REPORTED RATHER THAN SILENTLY DROPPED. Such a model cannot be budgeted
+   * (docs/specs/notes.md §3.3 needs `contextWindowTokens`), so
+   * `GET /api/ai/config` omits it — and an administrator would otherwise see it
    * saved, listed back, and quietly never offered to anyone, with nothing
    * anywhere to explain why.
    */
@@ -163,7 +171,16 @@ export class AiSettingsService {
     userId: string,
     expectedVersion?: number,
   ): Promise<AiSettingsAdminView> {
-    const provider = this.registry.get('openai');
+    // ⚠ THE PROVIDER THE SUBMITTED MODELS WILL BELONG TO — which is the one
+    // this PATCH is SWITCHING TO when it carries a `provider`, and the stored
+    // one otherwise (#78). Reading only the stored value would validate the new
+    // vendor's model ids against the old vendor's catalogue in the single
+    // request where the two differ, which is precisely the request an
+    // administrator makes when migrating.
+    const stored = await this.get();
+    const providerId =
+      patch.provider !== undefined ? patch.provider : stored.provider;
+    const provider = providerId ? this.registry.get(providerId) : undefined;
 
     // A model id the policy names but this build cannot budget is a 400 rather
     // than a silent save, because the failure it produces otherwise is
@@ -172,16 +189,46 @@ export class AiSettingsService {
     // than in the zod schema deliberately — it depends on the REGISTRY, which a
     // schema has no access to, and a fork registering its own models must not
     // have to edit a validation rule to make them acceptable.
-    const submittedModels = patch.providers?.openai?.allowedModels;
-    if (provider && submittedModels) {
-      const known = new Set(provider.capabilities.models.map((m) => m.id));
-      const unknown = submittedModels.filter((id) => !known.has(id));
+    // Indexed by the resolved provider id rather than written `?.openai?.`:
+    // when `AI_PROVIDER_IDS` grows, this line keeps compiling only if
+    // `aiProvidersSchema` grew the matching block in the same edit, which is
+    // exactly the parallel change that must not be forgotten.
+    const submittedModels = providerId
+      ? patch.providers?.[providerId]?.allowedModels
+      : undefined;
 
-      if (unknown.length > 0) {
+    if (provider && submittedModels) {
+      const catalogue = provider.capabilities.models;
+
+      // ⚠ NARROWED BY #78: the test is no longer "is this id in the build
+      // catalogue" but "can this entry be BUDGETED AT ALL". An entry carrying
+      // its own `contextWindowTokens` and `maxOutputTokens` passes even though
+      // this build has never heard of the model — which is the entire point of
+      // model discovery, since a vendor's list is mostly models no release of
+      // this application knows about yet. Only an entry that resolves to
+      // NOTHING is refused, and `resolveAllowedModel` is the one place that
+      // precedence lives.
+      const unresolved = submittedModels
+        .map((entry) => ({ entry, missing: missingModelNumbers(entry, catalogue) }))
+        .filter(({ missing }) => missing.length > 0);
+
+      if (unresolved.length > 0) {
+        // WORDED AS "SUPPLY THE NUMBERS", NOT "THIS MODEL IS FORBIDDEN". The
+        // old message read as a permission refusal and named the four ids this
+        // build ships with, which told an administrator adopting a new model
+        // that their only option was to wait for a release. It is not: the
+        // missing thing is a number they can read off the vendor's own
+        // documentation, and this sentence has to say so or the widened schema
+        // is undiscoverable.
+        const detail = unresolved
+          .map(({ entry, missing }) => `"${entry.id}" (${missing.join(', ')})`)
+          .join(', ');
+
         throw new BadRequestException(
-          `Unknown model id(s) for provider "openai": ${unknown.join(', ')}. ` +
-            `This build can budget requests for: ${[...known].join(', ')}. ` +
-            'A model it does not know the context window of cannot be offered to users, because the token budget has no number to check against.',
+          `This deployment cannot budget requests for ${detail} on provider "${provider.id}". ` +
+            'These models are not forbidden — this build simply carries no context window for them, and the token budget has no number to check a prompt against. ' +
+            'Add `contextWindowTokens` and `maxOutputTokens` to each entry (the vendor publishes both), or choose a model this build already knows: ' +
+            `${catalogue.map((model) => model.id).join(', ') || 'none'}.`,
         );
       }
     }
@@ -234,8 +281,38 @@ export class AiSettingsService {
     baseUrlOverride?: string | null,
   ): Promise<AiReachabilityTest> {
     const settings = await this.get();
-    const baseUrl = (baseUrlOverride?.trim() || settings.providers.openai.baseUrl)
-      .replace(/\/+$/, '');
+
+    // THE ACTIVE PROVIDER'S BASE URL, not `providers.openai`'s (#78) — a probe
+    // that always read one vendor's block would silently test the wrong
+    // endpoint the moment a deployment switched vendors, and would report the
+    // old one healthy.
+    //
+    // A SUPPLIED `baseUrl` STILL WINS AND STILL WORKS WITH NO ACTIVE PROVIDER,
+    // deliberately: this endpoint exists to prove a URL an administrator has
+    // typed but not saved, and "type the URL, then choose the provider" is a
+    // legitimate order to do that in.
+    const storedBaseUrl = settings.provider
+      ? settings.providers[settings.provider].baseUrl
+      : null;
+
+    const resolved = baseUrlOverride?.trim() || storedBaseUrl;
+
+    if (!resolved) {
+      const detail =
+        'No provider is active for this deployment and no base URL was supplied, so there is nothing to probe. Choose a provider (or type a base URL) and try again.';
+
+      await this.audit(userId, 'ai_settings:test', {
+        baseUrl: null,
+        ok: false,
+        latencyMs: 0,
+        detail,
+        usedSuppliedBaseUrl: false,
+      });
+
+      return { ok: false, latencyMs: 0, detail };
+    }
+
+    const baseUrl = resolved.replace(/\/+$/, '');
 
     const startedAt = Date.now();
     let result: AiReachabilityTest;
@@ -305,13 +382,35 @@ export class AiSettingsService {
   // Internals
   // ---------------------------------------------------------------------------
 
-  /** Policy-named models no registered provider declares. See `unknownModels`. */
+  /**
+   * Policy entries this deployment cannot budget for. See `unknownModels`.
+   *
+   * READ THROUGH THE ACTIVE PROVIDER (#78), and resolved with the SAME function
+   * `AiConfigService` publishes with — `resolveAllowedModel`. If these two ever
+   * used different rules, a model would be listed as unknown on the admin page
+   * while being offered to users, or the reverse, and neither disagreement has
+   * any visible cause.
+   */
   private findUnknownModels(settings: SystemAiValue): string[] {
-    const provider = this.registry.get('openai');
-    if (!provider) return [...settings.providers.openai.allowedModels];
+    const providerId = settings.provider;
 
-    const known = new Set(provider.capabilities.models.map((model) => model.id));
-    return settings.providers.openai.allowedModels.filter((id) => !known.has(id));
+    // No provider is active: there is no catalogue for a model to be unknown
+    // against, and reporting every permitted model as unknown would be noise on
+    // a page whose actual problem — nobody has chosen a vendor — the `provider`
+    // field states directly.
+    if (!providerId) return [];
+
+    const provider = this.registry.get(providerId);
+
+    // An EMPTY catalogue rather than an early return for the provider this
+    // build does not implement (a rollback across its addition): entries
+    // carrying their own numbers still resolve, and refusing to acknowledge
+    // that would tell an administrator to fix a model that is already fine.
+    const catalogue = provider?.capabilities.models ?? [];
+
+    return settings.providers[providerId].allowedModels
+      .filter((entry) => resolveAllowedModel(entry, catalogue) === null)
+      .map((entry) => entry.id);
   }
 
   /**

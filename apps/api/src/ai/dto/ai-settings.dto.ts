@@ -1,7 +1,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-import { systemAiPatchSchema } from '../ai-settings.schema';
+import { AI_PROVIDER_IDS, systemAiPatchSchema } from '../ai-settings.schema';
 
 // =============================================================================
 // AI settings — request and response bodies (issue #47, epic #45)
@@ -83,6 +83,11 @@ export const aiProviderCapabilitiesSchema = z.object({
   models: z
     .array(aiModelDescriptorSchema)
     .describe('Every model this build knows how to budget requests for.'),
+  modelDiscovery: z
+    .boolean()
+    .describe(
+      'Whether this provider can be asked for its live model list (`GET /api/ai-settings/models`). False means the admin form must let an administrator type model ids by hand — which it always allows anyway.',
+    ),
   streaming: z
     .literal(true)
     .describe(
@@ -121,6 +126,36 @@ export const aiProviderDescriptionSchema = z.object({
 });
 
 /**
+ * One entry of `allowedModels` as it is READ BACK (#78).
+ *
+ * ALWAYS AN OBJECT IN A RESPONSE, even for a deployment whose stored JSONB
+ * still holds the pre-#78 bare strings: the schema normalises on the way in, so
+ * a client has exactly one shape to render. The request side still accepts
+ * both — see `UpdateAiSettingsDto`.
+ */
+export const aiAllowedModelResponseSchema = z.object({
+  id: z.string().describe("The provider's own model id, e.g. `gpt-4o`."),
+  label: z
+    .string()
+    .optional()
+    .describe(
+      'What a picker shows. Absent means "use the build catalogue\'s label, or the id".',
+    ),
+  contextWindowTokens: z
+    .number()
+    .optional()
+    .describe(
+      "This entry's own context window, overriding the build catalogue. Absent means the catalogue answers — and if it cannot, the model is reported in `unknownModels` and never offered.",
+    ),
+  maxOutputTokens: z
+    .number()
+    .optional()
+    .describe(
+      "This entry's own output ceiling, overriding the build catalogue. Absent means the catalogue answers.",
+    ),
+});
+
+/**
  * `GET`/`PUT /api/ai-settings` — the response.
  *
  * ⚠ NO FIELD HERE CAN HOLD AN API KEY, and there is no masked key-status array
@@ -131,15 +166,21 @@ export const aiSettingsResponseSchema = z.object({
   settings: z
     .object({
       enabled: z.boolean().describe('Master switch for AI features.'),
+      provider: z
+        .enum(AI_PROVIDER_IDS)
+        .nullable()
+        .describe(
+          'The active provider, or `null` when none has been chosen. A separate axis from `enabled`, so switching AI off does not discard the vendor choice.',
+        ),
       providers: z.object({
         openai: z.object({
           baseUrl: z
             .string()
             .describe('The API root this deployment calls.'),
           allowedModels: z
-            .array(z.string())
+            .array(aiAllowedModelResponseSchema)
             .describe(
-              "Model ids users may generate with. This deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own.",
+              "Models users may generate with. This deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An entry may carry its own context window, which is what lets a deployment permit a model this build has never heard of.",
             ),
           defaultModel: z.string().describe('The model offered first.'),
         }),

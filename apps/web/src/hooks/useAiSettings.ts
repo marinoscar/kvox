@@ -13,13 +13,46 @@
  * (`useAiCredential`) — so the only destructive act this hook can perform is
  * saving a narrower policy, and a `removeKey` here would be a control with
  * nothing behind it.
+ *
+ * =============================================================================
+ * #78 ADDS A SECOND PROBE, AND IT FAILS IN THREE WAYS, NOT TWO
+ * =============================================================================
+ *
+ * `discoverModels` follows `testReachability` exactly — one in-flight flag, one
+ * result that survives until the page clears it, never throws — with ONE
+ * structural difference that the page depends on:
+ *
+ * ⚠ `ai_key_missing` IS ITS OWN STATE, NOT AN ERROR STRING. Flattening it into
+ * `discoverError` would compile, read fine, and lose the only thing that makes
+ * the failure actionable: the fix is on a DIFFERENT PAGE, under the reader's
+ * own account, and the reason there is no deployment key to fall back on is an
+ * argument (docs/specs/notes.md §9) the settings page already makes in full at
+ * the top. A generic red box saying "409 Conflict" — or even the API's own
+ * sentence rendered as an error — invites an administrator to look for a
+ * deployment key field that does not and will never exist. So the three
+ * outcomes stay distinguishable all the way to the render:
+ *
+ *   `discoverResult.ok === true`   the provider listed models
+ *   `discoverResult.ok === false`  it refused — `detail` names which of the
+ *                                  three fixes applies, and is the whole value
+ *                                  of the call (arrives as a **200**)
+ *   `discoverError.kind`           the call itself could not be made:
+ *                                  `'key-missing'` (409, the caller's own key)
+ *                                  or `'other'` (a 400, a dropped connection)
  */
 
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError } from '../services/api';
-import { getAiSettings, testAiReachability, updateAiSettings } from '../services/ai';
+import {
+  aiDiscoveryConflictReason,
+  discoverAiModels,
+  getAiSettings,
+  testAiReachability,
+  updateAiSettings,
+} from '../services/ai';
 import type {
+  AiModelDiscovery,
   AiReachabilityTest,
   AiSettingsAdminView,
   TestAiReachabilityInput,
@@ -37,6 +70,19 @@ function messageFor(err: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+/**
+ * Why a discovery call could not be made at all (#78).
+ *
+ * A DISCRIMINATED UNION RATHER THAN A STRING, so the page's branch on
+ * `'key-missing'` is exhaustive and a future kind is a compile error rather
+ * than a message that silently falls through to the generic box. `message` is
+ * always present — the API's own sentence for the `key-missing` case is worth
+ * showing alongside the page's cross-reference, not instead of it.
+ */
+export type AiDiscoveryError =
+  | { kind: 'key-missing'; message: string }
+  | { kind: 'other'; message: string };
 
 export interface UseAiSettingsReturn {
   data: AiSettingsAdminView | null;
@@ -57,6 +103,24 @@ export interface UseAiSettingsReturn {
   testReachability: (input: TestAiReachabilityInput) => Promise<void>;
   clearTestResult: () => void;
 
+  isDiscovering: boolean;
+  /**
+   * The last model list, INCLUDING a refusal (`ok: false`), until cleared.
+   *
+   * ⚠ A refusal is a 200 and lands here, not in `discoverError`. See the header.
+   */
+  discoverResult: AiModelDiscovery | null;
+  /** Set only when the call itself failed. Mutually exclusive with `discoverResult`. */
+  discoverError: AiDiscoveryError | null;
+  /**
+   * Ask the provider for its models. `provider` defaults to the active one.
+   *
+   * ⚠ SPENDS THE CALLING ADMINISTRATOR'S OWN API KEY on a real vendor request
+   * — never call it from an effect. Never throws; the outcome is state.
+   */
+  discoverModels: (provider?: string | null) => Promise<void>;
+  clearDiscoverResult: () => void;
+
   refresh: () => Promise<void>;
 }
 
@@ -68,6 +132,9 @@ export function useAiSettings(): UseAiSettingsReturn {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<AiReachabilityTest | null>(null);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoverResult, setDiscoverResult] = useState<AiModelDiscovery | null>(null);
+  const [discoverError, setDiscoverError] = useState<AiDiscoveryError | null>(null);
 
   const isMounted = useIsMounted();
 
@@ -160,8 +227,64 @@ export function useAiSettings(): UseAiSettingsReturn {
     [isMounted],
   );
 
+  /**
+   * Ask the provider for its models (#78).
+   *
+   * ⚠ THE 409 IS SEPARATED HERE, ONCE, rather than at the call site. It is the
+   * one failure whose fix is neither on this page nor in this deployment's
+   * configuration — the administrator has saved no key of their OWN — and
+   * `aiDiscoveryConflictReason` is the only correct way to recognise it, since
+   * the API's global filter derives the top-level `code` from the status and
+   * overwrites the endpoint's reason. Reading `err.code` would compile, never
+   * match, and quietly demote this to the generic branch.
+   *
+   * ⚠ BOTH RESULT SLOTS ARE CLEARED BEFORE THE CALL, so a second attempt can
+   * never render last attempt's answer beside this attempt's spinner — the
+   * failure mode that makes a stale success look like a fresh one.
+   */
+  const discoverModels = useCallback(
+    async (provider?: string | null) => {
+      try {
+        setIsDiscovering(true);
+        setDiscoverResult(null);
+        setDiscoverError(null);
+
+        const result = await discoverAiModels(provider);
+        if (isMounted()) setDiscoverResult(result);
+      } catch (err) {
+        if (!isMounted()) return;
+
+        if (aiDiscoveryConflictReason(err) === 'ai_key_missing') {
+          setDiscoverError({
+            kind: 'key-missing',
+            message: messageFor(
+              err,
+              'You have not saved an API key for this provider.',
+            ),
+          });
+          return;
+        }
+
+        setDiscoverError({
+          kind: 'other',
+          message: messageFor(err, 'The provider could not be asked for its models'),
+        });
+      } finally {
+        if (isMounted()) setIsDiscovering(false);
+      }
+    },
+    [isMounted],
+  );
+
   const clearSaveError = useCallback(() => setSaveError(null), []);
   const clearTestResult = useCallback(() => setTestResult(null), []);
+  const clearDiscoverResult = useCallback(() => {
+    // BOTH, from one control: the page offers a single dismissal, and leaving
+    // one of the two set would make the dialog reopen showing an outcome the
+    // administrator has already dismissed.
+    setDiscoverResult(null);
+    setDiscoverError(null);
+  }, []);
 
   return {
     data,
@@ -175,6 +298,11 @@ export function useAiSettings(): UseAiSettingsReturn {
     testResult,
     testReachability,
     clearTestResult,
+    isDiscovering,
+    discoverResult,
+    discoverError,
+    discoverModels,
+    clearDiscoverResult,
     refresh: fetchSettings,
   };
 }
