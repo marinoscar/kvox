@@ -82,6 +82,7 @@ import type {
   StorageUploadOptions,
   StorageUploadResult,
   UploadPart,
+  UploadedPart,
 } from '../../src/storage/providers';
 import { STORAGE_OBJECT_SUBJECT_TYPE } from '../../src/storage/storage-job-input';
 import { createDbClient, resolveDbSuite } from '../jobs/db-test-support';
@@ -231,6 +232,13 @@ class LocalFileStorageProvider implements StorageProvider {
   }
 
   async abortMultipartUpload(): Promise<void> {}
+
+  // Issue #21 added this to the interface. Nothing in this spec resumes an
+  // upload — it writes whole objects — so an empty part list is the honest
+  // answer rather than a fabricated one.
+  async listParts(): Promise<UploadedPart[]> {
+    return [];
+  }
 
   async delete(key: string): Promise<void> {
     rmSync(this.path(key), { force: true });

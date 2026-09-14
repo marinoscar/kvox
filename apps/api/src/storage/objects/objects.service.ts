@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -41,6 +42,40 @@ import {
   OBJECT_UPLOADED_EVENT,
   ObjectUploadedEvent,
 } from '../processing/events/object-uploaded.event';
+import {
+  PresignPartsDto,
+  PresignedPartDto,
+} from './dto/presign-parts.dto';
+import {
+  AUDIO_EXTENSIONS,
+  MAX_PARTS,
+  MIN_PART_SIZE,
+  computePartSize,
+  computeTotalParts,
+  formatBytes,
+  isMimeTypeAllowed,
+  resolveMimeType,
+} from './upload-constraints';
+
+/**
+ * Most part URLs one `POST /:id/upload/parts` call will sign.
+ *
+ * A cap rather than "all of them" because signing is real work per URL and the
+ * response grows without bound otherwise — 10,000 signed URLs is a multi-
+ * megabyte JSON body a phone has to parse before it can upload anything. A
+ * client asks for the next 100 as it goes, which is also what makes each batch
+ * a natural liveness signal for the stale-upload sweep.
+ */
+const MAX_PRESIGN_BATCH = 100;
+
+/**
+ * How many part URLs `initUpload` hands back without being asked.
+ *
+ * Unchanged from before #21 — it is a useful fast path that lets a small
+ * upload finish without a second round trip. What changed is that it is NO
+ * LONGER THE CAP: `presignParts` issues the rest.
+ */
+const INITIAL_PRESIGN_BATCH = 10;
 
 export interface MultipartFile {
   filename: string;
@@ -61,31 +96,92 @@ export class ObjectsService {
   ) {}
 
   /**
-   * Initialize a resumable multipart upload
+   * Initialize a resumable multipart upload.
+   *
+   * `managedBy` is a SERVICE-LEVEL argument only. It is deliberately absent
+   * from `InitUploadDto` and therefore unreachable over HTTP: a client able to
+   * declare its own upload "managed by transcripts" could mint an object the
+   * generic delete endpoint refuses to remove and the generic list refuses to
+   * show — an undeletable, invisible row, created on request. Only a module
+   * calling this service in-process may claim ownership.
    */
   async initUpload(
     dto: InitUploadDto,
     userId: string,
+    managedBy?: string,
   ): Promise<InitUploadResponseDto> {
-    const { name, size, mimeType } = dto;
+    const { name, size } = dto;
 
-    // Get configuration
-    const partSize = this.config.get<number>('storage.partSize', 10485760); // 10MB default
-    const minPartSize = 5 * 1024 * 1024; // 5MB S3 minimum
+    // -----------------------------------------------------------------------
+    // What this deployment allows. Both of these were configured and READ BY
+    // NOTHING before #21.
+    // -----------------------------------------------------------------------
+    const maxFileSize = this.config.get<number>(
+      'storage.maxFileSize',
+      10737418240,
+    );
 
-    // Validate part size
-    if (partSize < minPartSize) {
+    if (size > maxFileSize) {
       throw new BadRequestException(
-        `Part size must be at least ${minPartSize} bytes`,
+        `File is ${formatBytes(size)}, which exceeds the maximum upload size of ` +
+          `${formatBytes(maxFileSize)} (${maxFileSize} bytes)`,
       );
     }
 
-    // Calculate total parts
-    const totalParts = Math.ceil(size / partSize);
+    const allowedMimeTypes = this.config.get<string[]>(
+      'storage.allowedMimeTypes',
+      ['image/*', 'application/pdf', 'video/*', 'audio/*'],
+    );
 
-    if (totalParts > 10000) {
+    // A browser that reported `application/octet-stream` or nothing at all for
+    // a `.m4a` is the ORDINARY case, not an attack; the extension decides.
+    const mimeType = resolveMimeType(name, dto.mimeType);
+
+    if (!mimeType || !isMimeTypeAllowed(mimeType, allowedMimeTypes)) {
+      const declared = dto.mimeType?.trim()
+        ? `"${dto.mimeType}"`
+        : 'no content type';
+
       throw new BadRequestException(
-        'File too large for multipart upload (exceeds 10,000 parts)',
+        `Files of type ${declared} are not accepted. Allowed types: ` +
+          `${allowedMimeTypes.join(', ')}. A file with no usable content type is ` +
+          `accepted when its extension is one of: ${AUDIO_EXTENSIONS.join(' ')}`,
+      );
+    }
+
+    if (mimeType !== (dto.mimeType ?? '').trim().toLowerCase()) {
+      this.logger.log(
+        `Resolved content type for ${name}: ` +
+          `${dto.mimeType || '(none)'} -> ${mimeType}`,
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // How the file is sliced. ADAPTIVE — see `computePartSize`.
+    // -----------------------------------------------------------------------
+    const configuredPartSize = this.config.get<number>(
+      'storage.partSize',
+      10485760,
+    );
+
+    if (configuredPartSize < MIN_PART_SIZE) {
+      throw new BadRequestException(
+        `Configured part size ${configuredPartSize} is below the ${MIN_PART_SIZE}-byte ` +
+          'minimum every S3-compatible provider enforces',
+      );
+    }
+
+    const partSize = computePartSize(size, configuredPartSize);
+    const totalParts = computeTotalParts(size, partSize);
+
+    if (totalParts > MAX_PARTS) {
+      // DEFENSIVE ONLY. `computePartSize` takes `ceil(size / MAX_PARTS)` as a
+      // floor, so this cannot trigger for any `size` the caller could send.
+      // It stays because the day someone "simplifies" that function, a wrong
+      // answer here is a corrupt object rather than an exception.
+      throw new BadRequestException(
+        `File would need ${totalParts} parts at a ${partSize}-byte part size, ` +
+          `above the ${MAX_PARTS}-part limit`,
       );
     }
 
@@ -95,7 +191,9 @@ export class ObjectsService {
     const extension = extname(name);
     const storageKey = `uploads/${timestamp}/${uuid}${extension}`;
 
-    this.logger.log(`Initializing upload for ${name}, ${totalParts} parts`);
+    this.logger.log(
+      `Initializing upload for ${name}, ${totalParts} part(s) of ${partSize} bytes`,
+    );
 
     // Initialize multipart upload with storage provider
     const { uploadId } = await this.storageProvider.initMultipartUpload(
@@ -114,12 +212,15 @@ export class ObjectsService {
         bucket: this.storageProvider.getBucket(),
         status: 'pending',
         s3UploadId: uploadId,
+        partSize,
+        managedBy: managedBy ?? null,
         uploadedById: userId,
       },
     });
 
-    // Generate presigned URLs for first batch (up to 10 parts)
-    const urlBatchSize = Math.min(10, totalParts);
+    // Generate presigned URLs for the first batch. A convenience, not a cap:
+    // `POST /:id/upload/parts` issues every later batch.
+    const urlBatchSize = Math.min(INITIAL_PRESIGN_BATCH, totalParts);
     const presignedUrls = await Promise.all(
       Array.from({ length: urlBatchSize }, (_, i) => i + 1).map(
         async (partNumber) => ({
@@ -147,7 +248,102 @@ export class ObjectsService {
   }
 
   /**
-   * Get upload status and progress
+   * Sign a further batch of part URLs for an upload already in progress
+   * (issue #21).
+   *
+   * WHY THIS ENDPOINT HAS TO EXIST: `initUpload` signs the first ten parts and
+   * nothing used to sign an eleventh, so a 10 MiB part size capped every
+   * upload at 100 MB. Signed URLs also EXPIRE (`storage.signedUrlExpiry`,
+   * one hour by default) — a multi-GB upload outlives its own first batch, so
+   * even a client that asked for all of them up front would need to come back.
+   */
+  async presignParts(
+    userId: string,
+    objectId: string,
+    partNumbers: number[],
+  ): Promise<PresignedPartDto[]> {
+    const object = await this.prisma.storageObject.findUnique({
+      where: { id: objectId },
+    });
+
+    if (!object) {
+      throw new NotFoundException('Upload not found');
+    }
+
+    if (object.uploadedById !== userId) {
+      throw new ForbiddenException('You do not own this upload');
+    }
+
+    if (!object.s3UploadId || !this.isUploadActive(object.status)) {
+      throw new BadRequestException(
+        `Upload is no longer in progress (status: ${object.status}); ` +
+          'part URLs can only be issued for a pending or uploading object',
+      );
+    }
+
+    if (partNumbers.length === 0) {
+      throw new BadRequestException('At least one part number is required');
+    }
+
+    if (partNumbers.length > MAX_PRESIGN_BATCH) {
+      throw new BadRequestException(
+        `At most ${MAX_PRESIGN_BATCH} part numbers may be requested per call, ` +
+          `received ${partNumbers.length}`,
+      );
+    }
+
+    const totalParts = this.totalPartsFor(object);
+    const seen = new Set<number>();
+
+    for (const partNumber of partNumbers) {
+      if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > totalParts) {
+        throw new BadRequestException(
+          `Part number ${partNumber} is out of range; this upload has ` +
+            `${totalParts} part(s)`,
+        );
+      }
+
+      if (seen.has(partNumber)) {
+        throw new BadRequestException(
+          `Part number ${partNumber} was requested more than once`,
+        );
+      }
+
+      seen.add(partNumber);
+    }
+
+    const expiresIn = this.config.get<number>('storage.signedUrlExpiry', 3600);
+    const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+    const urls = await Promise.all(
+      partNumbers.map(async (partNumber) => ({
+        partNumber,
+        url: await this.storageProvider.getSignedUploadUrl(
+          object.storageKey,
+          object.s3UploadId as string,
+          partNumber,
+          expiresIn,
+        ),
+      })),
+    );
+
+    await this.touchUpload(objectId);
+
+    this.logger.log(
+      `Signed ${urls.length} part URL(s) for upload ${objectId}`,
+    );
+
+    return urls.map((url) => ({ ...url, expiresAt }));
+  }
+
+  /**
+   * Get upload status and progress.
+   *
+   * ⚠ BUILT FROM `provider.listParts`, NOT FROM `storage_object_chunks`.
+   * Those rows are written by `completeUpload`, so a status derived from them
+   * reported ZERO PROGRESS for the entire life of an upload and then jumped to
+   * complete once resuming was pointless — which is to say resume never worked.
+   * The provider is the only party that knows what it is holding.
    */
   async getUploadStatus(
     objectId: string,
@@ -155,7 +351,6 @@ export class ObjectsService {
   ): Promise<UploadStatusResponseDto> {
     const storageObject = await this.prisma.storageObject.findUnique({
       where: { id: objectId },
-      include: { chunks: true },
     });
 
     if (!storageObject) {
@@ -167,30 +362,61 @@ export class ObjectsService {
       throw new ForbiddenException('You do not own this upload');
     }
 
-    const uploadedParts = storageObject.chunks
-      .map((chunk) => chunk.partNumber)
-      .sort((a, b) => a - b);
+    const partSize = this.partSizeFor(storageObject);
+    const totalParts = this.totalPartsFor(storageObject);
 
-    const uploadedBytes = storageObject.chunks.reduce(
-      (sum, chunk) => sum + chunk.size,
-      BigInt(0),
-    );
+    let uploadedParts: number[] = [];
+    let uploadedBytes = BigInt(0);
 
-    const partSize = this.config.get<number>('storage.partSize', 10485760);
-    const totalParts = Math.ceil(Number(storageObject.size) / partSize);
+    if (storageObject.s3UploadId && this.isUploadActive(storageObject.status)) {
+      const parts = await this.storageProvider.listParts(
+        storageObject.storageKey,
+        storageObject.s3UploadId,
+      );
+
+      uploadedParts = parts
+        .map((part) => part.partNumber)
+        .sort((a, b) => a - b);
+      uploadedBytes = parts.reduce(
+        (sum, part) => sum + BigInt(part.size),
+        BigInt(0),
+      );
+
+      // Polling for progress is a client saying "I am still here". The
+      // stale-upload sweep measures from `updated_at`, so this is what keeps a
+      // paused-but-watched upload alive. Settled objects are deliberately NOT
+      // touched: their `updated_at` means "when this object last changed", and
+      // a read must not rewrite that.
+      await this.touchUpload(objectId);
+    } else if (
+      storageObject.status === 'processing' ||
+      storageObject.status === 'ready'
+    ) {
+      // The multipart upload is gone because it COMPLETED — every part landed,
+      // by definition, and asking the provider would now 404.
+      uploadedParts = Array.from({ length: totalParts }, (_, i) => i + 1);
+      uploadedBytes = storageObject.size;
+    }
 
     return {
       objectId: storageObject.id,
       status: storageObject.status,
       uploadedParts,
       totalParts,
+      partSize,
       uploadedBytes: uploadedBytes.toString(),
       totalBytes: storageObject.size.toString(),
     };
   }
 
   /**
-   * Complete multipart upload
+   * Complete multipart upload.
+   *
+   * `dto.parts` is OPTIONAL. When it is absent the parts list is read back from
+   * the provider — which is the path a browser should take, because reading an
+   * ETag response header off a cross-origin PUT requires the bucket to expose
+   * it via `Access-Control-Expose-Headers` and a client that mishandles that
+   * silently completes with the wrong ETags. The server can always see them.
    */
   async completeUpload(
     objectId: string,
@@ -199,7 +425,6 @@ export class ObjectsService {
   ): Promise<ObjectResponseDto> {
     const storageObject = await this.prisma.storageObject.findUnique({
       where: { id: objectId },
-      include: { chunks: true },
     });
 
     if (!storageObject) {
@@ -215,7 +440,12 @@ export class ObjectsService {
       throw new BadRequestException('Upload ID not found');
     }
 
-    const { parts } = dto;
+    const parts = dto.parts?.length
+      ? dto.parts
+      : await this.partsFromProvider(
+          storageObject.storageKey,
+          storageObject.s3UploadId,
+        );
 
     this.logger.log(`Completing upload ${objectId} with ${parts.length} parts`);
 
@@ -384,8 +614,14 @@ export class ObjectsService {
     const skip = (page - 1) * pageSize;
     const take = pageSize;
 
+    // ⚠ MANAGED OBJECTS ARE EXCLUDED (#21). A transcript's source audio, its
+    // playback rendition and its exports are all `storage_objects` rows owned
+    // by the same user, so without this filter one transcript turns into four
+    // rows in a generic file list nobody asked for — each of them a file the
+    // user cannot meaningfully act on here. The owning module lists its own.
     const where = {
       uploadedById: userId,
+      managedBy: null,
       ...(status && { status }),
     };
 
@@ -472,6 +708,18 @@ export class ObjectsService {
   async delete(id: string, userId: string): Promise<void> {
     const object = await this.getObjectWithAuthCheck(id, userId);
 
+    // ⚠ 409, NOT 403 AND NOT A SILENT SUCCESS. The caller genuinely owns these
+    // bytes — the refusal is about the object's STATE (something else depends
+    // on it), which is what 409 means. Deleting a transcript's source audio
+    // through the generic endpoint leaves the transcript pointing at bytes
+    // that no longer exist and nothing to repair it from.
+    if (object.managedBy) {
+      throw new ConflictException(
+        `This object is managed by the ${object.managedBy} module and must be ` +
+          `deleted through it, not through the generic storage endpoint`,
+      );
+    }
+
     this.logger.log(`Deleting object ${id} from storage and database`);
 
     // Delete from storage provider
@@ -524,6 +772,136 @@ export class ObjectsService {
     this.logger.log(`Updated metadata for object ${id}`);
 
     return this.mapToResponseDto(updated);
+  }
+
+  /**
+   * Delete an object THE OWNING MODULE is responsible for (issue #21).
+   *
+   * The in-process counterpart to the 409 in {@link delete}: a managed object
+   * still has to be deletable, just not by a client naming it directly. There
+   * is no ownership check here because the caller is a module acting on its
+   * own row, not a user acting on someone else's — but it MUST name the module
+   * it believes owns the object, and a mismatch throws. That turns "the
+   * transcripts module deleted an export belonging to some other feature" from
+   * a possible bug into an impossible one.
+   *
+   * ⚠ NOT REACHABLE OVER HTTP, and must not become so. No controller calls it.
+   */
+  async deleteManagedObject(
+    id: string,
+    expectedManagedBy: string,
+    actorUserId?: string | null,
+  ): Promise<void> {
+    const object = await this.prisma.storageObject.findUnique({ where: { id } });
+
+    if (!object) {
+      throw new NotFoundException('Object not found');
+    }
+
+    if (object.managedBy !== expectedManagedBy) {
+      throw new ConflictException(
+        `Object ${id} is managed by ${object.managedBy ?? 'nobody'}, not by ` +
+          `${expectedManagedBy}`,
+      );
+    }
+
+    this.logger.log(
+      `Deleting ${expectedManagedBy}-managed object ${id} from storage and database`,
+    );
+
+    await this.storageProvider.delete(object.storageKey);
+    await this.prisma.storageObject.delete({ where: { id } });
+
+    if (actorUserId) {
+      await this.createAuditEvent(actorUserId, 'storage:object:delete', id, {
+        name: object.name,
+        size: object.size.toString(),
+        mimeType: object.mimeType,
+        managedBy: expectedManagedBy,
+      });
+    }
+
+    this.logger.log(`Managed object deleted: ${id}`);
+  }
+
+  // ===========================================================================
+  // Multipart upload helpers (issue #21)
+  // ===========================================================================
+  //
+  // ⚠ A NOTE ON WHAT `managed_by` DOES AND DOES NOT GATE.
+  //
+  // Only LIST and DELETE change for a managed object. `GET /:id`,
+  // `GET /:id/download` and `PATCH /:id/metadata` stay reachable by the
+  // object's owner, deliberately: the user owns the bytes, and the download URL
+  // is exactly how the owning module's own UI plays back the audio it manages.
+  // The two that change are the two where the generic endpoint would otherwise
+  // ACT ON BEHALF of a module that knows better — cluttering a file list with
+  // rows the user cannot interpret, and destroying a row another feature
+  // depends on. Reading your own file is neither.
+
+  /** Is this object still an upload a client can push parts to? */
+  private isUploadActive(status: string): boolean {
+    return status === 'pending' || status === 'uploading';
+  }
+
+  /**
+   * The part size THIS upload uses.
+   *
+   * Falls back to the configured size only for rows written before `part_size`
+   * existed — never as a routine path, because reading the current setting is
+   * exactly the bug that made a mid-flight configuration change renumber an
+   * upload's parts.
+   */
+  private partSizeFor(object: { partSize: number | null }): number {
+    return (
+      object.partSize ?? this.config.get<number>('storage.partSize', 10485760)
+    );
+  }
+
+  /** Part count derived from the size and part size on the row itself. */
+  private totalPartsFor(object: { size: bigint; partSize: number | null }): number {
+    return computeTotalParts(Number(object.size), this.partSizeFor(object));
+  }
+
+  /**
+   * Mark an upload as still alive.
+   *
+   * An explicit write rather than a reliance on `@updatedAt`, because the
+   * operations that prove a client is still there — signing a batch, polling
+   * progress — otherwise change no column at all and so touch no timestamp.
+   * The stale-upload sweep reads `updated_at`; without this it would be reading
+   * the moment the upload STARTED under a different name.
+   */
+  private async touchUpload(objectId: string): Promise<void> {
+    await this.prisma.storageObject.update({
+      where: { id: objectId },
+      data: { updatedAt: new Date() },
+    });
+  }
+
+  /**
+   * The parts list for a completion the client did not supply one for.
+   *
+   * Sorted ascending, because `CompleteMultipartUpload` rejects an out-of-order
+   * list outright.
+   */
+  private async partsFromProvider(
+    storageKey: string,
+    uploadId: string,
+  ): Promise<{ partNumber: number; eTag: string }[]> {
+    const parts = await this.storageProvider.listParts(storageKey, uploadId);
+
+    if (parts.length === 0) {
+      throw new BadRequestException(
+        'No uploaded parts found for this upload; upload at least one part ' +
+          'before completing it',
+      );
+    }
+
+    return parts
+      .slice()
+      .sort((a, b) => a.partNumber - b.partNumber)
+      .map((part) => ({ partNumber: part.partNumber, eTag: part.etag }));
   }
 
   /**

@@ -28,9 +28,22 @@ export class ObjectResponseDto extends createZodDto(objectResponseSchema) {}
 export const uploadStatusResponseSchema = z.object({
   objectId: z.uuid(),
   status: z.enum(StorageObjectStatus),
-  /** Part numbers already uploaded, so a resuming client knows what to skip. */
+  /**
+   * Part numbers the STORAGE PROVIDER is actually holding, so a resuming
+   * client knows what to skip (#21). Read from the provider on every call,
+   * not from this application's own chunk rows — those are written at
+   * completion time and are empty for exactly as long as the answer matters.
+   */
   uploadedParts: z.array(z.number().int()),
   totalParts: z.number().int(),
+  /**
+   * The part size THIS upload was initialised with (#21).
+   *
+   * Returned so a resuming client slices the file the same way the original
+   * upload did. It is read from the row, never re-derived from the
+   * deployment's current configuration — see `storage_objects.part_size`.
+   */
+  partSize: z.number().int().positive(),
   uploadedBytes: z.string(),
   totalBytes: z.string(),
 });

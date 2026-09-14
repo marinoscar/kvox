@@ -44,6 +44,7 @@
 // =============================================================================
 
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Job } from '@prisma/client';
 
 import { JobHandler } from '../../jobs/job-handler.interface';
@@ -59,15 +60,13 @@ import { STORAGE_PROVIDER, StorageProvider } from '../providers';
 export const STORAGE_CLEANUP_TYPE = 'storage.cleanup.stale-uploads';
 
 /**
- * How long an unfinished upload is left alone before it is considered
- * abandoned.
+ * Default hours an untouched upload is left alone before it is considered
+ * abandoned, when `STORAGE_STALE_UPLOAD_HOURS` says nothing.
  *
- * TWENTY-FOUR HOURS, carried over from the cron this handler replaces. It is a
- * generous ceiling on a resumable upload rather than a guess: a client
- * genuinely still uploading refreshes the row, and one that stopped a day ago
- * is not coming back.
+ * SEVENTY-TWO, up from a hard-coded 24 — but the BASELINE change below matters
+ * more than the number. See {@link StorageCleanupHandler.sweep}.
  */
-const CLEANUP_AGE_HOURS = 24;
+const DEFAULT_CLEANUP_AGE_HOURS = 72;
 
 /** What one sweep did. Returned so a test can assert the split directly. */
 export interface StaleUploadCleanupResult {
@@ -87,7 +86,8 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
     @Inject(STORAGE_PROVIDER)
-    private readonly storageProvider: StorageProvider
+    private readonly storageProvider: StorageProvider,
+    private readonly config: ConfigService
   ) {}
 
   /** Self-registration — the only wiring a handler needs. */
@@ -96,8 +96,8 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
   }
 
   /**
-   * Aborts and deletes every upload that has been unfinished for longer than
-   * {@link CLEANUP_AGE_HOURS}.
+   * Aborts and deletes every upload that has been UNTOUCHED for longer than
+   * the configured stale window.
    *
    * Throws only when EVERY candidate failed — see the file header for why that
    * is the line between "one wedged upload" and "the bucket is unreachable".
@@ -133,13 +133,27 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
    * going through `process`'s throw rule.
    */
   async sweep(): Promise<StaleUploadCleanupResult> {
-    const cleanupBefore = new Date();
-    cleanupBefore.setHours(cleanupBefore.getHours() - CLEANUP_AGE_HOURS);
+    const ageHours = this.config.get<number>(
+      'storage.staleUploadHours',
+      DEFAULT_CLEANUP_AGE_HOURS
+    );
 
+    const cleanupBefore = new Date();
+    cleanupBefore.setHours(cleanupBefore.getHours() - ageHours);
+
+    // ⚠ `updatedAt`, NOT `createdAt` (issue #21). Measured from creation, this
+    // sweep destroyed uploads that were unambiguously ALIVE: a multi-GB
+    // recording uploaded from a phone over a day — paused on the train,
+    // resumed at home, 80% done — was aborted and deleted the first night,
+    // because "when it started" says nothing about whether anybody is still
+    // pushing parts to it. `updated_at` is refreshed by every part-URL batch
+    // and every status poll (see `ObjectsService.touchUpload`), so this now
+    // asks the question the sweep actually means: has NOTHING touched this
+    // upload for `ageHours`?
     const staleUploads = await this.prisma.storageObject.findMany({
       where: {
         status: { in: ['pending', 'uploading'] },
-        createdAt: { lt: cleanupBefore },
+        updatedAt: { lt: cleanupBefore },
       },
       select: {
         id: true,

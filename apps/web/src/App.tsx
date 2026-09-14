@@ -4,6 +4,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeContextProvider, useThemeContext } from './contexts/ThemeContext';
+// Issue #22, epic #19 — the app-wide upload manager. Mounted around the
+// authenticated shell (see the route element below), never per-page.
+import { UploadManagerProvider } from './contexts/UploadManagerContext';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { RequirePermission } from './components/common/RequirePermission';
 import { Layout } from './components/common/Layout';
@@ -146,7 +149,30 @@ function AppRoutes() {
                 <Route
                   element={
                     <NotificationProvider>
-                      <Layout />
+                      {/* The upload manager (#22, epic #19) is mounted HERE,
+                          for the same reason the notification centre above is
+                          and with the same consequence: ONE mount point for
+                          the whole authenticated shell.
+
+                          An upload of a two-hour recording outlives every
+                          route change a user makes while it runs. Mounted on
+                          a page, the provider would unmount with that page and
+                          take the in-flight `XMLHttpRequest`s with it — the
+                          transfer would die mid-part, with nothing on screen to
+                          say so. Mounted here, the engines live in a ref that
+                          survives every navigation inside `Layout`.
+
+                          INSIDE `ProtectedRoute`, like `NotificationProvider`:
+                          every endpoint it calls is `@Auth()`-guarded, and
+                          `/activate` deliberately sits outside the shell (a
+                          full-screen device flow with no upload affordance).
+
+                          Inside `NotificationProvider` rather than outside is
+                          not significant — neither reads the other — but the
+                          order is fixed so the tree is stable to read. */}
+                      <UploadManagerProvider>
+                        <Layout />
+                      </UploadManagerProvider>
                     </NotificationProvider>
                   }
                 >

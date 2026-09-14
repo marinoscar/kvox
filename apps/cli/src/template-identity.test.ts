@@ -164,6 +164,26 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // Worker container env plus one prose comment naming the enroll command.
   'infra/compose/.env.worker.example',
   'infra/compose/worker.compose.yml',
+
+  // ---------------------------------------------------------------------
+  // Added by epic #19 (issue #20), the transcription architecture spec.
+  // ---------------------------------------------------------------------
+
+  // Prose about the product, on the same standing as `VISION.md` above:
+  // a design document arguing about what this product does names it, and
+  // Markdown cannot import from `@app/shared`.
+  'docs/specs/transcription.md',
+  // A PUBLISHED FORMAT IDENTIFIER, not a display string — the same
+  // standing as the `Symbol.for()` registry key in
+  // `verbatim-error-body.exception.ts` above. `kvox.transcript/v1` is the
+  // `$id`/`const` a third-party consumer matches on to recognise an export
+  // it has already written a parser for, so it is deliberately PERMANENT:
+  // rewriting it on a rebrand would silently invalidate every consumer of
+  // every file exported before the rename, which is exactly the breakage a
+  // versioned schema exists to prevent. A fork that wants its own format
+  // publishes `<name>.transcript/v1` as a NEW schema beside this one; it
+  // does not renumber this one. See docs/specs/transcription.md §8.2.
+  'docs/specs/transcript-export.v1.schema.json',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this

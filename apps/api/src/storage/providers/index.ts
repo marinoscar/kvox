@@ -8,6 +8,7 @@ export {
   StorageUploadOptions,
   StorageUploadResult,
   UploadPart,
+  UploadedPart,
   SignedUrlOptions,
   SignedPutUrlOptions,
   MultipartUploadInit,
