@@ -16,9 +16,13 @@
  * may contradict. Guessing eight and rendering two is a worse flicker than the
  * one this file exists to remove.
  *
- * `aria-busy` + a polite status label, not `role="progressbar"`: there is no
+ * `role="status"` + `aria-busy`, not `role="progressbar"`: there is no
  * measurable progress here, and a screen reader announcing an unlabelled,
  * value-less progress bar on every visit is noise rather than information.
+ * The role is load-bearing rather than decorative — `aria-label` on a bare
+ * `div` is an axe `aria-prohibited-attr` failure, because a nameless generic
+ * element has nothing for a name to attach to. `status` also carries an
+ * implicit `aria-live="polite"`, so that attribute is deliberately absent.
  */
 
 import Box from '@mui/material/Box';
@@ -28,7 +32,7 @@ import Stack from '@mui/material/Stack';
 
 export function HomeSkeleton() {
   return (
-    <Box aria-busy="true" aria-live="polite" aria-label="Loading your transcripts">
+    <Box role="status" aria-busy="true" aria-label="Loading your transcripts">
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={2}

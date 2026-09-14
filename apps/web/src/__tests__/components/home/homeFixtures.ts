@@ -1,0 +1,186 @@
+/**
+ * Fixtures shared by the home-page suites — issue #32, epic #19.
+ *
+ * NOT a `.test.ts` file, so `vitest.config.ts`'s
+ * `include: ['src/**\/*.{test,spec}.{ts,tsx}']` never treats it as a suite with
+ * no assertions in it.
+ *
+ * The point of collecting these here rather than re-declaring them per file is
+ * that six suites render the same five components over the same shapes: a
+ * divergence between "the transcript the card test renders" and "the transcript
+ * the page test renders" is how a component passes its own suite and fails in
+ * the page that mounts it.
+ */
+
+import { vi } from 'vitest';
+
+import { mockUser, type MockUser } from '../../utils/test-utils';
+
+import type { UploadManagerContextValue, ManagedUpload } from '../../../contexts/UploadManagerContext';
+import type { TranscriptListItem, TranscriptSummary } from '../../../services/transcripts';
+import type { UploadSessionRecord } from '../../../services/uploadSessions';
+import type { TranscriptionConfig } from '../../../services/transcription';
+
+/**
+ * A fixed instant, never `Date.now()`.
+ *
+ * `formatRelativeTime` renders against the browser clock, so a fixture pinned
+ * far enough in the past reads the same ("2 years ago") on every run, on every
+ * machine, on every day — which is the only way an assertion on the metadata
+ * line can be stable.
+ */
+export const FIXED_ISO = '2024-03-01T09:00:00.000Z';
+
+export function transcript(overrides: Partial<TranscriptListItem> = {}): TranscriptListItem {
+  return {
+    id: 't1',
+    title: 'Weekly standup',
+    status: 'ready',
+    transcriptionStatus: 'completed',
+    playbackStatus: 'ready',
+    language: 'en',
+    durationMs: 900_000,
+    speakerCount: 3,
+    wordCount: 2400,
+    currentVersion: 1,
+    failureReason: null,
+    access: 'owner',
+    createdAt: FIXED_ISO,
+    updatedAt: FIXED_ISO,
+    ...overrides,
+  };
+}
+
+export function summary(overrides: Partial<TranscriptSummary> = {}): TranscriptSummary {
+  const recent = overrides.recent ?? [];
+  const shared = overrides.sharedWithMe ?? [];
+  const inProgress = overrides.inProgress ?? [];
+  return {
+    inProgress,
+    recent,
+    sharedWithMe: shared,
+    counts: {
+      owned: recent.length + inProgress.length,
+      shared: shared.length,
+      inProgress: inProgress.length,
+      failed: 0,
+      ...overrides.counts,
+    },
+  };
+}
+
+export const TRANSCRIPTION_AVAILABLE: TranscriptionConfig = {
+  available: true,
+  providerLabel: 'AssemblyAI',
+  maxUploadBytes: 100_000_000,
+  maxDurationMs: 7_200_000,
+  acceptedExtensions: ['.m4a', '.mp3'],
+  acceptedMimeTypes: ['audio/mp4', 'audio/mpeg'],
+};
+
+export const TRANSCRIPTION_UNAVAILABLE: TranscriptionConfig = {
+  ...TRANSCRIPTION_AVAILABLE,
+  available: false,
+  providerLabel: null,
+};
+
+export function upload(overrides: Partial<ManagedUpload> = {}): ManagedUpload {
+  return {
+    id: 'obj-1',
+    objectId: 'obj-1',
+    transcriptId: 't-upload',
+    fileName: 'interview.m4a',
+    size: 40_000_000,
+    startedAt: Date.parse(FIXED_ISO),
+    resumed: false,
+    ...overrides,
+    progress: {
+      phase: 'uploading',
+      uploadedBytes: 10_000_000,
+      totalBytes: 40_000_000,
+      percent: 25,
+      completedParts: 1,
+      totalParts: 4,
+      bytesPerSecond: 1_000_000,
+      etaSeconds: 30,
+      error: null,
+      waitingForNetwork: false,
+      ...overrides.progress,
+    },
+  };
+}
+
+export function session(overrides: Partial<UploadSessionRecord> = {}): UploadSessionRecord {
+  return {
+    objectId: 'obj-interrupted',
+    transcriptId: 't-interrupted',
+    fileName: 'board-meeting.m4a',
+    size: 80_000_000,
+    lastModified: Date.parse(FIXED_ISO),
+    partSize: 8_000_000,
+    createdAt: Date.parse(FIXED_ISO),
+    ...overrides,
+  };
+}
+
+export interface ManagerOverrides {
+  uploads?: ManagedUpload[];
+  sessions?: UploadSessionRecord[];
+  pauseUpload?: UploadManagerContextValue['pauseUpload'];
+  resumeUpload?: UploadManagerContextValue['resumeUpload'];
+  cancelUpload?: UploadManagerContextValue['cancelUpload'];
+  resumeFromSession?: UploadManagerContextValue['resumeFromSession'];
+}
+
+/**
+ * A whole `useUploadManager` return value.
+ *
+ * The manager is mocked rather than stood up for real, which its own hook
+ * header anticipates: it owns `XMLHttpRequest`s, IndexedDB sessions and a wake
+ * lock, and none of the home page's behaviour depends on any of the three —
+ * only on the array it publishes and the three callbacks the rows invoke.
+ */
+export function manager(overrides: ManagerOverrides = {}): UploadManagerContextValue {
+  const uploads = overrides.uploads ?? [];
+  return {
+    uploads,
+    activeUploads: uploads,
+    sessions: overrides.sessions ?? [],
+    sessionsLoading: false,
+    keepScreenAwake: true,
+    setKeepScreenAwake: vi.fn(),
+    wakeLockSupported: true,
+    wakeLockHeld: false,
+    startUpload: vi.fn(),
+    pauseUpload: overrides.pauseUpload ?? vi.fn(),
+    resumeUpload: overrides.resumeUpload ?? vi.fn(),
+    cancelUpload: overrides.cancelUpload ?? vi.fn().mockResolvedValue(undefined),
+    dismissUpload: vi.fn(),
+    resumeFromSession: overrides.resumeFromSession ?? vi.fn().mockResolvedValue(upload()),
+    refreshSessions: vi.fn().mockResolvedValue(undefined),
+    getUpload: vi.fn(),
+  };
+}
+
+/**
+ * jsdom performs no layout, so `color-contrast` cannot resolve an element's
+ * effective background and is a well-known false-negative trap here. Every
+ * other rule runs at full strength — the same posture, and the same reasoning,
+ * as the transcripts library suite's own axe pass.
+ */
+export const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
+
+/**
+ * An ordinary (Viewer) account that can actually record something.
+ *
+ * `transcripts:read`/`:write` are seeded to ALL THREE roles
+ * (`apps/api/prisma/seed.ts`), so a viewer fixture WITHOUT them is a user that
+ * cannot exist — and a home page rendered for one would silently be a home page
+ * with no call to action, asserted against as though that were the norm.
+ * `mockUser` predates the transcripts permissions and is left alone here
+ * because a dozen navigation suites derive expectations from its exact list.
+ */
+export const homeUser: MockUser = {
+  ...mockUser,
+  permissions: [...mockUser.permissions, 'transcripts:read', 'transcripts:write'],
+};
