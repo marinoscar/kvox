@@ -20,7 +20,13 @@ import type { TranscriptionProvider } from './providers/transcription-provider.i
 // edit somebody makes, because the form always renders the key box empty.
 // =============================================================================
 
-const API_KEY = 'aai-live-key-3f9a2b7c';
+// Deliberately shaped so no scanner and no reader can mistake it for a real
+// credential. The first spelling here was `aai-live-key-<hex>`, which imitates
+// the vendor's live-key format closely enough that GitGuardian opened an
+// incident on it — a false positive that costs a human the time to confirm it
+// is fake. A fixture only has to be a distinctive string; looking plausible
+// buys this suite nothing and costs somebody a triage.
+const API_KEY = 'fake-test-api-key-do-not-use';
 
 const DEFAULTS = DEFAULT_SYSTEM_SETTINGS.transcription;
 
