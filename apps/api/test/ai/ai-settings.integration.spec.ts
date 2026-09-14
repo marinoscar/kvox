@@ -216,8 +216,16 @@ describe('AI settings and config integration', () => {
 
       // A merging list could never express "stop permitting gpt-4o", so
       // unchecking it on the admin page would be a no-op.
+      //
+      // ⚠ STORED AS AN OBJECT even though a bare id was sent (#78): the schema
+      // normalises both accepted forms on the way in, so every reader
+      // downstream sees one shape. The bare-string form on the WIRE is
+      // permanent — every pre-#78 row contains it — and this assertion is what
+      // pins the normalisation rather than the wire format.
       const written = prismaMock.systemSettings.update.mock.calls[0][0].data.value;
-      expect(written.ai.providers.openai.allowedModels).toEqual(['gpt-4o-mini']);
+      expect(written.ai.providers.openai.allowedModels).toEqual([
+        { id: 'gpt-4o-mini' },
+      ]);
     });
 
     it('rejects a model id no registered provider declares', async () => {
