@@ -19,12 +19,14 @@ import {
   systemNodesSchema,
   systemDatabaseBackupSchema,
   systemMaintenanceSchema,
+  systemTranscriptionSchema,
   MAX_DISABLED_NOTIFICATION_EVENTS,
   type SystemNotificationsValue,
   type SystemMaintenanceValue,
   type SystemJobsValue,
   type SystemNodesValue,
   type SystemDatabaseBackupValue,
+  type SystemTranscriptionValue,
 } from '../../common/schemas/settings.schema';
 
 const SETTINGS_KEY = 'global';
@@ -341,6 +343,13 @@ export class SystemSettingsService {
         systemMaintenanceSchema,
         DEFAULT_SYSTEM_SETTINGS.maintenance,
       ),
+      // Transcription (#23, epic #19). Same helper, same contract: whatever is
+      // on disk, what comes back validates.
+      transcription: this.readNamespace(
+        root?.transcription,
+        systemTranscriptionSchema,
+        DEFAULT_SYSTEM_SETTINGS.transcription,
+      ),
     };
   }
 
@@ -602,6 +611,7 @@ export class SystemSettingsService {
       nodes: value.nodes,
       databaseBackup: value.databaseBackup,
       maintenance: value.maintenance,
+      transcription: value.transcription,
       security: this.readSecurityPolicy(),
       updatedAt: row.updatedAt,
       updatedBy: row.updatedByUser,
@@ -808,6 +818,41 @@ export class SystemSettingsService {
   }
 
   /**
+   * The transcription policy — the active provider, its region and model, how
+   * audio is delivered and what happens to it afterwards (#23, epic #19).
+   *
+   * A NARROW ACCESSOR RATHER THAN `getSettings()`, for the three reasons
+   * `getJobsPolicy` above gives, and one that belongs to this caller:
+   *
+   *   1. IT DOES NOT CREATE THE ROW. `getSettings` goes through
+   *      `loadOrCreateRow`, which INSERTs when the row is missing. Its callers
+   *      are a job handler and the config endpoint any authenticated user can
+   *      reach; neither should materialise a settings row as a side effect.
+   *   2. IT RETURNS ONLY THIS BLOCK. `GET /api/transcription/config` is
+   *      readable by any signed-in account, and building it from the whole
+   *      settings blob would mean holding the fleet, backup and maintenance
+   *      policy in scope on a request that publishes three numbers.
+   *   3. IT IS THE ONE READ PATH FOR THESE VALUES, so "which provider is this
+   *      deployment using" has exactly one answer — which matters because the
+   *      answer also decides WHICH CREDENTIAL ROW is read, and a second read
+   *      path is how a job ends up submitting to one vendor with another
+   *      vendor's key.
+   *
+   * Degrades exactly as every other read here does: a missing row, a `null`
+   * value or a malformed one yields `DEFAULT_SYSTEM_SETTINGS.transcription`
+   * through `readKnownSettings` — which reads as `enabled: false`, so a damaged
+   * row cannot start submitting audio to a third party by accident.
+   */
+  async getTranscriptionPolicy(): Promise<SystemTranscriptionValue> {
+    const row = await this.prisma.systemSettings.findUnique({
+      where: { key: SETTINGS_KEY },
+      select: { value: true },
+    });
+
+    return this.readKnownSettings(row?.value).transcription;
+  }
+
+  /**
    * Replace system settings (PUT)
    */
   async replaceSettings(dto: UpdateSystemSettingsDto, userId: string) {
@@ -1011,6 +1056,49 @@ export class SystemSettingsService {
         nodeOffloadEnabled:
           dto.databaseBackup?.nodeOffloadEnabled ??
           currentValue.databaseBackup.nodeOffloadEnabled,
+      },
+      // Transcription (#23, epic #19). Field by field like its neighbours, and
+      // `defaultLanguage` tests `!== undefined` rather than using `??` for the
+      // same reason `maintenance.startedAt` does: an explicit `null` is a
+      // VALUE here ("detect the language"), so `??` would silently make
+      // switching back to detection a no-op.
+      transcription: {
+        enabled: dto.transcription?.enabled ?? currentValue.transcription.enabled,
+        provider:
+          dto.transcription?.provider !== undefined
+            ? dto.transcription.provider
+            : currentValue.transcription.provider,
+        providers: {
+          assemblyai: {
+            region:
+              dto.transcription?.providers?.assemblyai?.region ??
+              currentValue.transcription.providers.assemblyai.region,
+            speechModel:
+              dto.transcription?.providers?.assemblyai?.speechModel ??
+              currentValue.transcription.providers.assemblyai.speechModel,
+          },
+        },
+        audioDelivery:
+          dto.transcription?.audioDelivery ??
+          currentValue.transcription.audioDelivery,
+        presignedUrlTtlMinutes:
+          dto.transcription?.presignedUrlTtlMinutes ??
+          currentValue.transcription.presignedUrlTtlMinutes,
+        deleteRemoteAfterIngest:
+          dto.transcription?.deleteRemoteAfterIngest ??
+          currentValue.transcription.deleteRemoteAfterIngest,
+        defaultLanguage:
+          dto.transcription?.defaultLanguage !== undefined
+            ? dto.transcription.defaultLanguage
+            : currentValue.transcription.defaultLanguage,
+        transcodeNodeOffloadEnabled:
+          dto.transcription?.transcodeNodeOffloadEnabled ??
+          currentValue.transcription.transcodeNodeOffloadEnabled,
+        playback: {
+          bitrateKbps:
+            dto.transcription?.playback?.bitrateKbps ??
+            currentValue.transcription.playback.bitrateKbps,
+        },
       },
       maintenance: {
         enabled: dto.maintenance?.enabled ?? currentValue.maintenance.enabled,

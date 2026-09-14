@@ -26,6 +26,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { DbBackupModule } from './db-backup/db-backup.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
+import { TranscriptionModule } from './transcription/transcription.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
 
@@ -163,6 +164,14 @@ import configuration from './config/configuration';
     // provides runs in front of every route in this application, and that
     // belongs in the module that owns the application.
     MaintenanceModule,
+
+    // Transcription (#23, epic #19): the provider framework, the AssemblyAI
+    // provider, the admin settings surface and the non-admin capability probe.
+    // Imported after SettingsModule because it writes the `transcription`
+    // namespace through `SystemSettingsService.patchSettings` rather than
+    // touching `system_settings` itself — the same arrangement DbBackupModule
+    // has with `databaseBackup`.
+    TranscriptionModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),

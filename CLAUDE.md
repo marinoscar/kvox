@@ -592,6 +592,21 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
 - `POST /api/admin/push-config/rotate` - Replace the key pair (body `{"confirmation":"ROTATE"}`; 400 if nothing configured yet) (`push:write`)
 - `DELETE /api/admin/push-config` - Delete both the credential and the settings row (body `{"confirmation":"REMOVE"}`) (`push:write`)
 
+### Transcription Settings (Admin-only)
+Speech-to-text provider configuration (issue #23, epic #19) — which vendor, its
+region and model, how audio reaches it, and what happens to it afterwards.
+Gated on `system_settings:read`/`:write` and **not** a permission pair of its
+own: this is a namespace (`transcription`) of the `global` system-settings row,
+which `system-settings.controller.ts` already gates on exactly those strings.
+The provider API key lives in the encrypted `credentials` table at
+`(purpose 'transcription', name '<providerId>')`, is never returned, and is
+preserved by an empty submission.
+- `GET /api/transcription-settings` - Settings, a masked key status per provider, and the provider catalogue (capabilities + form-field descriptors) (`system_settings:read`)
+- `PUT /api/transcription-settings` - Partial update, plus an optional write-only `apiKey` (blank/absent keeps the stored key) (`system_settings:write`)
+- `POST /api/transcription-settings/test` - Probe a credential, **including one that has not been saved**; audited. ⚠ Answers **200** with `{ ok: false, detail }` on a refusal — a refused probe is a successful diagnosis (`system_settings:write`)
+- `DELETE /api/transcription-settings/credentials/{provider}` - Erase one provider's key; the only path that does. Does not change the settings, so a rotation is not an outage (`system_settings:write`)
+- `GET /api/transcription/config` - Narrow capability probe (`available`, provider label, size/duration ceilings, accepted types) readable by **any authenticated user**, exactly like `GET /api/notifications/config`. Becomes `transcripts:read` in issue #24
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -649,7 +664,7 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
 - `user_identities` - OAuth provider identities (provider + subject)
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-role assignments
-- `system_settings` - Global app settings (JSONB)
+- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`. ⚠ Adding one costs **six** edits — see `apps/api/src/common/schemas/settings-parity.spec.ts`'s header; miss the wire DTOs and every PATCH becomes a silent no-op that returns 200
 - `user_settings` - Per-user settings (JSONB)
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)

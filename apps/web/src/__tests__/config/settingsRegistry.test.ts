@@ -644,6 +644,10 @@ describe('the Operations group (#266)', () => {
       expect(titlesOf(result)).toEqual([
         'Email',
         'Notifications',
+        // #23, epic #19 — a General card gated on the same
+        // `system_settings:read` its controller enforces, so it appears for
+        // exactly the admin this assertion describes.
+        'Transcription',
         'Maintenance',
         'Users & Allowlist',
       ]);
@@ -717,5 +721,94 @@ describe('the Operations group (#266)', () => {
       // And the segment-boundary rule holds around the new path too.
       expect(titleFor('/admin/settings/db-backup-archive')).toBe(ADMIN_HUB_TITLE);
     });
+  });
+});
+
+/**
+ * Issue #23, epic #19. The `Transcription` page is a registry CARD, never a
+ * fourth tab on the admin Email or Notifications page — `CLAUDE.md`'s mandatory
+ * settings-UI rule 1, stated as an assertion.
+ *
+ * The route/permission agreement with `App.tsx` is asserted generically for
+ * every card in `destinations.test.ts`; what is pinned here is this card's own
+ * identity, that it sits in General rather than Operations, and that the gate
+ * genuinely denies.
+ */
+describe('the Transcription card (#23)', () => {
+  const card = ADMIN_SECTIONS.flatMap((section) => section.cards).find(
+    (entry) => entry.title === 'Transcription',
+  );
+
+  it('is declared in ADMIN_SECTIONS', () => {
+    expect(card).toBeDefined();
+  });
+
+  it('routes to /admin/settings/transcription', () => {
+    expect(card?.path).toBe('/admin/settings/transcription');
+  });
+
+  it('declares the exact permission the API enforces on GET /api/transcription-settings', () => {
+    // `transcription-settings.controller.ts`. Not a pair of its own, and
+    // deliberately: this page edits the `transcription` NAMESPACE of the
+    // `global` system_settings row, which `system-settings.controller.ts`
+    // already gates on exactly these strings.
+    expect(card?.permission).toBe('system_settings:read');
+  });
+
+  it('lives under General, not Operations', () => {
+    // General is configuration an administrator SETS, which then sits there.
+    // Transcription is a provider choice, a credential and a policy — not a
+    // view onto the running system.
+    const owner = ADMIN_SECTIONS.find((section) =>
+      section.cards.some((entry) => entry.title === 'Transcription'),
+    );
+
+    expect(owner?.label).toBe('General');
+  });
+
+  it('is routed, not inert', () => {
+    expect(card?.disabled).toBeFalsy();
+    expect(card?.path).toBeTruthy();
+  });
+
+  it('is not an alwaysShow escape hatch — the gate must be able to deny it', () => {
+    expect(card?.alwaysShow).toBeUndefined();
+  });
+
+  it('appears for an admin holding system_settings:read', () => {
+    const result = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission === 'system_settings:read',
+    );
+
+    expect(titlesOf(result)).toContain('Transcription');
+  });
+
+  it('appears in none of the three surfaces for a viewer', () => {
+    // One assertion covers the hub, the Console rail and the AppBar title
+    // resolver, because all three run this same function.
+    const viewerPermissions = ['user_settings:read', 'user_settings:write'];
+    const result = visibleSettingsSections(ADMIN_SECTIONS, (permission) =>
+      viewerPermissions.includes(permission),
+    );
+
+    expect(titlesOf(result)).not.toContain('Transcription');
+  });
+
+  it('resolves its route to its own title, not the hub title', () => {
+    expect(
+      settingsPageTitle(
+        ADMIN_SECTIONS,
+        ADMIN_HUB_PATH,
+        ADMIN_HUB_TITLE,
+        '/admin/settings/transcription',
+      ),
+    ).toBe('Transcription');
+  });
+
+  it('is findable by hub search on its title', () => {
+    const result = visibleSettingsSections(ADMIN_SECTIONS, () => true, 'transcri');
+
+    expect(titlesOf(result)).toContain('Transcription');
   });
 });
