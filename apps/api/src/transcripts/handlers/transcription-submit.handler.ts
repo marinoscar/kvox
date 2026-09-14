@@ -195,6 +195,39 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
       return;
     }
 
+    // -------------------------------------------------------------------------
+    // The duration ceiling, enforced HERE and deliberately nowhere later.
+    // -------------------------------------------------------------------------
+    //
+    // `transcripts.duration_ms` is null until something measures it: issue
+    // #26's rendition probe, or the provider's own `audio_duration` at ingest.
+    // This is the ONLY point where knowing it is still worth acting on — the
+    // provider has not been asked to do anything yet, so refusing costs
+    // nothing and saves the bill.
+    //
+    // ⚠ IT IS NOT RE-CHECKED AT INGEST, AND THAT IS THE POINT. By then the
+    // provider has already transcribed the recording and returned a result;
+    // failing a transcript whose text is sitting in front of us because the
+    // vendor's own published ceiling turned out to be advisory would destroy
+    // the one thing worth keeping, to enforce a limit whose purpose (do not
+    // submit what will be rejected) has already been overtaken by events.
+    if (
+      typeof transcript.durationMs === 'number' &&
+      transcript.durationMs > provider.capabilities.maxDurationMs
+    ) {
+      await this.pipeline.markFailed({
+        transcriptId: transcript.id,
+        reason:
+          `This recording is ${Math.round(transcript.durationMs / 60_000)} minutes long, ` +
+          `above the ${Math.round(provider.capabilities.maxDurationMs / 60_000)}-minute ` +
+          `limit ${provider.label} accepts.`,
+        stage: 'transcription',
+        retryable: false,
+      });
+
+      return;
+    }
+
     const selection = selectTranscriptionInput({
       capabilities: provider.capabilities,
       audioDelivery: policy.audioDelivery,

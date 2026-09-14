@@ -359,6 +359,33 @@ describe('TranscriptionSubmitHandler', () => {
       );
     });
 
+    it('refuses a recording over the provider\'s duration ceiling, before submitting', async () => {
+      // The only point where knowing the duration is still worth acting on:
+      // the provider has not been asked to do anything yet, so refusing costs
+      // nothing and saves the bill.
+      provider.capabilities.maxDurationMs = 60 * 60_000;
+      pipeline.loadForJob.mockResolvedValue(transcriptRow({ durationMs: 3 * 60 * 60_000 }));
+
+      await handler.process(job());
+
+      expect(provider.submit).not.toHaveBeenCalled();
+      expect(pipeline.markFailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          retryable: false,
+          reason: expect.stringContaining('180 minutes long'),
+        }),
+      );
+    });
+
+    it('submits a recording whose duration is not yet known', async () => {
+      // `duration_ms` is null until #26's probe or the provider's own
+      // `audio_duration` fills it in, and an unknown length must not block the
+      // submission that would measure it.
+      await handler.process(job());
+
+      expect(provider.submit).toHaveBeenCalled();
+    });
+
     it('fails when the uploaded audio has vanished from storage', async () => {
       prisma.storageObject.findUnique.mockResolvedValue(null);
 
