@@ -741,6 +741,14 @@ permission string** — deliberately: the resource is the caller's own credentia
 - `DELETE /api/ai-credentials/{provider}` - The only way to erase a key
 - `GET /api/ai/config` - What this deployment permits and whether **the caller** has a key, gated on `notes:read` (#47) rather than left merely authenticated — seeded to all three roles, so it stays readable by every ordinary account
 
+### User Data
+The "Danger Zone" — bulk-delete the data one user owns (issue #80). Both routes are `@Auth()`
+with **no permission string**, the same ownership-scoped posture `/api/user-settings`, `/api/pat`
+and `/api/ai-credentials` already take — see [`docs/specs/user-data-deletion.md`](docs/specs/user-data-deletion.md)
+and [`docs/API.md`](docs/API.md#user-data).
+- `GET /api/user-data/summary` - Per-category row counts and bytes (`bytes` a decimal string, same convention as the database backup's), plus the caller's own deletion already in flight, if any
+- `POST /api/user-data/deletions` - Queue a `user.data.purge` job for one `scope` (`transcripts`/`notes`/`files`/`content`/`everything`). **202**; 400 if `confirmation` isn't exactly the scope uppercased, 409 if a deletion is already pending/running for this caller. ⚠ **`confirmation` IS the scope, uppercased** — a word typed for one scope can never authorise another. ⚠ **The bulk path deliberately does not honour the per-item 409 guards** `DELETE /api/notes/{id}` and `DELETE /api/transcripts/{id}` enforce — it clears the `Restrict` foreign keys those guards protect first and deletes anyway
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -1570,6 +1578,48 @@ here offers a job-scoped sub-key the way PostgreSQL does for
 renderers live in the API, the same scope line `transcript.export` draws),
 `note.purge` and `notes.housekeeping` (the sweep that hard-deletes expired
 template previews and expired exports).
+
+### Deleting Your Own Data
+
+The "Danger Zone" (`/settings/danger-zone`, issue #80) is one queue job,
+`user.data.purge`, enqueued by `POST /api/user-data/deletions` and never run
+inline, per the "Every Long-Running Activity Is a Queue Job" rule above.
+**Server-only permanently**, for the database-restore reason at its
+strongest: it holds the authority to destroy a user's entire dataset across
+six tables, and there is no credential narrow enough for a
+`nodeSecretBroker` to hand a worker node instead. `profile: { maxAttempts:
+1 }`, for the identical reason `note.generate` carries it — a destructive
+fan-out that fails part-way through must surface as a `failed` job a person
+looks at, never silently resume minutes later. `POST
+/api/user-data/deletions` is the retry path, the same relationship `POST
+/api/notes/{id}/regenerate` has with `note.generate`.
+
+⚠ **It clears `Restrict` foreign keys before deleting, and never catches an
+FK violation.** A bulk deletion deliberately does not honour the per-item
+409 guards `NotesService.remove` and `TranscriptsService.remove` enforce —
+the blocking relationship is often inside the very batch being deleted, and
+unfixable from the UI once it is. So `notes.source_note_id` and
+`notes.source_transcript_id` are cleared first — including on **other
+users'** notes derived from a transcript the caller shared, which keep
+their text and lose only the provenance link — and the delete that follows
+is then an ordinary one.
+
+⚠ **It fans out to the existing `transcript.purge`/`note.purge` handlers and
+deletes no bytes itself.** A transcript is soft-deleted and handed to
+`transcript.purge`; a note to `note.purge`; an unmanaged upload goes through
+`ObjectsService.delete`. Reimplementing byte deletion here — the shortcut a
+"simplify this" pass would reach for — would orphan multi-gigabyte objects
+with nothing left in the database that knows they exist, the exact failure
+`transcript-purge.handler.ts`'s own header argues against.
+
+The scope matrix (`scopeIncludes` in `apps/api/src/user-data/job-types.ts`):
+`transcripts`/`notes`/`files` each remove exactly one category; `content` is
+transcripts + notes + the caller's own note templates + files; `everything`
+is `content` plus credentials (AI provider keys, personal access tokens). No
+scope deletes the account. Full design — the FK-clearing order and why it is
+mandatory, and the honest gaps (a template that finishes archived rather
+than deleted, a provenance link lost on a stranger's note) — is
+[`docs/specs/user-data-deletion.md`](docs/specs/user-data-deletion.md).
 
 ## Specialized Subagents (MANDATORY)
 
