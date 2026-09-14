@@ -1379,6 +1379,13 @@ multi-GB upload outlives its own first batch.
   `image/*,application/pdf,video/*,audio/*`) and no known audio extension
   rescues it; the message names the type that was rejected
 
+  ⚠ **This is the generic-upload allowlist only.** `POST /api/transcripts`
+  (issue #79) does **not** route its content-type check through
+  `ALLOWED_MIME_TYPES` — it enforces its own, fixed `audio/*,video/*` list
+  regardless of what an operator has configured here, for the reason given
+  under `### Transcripts` below. A 400 from a transcript upload never names
+  this setting.
+
 ---
 
 #### Sign More Upload Part URLs
@@ -2881,8 +2888,22 @@ request leaves no half-started upload behind for the stale sweep to find:
 | Code | When |
 |---|---|
 | `409` | Transcription is not configured for this deployment: disabled, no provider chosen, a provider this build does not include, or **no API key stored**. The request was well formed; the deployment is not ready, and a 400 would blame the caller for an administrator's unfinished setup |
-| `400` | The file is larger than the active provider accepts (5 GB for AssemblyAI), or is not a type this deployment allows at all |
+| `400` | The file is larger than the active provider accepts (5 GB for AssemblyAI), or is not audio or video at all |
 | `403` | The caller does not hold `transcripts:write` |
+
+**The `400` type check is `audio/*,video/*`, a fixed allowlist this endpoint
+enforces itself — not the operator-configured `ALLOWED_MIME_TYPES` the generic
+`POST /api/storage/objects*` surface reads (issue #79).** A deployment whose
+`.env` predates issue #21 lists `image/*,application/pdf,video/*` with no
+`audio/*` entry, which used to reject every Android `.m4a` recording with a
+message about images and PDFs — for a type AssemblyAI's own accepted list
+already contains. Recording is this feature's core action, so it cannot be
+silently disabled by an unrelated setting written for arbitrary file uploads;
+see [`docs/specs/transcription.md` §9.6](specs/transcription.md#96-content-type-allowlist-transcript_source_mime_types-not-storageallowedmimetypes-issue-79)
+for the full reasoning. Also note the check is deliberately **wider** than
+what AssemblyAI accepts directly: a video file passes here because
+`media.audio.transcode` extracts a rendition the provider does accept, decided
+later by `selectTranscriptionInput` once that rendition exists.
 
 The upload object is created `managed_by: transcripts`, which makes it
 **invisible** to `GET /storage/objects` and makes a generic `DELETE` against it
