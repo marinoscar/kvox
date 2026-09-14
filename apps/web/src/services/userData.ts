@@ -124,6 +124,101 @@ export const USER_DATA_CONFIRMATION: Record<UserDataScope, string> = {
   everything: 'EVERYTHING',
 };
 
+// =============================================================================
+// Scope semantics — a deliberate mirror of the API's own `scopeIncludes`
+// =============================================================================
+
+/**
+ * The five categories a scope may or may not cover.
+ *
+ * Named exactly as `apps/api/src/user-data/job-types.ts` names them, and in the
+ * same order, so the two functions can be read side by side.
+ */
+export type UserDataCategory =
+  | 'transcripts'
+  | 'notes'
+  | 'noteTemplates'
+  | 'files'
+  | 'credentials';
+
+/** Every category, for callers that need to ask about all of them. */
+export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
+  'transcripts',
+  'notes',
+  'noteTemplates',
+  'files',
+  'credentials',
+];
+
+/**
+ * Whether `scope` covers `category` — a MIRROR of `scopeIncludes` in
+ * `apps/api/src/user-data/job-types.ts`, which is the authority.
+ *
+ * ⚠ THIS IS A SECOND IMPLEMENTATION OF A RULE THE SERVER OWNS, and that is
+ * worth being uncomfortable about, so here is the whole argument for it.
+ *
+ * It exists so the confirmation dialog can state what is about to be destroyed
+ * IN NUMBERS at the moment of decision, and there is no way to get that from
+ * the server: `GET /api/user-data/summary` reports each category's count
+ * independently and says nothing about which scope covers which. The
+ * alternative is not "no duplication" — it is duplication in a worse place. A
+ * dialog that hardcoded "content means transcripts + notes + templates +
+ * files" would be the same rule, spelled in prose, inside a string, where
+ * nothing could grep it. That is exactly how the earlier `notes`-claims-
+ * templates copy went wrong and had to be reversed: the coupling lived in a
+ * sentence, so nothing connected it to the function that actually decided.
+ *
+ * Written as the same `switch` on the same category union rather than as a
+ * lookup table, so a diff against the API file is a genuine line-by-line
+ * comparison. What keeps them in step is that this is the only copy on this
+ * side, every caller goes through it, and a category added to the union above
+ * without a case here is a compile error.
+ *
+ * ⚠ IT IS NEVER AN AUTHORIZATION OR A GUARANTEE. Nothing here decides what gets
+ * deleted — the handler does, from the server's own copy. This answers one
+ * question only: what should this dialog tell the user is about to go. If the
+ * two ever disagree, the server wins and the dialog was misleading, which is
+ * why the header comments on both sides point at each other.
+ */
+export function scopeIncludes(scope: UserDataScope, category: UserDataCategory): boolean {
+  switch (category) {
+    // Every narrow scope maps to exactly one category; only the composites fan
+    // out.
+    case 'transcripts':
+      return scope === 'transcripts' || scope === 'content' || scope === 'everything';
+    case 'notes':
+      return scope === 'notes' || scope === 'content' || scope === 'everything';
+    case 'files':
+      return scope === 'files' || scope === 'content' || scope === 'everything';
+    // ⚠ NOTE TEMPLATES ARE `content`/`everything` ONLY — the narrow `notes`
+    // scope does not touch them. A template is reusable CONFIGURATION with its
+    // own settings destination (`/settings/note-templates`), authored
+    // independently of any particular note and meant for notes that do not
+    // exist yet, so "Delete notes" must not empty a page the user never opened.
+    case 'noteTemplates':
+      return scope === 'content' || scope === 'everything';
+    // ⚠ CREDENTIALS ARE `everything` ONLY. Revoking a user's API tokens is not
+    // implied by deleting their recordings.
+    case 'credentials':
+      return scope === 'everything';
+  }
+}
+
+/**
+ * Whether a scope covers more than one category — i.e. whether its name alone
+ * fails to say what it takes.
+ *
+ * DERIVED, NOT A LIST OF THE TWO COMPOSITES. This is what decides whether a
+ * confirmation dialog is worth showing an itemised inventory for: a narrow
+ * scope names one category whose count the user just read on the row they
+ * clicked, and restating it would be noise. Deriving it means a scope that
+ * later grew a second category would start showing an inventory on its own,
+ * instead of silently keeping a one-line dialog that no longer describes it.
+ */
+export function scopeIsCompound(scope: UserDataScope): boolean {
+  return USER_DATA_CATEGORIES.filter((category) => scopeIncludes(scope, category)).length > 1;
+}
+
 const BASE = '/user-data';
 
 /** `GET /api/user-data/summary` — `@Auth()`, no permission. */

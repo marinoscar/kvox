@@ -53,11 +53,19 @@ import { Box, List, ListItem, ListItemText, Typography } from '@mui/material';
 
 import { ConfirmByTypingDialog } from '../common/ConfirmByTypingDialog';
 import { USER_DATA_CONFIRMATION } from '../../services/userData';
-import type { UserDataScope } from '../../services/userData';
+import type { UserDataScope, UserDataSummary } from '../../services/userData';
+import { buildDeletionInventory } from '../../utils/userDataDisplay';
 
 export interface UserDataDeleteDialogProps {
   /** `null` closes the dialog; a scope opens it for that scope. */
   scope: UserDataScope | null;
+  /**
+   * What the caller currently has, for the itemised inventory line. `null`
+   * while the summary is unknown or failed to load, in which case the line is
+   * omitted — a confirmation that stated counts it could not read would be
+   * worse than one that states none.
+   */
+  summary: UserDataSummary | null;
   isWorking: boolean;
   /** The last failure from the hook's request, including the API's own 409 message. */
   error: string | null;
@@ -159,6 +167,7 @@ export const FORCE_SEMANTICS: string[] = [
 
 export function UserDataDeleteDialog({
   scope,
+  summary,
   isWorking,
   error,
   onConfirm,
@@ -168,6 +177,9 @@ export function UserDataDeleteDialog({
 
   const copy = COPY[scope];
   const literal = USER_DATA_CONFIRMATION[scope];
+  // `null` for the three narrow scopes and whenever the summary is unknown —
+  // see `buildDeletionInventory` for both reasons.
+  const inventory = buildDeletionInventory(scope, summary);
 
   return (
     <ConfirmByTypingDialog
@@ -185,6 +197,17 @@ export function UserDataDeleteDialog({
       onConfirm={onConfirm}
       onClose={onClose}
     >
+      {/* THE NUMBERS, DIRECTLY UNDER THE CONSEQUENCE AND ABOVE EVERYTHING ELSE.
+          The prose in the alert says which categories go; this says how much
+          of each there is. It sits here — not at the bottom, and not inside the
+          alert — because it is the last fact a user needs before deciding, and
+          the page's own inventory is behind this modal at that moment. */}
+      {inventory && (
+        <Typography variant="body2" sx={{ mt: 2 }}>
+          {inventory}
+        </Typography>
+      )}
+
       <Box sx={{ mt: 2 }}>
         <Typography variant="subtitle2" component="p">
           Before you confirm
