@@ -396,7 +396,7 @@ describe('ObjectsService', () => {
       await service.initUpload(
         { name: 'src.m4a', size: 1024, mimeType: 'audio/mp4' },
         testUserId,
-        'transcripts',
+        { managedBy: 'transcripts' },
       );
 
       expect(mockPrisma.storageObject.create).toHaveBeenCalledWith(

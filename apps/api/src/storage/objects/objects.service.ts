@@ -98,19 +98,41 @@ export class ObjectsService {
   /**
    * Initialize a resumable multipart upload.
    *
-   * `managedBy` is a SERVICE-LEVEL argument only. It is deliberately absent
-   * from `InitUploadDto` and therefore unreachable over HTTP: a client able to
-   * declare its own upload "managed by transcripts" could mint an object the
-   * generic delete endpoint refuses to remove and the generic list refuses to
-   * show — an undeletable, invisible row, created on request. Only a module
-   * calling this service in-process may claim ownership.
+   * ⚠ EVERY MEMBER OF `options` IS A SERVICE-LEVEL ARGUMENT ONLY. Not one of
+   * them appears in `InitUploadDto`, so not one of them is reachable over
+   * HTTP: an in-process caller may set them, a request body may not, and that
+   * boundary is the entire reason the object exists.
+   *
+   * • `managedBy` — a client able to declare its own upload "managed by
+   *   transcripts" could mint an object the generic delete endpoint refuses to
+   *   remove and the generic list refuses to show — an undeletable, invisible
+   *   row, created on request. Only a module calling this service in-process
+   *   may claim ownership.
+   * • `allowedMimeTypes` — REPLACES `storage.allowedMimeTypes` for this call
+   *   alone. The same rule applies for a sharper reason: this is not a flag the
+   *   check reads, it IS the check, and a client able to name its own allowlist
+   *   has defeated the allowlist. It exists because `storage.allowedMimeTypes`
+   *   is the operator's policy for the ARBITRARY user uploads that arrive
+   *   through `POST /api/storage/objects*`, and a module accepting one narrow,
+   *   purpose-built kind of file is not governed by it — a deployment whose
+   *   `.env` predates #21 lists `image/*,application/pdf,video/*`, which
+   *   refused every Android `.m4a` recording the transcription provider itself
+   *   would have accepted (issue #79). A module passing its own list is what
+   *   keeps that operator setting meaning what it says instead of silently
+   *   governing a pipeline nobody wrote it for.
+   *
+   * The 400 below names WHICHEVER list was actually enforced, never the
+   * configured one unconditionally: a caller uploading a recording and told to
+   * pick one of `image/*, application/pdf` has been sent to fix the wrong
+   * thing, in a place they have no access to.
    */
   async initUpload(
     dto: InitUploadDto,
     userId: string,
-    managedBy?: string,
+    options?: { managedBy?: string; allowedMimeTypes?: string[] },
   ): Promise<InitUploadResponseDto> {
     const { name, size } = dto;
+    const managedBy = options?.managedBy;
 
     // -----------------------------------------------------------------------
     // What this deployment allows. Both of these were configured and READ BY
@@ -128,10 +150,19 @@ export class ObjectsService {
       );
     }
 
-    const allowedMimeTypes = this.config.get<string[]>(
-      'storage.allowedMimeTypes',
-      ['image/*', 'application/pdf', 'video/*', 'audio/*'],
-    );
+    // A caller's own list WINS OUTRIGHT when it supplies one — see the ⚠
+    // above. The `??` sits on `options.allowedMimeTypes` rather than on some
+    // merge of the two on purpose: a module's list REPLACES the operator's, it
+    // never extends it, so a narrow module list cannot be widened by whatever a
+    // deployment happens to permit for generic uploads.
+    const allowedMimeTypes =
+      options?.allowedMimeTypes ??
+      this.config.get<string[]>('storage.allowedMimeTypes', [
+        'image/*',
+        'application/pdf',
+        'video/*',
+        'audio/*',
+      ]);
 
     // A browser that reported `application/octet-stream` or nothing at all for
     // a `.m4a` is the ORDINARY case, not an attack; the extension decides.
@@ -142,6 +173,9 @@ export class ObjectsService {
         ? `"${dto.mimeType}"`
         : 'no content type';
 
+      // `allowedMimeTypes`, NOT `this.config.get(...)`: the message has to name
+      // the list this call enforced, or a transcript rejection prints the
+      // storage allowlist and sends the user to a setting that had no say.
       throw new BadRequestException(
         `Files of type ${declared} are not accepted. Allowed types: ` +
           `${allowedMimeTypes.join(', ')}. A file with no usable content type is ` +
