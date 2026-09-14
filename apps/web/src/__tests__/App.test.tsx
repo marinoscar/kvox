@@ -66,6 +66,15 @@ vi.mock('../pages/UserTokensPage', () => ({
   default: () => <h1>User Tokens Page</h1>,
 }));
 
+// Issue #80. Same rationale as the stand-ins above, plus one specific to this
+// page: the real one opens a `GET /api/user-data/summary` and, while a deletion
+// is running, a repeating interval — neither of which this route-guard suite is
+// about. Its own suite covers that behaviour; this file only proves `App.tsx`
+// wires `/settings/danger-zone` to it and carries no `RequirePermission`.
+vi.mock('../pages/UserDangerZonePage', () => ({
+  default: () => <h1>User Danger Zone Page</h1>,
+}));
+
 // Issue #126, epic #109. Same rationale as the four stand-ins above: the real
 // page's own suite (`UserNotificationsPage.test.tsx`) already proves it
 // renders correctly, so this stand-in makes the assertions below about
@@ -334,6 +343,7 @@ describe('App', () => {
       ['/settings/appearance', 'User Appearance Page'],
       ['/settings/notifications', 'User Notifications Page'],
       ['/settings/tokens', 'User Tokens Page'],
+      ['/settings/danger-zone', 'User Danger Zone Page'],
     ])('renders %s as %s for a user holding only user_settings:read', async (path, heading) => {
       signInAs(['user_settings:read']);
 
@@ -355,6 +365,7 @@ describe('App', () => {
         'User Appearance Page',
         'User Notifications Page',
         'User Tokens Page',
+        'User Danger Zone Page',
       ];
       for (const other of allHeadings.filter((h) => h !== heading)) {
         expect(screen.queryByRole('heading', { name: other })).not.toBeInTheDocument();

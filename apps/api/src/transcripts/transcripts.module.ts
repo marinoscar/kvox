@@ -163,6 +163,14 @@ import { TranscriptsService } from './transcripts.service';
     // read this transcript", which is exactly the cross-feature disagreement
     // epic #45 was scoped to avoid.
     TranscriptAccessService,
+    // ⚠ A FOURTH, ADDED BY #80 AND FOR THE SAME NARROW REASON. The Danger
+    // Zone's `user.data.purge` soft-deletes a user's transcripts in batches and
+    // hands each to `enqueuePurge` — the one place that knows which job type
+    // and which subject shape a transcript purge is queued under. A second
+    // `jobs.enqueue({ type: 'transcript.purge', … })` written in the user-data
+    // module would be a literal string pair to keep in step with this one, and
+    // getting it wrong produces `pending` rows no worker can ever claim.
+    TranscriptPipelineService,
   ],
 })
 export class TranscriptsModule {}

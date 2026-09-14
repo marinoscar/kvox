@@ -161,5 +161,15 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // never declared; nothing in production supplies a value.
     { provide: NOTE_STREAM_TUNING, useValue: {} },
   ],
+  // ⚠ TWO EXPORTS, ADDED BY #80 FOR THE NARROW REASON EXPORTS IN THIS
+  // REPOSITORY ARE ADDED FOR: somebody now imports them. The Danger Zone's
+  // `user.data.purge` soft-deletes a user's notes in batches and hands each to
+  // `NotesService.enqueuePurge`, and removes their own custom templates through
+  // `NoteTemplatesService.remove` — the path that already knows a template must
+  // be ARCHIVED rather than deleted while a note still names it. Re-deriving
+  // either inside the user-data module would be a second implementation of
+  // "how a note's bytes are removed" and of "when a template may go", each free
+  // to drift from the one the per-item delete endpoints use.
+  exports: [NotesService, NoteTemplatesService],
 })
 export class NotesModule {}
