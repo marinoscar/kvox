@@ -721,13 +721,17 @@ pair from `notes:*`. See [`docs/API.md`](docs/API.md#note-templates).
 - `POST /api/note-templates/{id}/duplicate` - Copy any readable template — built-in or the caller's own — into a new, editable row owned by the caller (`note_templates:write`)
 
 ### AI Settings (Admin-only)
-The deployment AI policy — which provider, which models are permitted, and the token/timeout/
-document ceilings (issue #47, epic #45). Gated on `system_settings:read`/`:write`, not a
-permission pair of its own: this is the `ai` namespace of the `global` system-settings row.
-**No API key lives here, ever** — epic #45 is strict bring-your-own-key; see
-`ai-settings.schema.ts`'s compile-time proof. See [`docs/API.md`](docs/API.md#ai-settings).
+The deployment AI policy — which provider is active, which models are permitted, and the
+token/timeout/document ceilings (issue #47, epic #45; the active-provider axis, live model
+discovery and the widened `allowedModels` entry are issue #78). Gated on
+`system_settings:read`/`:write`, not a permission pair of its own: this is the `ai` namespace
+of the `global` system-settings row. **No API key lives here, ever** — epic #45 is strict
+bring-your-own-key; see `ai-settings.schema.ts`'s compile-time proof, which since #78 also
+covers the per-model `allowedModels` entry type. See [`docs/API.md`](docs/API.md#ai-settings)
+and [`docs/specs/notes.md`](docs/specs/notes.md) §2.5.
 - `GET /api/ai-settings` - The AI policy and the provider catalogue (`system_settings:read`)
-- `PUT /api/ai-settings` - Partial update. `allowedModels` replaces wholesale, RFC 7396-style (`system_settings:write`)
+- `PUT /api/ai-settings` - Partial update. `allowedModels` replaces wholesale, RFC 7396-style; an entry may be a bare model id or `{ id, label?, contextWindowTokens?, maxOutputTokens? }` (`system_settings:write`)
+- `GET /api/ai-settings/models` - List the active (or `?provider=`-named) provider's live models, using the **calling admin's own** saved key — this deployment holds none of its own (issue #78). ⚠ A vendor refusal is a **200** with `ok: false`; 409 `details.reason: "ai_key_missing"` when the caller has no key (`system_settings:write`)
 - `POST /api/ai-settings/test` - Reachability probe, no credential sent (this deployment holds none). ⚠ A 401/403 from the endpoint is reported as `ok: true` — it proves the endpoint exists (`system_settings:write`)
 
 ### AI Credentials
@@ -820,7 +824,7 @@ permission string** — deliberately: the resource is the caller's own credentia
 - `user_identities` - OAuth provider identities (provider + subject)
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-role assignments
-- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one costs **six** edits — see `apps/api/src/common/schemas/settings-parity.spec.ts`'s header; miss the wire DTOs and every PATCH becomes a silent no-op that returns 200. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk
+- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one costs **six** edits — see `apps/api/src/common/schemas/settings-parity.spec.ts`'s header; miss the wire DTOs and every PATCH becomes a silent no-op that returns 200. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever
 - `user_settings` - Per-user settings (JSONB)
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)

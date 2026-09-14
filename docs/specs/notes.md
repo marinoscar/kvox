@@ -362,6 +362,196 @@ for the exact same reason (a vendor API's shape is precisely the kind of fact
 that drifts between a spec being written and the code that implements it
 shipping).
 
+### 2.5 The active-provider axis, live model discovery, and the widened `allowedModels` entry (#78)
+
+Three changes shipped together because they answer one question — *"how does
+a deployment adopt a model this application does not already know about,
+without waiting for a release?"* — from three different angles.
+
+**`ai.provider: AiProviderId | null`.** Before #78, every consumer of the AI
+provider framework resolved the single registered provider by a hardcoded
+`'openai'` literal, because there was exactly one and nobody had to ask.
+That is now a persisted, nullable field on the `ai` namespace, resolved
+through `AiProviderRegistry`, and **every hardcoded `'openai'` consumer
+literal is gone** — `AiConfigService`, `AiSettingsService`,
+`AiModelDiscoveryService` and the generation path all call
+`this.registry.get(policy.provider)`. Adding a second OpenAI-API-compatible
+vendor now costs one id in `AI_PROVIDER_IDS`, one block in
+`aiProvidersSchema`, and one provider class — no consumer edit, in the same
+"one registry entry" shape CLAUDE.md's "Adding a Job Type" and "Adding a
+Notification" recipes already establish elsewhere in this codebase.
+
+It is **nullable, not optional**, field for field with
+`ai-settings.schema.ts`'s own reasoning and `systemTranscriptionSchema
+.provider`'s precedent: "nobody has chosen a vendor" is a *persisted fact*
+the settings page renders, not an absent key three different situations
+(unset, dropped by a partial merge, or a schema a rollback no longer models)
+would otherwise all collapse into. It defaults to `'openai'` rather than
+`null`, unlike transcription's own provider field — the divergence is
+deliberate: `enabled: false` plus an empty `allowedModels` already make a
+fresh deployment inert twice over, so a `null` default would buy no extra
+safety and would cost an administrator a second decision ("which vendor?")
+to turn on a feature this build ships exactly one implementation of.
+Transcription defaults to `null` because choosing AssemblyAI commits a
+deployment to a specific named company; choosing "the OpenAI-compatible
+provider" here commits it to nothing until a model is permitted and a user
+pastes their own key. It is still a separate axis from `enabled`: an
+operator can switch AI off for an incident without losing the vendor choice,
+and switch vendors without touching the master switch.
+
+**`listModels` and `capabilities.modelDiscovery` on `AiProvider`.** A new
+optional method, present exactly when `capabilities.modelDiscovery` is
+`true` — "presence is the declaration," the identical rule
+`JobHandler.nodeResultSchema`/`persistNodeResult` already follows in this
+codebase, except that here one of the two halves is a boolean a caller reads
+*before* spending a request, so `AiProviderRegistry.register` enforces the
+agreement at **boot** rather than leaving it to the type system alone — the
+same one-line check `TranscriptionProviderRegistry` makes for
+`capabilities.cancel`, and the same argument: an advertised capability with
+no method is a `TypeError` in the path *least likely to have been
+exercised* (an administrator pressing "load models from the provider" on a
+page opened once a quarter), and a boot failure naming the provider is a far
+better place to meet that bug than a 500 an admin reaches once a quarter.
+`OpenAiProvider.listModels` implements it against `GET {baseUrl}/models` —
+the same route `testConnection` already probes, read here for its *content*
+instead of its status code — filtered to plausible chat models by a short,
+literal substring list (`NON_CHAT_MODEL_MARKERS`) that is a convenience over
+an unstructured vendor list and *never* a gate: the filter can only hide a
+row from the discovery dropdown, and `aiAllowedModelSchema` accepts any
+model id typed by hand regardless of whether discovery would have shown it.
+
+`listModels` throws on refusal, unlike `testConnection`, because a model
+list has no partial form — the caller decides whether a refusal is a 200
+diagnosis or a real failure, not the provider.
+`AiModelDiscoveryService.discoverModels` is that caller, and is a
+**service of its own**, not a method on `AiSettingsService` — a real
+circular dependency, not a stylistic preference:
+`UserAiCredentialsService` already injects `AiSettingsService` to read the
+policy, so a `discoverModels` method needing the *caller's* credential would
+close the loop and force a `forwardRef` on both sides. `AiConfigService` is
+the standing precedent for solving this the same way: a leaf composing the
+policy, the registry and the credential service without any of them knowing
+about it.
+
+**Why discovery spends the *calling administrator's own* key, and not a
+deployment key.** There is no deployment key to spend — §9's strict
+bring-your-own-key decision means this application stores no AI credential
+of any kind, for any purpose, ever. Adding one *just for discovery* was
+considered and rejected: it would be the exact deployment-wide fallback
+credential §9 exists to rule out, introduced through a side door reachable
+only by an administrator, which does not make the privacy answer any less
+institutional than doing it through the main door would. So discovery
+authenticates as the administrator making the request, exactly as `POST
+/api/ai-credentials/test` does — with the stated consequence that an
+administrator with no key of their own gets a `409` (`ai_key_missing`), not
+an empty list, because "you have not set up a key" and "the provider offers
+nothing" are different sentences with different fixes; and that the model
+list returned is the one **that key** can reach (project-scoped, on
+OpenAI), so two administrators can legitimately see different lists — the
+policy saved from either list is checked against **neither** at generation
+time, only against each user's own key, which is the only authority that
+ever actually matters. Gated on `system_settings:write`, not `:read`, for
+the same reason `POST /api/ai-settings/test` is: it is side-effecting (it
+spends a real, billable vendor call), and looking at settings is not
+probing a third party.
+
+**Why `allowedModels` widened from `string[]` to an array of
+`{ id, label?, contextWindowTokens?, maxOutputTokens? }`, instead of a bare
+id plus a sibling metadata map.** Before #78, every entry was resolved
+against this build's own four-model `MODELS` catalogue to find the context
+window §3.3's budget needs — which made the deployment's model policy a
+**subset** of an array compiled into the application: a model the vendor
+shipped last week could be typed into `allowedModels` and saved, but never
+budgeted and therefore never offered to anyone, and adopting it required a
+release of this application. It also made discovery nearly pointless: there
+is no use listing the sixty models a key can reach if fifty-six of them can
+never be permitted. A **sibling map** keyed by model id (`{ "gpt-4o": {
+contextWindowTokens: … } }`, alongside the existing `allowedModels: string[]`)
+was the other shape considered and rejected: it is two structures that can
+name a different set of models — an id present in one array and absent from
+the other, or present in both with a stale entry nobody removed when the
+model was un-permitted — with no schema-level way to say that is wrong. A
+single array where each entry *is* both a permission and (optionally) its
+own budget numbers cannot disagree with itself about which models exist.
+
+**Resolution precedence, in one function.** `ai-model-resolution.ts`'s
+`resolveAllowedModel(entry, catalogue)` is the *only* place that answers
+"what does this deployment actually know about the model named by this
+`allowedModels` entry," because two callers ask for opposite reasons —
+`AiSettingsService` to **refuse** a save it cannot honour, `AiConfigService`
+to **publish** a model to a picker — and a second implementation could
+answer them differently with no error anywhere to say so. The precedence:
+(1) **the entry's own numbers win**, including over a build descriptor for
+the same id, so a deployment can correct a stale catalogue number without a
+release; (2) **the build catalogue otherwise**; (3) **`null` when neither
+can answer**, which is the deliberate return type — see below. The same
+function is now also called from the request-time budget check
+(`NoteGenerationRequestService.assertPromptFits`) and from
+`note.generate` itself, closing a gap #78 introduced and a same-epic fix
+patched immediately: `assertPromptFits` originally looked a model up in the
+*build* catalogue directly and returned silently (i.e., un-budgeted, not
+refused) when the id was absent — which, once an entry can carry its own
+numbers, is precisely the model an administrator just adopted from the
+discovery list. Falling through meant an over-long prompt was not refused
+at request time with numbers in a `400`, but minutes later as a `failed`
+note with nothing to look at. All three call sites now agree by
+construction.
+
+**Why an unknown model's context window is asked for, never guessed.**
+Restated from §3.3 because #78 is where "unknown" first becomes a
+*reachable* state through an ordinary admin workflow rather than only a
+typo: a vendor's `GET /models` response carries no context window and no
+output ceiling for any provider this build talks to (`AiDiscoveredModel` is
+a deliberately different type from `AiModelDescriptor` for exactly this
+reason), so there is no vendor-supplied number to fall back to even when
+discovery succeeds. Guessing **high** submits a prompt the vendor rejects
+after the user has already been billed for it; guessing **low** refuses
+work that would have fit, for no reason the user can see. Neither error is
+recoverable after the fact — a rejected-after-billing request cannot be
+un-billed, and a wrongly-refused one looks identical to a genuinely too-large
+one — so `resolveAllowedModel` returns `null` instead of either number, and
+each caller turns that into an explicit, actionable statement: a `400`
+naming the missing field(s) on save (`missingModelNumbers`), or a quiet
+omission from `GET /api/ai/config`'s published list. This is the same
+"refuse with a number, never silently degrade" discipline §3.3 already
+applies to an over-budget prompt, extended to a model whose budget cannot be
+computed at all.
+
+**Why the legacy bare-string form must keep parsing, forever.** Every
+deployment that had already saved an AI policy before #78 has
+`["gpt-4o", "gpt-4o-mini"]` sitting in the `global` row's JSONB. §7.10-style
+schema evolution in this codebase is additive by convention, but the reason
+this particular case is load-bearing rather than merely tidy is
+`SystemSettingsService.readKnownSettings`'s degrade-to-defaults behaviour: a
+namespace that fails to parse is not a migration failure or a `500`, it is
+a **silent** substitution of `DEFAULT_SYSTEM_SETTINGS` — no log line an
+administrator would find, no error, just `allowedModels: []` and
+`enabled: false` from then on. A schema that rejected the string form would
+not announce itself; it would quietly reset every existing deployment's
+model policy on the next read, and the first anyone would know is users
+reporting that AI generation had stopped working with no explanation
+anywhere. So `aiAllowedModelEntrySchema` is a union with a normalising
+transform (`typeof entry === 'string' ? { id: entry } : entry`), not a
+widened object type with a one-time migration — there is no migration, and
+the old shape is accepted for as long as this namespace exists. Normalising
+at the schema boundary, rather than leaving every downstream reader to
+branch on `typeof entry === 'string'`, is the same "one implementation, not
+one per call site" argument the rest of this section makes about
+`resolveAllowedModel`: a union type callers must narrow is a `typeof` check
+that one of them, eventually, gets wrong.
+
+**The no-secret compile-time proof now covers three levels, not two.**
+`ai-settings.schema.ts`'s `CarriesNoSecret` check — the same technique
+`transcription-settings.schema.ts` uses to prove no field named `apiKey` (or
+its aliases) exists on the namespace — now also checks
+`AiAllowedModel`, the per-entry object type #78 introduced. This is not a
+formality: once an `allowedModels` entry became an object with its own
+optional fields, "this one model lives on a different account, so give it
+its own key" became a plausible-sounding one-line change for someone to
+make, and it would be exactly the deployment-wide fallback credential §9
+rejects, hidden two levels deeper in a settings blob every
+`system_settings:read` holder can already read wholesale.
+
 ## 3. Prompt assembly and the token budget
 
 ### 3.1 Assembly order, and why it is fixed
@@ -438,7 +628,12 @@ that fixed order**:
 model is `model.contextWindowTokens - requestedMaxOutputTokens - safetyMarginTokens`
 (a fixed 500-token margin, covering the few tokens OpenAI's own message
 framing adds beyond the literal text). `countTokens` (§2.1) measures the
-assembled `systemPrompt + userContent`.
+assembled `systemPrompt + userContent`. `model` here is `resolveAllowedModel`'s
+output (§2.5), not a direct build-catalogue lookup — since #78 a permitted
+model may carry its own `contextWindowTokens`/`maxOutputTokens` on its
+`allowedModels` entry, and every caller of this budget (the request-time
+check below, the job's re-check, and the config probe) resolves through the
+same function so none of them can disagree about a given model's window.
 
 **If the assembled prompt exceeds the budget, the request is refused before
 anything is created — no note, no draft row, no job.** `POST /api/notes` and
@@ -1006,6 +1201,16 @@ before it): a regular user needs to know which providers/models this
 deployment permits, and which provider their content would go to, without
 needing `system_settings:read` to ask.
 
+**`GET /api/ai-settings/models` (#78) is gated on `system_settings:write`,
+not `:read`, even though it is a `GET`.** Every other read in this group is
+`:read`; this one is side-effecting — it spends a real, billable vendor call
+— which is the identical "looking is not probing" reasoning `POST
+/api/ai-settings/test` and `POST /api/transcription-settings/test` already
+establish for their own probes. It is gated no differently for the fact that
+it spends the *calling administrator's own* key rather than a deployment
+one: whose credential is charged changes who bears the cost, not whether the
+action is a read or a write.
+
 ## 7. Templates and built-ins
 
 ### 7.1 The null-owner convention
@@ -1308,6 +1513,24 @@ requested work, not a security-relevant change to their account.
   OpenAI under this deployment's own account" instead of "under yours."
   It would also make `ai-provider:<userId>` throttle keys (§2.3) meaningless,
   since every user's generations would share one account's rate limit again.
+- **A deployment key held just for model discovery (#78)**, so an
+  administrator without a personal key could still browse the catalogue.
+  Rejected for the identical reason as the entry above: it is the same
+  fallback credential §9 rules out, reintroduced through a side door that
+  makes the privacy answer no less institutional than adding it through the
+  front door would. See §2.5.
+- **A sibling metadata map for model context windows (#78)**, keyed by model
+  id alongside a still-`string[]` `allowedModels`. Rejected because it is two
+  structures that can disagree about which models exist — an id present in
+  one and absent from the other, or present in both with a stale entry
+  nobody removed when the model was un-permitted — with no way for a schema
+  to say that is wrong. See §2.5.
+- **Rejecting the legacy bare-string `allowedModels` entry once the object
+  form existed (#78).** Rejected because `SystemSettingsService
+  .readKnownSettings` silently degrades a namespace that fails to parse to
+  `DEFAULT_SYSTEM_SETTINGS` — a schema that rejected the old shape would not
+  fail loudly, it would quietly reset every existing deployment's model
+  policy to empty on the next read. See §2.5.
 - **An operation log for note bodies**, mirroring `transcript_versions`'
   design. Rejected per §4.5: the arithmetic that justifies an op log for a
   90,000-word transcript (roughly 7 MB per full snapshot) does not apply to
