@@ -579,7 +579,7 @@ describe('AssemblyAiProvider job lifecycle', () => {
     expect(body).toEqual({
       audio_url: 'https://storage.invalid/a.mp3',
       speaker_labels: true,
-      speech_model: 'slam-1',
+      speech_models: ['universal-3-5-pro', 'universal-2'],
       language_detection: true,
       speakers_expected: 3,
     });

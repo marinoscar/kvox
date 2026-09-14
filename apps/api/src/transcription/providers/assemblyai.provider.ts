@@ -36,11 +36,21 @@ import type {
 // ⚠ RE-VERIFY BEFORE THIS EPIC IS DECLARED FINAL.
 //
 // Every vendor-specific constant below — the parameter NAMES on `POST
-// /v2/transcript`, the `speech_model` ids, the size and duration LIMITS, the
+// /v2/transcript`, the `speech_models` ids, the size and duration LIMITS, the
 // status vocabulary, and the units (`audio_duration` in SECONDS while word
 // `start`/`end` are MILLISECONDS) — was written against AssemblyAI's published
-// API as understood when this issue was implemented. Vendors change all of
-// these without changing a version number. Before epic #19 ships, walk this
+// API as understood when this issue was implemented.
+//
+// RE-VERIFIED 2026-09-14 (#95): the model selector. The singular `speech_model`
+// parameter is now REFUSED with an HTTP 400 ("The speech_model parameter is
+// deprecated. Use speech_models: [...]"), which exhausted `transcription.submit`
+// on every upload. The request now carries `speech_models: string[]` — an
+// ordered list the vendor falls back through by language — and the response
+// reports the model it actually used as `speech_model_used`. Documented ids at
+// that date: `universal-3-5-pro` (recommended) and `universal-2`. See
+// `resolveAssemblyAiSpeechModels` for how the stored setting maps onto it.
+//
+// Vendors change all of these without changing a version number. Before epic #19 ships, walk this
 // file against the current AssemblyAI documentation and correct anything that
 // has moved; `assemblyai.provider.spec.ts`'s fixtures pin the SHAPE this file
 // expects, so a change there will show up as a failing normalization test
@@ -168,6 +178,9 @@ interface AssemblyAiTranscript {
   /** SECONDS. Converted on the way into `NormalizedTranscript.durationMs`. */
   audio_duration?: unknown;
   language_code?: unknown;
+  /** The model the vendor actually ran (current API, #95). */
+  speech_model_used?: unknown;
+  /** The pre-#95 field name, still read so an older stored payload normalizes. */
   speech_model?: unknown;
   text?: unknown;
   utterances?: unknown;
@@ -275,7 +288,7 @@ export function normalizeAssemblyAiTranscript(
     segments: split,
     provider: {
       id: ASSEMBLYAI_PROVIDER_ID,
-      model: asString(body.speech_model),
+      model: asString(body.speech_model_used) ?? asString(body.speech_model),
       remoteId,
     },
   };
@@ -283,6 +296,51 @@ export function normalizeAssemblyAiTranscript(
 
 /** This provider's id. Matches `TRANSCRIPTION_PROVIDER_IDS`. PERMANENT. */
 export const ASSEMBLYAI_PROVIDER_ID = 'assemblyai';
+
+/**
+ * The vendor's recommended `speech_models` list (re-verified 2026-09-14, #95):
+ * the most accurate model first, with a broader-language model to fall back to.
+ */
+export const ASSEMBLYAI_DEFAULT_SPEECH_MODELS: readonly string[] = [
+  'universal-3-5-pro',
+  'universal-2',
+];
+
+/**
+ * Model ids that predate the `speech_models` array and are no longer accepted.
+ * A stored setting naming one of these is a deployment configured before #95,
+ * not an operator's deliberate choice, so it maps onto the current default
+ * rather than onto a request the vendor refuses.
+ */
+const LEGACY_SPEECH_MODEL_IDS = new Set(['universal', 'best', 'nano', 'slam-1']);
+
+/**
+ * The stored `speechModel` setting → the `speech_models` array to send.
+ *
+ * ⚠ THE SETTING STAYS A STRING, deliberately. Widening it to an array would
+ * change the `transcription` system-settings namespace, which is six
+ * coordinated edits (see `settings-parity.spec.ts`) where a missed one turns
+ * every PATCH into a silent no-op. So the string is read as a COMMA-SEPARATED,
+ * ORDERED list: split, trimmed, empties dropped, duplicates removed keeping the
+ * first occurrence.
+ *
+ * Empty input, or a list made only of legacy ids, resolves to
+ * `ASSEMBLYAI_DEFAULT_SPEECH_MODELS`. A legacy id mixed with current ones is
+ * dropped. Anything else passes through untouched — the field is free text so a
+ * model the vendor adds can be adopted without a release of this application.
+ */
+export function resolveAssemblyAiSpeechModels(setting: string | null | undefined): string[] {
+  const models: string[] = [];
+
+  for (const raw of (setting ?? '').split(',')) {
+    const id = raw.trim();
+
+    if (id.length === 0 || LEGACY_SPEECH_MODEL_IDS.has(id.toLowerCase())) continue;
+    if (!models.includes(id)) models.push(id);
+  }
+
+  return models.length > 0 ? models : [...ASSEMBLYAI_DEFAULT_SPEECH_MODELS];
+}
 
 type AssemblyAiSettings = TranscriptionProvidersValue['assemblyai'];
 
@@ -349,12 +407,12 @@ export class AssemblyAiProvider
     },
     {
       key: 'speechModel',
-      label: 'Speech model',
+      label: 'Speech models',
       type: 'text',
       helpText:
-        "The provider's model identifier, e.g. `universal`. Free text rather than a fixed list, so a model added by the vendor can be adopted without a release of this application.",
+        'A comma-separated, ordered list of AssemblyAI model ids, e.g. `universal-3-5-pro, universal-2`. AssemblyAI uses the first model that supports the audio\'s language and falls back to the next. Current ids: `universal-3-5-pro` (most accurate) and `universal-2` (broadest language coverage). The retired `universal`, `best`, `nano` and `slam-1` ids are treated as the default list. Free text rather than a fixed list, so a model added by the vendor can be adopted without a release of this application.',
       required: true,
-      defaultValue: 'universal',
+      defaultValue: 'universal-3-5-pro, universal-2',
     },
   ];
 
@@ -495,7 +553,10 @@ export class AssemblyAiProvider
     const body: Record<string, unknown> = {
       audio_url: audioUrl,
       speaker_labels: true,
-      speech_model: ctx.settings.speechModel,
+      // ⚠ `speech_models` (an array), NEVER the singular `speech_model`: the
+      // vendor refuses that parameter with a 400 (#95). See
+      // `resolveAssemblyAiSpeechModels`.
+      speech_models: resolveAssemblyAiSpeechModels(ctx.settings.speechModel),
     };
 
     // LANGUAGE OR DETECTION, NEVER BOTH. The vendor rejects a request carrying
