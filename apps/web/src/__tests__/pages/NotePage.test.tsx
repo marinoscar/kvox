@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { Route, Routes } from 'react-router-dom';
@@ -8,6 +8,7 @@ import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
 import { server } from '../mocks/server';
+import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
 import { render, mockAdminUser } from '../utils/test-utils';
 import NotePage from '../../pages/NotePage';
 import type { Note } from '../../services/notes';
@@ -82,6 +83,69 @@ function note(overrides: Partial<Note> = {}): Note {
   };
 }
 
+/**
+ * What `GET /api/ai/config` answers with.
+ *
+ * ⚠ IT HAS TO BE MOCKED AT ALL because the note page asks before deciding
+ * whether to offer Regenerate — and `useAiConfig` treats an unanswered question
+ * as `keyConfigured: false`, which is the safe direction and would silently
+ * turn every regeneration test into a test of `AiKeyRequired`.
+ */
+let aiConfig: Record<string, unknown>;
+
+/** The formats the export dialog builds itself from. */
+const EXPORTERS = [
+  {
+    format: 'markdown',
+    label: 'Markdown',
+    mimeType: 'text/markdown',
+    extension: 'md',
+    options: [
+      {
+        key: 'includeProvenance',
+        label: 'Include the provenance header',
+        description: 'Names the source, the template and the version.',
+        type: 'boolean',
+        default: true,
+      },
+    ],
+  },
+  { format: 'pdf', label: 'PDF', mimeType: 'application/pdf', extension: 'pdf', options: [] },
+  {
+    format: 'docx',
+    label: 'Word',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    extension: 'docx',
+    options: [],
+  },
+];
+
+function exportRowFor(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'exp-1',
+    noteId: 'n1',
+    version: 1,
+    format: 'markdown',
+    options: { includeProvenance: true },
+    status: 'ready',
+    reused: false,
+    mimeType: 'text/markdown',
+    filename: 'Q3 planning — decisions (v1).md',
+    sizeBytes: '2048',
+    error: null,
+    downloadUrl: 'https://storage.example/exports/exp-1?sig=abc',
+    downloadExpiresAt: new Date(Date.now() + 900_000).toISOString(),
+    expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+/** Every body `POST /api/notes/:id/exports` was sent, for the registry assertions. */
+let exportRequests: Record<string, unknown>[];
+/** What both export routes answer with. Reassign mid-test to make a poll settle. */
+let exportRow: Record<string, unknown> | null;
+
 /** What `GET /api/notes/:id` answers with right now. Reassign to change it. */
 let current: Note;
 let regenerateCalls = 0;
@@ -90,10 +154,44 @@ beforeEach(() => {
   // See `LibraryPage.test.tsx`: `localStorage` survives between tests and the
   // theme provider seeds itself from this key.
   localStorage.setItem('theme_mode', 'light');
+  // The source-name cache is MODULE-LEVEL and deliberately never invalidated
+  // (see `useNoteSourceNames`' header), including its resolved negatives — so a
+  // test that does not clear it inherits whichever answer an earlier test's
+  // handlers produced.
+  clearNoteSourceNameCache();
   streams.length = 0;
   regenerateCalls = 0;
   current = note();
+  aiConfig = {
+    available: true,
+    provider: 'openai',
+    providerLabel: 'OpenAI',
+    models: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o mini', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+    ],
+    defaultModel: 'gpt-4o-mini',
+    maxInputTokens: 100_000,
+    maxOutputTokens: 8_000,
+    keyConfigured: true,
+  };
+  exportRequests = [];
+  exportRow = null;
   server.use(
+    // ⚠ REGISTERED BEFORE `/notes/:id`. Within one `server.use` call handlers
+    // are matched in order, and `/notes/:id` would happily swallow
+    // `/notes/exporters` — which is the same collision the API's own
+    // controller has to declare its literal routes first to avoid.
+    http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig })),
+    http.get(`${API_BASE}/notes/exporters`, () =>
+      HttpResponse.json({ data: { exporters: EXPORTERS } }),
+    ),
+    http.post(`${API_BASE}/notes/:id/exports`, async ({ request }) => {
+      exportRequests.push((await request.json()) as Record<string, unknown>);
+      return HttpResponse.json({ data: exportRow });
+    }),
+    http.get(`${API_BASE}/notes/:id/exports`, () =>
+      HttpResponse.json({ data: { exports: exportRow ? [exportRow] : [] } }),
+    ),
     http.get(`${API_BASE}/notes/:id`, () => HttpResponse.json({ data: current })),
     http.post(`${API_BASE}/notes/:id/regenerate`, () => {
       regenerateCalls += 1;
@@ -288,6 +386,11 @@ describe('NotePage — failure and regeneration', () => {
     expect(streams).toHaveLength(0);
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    // #58: Regenerate CONFIRMS first. Nothing has been spent yet.
+    expect(regenerateCalls).toBe(0);
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Regenerate' }),
+    );
 
     await waitFor(() => expect(regenerateCalls).toBe(1));
     // A NEW connection, opened off the row `regenerate` answered with rather
@@ -312,6 +415,9 @@ describe('NotePage — failure and regeneration', () => {
     await screen.findByText('The provider timed out.');
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Regenerate' }),
+    );
 
     expect(await screen.findByText('This note is already generating.')).toBeInTheDocument();
   });
@@ -383,6 +489,722 @@ describe('NotePage — the rest of the page', () => {
     current = note({ status: 'failed', failureReason: 'The provider timed out.' });
     const { container } = renderNote();
     await screen.findByText('The provider timed out.');
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
+// #58 — editing, saving, and the 409
+// =============================================================================
+
+/** Open the editor on a settled note. Every editing test starts here. */
+async function openEditor(user: ReturnType<typeof userEvent.setup>) {
+  renderNote();
+  await screen.findByRole('button', { name: 'Edit' });
+  await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+  return screen.getByRole('textbox', { name: 'Note' });
+}
+
+describe('NotePage — editing the body', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: '# Decisions\n\nWe agreed.', currentVersion: 3 });
+  });
+
+  it('edits as MARKDOWN in a textarea, not a rich-text surface', async () => {
+    const user = userEvent.setup();
+    const textarea = await openEditor(user);
+
+    // The literal markdown — the storage format, the model's output format and
+    // the export source. A WYSIWYG would have shown a rendered heading here and
+    // would have had to convert it back on save.
+    expect(textarea).toHaveValue('# Decisions\n\nWe agreed.');
+    expect(textarea.tagName).toBe('TEXTAREA');
+  });
+
+  it('previews the draft with the same renderer the read view uses, and back again', async () => {
+    const user = userEvent.setup();
+    const textarea = await openEditor(user);
+
+    await user.clear(textarea);
+    await user.type(textarea, '## Later');
+
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    // A real heading, from the draft, rendered by `MarkdownView`.
+    expect(
+      within(screen.getByTestId('note-preview')).getByRole('heading', { name: 'Later' }),
+    ).toBeInTheDocument();
+
+    // ⚠ AND BACK, WITH THE TEXT INTACT. Toggling to the preview must never be a
+    // way to lose a paragraph.
+    await user.click(screen.getByRole('button', { name: 'Write' }));
+    expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue('## Later');
+  });
+
+  it('toggles between writing and previewing from the keyboard alone', async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+
+    const preview = screen.getByRole('button', { name: 'Preview' });
+
+    preview.focus();
+    expect(preview).toHaveFocus();
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByTestId('note-preview')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Preview' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    const write = screen.getByRole('button', { name: 'Write' });
+    write.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('textbox', { name: 'Note' })).toBeInTheDocument();
+  });
+
+  it('does not execute raw HTML typed into the editor’s own preview', async () => {
+    const user = userEvent.setup();
+    const textarea = await openEditor(user);
+
+    await user.clear(textarea);
+    await user.type(textarea, '<img src="x" data-evil="1">');
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    expect(document.querySelector('img[data-evil]')).toBeNull();
+    expect(screen.getByTestId('note-preview')).toHaveTextContent('data-evil');
+  });
+
+  it('sends the baseVersion it was editing, and adopts the version that comes back', async () => {
+    const user = userEvent.setup();
+    let sent: Record<string, unknown> | null = null;
+
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        current = note({
+          status: 'ready',
+          body: '# Decisions\n\nWe agreed, twice.',
+          currentVersion: 4,
+        });
+        return HttpResponse.json({ data: current });
+      }),
+    );
+
+    const textarea = await openEditor(user);
+    await user.clear(textarea);
+    await user.type(textarea, 'We agreed, twice.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(sent).not.toBeNull());
+    // ⚠ THE VERSION THE DRAFT WAS OPENED AGAINST — not one re-read at save
+    // time, which would defeat the check entirely.
+    expect(sent).toMatchObject({ baseVersion: 3, body: 'We agreed, twice.' });
+
+    // …and the page now reports the version the save produced. (A regex: the
+    // version and the provider share one element, so an exact match would be
+    // asserting against a string the page never renders as one node.)
+    expect(await screen.findByText(/Version 4/)).toBeInTheDocument();
+  });
+
+  it('says out loud that there is no autosave', async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+
+    expect(screen.getByText(/there is no autosave/i)).toBeInTheDocument();
+  });
+
+  it('does not offer Save until something has actually changed', async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+
+    // An unchanged save would be a version row recording nothing, which is
+    // exactly the noise the no-autosave decision exists to keep out.
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+});
+
+describe('NotePage — the 409', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: 'Mine was based on this.', currentVersion: 3 });
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, () =>
+        HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'The note has changed since you loaded it.',
+            details: { reason: 'stale_base_version', currentVersion: 5 },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+  });
+
+  /** Type something and try to save it into a note that has moved on. */
+  async function collide(user: ReturnType<typeof userEvent.setup>) {
+    const textarea = await openEditor(user);
+    await user.clear(textarea);
+    await user.type(textarea, 'My unsaved paragraph.');
+    // The other tab's save, as the re-read will find it.
+    current = note({ status: 'ready', body: 'Their paragraph.', currentVersion: 5 });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+  }
+
+  it('explains what happened, names both versions, and shows what the other one says', async () => {
+    const user = userEvent.setup();
+    await collide(user);
+
+    const dialog = await screen.findByRole('dialog', { name: 'This note changed somewhere else' });
+
+    expect(within(dialog).getByText(/you were editing version 3/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/now at version 5/i)).toBeInTheDocument();
+    // BOTH TEXTS ARE ON SCREEN. A user cannot choose between two bodies they
+    // have only been told about.
+    expect(within(dialog).getByText('My unsaved paragraph.')).toBeInTheDocument();
+    expect(await within(dialog).findByText('Their paragraph.')).toBeInTheDocument();
+  });
+
+  it('offers a CHOICE, and never a Retry — retrying would overwrite the other version', async () => {
+    const user = userEvent.setup();
+    await collide(user);
+
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByRole('button', { name: /copy my text/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /keep editing/i })).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: /discard mine and reload/i }),
+    ).toBeInTheDocument();
+    // ⚠ THE ASSERTION THE ISSUE ASKS FOR BY NAME.
+    expect(within(dialog).queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /try again/i })).not.toBeInTheDocument();
+  });
+
+  it('never overwrites silently — nothing was saved, and the draft is still there', async () => {
+    const user = userEvent.setup();
+    let patches = 0;
+
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, () => {
+        patches += 1;
+        return HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'The note has changed since you loaded it.',
+            details: { reason: 'stale_base_version', currentVersion: 5 },
+          },
+          { status: 409 },
+        );
+      }),
+    );
+
+    await collide(user);
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: /keep editing/i }));
+
+    // Exactly ONE attempt, and it was refused. Nothing re-sent, nothing forced.
+    expect(patches).toBe(1);
+    // `findBy`, not `getBy`: MUI keeps the dialog mounted through its closing
+    // transition and `aria-hidden`s the page behind it, so the editor is
+    // briefly absent from the accessibility tree.
+    expect(await screen.findByRole('textbox', { name: 'Note' })).toHaveValue(
+      'My unsaved paragraph.',
+    );
+  });
+
+  it('puts the user’s own text on the clipboard so it survives whatever they choose', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+    await collide(user);
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: /copy my text/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('My unsaved paragraph.'));
+    expect(await screen.findByText(/on the clipboard/i)).toBeInTheDocument();
+  });
+
+  it('takes the server’s version only when the user asks for it, in those words', async () => {
+    const user = userEvent.setup();
+    await collide(user);
+    await screen.findByRole('dialog');
+
+    await user.click(screen.getByRole('button', { name: /discard mine and reload/i }));
+
+    expect(await screen.findByText('Their paragraph.')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Note' })).not.toBeInTheDocument();
+  });
+
+  it('treats a `generating` 409 as a wait, not as a conflict between two texts', async () => {
+    const user = userEvent.setup();
+
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, () =>
+        HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'This note is generating.',
+            details: { reason: 'generating' },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const textarea = await openEditor(user);
+    await user.clear(textarea);
+    await user.type(textarea, 'Something.');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(/save again once the generation finishes/i)).toBeInTheDocument();
+    // Nothing to choose between — there is only one text.
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue('Something.');
+  });
+
+  it('has no axe violations while the conflict is on screen', async () => {
+    const user = userEvent.setup();
+    await collide(user);
+    await screen.findByRole('dialog');
+
+    expect(await axe(document.body, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+describe('NotePage — leaving with unsaved changes', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: 'Committed.', currentVersion: 2 });
+  });
+
+  it('asks the browser to confirm before the tab leaves', async () => {
+    const user = userEvent.setup();
+    const textarea = await openEditor(user);
+
+    const clean = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(clean);
+    expect(clean.defaultPrevented).toBe(false);
+
+    await user.type(textarea, ' And more.');
+
+    const dirty = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(dirty);
+    // ⚠ THE WHOLE MITIGATION FOR HAVING NO AUTOSAVE.
+    expect(dirty.defaultPrevented).toBe(true);
+  });
+
+  it('warns before an in-app navigation away from unsaved text', async () => {
+    const user = userEvent.setup();
+    const textarea = await openEditor(user);
+    await user.type(textarea, ' And more.');
+
+    await user.click(screen.getByRole('link', { name: 'History' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Leave without saving?' });
+    expect(within(dialog).getByText(/There is no autosave/i)).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: /stay and keep editing/i }));
+    // Still here, with the text intact — the link's default was prevented
+    // rather than followed. (`findBy` because the dialog's closing transition
+    // `aria-hidden`s the page behind it for a frame.)
+    expect(await screen.findByRole('textbox', { name: 'Note' })).toHaveValue(
+      'Committed. And more.',
+    );
+  });
+
+  it('does not warn when there is nothing to lose', async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+
+    await user.click(screen.getByRole('link', { name: 'History' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Leave without saving?' })).not.toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// #58 — provenance
+// =============================================================================
+
+describe('NotePage — provenance', () => {
+  it('names the transcript it was generated from, and links to it', async () => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    server.use(
+      http.get(`${API_BASE}/transcripts/:id`, () =>
+        HttpResponse.json({ data: { id: 't1', title: 'Q3 planning call', currentVersion: 1 } }),
+      ),
+    );
+    renderNote();
+
+    const link = await screen.findByRole('link', { name: 'Q3 planning call' });
+    expect(link).toHaveAttribute('href', '/transcripts/t1');
+    // The whole sentence, not a label-and-value pair.
+    expect(screen.getByTestId('note-provenance')).toHaveTextContent(
+      /Generated from Q3 planning call using Meeting minutes/,
+    );
+  });
+
+  it('links a source NOTE back to that note', async () => {
+    current = note({
+      status: 'ready',
+      body: 'Done.',
+      currentVersion: 1,
+      sourceType: 'note',
+      sourceTranscriptId: null,
+      sourceNoteId: 'n0',
+    });
+    server.use(
+      http.get(`${API_BASE}/notes/n0`, () =>
+        HttpResponse.json({ data: note({ id: 'n0', title: 'Earlier note' }) }),
+      ),
+    );
+    renderNote();
+
+    expect(await screen.findByRole('link', { name: 'Earlier note' })).toHaveAttribute(
+      'href',
+      '/notes/n0',
+    );
+  });
+
+  it('NAMES an uploaded document without inventing a link to it', async () => {
+    // ⚠ A `managed_by: 'notes'` object has no page in this application, so
+    // there is nothing to link to — and a link to a download would hand the
+    // user back the file they uploaded instead of the evidence.
+    current = note({
+      status: 'ready',
+      body: 'Done.',
+      currentVersion: 1,
+      sourceType: 'document',
+      sourceTranscriptId: null,
+      sourceObjectId: 'obj-1',
+    });
+    server.use(
+      http.get(`${API_BASE}/storage/objects/:id`, () =>
+        HttpResponse.json({ data: { id: 'obj-1', name: 'board-pack.pdf', metadata: null } }),
+      ),
+    );
+    renderNote();
+
+    expect(await screen.findByText('board-pack.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'board-pack.pdf' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to the category noun rather than showing a uuid', async () => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    renderNote();
+
+    expect(await screen.findByRole('link', { name: 'a transcript' })).toHaveAttribute(
+      'href',
+      '/transcripts/t1',
+    );
+    expect(screen.getByTestId('note-provenance')).not.toHaveTextContent('t1');
+  });
+});
+
+// =============================================================================
+// #58 — export
+// =============================================================================
+
+describe('NotePage — the export dialog', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+  });
+
+  async function openExport(user: ReturnType<typeof userEvent.setup>) {
+    renderNote();
+    await screen.findByRole('button', { name: 'Export' });
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+
+    return screen.findByRole('dialog', { name: 'Export note' });
+  }
+
+  it('offers every format the SERVER publishes, with that format’s own options', async () => {
+    const user = userEvent.setup();
+    exportRow = exportRowFor();
+    const dialog = await openExport(user);
+
+    // ⚠ NOT A HARDCODED LIST. These three come from `GET /api/notes/exporters`,
+    // which is what makes "a fourth exporter is one class" true on this side.
+    expect(within(dialog).getByRole('radio', { name: 'Markdown' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'PDF' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('radio', { name: 'Word' })).toBeInTheDocument();
+    // …and the option the registry declared for the selected one.
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'Include the provenance header' }),
+    ).toBeInTheDocument();
+  });
+
+  it('says which version is being exported', async () => {
+    const user = userEvent.setup();
+    exportRow = exportRowFor();
+    const dialog = await openExport(user);
+
+    expect(within(dialog).getByText(/version 1/i)).toBeInTheDocument();
+  });
+
+  it('polls a queued render to completion, then offers the download', async () => {
+    const user = userEvent.setup();
+    exportRow = exportRowFor({ status: 'pending', downloadUrl: null, sizeBytes: null });
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Export' }));
+
+    // The render finishes between two polls.
+    exportRow = exportRowFor();
+
+    expect(await screen.findByTestId('note-export-ready', undefined, { timeout: 10_000 }))
+      .toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+
+    // ⚠ THE SIGNED URL IS OPENED, NOT FETCHED — the filename is signed into its
+    // own `Content-Disposition`.
+    expect(open).toHaveBeenCalledWith(
+      'https://storage.example/exports/exp-1?sig=abc',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    open.mockRestore();
+  }, 20_000);
+
+  it('hands back a REUSED export immediately, with no visible stall', async () => {
+    const user = userEvent.setup();
+    // #54's content addressing: the identical request answers 200 with the
+    // existing, already-`ready` row.
+    exportRow = exportRowFor({ reused: true });
+
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Export' }));
+
+    // No poll, no spinner — the download is on screen on the same tick.
+    expect(await screen.findByTestId('note-export-ready')).toBeInTheDocument();
+    expect(screen.getByText(/here it is again, no waiting/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Rendering the export')).not.toBeInTheDocument();
+    expect(exportRequests).toHaveLength(1);
+  });
+
+  it('sends the chosen format and the options as drawn', async () => {
+    const user = userEvent.setup();
+    exportRow = exportRowFor({ format: 'docx' });
+    const dialog = await openExport(user);
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Word' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Export' }));
+
+    await waitFor(() => expect(exportRequests).toHaveLength(1));
+    expect(exportRequests[0]).toMatchObject({ format: 'docx' });
+  });
+
+  it('reports a render that failed, with the reason the row recorded', async () => {
+    const user = userEvent.setup();
+    exportRow = exportRowFor({ status: 'failed', error: 'The PDF renderer ran out of memory.' });
+    const dialog = await openExport(user);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Export' }));
+
+    expect(
+      await screen.findByText('The PDF renderer ran out of memory.'),
+    ).toBeInTheDocument();
+  });
+
+  it('has no axe violations with the dialog open', async () => {
+    const user = userEvent.setup();
+    exportRow = exportRowFor();
+    await openExport(user);
+
+    expect(await axe(document.body, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
+// #58 — regeneration, and the missing key
+// =============================================================================
+
+describe('NotePage — regenerating', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: 'The first attempt.', currentVersion: 2 });
+  });
+
+  it('confirms first, and the confirmation states the cost and what is kept', async () => {
+    const user = userEvent.setup();
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Regenerate this note?' });
+    // FACT 1 — it is the user's own money, again.
+    expect(within(dialog).getByText(/costs you money again/i)).toBeInTheDocument();
+    // FACT 2 — the current body is kept as a version, not lost.
+    expect(within(dialog).getByText(/version 2/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Nothing is lost/i)).toBeInTheDocument();
+    // Nothing has been spent while the question is still on screen.
+    expect(regenerateCalls).toBe(0);
+  });
+
+  it('spends nothing when the confirmation is declined', async () => {
+    const user = userEvent.setup();
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }),
+    );
+
+    expect(regenerateCalls).toBe(0);
+    expect(screen.getByText('The first attempt.')).toBeInTheDocument();
+  });
+
+  it('starts the generation once, and keeps the old text on screen until the new one commits', async () => {
+    const user = userEvent.setup();
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Regenerate' }),
+    );
+
+    await waitFor(() => expect(regenerateCalls).toBe(1));
+    await waitFor(() => expect(streams).toHaveLength(1));
+  });
+});
+
+describe('NotePage — with no AI key saved', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: '# Kept\n\nMy own note.', currentVersion: 2 });
+    aiConfig = { ...aiConfig, keyConfigured: false };
+  });
+
+  it('replaces Regenerate with AiKeyRequired', async () => {
+    renderNote();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Add your AI key to use this' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Regenerate' })).not.toBeInTheDocument();
+  });
+
+  it('still lets the user READ, EDIT and EXPORT their own note', async () => {
+    // ⚠ THE POINT OF THE CRITERION. A missing provider credential gates spending
+    // money at a provider; it must never gate a user's own work.
+    const user = userEvent.setup();
+    exportRow = exportRowFor();
+    renderNote();
+
+    expect(await screen.findByRole('heading', { name: 'Kept' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    expect(await screen.findByRole('dialog', { name: 'Export note' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(await screen.findByRole('textbox', { name: 'Note' })).toHaveValue(
+      '# Kept\n\nMy own note.',
+    );
+  });
+
+  it('offers no Regenerate on a FAILED note either, but still explains the failure', async () => {
+    current = note({ status: 'failed', failureReason: 'Your provider rejected the key.' });
+    renderNote();
+
+    expect(await screen.findByText('Your provider rejected the key.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Regenerate' })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Add your AI key to use this' }),
+    ).toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// #58 — the title
+// =============================================================================
+
+describe('NotePage — renaming', () => {
+  it('renames in place, and sends NO baseVersion because a title is not versioned', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 2 });
+
+    let sent: Record<string, unknown> | null = null;
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        current = note({ ...current, title: 'Renamed' });
+        return HttpResponse.json({ data: current });
+      }),
+    );
+
+    renderNote();
+    await user.click(await screen.findByRole('button', { name: 'Rename this note' }));
+
+    const field = screen.getByRole('textbox', { name: 'Title' });
+    await user.clear(field);
+    await user.type(field, 'Renamed');
+    await user.click(screen.getByRole('button', { name: 'Save the title' }));
+
+    await waitFor(() => expect(sent).not.toBeNull());
+    // ⚠ A title is metadata about the note, never versioned content of it —
+    // recording a rename would put a no-op in the history that a later restore
+    // could "undo" into a name nobody chose.
+    expect(sent).toEqual({ title: 'Renamed' });
+    expect(await screen.findByRole('heading', { name: 'Renamed', level: 1 })).toBeInTheDocument();
+  });
+});
+
+describe('NotePage — the editor’s accessibility', () => {
+  beforeEach(() => {
+    current = note({ status: 'ready', body: '# Decisions\n\nWe agreed.', currentVersion: 3 });
+  });
+
+  it('is reachable and typable from the keyboard alone', async () => {
+    const user = userEvent.setup();
+    await openEditor(user);
+
+    const textarea = screen.getByRole('textbox', { name: 'Note' });
+
+    textarea.focus();
+    expect(textarea).toHaveFocus();
+    // The caret lands at the start on a programmatic focus, so this asserts
+    // that keystrokes reach the field — not where jsdom puts the cursor.
+    await user.keyboard('Typed. ');
+
+    expect(textarea).toHaveValue('Typed. # Decisions\n\nWe agreed.');
+  });
+
+  it('has no axe violations with the editor open, in the light theme', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <Routes>
+        <Route path="/notes/:id" element={<NotePage />} />
+      </Routes>,
+      { wrapperOptions: { user: mockAdminUser, route: '/notes/n1' } },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('has no axe violations with the editor open, in the dark theme', async () => {
+    // ⚠ THROUGH `localStorage` — the helper's `theme` option is declared and
+    // not read, so passing it would render the light theme and assert nothing.
+    localStorage.setItem('theme_mode', 'dark');
+    const user = userEvent.setup();
+    const { container } = render(
+      <Routes>
+        <Route path="/notes/:id" element={<NotePage />} />
+      </Routes>,
+      { wrapperOptions: { user: mockAdminUser, route: '/notes/n1' } },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });

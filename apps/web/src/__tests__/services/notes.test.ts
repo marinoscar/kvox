@@ -6,8 +6,12 @@ import { ApiError } from '../../services/api';
 import {
   createNote,
   getNoteDocumentExtraction,
+  getNoteVersion,
   getNotes,
+  noteConflictCurrentVersion,
   noteConflictReason,
+  restoreNoteVersion,
+  updateNote,
   uploadNoteSourceDocument,
 } from '../../services/notes';
 
@@ -226,5 +230,152 @@ describe('uploadNoteSourceDocument', () => {
     expect(receivedFieldCount).toBe(1);
     expect(result.objectId).toBe('obj-1');
     expect(result.status).toBe('extracting');
+  });
+});
+
+// =============================================================================
+// #58 — editing, versions, and the 409's machine-readable half
+// =============================================================================
+
+describe('notes service — saving an edit', () => {
+  it('PATCHes exactly what it was given, `baseVersion` included', async () => {
+    let sent: Record<string, unknown> | null = null;
+
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: { id: 'n1', currentVersion: 4 } });
+      }),
+    );
+
+    const note = await updateNote('n1', { body: 'New text.', baseVersion: 3 });
+
+    expect(sent).toEqual({ body: 'New text.', baseVersion: 3 });
+    expect(note.currentVersion).toBe(4);
+  });
+
+  it('sends a rename with NO baseVersion — a title is not versioned content', async () => {
+    let sent: Record<string, unknown> | null = null;
+
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: { id: 'n1', title: 'Renamed' } });
+      }),
+    );
+
+    await updateNote('n1', { title: 'Renamed' });
+
+    expect(sent).toEqual({ title: 'Renamed' });
+  });
+});
+
+describe('notes service — the conflict readers', () => {
+  it('names the reason AND the version a stale save collided with', async () => {
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, () =>
+        HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'Stale.',
+            details: { reason: 'stale_base_version', currentVersion: 7 },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const err = await updateNote('n1', { body: 'x', baseVersion: 3 }).catch((cause) => cause);
+
+    expect(noteConflictReason(err)).toBe('stale_base_version');
+    // ⚠ WITHOUT THIS, A CONFLICT UI HAS NOTHING TO OFFER BUT A RETRY — and a
+    // retry is the one response that would overwrite the other version.
+    expect(noteConflictCurrentVersion(err)).toBe(7);
+  });
+
+  it('answers null for a 409 that names no version, rather than inventing one', async () => {
+    server.use(
+      http.patch(`${API_BASE}/notes/:id`, () =>
+        HttpResponse.json(
+          { statusCode: 409, code: 'CONFLICT', message: 'Generating.', details: { reason: 'generating' } },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const err = await updateNote('n1', { body: 'x', baseVersion: 3 }).catch((cause) => cause);
+
+    expect(noteConflictReason(err)).toBe('generating');
+    expect(noteConflictCurrentVersion(err)).toBeNull();
+  });
+
+  it('answers null for anything that is not a 409 at all', () => {
+    expect(noteConflictCurrentVersion(new Error('boom'))).toBeNull();
+  });
+});
+
+describe('notes service — versions', () => {
+  it('reads one version in full, body included', async () => {
+    server.use(
+      http.get(`${API_BASE}/notes/:id/versions/:version`, ({ params }) =>
+        HttpResponse.json({
+          data: {
+            version: Number(params.version),
+            kind: 'ai_generated',
+            summary: null,
+            author: null,
+            generationId: 'gen-1',
+            restoredFromVersion: null,
+            createdAt: new Date().toISOString(),
+            noteId: 'n1',
+            body: '# Original',
+            isCurrent: false,
+          },
+        }),
+      ),
+    );
+
+    const detail = await getNoteVersion('n1', 1);
+
+    expect(detail.body).toBe('# Original');
+    // ⚠ `author: null` MEANS THE AI. Carried through the client unchanged, so
+    // no surface has to re-derive it.
+    expect(detail.author).toBeNull();
+  });
+
+  it('restores by APPENDING, and pins the request to the current version', async () => {
+    let sent: Record<string, unknown> | null = null;
+    let path = '';
+
+    server.use(
+      http.post(`${API_BASE}/notes/:id/versions/:version/restore`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        path = new URL(request.url).pathname;
+        return HttpResponse.json({ data: { id: 'n1', currentVersion: 6 } });
+      }),
+    );
+
+    const note = await restoreNoteVersion('n1', 2, 5, 'Back to the AI draft');
+
+    expect(path).toBe('/api/notes/n1/versions/2/restore');
+    expect(sent).toEqual({ baseVersion: 5, summary: 'Back to the AI draft' });
+    // A NEW version, higher than both — nothing was rewritten.
+    expect(note.currentVersion).toBe(6);
+  });
+
+  it('omits an absent summary rather than sending an empty one', async () => {
+    let sent: Record<string, unknown> | null = null;
+
+    server.use(
+      http.post(`${API_BASE}/notes/:id/versions/:version/restore`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ data: { id: 'n1', currentVersion: 6 } });
+      }),
+    );
+
+    await restoreNoteVersion('n1', 2, 5);
+
+    expect(sent).toEqual({ baseVersion: 5 });
   });
 });
