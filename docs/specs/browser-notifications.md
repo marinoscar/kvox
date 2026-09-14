@@ -195,6 +195,73 @@ location block this epic added needed to be told this the hard way, but it is
 the reason any *future* location block touching these routes must repeat
 those headers rather than assume they inherit.
 
+### 1.4 Navigations are network-first — a precached document freezes its headers
+
+> Issue #88, filed against a symptom epic #215 did not anticipate: a header
+> made this file's own subject — the CSP hardened in issue #84/PR #85 — is
+> not "app shell content" in the sense Section 1's `no-cache` rule protects.
+> It is a *response header*, and a precached `Response` object replays the
+> headers it was served with forever, independently of whatever the server
+> is sending today.
+
+Epic #215 registered the SPA fallback as a single Workbox `NavigationRoute`
+whose handler was `createHandlerBoundToURL('/index.html')` — every navigation
+this app receives (`denylist: [/^\/api\//]`, unchanged by this fix; see
+Section 3) was answered from the precache, unconditionally, whenever the
+worker had one. That is a cache-first shell, and a precached `Response`
+carries the `Content-Security-Policy` header — along with everything else the
+server sent — as it stood at precache time. In dev the manifest entry for
+`index.html` has no revision (`devOptions.navigateFallback: 'index.html'`),
+so it never refreshes at all; in prod it refreshes only when the *content* of
+`index.html` hashes differently, which is exactly what a header-only nginx
+change does not do. The failure this produced on kvox.dev: after issue #84/PR
+#85 widened `connect-src` to allow the S3 origin, an already-installed
+Android client kept running the CSP from before that fix — nginx's access log
+showed no HTML document request from the phone at all for the affected
+navigation, and headless verification confirmed `fromServiceWorker() ===
+true` on the response, with its stored `content-security-policy` and `date`
+headers dated to the original precache, not the current deploy. Uploads on
+that client stayed blocked by the stale `connect-src 'self'` with no remedy
+short of the recovery paths below.
+
+The fix keeps the single `NavigationRoute` — no second route is added, and
+the `/api` denylist is untouched — but changes what its handler does:
+`fetch(request)` first, and whatever comes back is returned as-is, including
+a non-2xx status. A 502 mid-restart or a 503 maintenance page
+must reach the user as that response, not be silently swapped for a
+cached shell that claims everything is fine — so a non-2xx answer is **not**
+treated as a trigger for the offline fallback. Only when `fetch` itself
+*rejects* — offline, DNS failure, a dropped connection — does the handler
+fall back to `matchPrecache('/index.html')`. The precache is now strictly the
+one thing an offline device has to show; it is never the default answer for
+an online one. Nothing else about the shell changes: `precacheAndRoute(self
+.__WB_MANIFEST)`, `cleanupOutdatedCaches()`, `registerType: 'prompt'`, and the
+`/api` denylist and its SSE reasoning (Section 3) are all exactly as before.
+
+The consequence worth stating plainly: a header-only server change — this
+CSP, `Permissions-Policy`, `X-Frame-Options`, anything nginx or the API adds
+— now reaches an already-installed client on its very next *online*
+navigation, with no update prompt and no cache purge required, because the
+document is no longer being served from a frozen precache entry at all. The
+trade-off is symmetric: every online navigation now costs one document round
+trip to the server — a hard reload, or a deep link/new tab, **not** in-app
+`react-router` navigation, which never re-requests the document and is
+unaffected. An offline fallback shell still carries whatever headers it
+captured at its own precache time, and that is acceptable specifically
+because nothing that depends on a fresh security policy — file uploads, API
+calls — works offline anyway, so a stale CSP on a shell nobody can act on has
+no exploitable consequence.
+
+A device already stuck running the *old*, cache-first worker does not
+self-heal by this fix landing on the server — its old worker keeps
+intercepting navigations with the old logic until it is replaced, and that
+replacement still goes through the ordinary `registerType: 'prompt'` handshake
+Section 1.2 describes: the new worker activates once the user accepts the
+update prompt, or once every tab of the origin has closed and reopened. A
+user who cannot wait for either has one more option: clearing the site's data
+(Chrome → Site settings → the site → "Clear & reset") drops the stale
+precache and worker immediately.
+
 ## 2. The no-auth-in-the-service-worker constraint
 
 `apps/web/src/sw.ts:26-39` states the rule this whole file is built around:
@@ -253,15 +320,21 @@ token that fetched it expired. Two independent facts hold this line:
 - `injectManifest.globPatterns` in `service-worker.ts:109` only ever matches
   built static assets (`js,css,html,ico,png,svg,woff2`) out of `dist/`, which
   never contains anything from the API — a different service entirely.
-- The SPA navigation fallback registered at `sw.ts:92-96` explicitly
-  denylists `/^\/api\//`, and the comment names exactly why narrowing that
-  denylist would be dangerous: `/api/notifications/stream` is Server-Sent
-  Events, which by design never ends. A handler that took it would hold a
-  `fetch()` open for the stream's lifetime; the worker would never reach
-  idle, the browser would eventually kill it as unresponsive, and the
-  notification stream would die with it. `/api/docs` and
+- The single `NavigationRoute` registered in `sw.ts` explicitly denylists
+  `/^\/api\//`, and the comment names exactly why narrowing that denylist
+  would be dangerous: `/api/notifications/stream` is Server-Sent Events,
+  which by design never ends. A handler that took it would hold a `fetch()`
+  open for the stream's lifetime; the worker would never reach idle, the
+  browser would eventually kill it as unresponsive, and the notification
+  stream would die with it. `/api/docs` and
   `/api/storage/objects/:id/download` are named for the same reason — real
-  server responses that must not be swapped for the cached SPA shell.
+  server responses that must not be swapped for the SPA shell, cached or
+  otherwise. (Since issue #88 — Section 1.4 — the navigation route itself is
+  network-first and answers a normal online navigation with the live
+  response, falling back to the precached shell only when the network
+  request cannot be made at all; this denylist and the reasoning above are
+  unchanged by that fix and apply identically to both the network attempt and
+  the offline fallback.)
 
 ## 4. The 8-state capability model
 
@@ -1068,6 +1141,20 @@ that makes each one wrong:
   unacceptable default for an enterprise application base where an admin
   might be mid-edit on a settings page. `'prompt'` defers the handover to a
   user action instead.
+- **Serve navigations from the precache (cache-first shell).** Epic #215's
+  original design, and issue #88's actual bug: it freezes response headers at
+  precache time — including `Content-Security-Policy` — with no remote remedy
+  short of a per-device cache purge, because a header-only server change
+  touches neither the dev-mode manifest entry (which has no revision to
+  refresh at all) nor prod's content hash (which a header never changes). See
+  Section 1.4.
+- **Bump the `index.html` revision on every CSP change**, as a narrower fix
+  than going network-first. Rejected because Workbox revisions are content
+  hashes: a header-only nginx change has no content to hash against, so
+  there is nothing to bump in prod, and the dev-mode manifest entry
+  (`devOptions.navigateFallback: 'index.html'`) carries no revision at all,
+  so there is nothing to bump in dev regardless — the fix would not apply to
+  the case that actually broke.
 - **Cross-tab leader election** for toast dedup. Rejected because
   `registration.getNotifications({ tag })` already solves the problem
   registration-wide in one call — leader election needs a coordination
