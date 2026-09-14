@@ -135,19 +135,18 @@ describe('Transcription Settings Integration', () => {
       ).toEqual(['system_settings:write']);
     });
 
-    it('the config endpoint requires authentication but NO permission', () => {
-      // Deliberately: the capability governs every account, so every account
-      // can read it. Gating it on `system_settings:read` would lock the answer
-      // away from precisely the users it is about.
-      //
-      // TODO(#24): this becomes `transcripts:read` once that permission is
-      // seeded — at which point this assertion changes with it.
+    it('the config endpoint is gated on `transcripts:read`, not `system_settings:read`', () => {
+      // The capability governs every account, so every account can read it —
+      // and `transcripts:read` is seeded to all three roles (#24), which is
+      // what keeps that true while still naming a real permission. Gating it
+      // on `system_settings:read` would lock the answer away from precisely
+      // the users it is about.
       expect(
         Reflect.getMetadata(
           PERMISSIONS_KEY,
           TranscriptionConfigController.prototype.getConfig,
         ),
-      ).toBeUndefined();
+      ).toEqual(['transcripts:read']);
     });
   });
 

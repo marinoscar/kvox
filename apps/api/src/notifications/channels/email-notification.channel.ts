@@ -108,6 +108,9 @@ export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
     'nodes.node_offline': 'node-offline',
     'db_backup.backup_failed': 'backup-failed',
     'db_backup.restore_completed': 'restore-completed',
+    // The transcript pipeline's two owner-addressed events (#25, epic #19).
+    'transcripts.transcript_ready': 'transcript-ready',
+    'transcripts.transcript_failed': 'transcript-failed',
   };
 
 @Injectable()
