@@ -192,6 +192,17 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // file is product-neutral; the constant carries the argument at its own
   // declaration so nobody "tidies" it into a template literal.
   'apps/api/src/transcripts/export/json.exporter.ts',
+
+  // ---------------------------------------------------------------------
+  // Added by epic #45 (issue #46), the notes/AI architecture spec.
+  // ---------------------------------------------------------------------
+
+  // Prose about the product, on exactly the same standing as
+  // `docs/specs/transcription.md` above: a design document arguing about
+  // what this product does has to name it, and Markdown cannot import from
+  // `@app/shared`. It is a `scripts/rename.mjs` codemod target like every
+  // other Markdown document here.
+  'docs/specs/notes.md',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this
