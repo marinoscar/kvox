@@ -59,13 +59,40 @@
  * anyone, and adopting it needed a release. Three changes replace that, and
  * each has its own component header:
  *
- *   • `AiPermittedModels` — one row per model, with the context window and
- *     output ceiling collected exactly when this build cannot supply them;
+ *   • `AiPermittedModels` — one row per model, stating the token limits in force
+ *     and offering to override them;
  *   • `AiModelDiscoveryDialog` — "Load models from provider", which asks the
  *     vendor what exists using the READER'S OWN key;
  *   • the manual-add path inside the editor, which is not a fallback but the
  *     guarantee: the vendor list is heuristically filtered and key-scoped, so
  *     it must never be the only way to permit a model.
+ *
+ * =============================================================================
+ * #97: PERMITTING A MODEL COSTS AN ID, AND NOTHING ELSE
+ * =============================================================================
+ *
+ * #78 left one demand standing: a model the build catalogue did not carry could
+ * only be permitted by typing its context window and output ceiling, because
+ * `resolveAllowedModel` had no third source and an entry missing either number
+ * resolved to nothing. A vendor ships a dated snapshot per model per release, so
+ * in practice that meant looking up two numbers in vendor documentation for
+ * every row of a forty-model list — and the discovery dialog rendered as forty
+ * cards of red required inputs, one of which fitted on a phone.
+ *
+ * The API now always resolves a pair (exact catalogue hit → dated-snapshot match
+ * against a family → conservative floor), so on this page:
+ *
+ *   • the two numbers are an OPTIONAL OVERRIDE everywhere they appear, and
+ *     nothing on the page may block a save because one is blank;
+ *   • `permittedModelsHaveError` reports only a value somebody typed that cannot
+ *     be used, or a list over the API's cap — which is why `saveBlockers` below
+ *     no longer speaks of a "missing" limit;
+ *   • `unknownModels` is kept and reworded rather than removed. The field still
+ *     exists and still means "this permitted model can never be offered", but
+ *     since #97 the only way to reach that state is having no provider to
+ *     resolve against at all. Telling an administrator that "this build does not
+ *     know these models" would now send them to look up numbers that would not
+ *     help.
  *
  * ⚠ THE MODEL SECTION EDITS `providers.openai`, WHICH IS A DIFFERENT AXIS FROM
  * THE ACTIVE PROVIDER. `settings.provider` says which vendor is in use;
@@ -396,8 +423,12 @@ export default function AiSettingsPage() {
   if (modelsError && defaultModelError) {
     saveBlockers.push('the permitted models and the default model, under “Permitted models”');
   } else if (modelsError) {
+    // ⚠ "A TOKEN LIMIT YOU TYPED", NOT "A MISSING ONE" (#97). A blank limit is
+    // no longer a blocker and cannot be one — `permittedModelsHaveError` reports
+    // only a typed value that is out of bounds, or an output ceiling larger than
+    // the context window it has to fit inside.
     saveBlockers.push(
-      'a permitted model that is missing its context window or output ceiling, under “Permitted models”',
+      'a token limit you typed for a permitted model, under “Permitted models”',
     );
   } else if (defaultModelError) {
     saveBlockers.push('the default model, under “Permitted models”');
@@ -513,19 +544,25 @@ export default function AiSettingsPage() {
           </Alert>
         )}
 
-        {/* Permitted models this deployment cannot budget for — since #78 that
-            means "resolves to nothing", not "absent from the build catalogue":
-            an entry carrying its own two numbers is fine and is not listed
-            here. Reported rather than silently dropped, because such a model
-            can never be offered and an administrator would otherwise have
-            nothing to explain why it vanished. */}
+        {/* ⚠ KEPT, REWORDED (#97). The API still reports permitted models it
+            cannot budget for, and this is still the only place that question is
+            answered — a page that stopped rendering it would leave "why is this
+            model never offered?" with no answer anywhere. What changed is what
+            reaching this state MEANS. Since #97 every id resolves to a pair, by
+            catalogue hit, by dated-snapshot match, or by a conservative floor —
+            so a listed model is no longer one whose numbers are missing. It is
+            one there was no provider to resolve against: none registered, or
+            none active. The old copy ("this build does not know these models …
+            give each one both numbers") now describes a fix that does not apply
+            and a cause that is not true. */}
         {data.unknownModels.length > 0 && (
           <Alert severity="warning" sx={{ mb: 3 }}>
             <AlertTitle>Some permitted models cannot be used</AlertTitle>
-            {data.unknownModels.join(', ')} — this build does not know these models and they
-            carry no context window or output ceiling of their own, so requests for them
-            cannot be budgeted and they are never offered to a user. Give each one both
-            numbers below, or remove it.
+            {data.unknownModels.join(', ')} — these are permitted by policy but this
+            deployment could not work out token limits for them, so they are never offered
+            to a user. That normally means no AI provider is registered or selected: choose
+            one above and they resolve on their own. Setting a context window and output
+            ceiling by hand on each row below also works, and so does removing them.
           </Alert>
         )}
 
@@ -644,10 +681,11 @@ export default function AiSettingsPage() {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               An allow-list, not a catalogue. A model a user&apos;s own key could reach but
-              this list does not name is refused here before any request is made. A model
-              this build does not already know can still be permitted — supply its context
-              window and output ceiling and it is budgeted from those, with no release of
-              this application needed.
+              this list does not name is refused here before any request is made. Any model
+              id can be permitted, including one no release of this application has heard
+              of: its token limits are worked out here — exactly when the id is one this
+              build ships knowing, and from the closest match or a safe floor otherwise —
+              and each row says which. Override a limit only when you know better.
             </Typography>
 
             {/* ⚠ THE ONE STATEMENT OF THE EMPTY-LIST SITUATION, and `info`
@@ -660,10 +698,10 @@ export default function AiSettingsPage() {
                 <AlertTitle>No models are permitted yet, so AI cannot run</AlertTitle>
                 Until this list names at least one model, nothing can be generated by
                 anyone — with the switch above on, a provider chosen, and users&apos; own
-                keys saved. Use <strong>Add a model by hand</strong> below to name one and
-                give it a context window and output ceiling: that path needs no API key, no
-                provider call and no release of this application, and it is the way out of
-                this state on a deployment where nobody has a key yet.
+                keys saved. Use <strong>Add a model by hand</strong> below to name one: the
+                id is all it takes, and that path needs no API key, no provider call and no
+                release of this application, so it is the way out of this state on a
+                deployment where nobody has a key yet.
               </Alert>
             )}
 
@@ -880,7 +918,14 @@ export default function AiSettingsPage() {
         <AiModelDiscoveryDialog
           open={discoveryOpen}
           onClose={handleCloseDiscovery}
-          onReload={() => void discoverModels(MODEL_POLICY_PROVIDER)}
+          // ⚠ STILL ONE CALL PER DELIBERATE PRESS (#97). The dialog asks for a
+          // reload from exactly two controls — "Try again" and the "show every
+          // model" switch — and each spends a real request on the reader's own
+          // account, which is why the unfiltered list is fetched rather than
+          // filtered out of one already held: this client never had it.
+          onReload={(includeAll) =>
+            void discoverModels(MODEL_POLICY_PROVIDER, includeAll)
+          }
           isLoading={isDiscovering}
           result={discoverResult}
           error={discoverError}

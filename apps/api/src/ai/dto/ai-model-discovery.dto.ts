@@ -24,13 +24,24 @@ import { z } from 'zod';
 /**
  * One model the provider reported.
  *
- * ⚠ `contextWindowTokens` AND `maxOutputTokens` ARE NULLABLE, AND THAT IS THE
- * WHOLE POINT OF THIS TYPE. No vendor's model list carries either number, so
- * `null` here means "the vendor did not say and this build has no descriptor" —
- * NOT "unlimited" and NOT "zero". A client offering such a model must collect
- * both numbers from the administrator before saving it into `allowedModels`,
- * because a model with no context window cannot be budgeted and would be saved,
- * listed back, and silently never offered to anyone.
+ * ⚠ THE TWO TOKEN NUMBERS ARE NOW FILLED FOR EVERY MODEL A PROVIDER CAN PLACE
+ * (issue #97), where before they were `null` for every id absent from this
+ * build's catalogue. No vendor's model list carries either number, so they come
+ * from the same resolution chain the save path and the token budget use: the
+ * exact catalogue entry, then the model's family (a dated snapshot such as
+ * `gpt-5.4-mini-2026-03-17` takes `gpt-5.4-mini`'s window), then the provider's
+ * conservative floor. `source` says which rank answered.
+ *
+ * ⚠ THEY REMAIN NULLABLE, and `null` still means "nothing could answer" — NOT
+ * "unlimited" and NOT "zero". It is now reachable only for a provider that
+ * declares no floor, and a client offering such a model must still collect both
+ * numbers from the administrator before saving it into `allowedModels`.
+ *
+ * ⚠ THE OLD SUPERSEDED RULE: "a model with `known: false` needs both numbers
+ * typed before it can be permitted." That has not been true since #97 — a
+ * client that still enforces it refuses models the server would accept. `known`
+ * itself is unchanged and still means an exact catalogue hit; it is `source`
+ * that says how much is knowledge.
  */
 export const aiDiscoveredModelSchema = z.object({
   id: z
@@ -44,19 +55,30 @@ export const aiDiscoveredModelSchema = z.object({
   known: z
     .boolean()
     .describe(
-      'True when this build carries a descriptor for the model and can budget against it, so permitting it needs no further input. False means the two token numbers below are `null` and the administrator must supply them.',
+      'True when this build carries a **verified** descriptor for this exact model id. Unchanged since issue #78 — and deliberately **not** widened to mean "permittable", which every model with non-null numbers below now is. Equivalent to `source === "catalogue"`; read `source` for the finer answer.',
     ),
   contextWindowTokens: z
     .number()
     .nullable()
     .describe(
-      "The model's total context window when this build knows it, otherwise `null` — the vendor's list does not carry it.",
+      "The model's total context window, detected automatically: this build's verified number, else its family's, else the provider's conservative floor (issue #97). `null` only when the provider can answer none of those — it never means unlimited.",
     ),
   maxOutputTokens: z
     .number()
     .nullable()
     .describe(
-      'Most tokens the model will produce in one completion when this build knows it, otherwise `null`.',
+      'Most tokens the model will produce in one completion, detected the same way and `null` under the same single condition.',
+    ),
+  source: z
+    .enum(['catalogue', 'derived', 'default'])
+    .describe(
+      'Which rank of the resolution chain supplied the two numbers (issue #97), and the **weakest** of the two: `catalogue` — verified for this exact id; `derived` — taken from the family named in `derivedFrom`, the id being a dated snapshot of it; `default` — the provider\'s conservative floor, because nothing better was available. All three are permittable with one click, and all three can be overridden per model by typing real numbers into the policy entry, which outranks every rank here. Show the difference rather than hiding it: a floor is a lower bound, not a measurement.',
+    ),
+  derivedFrom: z
+    .string()
+    .nullable()
+    .describe(
+      'The catalogue model id the numbers were inferred from, non-null exactly when `source` is `derived` — so the dialog can say which model was assumed.',
     ),
 });
 
@@ -74,7 +96,7 @@ export const aiModelDiscoverySchema = z.object({
   models: z
     .array(aiDiscoveredModelSchema)
     .describe(
-      'Chat-capable models the calling administrator\'s key can reach, models this build already knows first and then alphabetically. **Empty whenever `ok` is false**, never partial. The list is filtered to plausible chat models as a convenience — an administrator can still permit any model id by hand, and that path never consults the filter.',
+      'Models the calling administrator\'s key can reach, ordered by how well this build knows each one — verified first, then models whose numbers were derived from a family, then models on the provider floor, alphabetically within each group. **Empty whenever `ok` is false**, never partial. The list is filtered to plausible chat models as a convenience; pass `includeAll=true` for the provider\'s whole list, and note that permitting a model id by hand never consults the filter either.',
     ),
 });
 
@@ -98,6 +120,22 @@ export const aiModelDiscoveryQuerySchema = z.object({
     .optional()
     .describe(
       'Which provider to ask. Defaults to the active one. Naming a different provider lets an administrator inspect its catalogue before switching to it.',
+    ),
+
+  /**
+   * `z.enum(['true','false']).transform(...)`, NEVER `z.coerce.boolean()`.
+   *
+   * Every query parameter arrives as a string and `Boolean('false')` is `true`,
+   * so a coercing schema would turn the explicit opt-OUT `?includeAll=false`
+   * into the opt-IN. The same shape as `jobs/dto/job-list-query.dto.ts` and
+   * `users/dto/user-list-query.dto.ts`.
+   */
+  includeAll: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional()
+    .describe(
+      'Return every model the provider listed, skipping the plausible-chat-model filter (issue #97). The filter is a convenience over a flat vendor list with no capability field, so it is wrong occasionally; this is the escape hatch that keeps it from ever being the reason a working model cannot be found.',
     ),
 });
 

@@ -117,8 +117,14 @@ export interface UseAiSettingsReturn {
    *
    * ⚠ SPENDS THE CALLING ADMINISTRATOR'S OWN API KEY on a real vendor request
    * — never call it from an effect. Never throws; the outcome is state.
+   *
+   * `includeAll` drops the API's chat-model heuristic and returns every id the
+   * vendor listed (#97). It is a SECOND REQUEST, billed like the first, which is
+   * why the dialog's toggle is a deliberate press rather than a filter applied
+   * to a list already in hand — the unfiltered list is not a subset this client
+   * holds, it is an answer only the API can give.
    */
-  discoverModels: (provider?: string | null) => Promise<void>;
+  discoverModels: (provider?: string | null, includeAll?: boolean) => Promise<void>;
   clearDiscoverResult: () => void;
 
   refresh: () => Promise<void>;
@@ -243,13 +249,13 @@ export function useAiSettings(): UseAiSettingsReturn {
    * failure mode that makes a stale success look like a fresh one.
    */
   const discoverModels = useCallback(
-    async (provider?: string | null) => {
+    async (provider?: string | null, includeAll?: boolean) => {
       try {
         setIsDiscovering(true);
         setDiscoverResult(null);
         setDiscoverError(null);
 
-        const result = await discoverAiModels(provider);
+        const result = await discoverAiModels(provider, includeAll);
         if (isMounted()) setDiscoverResult(result);
       } catch (err) {
         if (!isMounted()) return;

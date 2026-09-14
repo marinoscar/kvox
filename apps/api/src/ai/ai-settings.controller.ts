@@ -139,9 +139,15 @@ export class AiSettingsController {
       'existed has bare strings stored — and both are read back as objects. The numbers on an ' +
       'entry OVERRIDE this build\'s own catalogue, which is what lets a deployment permit a ' +
       'model no release of this application knows about yet.\n\n' +
-      'A **400** is returned only for an entry this deployment could not budget for at all: ' +
-      'no context window on the entry and none in the build catalogue. The message names the ' +
-      'missing fields — it is not a statement that the model is forbidden.',
+      '**Since issue #97 the numbers are optional in practice, not just in the schema.** An ' +
+      'entry that carries none is resolved from this build\'s catalogue, then from the family ' +
+      'the id belongs to (`gpt-5.4-mini-2026-03-17` takes `gpt-5.4-mini`\'s window), then from ' +
+      "a conservative floor the provider declares. `GET /api/ai/config` reports which of those " +
+      'answered, per model, as `source`.\n\n' +
+      'A **400** is therefore returned only for an entry **nothing** could budget for: no ' +
+      'numbers on the entry and no provider knowledge of any kind, which in practice means the ' +
+      'policy names a provider this build does not implement. The message names the missing ' +
+      'fields — it is not a statement that the model is forbidden.',
   })
   @ApiHeader({
     name: 'If-Match',
@@ -155,7 +161,11 @@ export class AiSettingsController {
     description: 'The updated policy, re-read from storage',
     type: AiSettingsResponseDto,
   })
-  @ApiResponse({ status: 400, description: 'Validation error, or an unknown model id' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Validation error, or a model id nothing in this deployment can supply a context window for',
+  })
   @ApiResponse({ status: 409, description: 'Version conflict' })
   async updateSettings(
     @Body() dto: UpdateAiSettingsDto,
@@ -192,15 +202,28 @@ export class AiSettingsController {
       "against neither, but against each user's own key at generation time.\n\n" +
       '**This returns HTTP 200 even when the provider refused.** Read `ok` and show `detail`, ' +
       'which distinguishes "the key is wrong", "the account has no credit" and "the endpoint ' +
-      'is unreachable". A model with `known: false` has `contextWindowTokens: null` — collect ' +
-      'that number from the administrator before permitting it, or it can never be offered to ' +
-      'anyone.',
+      'is unreachable".\n\n' +
+      '**Every model comes back with a context window and an output ceiling** (issue #97). ' +
+      'They are detected automatically: verified numbers for a model this build knows, else ' +
+      "the numbers of the family the id belongs to (`gpt-5.4-mini-2026-03-17` takes " +
+      "`gpt-5.4-mini`'s), else a conservative floor for the provider. `source` says which, and " +
+      '`derivedFrom` names the family. Nothing has to be typed to permit a model — an ' +
+      'administrator may still override either number per model, which outranks all three.\n\n' +
+      'The list is filtered to plausible chat models as a convenience; pass `includeAll=true` ' +
+      "to get the provider's whole list when that heuristic has hidden something.",
   })
   @ApiQuery({
     name: 'provider',
     required: false,
     description:
       'Which provider to ask. Defaults to the active one, so an administrator can inspect a catalogue before switching to it.',
+  })
+  @ApiQuery({
+    name: 'includeAll',
+    required: false,
+    enum: ['true', 'false'],
+    description:
+      "`true` returns every model the provider listed, skipping the plausible-chat-model filter (issue #97). The filter keeps embeddings, voices and moderation endpoints out of a model dropdown, but it is a heuristic over ids the vendor invents on its own schedule — this is the escape hatch that stops it ever being the reason a working model cannot be found.",
   })
   @ApiResponse({
     status: 200,
@@ -222,7 +245,11 @@ export class AiSettingsController {
     @Query() query: AiModelDiscoveryQueryDto,
     @CurrentUser('id') userId: string,
   ) {
-    return this.discovery.discoverModels(userId, query.provider);
+    return this.discovery.discoverModels(
+      userId,
+      query.provider,
+      query.includeAll,
+    );
   }
 
   @Post('test')

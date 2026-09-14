@@ -86,7 +86,18 @@ export const aiModelDescriptorSchema = z.object({
 export const aiProviderCapabilitiesSchema = z.object({
   models: z
     .array(aiModelDescriptorSchema)
-    .describe('Every model this build knows how to budget requests for.'),
+    .describe(
+      'Every model this build ships **verified** numbers for. Since issue #97 this is no longer the set of models that can be permitted: an id absent from it takes its family\'s numbers (a dated snapshot of one of these) or, failing that, `defaultModelLimits` below. It remains the only source that reports `source: "catalogue"`.',
+    ),
+  defaultModelLimits: z
+    .object({
+      contextWindowTokens: z.number(),
+      maxOutputTokens: z.number(),
+    })
+    .optional()
+    .describe(
+      'The conservative floor applied to a chat model this provider has never heard of (issue #97) — a **lower bound**, not a guess at the model\'s real size, so no model is ever un-permittable for want of two numbers. Absent means this provider declines to have one, and ids it cannot otherwise place stay unresolvable. An administrator who knows the real numbers still outranks it: an entry\'s own `contextWindowTokens`/`maxOutputTokens` win over every other source.',
+    ),
   modelDiscovery: z
     .boolean()
     .describe(
@@ -149,13 +160,13 @@ export const aiAllowedModelResponseSchema = z.object({
     .number()
     .optional()
     .describe(
-      "This entry's own context window, overriding the build catalogue. Absent means the catalogue answers — and if it cannot, the model is reported in `unknownModels` and never offered.",
+      "This entry's own context window. It **overrides every other source** — the build catalogue included — so a deployment can correct a stale number without waiting for a release. Absent means the resolution chain answers instead: the exact catalogue entry, then the model's family (issue #97), then the provider's conservative floor. Only when none of those can answer is the model reported in `unknownModels` and never offered, which in practice means the policy names a provider this build does not implement.",
     ),
   maxOutputTokens: z
     .number()
     .optional()
     .describe(
-      "This entry's own output ceiling, overriding the build catalogue. Absent means the catalogue answers.",
+      "This entry's own output ceiling, overriding every other source. Absent means the same chain answers, per field — an entry may supply one number and inherit the other.",
     ),
 });
 
@@ -184,7 +195,7 @@ export const aiSettingsResponseSchema = z.object({
           allowedModels: z
             .array(aiAllowedModelResponseSchema)
             .describe(
-              "Models users may generate with. This deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An entry may carry its own context window, which is what lets a deployment permit a model this build has never heard of.",
+              "Models users may generate with. This deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An entry may carry its own context window and output ceiling, which override everything else; since issue #97 it does not need to, because an id this build has no descriptor for takes its family's numbers or the provider's conservative floor. Up to 200 entries — a bound on the size of the stored settings blob, not a ration on models.",
             ),
           defaultModel: z.string().describe('The model offered first.'),
         }),
@@ -216,7 +227,7 @@ export const aiSettingsResponseSchema = z.object({
   unknownModels: z
     .array(z.string())
     .describe(
-      'Model ids the policy permits that no registered provider declares. Reported rather than silently dropped: such a model cannot be budgeted, so it is never offered to a user, and an administrator who mistyped one would otherwise have nothing to explain why.',
+      'Model ids the policy permits that **nothing** can supply a context window for — not the entry itself, not the build catalogue, not the family derivation, not the provider floor (issue #97). Normally empty: for a registered provider that declares a floor it cannot be populated at all, so a non-empty list almost always means the policy names a provider this build does not implement. Reported rather than silently dropped, because such a model is saved, listed back, and then never offered to a single user with nothing anywhere to explain why.',
     ),
   version: z
     .number()

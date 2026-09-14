@@ -8,6 +8,11 @@ import {
   parseRetryAfterMs,
   RateLimitError,
 } from '../ai-errors';
+import {
+  modelKnowledgeOf,
+  resolveAllowedModel,
+  type AiResolvedModel,
+} from '../ai-model-resolution';
 import { AiProviderRegistry } from '../ai-provider.registry';
 import {
   aiProvidersSchema,
@@ -19,6 +24,7 @@ import type {
   AiDiscoveredModel,
   AiFinishReason,
   AiGenerateRequest,
+  AiListModelsOptions,
   AiModelDescriptor,
   AiProvider,
   AiProviderCapabilities,
@@ -121,13 +127,25 @@ export const OPENAI_PROVIDER_ID = 'openai';
 /**
  * The model catalogue this build knows how to budget against.
  *
- * ⚠ THIS IS NOT AN ALLOW-LIST. What a user may actually generate with is the
- * INTERSECTION of this catalogue and `ai.providers.openai.allowedModels` — the
- * deployment's policy decides what is permitted, and this list only says what
- * this application knows the context window of. A model an operator adds to the
- * policy that is absent here cannot be budgeted (docs/specs/notes.md §3.3 needs
- * `contextWindowTokens`), so `AiConfigService` reports only models present in
- * both, rather than guessing a window and refusing a prompt that would have fit.
+ * ⚠ THIS IS NOT AN ALLOW-LIST. What a user may actually generate with is
+ * `ai.providers.openai.allowedModels`; this list only says which ids this
+ * application has VERIFIED numbers for. The deployment's policy decides what is
+ * permitted.
+ *
+ * ⚠ NOR IS IT THE ONLY WAY A MODEL BECOMES BUDGETABLE ANY MORE (#97). It used
+ * to be: a policy entry naming an id absent from this array could not be
+ * budgeted, so `AiConfigService` dropped it and the settings page refused the
+ * save. Since #97 an absent id falls through to
+ * {@link deriveOpenAiModelDescriptor} (a dated snapshot of a family listed
+ * here) and then to {@link OPENAI_DEFAULT_MODEL_LIMITS}. This array is now rank
+ * 2 of four in `ai-model-resolution.ts`'s precedence — still the most
+ * authoritative answer short of an administrator typing one, and still the only
+ * one that makes a model report `source: 'catalogue'`.
+ *
+ * ⚠ EVERY ENTRY HERE IS ALSO A FAMILY PREFIX. The derivation matches dated
+ * snapshots against these ids on a hyphen boundary, so adding `gpt-5.4-mini`
+ * teaches this build `gpt-5.4-mini-2026-03-17` at the same time — and removing
+ * an entry silently reduces a whole family of ids to the conservative floor.
  *
  * ⚠ RE-VERIFY THE NUMBERS. See the file header: a context window that has grown
  * on the vendor's side makes this application refuse work it could do, and one
@@ -165,8 +183,11 @@ const MODELS: AiModelDescriptor[] = [
   // ⚠ THE FOUR GPT-4 ENTRIES ABOVE STAY. This catalogue is not an allow-list
   // (see the doc comment): it is what this build knows how to BUDGET against,
   // and removing an entry a deployment already names in `allowedModels` would
-  // strand that policy — `resolveAllowedModel` would find no numbers, the model
-  // would stop being offered, and nothing would say why.
+  // strand that policy. #97 changes the SYMPTOM of that mistake without making
+  // it any less of one: the model no longer vanishes from the picker, it is
+  // silently demoted to the 128k/16k floor — so a 1,050k model quietly starts
+  // refusing prompts that used to fit, with `source: 'default'` as the only
+  // trace. Harder to notice than disappearing, not easier.
   //
   // ⚠ THEIR OUTPUT CEILING IS SHARED WITH THEIR THINKING. A reasoning model
   // spends tokens deliberating before it writes anything, those tokens are
@@ -197,6 +218,111 @@ const MODELS: AiModelDescriptor[] = [
 ];
 
 /**
+ * The conservative floor for an OpenAI chat model this build cannot place (#97)
+ * — the last rank of `ai-model-resolution.ts`'s precedence.
+ *
+ * WHY THESE TWO NUMBERS. 128,000 input tokens and 16,384 output tokens are what
+ * the SMALLEST modern OpenAI chat model offers: every entry in MODELS above
+ * meets or exceeds both, and `gpt-4o` — the oldest model this build still
+ * catalogues — meets them exactly. So an id this file has never seen is either a
+ * member of one of those families (in which case the derivation above answered
+ * and this is never read) or something newer, and OpenAI has not shipped a chat
+ * model BELOW its 2024 flagship since.
+ *
+ * ⚠ IT IS A LOWER BOUND, NOT A GUESS AT THE MODEL'S REAL SIZE, and the
+ * asymmetry is the entire justification for it existing. Under-estimating
+ * refuses a prompt that would have fit — visible, recoverable, and fixed by an
+ * administrator typing the real number into the policy entry, which still
+ * outranks everything here. Over-estimating submits a prompt the vendor rejects
+ * AFTER billing the user for the attempt, which nobody can undo and which the
+ * user, not the deployment, pays for. docs/specs/notes.md §3.3's rule against
+ * guessing is a rule against the second mistake; this is the first.
+ *
+ * ⚠ RE-VERIFY IT WITH THE MODELS. If OpenAI ever ships a small chat model with
+ * a 32k window, this number starts submitting prompts that do not fit — and
+ * unlike a stale MODELS entry, nothing names the model it got wrong. Lower it
+ * before adding such a model to the catalogue, not after.
+ */
+export const OPENAI_DEFAULT_MODEL_LIMITS = {
+  contextWindowTokens: 128_000,
+  maxOutputTokens: 16_384,
+} as const;
+
+/**
+ * One trailing dated-snapshot suffix, in the three shapes OpenAI has used (#97).
+ *
+ * `-2026-03-17` (current), `-20260317` (used by some gateways and by Azure
+ * deployments) and `-0806` (the short form on `gpt-4o-2024-08-06`'s
+ * predecessors). ANCHORED AND STRIPPED AT MOST ONCE: repeating the strip would
+ * eat a meaningful trailing number from an id like `o3-mini-2025-01-31` twice
+ * over and, more importantly, turn any future `-<n>` variant suffix into a
+ * silent truncation of the family name.
+ *
+ * THE LONGER ALTERNATIVES COME FIRST, because a regex alternation is ordered:
+ * `\d{4}` would otherwise match the tail of `-20260317` and leave `-2026`
+ * behind, which matches nothing.
+ */
+const SNAPSHOT_SUFFIX = /-(?:\d{4}-\d{2}-\d{2}|\d{8}|\d{4})$/;
+
+/**
+ * Place an unrecognised OpenAI model id in a known family (#97).
+ *
+ * EXPORTED AND PURE, for the reason `looksLikeChatModel` and `parseSseData` are:
+ * a rule about ids a vendor invents on its own schedule is one that has to be
+ * assertable directly, with no Nest container and no network. It is reachable
+ * through the provider instance as `deriveModelDescriptor`, which is what
+ * `resolveAllowedModel` actually calls.
+ *
+ * THE TWO STEPS, AND WHY EACH:
+ *
+ *   1. STRIP ONE DATED SNAPSHOT SUFFIX. Real vendor lists are mostly dated
+ *      snapshots of models this build already knows — `gpt-4o-2024-08-06` IS
+ *      `gpt-4o` — and before #97 that one difference was enough to make a model
+ *      unpermittable without hand-typing two numbers.
+ *
+ *   2. LONGEST-PREFIX MATCH AGAINST `MODELS`, ON A HYPHEN BOUNDARY ONLY.
+ *      LONGEST, because `gpt-5.4-mini-2026-03-17` must resolve to
+ *      `gpt-5.4-mini` (400k/128k) and NEVER to `gpt-5.4` (1,050k): the shorter
+ *      prefix also matches, and taking it would hand a 400k model a 1,050k
+ *      window — the over-estimate that bills the user for a rejected prompt.
+ *      BOUNDARY, because a prefix that ends mid-segment is not a family
+ *      relationship at all: `gpt-4.1` must not claim `gpt-4.10-turbo` if OpenAI
+ *      ever spells one that way.
+ *
+ * Returns the family's FULL numbers — see `AiProvider.deriveModelDescriptor`
+ * for why reducing them "to be safe" would undo the point — with `id` set to the
+ * FAMILY (it becomes `derivedFrom`) and `label` to the raw requested id (never
+ * the family's human name, which would claim a descriptor this build lacks).
+ *
+ * `null` when nothing matches, so the conservative floor applies.
+ */
+export function deriveOpenAiModelDescriptor(
+  id: string,
+): AiModelDescriptor | null {
+  const trimmed = id.trim();
+  if (trimmed.length === 0) return null;
+
+  const base = trimmed.replace(SNAPSHOT_SUFFIX, '');
+
+  let best: AiModelDescriptor | null = null;
+
+  for (const model of MODELS) {
+    const matches = base === model.id || base.startsWith(`${model.id}-`);
+    if (!matches) continue;
+    if (best === null || model.id.length > best.id.length) best = model;
+  }
+
+  if (!best) return null;
+
+  return {
+    id: best.id,
+    label: trimmed,
+    contextWindowTokens: best.contextWindowTokens,
+    maxOutputTokens: best.maxOutputTokens,
+  };
+}
+
+/**
  * Substrings in a model id that mean "this is not a chat model" (#78).
  *
  * ⚠ A CONVENIENCE OVER AN UNSTRUCTURED VENDOR LIST, AND NOTHING MORE. OpenAI's
@@ -218,7 +344,12 @@ const MODELS: AiModelDescriptor[] = [
  *
  * A MISS IS CHEAP IN BOTH DIRECTIONS, which is why the list is short and
  * literal rather than clever: a false negative shows one extra row; a false
- * positive hides a row an administrator can still type.
+ * positive hides a row an administrator can still type — and since #97 one they
+ * can also simply ask for, with `?includeAll=true` on
+ * `GET /api/ai-settings/models` (see {@link AiListModelsOptions}). That escape
+ * hatch is what makes this filter FULLY non-blocking rather than merely
+ * non-binding: the cost of a false positive is now one checkbox instead of
+ * knowing the exact id by heart.
  */
 const NON_CHAT_MODEL_MARKERS = [
   'embedding',
@@ -318,6 +449,44 @@ function asString(value: unknown): string | null {
 
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Sort weight for {@link AiDiscoveredModel.source}. Lower sorts first.
+ *
+ * Verified numbers, then an inference from a family, then the floor — the same
+ * order as the resolution precedence, so the dialog reads top to bottom as
+ * "most certain first".
+ */
+const DISCOVERY_SOURCE_RANK: Record<AiDiscoveredModel['source'], number> = {
+  catalogue: 0,
+  derived: 1,
+  default: 2,
+};
+
+/**
+ * Project a resolution onto the three sources the DISCOVERY wire type admits.
+ *
+ * TWO CASES THE WIRE TYPE CANNOT SPELL, and both are handled here rather than
+ * with a `!`:
+ *
+ *   • `'explicit'` — unreachable, because discovery resolves a bare `{ id }`
+ *     with no administrator override behind it. Folded onto `'catalogue'`,
+ *     which is the strongest source a client can be shown and is what an
+ *     explicit number would be standing in for.
+ *   • `null` — unreachable while this provider declares `defaultModelLimits`,
+ *     since the floor answers everything. Reported as `'default'` alongside the
+ *     `null` numbers it comes with, which is the only honest label for "nothing
+ *     better than the floor, and not even that".
+ *
+ * Written as a total function so that removing the floor one day degrades this
+ * list gracefully instead of throwing inside a settings page.
+ */
+function discoverySource(
+  resolved: AiResolvedModel | null,
+): AiDiscoveredModel['source'] {
+  if (!resolved) return 'default';
+  return resolved.source === 'explicit' ? 'catalogue' : resolved.source;
 }
 
 function containsAny(haystack: string, needles: string[]): boolean {
@@ -468,6 +637,10 @@ export class OpenAiProvider
   readonly capabilities: AiProviderCapabilities = {
     models: MODELS,
     streaming: true,
+    // #97: the last rank of the resolution chain, so no OpenAI chat model is
+    // ever un-permittable for want of two numbers. See the constant for why a
+    // floor is honest where a guess is not.
+    defaultModelLimits: OPENAI_DEFAULT_MODEL_LIMITS,
     // TRUE, AND `listModels` BELOW IS WHAT MAKES THAT LEGAL (#78) — the
     // registry refuses this provider at boot if the two disagree. `GET /models`
     // is the one route every OpenAI-compatible gateway implements, which is a
@@ -503,7 +676,7 @@ export class OpenAiProvider
       label: 'Permitted models',
       type: 'string-list',
       helpText:
-        "Models users of this deployment may generate with. This is the deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An empty list permits nothing. Load the live list from the provider, or type an id by hand; a model this build does not recognise also needs its context window and output ceiling, which the vendor publishes.",
+        "Models users of this deployment may generate with. This is the deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An empty list permits nothing. Load the live list from the provider, or type an id by hand: token limits for a model this build does not recognise are detected from the model's family or from a conservative default, and can be overridden per model if the vendor publishes better numbers.",
       required: false,
       // `[]` STILL, and still a `string-list`: an entry may now be an object
       // (#78), but a bare id remains a legal way to write one and is what the
@@ -673,9 +846,18 @@ export class OpenAiProvider
    * ⚠ `ctx` IS NEVER LOGGED, in this method or anywhere near it. The key is an
    * individual person's, and the only variables permitted in a log line here
    * are counts.
+   *
+   * ⚠ THE TWO TOKEN NUMBERS COME FROM `resolveAllowedModel`, NOT FROM A LOCAL
+   * LOOKUP (#97). They used to be `catalogue.get(id)?.contextWindowTokens ??
+   * null`, which was a second, shorter copy of a precedence that has since
+   * grown two more ranks. Routing a bare `{ id }` entry through the shared
+   * resolver means the number this dialog shows is the number the save path
+   * validates and the number the token budget will subtract from — by
+   * construction rather than by two files being kept in step.
    */
   async listModels(
     ctx: AiProviderContext<OpenAiSettings>,
+    opts?: AiListModelsOptions,
   ): Promise<AiDiscoveredModel[]> {
     const response = await this.fetchImpl(
       `${this.baseUrl(ctx.settings)}/models`,
@@ -720,9 +902,18 @@ export class OpenAiProvider
       // the same id twice, and a duplicated row in a dropdown reads as a bug in
       // this application.
       .filter((id, index, all) => all.indexOf(id) === index)
-      .filter((id) => looksLikeChatModel(id))
+      // ⚠ SKIPPED ENTIRELY WHEN THE CALLER ASKED FOR EVERYTHING (#97). See
+      // `NON_CHAT_MODEL_MARKERS`: this filter is a convenience over a flat
+      // vendor list, and an administrator who knows better must be able to say
+      // so without knowing the id by heart.
+      .filter((id) => opts?.includeAll === true || looksLikeChatModel(id))
       .map((id): AiDiscoveredModel => {
         const descriptor = catalogue.get(id);
+        // ⚠ THE SHARED RESOLVER, WITH A BARE `{ id }` ENTRY — no policy entry
+        // exists at discovery time, so the `explicit` rank is unreachable and
+        // what comes back is the catalogue, the family derivation, or the
+        // floor, exactly as the save path will compute it.
+        const resolved = resolveAllowedModel({ id }, modelKnowledgeOf(this));
 
         return {
           id,
@@ -730,34 +921,57 @@ export class OpenAiProvider
           // otherwise. NEVER a prettified guess — a label this application
           // invented for a model it knows nothing about would look exactly like
           // one it can budget for, which is the distinction `known` exists to
-          // make.
+          // make. A DERIVED family's label is not borrowed either, for the same
+          // reason; `derivedFrom` carries that relationship instead.
           label: descriptor?.label ?? id,
+          // UNCHANGED, AND STILL AN EXACT CATALOGUE HIT (#97). Widening it to
+          // "resolvable" would have made a derived or floored model claim
+          // verified numbers on a wire field clients already branch on.
           known: descriptor !== undefined,
-          // `null`, NOT a default. The vendor's list carries neither number,
-          // and a guessed context window is how a prompt that would have fit
-          // gets refused — or one that does not gets submitted and billed to
-          // the user. An administrator supplies them per model in the policy;
-          // see `aiAllowedModelSchema`.
-          contextWindowTokens: descriptor?.contextWindowTokens ?? null,
-          maxOutputTokens: descriptor?.maxOutputTokens ?? null,
+          // No longer `null` for everything this build has not heard of: the
+          // resolver answers from the family or the floor. Still `null` rather
+          // than a made-up number in the one case where nothing can answer.
+          contextWindowTokens: resolved?.contextWindowTokens ?? null,
+          maxOutputTokens: resolved?.maxOutputTokens ?? null,
+          source: discoverySource(resolved),
+          derivedFrom: resolved?.derivedFrom ?? null,
         };
       });
 
-    // KNOWN FIRST, THEN ALPHABETICALLY. The models this build can budget
-    // without any further input are the ones an administrator can permit with
-    // one click, so they belong at the top; everything else is a flat
-    // alphabetical list because a vendor's own ordering (creation date, in
-    // OpenAI's case) is meaningless to the person reading it.
+    // KNOWN FIRST, THEN BY HOW WELL THIS BUILD KNOWS THE NUMBERS, THEN
+    // ALPHABETICALLY. The models an administrator can permit with one click and
+    // no doubt belong at the top; below them, a model whose window was derived
+    // from its family is a better offer than one that fell back to the
+    // conservative floor, because the floor may well be an under-estimate the
+    // administrator would rather correct. Within a group the order is flat and
+    // alphabetical, because a vendor's own ordering (creation date, in OpenAI's
+    // case) is meaningless to the person reading it.
     discovered.sort((a, b) => {
       if (a.known !== b.known) return a.known ? -1 : 1;
+      const bySource =
+        DISCOVERY_SOURCE_RANK[a.source] - DISCOVERY_SOURCE_RANK[b.source];
+      if (bySource !== 0) return bySource;
       return a.id.localeCompare(b.id);
     });
 
     this.logger.debug(
-      `Discovered ${discovered.length} chat-capable model(s) from the provider's model list.`,
+      `Discovered ${discovered.length} model(s) from the provider's model list.`,
     );
 
     return discovered;
+  }
+
+  /**
+   * See {@link deriveOpenAiModelDescriptor} — the whole rule, kept as a module
+   * function so it is testable without a container.
+   *
+   * PRESENT ON THE INSTANCE BECAUSE `resolveAllowedModel` REACHES IT THROUGH THE
+   * PROVIDER, via `modelKnowledgeOf`. A caller holding only an `AiProvider` must
+   * never have to know which concrete class it got, or to import one vendor's
+   * module to resolve another vendor's model.
+   */
+  deriveModelDescriptor(id: string): AiModelDescriptor | null {
+    return deriveOpenAiModelDescriptor(id);
   }
 
   // ---------------------------------------------------------------------------

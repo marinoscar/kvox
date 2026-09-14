@@ -173,8 +173,19 @@ export const aiProvidersSchema = z.object({
      * An EMPTY list is legal and means "nothing is permitted" — a deliberately
      * representable state, so an administrator can close the feature by policy
      * without also flipping `enabled` and losing the rest of the configuration.
+     *
+     * ⚠ THE CAP BOUNDS THE SETTINGS BLOB, IT DOES NOT RATION MODELS (#97). It
+     * exists because this array is stored inside the `global` row's JSONB and
+     * returned whole by `GET /api/ai-settings`, so an unbounded list is an
+     * unbounded row and an unbounded response. It was 50 when the only way to
+     * permit a model this build had not heard of was to hand-type two numbers
+     * per entry, which made 50 an unreachable ceiling; now that a model can be
+     * permitted with one click, a vendor list of a hundred-odd dated snapshots
+     * is an ordinary thing to select most of. 200 is comfortably past any real
+     * vendor catalogue and still a bound on a mistake (a script writing the
+     * same id in a loop), which is the only thing it was ever for.
      */
-    allowedModels: z.array(aiAllowedModelEntrySchema).max(50),
+    allowedModels: z.array(aiAllowedModelEntrySchema).max(200),
 
     /**
      * The model a client offers first. It SHOULD be a member of
@@ -375,7 +386,11 @@ export const systemAiPatchSchema = z.object({
       openai: z
         .object({
           baseUrl: z.string().trim().url().max(512).optional(),
-          allowedModels: z.array(aiAllowedModelEntrySchema).max(50).optional(),
+          // 200, matching the value schema exactly — see its comment for why
+          // the cap bounds the settings blob rather than rationing models (#97).
+          // A PATCH cap below the value cap would refuse a list the stored
+          // shape considers legal, which is the drift these two must not have.
+          allowedModels: z.array(aiAllowedModelEntrySchema).max(200).optional(),
           defaultModel: z.string().trim().min(1).max(128).optional(),
         })
         .optional(),
