@@ -142,6 +142,17 @@ const SAMPLE_DATA: { [K in EmailTemplateName]: EmailTemplateDataMap[K] } = {
     retryable: true,
     appUrl: 'https://app.example.com',
   },
+  // #29's recipient-addressed template. BOTH of its escaped fields reach the
+  // subject, so both stay benign here and the escaping is asserted by
+  // `transcript-shared.email.spec.ts` instead, which renders a hostile payload
+  // and checks the html rather than the subject line.
+  'transcript-shared': {
+    transcriptId: 'transcript-1',
+    title: 'Board meeting, 3 March',
+    role: 'editor',
+    ownerName: 'Ana Rivera',
+    appUrl: 'https://app.example.com',
+  },
 };
 
 function render(name: EmailTemplateName): RenderedEmail {

@@ -111,6 +111,8 @@ export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
     // The transcript pipeline's two owner-addressed events (#25, epic #19).
     'transcripts.transcript_ready': 'transcript-ready',
     'transcripts.transcript_failed': 'transcript-failed',
+    // Sharing (#29) — the one transcript template addressed to the RECIPIENT.
+    'transcripts.transcript_shared': 'transcript-shared',
   };
 
 @Injectable()

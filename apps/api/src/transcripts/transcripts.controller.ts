@@ -2,9 +2,22 @@
 // TranscriptsController (issue #25, epic #19)
 // =============================================================================
 //
-// Fifteen routes: the ten reads and lifecycle actions of issue #25, plus the
-// five corrections routes of issue #27 — apply a batch of ops, search, browse
-// the version history, read one version, restore one.
+// Nineteen routes: the ten reads and lifecycle actions of issue #25, the five
+// corrections routes of issue #27 — apply a batch of ops, search, browse the
+// version history, read one version, restore one — and the four sharing routes
+// of issue #29.
+//
+// -----------------------------------------------------------------------------
+// THE SHARING FOUR, AND THE ONE OF THEM THAT IS NOT OWNER-ONLY
+// -----------------------------------------------------------------------------
+//
+// `GET`, `POST` and `PATCH` under `:id/shares` are owner-only, enforced by
+// `require(..., 'own')` inside `TranscriptSharingService` and therefore
+// answering the same 404 a stranger gets. `DELETE :id/shares/:userId` is the
+// exception: a RECIPIENT passing their OWN user id is leaving, which needs no
+// more authority than holding the share did — and so it is gated on
+// `transcripts:read`, not `transcripts:write`, because giving up your own
+// access is not a write against somebody else's recording.
 //
 // -----------------------------------------------------------------------------
 // TWO PERMISSIONS, AND A SHARE CAPS WHAT EITHER CAN REACH
@@ -115,7 +128,18 @@ import {
   type TranscriptSearchQueryDto,
   type TranscriptVersionsQueryDto,
 } from './dto/transcript-editing.dto';
+import {
+  CreateTranscriptShareBodyDto,
+  TranscriptShareDto,
+  TranscriptSharesDto,
+  UpdateTranscriptShareBodyDto,
+  createTranscriptShareSchema,
+  updateTranscriptShareSchema,
+  type CreateTranscriptShareDto,
+  type UpdateTranscriptShareDto,
+} from './dto/transcript-share.dto';
 import { TranscriptEditingService } from './transcript-editing.service';
+import { TranscriptSharingService } from './transcript-sharing.service';
 import { TranscriptsService } from './transcripts.service';
 
 /**
@@ -158,6 +182,7 @@ export class TranscriptsController {
   constructor(
     private readonly transcripts: TranscriptsService,
     private readonly editing: TranscriptEditingService,
+    private readonly sharing: TranscriptSharingService,
   ) {}
 
   // ===========================================================================
@@ -613,6 +638,121 @@ export class TranscriptsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.editing.restore(id, version, dto, user);
+  }
+
+  // ===========================================================================
+  // Sharing (issue #29, spec §6.3)
+  // ===========================================================================
+
+  @Get(':id/shares')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'List who a transcript is shared with',
+    description:
+      'Owner only. Every share on this transcript, oldest first, with each recipient\'s ' +
+      'address, display name and role.\n\n' +
+      '**Owner only, not viewer-or-better**, deliberately: who else can read a recording ' +
+      'is a fact about those other people, not about the caller. A recipient gets the ' +
+      'same **404** a stranger gets.\n\n' +
+      'Not paginated. This is the list inside one dialog, for a private conversation ' +
+      'shared by typing addresses one at a time.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiDataResponse(TranscriptSharesDto, { description: 'Everyone this transcript is shared with' })
+  @ApiResponse({ status: 404, description: 'No such transcript, or the caller is not its owner' })
+  async shares(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.sharing.list(id, user);
+  }
+
+  @Post(':id/shares')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
+  @ApiOperation({
+    summary: 'Share a transcript with somebody',
+    description:
+      'Owner only. Grants `viewer` (read, play, export) or `editor` (everything a viewer ' +
+      'can do, plus corrections, which create versions).\n\n' +
+      'The recipient is found by **exact, case-insensitive email** — never a prefix, never ' +
+      'a listing, one address per call. An address with no **active** account answers a ' +
+      'generic **404** that names neither the address nor any user, and a **deactivated** ' +
+      'account is indistinguishable from one that never existed: telling the two apart is ' +
+      'precisely the account-enumeration oracle this shape exists to close. For the same ' +
+      'reason the lookup is **rate limited per caller**, and a run of misses answers ' +
+      '**429** — a generic message does not stop an enumerator reading the status code.\n\n' +
+      'Sharing again with somebody who already holds a share **updates their role** rather ' +
+      'than failing: the email field does not know who is already on the list.\n\n' +
+      'The recipient — and only the recipient — is notified, after the grant has ' +
+      'committed. Re-submitting the same role notifies nobody.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiBody({ type: CreateTranscriptShareBodyDto })
+  @ApiDataResponse(TranscriptShareDto, { status: 201, description: 'The share that now exists' })
+  @ApiResponse({ status: 400, description: 'The address is not a valid email, or the role is not one of the two' })
+  @ApiResponse({ status: 404, description: 'No such transcript, the caller is not its owner, or no user has that address' })
+  @ApiResponse({ status: 429, description: 'Too many lookups for addresses with no account' })
+  async addShare(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createTranscriptShareSchema)) dto: CreateTranscriptShareDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.sharing.add(id, dto, user);
+  }
+
+  @Patch(':id/shares/:userId')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
+  @ApiOperation({
+    summary: 'Change what a share grants',
+    description:
+      'Owner only. Promotes a viewer to editor or demotes an editor to viewer. Takes ' +
+      'effect on the **next request** — there is no cached grant anywhere, so a demoted ' +
+      'editor\'s next correction is refused without anything having to be invalidated.\n\n' +
+      'A promotion notifies the recipient; a **demotion is silent**, because the "shared ' +
+      'with you" message is simply the wrong message for "you can no longer correct this".',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiParam({ name: 'userId', type: String, format: 'uuid', description: 'The RECIPIENT\'s user id, not the share row id' })
+  @ApiBody({ type: UpdateTranscriptShareBodyDto })
+  @ApiDataResponse(TranscriptShareDto, { description: 'The updated share' })
+  @ApiResponse({ status: 404, description: 'No such transcript or share, or the caller is not the owner' })
+  async updateShare(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body(new ZodValidationPipe(updateTranscriptShareSchema)) dto: UpdateTranscriptShareDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.sharing.update(id, userId, dto, user);
+  }
+
+  @Delete(':id/shares/:userId')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Revoke a share, or leave one',
+    description:
+      'Two callers, one route. The **owner** may remove anybody; a **recipient** may pass ' +
+      'their own user id to give up their own access ("leave"). Nobody else can remove ' +
+      'anybody — an editor cannot revoke a viewer.\n\n' +
+      'Revocation takes effect on the **next request**. There is no cached grant, no ' +
+      'claim to re-issue and nothing to invalidate: the access check reads the share table ' +
+      'every time, so deleting the row **is** the revocation.\n\n' +
+      'The person removed is **not** notified. An owner is entitled to un-share a private ' +
+      'conversation without composing an explanation.\n\n' +
+      'Gated on `transcripts:read`, not `transcripts:write`: giving up your own access is ' +
+      'not a write against somebody else\'s recording, and a role change that removed ' +
+      '`transcripts:write` must not trap a recipient in a share they want out of.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiParam({ name: 'userId', type: String, format: 'uuid', description: 'The RECIPIENT\'s user id — their own, to leave' })
+  @ApiResponse({ status: 204, description: 'The share is gone' })
+  @ApiResponse({ status: 404, description: 'No such transcript or share, or the caller may not remove it' })
+  async removeShare(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<void> {
+    await this.sharing.remove(id, userId, user);
   }
 
   // ===========================================================================

@@ -434,6 +434,42 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     channels: ['email', 'browser'],
     defaultEnabled: true,
   },
+
+  // ===========================================================================
+  // SHARING (#29, epic #19)
+  // ===========================================================================
+  //
+  // The one transcript event addressed to somebody OTHER than the owner. It
+  // goes to the RECIPIENT of a share, with `notify(key, recipientId, ...)`, and
+  // to nobody else — not the owner (who just performed the action), not the
+  // other people the transcript is already shared with (who have no business
+  // learning that somebody new was added).
+  //
+  // NOT `mandatory`, and that is the same test the two events above pass:
+  // `security.role_changed` is mandatory because it is a change to the reader's
+  // OWN privileges inside this application, which they must not be able to
+  // miss. Being handed access to somebody else's recording is an offer, not a
+  // change to what the reader is trusted with — the transcript also simply
+  // appears in their "Shared with me" list, so silencing the message loses
+  // nobody any access. A user who is shared thirty recordings a week is
+  // entitled to turn it off.
+  //
+  // ⚠ THERE IS DELIBERATELY NO `transcript_unshared` COUNTERPART. "Your access
+  // was removed" is a message whose main effect is to tell somebody they were
+  // discussed; an owner is entitled to un-share a private conversation without
+  // composing an explanation, and revocation already takes effect silently on
+  // the next request.
+  {
+    key: 'transcripts.transcript_shared',
+    label: 'A recording was shared with you',
+    description:
+      'Sent when another user shares one of their recordings with you, as a viewer or an editor.',
+    // Both channels, like the two above: the reader is usually not in the
+    // application when somebody shares with them, which is what the email is
+    // for, while somebody who is gets the toast instead of finding it later.
+    channels: ['email', 'browser'],
+    defaultEnabled: true,
+  },
 ];
 
 /**
