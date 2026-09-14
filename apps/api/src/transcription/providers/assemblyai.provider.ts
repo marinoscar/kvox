@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, OnModuleInit } from '@nestjs/common';
 import type { Readable } from 'node:stream';
 
 import { parseRetryAfterMs, RateLimitError } from '../../jobs/rate-limit.error';
@@ -106,6 +106,17 @@ const ACCEPTED_MIME_TYPES = [
   'video/webm',
   'video/quicktime',
 ];
+
+/**
+ * DI token for the `fetch` implementation.
+ *
+ * A TOKEN RATHER THAN A BARE DEFAULT PARAMETER, because `emitDecoratorMetadata`
+ * records `Function` as the parameter's type and Nest then tries to resolve a
+ * provider called `Function` — which fails at boot with a message that names
+ * neither `fetch` nor this file. `@Optional() @Inject(...)` tells the container
+ * to skip it, at which point TypeScript's own default parameter applies.
+ */
+export const ASSEMBLYAI_FETCH = Symbol('ASSEMBLYAI_FETCH');
 
 /** The `fetch` shape this provider needs. Injected so tests replace it. */
 export type FetchLike = (
@@ -358,6 +369,8 @@ export class AssemblyAiProvider
      * throws `Illegal invocation` in some runtimes, and the failure looks like
      * a network error rather than like the mistake it is.
      */
+    @Optional()
+    @Inject(ASSEMBLYAI_FETCH)
     private readonly fetchImpl: FetchLike = ((
       input: string,
       init?: unknown,

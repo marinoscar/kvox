@@ -5,7 +5,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CredentialsService } from '../credentials/credentials.service';
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
 import type { PatchSystemSettingsDto } from '../settings/dto/update-system-settings.dto';
-import type { SystemTranscriptionValue } from './transcription-settings.schema';
+import type {
+  SystemTranscriptionValue,
+  systemTranscriptionPatchSchema,
+} from './transcription-settings.schema';
 import { TranscriptionProviderRegistry } from './transcription-provider.registry';
 import {
   TRANSCRIPTION_CREDENTIAL_PURPOSE,
@@ -111,9 +114,22 @@ export interface TranscriptionSettingsAdminView {
   updatedBy: { id: string; email: string } | null;
 }
 
+/**
+ * A validated PATCH of the namespace.
+ *
+ * DERIVED FROM `systemTranscriptionPatchSchema`, not `Partial<SystemTranscriptionValue>`:
+ * the two are genuinely different types. A `Partial` is optional one level
+ * deep, so it would demand a COMPLETE `providers.assemblyai` from a caller
+ * changing only the region — which is exactly the body the PATCH schema exists
+ * to make legal.
+ */
+export type TranscriptionSettingsPatch = import('zod').infer<
+  typeof systemTranscriptionPatchSchema
+>;
+
 /** The write body, after validation. `apiKey` is REQUEST-ONLY — never persisted. */
 export interface UpdateTranscriptionSettingsInput {
-  settings: Partial<SystemTranscriptionValue>;
+  settings: TranscriptionSettingsPatch;
   /**
    * A new key for `settings.provider` (or for `provider` when one is named).
    * Blank/absent preserves the stored key. NEVER reaches `system_settings`.
@@ -405,8 +421,18 @@ export class TranscriptionSettingsService {
     // The provider's own settings, with the request's region override applied.
     // Parsed through the provider's schema so an override of `"eu "` or
     // `"europe"` is a 400 here rather than a confusing 404 from the vendor.
+    // The stored block for this provider, if this build's settings shape has
+    // one. `?? {}` rather than an assertion: a provider registered by a fork
+    // has no block in `transcriptionProvidersSchema`, and its own
+    // `settingsSchema` is what decides whether an empty object is acceptable —
+    // which is the right place for that decision.
+    const storedBlock =
+      (stored.providers as Record<string, unknown>)[input.provider] ?? {};
+
     const settingsParse = provider.settingsSchema.safeParse({
-      ...(stored.providers as Record<string, unknown>)[input.provider],
+      ...(typeof storedBlock === 'object' && storedBlock !== null
+        ? (storedBlock as Record<string, unknown>)
+        : {}),
       ...(input.region ? { region: input.region } : {}),
     });
 

@@ -204,13 +204,21 @@ export function partitionWords(
         // The preferred cut: end the run on a finished sentence.
         cutAfter = lastBoundary;
       } else {
-        // NO PUNCTUATION IN THIS STRETCH. Fall back to a word count, clamped
-        // so the cut always consumes at least one word — otherwise a single
-        // word longer than `maxMs` (a stall in the provider's timings, a
-        // mis-aligned long pause) would spin here forever.
-        cutAfter = Math.min(
-          Math.max(fallbackWords - 1, 0),
-          pending.length - 1,
+        // NO PUNCTUATION IN THIS STRETCH. Fall back to a word count, bounded
+        // by TWO clamps that are both load-bearing:
+        //
+        //   • `pending.length - 2` — cut BEFORE the word that pushed the run
+        //     over, so the piece that is emitted is actually under the limit.
+        //     Cutting at `length - 1` would emit the over-long run itself,
+        //     which is the bug this whole function exists to prevent and is
+        //     invisible unless the run is shorter than `fallbackWords`.
+        //   • `Math.max(…, 0)` — never a negative index, so a single word
+        //     longer than `maxMs` (a stall in the provider's timings, a
+        //     mis-aligned long pause) is emitted alone rather than spinning
+        //     here forever.
+        cutAfter = Math.max(
+          Math.min(fallbackWords - 1, pending.length - 2),
+          0,
         );
       }
 
