@@ -3,7 +3,7 @@ import {
   aiAllowedModelEntrySchema,
   aiProvidersSchema,
 } from './ai-settings.schema';
-import { resolveAllowedModel } from './ai-model-resolution';
+import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { OpenAiProvider } from './providers/openai.provider';
 
 // =============================================================================
@@ -20,11 +20,29 @@ import { OpenAiProvider } from './providers/openai.provider';
 // know is users reporting AI had stopped working.
 // =============================================================================
 
-/** The catalogue a real, registered `OpenAiProvider` carries — no test double. */
-function realCatalogue() {
+/** A real, registered `OpenAiProvider` — no test double. */
+function realProvider(): OpenAiProvider {
   return new OpenAiProvider(new AiProviderRegistry(), (async () => {
     throw new Error('not used — this spec never calls fetch');
-  }) as never).capabilities.models;
+  }) as never);
+}
+
+/**
+ * Everything that provider knows: its catalogue, its family derivation and its
+ * conservative floor (#97).
+ *
+ * ⚠ `modelKnowledgeOf` RATHER THAN `capabilities.models`, which is what this
+ * spec passed before #97. Passing the bare catalogue would test a resolution
+ * NO CALLER PERFORMS any more, and would go green while the real precedence —
+ * which has two more ranks under the catalogue — did something else entirely.
+ */
+function realKnowledge() {
+  return modelKnowledgeOf(realProvider());
+}
+
+/** The catalogue alone: what a provider declaring neither new rank knows. */
+function catalogueOnly() {
+  return { catalogue: realProvider().capabilities.models };
 }
 
 describe('aiAllowedModelEntrySchema — the legacy string form', () => {
@@ -74,23 +92,49 @@ describe('aiAllowedModelEntrySchema — the legacy string form', () => {
     // must produce the SAME descriptor — otherwise every deployment holding
     // `["gpt-4o"]` today would silently lose (or gain) something the moment
     // this build starts.
-    const catalogue = realCatalogue();
     const legacy = aiAllowedModelEntrySchema.parse('gpt-4o');
-    const direct = catalogue.find((m) => m.id === 'gpt-4o');
+    const direct = realProvider().capabilities.models.find(
+      (m) => m.id === 'gpt-4o',
+    );
 
     expect(direct).toBeDefined();
-    expect(resolveAllowedModel(legacy, catalogue)).toEqual(direct);
+    // The descriptor is unchanged; #97 only ADDS the provenance fields, and
+    // for an exact catalogue hit the provenance is `catalogue` with nothing
+    // derived — the strongest answer short of an administrator typing one.
+    expect(resolveAllowedModel(legacy, realKnowledge())).toEqual({
+      ...direct,
+      source: 'catalogue',
+      derivedFrom: null,
+    });
   });
 
-  it('a legacy string for a model the build does NOT know resolves to null, exactly as before', () => {
-    // Pre-#78 behaviour for an id outside the four-entry catalogue was also
-    // "cannot be budgeted" — there was nowhere else to look. That has not
-    // changed for the STRING form; only an OBJECT entry can now supply its own
-    // numbers.
-    const catalogue = realCatalogue();
+  it('a legacy string for a model NOTHING can describe still resolves to null', () => {
+    // ⚠ SUPERSEDED BY #97, AND THE OLD ASSERTION IS KEPT ONLY AS THE
+    // CATALOGUE-ONLY CASE. Before #97 an id outside the build catalogue could
+    // not be budgeted at all, because there was nowhere else to look. There
+    // now is: the family derivation, then the provider's floor. So `null`
+    // means "no provider knowledge of any kind", which is what a policy naming
+    // an unimplemented provider looks like — and that is what this asserts.
     const legacy = aiAllowedModelEntrySchema.parse('gpt-9-imaginary');
 
-    expect(resolveAllowedModel(legacy, catalogue)).toBeNull();
+    expect(resolveAllowedModel(legacy, catalogueOnly())).toBeNull();
+    expect(resolveAllowedModel(legacy, { catalogue: [] })).toBeNull();
+  });
+
+  it('a legacy string for an UNKNOWN model now resolves through the provider floor (#97)', () => {
+    // The behaviour change #97 exists for, pinned in the same file that pins
+    // the behaviour it replaces: an id this build has never heard of is
+    // permittable, on the provider's conservative floor, with nothing typed.
+    const legacy = aiAllowedModelEntrySchema.parse('gpt-9-imaginary');
+
+    expect(resolveAllowedModel(legacy, realKnowledge())).toEqual({
+      id: 'gpt-9-imaginary',
+      label: 'gpt-9-imaginary',
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 16_384,
+      source: 'default',
+      derivedFrom: null,
+    });
   });
 });
 
@@ -109,14 +153,15 @@ describe('the GPT-5.4 family in the real catalogue (#87)', () => {
   ] as const)(
     'resolves %s to exactly %d context / %d output tokens',
     (id, contextWindowTokens, maxOutputTokens) => {
-      const catalogue = realCatalogue();
       const legacy = aiAllowedModelEntrySchema.parse(id);
 
-      expect(resolveAllowedModel(legacy, catalogue)).toEqual({
+      expect(resolveAllowedModel(legacy, realKnowledge())).toEqual({
         id,
         label: expect.any(String) as unknown as string,
         contextWindowTokens,
         maxOutputTokens,
+        source: 'catalogue',
+        derivedFrom: null,
       });
     },
   );
@@ -129,10 +174,15 @@ describe('the GPT-5.4 family in the real catalogue (#87)', () => {
   it.each(['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'])(
     'still resolves the pre-existing GPT-4 entry %s',
     (id) => {
-      const catalogue = realCatalogue();
       const legacy = aiAllowedModelEntrySchema.parse(id);
 
-      expect(resolveAllowedModel(legacy, catalogue)).not.toBeNull();
+      // ⚠ `source: 'catalogue'`, NOT MERELY NON-NULL. Since #97 a dropped
+      // catalogue entry no longer makes a model unresolvable — it quietly
+      // demotes it to the conservative floor, so a bare `not.toBeNull()` would
+      // pass for exactly the regression this case exists to catch.
+      expect(resolveAllowedModel(legacy, realKnowledge())?.source).toBe(
+        'catalogue',
+      );
     },
   );
 });

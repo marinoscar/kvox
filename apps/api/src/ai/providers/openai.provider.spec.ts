@@ -11,8 +11,10 @@ import {
 import { AiProviderRegistry } from '../ai-provider.registry';
 import { createProviderContext } from './ai-provider.interface';
 import {
+  deriveOpenAiModelDescriptor,
   OpenAiProvider,
   parseSseData,
+  OPENAI_DEFAULT_MODEL_LIMITS,
   type FetchLike,
   type FetchLikeResponse,
 } from './openai.provider';
@@ -595,15 +597,89 @@ describe('OpenAiProvider.listModels', () => {
     });
   });
 
-  it('reports both numbers as null — never a guess — for an unknown model', async () => {
+  it('fills an unplaceable model from the conservative floor, and SAYS SO (#97)', async () => {
+    // ⚠ SUPERSEDES "reports both numbers as null — never a guess". Issue #97
+    // establishes that the two mistakes are not symmetric: a floor that is too
+    // LOW refuses a prompt that would have fit, which an administrator can see
+    // and correct by typing the real number, while `null` meant they had to
+    // type it before they could permit the model at all. `source: 'default'` is
+    // what keeps that honest — the number is published as a floor, not as
+    // knowledge.
     const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
 
     const models = await provider.listModels(ctx());
-    const unknown = models.find((m) => m.id === 'chatgpt-4o-latest');
+    const unplaceable = models.find((m) => m.id === 'chatgpt-4o-latest');
 
-    expect(unknown?.known).toBe(false);
-    expect(unknown?.contextWindowTokens).toBeNull();
-    expect(unknown?.maxOutputTokens).toBeNull();
+    expect(unplaceable).toMatchObject({
+      known: false,
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 16_384,
+      source: 'default',
+      derivedFrom: null,
+    });
+  });
+
+  it('derives a dated snapshot from its family, at the family\'s FULL numbers (#97)', async () => {
+    // The case that motivated the issue: a real vendor list is mostly dated
+    // snapshots of models this build already knows, and before #97 each one
+    // needed two hand-typed numbers.
+    const provider = providerWith(async () =>
+      modelListResponse(
+        JSON.stringify({
+          data: [
+            { id: 'gpt-5.4-mini-2026-03-17' },
+            { id: 'gpt-4o-20240806' },
+            { id: 'gpt-4.1-0125' },
+          ],
+        }),
+      ),
+    );
+
+    const byId = new Map(
+      (await provider.listModels(ctx())).map((m) => [m.id, m]),
+    );
+
+    // ⚠ `gpt-5.4-mini`, NEVER `gpt-5.4` — the shorter prefix matches too, and
+    // taking it would hand a 400k model a 1,050k window, which is the
+    // over-estimate that bills the user for a prompt the vendor then rejects.
+    expect(byId.get('gpt-5.4-mini-2026-03-17')).toMatchObject({
+      known: false,
+      label: 'gpt-5.4-mini-2026-03-17',
+      contextWindowTokens: 400_000,
+      maxOutputTokens: 128_000,
+      source: 'derived',
+      derivedFrom: 'gpt-5.4-mini',
+    });
+
+    // The other two snapshot spellings OpenAI has used.
+    expect(byId.get('gpt-4o-20240806')).toMatchObject({
+      contextWindowTokens: 128_000,
+      source: 'derived',
+      derivedFrom: 'gpt-4o',
+    });
+    expect(byId.get('gpt-4.1-0125')).toMatchObject({
+      contextWindowTokens: 1_047_576,
+      source: 'derived',
+      derivedFrom: 'gpt-4.1',
+    });
+  });
+
+  it('`includeAll` returns the vendor list unfiltered (#97)', async () => {
+    // The filter is a convenience over a flat vendor list and will eventually
+    // be wrong about an id; this is what stops it ever being the reason a
+    // working model cannot be found.
+    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+
+    const ids = (await provider.listModels(ctx(), { includeAll: true })).map(
+      (m) => m.id,
+    );
+
+    expect(ids).toContain('text-embedding-3-small');
+    expect(ids).toContain('whisper-1');
+
+    // And the default is unchanged: omitting the option still filters.
+    const filtered = (await provider.listModels(ctx())).map((m) => m.id);
+    expect(filtered).not.toContain('text-embedding-3-small');
   });
 
   it('filters out non-chat models — embeddings, audio, image, moderation, realtime', async () => {
@@ -635,7 +711,7 @@ describe('OpenAiProvider.listModels', () => {
     expect(ids.filter((id) => id === 'gpt-4o')).toHaveLength(1);
   });
 
-  it('sorts known models first, then everything alphabetically within each group', async () => {
+  it('sorts known models first, then by source, then alphabetically (#97)', async () => {
     const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
 
     const ids = (await provider.listModels(ctx())).map((m) => m.id);
@@ -723,5 +799,95 @@ describe('OpenAiProvider registration', () => {
     expect(registry.ids()).toEqual([]);
     provider.onModuleInit();
     expect(registry.get('openai')).toBe(provider);
+  });
+});
+
+describe('deriveOpenAiModelDescriptor (#97)', () => {
+  // The vendor-knowledge half of issue #97: which id shapes are dated snapshots
+  // of a model this build already knows. Asserted directly because a heuristic
+  // over ids a vendor invents on its own schedule is one that quietly rots —
+  // the same argument `looksLikeChatModel` is exported for.
+
+  it.each([
+    // The three snapshot spellings OpenAI has used.
+    ['gpt-4o-2024-08-06', 'gpt-4o'],
+    ['gpt-4o-20240806', 'gpt-4o'],
+    ['gpt-4o-0806', 'gpt-4o'],
+    // An undated variant of a known family is still the family.
+    ['gpt-4.1-mini-preview', 'gpt-4.1-mini'],
+    // An exact id derives to itself, which is what makes the function safe to
+    // call from a path that has already missed the catalogue.
+    ['gpt-5.4-nano', 'gpt-5.4-nano'],
+  ])('places %s in the %s family', (id, family) => {
+    expect(deriveOpenAiModelDescriptor(id)?.id).toBe(family);
+  });
+
+  it('takes the LONGEST matching family, never a shorter prefix of it', () => {
+    // ⚠ THE CASE THAT COSTS REAL MONEY IF IT REGRESSES. `gpt-5.4` also
+    // prefixes `gpt-5.4-mini-2026-03-17`, and its window is 1,050,000 against
+    // the mini's 400,000 — so the shorter match would submit a prompt two and a
+    // half times too large, which the vendor rejects after billing the user.
+    const derived = deriveOpenAiModelDescriptor('gpt-5.4-mini-2026-03-17');
+
+    expect(derived).toEqual({
+      id: 'gpt-5.4-mini',
+      // The RAW requested id, never the family's human name.
+      label: 'gpt-5.4-mini-2026-03-17',
+      contextWindowTokens: 400_000,
+      maxOutputTokens: 128_000,
+    });
+  });
+
+  it('matches on a hyphen boundary only', () => {
+    // `gpt-4.1` must not claim `gpt-4.10-turbo` if OpenAI ever spells one that
+    // way: sharing a character prefix is not a family relationship, and the
+    // two models could have nothing in common.
+    expect(deriveOpenAiModelDescriptor('gpt-4.10-turbo')).toBeNull();
+    expect(deriveOpenAiModelDescriptor('gpt-4oxide')).toBeNull();
+  });
+
+  it('strips at most ONE snapshot suffix', () => {
+    // Repeating the strip would eat a meaningful trailing number from an id and
+    // silently truncate a family name.
+    expect(deriveOpenAiModelDescriptor('gpt-4o-2024-08-06')?.id).toBe('gpt-4o');
+    // Two suffixes: only the last is removed, and what remains is matched as
+    // written — `gpt-4o-1234` still belongs to `gpt-4o` on the boundary rule,
+    // which is the answer either way, but the family is reached without a
+    // second strip.
+    expect(deriveOpenAiModelDescriptor('gpt-4o-1234-5678')?.id).toBe('gpt-4o');
+  });
+
+  it('returns null for an id from another vendor entirely, so the floor applies', () => {
+    expect(deriveOpenAiModelDescriptor('claude-opus-5')).toBeNull();
+    expect(deriveOpenAiModelDescriptor('')).toBeNull();
+  });
+
+  it('is reachable through the provider instance, which is how the resolver calls it', () => {
+    // `resolveAllowedModel` holds an `AiProvider`, never a concrete class — see
+    // `modelKnowledgeOf`. A module function nothing exposes would be unreachable
+    // from every caller that matters.
+    const provider = providerWith(async () => {
+      throw new Error('not used');
+    });
+
+    expect(provider.deriveModelDescriptor('gpt-4o-2024-08-06')?.id).toBe('gpt-4o');
+  });
+
+  it('the floor is at or below every catalogued model, which is what makes it a floor', () => {
+    // ⚠ A FLOOR THAT EXCEEDED A SHIPPED MODEL WOULD BE A GUESS, not a lower
+    // bound — and an over-estimate is the unrecoverable direction: the vendor
+    // rejects the prompt after the user has been charged for it.
+    const provider = providerWith(async () => {
+      throw new Error('not used');
+    });
+
+    for (const model of provider.capabilities.models) {
+      expect(model.contextWindowTokens).toBeGreaterThanOrEqual(
+        OPENAI_DEFAULT_MODEL_LIMITS.contextWindowTokens,
+      );
+      expect(model.maxOutputTokens).toBeGreaterThanOrEqual(
+        OPENAI_DEFAULT_MODEL_LIMITS.maxOutputTokens,
+      );
+    }
   });
 });
