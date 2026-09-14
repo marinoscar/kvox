@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import request from 'supertest';
 
 import {
@@ -33,6 +34,24 @@ import { OPENAI_FETCH } from '../../src/ai/providers/openai.provider';
 // **false before a key is saved** and must describe the CALLER rather than the
 // deployment.
 // =============================================================================
+
+// `secret-cipher.ts` caches its master key at module scope on first use
+// (`GET /api/ai-settings/models` decrypts the calling administrator's own
+// credential), so this must be set before the first encrypt/decrypt in this
+// file — never at import time, since that happens inside a request. Restored
+// below so it cannot leak into another spec sharing this worker. Mirrors
+// `ai-credentials.integration.spec.ts` exactly.
+const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');
+const ORIGINAL_KEY_ENV = process.env.SECRETS_ENCRYPTION_KEY;
+process.env.SECRETS_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+
+afterAll(() => {
+  if (ORIGINAL_KEY_ENV === undefined) {
+    delete process.env.SECRETS_ENCRYPTION_KEY;
+  } else {
+    process.env.SECRETS_ENCRYPTION_KEY = ORIGINAL_KEY_ENV;
+  }
+});
 
 const SETTINGS = '/api/ai-settings';
 const CONFIG = '/api/ai/config';
@@ -241,6 +260,150 @@ describe('AI settings and config integration', () => {
       expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
     });
 
+    // ==========================================================================
+    // #78: an entry carrying its own numbers is a DIFFERENT thing from a
+    // mistyped id. Only a resolution to NOTHING is a 400.
+    // ==========================================================================
+
+    it('SAVES an entry the build catalogue has never heard of, when it carries its own numbers', async () => {
+      // This is the whole point of #78: a deployment can permit a model no
+      // release of this application knows about, without waiting for one.
+      const admin = await createMockAdminUser(context);
+
+      await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({
+          providers: {
+            openai: {
+              allowedModels: [
+                {
+                  id: 'gpt-6-turbo',
+                  contextWindowTokens: 500_000,
+                  maxOutputTokens: 64_000,
+                },
+              ],
+            },
+          },
+        })
+        .expect(200);
+
+      const written = prismaMock.systemSettings.update.mock.calls[0][0].data.value;
+      expect(written.ai.providers.openai.allowedModels).toEqual([
+        {
+          id: 'gpt-6-turbo',
+          contextWindowTokens: 500_000,
+          maxOutputTokens: 64_000,
+        },
+      ]);
+    });
+
+    it('rejects an entry with NEITHER its own numbers nor a catalogue descriptor, naming the missing fields', async () => {
+      const admin = await createMockAdminUser(context);
+
+      const res = await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({
+          providers: {
+            openai: { allowedModels: [{ id: 'gpt-9-imaginary' }] },
+          },
+        })
+        .expect(400);
+
+      // Worded as "supply the numbers", not "this model is forbidden" — see
+      // `AiSettingsService.update`'s own comment on why.
+      expect(res.text).toContain('gpt-9-imaginary');
+      expect(res.text).toContain('contextWindowTokens');
+      expect(res.text).toContain('maxOutputTokens');
+      expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
+    });
+
+    it('SAVES a partial entry once the catalogue supplies the field it is missing', async () => {
+      // `gpt-4o` is in the build catalogue with both numbers; overriding only
+      // `contextWindowTokens` still resolves, because the catalogue fills in
+      // `maxOutputTokens`.
+      const admin = await createMockAdminUser(context);
+
+      await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({
+          providers: {
+            openai: {
+              allowedModels: [{ id: 'gpt-4o', contextWindowTokens: 300_000 }],
+            },
+          },
+        })
+        .expect(200);
+
+      expect(prismaMock.systemSettings.update).toHaveBeenCalled();
+    });
+
+    // ==========================================================================
+    // The six-edit path, end to end: a PATCH-shaped body naming ONLY `provider`
+    // must actually persist — the failure mode `settings-parity.spec.ts` calls
+    // the nastiest of the six is a silent 200 no-op.
+    // ==========================================================================
+
+    it('persists a body naming ONLY `provider`, leaving every other field untouched', async () => {
+      const admin = await createMockAdminUser(context);
+      // Starts at `null` specifically so the PATCH below produces an
+      // OBSERVABLE change rather than re-asserting the schema's own default.
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings({ ...ENABLED, provider: null }) as never,
+      );
+
+      await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({ provider: 'openai' })
+        .expect(200);
+
+      // ⚠ THE ASSERTION THE SIX-EDIT RULE EXISTS FOR, applied to `provider`
+      // specifically: if either wire DTO were missing this field, the body
+      // would parse with `provider` stripped, nothing would be merged, and the
+      // endpoint would return 200 having stored the stale `null` — with no
+      // error, no log line and no audit entry to show for it.
+      const written = prismaMock.systemSettings.update.mock.calls[0][0].data.value;
+      expect(written.ai.provider).toBe('openai');
+      // Nothing else in the namespace was named by this request, and none of
+      // it may be lost.
+      expect(written.ai.enabled).toBe(ENABLED.enabled);
+      expect(written.ai.providers.openai.allowedModels).toEqual(
+        ENABLED.providers.openai.allowedModels.map((id) => ({ id })),
+      );
+    });
+
+    it('an explicit `provider: null` clears the active provider — distinct from omitting it entirely', async () => {
+      const admin = await createMockAdminUser(context);
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings(ENABLED) as never,
+      );
+
+      // Omitting `provider` leaves the stored one untouched.
+      await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({ maxOutputTokens: 4096 })
+        .expect(200);
+
+      const unchanged = prismaMock.systemSettings.update.mock.calls[0][0].data.value;
+      expect(unchanged.ai.provider).toBe('openai');
+
+      // An EXPLICIT `null` is a value — "no provider is active" — and must
+      // not be swallowed by a `??` merge, the exact `maintenance.startedAt`
+      // trap the schema's own comments warn about.
+      await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({ provider: null })
+        .expect(200);
+
+      const cleared = prismaMock.systemSettings.update.mock.calls[1][0].data.value;
+      expect(cleared.ai.provider).toBeNull();
+    });
+
     it('audits the policy change', async () => {
       const admin = await createMockAdminUser(context);
 
@@ -401,6 +564,212 @@ describe('AI settings and config integration', () => {
         .post(`${SETTINGS}/test`)
         .set(authHeader(contributor.accessToken))
         .send({})
+        .expect(403);
+    });
+  });
+
+  // ==========================================================================
+  // GET /api/ai-settings/models (#78)
+  //
+  // The 400-for-a-non-discovering-provider outcome is deliberately NOT driven
+  // here: it would require registering a second, fake provider into this
+  // suite's real (shared, singleton) `AiProviderRegistry`, which would leak
+  // into every other test in this file that runs after it. It is covered at
+  // the unit level instead, in `ai-model-discovery.service.spec.ts`, against
+  // an isolated stub registry built fresh per test.
+  // ==========================================================================
+
+  describe('GET /api/ai-settings/models', () => {
+    const MODELS = `${SETTINGS}/models`;
+    /** A key with an obvious, greppable shape. Never a real one. */
+    const RAW_KEY = 'sk-proj-DISCOVERY-INTEGRATION-abcd1234';
+
+    beforeEach(() => {
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings(ENABLED) as never,
+      );
+    });
+
+    async function withStoredKey() {
+      const { encryptSecret } = await import(
+        '../../src/common/crypto/secret-cipher'
+      );
+      prismaMock.userAiCredential.findUnique.mockResolvedValue({
+        secret: encryptSecret(RAW_KEY, 'ai-key'),
+      } as never);
+    }
+
+    it('lists the models the CALLING administrator\'s own key can reach', async () => {
+      const admin = await createMockAdminUser(context);
+      await withStoredKey();
+      openAiFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        text: async () => '{}',
+        json: async () => ({
+          data: [{ id: 'gpt-4o' }, { id: 'gpt-5-preview' }],
+        }),
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(res.body.data.ok).toBe(true);
+      expect(res.body.data.models).toEqual([
+        expect.objectContaining({ id: 'gpt-4o', known: true }),
+        expect.objectContaining({
+          id: 'gpt-5-preview',
+          known: false,
+          contextWindowTokens: null,
+          maxOutputTokens: null,
+        }),
+      ]);
+    });
+
+    it("resolves the credential scoped by THIS caller's own id, and sends it as the bearer token", async () => {
+      const admin = await createMockAdminUser(context);
+      await withStoredKey();
+      openAiFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        text: async () => '{}',
+        json: async () => ({ data: [] }),
+      });
+
+      await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      const where = prismaMock.userAiCredential.findUnique.mock.calls[0][0].where;
+      expect(where.userId_provider).toEqual({ userId: admin.id, provider: 'openai' });
+      expect(openAiFetch.mock.calls[0][1].headers.authorization).toBe(
+        `Bearer ${RAW_KEY}`,
+      );
+    });
+
+    it('answers 200 with ok:false for a vendor refusal — never a 4xx or 5xx', async () => {
+      const admin = await createMockAdminUser(context);
+      await withStoredKey();
+      openAiFetch.mockResolvedValue({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        text: async () => '{"error":{"message":"Incorrect API key"}}',
+        json: async () => ({}),
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(res.body.data.ok).toBe(false);
+      expect(res.body.data.models).toEqual([]);
+      expect(res.text).not.toContain(RAW_KEY);
+    });
+
+    it('409s with details.reason: ai_key_missing when the caller has saved no key of their own', async () => {
+      const admin = await createMockAdminUser(context);
+      prismaMock.userAiCredential.findUnique.mockResolvedValue(null as never);
+
+      const res = await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(admin.accessToken))
+        .expect(409);
+
+      expect(res.body.details.reason).toBe('ai_key_missing');
+      // Not a diagnosis — nothing was spent, because there was no key to spend.
+      expect(openAiFetch).not.toHaveBeenCalled();
+    });
+
+    it('400s for a provider this build does not implement', async () => {
+      const admin = await createMockAdminUser(context);
+
+      const res = await request(context.app.getHttpServer())
+        .get(`${MODELS}?provider=azure-openai`)
+        .set(authHeader(admin.accessToken))
+        .expect(400);
+
+      expect(res.text).toMatch(/Unknown AI provider/i);
+      expect(openAiFetch).not.toHaveBeenCalled();
+    });
+
+    it('never leaks the key into the response body, the audit row, or a log call', async () => {
+      const admin = await createMockAdminUser(context);
+      await withStoredKey();
+      // A REALISTIC refusal (a wrong key, HTTP 401) — `assertOk` answers this
+      // one with a hand-written, key-free sentence, never the raw response
+      // body. (A vendor's error BODY happening to echo a submitted key back is
+      // a separate, already-documented and already-accepted edge case — see
+      // `OpenAiProvider.testConnection`'s own "never puts the key in the
+      // reported detail, whatever happened" spec, which asserts the opposite
+      // for exactly that scenario. This test is about the ordinary path.)
+      openAiFetch.mockResolvedValue({
+        ok: false,
+        status: 401,
+        headers: { get: () => null },
+        text: async () => '{"error":{"message":"Incorrect API key provided"}}',
+        json: async () => ({}),
+      });
+
+      const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+      const debugSpy = jest
+        .spyOn(Logger.prototype, 'debug')
+        .mockImplementation(() => undefined);
+      const warnSpy = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+
+      try {
+        const res = await request(context.app.getHttpServer())
+          .get(MODELS)
+          .set(authHeader(admin.accessToken))
+          .expect(200);
+
+        expect(res.text).not.toContain(RAW_KEY);
+
+        const audit = prismaMock.auditEvent.create.mock.calls.find(
+          (call: [{ data: { action: string } }]) =>
+            call[0].data.action === 'ai_settings:discover_models',
+        );
+        expect(JSON.stringify(audit?.[0].data.meta)).not.toContain(RAW_KEY);
+
+        for (const spy of [logSpy, debugSpy, warnSpy, errorSpy]) {
+          for (const call of spy.mock.calls) {
+            expect(JSON.stringify(call)).not.toContain(RAW_KEY);
+          }
+        }
+      } finally {
+        logSpy.mockRestore();
+        debugSpy.mockRestore();
+        warnSpy.mockRestore();
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('is 403 for a Contributor — this spends a real vendor call on the caller\'s own key', async () => {
+      const contributor = await createMockContributorUser(context);
+
+      await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(contributor.accessToken))
+        .expect(403);
+    });
+
+    it('is 403 for a Viewer too', async () => {
+      const viewer = await createMockViewerUser(context);
+
+      await request(context.app.getHttpServer())
+        .get(MODELS)
+        .set(authHeader(viewer.accessToken))
         .expect(403);
     });
   });
