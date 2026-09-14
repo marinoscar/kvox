@@ -85,6 +85,8 @@ describe('resumable upload engine', () => {
   let completeCalls: number;
   let abortCalls: number;
   let partRequests: number[][];
+  /** The parsed JSON body of every `…/upload/complete` request received. */
+  let completeRequestBodies: unknown[];
   /** The handler `UploadEngine` last subscribed with, or `null` once unsubscribed. */
   let cspHandler: ((violation: CspViolation) => void) | null;
   let cspSubscribeCount: number;
@@ -116,6 +118,7 @@ describe('resumable upload engine', () => {
     completeCalls = 0;
     abortCalls = 0;
     partRequests = [];
+    completeRequestBodies = [];
     cspHandler = null;
     cspSubscribeCount = 0;
     cspUnsubscribeCount = 0;
@@ -152,8 +155,13 @@ describe('resumable upload engine', () => {
           })),
         });
       }),
-      http.post(`${API}/storage/objects/:id/upload/complete`, () => {
+      http.post(`${API}/storage/objects/:id/upload/complete`, async ({ request }) => {
         completeCalls += 1;
+        // Captured as TEXT, not `.json()`: issue #89 is precisely about a
+        // request that sends NO body, and calling `.json()` on that throws
+        // before this handler ever gets to record what actually arrived.
+        const text = await request.text();
+        completeRequestBodies.push(text === '' ? undefined : JSON.parse(text));
         return new HttpResponse(null, { status: 204 });
       }),
       http.delete(`${API}/storage/objects/:id/upload/abort`, () => {
@@ -484,6 +492,33 @@ describe('resumable upload engine', () => {
       expect((await upload.whenSettled()).status).toBe('completed');
       expect(xhr.requests).toHaveLength(0);
       expect(completeCalls).toBe(1);
+    });
+
+    // ⚠ THE REGRESSION TEST FOR #89. `ApiService.post` drops a body it is
+    // never given — no payload, no `Content-Type` — which a browser's bare
+    // `POST …/upload/complete` used to hit exactly that way, and an object
+    // schema whose every field is optional still rejects `undefined`. Every
+    // browser upload failed at 100% until `completeUpload` started sending an
+    // explicit `{}`. This asserts the body itself, not just a success status,
+    // so a regression that silently reverts to no body — which would still
+    // pass against this suite's happy-path MSW handler — fails here instead.
+    it('sends an explicit {} body on complete, never nothing and never parts', async () => {
+      const status: UploadStatusResponse = {
+        status: 'uploading',
+        partSize: PART_SIZE,
+        totalParts: TOTAL_PARTS,
+        uploadedParts: [1, 2, 3].map((partNumber) => ({ partNumber, size: PART_SIZE })),
+        uploadedBytes: TOTAL_BYTES,
+        totalBytes: TOTAL_BYTES,
+      };
+
+      const upload = resumeUpload(makeFile(), OBJECT_ID, status, { runtime });
+
+      expect((await upload.whenSettled()).status).toBe('completed');
+      expect(completeRequestBodies).toHaveLength(1);
+      expect(completeRequestBodies[0]).toEqual({});
+      const body = completeRequestBodies[0] as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(body, 'parts')).toBe(false);
     });
   });
 

@@ -1,7 +1,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-export const completeUploadSchema = z.object({
+const completeUploadObjectSchema = z.object({
   /**
    * The uploaded parts, in any order.
    *
@@ -27,6 +27,27 @@ export const completeUploadSchema = z.object({
     .min(1)
     .optional(),
 });
+
+/**
+ * The request body, with an ABSENT body accepted as `{}` (#89).
+ *
+ * Omitting `parts` is the documented browser path above, and a browser that
+ * has nothing to send sends a body-less POST: no payload, no `Content-Type`.
+ * Fastify then hands the handler `body === undefined`, which a bare
+ * `z.object` rejects — so every browser upload failed at 100% with a 400
+ * `Validation failed`, all of its parts already sitting in the bucket.
+ *
+ * Only a missing (or `null`) body is normalised. A body that is present but
+ * wrong — `{ "parts": [] }`, a string, an array — still fails validation.
+ *
+ * The preprocess does not change the published OpenAPI schema: for a pipe
+ * whose input side is a transform, zod's `toJSONSchema` describes the object
+ * it feeds, so `CompleteUploadBodyDto` documents exactly the same shape.
+ */
+export const completeUploadSchema = z.preprocess(
+  (body) => body ?? {},
+  completeUploadObjectSchema,
+);
 
 export type CompleteUploadDto = z.infer<typeof completeUploadSchema>;
 

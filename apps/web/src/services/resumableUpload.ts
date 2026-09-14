@@ -367,9 +367,19 @@ export async function fetchUploadStatus(objectId: string): Promise<UploadStatusR
  * cross-origin `ETag` headers, and the server's `ListParts` reconstruction is
  * the authoritative answer anyway. Adding a `parts` body here would make every
  * upload depend on a bucket CORS `ExposeHeaders` entry.
+ *
+ * **But it does send a body: `{}`, never nothing (#89).** `ApiService.post`
+ * drops a missing body entirely — no payload, no `Content-Type` — so a
+ * body-less POST reaches the API with `request.body === undefined`, and an
+ * object schema whose every field is optional still rejects `undefined`. That
+ * failure is a 400 `Validation failed` arriving *after* every part is already
+ * in S3, the worst moment an upload can fail. `{}` is truthy, so it is
+ * serialized and labelled `application/json` like any other JSON call, and it
+ * validates against any server, including one that never learned to tolerate
+ * an absent body.
  */
 export async function completeUpload(objectId: string): Promise<void> {
-  await api.post<void>(`/storage/objects/${objectId}/upload/complete`);
+  await api.post<void>(`/storage/objects/${objectId}/upload/complete`, {});
 }
 
 export async function abortUpload(objectId: string): Promise<void> {
