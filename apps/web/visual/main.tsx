@@ -100,6 +100,7 @@ const TranscriptHistoryPage = lazy(() => import('../src/pages/TranscriptHistoryP
 // stops asserting pixels for.
 const NewNotePage = lazy(() => import('../src/pages/NewNotePage'));
 const NotePage = lazy(() => import('../src/pages/NotePage'));
+const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 
@@ -331,6 +332,19 @@ function HarnessRoutes() {
             element={
               <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
                 <NotePage />
+              </RequirePermission>
+            }
+          />
+          {/* The note version-history drill-down (#58, epic #45). Registered
+              here for the same reason `/transcripts/:id/history` is: the
+              history specs navigate straight to it, and a route the harness
+              does not know renders nothing at all — which fails as a timeout
+              waiting for a label rather than as a missing route. */}
+          <Route
+            path="/notes/:id/history"
+            element={
+              <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
+                <NoteHistoryPage />
               </RequirePermission>
             }
           />
