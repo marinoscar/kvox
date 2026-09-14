@@ -756,6 +756,9 @@ export class ObjectsService {
 
     this.logger.log(`Deleting object ${id} from storage and database`);
 
+    // Abort an unfinished multipart upload BEFORE the row goes (#101).
+    await this.abortActiveMultipartUpload(object);
+
     // Delete from storage provider
     await this.storageProvider.delete(object.storageKey);
 
@@ -843,6 +846,9 @@ export class ObjectsService {
       `Deleting ${expectedManagedBy}-managed object ${id} from storage and database`,
     );
 
+    // Abort an unfinished multipart upload BEFORE the row goes (#101).
+    await this.abortActiveMultipartUpload(object);
+
     await this.storageProvider.delete(object.storageKey);
     await this.prisma.storageObject.delete({ where: { id } });
 
@@ -876,6 +882,68 @@ export class ObjectsService {
   /** Is this object still an upload a client can push parts to? */
   private isUploadActive(status: string): boolean {
     return status === 'pending' || status === 'uploading';
+  }
+
+  /**
+   * Abort the provider-side multipart upload of an object that is still being
+   * uploaded, ahead of deleting its row (issue #101).
+   *
+   * ⚠ ABORT BEFORE DELETE, NEVER AFTER — the same ordering
+   * `StorageCleanupHandler.sweep` uses. The row is the only record of
+   * `s3UploadId`: an unfinished upload has no object at `storageKey` yet, so
+   * `storageProvider.delete` removes nothing, and dropping the row afterwards
+   * orphans the upload and every billed part with nothing left able to name
+   * them. With this order a failed abort THROWS, the row survives, and the
+   * stale-upload sweep (which targets `pending`/`uploading` rows) retries it.
+   *
+   * An upload the provider no longer knows about — already aborted, completed,
+   * or expired by a bucket lifecycle rule — is the outcome an abort exists to
+   * reach, so `NoSuchUpload` counts as success rather than wedging the delete
+   * forever.
+   */
+  private async abortActiveMultipartUpload(object: {
+    id: string;
+    storageKey: string;
+    s3UploadId: string | null;
+    status: string;
+  }): Promise<void> {
+    if (!object.s3UploadId || !this.isUploadActive(object.status)) {
+      return;
+    }
+
+    try {
+      await this.storageProvider.abortMultipartUpload(
+        object.storageKey,
+        object.s3UploadId,
+      );
+    } catch (error) {
+      if (!this.isNoSuchUploadError(error)) {
+        throw error;
+      }
+
+      this.logger.log(
+        `Multipart upload for object ${object.id} is already gone; continuing with delete`,
+      );
+    }
+  }
+
+  /**
+   * Did the provider refuse an abort because the upload no longer exists?
+   *
+   * Matched on the SDK error's `name` and HTTP status rather than
+   * `instanceof NoSuchUpload`, so an error from a second copy of the SDK (or a
+   * plain object from a mock) is still recognised. The S3 provider rethrows
+   * the SDK error unchanged, which is what keeps both fields intact.
+   */
+  private isNoSuchUploadError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+
+    const { name, $metadata } = error as {
+      name?: unknown;
+      $metadata?: { httpStatusCode?: unknown };
+    };
+
+    return name === 'NoSuchUpload' || $metadata?.httpStatusCode === 404;
   }
 
   /**
