@@ -254,6 +254,16 @@ export const handlers = [
     });
   }),
 
+  // `GET /api/notes` — the quietest possible answer, for the same reason the
+  // transcript summary above gives: the transcript viewer now lists the notes
+  // generated from it (#59), so EVERY suite rendering that page makes this
+  // request. An empty page renders nothing, so it cannot be matched by another
+  // suite's query; a suite that cares about the content overrides it with
+  // `server.use(...)`.
+  http.get(`${API_BASE}/notes`, () => {
+    return HttpResponse.json({ data: { items: [], nextCursor: null } });
+  }),
+
   http.get(`${API_BASE}/transcription/config`, () => {
     return HttpResponse.json({
       data: {
