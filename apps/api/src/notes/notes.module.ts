@@ -8,11 +8,17 @@ import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { NoteGenerationAccessService } from './access/note-generation-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
+import {
+  NOTE_STREAM_TUNING,
+  NoteGenerationStreamService,
+} from './generation/note-generation-stream.service';
 import { NoteGenerationService } from './generation/note-generation.service';
 import { NoteSourceService } from './generation/note-source.service';
 import { NoteGenerateHandler } from './handlers/note-generate.handler';
 import { NoteSourceExtractHandler } from './handlers/note-source-extract.handler';
+import { NoteGenerationStreamController } from './note-generation-stream.controller';
 import { NoteObjectsService } from './note-objects.service';
 import { NoteSourcesController } from './note-sources.controller';
 import { NoteSourcesService } from './note-sources.service';
@@ -73,9 +79,15 @@ import { NoteTemplatesService } from './note-templates.service';
     StorageProvidersModule,
     SettingsModule,
   ],
-  // #51's ONE ROUTE (`POST /api/notes/sources/documents`) plus #50's SEVEN
-  // (`/api/note-templates/*`). The NOTE routes themselves are still #53's.
-  controllers: [NoteSourcesController, NoteTemplatesController],
+  // #51's ONE ROUTE (`POST /api/notes/sources/documents`), #50's SEVEN
+  // (`/api/note-templates/*`) and #52's TWO SSE readers
+  // (`GET /api/notes/:id/stream`, `GET /api/note-generations/:id/stream`). The
+  // rest of the NOTE routes are still #53's.
+  controllers: [
+    NoteSourcesController,
+    NoteTemplatesController,
+    NoteGenerationStreamController,
+  ],
   providers: [
     NoteGenerationService,
     NoteSourceService,
@@ -92,6 +104,16 @@ import { NoteTemplatesService } from './note-templates.service';
     NoteTemplateAccessService,
     NoteTemplatesService,
     NoteTemplatePreviewService,
+    // The generation stream (#52). `NoteGenerationStreamService` only ever
+    // READS — the stream is a view over `note_generations.content`, never a
+    // second source of truth, and the note completes identically with nobody
+    // watching.
+    NoteGenerationAccessService,
+    NoteGenerationStreamService,
+    // Declared with no overrides so the service's own defaults ship. It exists
+    // as a provider at all because a spec cannot override a token its module
+    // never declared; nothing in production supplies a value.
+    { provide: NOTE_STREAM_TUNING, useValue: {} },
   ],
 })
 export class NotesModule {}
