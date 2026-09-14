@@ -4108,7 +4108,9 @@ Every column is copied, not just `instructions`. No lineage is recorded.
 The deployment AI policy — is AI on, which provider is active, which models
 are permitted, and the token/timeout/document ceilings every generation runs
 under — issue #47, epic #45; the active-provider axis, live model discovery
-and the widened `allowedModels` entry are issue #78. See
+and the widened `allowedModels` entry are issue #78; the five-rank
+resolution chain that lets a model be permitted with **no typed numbers at
+all**, and the raised `allowedModels` cap, are issue #97. See
 [`docs/specs/notes.md`](specs/notes.md) §2.5, §6.4.
 
 Gated on `system_settings:read` / `system_settings:write`, **not a
@@ -4168,20 +4170,32 @@ provider schema and a provider class, with no consumer edit anywhere.
 `{ id, label?, contextWindowTokens?, maxOutputTokens? }`. A bare string
 (`"gpt-4o"`) is still accepted on write and always will be — every
 deployment that saved a policy before #78 has strings stored right now — and
-it is read back normalised to `{ id: "gpt-4o" }`. The two optional numbers
-let an administrator permit a model this build's own catalogue does not
-describe (adopted from `GET /ai-settings/models` below, or typed by hand);
-when absent, they fall back to this build's catalogue for that id, and then
-to nothing.
+it is read back normalised to `{ id: "gpt-4o" }`.
 
-`unknownModels` lists model ids the policy permits that this deployment
-cannot budget for at all — neither the entry's own numbers nor the build
-catalogue can answer. Such a model is never offered to a user; this is
-where a mistyped model id, or one adopted with no numbers supplied, becomes
-visible. **Since #78 this is narrower than "not in the build catalogue"**: an
-entry carrying its own `contextWindowTokens`/`maxOutputTokens` is usable and
-is *not* listed here, even for a model no release of this application has
-ever heard of.
+**Since issue #97, `contextWindowTokens`/`maxOutputTokens` are optional in
+practice, not merely in the schema.** An administrator no longer has to
+supply either number to permit a model. Resolution is a five-rank chain,
+applied per number: (1) the entry's own typed value, (2) an exact hit in
+this build's catalogue, (3) the provider's own family derivation — a dated
+snapshot id such as `gpt-5.4-mini-2026-03-17` takes its family's (
+`gpt-5.4-mini`'s) full window — (4) the provider's conservative floor, (5)
+unresolved. `GET /ai-settings/models` and `GET /api/ai/config` both report
+which rank answered as `source`, plus `derivedFrom` when it was rank 3, so a
+client never presents an inference as a verified number. Typed numbers
+always outrank everything derived — see
+[`docs/specs/notes.md`](specs/notes.md) §2.5 for the full precedence and the
+argument for why a conservative floor is safe to fall back to when a typed
+number is not, an asymmetry that supersedes the narrower "an unknown model
+needs both numbers typed" reading §2.5 previously stated.
+
+`unknownModels` lists model ids the policy permits that **nothing** in this
+deployment can budget for — no typed numbers on the entry, no catalogue
+hit, no family derivation, and no provider floor. Such a model is never
+offered to a user. **Since #97 this is a much narrower list than it used to
+be**: in practice it now means only a policy naming a provider this build
+does not implement (or a rollback across the addition of one), or a
+provider that has deliberately declined to declare a floor — not "this
+build has never heard of the model," which resolves automatically now.
 
 `providers[].capabilities.modelDiscovery` (#78) says whether
 `GET /ai-settings/models` will work for that provider at all — a provider
@@ -4202,7 +4216,14 @@ body as `allowedModels`, the submitted models are validated against the
 An `allowedModels` entry may be a **bare model id** (`"gpt-4o"`) or an
 **object** (`{ "id": "o5-preview", "label": "O5 Preview",
 "contextWindowTokens": 300000, "maxOutputTokens": 32768 }`). Both forms are
-accepted forever and both are read back as objects.
+accepted forever and both are read back as objects. **Since #97 the two
+numbers are optional on the object form too** — see the resolution chain
+above; they remain the way to override what this deployment would otherwise
+derive or fall back to, which is the one rank nothing below it can beat.
+`allowedModels` is capped at **200 entries** (raised from 50 by #97, since a
+vendor's whole discovered catalogue is now realistically selectable in one
+pass rather than hand-typed two numbers at a time) — the cap bounds the
+stored settings blob, not how many models a deployment may permit.
 
 **Requires:** `system_settings:write`
 
@@ -4211,7 +4232,7 @@ accepted forever and both are read back as objects.
 **Response:** the updated policy, re-read from storage, in the `GET` shape above.
 
 **Error Cases:**
-- `400` - Validation error, or an `allowedModels` entry this deployment cannot budget for (no context window on the entry and none in the active provider's build catalogue — the message names the missing field(s) and is not a statement that the model is forbidden)
+- `400` - Validation error, or an `allowedModels` entry **nothing** in this deployment can budget for — no typed numbers, no catalogue hit, no family derivation, and no provider floor (in practice: the policy names a provider this build does not implement). The message names the missing field(s) and is not a statement that the model is forbidden.
 - `409` - Version conflict
 
 ---
@@ -4241,19 +4262,30 @@ here, because there isn't one — the route answers 200 either way.
 
 **Requires:** `system_settings:write`
 
-**Query:** `?provider=` (optional) — which provider to ask; defaults to the
-active one. Naming a different provider lets an administrator inspect its
-catalogue **before** switching to it.
+**Query:**
+- `?provider=` (optional) — which provider to ask; defaults to the active
+  one. Naming a different provider lets an administrator inspect its
+  catalogue **before** switching to it.
+- `?includeAll=true` (optional, issue #97) — skip the plausible-chat-model
+  filter and return the provider's **whole** list. The filter
+  (`NON_CHAT_MODEL_MARKERS`) is a convenience over an unstructured vendor
+  list — OpenAI's `GET /models` returns embeddings, TTS voices and
+  moderation endpoints in the same flat array as chat models, with no
+  capability field to tell them apart — and it can only hide a row from this
+  dropdown, never make a model unusable: `allowedModels` accepts any id
+  typed by hand regardless of whether discovery showed it. `includeAll` is
+  the escape hatch for when the heuristic hides something real.
 
 **Response (success):**
 ```json
 {
   "data": {
     "ok": true,
-    "detail": "The provider listed 42 chat-capable model(s). Models this build already knows the context window of are marked as such; for any other, supply a context window and output ceiling when you permit it.",
+    "detail": "The provider listed 42 chat-capable model(s). Models this build already knows the context window of are marked as such; for any other, a context window and output ceiling were derived or a conservative default was used.",
     "models": [
-      { "id": "gpt-4o", "label": "GPT-4o", "known": true, "contextWindowTokens": 128000, "maxOutputTokens": 16384 },
-      { "id": "o5-preview", "label": "o5-preview", "known": false, "contextWindowTokens": null, "maxOutputTokens": null }
+      { "id": "gpt-4o", "label": "GPT-4o", "known": true, "contextWindowTokens": 128000, "maxOutputTokens": 16384, "source": "catalogue", "derivedFrom": null },
+      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "known": false, "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini" },
+      { "id": "o5-preview", "label": "o5-preview", "known": false, "contextWindowTokens": 128000, "maxOutputTokens": 16384, "source": "default", "derivedFrom": null }
     ]
   }
 }
@@ -4264,14 +4296,24 @@ catalogue **before** switching to it.
 { "data": { "ok": false, "detail": "The provider rejected this API key (HTTP 401). Check that you pasted the whole key and that it has not been revoked in your provider account.", "models": [] } }
 ```
 
-`known: false` means the provider listed the model but this build carries no
-descriptor for it, so `contextWindowTokens`/`maxOutputTokens` are `null` —
-collect those two numbers from the administrator (the vendor publishes both)
-before saving it into `allowedModels`, or it will be saved, listed back, and
-never offered to anyone (it lands in `unknownModels` above). The list is
-sorted known-models-first, then alphabetically, and filtered to plausible
-chat models as a convenience only — an administrator can still permit any
-model id by hand, and that path never consults the filter.
+**Every model now comes back with a usable `contextWindowTokens` and
+`maxOutputTokens` (issue #97).** Before #97 both were `null` for any id
+absent from the build catalogue, and a client had to collect them from the
+administrator by hand before the model could be saved into `allowedModels`.
+They are now filled by the same five-rank resolution `PUT /ai-settings`
+itself uses — the exact catalogue entry, then the model's family (a dated
+snapshot such as `gpt-5.4-mini-2026-03-17` takes `gpt-5.4-mini`'s window),
+then the provider's conservative floor — and `source` names which rank
+answered (`'catalogue' | 'derived' | 'default'`; `'explicit'` cannot appear
+here, since discovery resolves a bare id with no policy entry behind it).
+`derivedFrom` names the family, non-null exactly when `source` is
+`'derived'`. **The two numbers remain nullable** and `null` still means
+"nothing could answer" — reachable now only for a provider that declares no
+conservative floor. `known` is **unchanged** and still means an exact
+build-catalogue hit; it does **not** mean "needs numbers typed before it can
+be permitted" any more — `source` is the field that answers how much of the
+pair is verified knowledge versus an inference. The list is sorted
+known-models-first, then by resolution strength, then alphabetically.
 
 **Error Cases:**
 - `400` - No provider is active and none was named in the query, the named provider is not implemented by this build, the provider cannot list models at all (`capabilities.modelDiscovery: false`), or this deployment's stored settings for that provider are invalid
@@ -4434,6 +4476,19 @@ request timeout, and nothing derived from anyone's key beyond the boolean
 fact that the caller has one. `models`/`defaultModel` are already narrowed by
 policy, so a client can offer them directly without re-checking.
 
+**Each model carries `source`/`derivedFrom` (issue #97)**, resolved through
+the same five-rank chain `PUT /ai-settings` and `GET /ai-settings/models`
+use: `explicit` (an administrator typed the numbers), `catalogue` (an exact
+hit in this build's verified list), `derived` (placed in a known family —
+`derivedFrom` names it), or `default` (this vendor's conservative floor,
+because nothing better was available). It is the **weakest** of the two
+numbers' sources, so a model whose window was derived but whose output
+ceiling fell back to the floor still reports `default`. All four are
+usable; a client showing an inference as a verified figure is the one thing
+this field exists to prevent. The `contextWindowTokens`/`maxOutputTokens`
+values here are already narrowed by deployment policy (`Math.min` against
+`maxInputTokens`/`maxOutputTokens`) — that narrowing never changes `source`.
+
 **Response:**
 ```json
 {
@@ -4442,7 +4497,8 @@ policy, so a client can offer them directly without re-checking.
     "provider": "openai",
     "providerLabel": "OpenAI",
     "models": [
-      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000 }
+      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null },
+      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini" }
     ],
     "defaultModel": "gpt-5.4-mini",
     "maxInputTokens": 100000,
