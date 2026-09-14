@@ -35,6 +35,14 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // User settings — the hub (#96) plus one route per card in
 // `config/userSettingsSections.tsx` (#91, epic #90). These replace the single
 // stacked `UserSettingsPage`, which is deleted rather than left unrouted.
+// Transcripts (#30, epic #19) — the library, the New-transcript flow, the
+// viewer, and #31's history placeholder. Lazy like every other page here, and
+// with more reason than most: the viewer alone pulls in the virtualizer and the
+// playback engine, neither of which a user who never opens a transcript needs.
+const TranscriptsLibraryPage = lazy(() => import('./pages/TranscriptsLibraryPage'));
+const NewTranscriptPage = lazy(() => import('./pages/NewTranscriptPage'));
+const TranscriptPage = lazy(() => import('./pages/TranscriptPage'));
+const TranscriptHistoryPage = lazy(() => import('./pages/TranscriptHistoryPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 // `User`-prefixed to make explicit that it edits the signed-in user's own
@@ -177,6 +185,77 @@ function AppRoutes() {
                   }
                 >
                   <Route path="/" element={<HomePage />} />
+
+                  {/* Transcripts (#30, epic #19).
+
+                      GATED ON THE SAME STRINGS `transcripts.controller.ts`
+                      ENFORCES, which is the invariant every other route here
+                      keeps: `transcripts:read` for the three read surfaces,
+                      `transcripts:write` for the one that creates. Both are
+                      seeded to all three roles — including Viewer, because
+                      recording a conversation is the action epic #19 exists to
+                      enable and a new account's default role is Viewer — so in
+                      practice nobody is refused. The gate is here anyway,
+                      because a deployment that revokes the permission must see
+                      the route close, not merely the nav row disappear.
+
+                      `/transcripts/new` carries `:write` while its siblings
+                      carry `:read`, and the split is the reachability-vs-content
+                      distinction the settings pages make: a user who may read
+                      transcripts but not create one reaches the library and the
+                      viewer, and is redirected away from the only route that
+                      would 403 on submit.
+
+                      ORDER IS NOT SIGNIFICANT — React Router v6 ranks by
+                      specificity, so `/transcripts/new` beats `/transcripts/:id`
+                      wherever each is written. They are grouped for reading. */}
+                  <Route
+                    path="/transcripts"
+                    element={
+                      <RequirePermission
+                        permission="transcripts:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <TranscriptsLibraryPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/transcripts/new"
+                    element={
+                      <RequirePermission
+                        permission="transcripts:write"
+                        fallback={<Navigate to="/transcripts" replace />}
+                      >
+                        <NewTranscriptPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/transcripts/:id"
+                    element={
+                      <RequirePermission
+                        permission="transcripts:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <TranscriptPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #31 replaces the PAGE; this route, its gate and its
+                      AppBar drill-down entry are #30's and are meant to
+                      survive that. See the page's own header. */}
+                  <Route
+                    path="/transcripts/:id/history"
+                    element={
+                      <RequirePermission
+                        permission="transcripts:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <TranscriptHistoryPage />
+                      </RequirePermission>
+                    }
+                  />
                   {/* The per-user settings surface (#96, epic #90) — the same
                       hub component `/admin/settings` renders, over
                       `USER_SETTINGS_SECTIONS`, plus one route per card.
