@@ -39,7 +39,7 @@
 // for this reason) and it is baked into `options_hash`. Renaming one orphans
 // every existing row of that format and breaks every reuse lookup for it. A new
 // output shape is a NEW format that coexists with the old one — the same
-// posture spec §8.2 takes for `kvox.transcript/v1` itself.
+// posture spec §8.2 takes for the published JSON export schema itself.
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';

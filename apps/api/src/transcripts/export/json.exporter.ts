@@ -1,5 +1,5 @@
 // =============================================================================
-// `kvox.transcript/v1` — the public JSON export (issue #28, epic #19, §8.2)
+// The public, versioned JSON export (issue #28, epic #19, spec §8.2)
 // =============================================================================
 //
 // THIS FILE IMPLEMENTS A PUBLISHED CONTRACT, not "whatever the JSON exporter
@@ -18,9 +18,9 @@
 // afterwards.
 //
 // The permanence rule from §8.2, restated where somebody editing would see it:
-// a field is added, never removed or repurposed. A breaking change is
-// `kvox.transcript/v2` with its own `$id` and its own exporter class, coexisting
-// with this one for as long as anything depends on the old shape — exactly the
+// a field is added, never removed or repurposed. A breaking change is a **v2**
+// schema with its own `$id` and its own exporter class, coexisting with this
+// one for as long as anything depends on the old shape — exactly the
 // "rows outlive the handler that produced them" posture the job queue takes for
 // a `type` string.
 //
@@ -67,7 +67,19 @@ import {
   type TranscriptExporter,
 } from './transcript-exporter.interface';
 
-/** The literal every consumer switches on. Never computed, never templated. */
+/**
+ * The literal every consumer switches on. Never computed, never templated.
+ *
+ * ⚠ THIS STRING IS PERMANENT AND IS **NOT** A REBRAND TARGET, which is why
+ * `apps/cli/src/template-identity.test.ts` allowlists this file by name. It is
+ * a published FORMAT IDENTIFIER — the `$id` in
+ * `docs/specs/transcript-export.v1.schema.json`, matched by third-party
+ * parsers — not a display string. Rewriting it on a rename would silently
+ * invalidate every consumer of every file exported before the rename, which is
+ * exactly the breakage a versioned schema exists to prevent. A fork that wants
+ * its own format publishes `<name>.transcript/v1` as a NEW schema beside this
+ * one; it does not renumber this one.
+ */
 export const KVOX_TRANSCRIPT_SCHEMA_ID = 'kvox.transcript/v1';
 
 /**

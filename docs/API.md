@@ -3258,7 +3258,7 @@ scoped by `transcriptId`, which *is* the authorisation.
 
 | Format | What it is |
 |---|---|
-| `json` | The public, versioned **`kvox.transcript/v1`** schema, published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). A consumer switches on the literal `schema` field. The contract is permanent: a field is added, never removed or repurposed — a breaking change ships as `kvox.transcript/v2` with its own `$id` |
+| `json` | The **public, versioned export schema** published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). Every document carries a literal `schema` field — that file's `$id` — and a consumer switches on it rather than assuming the shape of an unversioned blob. The contract is permanent: a field is added, never removed or repurposed, and a breaking change ships as a **v2** schema with its own `$id` beside this one |
 | `markdown` | YAML front matter (title, date, duration, speakers, version) then `**Speaker** · 00:01:23` paragraphs. Every interpolated value is escaped for Markdown's own specials, because a speaker name and a line of speech are text, not markup |
 | `pdf` | pdfkit, streamed, with bundled Noto faces: a cover block (title, date, duration, participants with talk time), speaker names in their own colours, a timestamp margin, a running header, and a footer reading `Page x of y · Version n · Exported from <app>` |
 

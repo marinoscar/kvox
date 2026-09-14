@@ -1,9 +1,10 @@
 /**
  * Take a transcript out of this application (issue #28, epic #19, spec §8).
  *
- * "The user should never need KVox in order to access information they created
- * with KVox." This dialog is where that promise is kept: pick a format, pick a
- * version, set the format's own options, and get a file.
+ * Epic #19's premise, in one sentence: a user should never need this
+ * application in order to reach information they created with it. This dialog
+ * is where that promise is kept — pick a format, pick a version, set the
+ * format's own options, and get a file.
  *
  * =============================================================================
  * THE FORM IS BUILT FROM THE SERVER'S ANSWER, NOT FROM A LIST COMPILED IN HERE

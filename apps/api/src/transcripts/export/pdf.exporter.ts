@@ -90,11 +90,17 @@ import {
 /** Where the three committed faces live. See the header for the path rule. */
 export const FONT_DIR = resolve(__dirname, '../../../assets/fonts');
 
-/** pdfkit font aliases, so no call site repeats a filename. */
+/**
+ * pdfkit font aliases, so no call site repeats a filename.
+ *
+ * Product-neutral on purpose: these are internal handles pdfkit resolves
+ * `doc.font(...)` against, never anything a reader sees, and a rebrand must not
+ * have to touch them (`apps/cli/src/template-identity.test.ts` enforces that).
+ */
 export const PDF_FONTS = {
-  body: 'kvox-body',
-  bold: 'kvox-bold',
-  mono: 'kvox-mono',
+  body: 'transcript-body',
+  bold: 'transcript-bold',
+  mono: 'transcript-mono',
 } as const;
 
 const FONT_FILES: Record<string, string> = {
