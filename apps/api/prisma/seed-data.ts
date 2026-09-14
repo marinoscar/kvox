@@ -354,6 +354,8 @@ export const DEFAULT_SYSTEM_SETTINGS = {
     maxInputTokens: 100000,
     maxOutputTokens: 16384,
     requestTimeoutMs: 600000,
+    // 25 MB (#51) — the ceiling on one uploaded note source document.
+    maxDocumentBytes: 26214400,
   },
   maintenance: {
     enabled: false,

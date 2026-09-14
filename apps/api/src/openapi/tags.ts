@@ -176,6 +176,26 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Notes',
+    tags: [
+      {
+        name: 'Notes',
+        description:
+          'AI-generated notes, and the sources they are generated from (epic #45). Today this ' +
+          'group carries one route: uploading a PDF, plain-text or Markdown **document** to ' +
+          'generate a note from. The upload is stored as a storage object owned by the notes ' +
+          'module — invisible to `GET /api/storage/objects`, and refusing the generic `DELETE` ' +
+          'with a 409 — and a queue job turns it into plain text, because a document outlives ' +
+          'the request that uploaded it.\n\n' +
+          'Gated on `notes:read`/`notes:write`, both seeded to every role including Viewer, ' +
+          'because writing a note from a conversation is the action this epic exists for. A ' +
+          'password-protected PDF, a scanned PDF with no text layer, and a corrupt file are all ' +
+          'recorded as readable reasons rather than as request failures; optical character ' +
+          'recognition is deliberately not supported.',
+      },
+    ],
+  },
+  {
     name: 'Storage',
     tags: [
       {

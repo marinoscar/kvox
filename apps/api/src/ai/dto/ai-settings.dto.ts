@@ -153,6 +153,11 @@ export const aiSettingsResponseSchema = z.object({
       requestTimeoutMs: z
         .number()
         .describe('How long one provider request may take, in milliseconds.'),
+      maxDocumentBytes: z
+        .number()
+        .describe(
+          'Ceiling on one uploaded note source document, in bytes. An AI policy rather than a storage one: every byte becomes input tokens on the uploading user\'s own vendor account, and `note.source.extract` must hold a whole PDF in memory to read it.',
+        ),
     })
     .describe('The stored AI policy. Carries no secret, by construction.'),
   providers: z

@@ -153,6 +153,31 @@ export const systemAiSchema = z.object({
    * expires, which is a much blunter instrument.
    */
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000),
+
+  /**
+   * Ceiling on one uploaded source document, in bytes (issue #51).
+   *
+   * ⚠ IT LIVES HERE RATHER THAN IN `storage` BECAUSE IT IS AN AI POLICY, not a
+   * storage policy. The reason to bound a source document is not disk — a
+   * 200 MB PDF costs pennies to store — it is that every byte of it becomes
+   * characters, and those characters become INPUT TOKENS on the uploading
+   * user's own vendor account. The deployment-wide ceiling on what may reach a
+   * model is `maxInputTokens` two fields above; this is the same decision taken
+   * at the only other moment it can be taken cheaply, which is before the
+   * bytes are accepted at all.
+   *
+   * A SECOND, NARROWER ROLE: it is the memory bound on extraction.
+   * `note.source.extract` must buffer a whole PDF (pdf.js resolves a
+   * cross-reference table that lives at the end of the file, so there is no
+   * streaming extraction to do), and a worker slot holding an unbounded
+   * document is how one upload takes a process down. That is why the endpoint
+   * enforces it AT THE DOOR rather than the job discovering it later.
+   *
+   * 25 MB by default — comfortably above any ordinary proposal, contract or
+   * brief, and far below anything whose extracted text a token budget would
+   * accept anyway.
+   */
+  maxDocumentBytes: z.number().int().min(65_536).max(268_435_456),
 });
 
 export type SystemAiValue = z.infer<typeof systemAiSchema>;
@@ -190,6 +215,7 @@ export const systemAiPatchSchema = z.object({
   maxInputTokens: z.number().int().min(256).max(2_000_000).optional(),
   maxOutputTokens: z.number().int().min(64).max(200_000).optional(),
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000).optional(),
+  maxDocumentBytes: z.number().int().min(65_536).max(268_435_456).optional(),
 });
 
 export type SystemAiPatchValue = z.infer<typeof systemAiPatchSchema>;

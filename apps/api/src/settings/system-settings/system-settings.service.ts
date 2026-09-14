@@ -1172,6 +1172,8 @@ export class SystemSettingsService {
           dto.ai?.maxOutputTokens ?? currentValue.ai.maxOutputTokens,
         requestTimeoutMs:
           dto.ai?.requestTimeoutMs ?? currentValue.ai.requestTimeoutMs,
+        maxDocumentBytes:
+          dto.ai?.maxDocumentBytes ?? currentValue.ai.maxDocumentBytes,
       },
       maintenance: {
         enabled: dto.maintenance?.enabled ?? currentValue.maintenance.enabled,

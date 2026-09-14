@@ -312,5 +312,12 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // Ten minutes. A streamed completion legitimately runs for minutes; this is
     // the backstop for a wedged connection, not an ordinary HTTP timeout.
     requestTimeoutMs: 600_000,
+    // 25 MB (#51). Comfortably above any ordinary proposal, contract or brief,
+    // and far below anything whose extracted text `maxInputTokens` would let
+    // through anyway — a document is bounded here because every byte of it
+    // becomes input tokens on the uploading user's own vendor account, and
+    // because `note.source.extract` has to hold a whole PDF in memory to read
+    // it.
+    maxDocumentBytes: 26_214_400,
   },
 };
