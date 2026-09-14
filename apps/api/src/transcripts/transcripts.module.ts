@@ -138,5 +138,18 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptsHousekeepingHandler,
     TranscriptsHousekeepingTask,
   ],
+  // ⚠ TWO PROVIDERS, AND ONLY BECAUSE SOMEBODY NOW IMPORTS THEM (#49, epic
+  // #45). This module exported nothing at all until the notes pipeline needed
+  // to generate from a transcript AS THE USER CORRECTED IT — which means going
+  // through `materialize()`, the canonical "full state at version N" entry
+  // point, and rendering it with THIS module's own Markdown projection rather
+  // than writing a third transcript-to-text serializer that could disagree with
+  // the other two about what a transcript says.
+  //
+  // `MarkdownTranscriptExporter` is exported BY CLASS rather than the whole
+  // `TranscriptExporterRegistry`, deliberately: the consumer wants one named
+  // projection it can depend on, not the ability to render a transcript into
+  // whatever formats happen to be registered.
+  exports: [TranscriptMaterializeService, MarkdownTranscriptExporter],
 })
 export class TranscriptsModule {}
