@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { clientsClaim } from 'workbox-core';
-import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
+import { cleanupOutdatedCaches, matchPrecache, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 
 // =============================================================================
@@ -68,31 +68,67 @@ precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
 // -----------------------------------------------------------------------------
-// SPA navigation fallback
+// SPA navigation: network first, precached shell only when OFFLINE  (issue #88)
 // -----------------------------------------------------------------------------
 // Every in-app route (`/settings`, `/admin/settings/users`, …) is a client-side
-// path with no file behind it, so a navigation request is answered from the
-// precached `index.html` — the same job `try_files $uri $uri/ /index.html` does
-// in `apps/web/nginx.conf`, done offline.
+// path with no file behind it. Online, nginx already answers it with
+// `index.html` (`try_files $uri $uri/ /index.html` in `apps/web/nginx.conf`),
+// so the worker simply forwards the navigation to the network.
+//
+// NEVER ANSWER AN ONLINE NAVIGATION FROM THE PRECACHE.
+//
+// A precached `Response` stores the headers the server sent WHEN IT WAS
+// PRECACHED — `Content-Security-Policy` included — and replays them verbatim
+// on every later hit. The precache entry is only refreshed when `index.html`'s
+// CONTENT changes (and in dev, where the entry has no revision, never). So a
+// header-only fix on the server never reached an installed client: when nginx's
+// `connect-src` gained the storage origin (issue #84), every page this worker
+// controlled kept booting under the old `connect-src 'self'` and uploads stayed
+// blocked. Fetching the document live means the page always runs under the
+// server's CURRENT headers; the precache is strictly the offline fallback.
+//
+// ONLY A REJECTED `fetch` FALLS BACK. An HTTP error status is a network
+// success and is returned as-is: a 502 while nginx or the web container
+// restarts, or a 503 maintenance page, is the truth about the server, and
+// swapping it for a cached shell would hide it — and would boot the SPA under
+// stale headers, the very bug this handler exists to prevent.
+//
+// `matchPrecache` resolves `undefined` rather than throwing when the shell was
+// never precached, in which case the original network error is rethrown and the
+// browser shows its own offline page — exactly what happens with no worker.
 //
 // THE DENYLIST IS LOAD-BEARING, AND `/api/notifications/stream` IS WHY.
 //
-// `/^\/api\//` keeps the worker out of the API's URL space entirely. Do not
-// narrow it to "just the HTML-ish API routes" or to individual paths: that
-// endpoint is SERVER-SENT EVENTS, and an SSE response BY DESIGN NEVER ENDS.
-// A handler that took it would hold a `fetch()` open for the lifetime of the
-// stream — the worker never reaches idle, the browser eventually kills it as
-// unresponsive, and the notification stream dies with it. The same reasoning
-// covers `/api/docs` and `/api/storage/objects/:id/download`, which are real
-// server responses that must not be swapped for the SPA shell.
+// `/^\/api\//` keeps the worker out of the API's URL space entirely — the
+// "never call the API" rule above holds because no `/api` request ever reaches
+// the `fetch` below. Do not narrow it to "just the HTML-ish API routes" or to
+// individual paths: that endpoint is SERVER-SENT EVENTS, and an SSE response BY
+// DESIGN NEVER ENDS. A handler that took it would hold a `fetch()` open for the
+// lifetime of the stream — the worker never reaches idle, the browser
+// eventually kills it as unresponsive, and the notification stream dies with
+// it. The same reasoning covers `/api/docs` and
+// `/api/storage/objects/:id/download`, which are real server responses that
+// must never be proxied through, or swapped for, the SPA shell.
 //
 // (Strictly, `NavigationRoute` only sees requests whose `mode` is `navigate`,
-// which an `EventSource` connection is not. The denylist is belt-and-braces
-// against exactly that reasoning being used to remove it.)
+// which an `EventSource` connection — or an upload part PUT — is not. The
+// denylist is belt-and-braces against exactly that reasoning being used to
+// remove it.)
 registerRoute(
-  new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/api\//],
-  }),
+  new NavigationRoute(
+    async ({ request }) => {
+      try {
+        return await fetch(request);
+      } catch (error) {
+        const shell = await matchPrecache('/index.html');
+        if (shell) return shell;
+        throw error;
+      }
+    },
+    {
+      denylist: [/^\/api\//],
+    },
+  ),
 );
 
 // -----------------------------------------------------------------------------
