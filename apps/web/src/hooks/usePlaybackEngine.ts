@@ -183,6 +183,30 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(-1);
   const [audioKind, setAudioKind] = useState<TranscriptAudio['kind'] | null>(null);
 
+  /**
+   * The three injectables, held in refs and read at CALL time.
+   *
+   * ⚠ NOT effect dependencies, and that is load-bearing rather than tidy. The
+   * effect below CREATES the media element; anything in its dependency list is
+   * therefore something that can tear the element down and rebuild it. A caller
+   * that passes an inline `fetchAudio`, or whose `playbackReady` flips from
+   * false to true when the transcode finishes, would otherwise destroy the
+   * element mid-listen — pausing the audio, losing the position, and re-signing
+   * a URL for no reason. The element's lifetime is tied to ONE thing, the
+   * transcript id, because that is the only input that genuinely means "this is
+   * different audio".
+   *
+   * The `preparing` → `ready` transition that `playbackReady` used to force
+   * through this effect is handled by its own effect further down, which
+   * reloads the SOURCE without discarding the element.
+   */
+  const createAudioRef = useRef(createAudio);
+  createAudioRef.current = createAudio;
+  const fetchAudioRef = useRef(fetchAudio);
+  fetchAudioRef.current = fetchAudio;
+  const playbackReadyRef = useRef(playbackReady);
+  playbackReadyRef.current = playbackReady;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number | null>(null);
   /** The last position published to React, so `handleTick` can throttle. */
@@ -296,14 +320,15 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
 
       setStatus((current) => (current === 'ready' ? current : 'loading'));
       try {
-        const info = await (fetchAudio ? fetchAudio(id) : getTranscriptAudio(id));
+        const fetcher = fetchAudioRef.current;
+        const info = await (fetcher ? fetcher(id) : getTranscriptAudio(id));
         if (audioRef.current !== audio) return;
 
         // A browser that will not play the ORIGINAL while the rendition is
         // still being produced is the "Preparing audio…" case (spec §7.1), not
         // an error: `canPlayType` answering `''` means "definitely not", and
         // the rendition exists precisely to make that answer irrelevant.
-        if (info.kind === 'original' && !playbackReady) {
+        if (info.kind === 'original' && !playbackReadyRef.current) {
           const verdict = audio.canPlayType?.(info.mimeType) ?? '';
           if (verdict === '') {
             setAudioKind(info.kind);
@@ -335,7 +360,10 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
         setError('The audio for this transcript could not be loaded.');
       }
     },
-    [fetchAudio, playbackReady],
+    // EMPTY, deliberately: everything this reads lives in a ref (see above), so
+    // the identity is stable for the life of the hook and the element effect
+    // below cannot be torn down by a caller's re-render.
+    [],
   );
 
   // Create the element once, and wire every listener it needs.
@@ -345,7 +373,8 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       return;
     }
 
-    const audio = createAudio ? createAudio() : new Audio();
+    const factory = createAudioRef.current;
+    const audio = factory ? factory() : new Audio();
     audio.preload = 'metadata';
     audioRef.current = audio;
     recoveringRef.current = false;
@@ -414,7 +443,24 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       audio.removeAttribute?.('src');
       audioRef.current = null;
     };
-  }, [createAudio, loadSource, transcriptId]);
+    // ONE dependency that can rebuild the element: the transcript. See the ref
+    // block above for why the injectables are deliberately absent.
+  }, [loadSource, transcriptId]);
+
+  /**
+   * The rendition finished while the page was open.
+   *
+   * `playbackReady` flips false → true when the transcode lands, and the ONLY
+   * state that cares is `preparing` — where the browser refused the original
+   * and there was nothing to play. Re-signing then turns "Preparing audio…"
+   * into a working player without the reader reloading the page. Every other
+   * status is left alone: a `ready` player must not be interrupted because a
+   * poll noticed a status field move.
+   */
+  useEffect(() => {
+    if (!transcriptId || !playbackReady || status !== 'preparing') return;
+    void loadSource(transcriptId, null, false);
+  }, [loadSource, playbackReady, status, transcriptId]);
 
   // ---------------------------------------------------------------------------
   // The rAF clock (visible only)
