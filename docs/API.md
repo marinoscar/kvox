@@ -2786,6 +2786,277 @@ refused rather than silently accepted.
 
 ---
 
+### Transcripts
+
+Audio in, a diarized and timestamped transcript out — issue #25, epic #19. The
+design, including the three state machines, the provider contract and the
+access model this section only summarises, is
+[`docs/specs/transcription.md`](specs/transcription.md).
+
+Two permissions, `transcripts:read` and `transcripts:write`, both **seeded to
+all three roles including Viewer**: creating a transcript is the action this
+whole feature exists to enable, and a brand-new account's default role is
+Viewer. A permission model that made a fresh signup unable to record their
+first conversation would contradict the product's own onboarding.
+
+**Per-transcript access is separate from the permission.** The owner reaches
+everything; anybody they shared it with reaches what their share role allows
+(`viewer` reads, `editor` also edits). **A caller with no access gets 404,
+never 403** — a 403 would confirm that a specific transcript id exists and
+merely refuse the caller, and the existence of a private conversation's id is
+itself something a stranger has no business learning. `edit` additionally
+requires `transcripts:write`: a share caps the *ceiling* an RBAC permission can
+raise a user to, never the floor.
+
+**There is deliberately no `transcripts:read_any`.** An administrator who
+configures which provider this deployment uses has no path, through any
+permission this application grants, to read a transcript they do not own or
+hold a share on. Configuring the pipe is not the authority to read what flows
+through it.
+
+Three status fields, not one, because the transcode and the transcription run
+**concurrently** and a single enum would need one member per combination:
+
+| Field | Values |
+|---|---|
+| `status` | `uploading` → `processing` → `ready`, plus `failed` and `deleting` |
+| `transcriptionStatus` | `waiting_input` → `queued` → `submitting` → `submitted` → `processing` → `completed`, plus `failed` and `cancelled` |
+| `playbackStatus` | `pending`, `processing`, `ready`, `failed`, `not_needed` |
+
+`GET /transcripts?status=` filters on the **top-level** field only. Filtering by
+a sub-pipeline status would require the caller to know that `processing` can
+mean either sub-pipeline, or both.
+
+#### POST /transcripts
+Creates the transcript **and** initialises the resumable multipart upload its
+audio arrives through, in one call — one user action, one request, both rows or
+neither. A client that had to make two calls could get the first to succeed and
+the second to fail, leaving a transcript in `uploading` with no upload behind
+it.
+
+**Requires:** `transcripts:write`
+
+**Request:**
+```json
+{
+  "title": "Board meeting, 3 March",
+  "language": "en",
+  "speakersExpected": 4,
+  "source": { "name": "meeting.m4a", "size": 148372910, "mimeType": "audio/mp4" }
+}
+```
+
+`title` defaults to the filename without its extension. `language` omitted or
+null asks the provider to detect it. `speakersExpected` is a **hint** a provider
+may bias diarization with, never a constraint, and is ignored entirely by a
+provider whose `speakersExpectedHint` capability is false.
+
+`source.mimeType` is optional because mobile browsers report audio types
+inconsistently — `application/octet-stream`, or nothing at all, for `.m4a` and
+`.amr` is the ordinary case — and the file extension decides when it is absent.
+
+**Response:** `201`
+```json
+{
+  "data": {
+    "transcript": { "id": "…", "status": "uploading", "…": "…" },
+    "upload": {
+      "objectId": "…",
+      "uploadId": "…",
+      "partSize": 16777216,
+      "totalParts": 9,
+      "presignedUrls": [{ "partNumber": 1, "url": "https://…" }]
+    }
+  }
+}
+```
+
+Upload the parts against `POST /storage/objects/:id/upload/parts` and finish
+with `POST /storage/objects/:id/upload/complete`, exactly as for any other
+resumable upload. Completing it is what starts the pipeline.
+
+Three pre-flight checks run **before** anything is created, so a rejected
+request leaves no half-started upload behind for the stale sweep to find:
+
+| Code | When |
+|---|---|
+| `409` | Transcription is not configured for this deployment: disabled, no provider chosen, a provider this build does not include, or **no API key stored**. The request was well formed; the deployment is not ready, and a 400 would blame the caller for an administrator's unfinished setup |
+| `400` | The file is larger than the active provider accepts (5 GB for AssemblyAI), or is not a type this deployment allows at all |
+| `403` | The caller does not hold `transcripts:write` |
+
+The upload object is created `managed_by: transcripts`, which makes it
+**invisible** to `GET /storage/objects` and makes a generic `DELETE` against it
+return 409 — only this transcript being deleted removes it.
+
+⚠ `source.size` is the client's claim, and every check here is made against it.
+That is not a trust decision: it is the only number available before a byte has
+moved, and refusing a 12 GB file before the upload starts is the entire value of
+checking here. The real size is enforced again when the multipart upload
+completes.
+
+#### GET /transcripts
+The transcripts this caller can open. Ordered by `updatedAt` descending and
+paginated by an **opaque cursor** rather than a page number — every pipeline
+transition rewrites `updatedAt`, and offset paging over a list that reorders
+itself while a user scrolls skips rows and repeats others.
+
+**Requires:** `transcripts:read`
+
+| Query | Meaning |
+|---|---|
+| `scope` | `owned`, `shared`, or `all` (default) |
+| `status` | One top-level status |
+| `q` | Case-insensitive title substring |
+| `cursor` | `nextCursor` from the previous page |
+| `limit` | 1–100, default 20 |
+
+**Response:** `{ "data": { "items": [...], "nextCursor": "…" | null } }`
+
+Each item carries an `access` field — `owner`, `editor` or `viewer` — describing
+how **this caller** reaches that row, not the owner's relationship to it.
+
+#### GET /transcripts/summary
+Three lists and four counts in one request, for the home page: `inProgress`,
+`recent` (eight), `sharedWithMe` (eight) and
+`counts: { owned, shared, inProgress, failed }`. Exists so the home page
+renders in one round trip rather than four.
+
+**Requires:** `transcripts:read`
+
+#### GET /transcripts/{id}
+Metadata, speakers, all three pipeline statuses, `currentVersion`, and the role
+the caller holds.
+
+Carries a **weak ETag**, `W/"v<currentVersion>"`, and honours `If-None-Match`
+with a `304` carrying **no body**. Issue #30's transcript view polls this route
+on an adaptive schedule while a transcript is in flight; the ETag is what makes
+the common case — nothing has moved — cost headers instead of a payload. It is
+*weak* because two responses at the same version are semantically, not
+byte-for-byte, equivalent: `updatedAt` moves when a poll writes
+`lastPolledAt`, and the version does not identify that.
+
+Weak comparison is used, which is the only comparison RFC 9110 permits for
+`If-None-Match`, so `"v3"` from a proxy that stripped the prefix still matches
+`W/"v3"`, and `*` and comma-separated lists both work.
+
+**Requires:** `transcripts:read`, plus `view` access. **404**, never 403, with
+no access.
+
+`sourceSizeBytes` is a **decimal string**, not a number: a multi-gigabyte
+recording is the ordinary case here and `JSON.stringify` throws on a BigInt
+rather than rounding it.
+
+#### GET /transcripts/{id}/segments
+Every segment in reading order, **without word timings** — those are the single
+largest thing in this schema, and a segment list carrying them would be tens of
+megabytes for a view that renders text. Same weak ETag and 304 as the detail
+route.
+
+**Requires:** `transcripts:read`, plus `view` access
+
+#### GET /transcripts/{id}/words?fromMs&toMs
+Per-word start, end and confidence for every segment overlapping
+`[fromMs, toMs)`, for word-level highlighting during playback.
+
+A **window**, never the whole transcript: a ten-hour recording's word index is
+hundreds of megabytes. `toMs` defaults to five minutes past `fromMs` and is
+capped at thirty minutes past it; a wider request is **silently narrowed**
+rather than refused, and the response echoes the window actually served.
+
+Segments are selected by **overlap**, not containment — one straddling the
+window's start carries the words the player is about to highlight.
+
+**Requires:** `transcripts:read`, plus `view` access
+
+#### GET /transcripts/{id}/audio
+A short-lived signed GET for the audio: the small, seekable playback rendition
+when one is ready, the original upload otherwise. Six-hour TTL, because an
+`<audio>` element holds the URL for as long as somebody is listening and a
+three-hour recording outlives a one-hour URL halfway through.
+
+`kind` (`playback` | `original`) says which file was signed, so a client can
+decide whether to trust the browser to play it.
+
+**Requires:** `transcripts:read`, plus `view` access
+
+#### PATCH /transcripts/{id}
+Changes the title. **Not versioned**: a title is metadata about the recording,
+not content of it, so recording a rename as a version would put a no-op in the
+edit history that a later restore could "undo" into a name nobody chose.
+
+**Requires:** `transcripts:write`, plus `edit` access (owner or `editor` share)
+
+#### DELETE /transcripts/{id}
+Owner only. Moves the transcript to `deleting` and queues `transcript.purge`,
+which removes **every** managed storage object it ever owned — the original
+upload, the playback rendition, the gzipped raw provider result, every snapshot,
+every export — deletes the provider's own copy if it still holds one, and only
+then deletes the rows.
+
+`deleting` is a real, visible status rather than an immediate row delete because
+purging multi-gigabyte objects and calling a third party's delete endpoint is
+long-running work. **There is no path back.**
+
+**Requires:** `transcripts:write`, plus `own` access · **Response:** `204`
+
+#### POST /transcripts/{id}/retry
+Owner only. Re-runs the stage that failed — and **the stage is derived from the
+row, not chosen by the caller**: a transcript the provider already accepted is
+re-polled, and only one that never got a provider job is re-submitted. Letting
+a client name the stage would allow a second remote job, and a second bill, for
+one recording.
+
+The audio is not re-uploaded; it is still in storage. **409** when it is not, or
+when the transcript is already complete, still uploading, or being deleted.
+
+**Requires:** `transcripts:write`, plus `own` access
+
+#### POST /transcripts/{id}/cancel
+Owner only. Cancels the job on the provider when the provider supports
+cancellation, and marks the transcript `failed` / `cancelled` **either way** — a
+vendor that will not answer must not stop the owner from stopping waiting. A
+cancelled transcript can be retried, which re-submits rather than polling the
+abandoned remote job.
+
+**Requires:** `transcripts:write`, plus `own` access
+
+#### The pipeline behind these routes
+
+Completing the upload raises an event whose listener **only enqueues** — it
+never calls the provider inline, which would be a multi-minute network call with
+no job row, no timeout, no retry and no visibility in `GET /admin/jobs`. Seven
+job types carry the work; all of the ones that talk to the provider are
+**server-only**, because the provider API key is a long-lived, account-level
+secret no per-job broker can narrow.
+
+| Job type | Profile | What it does |
+|---|---|---|
+| `media.audio.transcode` | issue #26 | The small, seekable playback rendition |
+| `transcription.submit` | `2h / 3 attempts` | Presigns the input **when the job runs**, submits, records the provider handle immediately. Idempotent on that handle |
+| `transcription.poll` | `2m / 5 attempts` | Re-enqueues itself with `skipDedup: true`. First delay `clamp(duration × 0.05, 30s, 5m)`, then ×1.5 to a 5-minute cap. Hard deadline `submittedAt + max(6h, 3 × duration)` |
+| `transcription.ingest` | `15m / 3 attempts` | Writes speakers, segments, version 1 (`ai_original`) and `status: ready` in **one transaction**; stores the raw provider JSON gzipped for provenance; deletes the provider's copy |
+| `transcript.snapshot` | issue #27 | A point-in-time copy of a version's materialized state |
+| `transcript.purge` | deployment default | Everything a deleted transcript owned |
+| `transcripts.housekeeping` | deployment default | Restarts a lost poll chain, fails transcripts whose upload was cleaned up, expires exports. Enqueued by a ten-minute cron that only enqueues |
+
+**Domain failures do not spend a job attempt.** A bad API key, a file the
+provider rejects, or the provider's own terminal error all set `failureReason`
+and `status: failed`, and the **job returns normally** — it did its job
+correctly by recognising the outcome, and retrying would re-ask a question whose
+answer cannot change. A `429` throws `RateLimitError` and is deferred through
+one shared throttle bucket across submit, poll and ingest, because all three
+share one vendor account and one rate-limit budget; the transcript's own status
+does not change, so from the owner's point of view a rate limit is invisible
+backoff rather than a failure.
+
+Two notifications reach the **owner alone**, never a permission fan-out:
+`transcripts.transcript_ready` after ingest commits, and
+`transcripts.transcript_failed` carrying the reason and a link to the retry
+action. Neither is `mandatory` — being told your own upload finished is a
+courtesy a user who transcribes twenty files a day may reasonably mute.
+
+---
+
 ### Transcription
 
 Speech-to-text configuration — issue #23, epic #19. Two surfaces with two very
@@ -2997,9 +3268,12 @@ provider is chosen at all.
 not the delivery mode, and no part of the API key. A capability probe hands out
 the capability, not the configuration behind it.
 
-**Requires:** authentication only — no permission. (Issue #24 changes this to
-`transcripts:read` once that permission is seeded; the controller carries a
-`TODO(#24)` at that exact line.)
+**Requires:** `transcripts:read` — which is seeded to **all three roles**,
+Admin, Contributor and Viewer (`prisma/seed-data.ts`), so this stays readable
+by every ordinary account. That is the property the argument above depends on:
+naming a real permission rather than "authenticated and nothing else" costs
+nothing here precisely because the permission is universal, while
+`system_settings:read` is not.
 
 **Response:**
 ```json

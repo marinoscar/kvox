@@ -592,6 +592,31 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
 - `POST /api/admin/push-config/rotate` - Replace the key pair (body `{"confirmation":"ROTATE"}`; 400 if nothing configured yet) (`push:write`)
 - `DELETE /api/admin/push-config` - Delete both the credential and the settings row (body `{"confirmation":"REMOVE"}`) (`push:write`)
 
+### Transcripts
+Audio in, a diarized and timestamped transcript out (issue #25, epic #19).
+Gated on `transcripts:read`/`transcripts:write`, both seeded to **every** role
+including Viewer. Per-transcript access is the owner, plus whoever they shared
+it with (`viewer` reads, `editor` also edits); `edit` additionally requires
+`transcripts:write`, because a share caps the *ceiling* an RBAC permission can
+raise a user to and never the floor. **No access is a 404, never a 403** — a
+403 would confirm that a specific transcript id exists, and the existence of a
+private conversation's id is itself something a stranger has no business
+learning. There is deliberately no admin read-any. See
+[`docs/specs/transcription.md`](docs/specs/transcription.md) and the
+`### Transcripts` section of [`docs/API.md`](docs/API.md); don't restate them
+here.
+- `POST /api/transcripts` - Create the transcript **and** its resumable upload in one call (`transcripts:write`). 409 when transcription is not configured (the deployment is not ready — not the caller's fault), 400 over the active provider's size ceiling. The upload object is created `managed_by: 'transcripts'`, which a client cannot ask for
+- `GET /api/transcripts` - List, cursor-paginated over `(updatedAt, id)` — every pipeline transition rewrites `updatedAt`, so offset paging would skip and repeat rows (`transcripts:read`)
+- `GET /api/transcripts/summary` - Three lists and four counts for the home page, in one round trip (`transcripts:read`)
+- `GET /api/transcripts/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with **no body** on a match
+- `GET /api/transcripts/{id}/segments` - Compact, **no word timings** (the largest thing in this schema); same ETag
+- `GET /api/transcripts/{id}/words?fromMs&toMs` - Word timings for one window, selected by **overlap** not containment; capped at 30 minutes and silently narrowed rather than refused
+- `GET /api/transcripts/{id}/audio` - Signed URL, 6 h TTL: the rendition when ready, else the original
+- `PATCH /api/transcripts/{id}` - Rename. **Not versioned** — a title is metadata about the recording, not content of it
+- `DELETE /api/transcripts/{id}` - Owner only. Soft-deletes to `deleting` and queues `transcript.purge`; there is no path back
+- `POST /api/transcripts/{id}/retry` - Owner only. **The stage is derived from the row, not chosen by the caller** — a transcript the provider already accepted is re-polled, never re-submitted, so one recording never becomes two remote jobs
+- `POST /api/transcripts/{id}/cancel` - Owner only. Cancels on the provider when it can, and marks the transcript either way
+
 ### Transcription Settings (Admin-only)
 Speech-to-text provider configuration (issue #23, epic #19) — which vendor, its
 region and model, how audio reaches it, and what happens to it afterwards.
@@ -605,7 +630,7 @@ preserved by an empty submission.
 - `PUT /api/transcription-settings` - Partial update, plus an optional write-only `apiKey` (blank/absent keeps the stored key) (`system_settings:write`)
 - `POST /api/transcription-settings/test` - Probe a credential, **including one that has not been saved**; audited. ⚠ Answers **200** with `{ ok: false, detail }` on a refusal — a refused probe is a successful diagnosis (`system_settings:write`)
 - `DELETE /api/transcription-settings/credentials/{provider}` - Erase one provider's key; the only path that does. Does not change the settings, so a rotation is not an outage (`system_settings:write`)
-- `GET /api/transcription/config` - Narrow capability probe (`available`, provider label, size/duration ceilings, accepted types) readable by **any authenticated user**, exactly like `GET /api/notifications/config`. Becomes `transcripts:read` in issue #24
+- `GET /api/transcription/config` - Narrow capability probe (`available`, provider label, size/duration ceilings, accepted types) gated on `transcripts:read` (#25), which is seeded to **all three roles** — so it stays readable by every ordinary account, exactly like `GET /api/notifications/config`, while naming a real permission rather than "authenticated and nothing else"
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -1080,6 +1105,51 @@ with `maxAttempts: 1`, `deriveOutputKey` re-reading the backup's own run row,
 [`docs/specs/worker-nodes.md`](docs/specs/worker-nodes.md) for the full design
 — the claim's `FOR UPDATE SKIP LOCKED`, the lease, the data plane's presigned
 URLs, and the rejected alternatives.
+
+### The Transcript Pipeline
+
+Turning an uploaded recording into a saved transcript is issue #25 of epic #19,
+and it is **seven job types**, not one — because a provider takes minutes to
+hours and rule 1 says nothing that outlives its request may be a detached
+promise. The design (the three state machines, the provider contract, the
+access model, privacy) is
+[`docs/specs/transcription.md`](docs/specs/transcription.md); the endpoints are
+the `### Transcripts` group above and `docs/API.md`. Four things are worth
+having here because they are easy to break from a neighbouring file:
+
+1. **`transcription.poll` re-enqueues itself with `skipDedup: true`, and that is
+   required for correctness.** The job calling `enqueue()` is itself a `running`
+   `transcription.poll` row for the same subject, so it matches the active-dedup
+   key: without `skipDedup` the enqueue silently returns the row that is running
+   right now, with its `scheduledFor` unchanged, the computed backoff is
+   discarded, the current job finishes moments later with nothing scheduled, and
+   the transcript sits in `submitted` **forever with no error anywhere**. A
+   regression here has no other symptom. It lives in one place —
+   `TranscriptPipelineService.enqueuePoll` — and `transcript-pipeline.service
+   .spec.ts` pins it.
+2. **The three provider-facing types are server-only under rule 3, and the
+   reason is specific**: the provider API key is long-lived and account-level,
+   and unlike `db.backup.run`'s PostgreSQL role there is no vendor API for
+   minting a job-scoped sub-key, so there is nothing a `nodeSecretBroker` could
+   broker. `media.audio.transcode` (#26) is node-eligible; nothing else in the
+   pipeline is.
+3. **Domain failures do not spend a job attempt.** `ProviderAuthError`,
+   `ProviderInputError` and the provider's own terminal error set
+   `failure_reason` + `status: failed` and the job **returns normally** — it
+   succeeded at determining a permanent outcome, and retrying would re-ask a
+   question whose answer cannot change. A `429` throws `RateLimitError` and is
+   deferred through one shared `'transcription-provider'` throttle key across
+   submit, poll and ingest, because all three share one vendor account and one
+   rate-limit budget.
+4. **Two enqueues are guarded on the registry**, because `media.audio.transcode`
+   (#26) and `transcript.snapshot` (#27) are registered by later issues: without
+   the guard they would create `pending` rows no worker can ever claim, which sit
+   in the admin job list as a permanent backlog of one.
+
+Job types, all labelled in `job-type-labels.ts`: `media.audio.transcode`,
+`transcription.submit`, `transcription.poll`, `transcription.ingest`,
+`transcript.snapshot`, `transcript.purge`, `transcripts.housekeeping` — the last
+enqueued by a ten-minute `@Cron` that only enqueues, like every other one.
 
 ### Worker Node Fleet, Maintenance Mode
 
