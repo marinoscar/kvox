@@ -119,10 +119,20 @@ jobs:
         # it exists to do. Ubuntu-noble (this image) has bash, so naming it is
         # enough.
         shell: bash
+        working-directory: ${{ github.workspace }}
         run: |
           set -euo pipefail
-          git config user.name  'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # `--global` for both the trust entry and the identity, because a
+          # REPO-LOCAL `git config` needs a repository it is allowed to open,
+          # and inside this container it had neither: the checked-out tree is
+          # not owned by the user this step runs as, so the first
+          # `git config user.name` died with "fatal: not in a git directory"
+          # before any of the work below ran. Marking the workspace trusted
+          # first, and writing the identity somewhere that needs no repository
+          # at all, removes both halves of that.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global user.name  'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           # `git add -A` over the directory, not a `**` pathspec: git's default
           # pathspec matching is not glob-magic, so a `**` pattern here silently
           # matches nothing and the commit step becomes a no-op that looks like
