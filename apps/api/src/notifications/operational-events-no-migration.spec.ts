@@ -54,6 +54,11 @@ const MIGRATIONS_AT_288 = [
   // was sliced with, and the module that owns the object. Multi-GB resumable
   // uploads, and equally not about notifications.
   '20260914120000_add_storage_part_size_and_managed_by',
+  // #24 (epic #19): the six transcript tables (transcripts,
+  // transcript_speakers, transcript_segments, transcript_versions,
+  // transcript_shares, transcript_exports). A data model for audio
+  // transcription, and equally not about notifications.
+  '20260914130000_add_transcripts',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
