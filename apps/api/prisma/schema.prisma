@@ -26,23 +26,23 @@ model User {
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  identities             UserIdentity[]
-  userRoles              UserRole[]
-  userSettings           UserSettings?
-  auditEvents            AuditEvent[]            @relation("ActorEvents")
-  settingsUpdates        SystemSettings[]        @relation("SettingsUpdater")
-  refreshTokens          RefreshToken[]          @relation("UserRefreshTokens")
-  allowlistEntriesAdded  AllowedEmail[]          @relation("AllowlistAddedBy")
-  allowlistEntry         AllowedEmail?           @relation("AllowlistClaimedBy")
-  deviceCodes            DeviceCode[]            @relation("UserDeviceCodes")
-  storageObjects         StorageObject[]         @relation("UserStorageObjects")
-  personalAccessTokens   PersonalAccessToken[]   @relation("UserPersonalAccessTokens")
-  credentialUpdates      Credential[]            @relation("CredentialUpdatedBy")
-  notificationDeliveries NotificationDelivery[]  @relation("UserNotificationDeliveries")
-  notifications          Notification[]          @relation("UserNotifications")
-  pushSubscriptions      PushSubscription[]      @relation("UserPushSubscriptions")
-  workerNodes            WorkerNode[]            @relation("UserWorkerNodes")
-  nodeCredentials        NodeCredential[]        @relation("UserNodeCredentials")
+  identities                 UserIdentity[]
+  userRoles                  UserRole[]
+  userSettings               UserSettings?
+  auditEvents                AuditEvent[]            @relation("ActorEvents")
+  settingsUpdates            SystemSettings[]        @relation("SettingsUpdater")
+  refreshTokens              RefreshToken[]          @relation("UserRefreshTokens")
+  allowlistEntriesAdded      AllowedEmail[]          @relation("AllowlistAddedBy")
+  allowlistEntry             AllowedEmail?           @relation("AllowlistClaimedBy")
+  deviceCodes                DeviceCode[]            @relation("UserDeviceCodes")
+  storageObjects             StorageObject[]         @relation("UserStorageObjects")
+  personalAccessTokens       PersonalAccessToken[]   @relation("UserPersonalAccessTokens")
+  credentialUpdates          Credential[]            @relation("CredentialUpdatedBy")
+  notificationDeliveries     NotificationDelivery[]  @relation("UserNotificationDeliveries")
+  notifications              Notification[]          @relation("UserNotifications")
+  pushSubscriptions          PushSubscription[]      @relation("UserPushSubscriptions")
+  workerNodes                WorkerNode[]            @relation("UserWorkerNodes")
+  nodeCredentials            NodeCredential[]        @relation("UserNodeCredentials")
   // Two relations to ONE table, deliberately (#281, epic #254): a
   // `database_backup_runs` row records both "who asked for this backup" and,
   // once Phase 7 restores from it, "who restored it". They are different acts
@@ -50,9 +50,23 @@ model User {
   // columns and therefore different relation names. See the block comment
   // above `DatabaseBackupRun` for why the restore audit lives on the backup's
   // own row rather than in a second table.
-  databaseBackupRuns     DatabaseBackupRun[]     @relation("UserDatabaseBackupRuns")
-  databaseRestores       DatabaseBackupRun[]     @relation("UserDatabaseRestores")
-  broadcastsCreated      NotificationBroadcast[] @relation("BroadcastAuthor")
+  databaseBackupRuns         DatabaseBackupRun[]     @relation("UserDatabaseBackupRuns")
+  databaseRestores           DatabaseBackupRun[]     @relation("UserDatabaseRestores")
+  broadcastsCreated          NotificationBroadcast[] @relation("BroadcastAuthor")
+  // Transcripts (issue #24, epic #19). Six relations to the transcript
+  // tables, split by role for the same reason `databaseBackupRuns` /
+  // `databaseRestores` are two relations to one table above: "owns this
+  // transcript", "wrote this version", "last edited this segment", "was
+  // granted a share", "granted a share", and "asked for this export" are six
+  // different acts, not one. See the block comment above the `Transcript`
+  // model for the full reasoning behind every one of these relations'
+  // `onDelete` behaviour.
+  transcripts                Transcript[]            @relation("TranscriptOwner")
+  transcriptVersionsAuthored TranscriptVersion[]     @relation("TranscriptVersionAuthor")
+  transcriptSegmentEdits     TranscriptSegment[]     @relation("TranscriptSegmentEditor")
+  transcriptSharesReceived   TranscriptShare[]       @relation("TranscriptShareUser")
+  transcriptSharesGranted    TranscriptShare[]       @relation("TranscriptShareGrantedBy")
+  transcriptExportsRequested TranscriptExport[]      @relation("TranscriptExportRequestedBy")
 
   @@map("users")
 }
@@ -315,7 +329,7 @@ model StorageObject {
   // upload, fixed the moment the first part is signed.
   //
   // `Int`, not `BigInt`: S3 caps a part at 5 GiB, comfortably inside int4.
-  partSize        Int?                @map("part_size")
+  partSize Int? @map("part_size")
 
   // The module that owns this object, e.g. 'transcripts' (issue #21). NULL
   // means the object is a plain user upload owned by nobody but its uploader.
@@ -328,16 +342,30 @@ model StorageObject {
   // Plain `text`, no enum and no FK, for the same reason `jobs.subject_type`
   // is plain text: the set of owning modules is open, and a fork's modules
   // cannot be enumerated here.
-  managedBy       String?             @map("managed_by")
+  managedBy String? @map("managed_by")
 
-  metadata        Json? // JSONB for flexible metadata
-  uploadedById    String?             @map("uploaded_by_id") @db.Uuid
-  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+  metadata     Json? // JSONB for flexible metadata
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  uploadedBy User?                @relation("UserStorageObjects", fields: [uploadedById], references: [id], onDelete: SetNull)
-  chunks     StorageObjectChunk[]
+  uploadedBy                 User?                @relation("UserStorageObjects", fields: [uploadedById], references: [id], onDelete: SetNull)
+  chunks                     StorageObjectChunk[]
+  // Five back-relations from transcripts (issue #24, epic #19), one per
+  // `storage_objects` FK the transcript tables hold. Every one of those FKs
+  // is `onDelete: Restrict` — see the block comment above the `Transcript`
+  // model for why a managed object like these may only ever be removed by
+  // `transcript.purge` deleting the referencing row first, never by an
+  // unrelated storage cleanup deleting the object out from under it. List
+  // types, not optional singulars, because nothing here declares these FKs
+  // `@unique` — a future column reusing an existing object (unlikely, but
+  // not schema-prevented) would still be representable.
+  transcriptsAsSource        Transcript[]         @relation("TranscriptSourceObject")
+  transcriptsAsPlayback      Transcript[]         @relation("TranscriptPlaybackObject")
+  transcriptsAsRawResult     Transcript[]         @relation("TranscriptRawResultObject")
+  transcriptVersionSnapshots TranscriptVersion[]  @relation("TranscriptVersionSnapshotObject")
+  transcriptExportFiles      TranscriptExport[]   @relation("TranscriptExportObject")
 
   @@index([uploadedById])
   @@index([status])
@@ -1260,6 +1288,14 @@ model Job {
   // just the required other half of that one-to-one relation.
   backupRun DatabaseBackupRun?
 
+  // The `transcript_exports` row this job rendered, when `type` is
+  // `'transcript.export'` (issue #24, epic #19). Same one-to-one shape as
+  // `backupRun` immediately above, for the same reason: `TranscriptExport
+  // .jobId` is `@unique`/nullable/`SetNull` because export rows have their
+  // own 7-day retention (`transcripts.housekeeping`), independent of
+  // `job.history.purge`'s schedule for this row.
+  transcriptExport TranscriptExport?
+
   // See the block comment above ("Prisma-expressible indexes...") for why
   // these eight are declared here and three more exist only in
   // migration.sql.
@@ -2040,4 +2076,498 @@ model JobNodeSecret {
   @@unique([jobId, kind])
   @@index([expiresAt])
   @@map("job_node_secrets")
+}
+
+// =============================================================================
+// Transcripts (issue #24, epic #19) — docs/specs/transcription.md §3
+// =============================================================================
+//
+// Six tables, all keyed to one `transcripts` row per uploaded recording. This
+// issue adds only the schema — the upload/pipeline/editing/sharing/export
+// logic that reads and writes it all arrives in issues #25–#29. What is here
+// is deliberately complete on its own, mirroring the `jobs`/`worker_nodes`
+// precedent of "the schema ships whole, ahead of the code that will use it,
+// so nothing downstream needs a follow-up migration to these tables
+// themselves." Every column, enum member and index below is named for and
+// justified by docs/specs/transcription.md §1, §3, §4, §5, §6, §8 and §10 —
+// read those sections for the full reasoning; this comment restates only
+// what has to live beside the code to stay correct.
+//
+// -----------------------------------------------------------------------------
+// Three status enums, not one — restated from spec §1.4
+// -----------------------------------------------------------------------------
+// `transcripts.status` (`TranscriptStatus`) is what every list view and every
+// permission check reads. `transcriptionStatus` and `playbackStatus` are
+// detail fields for the pipeline stepper (issue #30): the transcode and the
+// transcription round trip run CONCURRENTLY, so a single top-level enum would
+// need one member per combination of the two sub-pipelines' states and would
+// still need a second field to say which failure belongs to which
+// sub-pipeline. This is the same design `worker_nodes` already uses for its
+// own health (`status` for stated intent, `lastHeartbeatAt` for computed
+// liveness): small, independently updatable pieces of state, not one field
+// pretending to be several.
+//
+// -----------------------------------------------------------------------------
+// owner_id CASCADES; source_object_id (and every other storage_objects FK
+// below) RESTRICTS — the same column shape, the opposite `onDelete`, because
+// they answer opposite ownership questions
+// -----------------------------------------------------------------------------
+// `owner_id` points UP the ownership chain: a `transcripts` row's only reason
+// to exist is that exactly one user owns it. This is the same "belongs
+// entirely to this user" shape `user_settings`, `refresh_tokens`,
+// `personal_access_tokens` and `device_codes` already use Cascade for — NOT
+// the audit/history shape `AuditEvent.actorUserId`, `Credential
+// .updatedByUserId` or `DatabaseBackupRun.createdById` use SetNull for. The
+// difference is what the row IS: an audit row is a record of an act someone
+// performed against shared infrastructure and must survive the actor's
+// deletion to keep meaning; a transcript is not a record OF anything, it IS
+// the private content itself, and this application's own access model (§6.1)
+// has no path to it once its owner is gone — there is deliberately no
+// `transcripts:read_any` (§6.2), so an owner-less transcript would be a row
+// nobody, including an admin, could ever read, share, edit or delete again.
+// Cascading it away when the account goes is the only outcome consistent
+// with "no read-any, ever."
+//
+// `source_object_id` / `playback_object_id` / `raw_result_object_id` (below)
+// and `transcript_versions.snapshot_object_id` / `transcript_exports
+// .object_id` all point SIDEWAYS, across a module boundary, into a DIFFERENT
+// feature's table (`storage_objects`, issue #21) that this feature does not
+// own. Restrict here protects the referenced object FROM this table's own
+// module boundary being crossed by someone else: a `storage_objects` row a
+// transcript still needs may never be deleted out from under it by the
+// generic storage endpoints or an unrelated cleanup sweep (the exact
+// `managed_by` discipline spec §9.3 already gives every managed object). The
+// only path that may ever remove one of these objects is `transcript.purge`
+// (spec §1.5.7, §10) deleting the referencing row FIRST — which a Restrict
+// FK permits freely, because Restrict blocks deleting the REFERENCED
+// `storage_objects` row while a reference exists, not deleting the
+// REFERENCING transcript row itself.
+//
+// ⚠ ONE CONSEQUENCE OF THAT PAIRING, STATED HONESTLY RATHER THAN PAPERED
+// OVER: `owner_id`'s Cascade fires at the Postgres level on a raw user
+// deletion and does not, and cannot, invoke `transcript.purge`'s storage and
+// provider cleanup — a cascading DELETE only removes SQL rows, and Restrict
+// on the sideways FKs means Postgres will not even attempt to touch the
+// `storage_objects` rows those columns pointed at (a Restrict's ON DELETE
+// action fires only when deleting the REFERENCED row, never when the
+// referencing row disappears by any means, cascade included). A user
+// deleted by a path other than the transcript's own `DELETE
+// /api/transcripts/:id` → `transcript.purge` route therefore leaves that
+// transcript's audio, rendition, raw result and export files as orphaned
+// `storage_objects` rows — reclaimable, but not reclaimed by this cascade.
+// This mirrors the same asymmetry already accepted for `WorkerNode
+// .createdBy`'s Cascade (deleting the SQL row is not the same act as
+// deleting the credential's real-world effects) and is exactly why spec §10
+// frames `transcript.purge` as the only complete-deletion path — a future
+// issue that adds account deletion as a first-class flow should route it
+// through that job rather than a bare `prisma.user.delete()`. This is a
+// decision made explicitly for issue #24, not an oversight; #25–#29 are the
+// right place to close it if account deletion becomes a real user-facing
+// flow.
+//
+// -----------------------------------------------------------------------------
+// speaker_id on transcript_segments — also Restrict, for a same-feature
+// reason rather than a cross-module one
+// -----------------------------------------------------------------------------
+// Unlike the storage FKs above, this Restrict is WITHIN the transcript
+// feature: a speaker may not be deleted while any segment still names it.
+// `speaker.merge` (spec §4.1) is the only op that ever deletes a speaker, and
+// it re-points every one of that speaker's segments to the merge target
+// FIRST, in the same transaction, before deleting the source speaker rows —
+// exactly the shape Restrict requires and enforces. A hypothetical direct
+// "delete this speaker" operation with segments still attached is therefore
+// unrepresentable at the database level, not merely disallowed by service
+// code that could have a bug.
+//
+// -----------------------------------------------------------------------------
+// Hand-written, Prisma-inexpressible constraints — INTENTIONAL SCHEMA DRIFT,
+// the same pattern `jobs_active_dedup_uniq_idx` / `database_backup_runs
+// _active_uniq_idx` already establish
+// -----------------------------------------------------------------------------
+// `transcript_speakers_transcript_id_label_key`, declared only in this
+// migration's `migration.sql`, not as a `@@unique` here: a provider-supplied
+// `label` (e.g. `"A"`) must be unique per transcript, but a user-created
+// speaker (`speaker.create`, spec §4.1) legitimately has none, and Prisma's
+// `@@index`/`@@unique` DSL has no syntax for the partial index's `WHERE
+// "label" IS NOT NULL` clause that scopes the constraint to labelled rows.
+// See that migration file's own header for the full accounting. Every OTHER
+// uniqueness constraint below (`transcript_versions` on `(transcriptId,
+// version)` and `(transcriptId, clientBatchId)`, `transcript_shares` on
+// `(transcriptId, userId)`) is fully expressible as a plain `@@unique` and is
+// declared that way — Postgres's standard "NULLS DISTINCT" behaviour already
+// gives `clientBatchId` exactly the semantics spec §5 wants (many versions
+// with a null `clientBatchId`, at most one per transcript for any given
+// non-null value) with no partial index required.
+// =============================================================================
+
+enum TranscriptStatus {
+  uploading
+  processing
+  ready
+  failed
+  deleting
+}
+
+enum TranscriptionStatus {
+  waiting_input
+  queued
+  submitting
+  submitted
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum PlaybackStatus {
+  pending
+  processing
+  ready
+  failed
+  not_needed
+}
+
+model Transcript {
+  id String @id @default(uuid()) @db.Uuid
+
+  ownerId  String  @map("owner_id") @db.Uuid
+  title    String
+  language String?
+
+  status              TranscriptStatus    @default(uploading)
+  transcriptionStatus TranscriptionStatus @default(waiting_input) @map("transcription_status")
+  playbackStatus      PlaybackStatus      @default(pending) @map("playback_status")
+
+  // The storage triple. See the block comment above for why every one of
+  // these three is `onDelete: Restrict`, and why that is the opposite choice
+  // from `ownerId` just above despite the same `String @db.Uuid` shape.
+  sourceObjectId    String  @map("source_object_id") @db.Uuid
+  playbackObjectId  String? @map("playback_object_id") @db.Uuid
+  rawResultObjectId String? @map("raw_result_object_id") @db.Uuid
+
+  // Which `TranscriptionProvider` (spec §2.1) this transcript was submitted
+  // to, and that provider's own job id once submitted. Plain strings, not an
+  // enum/FK — the provider registry is code-owned and open (a future
+  // provider is one new class, per spec §2.1), the same reasoning `Job.type`
+  // and `storage_objects.managed_by` already use for an open, code-owned set.
+  provider        String
+  providerJobId   String? @map("provider_job_id")
+  // `{ speakersExpected?, language? }` (spec §2.1/§3.1) — the per-transcript
+  // overrides a submitter chose, opaque JSONB for the same reason every
+  // other provider-shaped payload in this schema (`Job.payload`) is: a
+  // provider-specific option set must not force a migration per provider.
+  providerOptions Json?   @map("provider_options") @db.JsonB
+
+  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz
+  lastPolledAt    DateTime? @map("last_polled_at") @db.Timestamptz
+  completedAt     DateTime? @map("completed_at") @db.Timestamptz
+  // Set once `provider.deleteRemote` succeeds (spec §1.5.2–4, §10) — either
+  // right after `transcription.ingest` commits (the default,
+  // `deleteRemoteAfterIngest: true`) or by `transcript.purge` if it had not
+  // happened yet. NULL means the provider may still hold a copy.
+  remoteDeletedAt DateTime? @map("remote_deleted_at") @db.Timestamptz
+  // Set when `DELETE /api/transcripts/:id` moves this row to `deleting`
+  // (spec §1.1) — i.e. WHEN REMOVAL WAS REQUESTED, not when it finished:
+  // spec §10 is explicit that `transcript.purge` deletes the SQL row once it
+  // is done ("only then deletes the SQL rows"), and the `TranscriptStatus`
+  // enum has no terminal `deleted` member for a finished purge to move to.
+  // This column therefore answers "how long has this been in `deleting`" —
+  // the same question `database_backup_runs.lastHeartbeatAt` answers for a
+  // running dump — for as long as the row exists to ask it of; it never
+  // survives to describe a completed deletion, because nothing does.
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  durationMs     Int?    @map("duration_ms")
+  failureReason  String? @map("failure_reason")
+  // Bumped by the SAME conditional `UPDATE ... WHERE current_version = $n`
+  // spec §5 describes for the batch-save race — 0 until `transcription
+  // .ingest` writes version 1 inside its own transaction (spec §1.5.4).
+  currentVersion Int     @default(0) @map("current_version")
+  // Denormalized off `transcript_speakers`/`transcript_segments` so a list
+  // view never joins and counts on every row, matching the "cheap to read
+  // often, recomputed by the one write path that changes the true count"
+  // shape `worker_nodes` and `job_stats_rollup` already use for their own
+  // derived numbers elsewhere in this schema.
+  speakerCount   Int     @default(0) @map("speaker_count")
+  wordCount      Int     @default(0) @map("word_count")
+
+  owner           User           @relation("TranscriptOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  sourceObject    StorageObject  @relation("TranscriptSourceObject", fields: [sourceObjectId], references: [id], onDelete: Restrict)
+  playbackObject  StorageObject? @relation("TranscriptPlaybackObject", fields: [playbackObjectId], references: [id], onDelete: Restrict)
+  rawResultObject StorageObject? @relation("TranscriptRawResultObject", fields: [rawResultObjectId], references: [id], onDelete: Restrict)
+
+  speakers TranscriptSpeaker[]
+  segments TranscriptSegment[]
+  versions TranscriptVersion[]
+  shares   TranscriptShare[]
+  exports  TranscriptExport[]
+
+  // "This owner's transcripts, newest first" — the transcript list view.
+  @@index([ownerId, updatedAt(sort: Desc)])
+  // "Every transcript in state X" — `transcripts.housekeeping`'s scans
+  // (spec §1.5.8) and any future admin-adjacent health check.
+  @@index([status])
+  @@map("transcripts")
+}
+
+model TranscriptSpeaker {
+  id           String @id @default(uuid()) @db.Uuid
+  transcriptId String @map("transcript_id") @db.Uuid
+
+  // The provider's own diarization label (e.g. `"A"`). NULL for a speaker a
+  // user created directly (`speaker.create`, spec §4.1), which has none.
+  // Unique per transcript AMONG LABELLED ROWS ONLY — see the block comment
+  // above the enums for why that constraint is hand-written in
+  // `migration.sql` rather than a `@@unique` here.
+  label       String?
+  displayName String  @map("display_name")
+  colorIndex  Int     @map("color_index")
+  // Optimistic-concurrency counter (spec §5). Starts at 1 — the row's first
+  // write (ingest, or `speaker.create`) is already its first version.
+  rev         Int     @default(1)
+
+  transcript Transcript          @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  segments   TranscriptSegment[]
+
+  @@map("transcript_speakers")
+}
+
+enum WordsAlignment {
+  exact
+  interpolated
+  none
+}
+
+enum SegmentOrigin {
+  ai
+  user
+}
+
+model TranscriptSegment {
+  // STABLE ACROSS EDITS (spec §3.5, §4.1's `segment.split` test vector): a
+  // split keeps this id on the earlier half specifically so a bookmark, an
+  // export reference, or a concurrent editor's stale `rev` for this segment
+  // still names something real.
+  id           String @id @default(uuid()) @db.Uuid
+  transcriptId String @map("transcript_id") @db.Uuid
+  // Restrict, not Cascade or SetNull — see the block comment above the
+  // enums: a speaker may not be deleted while a segment still names it;
+  // `speaker.merge` re-points every segment away first.
+  speakerId    String @map("speaker_id") @db.Uuid
+
+  startMs Int   @map("start_ms")
+  endMs   Int   @map("end_ms")
+  // Gap-based float, NOT a dense integer sequence (spec §3.4): a
+  // `segment.split` only needs the midpoint between its two neighbours and
+  // touches no other row, versus an integer sequence that would need to
+  // renumber every later segment on every single split.
+  ordinal Float
+
+  text           String
+  // `[{t, s, e, c}]` — text, start, end, confidence per word (spec §3.3),
+  // kept terse because a 10-hour transcript's word array is the single
+  // largest thing in this schema. Opaque JSONB, not a child table: word rows
+  // are never queried or updated independently of their segment.
+  words          Json           @db.JsonB
+  // How much of `words[]` to trust after an edit (spec §3.5). `exact` is the
+  // default because a freshly ingested (`ai_original`) segment, and either
+  // half of a `segment.split`/`segment.join`, are always exact — nothing
+  // about dividing or concatenating an existing array invents a timing.
+  wordsAlignment WordsAlignment @default(exact) @map("words_alignment")
+  confidence     Float?
+
+  // Whether this segment's TEXT originated from the provider or was created
+  // by a person. Defaults `ai` because every segment `transcription.ingest`
+  // writes is exactly that; nothing in spec §4.1's op table currently
+  // creates a segment from nothing (only `speaker.create` has a from-nothing
+  // shape), so `user` exists for a future op without one today.
+  origin     SegmentOrigin @default(ai)
+  // Optimistic-concurrency counter (spec §5), same starting value and same
+  // reasoning as `TranscriptSpeaker.rev` above.
+  rev        Int           @default(1)
+  editedById String?       @map("edited_by_id") @db.Uuid
+  editedAt   DateTime?     @map("edited_at") @db.Timestamptz
+
+  transcript Transcript        @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  speaker    TranscriptSpeaker @relation(fields: [speakerId], references: [id], onDelete: Restrict)
+  // SetNull, matching `AuditEvent.actorUserId`/`Credential.updatedByUserId`:
+  // "who last hand-edited this line" is an audit fact about the segment, not
+  // something the segment's own existence depends on.
+  editedBy   User?             @relation("TranscriptSegmentEditor", fields: [editedById], references: [id], onDelete: SetNull)
+
+  // The compound order both a segment list and a time-window query
+  // (`GET /:id/words?fromMs&toMs`) need (spec §3.3).
+  @@index([transcriptId, startMs, ordinal])
+  @@map("transcript_segments")
+}
+
+enum TranscriptVersionKind {
+  ai_original
+  edit
+  restore
+}
+
+model TranscriptVersion {
+  id           String                @id @default(uuid()) @db.Uuid
+  transcriptId String                @map("transcript_id") @db.Uuid
+  version      Int
+  kind         TranscriptVersionKind
+
+  // NULL means "the AI" — the ingest handler is the only writer that ever
+  // leaves this null (spec §4.5); every human-triggered version (`edit`,
+  // `restore`) always has a real author. SetNull, not Restrict/Cascade: a
+  // version is permanent history (spec §4.5 — "nothing in this design ever
+  // deletes a `transcript_versions` row"; only `transcript.purge` deleting
+  // the whole transcript does) and must survive the author's own account
+  // being deleted, the same audit posture as `DatabaseBackupRun.createdById`.
+  authorId String? @map("author_id") @db.Uuid
+  summary  String?
+  // The concrete ops this version applied (spec §4.1) — e.g. the expanded
+  // `segment.update_text` ops a `transcript.find_replace` call becomes
+  // (spec §4.2), NEVER the abstract find/replace call itself, so replaying
+  // history stays correct even if this application's matching logic changes
+  // later.
+  ops      Json    @db.JsonB
+
+  // The version number this row restored FROM, when `kind: restore` (spec
+  // §4.5). A plain version number, not a self-relation FK: it names another
+  // row's `(transcriptId, version)` pair, which is not a column any FK can
+  // point at directly, and a restore's target version is immutable history
+  // that is never itself deleted (short of purging the whole transcript).
+  restoredFromVersion Int?    @map("restored_from_version")
+  // The gzipped materialized state at this version, when this version was
+  // snapshotted (spec §4.3 — always for v1 and every restore, otherwise on a
+  // size-or-count trigger). NULL for a version materialized purely by
+  // replaying `ops` from the nearest earlier snapshot.
+  snapshotObjectId    String? @map("snapshot_object_id") @db.Uuid
+  // Idempotency key for a retried save (spec §5): a client that saved but
+  // never saw the response retries with the SAME `clientBatchId`, and
+  // `@@unique([transcriptId, clientBatchId])` below is what lets the write
+  // path detect the retry and return the original version instead of
+  // creating a second one. NULL for a version this application created
+  // itself (ingest, restore) rather than in response to a client batch —
+  // Postgres's standard NULLS-DISTINCT behaviour is exactly what is wanted
+  // there: any number of null-`clientBatchId` versions may coexist.
+  clientBatchId       String? @map("client_batch_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  transcript     Transcript     @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  author         User?          @relation("TranscriptVersionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  // Restrict, matching every other storage_objects FK on this feature — see
+  // the block comment above the enums.
+  snapshotObject StorageObject? @relation("TranscriptVersionSnapshotObject", fields: [snapshotObjectId], references: [id], onDelete: Restrict)
+
+  // The version sequence itself, and what `materialize()` (spec §4.4) looks
+  // up by.
+  @@unique([transcriptId, version])
+  // The idempotent-retry key described above. Plain `@@unique`, not a
+  // hand-written partial index: Postgres's default NULLS DISTINCT behaviour
+  // already gives exactly the wanted semantics for a nullable column, unlike
+  // `transcript_speakers`' label uniqueness above.
+  @@unique([transcriptId, clientBatchId])
+  @@map("transcript_versions")
+}
+
+enum TranscriptShareRole {
+  viewer
+  editor
+}
+
+model TranscriptShare {
+  id           String              @id @default(uuid()) @db.Uuid
+  transcriptId String              @map("transcript_id") @db.Uuid
+  userId       String              @map("user_id") @db.Uuid
+  // No default — matching `DatabaseBackupTrigger`'s own "a run with no known
+  // origin is a run nobody can attribute" reasoning: every share is granted
+  // with an explicit role, on purpose, every time.
+  role         TranscriptShareRole
+  grantedById  String              @map("granted_by_id") @db.Uuid
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
+
+  transcript Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  // Cascade: a share row has no meaning once either party to it is gone —
+  // the recipient can no longer be granted access, and (today) the granter
+  // is always the owner, whose own deletion already cascades the transcript
+  // and therefore this row via `transcriptId` above regardless.
+  user       User       @relation("TranscriptShareUser", fields: [userId], references: [id], onDelete: Cascade)
+  grantedBy  User       @relation("TranscriptShareGrantedBy", fields: [grantedById], references: [id], onDelete: Cascade)
+
+  // `POST /api/transcripts/:id/shares` (spec §6.3) upserts on this pair —
+  // one role per (transcript, user), never two competing rows.
+  @@unique([transcriptId, userId])
+  @@map("transcript_shares")
+}
+
+enum TranscriptExportStatus {
+  pending
+  ready
+  failed
+}
+
+model TranscriptExport {
+  id           String @id @default(uuid()) @db.Uuid
+  transcriptId String @map("transcript_id") @db.Uuid
+  version      Int
+
+  // The exporter's own registry key (`markdown`, `pdf`, `kvox.transcript.v1`,
+  // …). Plain string, not an enum, for the same self-registering-registry
+  // reason `Job.type` is: adding an exporter (spec §8.1 — "one new class
+  // registering itself") must cost zero migrations to this table.
+  format      String
+  // The requester's export options, as passed to the exporter's own
+  // `optionsSchema` (spec §8.1) — opaque JSONB, since the option shape is
+  // defined by the exporter, not by this table.
+  options     Json                   @db.JsonB
+  // sha256 (or similar) of `{ format, version, options }` (spec §8.5) — the
+  // content-addressed key `POST /:id/exports` looks up to decide whether an
+  // existing, unexpired export can be returned instead of rendering again.
+  optionsHash String                 @map("options_hash")
+  status      TranscriptExportStatus @default(pending)
+
+  // The rendered file, once `status: ready`. Restrict, matching every other
+  // storage_objects FK on this feature (block comment above the enums) —
+  // only `transcripts.housekeeping`'s expiry sweep (spec §8.5) may remove
+  // it, and only after deleting this row first.
+  objectId      String? @map("object_id") @db.Uuid
+  // The `transcript.export` job that rendered this row, when one did (spec
+  // §1.5.6). `@unique`/SetNull, mirroring `DatabaseBackupRun.jobId` exactly:
+  // a second render for the SAME job is unrepresentable, this row's own
+  // 7-day retention is independent of `job.history.purge`'s schedule for the
+  // underlying `jobs` row, and losing the link on a history purge must never
+  // mean losing the export.
+  jobId         String? @unique @map("job_id") @db.Uuid
+  // Who asked for this export. NOT NULL and Cascade — unlike every SetNull
+  // audit column elsewhere in this schema, an export is a disposable,
+  // byte-for-byte reproducible artifact with a 7-day expiry already built in
+  // (spec §8.5): nothing is lost by deleting a pending/ready export row
+  // alongside the account that requested it, the same way nothing is lost
+  // by `transcripts.housekeeping` expiring it on its own schedule.
+  requestedById String  @map("requested_by_id") @db.Uuid
+
+  error     String?
+  // 7 days out from creation by default (spec §8.5) — what
+  // `transcripts.housekeeping`'s sweep compares against.
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  transcript  Transcript     @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  object      StorageObject? @relation("TranscriptExportObject", fields: [objectId], references: [id], onDelete: Restrict)
+  job         Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  requestedBy User           @relation("TranscriptExportRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  // The reuse-by-content-hash lookup spec §8.5 names explicitly ("the index
+  // issue #24 declares for exactly this lookup"). Not unique: an expired or
+  // failed row may briefly coexist with a fresh one sharing the same key
+  // before housekeeping removes the stale one.
+  //
+  // `map:` pins an explicit name: Prisma's own default-generated name for
+  // this four-column index is 64 bytes, one over PostgreSQL's 63-byte
+  // identifier limit, which would otherwise leave the exact truncated name
+  // to guess at in the hand-written migration.sql this issue ships without a
+  // live database to diff against.
+  @@index([transcriptId, version, format, optionsHash], map: "transcript_exports_lookup_idx")
+  @@map("transcript_exports")
 }
