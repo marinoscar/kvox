@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 
 import { server } from '../mocks/server';
@@ -181,50 +181,58 @@ describe('getNoteDocumentExtraction — total over the metadata bag', () => {
 
 describe('uploadNoteSourceDocument', () => {
   it('sends multipart with a single "file" part, as the controller requires', async () => {
-    let receivedField: string | null = null;
-    let receivedBytes: string | null = null;
-    let receivedFieldCount = 0;
-
-    server.use(
-      http.post(`${API_BASE}/notes/sources/documents`, async ({ request }) => {
-        const form = await request.formData();
-        receivedFieldCount = [...form.keys()].length;
-        const entry = form.get('file');
-        receivedField = entry === null ? null : 'file';
-        // NOT a string — i.e. a file part rather than a text field. The
-        // filename and the bytes are deliberately not asserted: jsdom's `File`
-        // does not survive msw's multipart round trip with either intact, which
-        // is an artefact of the test transport rather than anything this client
-        // controls. What this client IS responsible for is the shape the
-        // controller reads — one part, named `file`, carrying a file — and that
-        // is what is asserted.
-        receivedBytes = entry !== null && typeof entry !== 'string' ? 'file-part' : null;
-        return HttpResponse.json(
-          {
-            data: {
-              objectId: 'obj-1',
-              filename: 'brief.pdf',
-              mimeType: 'application/pdf',
-              size: 5,
-              jobId: 'job-1',
-              status: 'extracting',
-            },
+    // ⚠ ASSERTED AGAINST THE `FormData` THIS CLIENT HANDS TO `fetch`, not
+    // against a multipart body parsed back out of the request.
+    //
+    // The earlier version called `request.formData()` inside an msw handler,
+    // which routes the body through whatever multipart parser the running
+    // Node's undici ships. That parser rejects jsdom's `File` outright on
+    // Node 24 (`assert(... webidl.is.File(value))`) while accepting it on
+    // Node 22 — so the test passed locally and failed in CI, reporting a 500
+    // from a client that had done nothing wrong. The round trip was never the
+    // thing under test: what this client is responsible for is the shape the
+    // controller reads — exactly one part, named `file`, carrying the file
+    // itself — and that is what the request body already is before it is
+    // serialized.
+    const file = new File(['hello'], 'brief.pdf', { type: 'application/pdf' });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            objectId: 'obj-1',
+            filename: 'brief.pdf',
+            mimeType: 'application/pdf',
+            size: 5,
+            jobId: 'job-1',
+            status: 'extracting',
           },
-          { status: 201 },
-        );
-      }),
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
     );
 
-    const result = await uploadNoteSourceDocument(
-      new File(['hello'], 'brief.pdf', { type: 'application/pdf' }),
-    );
+    try {
+      const result = await uploadNoteSourceDocument(file);
 
-    expect(receivedField).toBe('file');
-    expect(receivedBytes).toBe('file-part');
-    // ⚠ EXACTLY ONE PART. The controller reads a single `file` part and refuses
-    // anything else, and a second field would be a 400 nobody could diagnose.
-    expect(receivedFieldCount).toBe(1);
-    expect(result.objectId).toBe('obj-1');
-    expect(result.status).toBe('extracting');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(String(url)).toContain('/notes/sources/documents');
+      expect(init.method).toBe('POST');
+
+      const body = init.body as FormData;
+      expect(body).toBeInstanceOf(FormData);
+      // EXACTLY ONE PART. The controller reads a single `file` part and
+      // refuses anything else; a second field would be a 400 nobody could
+      // diagnose from the UI.
+      expect([...body.keys()]).toEqual(['file']);
+      // The part carries the file itself, not a stringified stand-in — and
+      // here, unlike through a multipart round trip, the name survives.
+      expect(body.get('file')).toBe(file);
+
+      expect(result.objectId).toBe('obj-1');
+      expect(result.status).toBe('extracting');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
