@@ -18,6 +18,12 @@ import {
 import { NoteGenerationRequestService } from './generation/note-generation-request.service';
 import { NoteGenerationService } from './generation/note-generation.service';
 import { NoteSourceService } from './generation/note-source.service';
+import { MarkdownNoteExporter } from './export/markdown.exporter';
+import { NoteExportService } from './export/note-export.service';
+import { NoteExporterRegistry } from './export/note-exporter.registry';
+import { PdfNoteExporter } from './export/pdf.exporter';
+import { WordNoteExporter } from './export/word.exporter';
+import { NoteExportHandler } from './handlers/note-export.handler';
 import { NoteGenerateHandler } from './handlers/note-generate.handler';
 import { NotePurgeHandler } from './handlers/note-purge.handler';
 import { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler';
@@ -37,8 +43,8 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 // NotesModule (issue #49, epic #45)
 // =============================================================================
 //
-// The generation pipeline (#49) and document sources (#51): #53 adds the note
-// controllers, #54 the exporters. This module exists as soon as there is a
+// The generation pipeline (#49), document sources (#51), the note controllers
+// (#53) and export (#54). This module exists as soon as there is a
 // handler to register, because a handler that no module provides is a class
 // Nest never instantiates — and `onModuleInit` is where every handler in this
 // codebase registers itself.
@@ -65,7 +71,10 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 //     the settings service and never off `system_settings` directly, the same
 //     discipline `AiSettingsService` states for itself.
 //   • `TranscriptsModule` — `TranscriptMaterializeService` and the Markdown
-//     exporter. ⚠ THIS IMPORT IS THE POINT OF THE EPIC: a note is generated
+//     exporter. ⚠ NOT for note export: `notes/export/` has its own three
+//     exporters over the GENERIC registry (`apps/api/src/export/`), which is
+//     what `docs/specs/notes.md` §8.1 means by "extracted, not
+//     re-implemented" — one registry class, two document types. ⚠ THIS IMPORT IS THE POINT OF THE EPIC: a note is generated
 //     from the transcript AS THE USER CORRECTED IT, which means going through
 //     the transcript module's own materialization rather than reading its
 //     tables sideways. See `NoteSourceService`'s header.
@@ -127,6 +136,20 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     NoteTemplateAccessService,
     NoteTemplatesService,
     NoteTemplatePreviewService,
+    // Export (#54). The registry, its three self-registering exporters, the
+    // service the three routes call, and the `note.export` handler.
+    //
+    // ⚠ EACH EXPORTER IS A PROVIDER IN ITS OWN RIGHT, which is the whole
+    // mechanism: `onModuleInit` is where an exporter registers itself, and a
+    // class Nest never instantiates never registers. Adding a fourth format is
+    // one new class and one line here — nothing in the controller, the handler
+    // or `apps/web` branches on a format string.
+    NoteExporterRegistry,
+    MarkdownNoteExporter,
+    PdfNoteExporter,
+    WordNoteExporter,
+    NoteExportService,
+    NoteExportHandler,
     // The generation stream (#52). `NoteGenerationStreamService` only ever
     // READS — the stream is a view over `note_generations.content`, never a
     // second source of truth, and the note completes identically with nobody

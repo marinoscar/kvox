@@ -64,11 +64,16 @@
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { Writable } from 'node:stream';
 import PDFDocument from 'pdfkit';
 import { APP_NAME } from '@app/shared';
+
+import {
+  FONT_DIR,
+  PDF_FONTS,
+  assertFontsPresent,
+  registerExportFonts,
+} from '../../export/pdf-fonts';
 
 import {
   formatDuration,
@@ -87,27 +92,18 @@ import {
   type TranscriptExporter,
 } from './transcript-exporter.interface';
 
-/** Where the three committed faces live. See the header for the path rule. */
-export const FONT_DIR = resolve(__dirname, '../../../assets/fonts');
-
 /**
- * pdfkit font aliases, so no call site repeats a filename.
+ * ⚠ THE FACES MOVED TO `apps/api/src/export/pdf-fonts.ts` (issue #54).
  *
- * Product-neutral on purpose: these are internal handles pdfkit resolves
- * `doc.font(...)` against, never anything a reader sees, and a rebrand must not
- * have to touch them (`apps/cli/src/template-identity.test.ts` enforces that).
+ * Re-exported here rather than relocated silently, because `FONT_DIR`,
+ * `PDF_FONTS` and `assertFontsPresent` are this module's published surface —
+ * `pdf.exporter.spec.ts` and `test/transcripts/transcript-export-assets.spec.ts`
+ * both import them, and the point of the extraction was that note PDFs use the
+ * SAME THREE FILES (`docs/specs/notes.md` §8.3), not that transcript export
+ * changed. Nothing about the bundled-fonts contract is different; see that
+ * file's header for it in full.
  */
-export const PDF_FONTS = {
-  body: 'transcript-body',
-  bold: 'transcript-bold',
-  mono: 'transcript-mono',
-} as const;
-
-const FONT_FILES: Record<string, string> = {
-  [PDF_FONTS.body]: 'NotoSans-Regular.ttf',
-  [PDF_FONTS.bold]: 'NotoSans-Bold.ttf',
-  [PDF_FONTS.mono]: 'NotoSansMono-Regular.ttf',
-};
+export { FONT_DIR, PDF_FONTS, assertFontsPresent };
 
 /** Page geometry, in PDF points (72 per inch). */
 const MARGIN = 56;
@@ -177,9 +173,7 @@ export class PdfTranscriptExporter implements TranscriptExporter, OnModuleInit {
       },
     });
 
-    for (const [alias, file] of Object.entries(FONT_FILES)) {
-      pdf.registerFont(alias, resolve(FONT_DIR, file));
-    }
+    registerExportFonts(pdf);
 
     // The promise settles on the DESTINATION's `finish`, not on the document's
     // `end`: the exporter contract promises every byte has been handed on, and
@@ -389,19 +383,6 @@ export function decoratePages(pdf: Pdf, doc: ExportDocument): void {
  */
 export function exportFooterText(page: number, total: number, version: number): string {
   return `Page ${page} of ${total} · Version ${version} · Exported from ${APP_NAME}`;
-}
-
-/** Fail with a sentence an operator can act on, not with ENOENT from fontkit. */
-export function assertFontsPresent(): void {
-  const missing = Object.values(FONT_FILES).filter((file) => !existsSync(resolve(FONT_DIR, file)));
-
-  if (missing.length > 0) {
-    throw new Error(
-      `The PDF exporter's bundled fonts are missing from ${FONT_DIR}: ${missing.join(', ')}. ` +
-        'They are committed under apps/api/assets/fonts and the production image copies that ' +
-        'directory; an image built without that COPY cannot export PDFs.',
-    );
-  }
 }
 
 /** Start a new page when there is not enough room left for a whole turn. */
