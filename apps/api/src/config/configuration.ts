@@ -272,11 +272,32 @@ export default () => {
       endpoint: process.env.S3_ENDPOINT || undefined,
     },
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '10737418240', 10), // 10GB default
+    // `audio/*` joined the default list in #21. It was the one obvious media
+    // family missing, and an audio upload is exactly the workload the rest of
+    // that issue exists for — a multi-GB recording resumed over a phone
+    // connection. Adding it to the DEFAULT rather than expecting every
+    // deployment to override ALLOWED_MIME_TYPES keeps a fork that never
+    // touches the variable from rejecting the files it was forked to handle.
+    //
+    // ⚠ THIS LIST IS NOW ENFORCED. Until #21 neither this nor `maxFileSize`
+    // was read anywhere, so widening or narrowing it had no effect at all;
+    // `ObjectsService.initUpload` reads both.
     allowedMimeTypes: (
-      process.env.ALLOWED_MIME_TYPES || 'image/*,application/pdf,video/*'
+      process.env.ALLOWED_MIME_TYPES || 'image/*,application/pdf,video/*,audio/*'
     ).split(','),
     signedUrlExpiry: parseInt(process.env.SIGNED_URL_EXPIRY || '3600', 10), // 1 hour default
     partSize: parseInt(process.env.STORAGE_PART_SIZE || '10485760', 10), // 10MB default
+    // How long an unfinished upload is left alone before the stale-upload
+    // sweep aborts and deletes it, measured from `updated_at` (#21).
+    //
+    // 72 HOURS, up from a hard-coded 24, and the change of BASELINE matters
+    // more than the number: the sweep used to measure from `created_at`, so a
+    // multi-GB upload that a phone had been actively resuming for a day was
+    // destroyed on its first night regardless of the progress it had made.
+    // Measured from `updated_at` — which every presign, status poll and part
+    // batch refreshes — 72 hours means "nobody has touched this for three
+    // days", which is a genuinely abandoned upload.
+    staleUploadHours: parseInt(process.env.STORAGE_STALE_UPLOAD_HOURS || '72', 10),
   },
 
   // Email transports (issue #122, epic #109)
