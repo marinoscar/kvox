@@ -91,6 +91,61 @@ describe('AiProviderRegistry', () => {
     ).toThrow(/no models/i);
   });
 
+  it('refuses a provider that advertises modelDiscovery but implements no listModels (#78)', () => {
+    // Mirrors `TranscriptionProviderRegistry`'s identical check for
+    // `capabilities.cancel`: an advertised capability with no method is a
+    // TypeError in the path least likely to have been exercised — here, an
+    // administrator pressing "load models from the provider" on a settings
+    // page opened once a quarter.
+    expect(() =>
+      registry.register(
+        stubProvider({
+          capabilities: {
+            models: [
+              {
+                id: 'stub-1',
+                label: 'Stub 1',
+                contextWindowTokens: 8000,
+                maxOutputTokens: 2000,
+              },
+            ],
+            streaming: true,
+            modelDiscovery: true,
+          },
+          // No `listModels` — the default stub does not implement one.
+        }),
+      ),
+    ).toThrow(/declares capabilities.modelDiscovery but implements no listModels/);
+  });
+
+  it('accepts a provider that advertises modelDiscovery AND implements listModels', () => {
+    expect(() =>
+      registry.register(
+        stubProvider({
+          capabilities: {
+            models: [
+              {
+                id: 'stub-1',
+                label: 'Stub 1',
+                contextWindowTokens: 8000,
+                maxOutputTokens: 2000,
+              },
+            ],
+            streaming: true,
+            modelDiscovery: true,
+          },
+          listModels: async () => [],
+        }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('accepts a provider that declares modelDiscovery: false with no listModels', () => {
+    // The default `stubProvider()` shape — registers fine, matching every test
+    // above it in this file.
+    expect(() => registry.register(stubProvider())).not.toThrow();
+  });
+
   it('lets a later registration shadow an earlier one, with a warning', () => {
     const first = stubProvider();
     const second = stubProvider({ label: 'Forked Stub' });

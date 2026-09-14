@@ -47,6 +47,12 @@ function fixture(name: string): string {
   return readFileSync(join(FIXTURES, `${name}.txt`), 'utf8');
 }
 
+/**
+ * The recorded `GET /models` envelope (#78) — real vendor shape, including the
+ * duplicate `gpt-4o` row and every non-chat model family the filter must drop.
+ */
+const MODEL_LIST_JSON = readFileSync(join(FIXTURES, 'model-list.json'), 'utf8');
+
 /** A body that hands the whole fixture over in one chunk. */
 async function* oneChunk(text: string): AsyncGenerator<Uint8Array> {
   yield new TextEncoder().encode(text);
@@ -91,6 +97,17 @@ function errorResponse(
     headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
     text: async () => body,
     json: async () => JSON.parse(body) as unknown,
+  };
+}
+
+/** A successful `GET /models` response carrying the given JSON body text. */
+function modelListResponse(bodyJson: string): FetchLikeResponse {
+  return {
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    text: async () => bodyJson,
+    json: async () => JSON.parse(bodyJson) as unknown,
   };
 }
 
@@ -478,6 +495,117 @@ describe('OpenAiProvider.testConnection', () => {
     // `detail` is rendered straight into a settings page.
     expect(result.ok).toBe(false);
     expect(result.detail).toContain('sk-test-DO-NOT-LOG');
+  });
+});
+
+describe('OpenAiProvider.listModels', () => {
+  it('joins the vendor list against the build catalogue via `known`', async () => {
+    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+
+    const models = await provider.listModels(ctx());
+    const byId = new Map(models.map((m) => [m.id, m]));
+
+    // Present in MODELS: known, with real numbers, and the catalogue's label.
+    expect(byId.get('gpt-4o')).toMatchObject({
+      known: true,
+      label: 'GPT-4o',
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 16_384,
+    });
+
+    // Absent from MODELS: unknown, and the raw id stands in for the label.
+    expect(byId.get('gpt-5-preview')).toMatchObject({
+      known: false,
+      label: 'gpt-5-preview',
+    });
+  });
+
+  it('reports both numbers as null — never a guess — for an unknown model', async () => {
+    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+
+    const models = await provider.listModels(ctx());
+    const unknown = models.find((m) => m.id === 'chatgpt-4o-latest');
+
+    expect(unknown?.known).toBe(false);
+    expect(unknown?.contextWindowTokens).toBeNull();
+    expect(unknown?.maxOutputTokens).toBeNull();
+  });
+
+  it('filters out non-chat models — embeddings, audio, image, moderation, realtime', async () => {
+    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+
+    const ids = (await provider.listModels(ctx())).map((m) => m.id);
+
+    for (const nonChat of [
+      'text-embedding-3-small',
+      'text-embedding-3-large',
+      'whisper-1',
+      'tts-1-hd',
+      'dall-e-3',
+      'omni-moderation-latest',
+      'gpt-4o-realtime-preview',
+      'gpt-4o-transcribe',
+    ]) {
+      expect(ids).not.toContain(nonChat);
+    }
+  });
+
+  it('deduplicates a model id the vendor listed twice', async () => {
+    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+
+    const ids = (await provider.listModels(ctx())).map((m) => m.id);
+
+    // The fixture lists "gpt-4o" twice — a gateway aggregating upstreams can do
+    // this for real, and a duplicated row would read as a bug in this app.
+    expect(ids.filter((id) => id === 'gpt-4o')).toHaveLength(1);
+  });
+
+  it('sorts known models first, then everything alphabetically within each group', async () => {
+    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+
+    const ids = (await provider.listModels(ctx())).map((m) => m.id);
+
+    expect(ids).toEqual([
+      'gpt-4.1',
+      'gpt-4o',
+      'gpt-4o-mini',
+      'chatgpt-4o-latest',
+      'gpt-5-preview',
+      'o3-mini',
+    ]);
+  });
+
+  it('throws AiAuthError on a refused key — the same taxonomy `generate` uses', async () => {
+    const provider = providerWith(async () =>
+      errorResponse(401, '{"error":{"message":"Incorrect API key"}}'),
+    );
+
+    await expect(provider.listModels(ctx())).rejects.toBeInstanceOf(AiAuthError);
+  });
+
+  it('propagates a transport failure (timeout, DNS) unmapped, for the caller to diagnose', async () => {
+    // `AiModelDiscoveryService.discoverModels` is the caller that turns any
+    // throw into `{ ok: false, detail: err.message }` — this method itself does
+    // not wrap or swallow it.
+    const timeout = new Error('The operation was aborted due to timeout');
+    const provider = providerWith(async () => {
+      throw timeout;
+    });
+
+    await expect(provider.listModels(ctx())).rejects.toBe(timeout);
+  });
+
+  it('never sends the key anywhere but the authorization header', async () => {
+    let seenAuth: string | undefined;
+    const provider = providerWith(async (_url, init) => {
+      seenAuth = (init as { headers?: Record<string, string> } | undefined)?.headers
+        ?.authorization;
+      return modelListResponse(MODEL_LIST_JSON);
+    });
+
+    await provider.listModels(ctx());
+
+    expect(seenAuth).toBe('Bearer sk-test-DO-NOT-LOG');
   });
 });
 
