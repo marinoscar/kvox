@@ -165,6 +165,9 @@ const aiSettingsSchema = z.object({
   maxInputTokens: z.number().int().min(256).max(2_000_000),
   maxOutputTokens: z.number().int().min(64).max(200_000),
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000),
+  // Ceiling on one uploaded note source document, in bytes (#51). See
+  // `ai-settings.schema.ts` for why an AI policy and not a storage one.
+  maxDocumentBytes: z.number().int().min(65_536).max(268_435_456),
 });
 
 // Full replacement (PUT)
@@ -319,6 +322,7 @@ export const patchSystemSettingsSchema = z.object({
       maxInputTokens: z.number().int().min(256).max(2_000_000).optional(),
       maxOutputTokens: z.number().int().min(64).max(200_000).optional(),
       requestTimeoutMs: z.number().int().min(1_000).max(3_600_000).optional(),
+      maxDocumentBytes: z.number().int().min(65_536).max(268_435_456).optional(),
     })
     .optional(),
 });
