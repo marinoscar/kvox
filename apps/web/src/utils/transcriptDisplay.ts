@@ -229,6 +229,49 @@ export function hasPlaybackRendition(status: PlaybackStatus): boolean {
   return status === 'ready' || status === 'not_needed';
 }
 
+/**
+ * Is there audio a list row can honestly offer a single Play button for?
+ *
+ * Issue #98. A row has one control and nowhere to explain itself, so this has
+ * to be stricter than "the API would answer `GET /:id/audio` with something".
+ * Three facts decide it, and the two that are deliberately absent matter as
+ * much as the one that is present.
+ *
+ * **`status === 'ready'` is required.** It is the app's existing notion of
+ * "there is audio here": `TranscriptPage` hands the playback engine a
+ * transcript id only once the transcript is ready, on the stated grounds that
+ * before then `GET /:id/audio` has nothing to sign. A row still `uploading` has
+ * no finished object; a `deleting` one is having its objects purged underneath
+ * it; a `failed` one may never have got an object at all. None of the three is
+ * a control worth rendering.
+ *
+ * **A transcode still in flight is required to be absent.** `pending` and
+ * `processing` mean the seekable rendition is still being produced, so the only
+ * candidate is the user's original upload — which is exactly the engine's
+ * `preparing` state, a third outcome that is neither playback nor an error and
+ * that a row cannot render. Every other `playbackStatus` has settled: `ready`
+ * and `not_needed` have a rendition or never needed one, and `failed` means the
+ * server will sign the original, which the API's own `audio()` documents as the
+ * deliberate fallback because most browsers play most uploads directly. If this
+ * particular browser will not, the row reports it — the preview's error path
+ * exists for precisely that, and refusing to offer playback on the chance of a
+ * codec mismatch would silence far more rows than it saved.
+ *
+ * **`durationMs` is NOT consulted.** It is null until the pipeline measures the
+ * media, which makes it a missing fact ABOUT the audio rather than evidence the
+ * audio is missing — and a preview needs no duration, having no scrubber.
+ *
+ * **`access` is NOT consulted.** Every role that can see the row holds view
+ * access, and view access is what `GET /:id/audio` checks. There is nothing for
+ * a role gate to add.
+ */
+export function hasPlayableAudio(
+  item: Pick<TranscriptListItem, 'status' | 'playbackStatus'>,
+): boolean {
+  if (item.status !== 'ready') return false;
+  return item.playbackStatus !== 'pending' && item.playbackStatus !== 'processing';
+}
+
 /** A byte count for a card. Decimal units, because that is what a file manager shows. */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—';
