@@ -686,6 +686,61 @@ preserved by an empty submission.
 - `DELETE /api/transcription-settings/credentials/{provider}` - Erase one provider's key; the only path that does. Does not change the settings, so a rotation is not an outage (`system_settings:write`)
 - `GET /api/transcription/config` - Narrow capability probe (`available`, provider label, size/duration ceilings, accepted types) gated on `transcripts:read` (#25), which is seeded to **all three roles** — so it stays readable by every ordinary account, exactly like `GET /api/notifications/config`, while naming a real permission rather than "authenticated and nothing else"
 
+### Notes
+Turning a transcript, another note, or an uploaded document into an AI-generated,
+user-correctable document (issue #48, epic #45). `notes:read`/`notes:write`, both seeded to
+all three roles; **404, never 403**, for a note the caller cannot see. See
+[`docs/API.md`](docs/API.md#notes) and [`docs/specs/notes.md`](docs/specs/notes.md).
+- `POST /api/notes` - Create the note **and** queue its generation in one call (`notes:write`). 409 `ai_key_missing`/`ai_not_configured`, 400 over the token budget or an unpermitted model, 404 for a source/template the caller cannot read
+- `GET /api/notes` - List, cursor-paginated over `updatedAt` (`notes:read`)
+- `GET /api/notes/summary` - Three lists and four counts for the home page, in one round trip (`notes:read`)
+- `GET /api/notes/exporters` - Every registered note export format, with its options (`notes:read`)
+- `GET /api/notes/exports/{exportId}/download` - Short-lived signed download URL for a rendered export (`notes:read`)
+- `GET /api/notes/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with no body on a match (`notes:read`)
+- `GET /api/notes/{id}/versions` - Version history, newest first, cursor-paginated (`notes:read`)
+- `GET /api/notes/{id}/versions/{version}` - One full-body version snapshot (`notes:read`)
+- `PATCH /api/notes/{id}` - Rename and/or edit the body. A body edit requires `baseVersion`; a stale one is a **409** naming `details.currentVersion` (`notes:write`)
+- `POST /api/notes/{id}/regenerate` - The only retry path (`note.generate` is `maxAttempts: 1`). Appends a new version; history is kept (`notes:write`)
+- `POST /api/notes/{id}/versions/{version}/restore` - Appends a `restore` version; `baseVersion` must equal `currentVersion` (`notes:write`)
+- `DELETE /api/notes/{id}` - Owner only. Soft-deletes to `deleting` and queues `note.purge`; 409 while generating or while another note names this one as its source (`notes:write`)
+- `POST /api/notes/{id}/exports` - Render one version into `markdown`/`pdf`/`docx` as a queue job. 202 when queued, 200 when an identical unexpired export is reused (`notes:write`)
+- `GET /api/notes/{id}/exports` - List a note's unexpired exports (`notes:read`)
+- `POST /api/notes/sources/documents` - Upload a PDF/TXT/MD document to generate a note from (`notes:write`, not `storage:write` — see `docs/API.md`). Object is `managed_by: notes`, invisible to the generic storage surface
+- `GET /api/notes/{id}/stream` / `GET /api/note-generations/{id}/stream` - SSE, resumable via `Last-Event-ID`. A view over `note_generations.content`, never the delivery mechanism (`notes:read`)
+
+### Note Templates
+CRUD over the reusable "recipe" a note is generated from, plus preview (issue #50, epic #45).
+`note_templates:read`/`note_templates:write`, both seeded to all three roles — a separate
+pair from `notes:*`. See [`docs/API.md`](docs/API.md#note-templates).
+- `GET /api/note-templates` - List the caller's own templates plus every built-in (`note_templates:read`)
+- `POST /api/note-templates/preview` - Try a saved or unsaved template against a real source. A real generation, billed to the caller's own provider account (`note_templates:write`)
+- `GET /api/note-templates/{id}` - One template, own or built-in (`note_templates:read`)
+- `POST /api/note-templates` - Create one, owned by the caller (`note_templates:write`)
+- `PATCH /api/note-templates/{id}` - Edit one of the caller's own. **403** on a built-in, never 404 — its existence is public (`note_templates:write`)
+- `DELETE /api/note-templates/{id}` - Archives rather than deletes when notes still reference it. **403** on a built-in (`note_templates:write`)
+- `POST /api/note-templates/{id}/duplicate` - Copy any readable template — built-in or the caller's own — into a new, editable row owned by the caller (`note_templates:write`)
+
+### AI Settings (Admin-only)
+The deployment AI policy — which provider, which models are permitted, and the token/timeout/
+document ceilings (issue #47, epic #45). Gated on `system_settings:read`/`:write`, not a
+permission pair of its own: this is the `ai` namespace of the `global` system-settings row.
+**No API key lives here, ever** — epic #45 is strict bring-your-own-key; see
+`ai-settings.schema.ts`'s compile-time proof. See [`docs/API.md`](docs/API.md#ai-settings).
+- `GET /api/ai-settings` - The AI policy and the provider catalogue (`system_settings:read`)
+- `PUT /api/ai-settings` - Partial update. `allowedModels` replaces wholesale, RFC 7396-style (`system_settings:write`)
+- `POST /api/ai-settings/test` - Reachability probe, no credential sent (this deployment holds none). ⚠ A 401/403 from the endpoint is reported as `ok: true` — it proves the endpoint exists (`system_settings:write`)
+
+### AI Credentials
+A user's own AI provider key (issue #47, epic #45). Four routes, all `@Auth()` with **no
+permission string** — deliberately: the resource is the caller's own credential, scoped by
+`userId` in the query itself, the same ownership-scoped posture `/api/user-settings` and
+`/api/pat` already take. See [`docs/API.md`](docs/API.md#ai-credentials).
+- `GET /api/ai-credentials` - The caller's own stored keys, masked (`hint`, never the key)
+- `PUT /api/ai-credentials` - Save or replace the caller's own key for one provider. `apiKey` blank/absent keeps the stored key
+- `POST /api/ai-credentials/test` - Test a key, including one never saved. ⚠ Answers **200** with `{ ok: false, detail }` on a refusal — the same convention `POST /api/transcription-settings/test` uses
+- `DELETE /api/ai-credentials/{provider}` - The only way to erase a key
+- `GET /api/ai/config` - What this deployment permits and whether **the caller** has a key, gated on `notes:read` (#47) rather than left merely authenticated — seeded to all three roles, so it stays readable by every ordinary account
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -736,6 +791,28 @@ preserved by an empty submission.
   share on — out of scope for this feature, not merely unused. No access answers **404,
   never 403** (`docs/specs/transcription.md` §6.1) — a 403 would confirm the transcript
   exists, which a stranger has no business learning about a private conversation.
+- `notes:read/write` - AI-generated notes (issue #48, epic #45), mirroring `transcripts:*`
+  exactly and for the identical reason: generating a note is the core product action this
+  epic exists to enable, and a fresh account's default role is Viewer. `notes:read` gates
+  every note read (list, get, versions, the generation stream, `GET /api/ai/config`);
+  `notes:write` gates create/regenerate/edit/delete **and**
+  `POST /api/note-templates/:id/preview` — a preview reads a template but its action is
+  generating real content through the caller's own AI key, the same mechanism `note.generate`
+  runs, so it is gated by the permission that governs generating, not by the template CRUD
+  permission. **There is deliberately no `notes:read_any`, not even for an admin** — a note
+  is derived from somebody's private conversation, exactly like a transcript, and no
+  permission string for reading another user's note exists anywhere in this design, for any
+  role, ever. `NoteAccessService.require` answers a caller with no access a plain **404**,
+  never 403, for the identical reason `TranscriptAccessService` does.
+- `note_templates:read/write` - Note template CRUD (issue #48, epic #45). A **separate pair**
+  from `notes:*`, not folded in — two different controllers with two different write
+  surfaces (editing a recipe versus generating content). `note_templates:write` gates
+  creating, editing and deleting a user's **own** custom templates only; it does not gate
+  built-ins, which are immutable through the API regardless of any permission any role holds
+  — a built-in's `PATCH`/`DELETE` answers **403**, a deliberate divergence from `notes:*`'s
+  404-never-403 posture, because a built-in template's existence is public by design (it is
+  in every account's own catalogue) while another user's template's existence is private.
+  Both permissions are seeded to all three roles.
 
 ## Database Tables
 
@@ -743,7 +820,7 @@ preserved by an empty submission.
 - `user_identities` - OAuth provider identities (provider + subject)
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-role assignments
-- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`. ⚠ Adding one costs **six** edits — see `apps/api/src/common/schemas/settings-parity.spec.ts`'s header; miss the wire DTOs and every PATCH becomes a silent no-op that returns 200
+- `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one costs **six** edits — see `apps/api/src/common/schemas/settings-parity.spec.ts`'s header; miss the wire DTOs and every PATCH becomes a silent no-op that returns 200. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk
 - `user_settings` - Per-user settings (JSONB)
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
@@ -846,6 +923,55 @@ preserved by an empty submission.
   `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun.jobId` exactly: this row's own
   7-day expiry is independent of `job.history.purge`'s retention schedule for the underlying
   `jobs` row.
+- `user_ai_credentials` - One AI provider API key per `(userId, provider)` (issue #47, epic
+  #45): each user's own key, never a deployment-wide one — see `docs/specs/notes.md` §9.
+  `secret` is `encryptSecret(rawKey, 'ai-key')` — the same cipher every other secret in this
+  application uses, under a new purpose string for domain separation, so a ciphertext lifted
+  out of `credentials` and pasted here fails authentication rather than decrypting into a
+  context where it means something else. `userId` **cascades**, and that is the whole reason
+  this is its own table rather than a row in `credentials`: `credentials` has no foreign key
+  to `users` and cannot grow one (`Credential.updatedByUserId` is `SetNull` on purpose, so
+  offboarding an admin never deletes a working SMTP configuration), so encoding a user id into
+  `credentials.name` would leave a deleted user's personal key in that table forever with no
+  FK to clean it up. Never returned by any endpoint, for any role.
+- `notes` - One AI-generated, user-correctable document per row (issue #48, epic #45),
+  generated from a transcript, another note, or an uploaded document. `ownerId` **cascades**
+  on user deletion — a note has no meaning and this app grants no path to read it once its
+  owner is gone, mirroring `transcripts.owner_id` and the deliberate absence of
+  `notes:read_any`. `sourceTranscriptId`/`sourceNoteId`/`sourceObjectId` all **restrict**
+  instead, the opposite direction: they point sideways into another module's table, and only
+  `note.purge` deleting the note row first may ever free one. `notes.body` is a denormalized
+  copy of the `note_versions` row at `currentVersion` — kept in the same transaction that
+  appends a version — so `GET /api/notes/:id` answers "what does this note say right now"
+  with a single-row read. See `docs/specs/notes.md` §4.1 and the block comment above the
+  `Note` model.
+- `note_templates` - The reusable "recipe" (instructions, output format, structure, tone,
+  length, an optional per-template model) a note is generated from (issue #48, epic #45).
+  `ownerId IS NULL` means **built-in**: seeded, readable by every user, and immutable through
+  the API under every role (`PATCH`/`DELETE` answer 403, never 404 — see `docs/API.md`'s Note
+  Templates section for the full reasoning). `PATCH`/`DELETE` on another user's own template
+  answers 404. Deleting a template that notes still reference **archives** it instead
+  (`isArchived`) rather than deleting the row, so a note never loses its `templateId`.
+- `note_generations` - The durable buffer the SSE stream (issue #52) reads from, never the
+  delivery mechanism itself: `note.generate` (issue #49) appends every delta to `content` on
+  the way past, so a generation completes identically whether or not anyone is watching.
+  `noteId` is nullable — `NULL` for a **template preview** (issue #50), which has no note to
+  belong to, is never listed in `GET /api/notes`, and is hard-deleted by `notes.housekeeping`
+  at its 10-minute TTL. `errorClass` is a proper enum (`auth`/`refusal`/`rate_limit`/`other`)
+  matching `ai-errors.ts`'s taxonomy — the SSE layer's own `NoteStreamErrorClass` adds two
+  wire-only values, `timeout` and `gone`, that never exist in this column because neither is a
+  property of the generation (see the new Common Patterns section below).
+- `note_versions` - The append-only correction history (issue #48, epic #45). **A full body
+  snapshot per row, not an operation log** — unlike `transcript_versions`, deliberately: a
+  note is a page or two of prose, so storing the whole markdown body per save costs kilobytes
+  and needs no reducer to read back, and `GET /api/notes/:id/versions/:version` is a
+  single-row read. `authorId: NULL` means the AI, the same convention
+  `transcript_versions.author_id` established. `kind` is `ai_generated` / `edit` / `restore`.
+- `note_exports` - One row per rendered export file, content-addressed by `(noteId, version,
+  format, optionsHash)`, mirroring `transcript_exports` field for field (issue #54,
+  `docs/specs/notes.md` §8). `jobId` is `@unique`/nullable/`SetNull`; the row's own 7-day
+  expiry is independent of `job.history.purge`'s retention schedule for the underlying `jobs`
+  row.
 
 ## Operations Admin Settings Group
 
@@ -1362,6 +1488,88 @@ split, why there is no `transcripts:read_any` and no access ever answers
 public export contract published alongside it as
 [`docs/specs/transcript-export.v1.schema.json`](docs/specs/transcript-export.v1.schema.json).
 Don't restate any of that here; extend those two instead.
+
+### Notes, Note Templates and the AI Layer
+
+Turning a transcript, another note, or an uploaded document into an
+AI-generated, user-correctable note — epic #45 (issues #46–#59), built on top
+of the transcript pipeline above. Note templates are the reusable recipe; AI
+settings (`system_settings:read`/`:write`, the `ai` namespace) is deployment
+policy; AI credentials are strict bring-your-own-key, one row per
+`(userId, provider)` in `user_ai_credentials`, never a deployment-wide
+fallback. The design — the two state machines, the token budget and why it
+refuses rather than truncates, the streaming contract, the access model, the
+export registry, and the full privacy statement of what leaves this
+deployment and under whose account — is documented in full in
+[`docs/specs/notes.md`](docs/specs/notes.md). Don't restate any of that here;
+extend it instead. Five rules below are the ones a contributor can break from
+a neighbouring file, each with its failure mode — the same editorial bar the
+Audio Transcription section above sets.
+
+1. **The generation stream is a view over durable state, never the delivery
+   mechanism.** `note.generate` writes every delta into
+   `note_generations.content` on the way past; `GET /api/notes/:id/stream`
+   and `GET /api/note-generations/:id/stream` (`generation/note-stream.ts`)
+   only read that column. A note completes identically whether or not
+   anybody is connected, and closing the tab loses nothing. Anything that
+   makes correctness depend on an open SSE connection — buffering a result in
+   memory instead of writing it, gating the note's own commit on a client
+   being attached — is a regression, and it will pass every test that runs
+   in one process because the test harness never disconnects.
+
+2. **`note.generate` declares `profile: { maxAttempts: 1 }` on purpose.**
+   Every other handler's "unrecognised failure" class auto-retries
+   correctly, because retrying has no side effect the user pays for twice.
+   Here a retry would call the same provider with the *user's own key* a
+   second time, and because a completion is non-deterministic it would show
+   different text than the partial stream they already watched fail.
+   `POST /api/notes/:id/regenerate` is the only retry path — a person
+   pressing a button, queuing a brand-new job with its own fresh
+   one-attempt budget. Someone "fixing" the profile to retry like every
+   other job silently double-charges users for output they never asked to
+   see twice.
+
+3. **The provider-rate-limit throttle key is per user, not per deployment.**
+   `aiProviderThrottleKey(userId)` (`notes/job-types.ts`) is the exact
+   inverse of `TRANSCRIPTION_THROTTLE_KEY`: transcription shares one
+   deployment-owned AssemblyAI account against one vendor rate limit, so one
+   shared bucket is correct there. Here every user brings their own vendor
+   account with their own limit, so a 429 against user A's key is evidence
+   about user A only. A shared `'ai-provider'` key would look right — it is
+   exactly the code transcription uses — and would let one busy user's 429
+   defer every other user's note generation, a relationship between the
+   accounts that does not exist.
+
+4. **Over-budget prompts are refused, never truncated, and the refusal
+   carries numbers.** `assertWithinBudget`/`AiBudgetError` (`ai-errors.ts`,
+   `generation/token-budget.ts`) name the required and available token
+   counts in the 400 body rather than silently cutting the source text.
+   Truncating instead would be the worst available failure: the user is
+   billed for a request that quietly generated a note from *part* of their
+   source, with nothing telling them a paragraph vanished into the cut.
+   `docs/specs/notes.md` §3.3 states the constructor-argument requirement
+   for exactly this reason — an `AiBudgetError` that could only say "too
+   large" would satisfy the type and defeat the requirement.
+
+5. **A per-user AI key lives in `user_ai_credentials`, never in
+   `credentials`, because of the cascade.** `credentials` has no foreign key
+   to `users` and cannot grow one — `Credential.updatedByUserId` is
+   `SetNull` on purpose so offboarding an admin never deletes a working SMTP
+   configuration. Encoding a user id into `credentials.name`
+   (`purpose 'ai'`, `name 'openai:<userId>'`) would mean deleting a user
+   leaves their encrypted personal API key in that table forever, with no FK
+   to clean it up and no enumeration path short of parsing every row's
+   `name`. `user_ai_credentials.userId` **cascades**, which is the entire
+   point of the table: the key is the user's, so its lifetime is the user's.
+
+The five job types (`notes/job-types.ts`, all labelled in
+`job-type-labels.ts`): `note.generate` (server-only permanently — no vendor
+here offers a job-scoped sub-key the way PostgreSQL does for
+`db.backup.run`, so there is nothing a `nodeSecretBroker` could broker),
+`note.source.extract` (node-eligible), `note.export` (server-only — the
+renderers live in the API, the same scope line `transcript.export` draws),
+`note.purge` and `notes.housekeeping` (the sweep that hard-deletes expired
+template previews and expired exports).
 
 ## Specialized Subagents (MANDATORY)
 
