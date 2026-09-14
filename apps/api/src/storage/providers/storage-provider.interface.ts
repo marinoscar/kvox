@@ -6,6 +6,7 @@ import {
   UploadPart,
   SignedUrlOptions,
   SignedPutUrlOptions,
+  UploadedPart,
 } from './storage-provider.types';
 
 /**
@@ -83,6 +84,26 @@ export interface StorageProvider {
    * @param uploadId - Upload ID from initMultipartUpload
    */
   abortMultipartUpload(key: string, uploadId: string): Promise<void>;
+
+  /**
+   * List the parts a provider is currently holding for an in-progress
+   * multipart upload (issue #21).
+   *
+   * ⚠ THIS IS THE ONLY HONEST SOURCE OF UPLOAD PROGRESS. The application's own
+   * `storage_object_chunks` rows are written when an upload COMPLETES, so they
+   * are empty for exactly as long as a resuming client needs to know what to
+   * skip. A resume answer must come from the provider.
+   *
+   * An implementation MUST paginate — S3 returns at most 1000 parts per call
+   * and a multi-GB upload routinely exceeds that — and MUST return the parts
+   * sorted by part number, so a caller can hand the result straight to
+   * `completeMultipartUpload`.
+   *
+   * @param key - Unique identifier for the file in storage
+   * @param uploadId - Upload ID from initMultipartUpload
+   * @returns Every part the provider holds, ascending by part number
+   */
+  listParts(key: string, uploadId: string): Promise<UploadedPart[]>;
 
   /**
    * Download a file as a readable stream

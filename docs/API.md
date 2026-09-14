@@ -1337,6 +1337,12 @@ The storage system provides file upload and management capabilities with support
 }
 ```
 
+`mimeType` is **optional**. A browser reports an empty string for `.amr`, and
+`application/octet-stream` or nothing at all for `.m4a` on several Android
+builds; when the declared type is generic or absent it is resolved from the
+file extension (`.m4a .mp3 .wav .flac .ogg .opus .aac .amr .webm .wma .mp4
+.m4b .3gp .aiff .aif .caf .wv`) and the resolved type is what gets stored.
+
 **Response:**
 ```json
 {
@@ -1353,25 +1359,106 @@ The storage system provides file upload and management capabilities with support
 }
 ```
 
+**`partSize` is chosen per upload, and it is not always the configured
+default.** S3 allows at most 10,000 parts, so for a large file the part size is
+raised to `max(configured, ceil(size / 10000))`, rounded up to a whole MiB — a
+1 TB object simply uses bigger parts rather than being rejected. Slice the file
+with exactly the `partSize` returned here; it is stored on the object and
+replayed by the status endpoint so a resume slices it the same way.
+
+**`presignedUrls` is the first batch, not the whole upload.** At most ten URLs
+come back, as a fast path for a small file. Ask
+`POST /api/storage/objects/:id/upload/parts` for the rest, in batches, as you
+go — signed URLs expire (`SIGNED_URL_EXPIRY`, one hour by default) and a
+multi-GB upload outlives its own first batch.
+
+**Error Cases:**
+- 400 Bad Request - File exceeds `MAX_FILE_SIZE`; the message names the actual
+  limit and the actual size
+- 400 Bad Request - Content type is not in `ALLOWED_MIME_TYPES` (default
+  `image/*,application/pdf,video/*,audio/*`) and no known audio extension
+  rescues it; the message names the type that was rejected
+
+---
+
+#### Sign More Upload Part URLs
+
+`POST /api/storage/objects/:id/upload/parts`
+
+**Requires Authentication** and `storage:write` - Issue signed `PUT` URLs for a
+further batch of parts of an in-progress upload. Each call also marks the
+upload as still active, which is what keeps it out of the stale-upload sweep
+(see `STORAGE_STALE_UPLOAD_HOURS`).
+
+**Request Body:**
+```json
+{
+  "partNumbers": [11, 12, 13]
+}
+```
+
+At most **100** part numbers per call. Each must be an integer in
+`1..totalParts` for this upload, and duplicates are rejected.
+
+**Response:**
+```json
+{
+  "data": {
+    "parts": [
+      {
+        "partNumber": 11,
+        "url": "https://...",
+        "expiresAt": "2024-01-01T01:00:00.000Z"
+      }
+    ]
+  }
+}
+```
+
+`expiresAt` is when to come back for a fresh batch rather than discovering the
+expiry as a 403 part-way through a file.
+
+**Error Cases:**
+- 400 Bad Request - More than 100 part numbers, a duplicate, a part number
+  outside `1..totalParts`, or an upload that is no longer `pending`/`uploading`
+- 403 Forbidden - Caller does not own the upload, or lacks `storage:write`
+- 404 Not Found - Upload not found
+
 ---
 
 #### Get Upload Status
 
 `GET /api/storage/objects/:id/upload/status`
 
-**Requires Authentication** - Check progress of an in-progress upload.
+**Requires Authentication** - Check progress of an in-progress upload, and the
+endpoint a resuming client asks first.
 
 **Response:**
 ```json
 {
   "data": {
+    "objectId": "uuid",
     "status": "uploading",
-    "uploadedParts": 5,
+    "uploadedParts": [1, 2, 4],
     "totalParts": 10,
-    "progress": 50
+    "partSize": 10485760,
+    "uploadedBytes": "31457280",
+    "totalBytes": "104857600"
   }
 }
 ```
+
+`uploadedParts` is read from the **storage provider**, not from this
+application's own records: it is the list of parts the bucket is actually
+holding, so the gaps in it are exactly the parts a resuming client must
+re-upload. `partSize` is the size this upload was initialised with — use it,
+not your own default, or the resumed parts will contain the wrong bytes.
+
+`uploadedBytes` and `totalBytes` are **strings**; a byte count at this scale
+loses precision as a JSON number.
+
+Polling this endpoint also refreshes the upload's activity timestamp, so an
+upload a client is watching is never swept away as abandoned.
 
 ---
 
@@ -1390,6 +1477,20 @@ The storage system provides file upload and management capabilities with support
   ]
 }
 ```
+
+**`parts` is optional, and a browser should omit it:**
+
+```json
+{}
+```
+
+Omitted, the server reads the uploaded parts back from the storage provider
+itself. The ETag of a part is a response header on a cross-origin `PUT`, which
+a page cannot read unless the bucket lists it in `Access-Control-Expose-Headers`
+— so a client that gets its CORS configuration slightly wrong completes the
+upload with null ETags and corrupts the object. Supply `parts` only from a
+non-browser client that already has the ETags and would rather avoid the extra
+`ListParts` call.
 
 **Response:**
 ```json
@@ -1446,6 +1547,11 @@ The storage system provides file upload and management capabilities with support
 `GET /api/storage/objects`
 
 **Requires Authentication** - List storage objects with pagination and filtering.
+
+Objects **managed by another module** (a transcript's source audio, its
+playback rendition, its exports) are excluded from this list. They belong to
+the feature that created them, not to a generic file browser; that module
+lists its own.
 
 **Query Parameters:**
 | Parameter | Type | Default | Description |
@@ -1540,6 +1646,12 @@ The storage system provides file upload and management capabilities with support
 **Error Cases:**
 - 404 Not Found - Object not found
 - 403 Forbidden - User does not own object (non-admin)
+- **409 Conflict** - The object is managed by another module and must be
+  deleted through that module. The message names the module. This is 409 and
+  not 403 on purpose: the caller genuinely owns the bytes, and the refusal is
+  about the object's state — something else depends on it. Reading, downloading
+  and editing the metadata of a managed object all remain available to its
+  owner; only listing and deleting change.
 
 ---
 
