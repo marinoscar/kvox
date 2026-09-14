@@ -118,6 +118,32 @@
  * three `Paper`s further down is indistinguishable from a broken page — which is
  * exactly how issue #83 was reported: "it is not letting me".
  *
+ * =============================================================================
+ * #87: REASONING EFFORT IS A CEILING FIELD, WHICH IS WHY IT IS IN `Limits`
+ * =============================================================================
+ *
+ * `reasoningEffort` is sent to the provider as `reasoning_effort`, and it looks
+ * like a provider knob — so it would land naturally in the Provider section
+ * above, next to the vendor and the API root. It is in `Limits` instead, and the
+ * reason is the only thing about this field an administrator has to know:
+ *
+ *   REASONING TOKENS ARE BILLED AND COUNTED AS OUTPUT TOKENS. They come out of
+ *   the SAME `Max output tokens` ceiling the visible answer comes out of. At
+ *   `high` or `xhigh` against the shipping 16,384 default, a generation can
+ *   spend most of its budget thinking and return little or nothing — and it
+ *   arrives as a TRUNCATED COMPLETION, not as an error anybody would connect to
+ *   this control.
+ *
+ * So it is a bound on somebody else's spend, exactly like `maxInputTokens` and
+ * `maxOutputTokens`, and it belongs beside the one field it can silently
+ * exhaust. The helper text names that field, in this page's own voice, at the
+ * point of the control — not in a tooltip: a consequence somebody only
+ * discovers by hovering is a consequence they discover from a support ticket.
+ *
+ * The option labels carry the trade-off too (`None (fastest, no reasoning)` …
+ * `Extra high (slowest, most output tokens)`), so the dropdown is legible
+ * without the vendor's documentation open beside it.
+ *
  * Mobile-first like its siblings — every row stacks at `xs` and goes horizontal
  * at `sm`, and nothing here mounts, unmounts or re-gates on a breakpoint (there
  * is no `useMediaQuery` in this page or in the three components it renders), so
@@ -160,7 +186,11 @@ import {
   type PermittedModelDraft,
 } from '../../components/admin/AiPermittedModels';
 import { AI_ALLOWED_MODELS_MAX } from '../../services/ai';
-import type { AiProviderId, UpdateAiSettingsInput } from '../../services/ai';
+import type {
+  AiProviderId,
+  AiReasoningEffort,
+  UpdateAiSettingsInput,
+} from '../../services/ai';
 
 /**
  * The provider whose block the model section edits.
@@ -182,6 +212,24 @@ const BOUNDS = {
   requestTimeoutMs: { min: 1_000, max: 3_600_000 },
   maxDocumentBytes: { min: 65_536, max: 268_435_456 },
 } as const;
+
+/**
+ * The reasoning-effort options, LABELLED WITH THEIR TRADE-OFF.
+ *
+ * The ids are the API's enum; the labels exist so the cost of moving down this
+ * list is readable from the dropdown alone. Ascending order of spend, so the
+ * list itself is the scale — see the `#87` section of the file header.
+ */
+const REASONING_EFFORT_OPTIONS: ReadonlyArray<{
+  value: AiReasoningEffort;
+  label: string;
+}> = [
+  { value: 'none', label: 'None (fastest, no reasoning)' },
+  { value: 'low', label: 'Low (brief reasoning, few extra tokens)' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High (slower, many more output tokens)' },
+  { value: 'xhigh', label: 'Extra high (slowest, most output tokens)' },
+];
 
 function numericError(
   raw: string,
@@ -232,6 +280,10 @@ export default function AiSettingsPage() {
   const [maxOutputTokens, setMaxOutputTokens] = useState('');
   const [requestTimeoutMs, setRequestTimeoutMs] = useState('');
   const [maxDocumentBytes, setMaxDocumentBytes] = useState('');
+  // Not `''`-as-none like the provider select above: `'none'` is a real stored
+  // value meaning "omit the parameter", so there is no null to map at the
+  // boundary and the `Select` holds the wire value directly.
+  const [reasoningEffort, setReasoningEffort] = useState<AiReasoningEffort>('none');
 
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -248,6 +300,7 @@ export default function AiSettingsPage() {
     setMaxOutputTokens(String(s.maxOutputTokens));
     setRequestTimeoutMs(String(s.requestTimeoutMs));
     setMaxDocumentBytes(String(s.maxDocumentBytes));
+    setReasoningEffort(s.reasoningEffort);
   }, [data]);
 
   // The permitted ids, as the default-model select and the discovery dialog
@@ -378,6 +431,7 @@ export default function AiSettingsPage() {
       maxOutputTokens: Number.parseInt(maxOutputTokens, 10),
       requestTimeoutMs: Number.parseInt(requestTimeoutMs, 10),
       maxDocumentBytes: Number.parseInt(maxDocumentBytes, 10),
+      reasoningEffort,
     };
 
     const ok = await save(input);
@@ -712,7 +766,7 @@ export default function AiSettingsPage() {
               />
             </Stack>
 
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
               <TextField
                 fullWidth
                 type="number"
@@ -739,6 +793,45 @@ export default function AiSettingsPage() {
                   'Ceiling on one uploaded source document. An AI policy, not a storage one: every byte becomes input tokens on the uploading user’s account.'
                 }
               />
+            </Stack>
+
+            {/* ⚠ A CEILING FIELD, NOT A PROVIDER KNOB — see the `#87` section of
+                the file header. It is here, beside `Max output tokens`, because
+                it is spent out of that ceiling; the helper text says so at the
+                control rather than in a tooltip, because the failure it causes
+                (a truncated answer, no error) is one nobody would otherwise
+                trace back to this select. Same `Stack` shape as its siblings so
+                the section still stacks cleanly at ~400px. */}
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                select
+                fullWidth
+                label="Reasoning effort"
+                value={reasoningEffort}
+                onChange={(event) =>
+                  setReasoningEffort(event.target.value as AiReasoningEffort)
+                }
+                disabled={!canWrite}
+                helperText={
+                  <>
+                    How hard the model is asked to think before it answers. Reasoning is
+                    billed and counted as <strong>output</strong> tokens, drawn from the
+                    same <strong>Max output tokens</strong> ceiling above as the answer
+                    itself — so at <strong>High</strong> or <strong>Extra high</strong> a
+                    generation can spend most of that ceiling thinking and return a short
+                    or empty answer, which arrives as a truncated completion rather than
+                    an error. Raise <strong>Max output tokens</strong> alongside this.{' '}
+                    <strong>None</strong> sends no reasoning setting at all, leaving the
+                    vendor&apos;s own default — and it is what this deployment ships with.
+                  </>
+                }
+              >
+                {REASONING_EFFORT_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Stack>
           </Paper>
 
