@@ -1,7 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-import { AI_PROVIDER_IDS, systemAiPatchSchema } from '../ai-settings.schema';
+import {
+  AI_PROVIDER_IDS,
+  AI_REASONING_EFFORTS,
+  systemAiPatchSchema,
+} from '../ai-settings.schema';
 
 // =============================================================================
 // AI settings — request and response bodies (issue #47, epic #45)
@@ -194,6 +198,11 @@ export const aiSettingsResponseSchema = z.object({
       requestTimeoutMs: z
         .number()
         .describe('How long one provider request may take, in milliseconds.'),
+      reasoningEffort: z
+        .enum(AI_REASONING_EFFORTS)
+        .describe(
+          'How hard a reasoning model may think before it answers. `none` is the default and the vendor\'s own: the parameter is not sent at all, so a deployment that never sets this puts exactly the bytes on the wire it always did — which matters because `baseUrl` may point at an OpenAI-compatible gateway that has never heard of the parameter. ⚠ **Reasoning tokens are billed and counted as output tokens**, drawn from the same ceiling the visible answer uses (`maxOutputTokens`, capped by the model\'s own). At `high`, against the default `maxOutputTokens` of 16,384, a generation can spend most of its budget thinking and return a truncated note or almost nothing — arriving as a `length` finish reason, **not** as an error. Raising this does not raise `maxOutputTokens`, deliberately: that ceiling bounds what one generation may cost on the user\'s own account, and widening it is a separate decision an administrator takes on purpose.',
+        ),
       maxDocumentBytes: z
         .number()
         .describe(

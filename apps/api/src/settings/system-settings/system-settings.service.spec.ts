@@ -1588,4 +1588,86 @@ describe('SystemSettingsService', () => {
       );
     });
   });
+
+  // ===========================================================================
+  // ai.reasoningEffort (#87)
+  //
+  // The one PATCH case that actually exercises `readKnownSettings`'s value-fill
+  // and `patchSettings`'s hand-written `ai` merge in the same field: the schema
+  // can parse `reasoningEffort` correctly and the merge can still forget to
+  // apply it — that bug ships as a 200 whose body looks right and whose stored
+  // value never changed, which the settings-parity spec (a purely structural
+  // check) cannot catch. See `system-settings.service.ts`'s own `#87` comment
+  // on the merge line this pins.
+  // ===========================================================================
+  describe('ai.reasoningEffort (#87)', () => {
+    it('a PATCH of only reasoningEffort persists it and leaves every sibling ai field untouched', async () => {
+      const storedAi = {
+        ...DEFAULT_SYSTEM_SETTINGS.ai,
+        provider: 'openai',
+        providers: {
+          openai: {
+            ...DEFAULT_SYSTEM_SETTINGS.ai.providers.openai,
+            defaultModel: 'gpt-5.4-mini',
+          },
+        },
+        maxOutputTokens: 20_000,
+      };
+
+      mockPrisma.systemSettings.findUnique.mockResolvedValue({
+        ...mockSystemSettings,
+        value: { ...DEFAULT_SYSTEM_SETTINGS, ai: storedAi } as any,
+      } as any);
+      mockPrisma.systemSettings.update.mockResolvedValue({
+        ...mockSystemSettings,
+        value: {
+          ...DEFAULT_SYSTEM_SETTINGS,
+          ai: { ...storedAi, reasoningEffort: 'high' },
+        } as any,
+        version: 2,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      const result = await service.patchSettings(
+        { ai: { reasoningEffort: 'high' } },
+        mockUserId,
+      );
+
+      // The field the request actually named.
+      expect(result.ai.reasoningEffort).toBe('high');
+
+      // Everything else in the namespace is exactly what was stored before —
+      // this is the assertion a merge that quietly built a fresh `ai` object
+      // from defaults, instead of spreading the current value, would fail.
+      expect(result.ai.provider).toBe('openai');
+      expect(result.ai.providers.openai.defaultModel).toBe('gpt-5.4-mini');
+      expect(result.ai.maxOutputTokens).toBe(20_000);
+
+      const updateArgs = mockPrisma.systemSettings.update.mock
+        .calls[0][0] as any;
+      expect(updateArgs.data.value.ai.reasoningEffort).toBe('high');
+      expect(updateArgs.data.value.ai.provider).toBe('openai');
+      expect(updateArgs.data.value.ai.providers.openai.defaultModel).toBe(
+        'gpt-5.4-mini',
+      );
+    });
+
+    it('a settings read with no stored ai namespace defaults reasoningEffort to none and defaultModel to gpt-5.4-mini', async () => {
+      // A row from before #47 (or one degraded by an earlier malformed-value
+      // fallback) carries no `ai` key at all. `readKnownSettings` must fill it
+      // from `DEFAULT_SYSTEM_SETTINGS`, not leave it absent.
+      mockPrisma.systemSettings.findUnique.mockResolvedValue({
+        ...mockSystemSettings,
+        value: {
+          jobs: DEFAULT_SYSTEM_SETTINGS.jobs,
+          nodes: DEFAULT_SYSTEM_SETTINGS.nodes,
+        } as any,
+      } as any);
+
+      const result = await service.getSettings();
+
+      expect(result.ai.reasoningEffort).toBe('none');
+      expect(result.ai.providers.openai.defaultModel).toBe('gpt-5.4-mini');
+    });
+  });
 });

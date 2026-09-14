@@ -312,10 +312,14 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
         // which is precisely the decision the allow-list exists to leave to an
         // administrator.
         allowedModels: [],
-        // A sensible first offer once an administrator permits it. Harmless
+        // A sensible first offer once an administrator permits it (#87: the
+        // GPT-5.4 family's mid-size member, rather than `gpt-4o`). Harmless
         // while `allowedModels` is empty: the config probe only ever returns a
-        // default that survived the intersection with the allow-list.
-        defaultModel: 'gpt-4o',
+        // default that survived the intersection with the allow-list, and
+        // since #83 a default naming nothing in an empty list is savable and
+        // REPORTED rather than refused — so this names the model a deployment
+        // should reach for first without pre-permitting anything.
+        defaultModel: 'gpt-5.4-mini',
       },
     },
     // Comfortably inside every model in the OpenAI catalogue, so the model's
@@ -328,6 +332,14 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // Ten minutes. A streamed completion legitimately runs for minutes; this is
     // the backstop for a wedged connection, not an ordinary HTTP timeout.
     requestTimeoutMs: 600_000,
+    // `'none'` — THE VENDOR'S OWN DEFAULT (#87), which is why it is this one.
+    // The provider omits the parameter entirely at this value, so an upgrade
+    // changes neither the bytes on the wire nor anybody's bill, and a gateway
+    // that has never heard of `reasoning_effort` keeps working untouched.
+    // Raising it spends the SAME `maxOutputTokens` budget below on thinking
+    // instead of on prose — see `ai-settings.schema.ts` for why that is an
+    // administrator's decision and not a default.
+    reasoningEffort: 'none',
     // 25 MB (#51). Comfortably above any ordinary proposal, contract or brief,
     // and far below anything whose extracted text `maxInputTokens` would let
     // through anyway — a document is bounded here because every byte of it
