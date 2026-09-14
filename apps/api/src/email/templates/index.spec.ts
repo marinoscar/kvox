@@ -142,13 +142,13 @@ const SAMPLE_DATA: { [K in EmailTemplateName]: EmailTemplateDataMap[K] } = {
     retryable: true,
     appUrl: 'https://app.example.com',
   },
-  // #29's recipient-addressed template. BOTH of its escaped fields reach the
-  // subject, so both stay benign here and the escaping is asserted by
-  // `transcript-shared.email.spec.ts` instead, which renders a hostile payload
-  // and checks the html rather than the subject line.
+  // #29's recipient-addressed template. `ownerName` reaches the subject and so
+  // stays benign; `title` deliberately does NOT (see that template's note on
+  // why a private recording's title stays off a lock screen), which is exactly
+  // what makes it the field the hostile fragment goes in.
   'transcript-shared': {
     transcriptId: 'transcript-1',
-    title: 'Board meeting, 3 March',
+    title: '<script>alert(document.cookie)</script>',
     role: 'editor',
     ownerName: 'Ana Rivera',
     appUrl: 'https://app.example.com',

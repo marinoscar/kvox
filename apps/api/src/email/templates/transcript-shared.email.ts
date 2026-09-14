@@ -62,7 +62,13 @@ export function shareRoleSentence(role: 'viewer' | 'editor'): string {
 /** Render the "somebody shared a transcript with you" message. */
 export function transcriptSharedEmail(data: TranscriptSharedEmailData): RenderedEmail {
   const roleLabel = shareRoleLabel(data.role);
-  const subject = `${data.ownerName} shared "${data.title}" with you`;
+  // ⚠ THE TITLE IS DELIBERATELY NOT IN THE SUBJECT, unlike
+  // `transcript-ready.email.ts` whose reader owns the recording. A subject line
+  // is the one part of an email that renders on a lock screen and in a
+  // notification preview, and the title of somebody else's private conversation
+  // has no business appearing there before the recipient has even opened it.
+  // The body carries it, two lines in.
+  const subject = `${data.ownerName} shared a recording with you`;
   const ctaUrl = data.appUrl
     ? `${data.appUrl}${transcriptPath(data.transcriptId)}`
     : undefined;
