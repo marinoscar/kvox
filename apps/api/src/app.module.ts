@@ -30,6 +30,7 @@ import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
 import { NotesModule } from './notes/notes.module';
+import { UserDataModule } from './user-data/user-data.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
 
@@ -202,6 +203,14 @@ import configuration from './config/configuration';
     // note is generated from the transcript AS THE USER CORRECTED IT, never
     // from the AI's original result.
     NotesModule,
+
+    // The Danger Zone (#80): a user deleting their own data in bulk. LAST of
+    // the feature modules because it imports several of them and is imported by
+    // none — it reuses `NotesService`, `TranscriptPipelineService`,
+    // `ObjectsService`, `NoteTemplatesService`, `PatService` and
+    // `UserAiCredentialsService` rather than reimplementing any of the per-item
+    // deletion machinery those already own.
+    UserDataModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
