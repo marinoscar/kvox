@@ -48,6 +48,11 @@ describe('destinations — route ownership', () => {
       expect.arrayContaining([
         '/',
         '/settings',
+        // #30, epic #19 — the four transcript routes.
+        '/transcripts',
+        '/transcripts/new',
+        '/transcripts/:id',
+        '/transcripts/:id/history',
         '/admin',
         '/admin/users',
         '/admin/settings',
@@ -184,8 +189,9 @@ describe('destinations — reachability regression', () => {
     }
   });
 
-  it('offers three destinations, with the two admin rows merged into Console', () => {
-    // NOT four any more (#92). `/admin/users` stops being a destination PATH
+  it('offers four destinations: Home, Transcripts, Settings and the merged Console', () => {
+    // Three after #92 merged the two admin rows; FOUR since #30 added the
+    // transcripts library. `/admin/users` is still not a destination PATH
     // while staying a resolvable route — it redirects to
     // `/admin/settings/users`, and the assertion above is what proves the
     // merge cost no reachability.
@@ -193,6 +199,20 @@ describe('destinations — reachability regression', () => {
       '/',
       '/admin/settings',
       '/settings',
+      '/transcripts',
+    ]);
+  });
+
+  it('keeps Home, Transcripts, Settings, Console as the declared ORDER', () => {
+    // Declaration order IS navigation order on the bottom bar and in the user
+    // menu (the rail only lifts `pinned` rows to its foot). Sorting the array
+    // above proves membership and says nothing about sequence, so the two
+    // assertions are deliberately separate.
+    expect(DESTINATIONS.map((destination) => destination.key)).toEqual([
+      'home',
+      'transcripts',
+      'settings',
+      'console',
     ]);
   });
 });
@@ -240,10 +260,44 @@ describe('destinations — the table itself', () => {
     expect(isDestinationVisible(both, holding(['users:write', 'users:read']))).toBe(true);
   });
 
-  it('leaves the non-admin destinations open to any authenticated user', () => {
+  it('leaves Home and User Settings open to any authenticated user', () => {
     const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
     expect(byKey.home.permission).toBeUndefined();
     expect(byKey.settings.permission).toBeUndefined();
+  });
+
+  it('gates Transcripts on the exact string transcripts.controller.ts enforces (#30)', () => {
+    // Verified against the controller, not assumed: every route on
+    // `TranscriptsController` carries
+    // `@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })` on its reads.
+    // The permission is seeded to all three roles, so in practice the row is
+    // visible to everybody — but the GATE has to be the permission, because a
+    // deployment that revokes it must lose the row.
+    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
+    expect(byKey.transcripts.permission).toBe('transcripts:read');
+    expect(byKey.transcripts.anyPermission).toBeUndefined();
+
+    const holding = (granted: string[]) => (permission: string) =>
+      granted.includes(permission);
+    expect(isDestinationVisible(byKey.transcripts, holding(['transcripts:read']))).toBe(
+      true,
+    );
+    expect(isDestinationVisible(byKey.transcripts, holding([]))).toBe(false);
+    // The admin ROLE grants nothing here, exactly as for Console.
+    expect(isDestinationVisible(byKey.transcripts, holding(['rbac:manage']))).toBe(false);
+  });
+
+  it('owns the whole /transcripts subtree, children included (#30)', () => {
+    // One prefix covers the library, the New-transcript flow, the viewer and
+    // #31's history page: a reader drilled into one transcript has not left
+    // the library, so the tab stays lit.
+    expect(resolveActiveDestination('/transcripts')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts/new')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts/abc-123')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts/abc-123/history')).toBe('transcripts');
+    // …and stops at the segment boundary, like every other prefix here.
+    expect(resolveActiveDestination('/transcriptsfoo')).toBeNull();
+    expect(resolveActiveDestination('/transcripts-archive')).toBeNull();
   });
 
   it('marks Console pinned and leaves Home and Settings as ordinary list rows (#105)', () => {

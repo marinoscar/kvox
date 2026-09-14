@@ -86,6 +86,13 @@ export const mockAdminUser: MockUser = {
     // testing a hub with no `Web Push` card — a user that cannot exist.
     'push:read',
     'push:write',
+    // Present because the seeded `admin` role grants them (#24, epic #19) —
+    // and because `transcripts:read`/`:write` are seeded to ALL THREE roles,
+    // an admin fixture without them is a user that cannot exist. Without them,
+    // every test rendering the real navigation with this fixture would
+    // silently be testing a bar and a rail with no Transcripts row.
+    'transcripts:read',
+    'transcripts:write',
   ],
   isActive: true,
   createdAt: new Date().toISOString(),

@@ -31,7 +31,11 @@ function setPermissions(granted: string[], isAdmin = false) {
   });
 }
 
-const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read'];
+// The seeded `admin` role's navigation-relevant permissions. `transcripts:read`
+// is in the set since #30 — it is seeded to ALL THREE roles, so an admin
+// fixture without it would be a user that cannot exist, and every assertion
+// below about the bar's four-action ceiling would silently be testing three.
+const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read', 'transcripts:read'];
 const PHONE = 375;
 
 /** Renders at a phone width, which is the only width this bar exists at. */
@@ -79,29 +83,44 @@ describe('BottomNav', () => {
   });
 
   describe('Destinations', () => {
-    it('renders all three destinations for a fully permitted user', () => {
-      // THREE since #92 merged the two admin rows into `Console`. The bar's
-      // four-action ceiling is unchanged and asserted below; this is simply one
-      // row further from it.
+    it('renders all four destinations for a fully permitted user', () => {
+      // FOUR since #30 added Transcripts — which is the bar's documented
+      // ceiling exactly, not one short of it. See `BottomNav`'s header: a
+      // fifth destination is a redesign, not an addition.
       renderPhone();
 
       expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Console' })).toBeInTheDocument();
     });
 
+    it('shows Transcripts to a user holding transcripts:read and nothing else', () => {
+      // The seeded Viewer. `transcripts:read` is granted to every role, so
+      // this is the ordinary user of this application rather than an edge case.
+      setPermissions(['transcripts:read'], false);
+      renderPhone();
+
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
+    });
+
     it('shows the compact label as visible text but the full label as the accessible name', () => {
-      // A 4-up bar at 375px gives each tab ~90px; "User Settings" does not fit.
+      // A 4-up bar at 375px gives each tab ~90px; "User Settings" does not fit,
+      // and neither does "Transcripts" (eleven characters). Both keep the full
+      // word as their ACCESSIBLE name, so nothing is lost to a screen reader.
       renderPhone();
 
       expect(screen.getByText('Settings')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
+      expect(screen.getByText('Library')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
     });
 
     it('never renders more than four actions — showLabels depends on it', () => {
       renderPhone();
 
-      expect(screen.getAllByRole('button')).toHaveLength(3);
+      expect(screen.getAllByRole('button')).toHaveLength(4);
       expect(screen.getAllByRole('button').length).toBeLessThanOrEqual(4);
     });
 
@@ -109,8 +128,12 @@ describe('BottomNav', () => {
       setPermissions([]);
       renderPhone();
 
+      // Home and User Settings only: both Transcripts and Console are gated.
       expect(screen.getAllByRole('button')).toHaveLength(2);
       expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Transcripts' }),
+      ).not.toBeInTheDocument();
     });
 
     it('gates on permission rather than the admin role', () => {
@@ -186,11 +209,11 @@ describe('BottomNav', () => {
       });
     });
 
-    it('reaches every destination the old Sidebar offered', async () => {
+    it('reaches every destination on the bar', async () => {
       const user = userEvent.setup();
       renderPhone('/');
 
-      for (const name of ['User Settings', 'Console', 'Home']) {
+      for (const name of ['User Settings', 'Transcripts', 'Console', 'Home']) {
         await user.click(screen.getByRole('button', { name }));
         await waitFor(() => {
           expect(screen.getByRole('button', { name })).toHaveClass('Mui-selected');

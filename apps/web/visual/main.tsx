@@ -72,6 +72,12 @@ import { ThemeContextProvider, useThemeContext } from '../src/contexts/ThemeCont
 import { ProtectedRoute } from '../src/components/common/ProtectedRoute';
 import { RequirePermission } from '../src/components/common/RequirePermission';
 import { Layout } from '../src/components/common/Layout';
+// Issue #30, epic #19. The New-transcript screen reads the app-wide upload
+// manager, and `useUploadManager` THROWS without a provider — deliberately, so
+// that an upload affordance rendered outside the authenticated shell is a loud
+// routing mistake rather than a dead button. The harness therefore mounts the
+// real provider, exactly as `App.tsx` does around `Layout`.
+import { UploadManagerProvider } from '../src/contexts/UploadManagerContext';
 import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
 import { LoadingSpinner } from '../src/components/common/LoadingSpinner';
 import type { Role, User } from '../src/types';
@@ -81,6 +87,9 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
 const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
+const TranscriptsLibraryPage = lazy(() => import('../src/pages/TranscriptsLibraryPage'));
+const NewTranscriptPage = lazy(() => import('../src/pages/NewTranscriptPage'));
+const TranscriptPage = lazy(() => import('../src/pages/TranscriptPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 
@@ -123,6 +132,12 @@ const DEFAULT_PERMISSIONS = [
   'db_backup:read',
   'db_backup:write',
   'db_backup:restore',
+  // Transcripts (#30, epic #19). Present for the same reason as every string
+  // above, with one addition specific to these: they are seeded to ALL THREE
+  // roles, so a harness user without them is a user that cannot exist — and
+  // the nav baselines would silently stop asserting the fourth destination.
+  'transcripts:read',
+  'transcripts:write',
 ];
 
 interface HarnessParams {
@@ -204,8 +219,53 @@ function HarnessRoutes() {
   return (
     <Routes>
       <Route element={<ProtectedRoute />}>
-        <Route element={<Layout />}>
+        <Route
+          element={
+            <UploadManagerProvider>
+              <Layout />
+            </UploadManagerProvider>
+          }
+        >
           <Route path="/" element={<HomePage />} />
+
+          {/* Transcripts (#30, epic #19). Gates copied verbatim from
+              `App.tsx`, like every other guarded route in this file. A spec
+              that visits one of these MOCKS THE API with `page.route` — the
+              pages genuinely render their own data, unlike the nav-only specs
+              that scope their screenshot to the rail. */}
+          <Route
+            path="/transcripts"
+            element={
+              <RequirePermission
+                permission="transcripts:read"
+                fallback={<Navigate to="/" replace />}
+              >
+                <TranscriptsLibraryPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/transcripts/new"
+            element={
+              <RequirePermission
+                permission="transcripts:write"
+                fallback={<Navigate to="/transcripts" replace />}
+              >
+                <NewTranscriptPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/transcripts/:id"
+            element={
+              <RequirePermission
+                permission="transcripts:read"
+                fallback={<Navigate to="/" replace />}
+              >
+                <TranscriptPage />
+              </RequirePermission>
+            }
+          />
 
           <Route path="/settings" element={<UserSettingsHubPage />} />
           <Route path="/settings/profile" element={<UserProfilePage />} />

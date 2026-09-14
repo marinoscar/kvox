@@ -1,0 +1,320 @@
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
+import { fireEvent, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+import { render } from '../../utils/test-utils';
+import { SegmentList } from '../../../components/transcripts/SegmentList';
+import type {
+  TranscriptSegment,
+  TranscriptSpeaker,
+  TranscriptWord,
+} from '../../../services/transcripts';
+
+/**
+ * The virtualized transcript.
+ *
+ * =============================================================================
+ * WHY THIS FILE INSTALLS LAYOUT STUBS
+ * =============================================================================
+ *
+ * jsdom performs no layout: every box is 0×0 and `ResizeObserver` is a no-op
+ * (see `__tests__/setup.ts`). `@tanstack/react-virtual` reads the scroll
+ * container's rect once on mount and each row's rect through `measureElement`,
+ * so with jsdom's real geometry it would compute a zero-height viewport and
+ * render a single row — which would make the "row count stays bounded"
+ * assertion below pass for entirely the wrong reason.
+ *
+ * The stubs are the same recipe `components/datatable/__tests__/testUtils/
+ * layoutStubs.ts` established for MUI X's own virtualizer, narrowed to what
+ * this component needs: a 600px-tall scroll container, 80px rows, and an
+ * `Element.prototype.scrollTo` (jsdom defines `scrollTo` on `window` only, and
+ * `scrollToIndex` calls it on the element).
+ *
+ * ⚠ `offsetHeight`, NOT `getBoundingClientRect`. Both the viewport measurement
+ * (`getRect`) and the per-row one (`measureElement`) read `offsetWidth` /
+ * `offsetHeight` — stubbing the rect instead leaves both at jsdom's zero and
+ * the virtualizer renders nothing at all, which looks exactly like a broken
+ * component.
+ */
+
+const VIEWPORT_HEIGHT = 600;
+const ROW_HEIGHT = 80;
+
+let scrollTo: ReturnType<typeof vi.fn>;
+
+function isRowElement(element: Element): boolean {
+  return (element as HTMLElement).dataset?.testid === 'segment-row';
+}
+
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return isRowElement(this) ? ROW_HEIGHT : VIEWPORT_HEIGHT;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    configurable: true,
+    get: () => 800,
+  });
+});
+
+afterAll(() => {
+  // `delete` restores jsdom's own accessor from further up the prototype
+  // chain; assigning `undefined` would leave a getter that answers undefined.
+  delete (HTMLElement.prototype as unknown as Record<string, unknown>).offsetHeight;
+  delete (HTMLElement.prototype as unknown as Record<string, unknown>).offsetWidth;
+});
+
+beforeEach(() => {
+  scrollTo = vi.fn();
+  Object.defineProperty(Element.prototype, 'scrollTo', {
+    configurable: true,
+    writable: true,
+    value: scrollTo,
+  });
+});
+
+const SPEAKERS: TranscriptSpeaker[] = [
+  { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
+  { id: 'sp2', label: 'B', displayName: 'Ben', colorIndex: 1, rev: 1 },
+];
+
+function makeSegments(count: number): TranscriptSegment[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `s${index}`,
+    speakerId: index % 2 === 0 ? 'sp1' : 'sp2',
+    startMs: index * 5000,
+    endMs: index * 5000 + 4000,
+    ordinal: index + 1,
+    text: `Line number ${index}`,
+    wordsAlignment: 'exact' as const,
+    confidence: 0.9,
+    origin: 'ai' as const,
+    rev: 1,
+    editedAt: null,
+  }));
+}
+
+function renderList(
+  overrides: Partial<Parameters<typeof SegmentList>[0]> = {},
+  segments = makeSegments(50),
+) {
+  const onPlayFrom = vi.fn();
+  const result = render(
+    <SegmentList
+      segments={segments}
+      speakers={SPEAKERS}
+      currentSegmentIndex={-1}
+      positionMs={0}
+      wordsBySegment={new Map<string, TranscriptWord[]>()}
+      onPlayFrom={onPlayFrom}
+      selectedSpeakerIds={[]}
+      {...overrides}
+    />,
+  );
+  return { ...result, onPlayFrom };
+}
+
+describe('SegmentList — virtualization', () => {
+  it('keeps the DOM row count bounded across a 6,000-segment transcript', () => {
+    // The benchmark fixture issue #30 names. The whole point of virtualizing
+    // is that this number does not track the transcript's length: a ten-hour
+    // conversation is tens of thousands of segments, and rendering them all on
+    // a phone is a blank screen rather than a slow one.
+    renderList({}, makeSegments(6000));
+
+    const rows = screen.getAllByTestId('segment-row');
+    expect(rows.length).toBeGreaterThan(0);
+    // A 600px viewport over 80px rows is ~8 visible plus 6 overscan each side.
+    // The generous ceiling is what keeps this a VIRTUALIZATION assertion rather
+    // than a brittle count of the overscan constant.
+    expect(rows.length).toBeLessThan(100);
+  });
+
+  it('renders the same bounded count for 50 segments as for 6,000', () => {
+    // The complement: if the count tracked the input, the assertion above
+    // would pass for a list that simply had fewer rows to draw.
+    const { unmount } = renderList({}, makeSegments(50));
+    const small = screen.getAllByTestId('segment-row').length;
+    unmount();
+
+    renderList({}, makeSegments(6000));
+    const large = screen.getAllByTestId('segment-row').length;
+
+    expect(large).toBe(small);
+  });
+
+  it('reserves the FULL scroll height, so the scrollbar tells the truth', () => {
+    // Virtualizing the rows must not virtualize the scroll range: a 6,000-row
+    // transcript whose container is 20 rows tall would be unscrollable.
+    const { container } = renderList({}, makeSegments(6000));
+    const sizer = container.querySelector('[role="region"] > div') as HTMLElement;
+
+    // `getComputedStyle`, not `.style`: the height comes from an `sx` prop, so
+    // emotion emits it as a class rule rather than as an inline declaration.
+    const height = parseInt(window.getComputedStyle(sizer).height, 10);
+    expect(height).toBeGreaterThan(6000 * ROW_HEIGHT * 0.9);
+  });
+});
+
+describe('SegmentList — content', () => {
+  it('renders each speaker’s name beside their text', () => {
+    renderList();
+
+    expect(screen.getAllByText('Ana').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Ben').length).toBeGreaterThan(0);
+    expect(screen.getByText('Line number 0')).toBeInTheDocument();
+  });
+
+  it('plays from a segment when its timestamp is activated', async () => {
+    const user = userEvent.setup();
+    const { onPlayFrom } = renderList();
+
+    await user.click(screen.getByRole('button', { name: 'Play from 0:10' }));
+
+    expect(onPlayFrom).toHaveBeenCalledWith(10_000);
+  });
+
+  it('names the timestamp control by what it DOES, not by its digits', () => {
+    // "0:10" is a fine visual label and a useless accessible one — it does not
+    // say that activating it starts playback.
+    renderList();
+
+    expect(screen.getByRole('button', { name: 'Play from 0:05' })).toBeInTheDocument();
+  });
+
+  it('highlights the current word when word timings are in hand', () => {
+    const words: TranscriptWord[] = [
+      { t: 'hello', s: 0, e: 500, c: 0.9 },
+      { t: 'there', s: 500, e: 1000, c: 0.9 },
+    ];
+
+    renderList({
+      currentSegmentIndex: 0,
+      positionMs: 600,
+      wordsBySegment: new Map([['s0', words]]),
+    });
+
+    // Rendered as words rather than as the segment's plain text, which is what
+    // makes per-word highlighting possible at all.
+    expect(screen.getByText('there')).toBeInTheDocument();
+    expect(screen.getByText('hello')).toBeInTheDocument();
+  });
+
+  it('falls back to the segment text when no word timings have arrived', () => {
+    // Word windows are fetched lazily and their failure is silent by design —
+    // the transcript must read correctly without them.
+    renderList({ currentSegmentIndex: 0, positionMs: 600 });
+
+    expect(screen.getByText('Line number 0')).toBeInTheDocument();
+  });
+
+  it('is a named region, so a screen-reader user can jump straight to it', () => {
+    renderList();
+
+    expect(screen.getByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+  });
+
+  it('says so plainly when there are no segments', () => {
+    renderList({}, []);
+
+    expect(screen.getByText(/no segments/i)).toBeInTheDocument();
+  });
+});
+
+describe('SegmentList — auto-follow and "Jump to current"', () => {
+  it('follows the current segment while the reader has not scrolled', () => {
+    const { rerender } = renderList({ currentSegmentIndex: 0 });
+    scrollTo.mockClear();
+
+    rerender(
+      <SegmentList
+        segments={makeSegments(50)}
+        speakers={SPEAKERS}
+        currentSegmentIndex={20}
+        positionMs={100_000}
+        wordsBySegment={new Map()}
+        onPlayFrom={vi.fn()}
+        selectedSpeakerIds={[]}
+      />,
+    );
+
+    expect(scrollTo).toHaveBeenCalled();
+  });
+
+  it('offers no "Jump to current" button while it is already following', () => {
+    // A permanently visible button that is sometimes a no-op trains the reader
+    // to ignore it.
+    renderList({ currentSegmentIndex: 5 });
+
+    expect(
+      screen.queryByRole('button', { name: 'Jump to current' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disengages following on a user scroll gesture and offers the button', () => {
+    // Continuing to yank the viewport back while somebody is re-reading is the
+    // single most hostile thing a transcript reader can do.
+    renderList({ currentSegmentIndex: 5 });
+    const region = screen.getByRole('region', { name: 'Transcript' });
+
+    fireEvent.wheel(region);
+
+    expect(screen.getByRole('button', { name: 'Jump to current' })).toBeInTheDocument();
+  });
+
+  it('disengages on touch and on a keyboard scroll too', () => {
+    renderList({ currentSegmentIndex: 5 });
+    const region = screen.getByRole('region', { name: 'Transcript' });
+
+    fireEvent.touchStart(region);
+    expect(screen.getByRole('button', { name: 'Jump to current' })).toBeInTheDocument();
+  });
+
+  it('stops following once disengaged, even as the current segment moves', () => {
+    const { rerender } = renderList({ currentSegmentIndex: 5 });
+    fireEvent.wheel(screen.getByRole('region', { name: 'Transcript' }));
+    scrollTo.mockClear();
+
+    rerender(
+      <SegmentList
+        segments={makeSegments(50)}
+        speakers={SPEAKERS}
+        currentSegmentIndex={30}
+        positionMs={150_000}
+        wordsBySegment={new Map()}
+        onPlayFrom={vi.fn()}
+        selectedSpeakerIds={[]}
+      />,
+    );
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('re-engages following when the button is used, and hides itself again', async () => {
+    // Engaging is always explicit, disengaging always implicit — the reverse
+    // would mean the reader has to fight the page first and find the control
+    // second.
+    const user = userEvent.setup();
+    renderList({ currentSegmentIndex: 5 });
+    fireEvent.wheel(screen.getByRole('region', { name: 'Transcript' }));
+    scrollTo.mockClear();
+
+    await user.click(screen.getByRole('button', { name: 'Jump to current' }));
+
+    expect(scrollTo).toHaveBeenCalled();
+    expect(
+      screen.queryByRole('button', { name: 'Jump to current' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers no button when there is no current segment to jump to', () => {
+    renderList({ currentSegmentIndex: -1 });
+    fireEvent.wheel(screen.getByRole('region', { name: 'Transcript' }));
+
+    expect(
+      screen.queryByRole('button', { name: 'Jump to current' }),
+    ).not.toBeInTheDocument();
+  });
+});

@@ -38,10 +38,11 @@
 
 import type { SvgIconComponent } from '@mui/icons-material';
 import HomeIcon from '@mui/icons-material/Home';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
-export type DestinationKey = 'home' | 'settings' | 'console';
+export type DestinationKey = 'home' | 'transcripts' | 'settings' | 'console';
 
 /**
  * Does `prefix` own `path`? True when the path equals the prefix or continues
@@ -68,6 +69,12 @@ export function owns(prefix: string, path: string): boolean {
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
   home: ['/'],
+  // `/transcripts` owns its whole subtree: the library, `/transcripts/new`,
+  // `/transcripts/:id` and `/transcripts/:id/history` (#30, #31, epic #19).
+  // One prefix, because every one of those is the same destination as far as
+  // "which tab is lit" is concerned — a viewer drilled into one transcript has
+  // not left the library.
+  transcripts: ['/transcripts'],
   settings: ['/settings'],
   console: ['/admin'],
 };
@@ -168,7 +175,9 @@ export function isDestinationVisible(
 }
 
 /**
- * The three destinations, in navigation order.
+ * The four destinations, in navigation order: Home, Transcripts, Settings,
+ * Console. That is the bottom bar's ceiling exactly — see `BottomNav`'s header
+ * — so a fifth destination is not an addition, it is a redesign.
  *
  * Declaration order IS navigation order on every surface. The rail is the one
  * exception, and only for the tail of the list: it lifts `pinned` destinations
@@ -179,6 +188,7 @@ export function isDestinationVisible(
  *
  *   - `users.controller.ts`           → `users:read`
  *   - `system-settings.controller.ts` → `system_settings:read`
+ *   - `transcripts.controller.ts`     → `transcripts:read`
  *
  * `console` is reachable on EITHER of those (see `anyPermission`), because
  * `/admin/settings` fronts pages from both controllers and a user entitled to
@@ -203,6 +213,30 @@ export const DESTINATIONS: readonly Destination[] = [
     compactLabel: 'Home',
     Icon: HomeIcon,
     path: '/',
+  },
+  {
+    // Issue #30, epic #19. Gated on `transcripts:read`, which is the exact
+    // string `transcripts.controller.ts` enforces on every one of its reads
+    // (`@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })`) — verified
+    // against the controller, not assumed, exactly as `console`'s pair was.
+    //
+    // The permission is seeded to ALL THREE roles (see the controller's own
+    // header: creating a transcript is the action epic #19 exists to enable
+    // and a new user's default role is Viewer), so in practice this row is
+    // visible to everybody — but the GATE is still the permission rather than
+    // "always", because a deployment that revokes it must lose the row too.
+    key: 'transcripts',
+    label: 'Transcripts',
+    // "Transcripts" is eleven characters and does not fit either surface that
+    // reads this field: a 4-up bottom bar at 360px gives each tab ~90px, and
+    // the collapsed rail is 56px wide. `label` stays the full word — it is the
+    // accessible name on both surfaces and the expanded rail's caption — and
+    // this is the visible short form, exactly the split `settings` already
+    // makes between "User Settings" and "Settings".
+    compactLabel: 'Library',
+    Icon: GraphicEqIcon,
+    path: '/transcripts',
+    permission: 'transcripts:read',
   },
   {
     key: 'settings',

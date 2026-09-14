@@ -474,7 +474,11 @@ describe('UserMenu', () => {
 
     it('labels and targets every entry from the destination table', async () => {
       const user = userEvent.setup();
-      setPermissions(['users:read', 'system_settings:read'], true);
+      // `transcripts:read` included since #30: `expected` below is derived
+      // from the LIVE table, so a fixture missing the permission would compare
+      // a four-row expectation against a three-row menu and fail — which is
+      // the assertion working, not a quirk to route around.
+      setPermissions(['users:read', 'system_settings:read', 'transcripts:read'], true);
 
       render(<UserMenu />, { wrapperOptions: { user: mockAdminUser } });
       await user.click(screen.getByRole('button'));

@@ -714,17 +714,41 @@ describe('QuickActions', () => {
     });
 
     it('takes each action path from the destination table, not a local copy', () => {
-      setPermissions(['users:read', 'system_settings:read'], true);
+      setPermissions(['users:read', 'system_settings:read', 'transcripts:read'], true);
 
       render(<QuickActions />, { wrapperOptions: { user: mockAdminUser } });
 
+      // Driven by the destinations this surface actually CARRIES — the ones
+      // with a line of prose in `ACTION_DESCRIPTIONS` — rather than by every
+      // row in the table. The component's own contract is "a destination with
+      // no entry is not shown here", and `transcripts` (#30) is the first row
+      // to exercise it: the home page is rebuilt by issue #32, which is where
+      // a transcripts shortcut belongs, so adding a description here now would
+      // be #30 editing a screen it does not own.
+      //
+      // What this still guards is the thing it was written for: the PATHS and
+      // LABELS come from `config/destinations.ts` and not from a second copy
+      // living in this file.
       for (const destination of DESTINATIONS) {
-        if (destination.key === 'home') continue;
+        if (destination.key === 'home' || destination.key === 'transcripts') continue;
         expect(
           screen.getByRole('button', { name: new RegExp(destination.label, 'i') }),
           `${destination.label} missing from Quick Actions`,
         ).toBeInTheDocument();
       }
+    });
+
+    it('omits a destination with no description of its own (#30)', () => {
+      // The explicit half of the rule above: `transcripts` is a real, visible
+      // destination this user can reach, and it is still absent from Quick
+      // Actions because this surface needs a sentence it has not been given.
+      setPermissions(['users:read', 'system_settings:read', 'transcripts:read'], true);
+
+      render(<QuickActions />, { wrapperOptions: { user: mockAdminUser } });
+
+      expect(
+        screen.queryByRole('button', { name: /transcripts/i }),
+      ).not.toBeInTheDocument();
     });
 
     it('keeps Theme as a deep link that rides on User Settings visibility', () => {

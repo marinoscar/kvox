@@ -57,6 +57,64 @@ const SETTINGS_SURFACES: {
   { sections: USER_SETTINGS_SECTIONS, hubPath: USER_HUB_PATH, hubTitle: USER_HUB_TITLE },
 ];
 
+/**
+ * Every NON-SETTINGS surface the compact bar drills into, in resolution order.
+ *
+ * Issue #30, epic #19. `SETTINGS_SURFACES` above answers the question "is this
+ * path a card in a settings registry?", and it can only ever answer it for
+ * paths a registry declares. `/transcripts/:id` is not a settings page and
+ * never will be — there is no card for it, there cannot be (the id is data,
+ * not configuration) — so before this table a phone opening a transcript got
+ * the wordmark treatment: no back arrow, and a header that said the product's
+ * name rather than which of a hundred transcripts was on screen.
+ *
+ * A TABLE OF PATTERNS, for the same reason `SETTINGS_SURFACES` is a table
+ * rather than a `??` chain: the bar needs to know WHICH level matched, because
+ * the up destination differs per level (`/transcripts/:id/history` goes up to
+ * the transcript, `/transcripts/:id` goes up to the library). Order is
+ * MOST SPECIFIC FIRST and is load-bearing here in a way it is not above —
+ * `/transcripts/:id` would otherwise claim `/transcripts/abc/history`, since a
+ * looser pattern matching a deeper path is exactly what a route hierarchy
+ * produces.
+ *
+ * ⚠ THE TITLES ARE STATIC, AND DELIBERATELY SO. A transcript's own title is
+ * data this component cannot reach: the AppBar is a SIBLING of `<Outlet />` in
+ * `Layout`, not an ancestor, so no page can publish into it without a new
+ * context wrapping both. That context is not worth its risk for a header line
+ * the page repeats as its own `<h1>` two rows below — what the bar has to get
+ * right is the WAY BACK, which a static label does not affect. If a future
+ * issue wants the live title here, the place to add it is a provider around
+ * both children in `Layout`, not a second resolver here.
+ *
+ * `/transcripts` itself is deliberately absent: it is a DESTINATION (the
+ * bottom bar lights its tab), not a drill-down, so it keeps the wordmark
+ * exactly as `/` and `/settings`'s own hub do not.
+ */
+const DRILL_DOWN_ROUTES: {
+  pattern: RegExp;
+  title: string;
+  /** `match` is the pattern's own result, so a level can go up to an id. */
+  upPath: (match: RegExpMatchArray) => string;
+}[] = [
+  {
+    pattern: /^\/transcripts\/new\/?$/,
+    title: 'New transcript',
+    upPath: () => '/transcripts',
+  },
+  {
+    // Issue #31 builds the page; the header treatment is wired here so the
+    // route is not reachable-but-unescapable on a phone the day it lands.
+    pattern: /^\/transcripts\/([^/]+)\/history\/?$/,
+    title: 'Version history',
+    upPath: (match) => `/transcripts/${match[1]}`,
+  },
+  {
+    pattern: /^\/transcripts\/([^/]+)\/?$/,
+    title: 'Transcript',
+    upPath: () => '/transcripts',
+  },
+];
+
 interface DrillDown {
   /** The resolved page title — a card's title, or the surface's hub title. */
   title: string;
@@ -66,7 +124,13 @@ interface DrillDown {
 
 /**
  * Resolve a pathname to the compact bar's title and its UP destination, or
- * `null` when the path is not a settings surface at all.
+ * `null` when the path is not a drill-down at all.
+ *
+ * TWO TABLES, CONSULTED IN ORDER: the settings registries first (#95), then
+ * `DRILL_DOWN_ROUTES` (#30). The settings half is untouched by that addition —
+ * a path a registry claims returns before the second loop is reached — so the
+ * only paths whose treatment changed are ones that previously fell through to
+ * `null`.
  *
  * UP ONE LEVEL, NEVER `navigate(-1)`. History-relative back is right only when
  * the user actually walked down the hierarchy in this tab. It diverges the
@@ -109,6 +173,17 @@ function resolveDrillDown(pathname: string): DrillDown | null {
       upPath: pathname === surface.hubPath ? '/' : surface.hubPath,
     };
   }
+
+  // Non-settings drill-downs (#30). Consulted AFTER the registries, so nothing
+  // about `SETTINGS_SURFACES`' behaviour changes: a path a registry claims
+  // never reaches this loop, and a path neither claims still returns `null`
+  // and keeps the wordmark.
+  for (const route of DRILL_DOWN_ROUTES) {
+    const match = pathname.match(route.pattern);
+    if (!match) continue;
+    return { title: route.title, upPath: route.upPath(match) };
+  }
+
   return null;
 }
 

@@ -67,8 +67,20 @@ import { api, ApiError } from './api';
 export interface PresignedPart {
   partNumber: number;
   url: string;
-  /** ISO-8601. After this the URL is dead and must be re-requested. */
-  expiresAt: string;
+  /**
+   * ISO-8601. After this the URL is dead and must be re-requested.
+   *
+   * OPTIONAL, because the two endpoints that produce these do not agree:
+   * `POST /upload/parts` sends it, and the `presignedUrls` inside an INIT
+   * response (`initUploadResponseSchema`, and the identical block inside
+   * `POST /api/transcripts`) does not. `hasFreshUrl` already handles its
+   * absence — an unparseable expiry is treated as fresh, and a URL that turns
+   * out to be dead is re-signed on the retry — so the field being absent is a
+   * supported state rather than a latent bug. It is typed as optional so a
+   * caller adopting an init response (issue #30's New-transcript screen) does
+   * not have to invent a timestamp the server never sent.
+   */
+  expiresAt?: string;
 }
 
 /** `POST /api/storage/objects/upload/init`. */
@@ -755,6 +767,10 @@ class UploadEngine implements ResumableUpload {
   private hasFreshUrl(partNumber: number): boolean {
     const cached = this.urls.get(partNumber);
     if (!cached) return false;
+    // An ABSENT expiry (the init endpoint sends none — see `PresignedPart`)
+    // and an unparseable one are the same case: nothing is known, so the URL
+    // is treated as fresh and a dead one is re-signed on the retry.
+    if (cached.expiresAt === undefined) return true;
     const expiry = Date.parse(cached.expiresAt);
     if (Number.isNaN(expiry)) return true;
     return expiry - URL_EXPIRY_SKEW_MS > this.runtime.now();
