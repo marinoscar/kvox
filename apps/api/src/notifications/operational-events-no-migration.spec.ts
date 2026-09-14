@@ -68,6 +68,11 @@ const MIGRATIONS_AT_288 = [
   // follow the identical registry-entry-only recipe #288 exists to prove,
   // with no schema of their own either.
   '20260914140000_add_notes',
+  // #47 (epic #45): `user_ai_credentials`, the first PER-USER secret in this
+  // schema — an encrypted AI provider key behind a cascading foreign key,
+  // which is the one thing the shared `credentials` table structurally could
+  // not offer. A credential store, and equally not about notifications.
+  '20260914150000_add_user_ai_credentials',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

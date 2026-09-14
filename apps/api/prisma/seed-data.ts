@@ -328,6 +328,33 @@ export const DEFAULT_SYSTEM_SETTINGS = {
       bitrateKbps: 64,
     },
   },
+  // ---------------------------------------------------------------------------
+  // AI (#47, epic #45)
+  // ---------------------------------------------------------------------------
+  //
+  // INERT on a fresh deployment: `enabled: false` and an EMPTY `allowedModels`
+  // mean nothing is sent to any AI provider until an administrator turns AI on
+  // AND names the models this deployment permits. The provider block is
+  // populated anyway, so enabling it is two fields rather than five.
+  //
+  // ⚠ NO API KEY HERE, AND — UNLIKE `transcription` ABOVE — NONE IN THE
+  // `credentials` TABLE EITHER. Epic #45 is strict BYO: every AI key belongs to
+  // an individual user and lives in `user_ai_credentials` behind a cascading
+  // foreign key. This namespace carries a compile-time proof that it has no
+  // secret-bearing field (`src/ai/ai-settings.schema.ts`).
+  ai: {
+    enabled: false,
+    providers: {
+      openai: {
+        baseUrl: 'https://api.openai.com/v1',
+        allowedModels: [] as string[],
+        defaultModel: 'gpt-4o',
+      },
+    },
+    maxInputTokens: 100000,
+    maxOutputTokens: 16384,
+    requestTimeoutMs: 600000,
+  },
   maintenance: {
     enabled: false,
     // Names no product and no repository — this is a template repo, and the

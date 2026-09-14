@@ -5,6 +5,10 @@ import {
   systemTranscriptionPatchSchema as transcriptionPatchSchema,
 } from '../../transcription/transcription-settings.schema';
 import {
+  systemAiSchema as aiSchema,
+  systemAiPatchSchema as aiPatchSchema,
+} from '../../ai/ai-settings.schema';
+import {
   dataTablesSchema,
   dataTablesPatchSchema,
   navigationSchema,
@@ -390,6 +394,34 @@ export type {
   AudioDeliveryMode,
 } from '../../transcription/transcription-settings.schema';
 
+/**
+ * AI policy (`ai`) — issue #47, epic #45.
+ *
+ * DEFINED IN `ai/ai-settings.schema.ts` AND RE-EXPORTED HERE, for the identical
+ * reason `transcription` is: the shape has a nested per-provider block and it
+ * carries a COMPILE-TIME PROOF that no secret-bearing field exists, and a proof
+ * has to live next to the thing it proves something about. That file imports
+ * nothing but zod, so it is a leaf and this import cannot cycle.
+ *
+ * ⚠ THERE IS NO AI KEY ANYWHERE IN THIS ROW, AND UNLIKE `transcription` THERE
+ * IS NOT ONE IN THE SHARED `credentials` TABLE EITHER. Epic #45 is strict BYO:
+ * every AI key belongs to an individual user and lives in
+ * `user_ai_credentials`, behind a cascading foreign key. A key in this
+ * namespace would be both a secret in a wholesale-returned settings blob and
+ * the deployment-wide fallback credential docs/specs/notes.md §9 rejected.
+ */
+export {
+  systemAiSchema,
+  systemAiPatchSchema,
+  AI_PROVIDER_IDS,
+} from '../../ai/ai-settings.schema';
+
+export type {
+  SystemAiValue,
+  SystemAiPatchValue,
+  AiProviderId,
+} from '../../ai/ai-settings.schema';
+
 // -----------------------------------------------------------------------------
 // PATCH (deep-partial) counterparts
 // -----------------------------------------------------------------------------
@@ -463,6 +495,11 @@ export const systemSettingsSchema = z.object({
   // `readKnownSettings` fills it from `DEFAULT_SYSTEM_SETTINGS` when storage
   // has nothing.
   transcription: transcriptionSchema,
+  // AI policy (#47, epic #45). Declared in its own leaf file and re-exported
+  // above; required here for the same reason every other namespace is — this
+  // schema describes the value as STORED, and `readKnownSettings` fills it
+  // from `DEFAULT_SYSTEM_SETTINGS` when storage has nothing.
+  ai: aiSchema,
 });
 
 export type SystemSettingsDto = z.infer<typeof systemSettingsSchema>;
@@ -491,4 +528,5 @@ export const systemSettingsPatchSchema = z.object({
   databaseBackup: systemDatabaseBackupPatchSchema.optional(),
   maintenance: systemMaintenancePatchSchema.optional(),
   transcription: transcriptionPatchSchema.optional(),
+  ai: aiPatchSchema.optional(),
 });
