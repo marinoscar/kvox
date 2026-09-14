@@ -261,6 +261,9 @@ class FakeProvider implements AiProvider<unknown> {
       { id: 'gpt-4o', label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
     ],
     streaming: true as const,
+    // #78: this fake implements no `listModels`, so it must not claim to — the
+    // registry refuses that combination at boot.
+    modelDiscovery: false,
   };
   readonly settingsSchema = z.unknown();
   readonly fieldDescriptors = [];

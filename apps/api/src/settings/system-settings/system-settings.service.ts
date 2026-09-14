@@ -1153,6 +1153,15 @@ export class SystemSettingsService {
       // one that can express removing a model.
       ai: {
         enabled: dto.ai?.enabled ?? currentValue.ai.enabled,
+        // ⚠ `!== undefined`, NEVER `??` (#78) — the `transcription.provider`
+        // and `maintenance.startedAt` case exactly. `null` is a meaningful
+        // value here ("no provider is active"), so `??` would fall through to
+        // the stored provider and make deactivating one a 200 that changed
+        // nothing.
+        provider:
+          dto.ai?.provider !== undefined
+            ? dto.ai.provider
+            : currentValue.ai.provider,
         providers: {
           openai: {
             baseUrl:

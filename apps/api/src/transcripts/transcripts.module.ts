@@ -64,8 +64,9 @@ import { TranscriptsService } from './transcripts.service';
 //     that this module can reach a plaintext-returning credential path.
 //   • `CredentialsModule` — `TranscriptionRuntimeService` resolves the provider
 //     API key per call. Imported explicitly for the same visibility reason.
-//   • `StorageModule` — `ObjectsService`, for `initUpload` (with `managedBy`)
-//     and `deleteManagedObject`.
+//   • `StorageModule` — `ObjectsService`, for `initUpload` (with `managedBy`
+//     and, since #79, this module's own MIME allowlist in place of the
+//     operator's generic-upload one) and `deleteManagedObject`.
 //   • `StorageProvidersModule` — the `STORAGE_PROVIDER` token itself, which
 //     `StorageModule` does not re-export. Submit presigns with it; ingest
 //     writes the gzipped raw result through it.

@@ -1379,6 +1379,13 @@ multi-GB upload outlives its own first batch.
   `image/*,application/pdf,video/*,audio/*`) and no known audio extension
   rescues it; the message names the type that was rejected
 
+  ⚠ **This is the generic-upload allowlist only.** `POST /api/transcripts`
+  (issue #79) does **not** route its content-type check through
+  `ALLOWED_MIME_TYPES` — it enforces its own, fixed `audio/*,video/*` list
+  regardless of what an operator has configured here, for the reason given
+  under `### Transcripts` below. A 400 from a transcript upload never names
+  this setting.
+
 ---
 
 #### Sign More Upload Part URLs
@@ -2881,8 +2888,22 @@ request leaves no half-started upload behind for the stale sweep to find:
 | Code | When |
 |---|---|
 | `409` | Transcription is not configured for this deployment: disabled, no provider chosen, a provider this build does not include, or **no API key stored**. The request was well formed; the deployment is not ready, and a 400 would blame the caller for an administrator's unfinished setup |
-| `400` | The file is larger than the active provider accepts (5 GB for AssemblyAI), or is not a type this deployment allows at all |
+| `400` | The file is larger than the active provider accepts (5 GB for AssemblyAI), or is not audio or video at all |
 | `403` | The caller does not hold `transcripts:write` |
+
+**The `400` type check is `audio/*,video/*`, a fixed allowlist this endpoint
+enforces itself — not the operator-configured `ALLOWED_MIME_TYPES` the generic
+`POST /api/storage/objects*` surface reads (issue #79).** A deployment whose
+`.env` predates issue #21 lists `image/*,application/pdf,video/*` with no
+`audio/*` entry, which used to reject every Android `.m4a` recording with a
+message about images and PDFs — for a type AssemblyAI's own accepted list
+already contains. Recording is this feature's core action, so it cannot be
+silently disabled by an unrelated setting written for arbitrary file uploads;
+see [`docs/specs/transcription.md` §9.6](specs/transcription.md#96-content-type-allowlist-transcript_source_mime_types-not-storageallowedmimetypes-issue-79)
+for the full reasoning. Also note the check is deliberately **wider** than
+what AssemblyAI accepts directly: a video file passes here because
+`media.audio.transcode` extracts a rendition the provider does accept, decided
+later by `selectTranscriptionInput` once that rendition exists.
 
 The upload object is created `managed_by: transcripts`, which makes it
 **invisible** to `GET /storage/objects` and makes a generic `DELETE` against it
@@ -4074,10 +4095,11 @@ Every column is copied, not just `instructions`. No lineage is recorded.
 
 ### AI Settings
 
-The deployment AI policy — is AI on, which provider endpoint may be called,
-which models are permitted, and the token/timeout/document ceilings every
-generation runs under — issue #47, epic #45. See
-[`docs/specs/notes.md`](specs/notes.md) §6.4.
+The deployment AI policy — is AI on, which provider is active, which models
+are permitted, and the token/timeout/document ceilings every generation runs
+under — issue #47, epic #45; the active-provider axis, live model discovery
+and the widened `allowedModels` entry are issue #78. See
+[`docs/specs/notes.md`](specs/notes.md) §2.5, §6.4.
 
 Gated on `system_settings:read` / `system_settings:write`, **not a
 permission pair of its own**: this configuration is the `ai` namespace of
@@ -4091,7 +4113,10 @@ one.** Epic #45 is strict bring-your-own-key: every AI key belongs to an
 individual user (`/api/ai-credentials` below), encrypted at rest and
 unreadable through the API by design, for any role including an
 administrator. There is deliberately no deployment-wide fallback key — a
-user with no key has no AI features.
+user with no key has no AI features. **`GET /ai-settings/models` below is the
+one exception to "no credential is touched here" in spirit, not in storage**:
+it spends the *calling administrator's own* saved key to ask the provider a
+question, but never accepts, stores or returns one.
 
 #### GET /ai-settings
 The deployment AI policy and the provider catalogue (models and form fields)
@@ -4105,13 +4130,14 @@ the admin page renders itself from.
   "data": {
     "settings": {
       "enabled": true,
-      "providers": { "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": ["gpt-4o", "gpt-4o-mini"], "defaultModel": "gpt-4o" } },
+      "provider": "openai",
+      "providers": { "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": [ "gpt-4o", { "id": "gpt-4o-mini" }, { "id": "o5-preview", "label": "O5 Preview", "contextWindowTokens": 300000, "maxOutputTokens": 32768 } ], "defaultModel": "gpt-4o" } },
       "maxInputTokens": 100000,
       "maxOutputTokens": 16384,
       "requestTimeoutMs": 600000,
       "maxDocumentBytes": 26214400
     },
-    "providers": [ { "id": "openai", "label": "OpenAI", "capabilities": { "models": [ "…" ], "streaming": true }, "fieldDescriptors": [ "…" ] } ],
+    "providers": [ { "id": "openai", "label": "OpenAI", "capabilities": { "models": [ "…" ], "streaming": true, "modelDiscovery": true }, "fieldDescriptors": [ "…" ] } ],
     "unknownModels": [],
     "version": 3,
     "updatedAt": "2024-01-01T00:00:00.000Z",
@@ -4120,9 +4146,35 @@ the admin page renders itself from.
 }
 ```
 
-`unknownModels` lists model ids the policy permits that no registered
-provider declares — such a model cannot be budgeted, so it is never offered
-to a user; this is where a mistyped model id becomes visible.
+`provider` (#78) is the active provider, or `null` when none has been
+chosen — a separate axis from `enabled`, so an operator can switch vendors
+without touching the master switch or vice versa. Every hardcoded `'openai'`
+consumer literal is gone from this application; adding a second
+OpenAI-API-compatible vendor costs an id in `AI_PROVIDER_IDS`, a block in the
+provider schema and a provider class, with no consumer edit anywhere.
+
+**`allowedModels` entries are now objects**, not bare strings (#78): each is
+`{ id, label?, contextWindowTokens?, maxOutputTokens? }`. A bare string
+(`"gpt-4o"`) is still accepted on write and always will be — every
+deployment that saved a policy before #78 has strings stored right now — and
+it is read back normalised to `{ id: "gpt-4o" }`. The two optional numbers
+let an administrator permit a model this build's own catalogue does not
+describe (adopted from `GET /ai-settings/models` below, or typed by hand);
+when absent, they fall back to this build's catalogue for that id, and then
+to nothing.
+
+`unknownModels` lists model ids the policy permits that this deployment
+cannot budget for at all — neither the entry's own numbers nor the build
+catalogue can answer. Such a model is never offered to a user; this is
+where a mistyped model id, or one adopted with no numbers supplied, becomes
+visible. **Since #78 this is narrower than "not in the build catalogue"**: an
+entry carrying its own `contextWindowTokens`/`maxOutputTokens` is usable and
+is *not* listed here, even for a model no release of this application has
+ever heard of.
+
+`providers[].capabilities.modelDiscovery` (#78) says whether
+`GET /ai-settings/models` will work for that provider at all — a provider
+with no live model list still accepts any model id typed by hand.
 
 ---
 
@@ -4131,6 +4183,15 @@ Updates the AI policy. Every field optional — send only what changed. **This
 endpoint never accepts an API key** — there is no field for one.
 `allowedModels` **replaces the stored list wholesale**, RFC 7396's rule for
 arrays: a merging list could never express "stop permitting this model."
+`provider` may be set to `null` to unset the active provider, or to one of
+the ids in `AI_PROVIDER_IDS`; when a request changes `provider` in the same
+body as `allowedModels`, the submitted models are validated against the
+**new** provider's catalogue, not the previously stored one.
+
+An `allowedModels` entry may be a **bare model id** (`"gpt-4o"`) or an
+**object** (`{ "id": "o5-preview", "label": "O5 Preview",
+"contextWindowTokens": 300000, "maxOutputTokens": 32768 }`). Both forms are
+accepted forever and both are read back as objects.
 
 **Requires:** `system_settings:write`
 
@@ -4139,8 +4200,71 @@ arrays: a merging list could never express "stop permitting this model."
 **Response:** the updated policy, re-read from storage, in the `GET` shape above.
 
 **Error Cases:**
-- `400` - Validation error, or a model id no registered provider declares
+- `400` - Validation error, or an `allowedModels` entry this deployment cannot budget for (no context window on the entry and none in the active provider's build catalogue — the message names the missing field(s) and is not a statement that the model is forbidden)
 - `409` - Version conflict
+
+---
+
+#### GET /ai-settings/models
+Asks the configured (or a named) provider's own API which models it offers,
+so `allowedModels` can be chosen from a live list instead of typed from
+memory (#78). This is what makes the policy independent of the handful of
+models compiled into this build's own catalogue.
+
+⚠ **This spends a real vendor call, on the *calling administrator's own* API
+key** — this deployment stores no AI key of any kind (every key belongs to
+an individual user), so discovery has to authenticate as the administrator
+making the request. The list returned is the one **that key** can reach,
+which on OpenAI is project-scoped: two administrators can legitimately see
+different lists. The policy saved from this list is checked against
+**neither** — it is checked against each user's own key, at generation time,
+which is the only authority that matters when a request is actually made.
+This is also why the route is gated on `system_settings:write` rather than
+`:read`: looking at settings is not probing a third party.
+
+⚠ **This returns HTTP 200 even when the provider refused the call.** Read
+`ok` and show `detail` — it distinguishes "the key is wrong," "the account
+has no credit" and "the endpoint is unreachable." This is the thing a client
+author is most likely to get wrong: a non-2xx is *not* the only failure mode
+here, because there isn't one — the route answers 200 either way.
+
+**Requires:** `system_settings:write`
+
+**Query:** `?provider=` (optional) — which provider to ask; defaults to the
+active one. Naming a different provider lets an administrator inspect its
+catalogue **before** switching to it.
+
+**Response (success):**
+```json
+{
+  "data": {
+    "ok": true,
+    "detail": "The provider listed 42 chat-capable model(s). Models this build already knows the context window of are marked as such; for any other, supply a context window and output ceiling when you permit it.",
+    "models": [
+      { "id": "gpt-4o", "label": "GPT-4o", "known": true, "contextWindowTokens": 128000, "maxOutputTokens": 16384 },
+      { "id": "o5-preview", "label": "o5-preview", "known": false, "contextWindowTokens": null, "maxOutputTokens": null }
+    ]
+  }
+}
+```
+
+**Response (vendor refusal — still HTTP 200):**
+```json
+{ "data": { "ok": false, "detail": "The provider rejected this API key (HTTP 401). Check that you pasted the whole key and that it has not been revoked in your provider account.", "models": [] } }
+```
+
+`known: false` means the provider listed the model but this build carries no
+descriptor for it, so `contextWindowTokens`/`maxOutputTokens` are `null` —
+collect those two numbers from the administrator (the vendor publishes both)
+before saving it into `allowedModels`, or it will be saved, listed back, and
+never offered to anyone (it lands in `unknownModels` above). The list is
+sorted known-models-first, then alphabetically, and filtered to plausible
+chat models as a convenience only — an administrator can still permit any
+model id by hand, and that path never consults the filter.
+
+**Error Cases:**
+- `400` - No provider is active and none was named in the query, the named provider is not implemented by this build, the provider cannot list models at all (`capabilities.modelDiscovery: false`), or this deployment's stored settings for that provider are invalid
+- `409` - `details.reason: "ai_key_missing"` — **you**, the calling administrator, have saved no API key for that provider under `/api/ai-credentials`. There is no deployment key to fall back to.
 
 ---
 

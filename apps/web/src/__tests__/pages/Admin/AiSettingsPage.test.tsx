@@ -20,16 +20,26 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
-vi.mock('../../../services/ai', () => ({
-  getAiSettings: vi.fn(),
-  updateAiSettings: vi.fn(),
-  testAiReachability: vi.fn(),
-}));
+// A PARTIAL MOCK, not a wholesale one (#78). The page and its model editor
+// import real constants and pure helpers from this module — `AI_MODEL_BOUNDS`,
+// `AI_ALLOWED_MODELS_MAX`, `aiDiscoveryConflictReason` — and stubbing the whole
+// module makes those `undefined` at render time, which fails as an unrelated
+// crash rather than as an assertion. Only the four network calls are replaced.
+vi.mock('../../../services/ai', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../services/ai')>();
+  return {
+    ...actual,
+    getAiSettings: vi.fn(),
+    updateAiSettings: vi.fn(),
+    testAiReachability: vi.fn(),
+    discoverAiModels: vi.fn(),
+  };
+});
 
 vi.mock('../../../hooks/usePermissions', () => ({
   usePermissions: vi.fn(),
@@ -38,13 +48,19 @@ vi.mock('../../../hooks/usePermissions', () => ({
 import { render, mockAdminUser } from '../../utils/test-utils';
 import AiSettingsPage from '../../../pages/Admin/AiSettingsPage';
 import { usePermissions } from '../../../hooks/usePermissions';
-import { getAiSettings, testAiReachability, updateAiSettings } from '../../../services/ai';
+import {
+  discoverAiModels,
+  getAiSettings,
+  testAiReachability,
+  updateAiSettings,
+} from '../../../services/ai';
 import type { AiSettingsAdminView } from '../../../services/ai';
 
 const mockUsePermissions = vi.mocked(usePermissions);
 const mockGet = vi.mocked(getAiSettings);
 const mockUpdate = vi.mocked(updateAiSettings);
 const mockTest = vi.mocked(testAiReachability);
+const mockDiscover = vi.mocked(discoverAiModels);
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
@@ -67,10 +83,14 @@ function setPermissions(granted: string[]) {
 const baseView: AiSettingsAdminView = {
   settings: {
     enabled: true,
+    provider: 'openai',
     providers: {
       openai: {
         baseUrl: 'https://api.openai.com/v1',
-        allowedModels: ['gpt-4o', 'gpt-4o-mini'],
+        // OBJECTS, not bare ids (#78). The API normalises a legacy stored
+        // `"gpt-4o"` to `{ id: 'gpt-4o' }` on read, so this is the shape the
+        // page always receives — whatever is in the database.
+        allowedModels: [{ id: 'gpt-4o' }, { id: 'gpt-4o-mini' }],
         defaultModel: 'gpt-4o',
       },
     },
@@ -84,6 +104,9 @@ const baseView: AiSettingsAdminView = {
       id: 'openai',
       label: 'OpenAI',
       capabilities: {
+        // Both permitted models are in the catalogue, so neither row demands
+        // the two token numbers — the default fixture is a VALID policy, and a
+        // test about something else does not fail on a disabled Save button.
         models: [
           {
             id: 'gpt-4o',
@@ -91,8 +114,15 @@ const baseView: AiSettingsAdminView = {
             contextWindowTokens: 128_000,
             maxOutputTokens: 16_384,
           },
+          {
+            id: 'gpt-4o-mini',
+            label: 'GPT-4o mini',
+            contextWindowTokens: 128_000,
+            maxOutputTokens: 16_384,
+          },
         ],
         streaming: true,
+        modelDiscovery: true,
       },
       fieldDescriptors: [],
     },
@@ -111,6 +141,32 @@ const renderPage = async () => {
   return result;
 };
 
+// ============================================================================
+// #83 REGRESSION FIXTURE
+// ============================================================================
+//
+// The ACTUAL shipping defaults of the `ai` namespace
+// (`apps/api/src/common/types/settings.types.ts`): `enabled: false`,
+// `provider: 'openai'`, `providers.openai.allowedModels: []`,
+// `defaultModel: 'gpt-4o'`. This is the exact state `baseView` above was built
+// to avoid — its own comment says the default fixture is deliberately valid
+// "so a test about something else does not fail on a disabled Save button."
+// That avoidance is the gap #83 shipped through: nothing in this file ever
+// rendered the page on the state every fresh deployment actually starts in.
+const freshDeploymentView: AiSettingsAdminView = {
+  ...baseView,
+  settings: {
+    ...baseView.settings,
+    enabled: false,
+    providers: {
+      openai: {
+        ...baseView.settings.providers.openai,
+        allowedModels: [],
+      },
+    },
+  },
+};
+
 describe('AiSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -119,6 +175,7 @@ describe('AiSettingsPage', () => {
     mockGet.mockResolvedValue(baseView);
     mockUpdate.mockResolvedValue(baseView);
     mockTest.mockResolvedValue({ ok: true, latencyMs: 55, detail: 'Answered normally.' });
+    mockDiscover.mockResolvedValue({ ok: true, detail: 'Listed 1 model.', models: [] });
   });
 
   afterEach(() => {
@@ -203,7 +260,13 @@ describe('AiSettingsPage', () => {
           'https://api.openai.com/v1',
         ),
       );
-      expect(screen.getByLabelText(/permitted models/i)).toHaveValue('gpt-4o\ngpt-4o-mini');
+      // #78: the textarea is gone. The permitted models are rows in a list,
+      // one per model, which is what makes per-model token limits expressible
+      // at all — see `AiPermittedModels`' header.
+      const permitted = screen.getByRole('list', { name: /permitted models/i });
+      expect(within(permitted).getAllByRole('listitem')).toHaveLength(2);
+      expect(within(permitted).getByText('gpt-4o')).toBeInTheDocument();
+      expect(within(permitted).getByText('gpt-4o-mini')).toBeInTheDocument();
       expect(screen.getByLabelText(/max input tokens/i)).toHaveValue(100_000);
       expect(screen.getByLabelText(/max output tokens/i)).toHaveValue(4_096);
       expect(screen.getByLabelText(/request timeout/i)).toHaveValue(120_000);
@@ -211,18 +274,36 @@ describe('AiSettingsPage', () => {
       expect(screen.getByLabelText(/max document size/i)).toHaveValue(26_214_400);
     });
 
-    it('saves the model list as an array, replacing it wholesale', async () => {
+    it('saves the model list as objects, replacing it wholesale', async () => {
       const user = userEvent.setup();
       await renderPage();
 
-      const models = screen.getByLabelText(/permitted models/i);
-      await user.clear(models);
-      await user.type(models, 'gpt-4o{Enter}gpt-4.1');
+      // Drop the second permitted model and add one this build has never heard
+      // of, with the two numbers that make it budgetable — the flow #78 exists
+      // for, and the one the retired textarea could not express.
+      await user.click(
+        screen.getByRole('button', { name: /stop permitting gpt-4o-mini/i }),
+      );
+      await user.type(screen.getByLabelText(/^model id$/i), 'gpt-9-turbo');
+      await user.type(
+        screen.getByLabelText(/context window in tokens for gpt-9-turbo/i),
+        '250000',
+      );
+      await user.type(
+        screen.getByLabelText(/maximum output tokens for gpt-9-turbo/i),
+        '32768',
+      );
+      await user.click(screen.getByRole('button', { name: /add model/i }));
       await user.click(screen.getByRole('button', { name: /save changes/i }));
 
       await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
       const [body, version] = mockUpdate.mock.calls[0];
-      expect(body.providers?.openai?.allowedModels).toEqual(['gpt-4o', 'gpt-4.1']);
+      // ⚠ ALWAYS OBJECTS. The API accepts a bare id for ever so that old STORED
+      // policies stay readable, not as a shorthand a client should use.
+      expect(body.providers?.openai?.allowedModels).toEqual([
+        { id: 'gpt-4o' },
+        { id: 'gpt-9-turbo', contextWindowTokens: 250_000, maxOutputTokens: 32_768 },
+      ]);
       // The version travels as `If-Match`, so a concurrent edit 409s rather
       // than being silently overwritten.
       expect(version).toBe(7);
@@ -232,9 +313,9 @@ describe('AiSettingsPage', () => {
       const user = userEvent.setup();
       await renderPage();
 
-      const models = screen.getByLabelText(/permitted models/i);
-      await user.clear(models);
-      await user.type(models, 'gpt-4.1');
+      // Removing the default out from under itself is exactly how this state is
+      // reached in practice.
+      await user.click(screen.getByRole('button', { name: /stop permitting gpt-4o$/i }));
 
       expect(
         await screen.findByText(/this model is not in the permitted list/i),
@@ -262,9 +343,109 @@ describe('AiSettingsPage', () => {
       await renderPage();
 
       expect(
-        await screen.findByText(/some permitted models are not recognised/i),
+        await screen.findByText(/some permitted models cannot be used/i),
       ).toBeInTheDocument();
       expect(screen.getByText(/gpt-9-turbo/)).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // #83: the shipping defaults must let an administrator turn AI on
+  // ==========================================================================
+
+  describe('#83: a fresh deployment can turn AI on', () => {
+    it('enables Save changes on the shipping defaults — allowedModels: [], defaultModel: gpt-4o — the exact fixture the rest of this file avoids', async () => {
+      mockGet.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      expect(await screen.findByRole('button', { name: /save changes/i })).toBeEnabled();
+      // Not merely enabled by accident: nothing is named as unresolved either.
+      expect(screen.queryByText(/save is unavailable until you fix/i)).not.toBeInTheDocument();
+    });
+
+    it('lets an administrator actually turn AI on from that state, preserving the default model and the empty allow-list', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(freshDeploymentView);
+      mockUpdate.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      // The point of #83: the enable switch works BEFORE any model is
+      // permitted, not just that the button happens to render enabled.
+      await user.click(screen.getByLabelText(/enable ai features/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      const [body] = mockUpdate.mock.calls[0];
+      expect(body.enabled).toBe(true);
+      expect(body.providers?.openai?.allowedModels).toEqual([]);
+      expect(body.providers?.openai?.defaultModel).toBe('gpt-4o');
+    });
+
+    it('shows the no-permitted-models guidance when the allow-list is empty', async () => {
+      mockGet.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      expect(
+        await screen.findByText(/no models are permitted yet, so ai cannot run/i),
+      ).toBeInTheDocument();
+      // "Add a model by hand" also names a control further down the page, so
+      // this checks there are at least two occurrences (the alert's own
+      // cross-reference plus the control) rather than picking one by text
+      // alone, which is ambiguous by construction here.
+      expect(screen.getAllByText(/add a model by hand/i).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('does not show that guidance once at least one model is permitted', async () => {
+      // baseView (the default fixture for every other test) already permits two.
+      await renderPage();
+
+      expect(screen.queryByText(/no models are permitted yet/i)).not.toBeInTheDocument();
+    });
+
+    it('still blocks when a non-empty allow-list does not contain the default model, and names it in the disabled reason', async () => {
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: {
+          ...baseView.settings,
+          providers: {
+            openai: {
+              ...baseView.settings.providers.openai,
+              // Non-empty, but the default ('gpt-4o') is not in it — a real
+              // contradiction, unlike the empty-list case above.
+              allowedModels: [{ id: 'gpt-4o-mini' }],
+              defaultModel: 'gpt-4o',
+            },
+          },
+        },
+      });
+      await renderPage();
+
+      expect(
+        await screen.findByText(/this model is not in the permitted list/i),
+      ).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: /save changes/i });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-describedby', 'save-blocked-reason');
+      expect(
+        screen.getByText(/save is unavailable until you fix the default model/i),
+      ).toBeInTheDocument();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it('still blocks an empty default model — the schema’s own min(1), which no allow-list state can excuse', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      // With `allowedModels: []` the field renders as free text, not a select
+      // (see `select={modelIds.length > 0}` in the page), so it can be cleared.
+      const field = screen.getByLabelText(/default model/i);
+      await user.clear(field);
+
+      expect(
+        await screen.findByText(/this cannot be left empty/i),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     });
   });
 
