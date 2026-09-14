@@ -3374,6 +3374,16 @@ The stored policy, a masked key status for every registered provider, and the
 provider catalogue (capabilities and form-field descriptors) the admin page
 renders itself from — so adding a provider costs no frontend change.
 
+AssemblyAI's `speechModel` field stays a plain string but is read as a
+**comma-separated, ordered list** of model ids (e.g.
+`"universal-3-5-pro, universal-2"`), sent to the vendor as its `speech_models`
+array — AssemblyAI falls back through the list by language support. The
+retired singular ids `universal`, `best`, `nano` and `slam-1` (case-insensitive)
+are dropped on read; if nothing remains, the default list
+`universal-3-5-pro, universal-2` is sent, so an existing deployment's stored
+`"universal"` keeps working with no migration (2026-09-14, issue #95 — see
+`docs/specs/transcription.md` §2.7).
+
 **Requires:** `system_settings:read`
 
 **Response:**
@@ -3384,7 +3394,7 @@ renders itself from — so adding a provider costs no frontend change.
       "enabled": true,
       "provider": "assemblyai",
       "providers": {
-        "assemblyai": { "region": "us", "speechModel": "universal" }
+        "assemblyai": { "region": "us", "speechModel": "universal-3-5-pro, universal-2" }
       },
       "audioDelivery": "presigned_url",
       "presignedUrlTtlMinutes": 360,
@@ -3465,7 +3475,7 @@ overwrite unconditionally.
 {
   "enabled": true,
   "provider": "assemblyai",
-  "providers": { "assemblyai": { "region": "eu", "speechModel": "universal" } },
+  "providers": { "assemblyai": { "region": "eu", "speechModel": "universal-3-5-pro, universal-2" } },
   "deleteRemoteAfterIngest": true,
   "defaultLanguage": null,
   "apiKey": "..."

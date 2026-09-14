@@ -316,7 +316,7 @@ export const DEFAULT_SYSTEM_SETTINGS = {
     providers: {
       assemblyai: {
         region: 'us',
-        speechModel: 'universal',
+        speechModel: 'universal-3-5-pro, universal-2',
       },
     },
     audioDelivery: 'presigned_url',
