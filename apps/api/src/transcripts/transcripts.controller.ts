@@ -689,7 +689,13 @@ export class TranscriptsController {
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @ApiBody({ type: CreateTranscriptShareBodyDto })
   @ApiDataResponse(TranscriptShareDto, { status: 201, description: 'The share that now exists' })
-  @ApiResponse({ status: 400, description: 'The address is not a valid email, or the role is not one of the two' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'The address is not a valid email, the role is not one of the two, or the address is ' +
+      'the caller\'s own — which is a **400**, not the generic 404, because there is nothing ' +
+      'to conceal from somebody about their own account',
+  })
   @ApiResponse({ status: 404, description: 'No such transcript, the caller is not its owner, or no user has that address' })
   @ApiResponse({ status: 429, description: 'Too many lookups for addresses with no account' })
   async addShare(

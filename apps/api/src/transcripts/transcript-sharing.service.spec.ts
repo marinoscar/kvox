@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
@@ -9,6 +9,7 @@ import type { TranscriptAccessService } from './transcript-access.service';
 import {
   SHARE_NOT_FOUND_MESSAGE,
   SHARE_RECIPIENT_NOT_FOUND_MESSAGE,
+  SHARE_WITH_SELF_MESSAGE,
   TranscriptSharingService,
 } from './transcript-sharing.service';
 
@@ -209,7 +210,7 @@ describe('TranscriptSharingService', () => {
       ).resolves.toBeDefined();
     });
 
-    it('refuses sharing with yourself, and does NOT use the generic message for it', async () => {
+    it('refuses sharing with yourself with a 400, not the generic 404', async () => {
       prisma.user.findFirst.mockResolvedValue({
         id: OWNER.id,
         email: OWNER.email,
@@ -219,7 +220,17 @@ describe('TranscriptSharingService', () => {
 
       await expect(
         service.add(TRANSCRIPT_ID, { email: OWNER.email, role: 'editor' }, OWNER),
-      ).rejects.toThrow('You already own this transcript');
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.add(TRANSCRIPT_ID, { email: OWNER.email, role: 'editor' }, OWNER),
+      ).rejects.toThrow(SHARE_WITH_SELF_MESSAGE);
+
+      // And it costs no rate-limit budget: a typo is not a probe.
+      for (let index = 0; index < 30; index += 1) {
+        await expect(
+          service.add(TRANSCRIPT_ID, { email: OWNER.email, role: 'editor' }, OWNER),
+        ).rejects.toThrow(BadRequestException);
+      }
     });
   });
 

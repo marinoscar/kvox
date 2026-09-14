@@ -62,7 +62,12 @@
 // against a real database rather than asserting it.
 // =============================================================================
 
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 
@@ -101,6 +106,9 @@ export interface TranscriptShareItem {
  * oracle this whole design closes.
  */
 export const SHARE_RECIPIENT_NOT_FOUND_MESSAGE = 'No user with that email';
+
+/** Sharing with yourself. See the 400 branch in `add` for why it is not a 404. */
+export const SHARE_WITH_SELF_MESSAGE = 'You already own this transcript';
 
 /** Removing a share that is not there. Distinct only because the row is known. */
 export const SHARE_NOT_FOUND_MESSAGE = 'That transcript is not shared with this user';
@@ -190,10 +198,11 @@ export class TranscriptSharingService {
     }
 
     if (recipient.id === user.id) {
-      // NOT throttled and NOT generic: the caller typed their own address, so
-      // there is nothing to conceal and a generic 404 would read as "your own
-      // account does not exist".
-      throw new NotFoundException('You already own this transcript');
+      // ⚠ 400, NOT the generic 404, and NOT throttled. The caller typed their
+      // OWN address: there is nothing to conceal from somebody about their own
+      // account, a generic 404 would read as "your account does not exist",
+      // and charging the limiter would punish a typo rather than a probe.
+      throw new BadRequestException(SHARE_WITH_SELF_MESSAGE);
     }
 
     const existing = await this.prisma.transcriptShare.findUnique({

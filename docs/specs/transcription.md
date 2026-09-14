@@ -1166,6 +1166,13 @@ role change that removed `transcripts:write` must not trap a recipient in a
 share they want out of. The leave path passes an empty permission list for
 the same reason.
 
+**Sharing with yourself is a 400, not the generic 404**, and costs no
+rate-limit budget. The 404 is generic because the caller must not learn
+whether a *stranger's* address has an account; there is nothing to conceal
+from somebody about their own, a generic answer there would read as "your
+account does not exist", and charging the limiter would punish a typo rather
+than a probe.
+
 Re-sharing with somebody who already holds a share **updates their role**
 rather than failing: the dialog's email field does not know who is already on
 the list, and a 409 would make the owner delete a row in order to type it
