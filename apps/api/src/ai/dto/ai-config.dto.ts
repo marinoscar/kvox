@@ -25,6 +25,15 @@ import { z } from 'zod';
 // see `ai-config.service.ts`'s header for why folding them together would make
 // the UI unable to tell "your administrator has not turned this on" from "you
 // have not pasted a key".
+//
+// ⚠ `provider` IS INDEPENDENT OF `available` FOR THE SAME REASON (issue #83).
+// It answers "which vendor would a key belong to"; `available` answers "may AI
+// be used right now". A key form needs the first and is not asking about the
+// second, so `provider` is populated whenever a recognised vendor is
+// configured — switched on or not — and is null only when there is genuinely no
+// vendor to name. Blanking it while AI was off was what made a fresh
+// deployment unsetuppable: nobody could save the key the administrator needed
+// in order to finish enabling AI.
 // =============================================================================
 
 export const aiConfigModelSchema = z.object({
@@ -48,17 +57,19 @@ export const aiConfigSchema = z.object({
   available: z
     .boolean()
     .describe(
-      'True only when AI is enabled, the configured provider is registered in this build, at least one permitted model is one this build can budget requests for, and the token ceilings leave room for input. A client should not offer AI generation when this is false. **Independent of `keyConfigured`** — see that field.',
+      'True only when AI is enabled, the configured provider is registered in this build, at least one permitted model is one this build can budget requests for, and the token ceilings leave room for input. A client should not offer AI generation when this is false. **Independent of `keyConfigured` and of `provider`** — a non-null `provider` alongside `available: false` is the ordinary state of a deployment whose administrator has not finished setting AI up.',
     ),
   provider: z
     .string()
     .nullable()
-    .describe('The active provider id, or null when none is usable.'),
+    .describe(
+      'The configured provider id — which vendor a key would belong to. **Independent of `available`** (issue #83): it is populated whenever this deployment names a provider this build recognises, including while AI is switched off or nothing is permitted yet, so a user can save and verify their key before an administrator finishes enabling the feature. Null means only that there is no vendor to name: either none is configured, or the configured one is unknown to this build.',
+    ),
   providerLabel: z
     .string()
     .nullable()
     .describe(
-      'Human name of the active provider, for the "this will be sent to …" disclosure shown before every generation.',
+      'Human name of the configured provider, for the "this will be sent to …" disclosure shown before every generation and for labelling the key form. Null exactly when `provider` is null — never merely because AI is unavailable.',
     ),
   models: z
     .array(aiConfigModelSchema)
