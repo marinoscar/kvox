@@ -46,6 +46,7 @@ import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
 import type { NormalizedTranscript } from '../../transcription/normalized-transcript';
+import { ORDINAL_GAP } from '../editing/ordinals';
 import {
   TRANSCRIPTION_INGEST_JOB_TYPE,
   TRANSCRIPTION_THROTTLE_KEY,
@@ -67,12 +68,19 @@ export const INGEST_MAX_RUNTIME_MS = 15 * 60 * 1000;
 /**
  * The gap between consecutive segment ordinals.
  *
- * 1000, 2000, 3000, … so a later `segment.split` (#28) only needs the midpoint
+ * 1000, 2000, 3000, … so a later `segment.split` (#27) only needs the midpoint
  * between two neighbours and touches no other row. See spec §3.4 for why a
  * dense integer sequence would make every split an `UPDATE` whose cost grows
  * with how far into the transcript it happened.
+ *
+ * ⚠ DEFINED IN `editing/ordinals.ts`, NOT HERE, and re-exported for the call
+ * sites that already name it off this module. The correction reducers assign
+ * ordinals with the same constant (and renumber a neighbourhood back out to it
+ * when a gap runs out), so two copies of the number would be two copies that
+ * could drift — and a drift would show up as segments ingested at one spacing
+ * being split at another.
  */
-export const ORDINAL_GAP = 1000;
+export { ORDINAL_GAP };
 
 @Injectable()
 export class TranscriptionIngestHandler implements JobHandler, OnModuleInit {
