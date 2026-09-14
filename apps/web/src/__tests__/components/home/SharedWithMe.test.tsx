@@ -84,10 +84,18 @@ describe('SharedWithMe', () => {
     expect(screen.getAllByText(/ago · 15 min · 3 speakers/)).toHaveLength(2);
   });
 
-  it('falls back to "Shared with you" when the API sends no owner name', () => {
-    render(<SharedWithMe items={[transcript({ id: 's3', access: 'viewer' })]} />);
+  it('names the owner on every shared row', () => {
+    // Issue #29 made `ownerName` required on every list row, so there is no
+    // "no owner name" case left to fall back from — the interesting assertion
+    // is that the name actually reaches the row, since knowing WHO shared a
+    // recording is the whole reason this section is separate from Recent.
+    render(
+      <SharedWithMe
+        items={[{ ...transcript({ id: 's3', access: 'viewer' }), ownerName: 'Dana Willis' }]}
+      />,
+    );
 
-    expect(screen.getByText('Shared with you')).toBeInTheDocument();
+    expect(screen.getByText('Shared by Dana Willis')).toBeInTheDocument();
   });
 
   it('opens a shared transcript when tapped', async () => {

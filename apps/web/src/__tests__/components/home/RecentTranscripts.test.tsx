@@ -118,12 +118,14 @@ describe('TranscriptSummaryCard', () => {
     expect(screen.getByText('Shared by Ana Ruiz')).toBeInTheDocument();
   });
 
-  it('falls back to "Shared with you" when the DTO carries no owner name', () => {
-    // `transcriptListItemSchema` has no owner field today — see the type's own
-    // note. The fallback must be true, not blank.
-    render(<TranscriptSummaryCard transcript={transcript({ access: 'viewer' })} showOwner />);
+  it('names no owner unless asked to, even though every row carries one', () => {
+    // `ownerName` is required on every row since issue #29 — owned rows carry
+    // the caller's OWN name — so the card must not volunteer it. Recent
+    // transcripts are the caller's own, and "Shared by <you>" on your own
+    // recording is noise at best and wrong at worst.
+    render(<TranscriptSummaryCard transcript={transcript({ access: 'viewer' })} />);
 
-    expect(screen.getByText('Shared with you')).toBeInTheDocument();
+    expect(screen.queryByText(/^Shared by /)).not.toBeInTheDocument();
   });
 
   it('has no accessibility violations', async () => {

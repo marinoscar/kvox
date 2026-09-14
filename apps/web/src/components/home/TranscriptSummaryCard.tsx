@@ -28,19 +28,16 @@ import { formatDuration } from '../../utils/playbackIntervals';
 import { formatRelativeTime } from '../../utils/relativeTime';
 
 /**
- * A summary row, plus the owner's name when the API has one to give.
+ * A summary row as this page renders it.
  *
- * ⚠ `ownerName` IS OPTIONAL BECAUSE THE DTO DOES NOT CARRY IT YET.
- * `transcriptListItemSchema` (`apps/api/src/transcripts/dto/transcript.dto.ts`)
- * has `access` but no owner field, and issue #32 is web-only — adding one is an
- * API change this change is not allowed to make. Typed optional rather than
- * omitted so the day the field lands, `SharedWithMe` renders it with no further
- * edit; until then the caller reads "Shared with you", which is true and is
- * information the `access` chip does not already carry.
+ * An alias of `TranscriptListItem` rather than a widened shape: issue #29 put
+ * `ownerName` on every row — owned rows included, carrying the caller's own
+ * name — so there is nothing left for the home page to add. It is kept as a
+ * named type because five components in this folder pass rows to each other,
+ * and a name that says *what a row is here* survives the list item gaining a
+ * field better than five separate imports of the service type would.
  */
-export type HomeTranscriptItem = TranscriptListItem & {
-  ownerName?: string | null;
-};
+export type HomeTranscriptItem = TranscriptListItem;
 
 /** How a share role is spelled for a person. `owner` never reaches a chip here. */
 export function accessRoleLabel(access: TranscriptAccessRole): string {
@@ -110,9 +107,7 @@ export function TranscriptSummaryCard({
           </Typography>
           {showOwner && (
             <Typography variant="caption" color="text.secondary" component="p" noWrap>
-              {transcript.ownerName
-                ? `Shared by ${transcript.ownerName}`
-                : 'Shared with you'}
+              {`Shared by ${transcript.ownerName}`}
             </Typography>
           )}
         </Box>
