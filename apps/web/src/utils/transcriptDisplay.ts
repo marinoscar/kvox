@@ -242,3 +242,104 @@ export function formatBytes(bytes: number): string {
   }
   return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
+
+// =============================================================================
+// The scrubber's speaker bands
+// =============================================================================
+
+/** One coloured band on the scrubber, as percentages of the whole duration. */
+export interface ScrubberRegion {
+  /** Left edge, 0–100. */
+  startPct: number;
+  /** Width, 0–100. */
+  widthPct: number;
+  /** The speaker's palette index — resolve with `speakerColor`. */
+  colorIndex: number;
+}
+
+/**
+ * How many columns the timeline is sampled into for the scrubber.
+ *
+ * ⚠ THE BANDS ARE SAMPLED, NOT DRAWN PER SEGMENT, and that is the whole reason
+ * this function exists. A ten-hour recording is tens of thousands of segments;
+ * one `<span>` per segment is tens of thousands of absolutely positioned
+ * elements behind a control four pixels tall, most of them sub-pixel wide. The
+ * scrubber's job is to show the SHAPE of the conversation — who holds the floor
+ * where — and 240 columns is finer than the control can resolve on any screen
+ * this application runs on.
+ */
+const SCRUBBER_BUCKETS = 240;
+
+/**
+ * Sample `segments` into at most `SCRUBBER_BUCKETS` bands, merging neighbours
+ * that belong to the same speaker.
+ *
+ * The dominant speaker wins each bucket — the one holding the floor longest
+ * inside it — rather than the first or the last, so a two-second interjection
+ * inside a two-minute monologue does not repaint the whole bucket.
+ *
+ * Returns `[]` for a zero or unknown duration, which renders as a plain rail:
+ * before `loadedmetadata` there is genuinely nothing to say about the shape of
+ * the recording, and dividing by zero would say it wrongly.
+ */
+export function buildScrubberRegions(
+  segments: readonly { speakerId: string; startMs: number; endMs: number }[],
+  durationMs: number,
+  speakerColorIndex: (speakerId: string) => number,
+): ScrubberRegion[] {
+  if (!Number.isFinite(durationMs) || durationMs <= 0 || segments.length === 0) {
+    return [];
+  }
+
+  const bucketMs = durationMs / SCRUBBER_BUCKETS;
+  /** Per bucket: speaker id → milliseconds held. */
+  const buckets: Map<string, number>[] = Array.from(
+    { length: SCRUBBER_BUCKETS },
+    () => new Map<string, number>(),
+  );
+
+  for (const segment of segments) {
+    const start = Math.max(0, Math.min(durationMs, segment.startMs));
+    const end = Math.max(start, Math.min(durationMs, segment.endMs));
+    const first = Math.min(SCRUBBER_BUCKETS - 1, Math.floor(start / bucketMs));
+    const last = Math.min(SCRUBBER_BUCKETS - 1, Math.floor(end / bucketMs));
+    for (let index = first; index <= last; index += 1) {
+      const bucketStart = index * bucketMs;
+      const overlap =
+        Math.min(end, bucketStart + bucketMs) - Math.max(start, bucketStart);
+      if (overlap <= 0) continue;
+      const map = buckets[index];
+      map.set(segment.speakerId, (map.get(segment.speakerId) ?? 0) + overlap);
+    }
+  }
+
+  const width = 100 / SCRUBBER_BUCKETS;
+  const regions: ScrubberRegion[] = [];
+  for (let index = 0; index < SCRUBBER_BUCKETS; index += 1) {
+    let dominant: string | null = null;
+    let best = 0;
+    for (const [speakerId, held] of buckets[index]) {
+      if (held > best) {
+        best = held;
+        dominant = speakerId;
+      }
+    }
+    if (dominant === null) continue;
+
+    const colorIndex = speakerColorIndex(dominant);
+    const previous = regions[regions.length - 1];
+    // Merged only when ADJACENT: a gap of silence between two buckets of the
+    // same speaker is part of the shape and must stay visible.
+    if (
+      previous &&
+      previous.colorIndex === colorIndex &&
+      Math.abs(previous.startPct + previous.widthPct - index * width) < 1e-9
+    ) {
+      previous.widthPct += width;
+      continue;
+    }
+    regions.push({ startPct: index * width, widthPct: width, colorIndex });
+  }
+
+  return regions;
+}
