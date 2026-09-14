@@ -158,6 +158,42 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
   },
+  // ---------------------------------------------------------------------------
+  // The GPT-5.4 family — the REASONING models (#87)
+  // ---------------------------------------------------------------------------
+  //
+  // ⚠ THE FOUR GPT-4 ENTRIES ABOVE STAY. This catalogue is not an allow-list
+  // (see the doc comment): it is what this build knows how to BUDGET against,
+  // and removing an entry a deployment already names in `allowedModels` would
+  // strand that policy — `resolveAllowedModel` would find no numbers, the model
+  // would stop being offered, and nothing would say why.
+  //
+  // ⚠ THEIR OUTPUT CEILING IS SHARED WITH THEIR THINKING. A reasoning model
+  // spends tokens deliberating before it writes anything, those tokens are
+  // BILLED AND COUNTED AS OUTPUT, and they come out of the same
+  // `max_completion_tokens` the visible answer does. So `maxOutputTokens` here
+  // is not "how long the answer may be" the way it is for GPT-4 — it is the
+  // thinking and the answer together. See `ai.reasoningEffort` in
+  // `../ai-settings.schema.ts` for what that means for a deployment's policy
+  // ceiling, which is the number that actually binds.
+  {
+    id: 'gpt-5.4',
+    label: 'GPT-5.4',
+    contextWindowTokens: 1_050_000,
+    maxOutputTokens: 128_000,
+  },
+  {
+    id: 'gpt-5.4-mini',
+    label: 'GPT-5.4 mini',
+    contextWindowTokens: 400_000,
+    maxOutputTokens: 128_000,
+  },
+  {
+    id: 'gpt-5.4-nano',
+    label: 'GPT-5.4 nano',
+    contextWindowTokens: 400_000,
+    maxOutputTokens: 128_000,
+  },
 ];
 
 /**
@@ -484,7 +520,11 @@ export class OpenAiProvider
       helpText:
         'The model offered first. It should be one of the permitted models above; if it is not, clients fall back to the first permitted one.',
       required: true,
-      defaultValue: 'gpt-4o',
+      // #87: the same value `DEFAULT_SYSTEM_SETTINGS.ai` now carries. These two
+      // are the same decision written in two places — a form that prefilled
+      // `gpt-4o` while a fresh row said `gpt-5.4-mini` would look like a bug in
+      // whichever one the administrator noticed second.
+      defaultValue: 'gpt-5.4-mini',
     },
   ];
 
@@ -795,6 +835,12 @@ export class OpenAiProvider
           stream: true,
           stream_options: { include_usage: true },
           max_completion_tokens: request.maxOutputTokens,
+          // ⚠ SPREAD, SO THE KEY IS ABSENT AND NOT `'none'` — see
+          // `reasoningEffortBody` for why absent is the only correct shape at
+          // the default, and for why the parameter is the FLAT
+          // `reasoning_effort` string rather than Responses API's
+          // `reasoning: { effort }`.
+          ...this.reasoningEffortBody(request.reasoningEffort),
           messages: [
             { role: 'system', content: request.systemPrompt },
             { role: 'user', content: request.userContent },
@@ -929,6 +975,35 @@ export class OpenAiProvider
   /** The configured API root, without a trailing slash. */
   private baseUrl(settings: OpenAiSettings): string {
     return settings.baseUrl.replace(/\/+$/, '');
+  }
+
+  /**
+   * The `reasoning_effort` fragment of a completion body, or nothing (#87).
+   *
+   * ⚠ `reasoning_effort: '<value>'`, FLAT — this is the CHAT COMPLETIONS
+   * spelling, and it is the single easiest thing to get wrong here. The nested
+   * `reasoning: { effort }` object belongs to the RESPONSES API, a different
+   * endpoint with a different body; sent to `/chat/completions` it is at best
+   * ignored (so the deployment pays for a setting that does nothing and nobody
+   * can tell) and at worst rejected as an unknown parameter. The whole point of
+   * this method existing rather than being one more line in the body literal is
+   * that the shape has a comment attached to it.
+   *
+   * ⚠ `'none'` AND `undefined` BOTH SEND NOTHING, deliberately. `'none'` is the
+   * vendor's own default, so omitting the key is behaviourally identical to
+   * sending it — and omitting it is strictly safer, because
+   * `providers.openai.baseUrl` is a setting precisely so an OpenAI-COMPATIBLE
+   * gateway can be used, and many of them predate `reasoning_effort` and reject
+   * a body carrying an unknown key. A deployment that has not opted in
+   * therefore puts byte-for-byte the request on the wire it put there before
+   * this feature existed.
+   */
+  private reasoningEffortBody(
+    effort: AiGenerateRequest['reasoningEffort'],
+  ): { reasoning_effort?: string } {
+    if (effort === undefined || effort === 'none') return {};
+
+    return { reasoning_effort: effort };
   }
 
   /**
