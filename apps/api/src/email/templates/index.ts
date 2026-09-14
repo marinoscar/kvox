@@ -18,6 +18,14 @@ import {
   restoreCompletedEmail,
 } from './restore-completed.email';
 import { type RoleChangedEmailData, roleChangedEmail } from './role-changed.email';
+import {
+  type TranscriptFailedEmailData,
+  transcriptFailedEmail,
+} from './transcript-failed.email';
+import {
+  type TranscriptReadyEmailData,
+  transcriptReadyEmail,
+} from './transcript-ready.email';
 import { type TestEmailData, testEmail } from './test-email.email';
 import { type UserWelcomeEmailData, userWelcomeEmail } from './user-welcome.email';
 
@@ -95,6 +103,13 @@ export interface EmailTemplateDataMap {
   'node-offline': NodeOfflineEmailData;
   'backup-failed': BackupFailedEmailData;
   'restore-completed': RestoreCompletedEmailData;
+
+  // The transcript pipeline's two owner-addressed events (#25, epic #19).
+  // Unlike the four operational templates above — which are addressed to a
+  // PERMISSION and describe the deployment — these describe one person's own
+  // recording and are sent to its owner alone.
+  'transcript-ready': TranscriptReadyEmailData;
+  'transcript-failed': TranscriptFailedEmailData;
 }
 
 /**
@@ -131,6 +146,8 @@ export const EMAIL_TEMPLATES: {
   'node-offline': nodeOfflineEmail,
   'backup-failed': backupFailedEmail,
   'restore-completed': restoreCompletedEmail,
+  'transcript-ready': transcriptReadyEmail,
+  'transcript-failed': transcriptFailedEmail,
 };
 
 /**
@@ -249,6 +266,9 @@ export { nodeOfflineEmail } from './node-offline.email';
 export { backupFailedEmail } from './backup-failed.email';
 export { restoreCompletedEmail } from './restore-completed.email';
 
+export { transcriptReadyEmail, formatDuration } from './transcript-ready.email';
+export { transcriptFailedEmail } from './transcript-failed.email';
+
 export type { PlainTextOptions, RenderLayoutOptions } from './layout';
 export type { EmailTemplate, RenderedEmail } from './email-template.types';
 export type { TestEmailData } from './test-email.email';
@@ -273,3 +293,5 @@ export type {
   BackupFailureOutcome,
 } from './backup-failed.email';
 export type { RestoreCompletedEmailData } from './restore-completed.email';
+export type { TranscriptReadyEmailData } from './transcript-ready.email';
+export type { TranscriptFailedEmailData } from './transcript-failed.email';

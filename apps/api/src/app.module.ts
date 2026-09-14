@@ -27,6 +27,7 @@ import { DbBackupModule } from './db-backup/db-backup.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { TestAuthModule } from './test-auth/test-auth.module';
 import { TranscriptionModule } from './transcription/transcription.module';
+import { TranscriptsModule } from './transcripts/transcripts.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
 
@@ -172,6 +173,14 @@ import configuration from './config/configuration';
     // touching `system_settings` itself — the same arrangement DbBackupModule
     // has with `databaseBackup`.
     TranscriptionModule,
+
+    // The transcript pipeline (#25, epic #19): create, the upload listener,
+    // five job handlers, the reconciliation cron and the read/lifecycle
+    // routes. After TranscriptionModule because it imports it for the provider
+    // registry and the settings service, and after StorageModule because it
+    // calls `ObjectsService.initUpload` with a `managedBy` only a module may
+    // claim.
+    TranscriptsModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),

@@ -160,6 +160,22 @@ export const mockPermissions = {
     name: 'push:write',
     description: 'Generate, rotate, enable/disable and remove the Web Push key pair',
   },
+  // The transcript pipeline (#24/#25, epic #19). Seeded to ALL THREE ROLES in
+  // `prisma/seed-data.ts`, including Viewer, and mirrored that way below:
+  // creating a transcript is the action the whole feature exists for, and a
+  // brand-new account's default role is Viewer. A fixture that withheld these
+  // from Viewer would make an integration test asserting a viewer CAN create a
+  // transcript fail for a reason the real seed does not have.
+  transcriptsRead: {
+    id: randomUUID(),
+    name: 'transcripts:read',
+    description: 'View your own transcripts and shares',
+  },
+  transcriptsWrite: {
+    id: randomUUID(),
+    name: 'transcripts:write',
+    description: 'Create, edit and delete your own transcripts',
+  },
 };
 
 export const mockRoles = {
@@ -474,12 +490,16 @@ export const rolePermissionsMap = {
     mockPermissions.dbBackupRestore,
     mockPermissions.pushRead,
     mockPermissions.pushWrite,
+    mockPermissions.transcriptsRead,
+    mockPermissions.transcriptsWrite,
   ],
   contributor: [
     mockPermissions.userSettingsRead,
     mockPermissions.userSettingsWrite,
     mockPermissions.storageRead,
     mockPermissions.storageWrite,
+    mockPermissions.transcriptsRead,
+    mockPermissions.transcriptsWrite,
   ],
   // Viewer gets storage:read and NOT storage:write, exactly as seeded — which
   // is what makes a 403 on a storage:write route testable.
@@ -487,6 +507,9 @@ export const rolePermissionsMap = {
     mockPermissions.userSettingsRead,
     mockPermissions.userSettingsWrite,
     mockPermissions.storageRead,
+    // Both, deliberately — see `transcriptsRead`'s note above.
+    mockPermissions.transcriptsRead,
+    mockPermissions.transcriptsWrite,
   ],
 };
 

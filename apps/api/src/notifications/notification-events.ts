@@ -395,6 +395,45 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     // debugging "where did today's data go?" from first principles.
     mandatory: true,
   },
+
+  // ===========================================================================
+  // THE TRANSCRIPT PIPELINE (#25, epic #19)
+  // ===========================================================================
+  //
+  // Two events, and the thing that makes them different from the four
+  // operational ones above is WHO THEY ARE ADDRESSED TO. `jobs.job_failed` and
+  // its neighbours are addressed to a PERMISSION — anybody who can see the
+  // queue should learn that it gave up — because a failed job is a fact about
+  // the deployment. A transcript is a fact about one person: their recording,
+  // their conversation, their private data. So both of these are raised with
+  // `notify(key, ownerId, …)` to the OWNER ALONE, and never with
+  // `notifyPermissionHolders`.
+  //
+  // NEITHER IS `mandatory`. Being told your own upload finished is a courtesy,
+  // not a security-relevant change to your own privileges — the test
+  // `security.role_changed` and `db_backup.restore_completed` pass and these
+  // two do not. A user who transcribes twenty files a day and watches the
+  // in-app list is entitled to turn both off.
+  // ===========================================================================
+  {
+    key: 'transcripts.transcript_ready',
+    label: 'Transcript ready',
+    description:
+      'Sent when one of your recordings finishes transcribing and can be read, corrected and shared.',
+    // Both channels: a transcription takes minutes to hours, so the reader has
+    // usually closed the tab — which is what an email is for — while somebody
+    // who is still in the application gets the toast that saves them polling.
+    channels: ['email', 'browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'transcripts.transcript_failed',
+    label: 'Transcription failed',
+    description:
+      'Sent when one of your recordings could not be transcribed. Carries the reason and a link to retry it.',
+    channels: ['email', 'browser'],
+    defaultEnabled: true,
+  },
 ];
 
 /**

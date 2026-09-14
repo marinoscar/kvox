@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Auth } from '../auth/decorators/auth.decorator';
+import { PERMISSIONS } from '../common/constants/roles.constants';
 import { TranscriptionConfigService } from './transcription-config.service';
 import {
   TranscriptionConfigDto,
@@ -42,8 +43,11 @@ export class TranscriptionConfigController {
   constructor(private readonly config: TranscriptionConfigService) {}
 
   @Get('config')
-  // TODO(#24): switch to PERMISSIONS.TRANSCRIPTS_READ once it is seeded
-  @Auth()
+  // `transcripts:read`, seeded to all three roles (#24) — so this is still
+  // readable by every ordinary account, which is the property the header's
+  // argument depends on, while naming the permission the feature actually has
+  // rather than "authenticated and nothing else".
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
   @ApiOperation({
     summary: 'Transcription capabilities of this deployment',
     description:

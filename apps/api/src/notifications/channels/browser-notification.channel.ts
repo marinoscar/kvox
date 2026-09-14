@@ -6,6 +6,8 @@ import type {
   NodeOfflineEmailData,
   RestoreCompletedEmailData,
   RoleChangedEmailData,
+  TranscriptFailedEmailData,
+  TranscriptReadyEmailData,
 } from '../../email';
 import { PrismaService } from '../../prisma/prisma.service';
 import { describeThrown } from '../describe-thrown';
@@ -307,6 +309,40 @@ export const EVENT_BROWSER_TEMPLATES: Partial<
         `The live database was replaced from backup run ${runId}. It now holds ` +
         `the state from ${takenAt}; anything written after that is not present.`,
       link: '/admin/settings/db-backup',
+    };
+  },
+
+  // ---------------------------------------------------------------------------
+  // THE TRANSCRIPT PIPELINE (#25, epic #19)
+  // ---------------------------------------------------------------------------
+  //
+  // Both link to `/transcripts/:id`, which is a REAL destination in both
+  // cases — and for the failure it is specifically where the retry action
+  // lives, so the row answers the question it raises. It is root-relative, as
+  // `sanitizeLink` requires, and it is the path issue #30's router declares.
+  'transcripts.transcript_ready': (data: never): BrowserNotificationContent => {
+    const { transcriptId, title, speakerCount, wordCount } =
+      data as TranscriptReadyEmailData;
+
+    return {
+      title: 'Transcript ready',
+      body:
+        `"${title}" finished transcribing: ${speakerCount} speaker(s), ` +
+        `${wordCount} words. It is ready to read and correct.`,
+      link: `/transcripts/${transcriptId}`,
+    };
+  },
+
+  'transcripts.transcript_failed': (data: never): BrowserNotificationContent => {
+    const { transcriptId, title, reason, retryable } =
+      data as TranscriptFailedEmailData;
+
+    return {
+      title: 'Transcription failed',
+      body:
+        `"${title}" could not be transcribed: ${reason}` +
+        (retryable ? ' You can try again from the transcript page.' : ''),
+      link: `/transcripts/${transcriptId}`,
     };
   },
 };

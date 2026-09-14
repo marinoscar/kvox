@@ -99,6 +99,18 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // are the words the handlers, the settings and the runbook already use.
   'nodes.fleet.sweep': 'Fleet sweep',
   'nodes.fleet.prune': 'Fleet prune',
+  // The transcript pipeline (#25, epic #19). `media.audio.transcode` and
+  // `transcript.snapshot` are labelled here too even though issues #26 and #27
+  // register their handlers: a label is a display string, not a registration,
+  // and having it ready costs nothing while a missing one shows an operator a
+  // raw dotted type in the admin list.
+  'media.audio.transcode': 'Audio transcode',
+  'transcription.submit': 'Transcription submit',
+  'transcription.poll': 'Transcription poll',
+  'transcription.ingest': 'Transcription ingest',
+  'transcript.snapshot': 'Transcript snapshot',
+  'transcript.purge': 'Transcript purge',
+  'transcripts.housekeeping': 'Transcript housekeeping',
 };
 
 /**

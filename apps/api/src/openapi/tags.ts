@@ -139,6 +139,26 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Transcripts',
+    tags: [
+      {
+        name: 'Transcripts',
+        description:
+          'Audio in, a diarized and timestamped transcript out. Create a transcript and its ' +
+          'resumable upload in one call, watch the pipeline through three independent status ' +
+          'fields, read segments and word timings, play the audio through a short-lived signed ' +
+          'URL, and retry, cancel or delete. Gated on `transcripts:read`/`transcripts:write`, ' +
+          'both seeded to every role including Viewer, because recording a conversation is the ' +
+          'action this feature exists for.\n\n' +
+          'Per-transcript access is the owner, plus anybody they have shared it with. **No ' +
+          'access is a 404, never a 403** — the existence of a specific transcript id is ' +
+          'itself something a stranger has no business learning — and there is deliberately ' +
+          'no administrator read-any: configuring which provider a deployment uses is not the ' +
+          'authority to read what flows through it.',
+      },
+    ],
+  },
+  {
     name: 'Storage',
     tags: [
       {

@@ -119,6 +119,29 @@ const SAMPLE_DATA: { [K in EmailTemplateName]: EmailTemplateDataMap[K] } = {
     preRestoreBackupId: 'run-pre-restore',
     appUrl: 'https://app.example.com',
   },
+  // #25's two owner-addressed templates (epic #19). Same placement rule as the
+  // four above: `title` reaches the SUBJECT of both, so it stays benign, and
+  // the hostile fragments go in fields only the body renders — `providerLabel`
+  // for the ready message, `reason` and `stage` for the failure.
+  'transcript-ready': {
+    transcriptId: 'transcript-1',
+    // Reaches the subject, so it stays benign on purpose.
+    title: 'Board meeting, 3 March',
+    durationMs: 3_725_000,
+    speakerCount: 4,
+    wordCount: 18_402,
+    providerLabel: '<script>alert(document.cookie)</script>',
+    appUrl: 'https://app.example.com',
+  },
+  'transcript-failed': {
+    transcriptId: 'transcript-1',
+    // Reaches the subject, so it stays benign on purpose.
+    title: 'Board meeting, 3 March',
+    reason: '<script>alert(document.cookie)</script>',
+    stage: '"><img src=x onerror=alert(1)>',
+    retryable: true,
+    appUrl: 'https://app.example.com',
+  },
 };
 
 function render(name: EmailTemplateName): RenderedEmail {

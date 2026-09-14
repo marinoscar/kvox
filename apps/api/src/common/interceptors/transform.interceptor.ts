@@ -57,6 +57,32 @@ export class TransformInterceptor<T>
 
     return next.handle().pipe(
       map((data) => {
+        // -------------------------------------------------------------------
+        // A 304 HAS NO BODY, BY DEFINITION (issue #25, epic #19)
+        // -------------------------------------------------------------------
+        //
+        // `GET /api/transcripts/:id` and `/segments` answer a conditional
+        // request with `304 Not Modified` and nothing else — that is the whole
+        // value of the weak ETag: a client polling while the transcript has
+        // not changed pays for headers and no payload.
+        //
+        // Without this guard the handler's `undefined` return would be wrapped
+        // into `{ data: undefined, meta: { timestamp } }` and serialised as
+        // `{"meta":{…}}`, so every 304 would ship a body RFC 9110 says must
+        // not be there — and a client that trusted `Content-Length` would read
+        // a fresh timestamp as if it were the resource.
+        //
+        // Keyed on the status the handler already set, not on a route
+        // allowlist, so any future conditional endpoint is correct without
+        // anybody remembering this file exists — the same reasoning the SSE
+        // guard above uses for `@Sse()` metadata.
+        const status = context.switchToHttp().getResponse<{ statusCode?: number }>()
+          ?.statusCode;
+
+        if (status === 304) {
+          return undefined as unknown as ApiResponse<T>;
+        }
+
         // If already wrapped, return as-is
         if (data && typeof data === 'object' && 'data' in data) {
           return data;
