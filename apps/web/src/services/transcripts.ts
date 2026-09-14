@@ -405,3 +405,26 @@ export async function retryTranscript(id: string): Promise<TranscriptDetail> {
 export async function cancelTranscript(id: string): Promise<TranscriptDetail> {
   return api.post<TranscriptDetail>(`/transcripts/${encodeURIComponent(id)}/cancel`);
 }
+
+/**
+ * `DELETE /api/transcripts/:id/shares/:userId` — give up your own access.
+ *
+ * ⚠ THE SHARING ENDPOINTS ARE ISSUE #29's, AND THIS IS THE ONE CALL #31 NEEDS.
+ * A recipient who leaves a transcript cannot put themselves back: only the
+ * owner can re-share it. So the viewer asks for confirmation before calling
+ * this, which is the opposite of the usual "make it easy, it is undoable"
+ * default — leaving is the one action on that page whose undo lives in somebody
+ * else's account.
+ *
+ * Passing the CALLER's own user id is what makes this "leave" rather than
+ * "revoke"; the API applies the same route to both and decides from who is
+ * asking.
+ */
+export async function removeShare(
+  transcriptId: string,
+  userId: string,
+): Promise<void> {
+  await api.delete<void>(
+    `/transcripts/${encodeURIComponent(transcriptId)}/shares/${encodeURIComponent(userId)}`,
+  );
+}

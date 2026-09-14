@@ -356,11 +356,55 @@ export function useTranscriptOperations(
 
   const isMounted = useIsMounted();
 
+  /** segmentId → the text the user has typed but not yet sent. */
+  const pendingText = useRef(new Map<string, string>());
+  const outbox = useRef<Batch[]>([]);
+  const draining = useRef(false);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [working, setWorking] = useState<WorkingState>({
     speakers: [...speakers],
     segments: [...segments],
     version: version ?? 0,
   });
+
+  /**
+   * The last server tuple this hook adopted, by IDENTITY.
+   *
+   * Adoption happens DURING RENDER rather than in an effect, and the difference
+   * is visible: an effect would commit one frame showing the old (usually
+   * empty) list and then re-render with the real one, which is a flash on every
+   * load and — worse — a frame in which the page can be observed with no
+   * segments in it. React re-runs the render function immediately for a
+   * render-phase `setState` on the SAME component and commits only the second
+   * result, so this costs a render pass and no frame.
+   */
+  const adoptedSource = useRef<{
+    speakers: readonly TranscriptSpeaker[];
+    segments: readonly TranscriptSegment[];
+    version: number | null;
+  }>({ speakers, segments, version });
+
+  const sourceChanged =
+    adoptedSource.current.speakers !== speakers ||
+    adoptedSource.current.segments !== segments ||
+    adoptedSource.current.version !== version;
+
+  if (sourceChanged) {
+    adoptedSource.current = { speakers, segments, version };
+    const dirty = pendingText.current.size > 0 || outbox.current.length > 0;
+    // Both conditions, and both are load-bearing — see the file header.
+    const stale = version !== null && version < working.version;
+    if (!dirty && !draining.current && !stale) {
+      setWorking({
+        speakers: [...speakers],
+        segments: [...segments],
+        version: version ?? working.version,
+      });
+    }
+  }
+
   const workingRef = useRef(working);
   workingRef.current = working;
 
@@ -375,18 +419,6 @@ export function useTranscriptOperations(
     { merges: MergeUndo[]; version: number; summary: string } | null
   >(null);
 
-  /** segmentId → the text the user has typed but not yet sent. */
-  const pendingText = useRef(new Map<string, string>());
-  const outbox = useRef<Batch[]>([]);
-  const draining = useRef(false);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const isDirty = useCallback(
-    () => pendingText.current.size > 0 || outbox.current.length > 0,
-    [],
-  );
-
   const publishPending = useCallback(() => {
     const count =
       pendingText.current.size +
@@ -394,19 +426,6 @@ export function useTranscriptOperations(
     setPendingCount(count);
     return count;
   }, []);
-
-  // ---------------------------------------------------------------------------
-  // Server state adoption. See the file header for both conditions.
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    if (isDirty() || draining.current) return;
-    if (version !== null && version < workingRef.current.version) return;
-    setWorking({
-      speakers: [...speakers],
-      segments: [...segments],
-      version: version ?? workingRef.current.version,
-    });
-  }, [isDirty, segments, speakers, version]);
 
   // ---------------------------------------------------------------------------
   // Offline
