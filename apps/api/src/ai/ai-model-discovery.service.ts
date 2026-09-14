@@ -112,10 +112,17 @@ export class AiModelDiscoveryService {
    * administrator can inspect a vendor's catalogue BEFORE switching to it —
    * the same "prove what you typed, not what you committed" workflow
    * `POST /api/ai-settings/test`'s `baseUrl` override serves.
+   *
+   * `includeAll` skips the provider's plausible-chat-model filter (#97). It is
+   * passed straight through and is deliberately NOT a policy decision this
+   * service makes: the filter is the provider's heuristic over its own vendor's
+   * id vocabulary, so the only thing that belongs here is the administrator's
+   * answer to "I think you have hidden the model I want".
    */
   async discoverModels(
     userId: string,
     requestedProvider?: string | null,
+    includeAll?: boolean,
   ): Promise<AiModelDiscoveryResult> {
     const policy = await this.settings.get();
     const providerId = requestedProvider?.trim() || policy.provider;
@@ -143,7 +150,7 @@ export class AiModelDiscoveryService {
       // capability check is what produces the honest message; the method check
       // is what makes it type-safe.
       throw new BadRequestException(
-        `The provider "${provider.id}" cannot list its models. Model ids for it must be entered by hand — which the settings page always allows, with a context window and output ceiling for any model this build does not already know.`,
+        `The provider "${provider.id}" cannot list its models. Model ids for it must be entered by hand — which the settings page always allows, and since #97 needs no token numbers typed alongside them: a model id this build does not recognise is resolved from its family or from this provider's conservative floor, and either can be overridden per model.`,
       );
     }
 
@@ -192,14 +199,30 @@ export class AiModelDiscoveryService {
         // path. Built here, passed down, dropped — never stored on an instance
         // field and never logged.
         createProviderContext(apiKey, settingsParse.data),
+        { includeAll: includeAll === true },
       );
+
+      // ⚠ THESE SENTENCES USED TO TELL AN ADMINISTRATOR TO SUPPLY TWO NUMBERS
+      // FOR ANY MODEL THIS BUILD DID NOT ALREADY KNOW. Since #97 that is no
+      // longer true and saying it would send them to type figures the server
+      // has already worked out — every model in this list carries a context
+      // window and an output ceiling, detected from the model's family or from
+      // the provider's conservative floor. What is still worth saying is that
+      // those two things are different, and that typing a real number still
+      // wins over both.
+      const inferred = models.filter((model) => !model.known).length;
 
       result = {
         ok: true,
         detail:
           models.length > 0
-            ? `The provider listed ${models.length} chat-capable model(s). Models this build already knows the context window of are marked as such; for any other, supply a context window and output ceiling when you permit it.`
-            : 'The provider answered, but listed no chat-capable models this key can reach. That usually means the key is scoped to a project with no chat models enabled.',
+            ? `The provider listed ${models.length} model(s)${includeAll === true ? ' (unfiltered)' : ''}. ` +
+              'Context windows and output ceilings were detected automatically — ' +
+              (inferred > 0
+                ? `${inferred} of them from the model's family or from a conservative default for this provider. `
+                : 'all of them from numbers this build has verified. ') +
+              'You can override either number per model after permitting it.'
+            : `The provider answered, but listed no ${includeAll === true ? 'models' : 'chat-capable models'} this key can reach. That usually means the key is scoped to a project with no chat models enabled${includeAll === true ? '' : ', though you can also ask for the unfiltered list'}.`,
         models,
       };
     } catch (err) {
@@ -238,6 +261,7 @@ export class AiModelDiscoveryService {
       modelCount: result.models.length,
       detail: result.detail,
       usedRequestedProvider: Boolean(requestedProvider?.trim()),
+      includeAll: includeAll === true,
     });
 
     this.logger.log(

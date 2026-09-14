@@ -362,7 +362,7 @@ for the exact same reason (a vendor API's shape is precisely the kind of fact
 that drifts between a spec being written and the code that implements it
 shipping).
 
-### 2.5 The active-provider axis, live model discovery, and the widened `allowedModels` entry (#78)
+### 2.5 The active-provider axis, live model discovery, and the widened `allowedModels` entry (#78; the five-rank resolution chain and derived defaults are #97)
 
 Three changes shipped together because they answer one question — *"how does
 a deployment adopt a model this application does not already know about,
@@ -474,48 +474,127 @@ model was un-permitted — with no schema-level way to say that is wrong. A
 single array where each entry *is* both a permission and (optionally) its
 own budget numbers cannot disagree with itself about which models exist.
 
-**Resolution precedence, in one function.** `ai-model-resolution.ts`'s
-`resolveAllowedModel(entry, catalogue)` is the *only* place that answers
-"what does this deployment actually know about the model named by this
-`allowedModels` entry," because two callers ask for opposite reasons —
-`AiSettingsService` to **refuse** a save it cannot honour, `AiConfigService`
-to **publish** a model to a picker — and a second implementation could
-answer them differently with no error anywhere to say so. The precedence:
-(1) **the entry's own numbers win**, including over a build descriptor for
-the same id, so a deployment can correct a stale catalogue number without a
-release; (2) **the build catalogue otherwise**; (3) **`null` when neither
-can answer**, which is the deliberate return type — see below. The same
-function is now also called from the request-time budget check
-(`NoteGenerationRequestService.assertPromptFits`) and from
-`note.generate` itself, closing a gap #78 introduced and a same-epic fix
-patched immediately: `assertPromptFits` originally looked a model up in the
-*build* catalogue directly and returned silently (i.e., un-budgeted, not
-refused) when the id was absent — which, once an entry can carry its own
-numbers, is precisely the model an administrator just adopted from the
-discovery list. Falling through meant an over-long prompt was not refused
-at request time with numbers in a `400`, but minutes later as a `failed`
-note with nothing to look at. All three call sites now agree by
-construction.
+**Two smaller consequences of #97 worth stating explicitly.** First, the
+chat-model filter `GET /api/ai-settings/models` applies
+(`NON_CHAT_MODEL_MARKERS`, a short literal substring list) can now be
+skipped with `?includeAll=true`: before #97 the filter only hid a row from
+the discovery dropdown, since an administrator could always type a filtered
+id by hand and the save path never consulted it — but "type it by hand" was
+exactly the "you must already know the answer to ask the question" state
+#97 removes everywhere else, so the escape hatch had to exist too. Second,
+`aiProvidersSchema`'s `allowedModels` cap rose from 50 to 200
+(`ai-settings.schema.ts`): it bounds the settings blob stored in the
+`global` row's JSONB, never how many models may be permitted, and 50 was an
+unreachable ceiling back when permitting an unrecognised id meant
+hand-typing two numbers per entry. Now that one click does it, a vendor
+list of a hundred-odd dated snapshots is an ordinary thing to select most
+of; 200 stays a bound on a mistake (a script writing the same id in a
+loop), which is the only thing the cap was ever for.
 
-**Why an unknown model's context window is asked for, never guessed.**
-Restated from §3.3 because #78 is where "unknown" first becomes a
-*reachable* state through an ordinary admin workflow rather than only a
-typo: a vendor's `GET /models` response carries no context window and no
-output ceiling for any provider this build talks to (`AiDiscoveredModel` is
-a deliberately different type from `AiModelDescriptor` for exactly this
-reason), so there is no vendor-supplied number to fall back to even when
-discovery succeeds. Guessing **high** submits a prompt the vendor rejects
-after the user has already been billed for it; guessing **low** refuses
-work that would have fit, for no reason the user can see. Neither error is
-recoverable after the fact — a rejected-after-billing request cannot be
-un-billed, and a wrongly-refused one looks identical to a genuinely too-large
-one — so `resolveAllowedModel` returns `null` instead of either number, and
-each caller turns that into an explicit, actionable statement: a `400`
-naming the missing field(s) on save (`missingModelNumbers`), or a quiet
-omission from `GET /api/ai/config`'s published list. This is the same
-"refuse with a number, never silently degrade" discipline §3.3 already
-applies to an over-budget prompt, extended to a model whose budget cannot be
-computed at all.
+**Resolution precedence, in one function.** `ai-model-resolution.ts`'s
+`resolveAllowedModel(entry, knowledge)` is the *only* place that answers
+"what does this deployment actually know about the model named by this
+`allowedModels` entry," because — since #97 — **three** callers ask for
+different reasons and must never be allowed to disagree: `AiSettingsService`
+to **refuse** a save it cannot honour, `AiConfigService` to **publish** a
+model to a picker, and — new in #97 — `OpenAiProvider.listModels` itself, so
+the numbers shown in the "load models from the provider" dialog are the
+exact numbers the save path will later compute for the same id. A second
+implementation anywhere in that set could answer differently with no error
+anywhere to say so, the same argument `materialize()` makes about replaying
+transcript versions through the live reducers (`docs/specs/transcription.md`
+§4.4).
+
+The precedence is applied **per number**, not per model, so an entry
+supplying only `maxOutputTokens` takes its context window from whichever
+rank below can answer next:
+
+1. **The entry's own numbers win (`explicit`)**, including over a build
+   descriptor for the same id, so a deployment can correct a stale catalogue
+   number without a release. Nothing #97 adds outranks this.
+2. **An exact hit in the build catalogue (`catalogue`)** — `MODELS` in the
+   provider, verified numbers for the models this application ships knowing
+   about.
+3. **The provider's own family derivation (`derived`, #97)** —
+   `AiProvider.deriveModelDescriptor(id)` places an unrecognised id in a
+   *known family*: `gpt-5.4-mini-2026-03-17` is a dated snapshot of
+   `gpt-5.4-mini` and takes that model's whole window, never a reduced one.
+   Real vendor lists are mostly dated snapshots of models this build already
+   knows, so this rank is what makes most of a discovered catalogue
+   permittable with one click instead of two hand-typed numbers per entry.
+4. **The provider's conservative floor (`default`, #97)** —
+   `AiProviderCapabilities.defaultModelLimits`, the smallest context window
+   and output ceiling a chat model from this vendor is known to have. See
+   below for why a floor is allowed to exist at all.
+5. **`null`**, only when none of the above can answer — since #97 this means
+   the policy names a provider this build does not implement (or a rollback
+   across the addition of one), or a provider that has deliberately declined
+   to declare a floor. It is *not* "this build has never heard of the
+   model" any more; that case now resolves at rank 3 or 4.
+
+Every resolution reports the **weakest** rank either number came from
+(`AiResolvedModel.source`) plus `derivedFrom` (non-null exactly when the
+weakest rank is `derived`), so a client can say "this build verified these
+numbers" apart from "we assumed the `gpt-5.4-mini` family" apart from "we
+used this vendor's conservative floor" — under-claiming what this
+deployment knows costs an administrator nothing, and over-claiming it costs
+them the chance to type the real number. `GET /api/ai/config` and
+`GET /api/ai-settings/models` both publish `source`/`derivedFrom` on every
+model for exactly this reason.
+
+The same function is also called from the request-time budget check
+(`NoteGenerationRequestService.assertPromptFits`) and from `note.generate`
+itself, closing a gap #78 introduced and a same-epic fix patched
+immediately: `assertPromptFits` originally looked a model up in the *build*
+catalogue directly and returned silently (i.e., un-budgeted, not refused)
+when the id was absent — which, once an entry can carry its own numbers, is
+precisely the model an administrator just adopted from the discovery list.
+Falling through meant an over-long prompt was not refused at request time
+with numbers in a `400`, but minutes later as a `failed` note with nothing
+to look at. All call sites now agree by construction.
+
+`deriveModelDescriptor` **must be pure and synchronous**, the identical
+requirement `AiProvider.countTokens` already carries and for the identical
+reason: resolution runs inside the §3.3 budget check in `POST /api/notes`'s
+own request handler and inside the `note.generate` job, so a network call or
+a read of mutable state there would put a round trip in front of every note
+creation and let the request-time and job-time answers disagree for reasons
+that have nothing to do with the model. And it belongs on the **provider**,
+never on `AiConfigService`/`AiSettingsService`: which id shapes are dated
+snapshots and which families exist is *vendor knowledge*, and a service that
+learned OpenAI's snapshot-suffix conventions would have to learn a different
+vendor's all over again for the next provider registered.
+
+**Why an unknown model's context window used to be asked for, never
+guessed — and why #97 supersedes that, without contradicting it.** Before
+#97, §3.3's rule against guessing a context window — "guessing high submits
+a prompt the vendor rejects after billing the user, and guessing low
+refuses work that would have fit" — was read as forbidding **both**
+directions equally, and `resolveAllowedModel` returned `null` for any id
+absent from the build catalogue with no numbers of its own. #97's argument
+is that the two directions are **not symmetric**, and that this is not a
+new observation but the thing the old sentence already said, read
+correctly: a window *below* the truth refuses a prompt that would have
+fit — **visible and correctable**, because the `400` names the model and an
+administrator can type a per-entry override that outranks every rank in the
+chain above. A window *above* the truth submits a prompt the vendor rejects
+**after billing the user** — invisible until the vendor's own error arrives,
+and by then unrecoverable. Only the high side is the mistake §3.3's
+"guessing" warning was actually written to prevent. That asymmetry is why
+rank 4's conservative floor is allowed to exist, and why it must stay
+exactly that — conservative, re-verified with the numbers in `MODELS`, never
+a plausible-looking estimate of a real model's size (see
+`OPENAI_DEFAULT_MODEL_LIMITS`'s own comment for the verification
+obligation).
+
+The refusal path is **kept**, not deleted — `missingModelNumbers` still
+names the fields a `400` should call out on save, and `GET /api/ai/config`
+still quietly omits a model nothing can budget for — but since #97 it fires
+only for the genuinely unanswerable case (rank 5 above), not for every model
+shipped since this build was cut. This is still the same "refuse with a
+number, never silently degrade" discipline §3.3 applies to an over-budget
+prompt; what changed is how often an id needs a human-typed number to clear
+it at all.
 
 **Why the legacy bare-string form must keep parsing, forever.** Every
 deployment that had already saved an AI policy before #78 has
@@ -1549,6 +1628,22 @@ requested work, not a security-relevant change to their account.
   `DEFAULT_SYSTEM_SETTINGS` — a schema that rejected the old shape would not
   fail loudly, it would quietly reset every existing deployment's model
   policy to empty on the next read. See §2.5.
+- **Leaving rank 4 (the provider's conservative floor) out and letting an
+  unknown id stay unresolvable forever (#97).** This is what #78 shipped,
+  and it read §3.3's rule against guessing a context window as forbidding
+  both directions of error equally. It does not: a window below the truth
+  refuses a prompt that would have fit, which is visible and correctable
+  with a per-model override that outranks the floor; a window above it
+  submits a prompt the vendor rejects **after** billing the user, which is
+  neither. Only the second is the mistake §3.3 was written to prevent. See
+  §2.5's "superseded" paragraph for the argument in full.
+- **Deriving family placement in `AiConfigService`/`AiSettingsService`
+  instead of on the provider (#97).** Rejected because which id shapes are
+  dated snapshots and which families exist is vendor knowledge, not policy
+  logic — a service that learned OpenAI's snapshot-suffix conventions would
+  have to learn a different vendor's all over again for the next provider,
+  and the two services would risk deriving differently for the same id with
+  nothing to catch the drift. See §2.5.
 - **An operation log for note bodies**, mirroring `transcript_versions`'
   design. Rejected per §4.5: the arithmetic that justifies an op log for a
   90,000-word transcript (roughly 7 MB per full snapshot) does not apply to

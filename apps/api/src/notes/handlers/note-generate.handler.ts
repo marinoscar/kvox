@@ -7,7 +7,10 @@ import {
   AiInputError,
   AiRefusedError,
 } from '../../ai/ai-errors';
-import { resolveAllowedModel } from '../../ai/ai-model-resolution';
+import {
+  modelKnowledgeOf,
+  resolveAllowedModel,
+} from '../../ai/ai-model-resolution';
 import { AiProviderRegistry } from '../../ai/ai-provider.registry';
 import type { AiAllowedModel } from '../../ai/ai-settings.schema';
 import { AiSettingsService } from '../../ai/ai-settings.service';
@@ -259,7 +262,14 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     // at the build catalogue here would let `GET /api/ai/config` offer such a
     // model, let the request-time budget check pass, and then fail the job —
     // after the note row exists and the user is watching it generate.
-    const descriptor = resolveAllowedModel(entry, provider.capabilities.models);
+    //
+    // ⚠ `modelKnowledgeOf` RATHER THAN THE BARE CATALOGUE (#97). The provider's
+    // family derivation and conservative floor are two more ranks of the same
+    // precedence, and this is the LAST place it is applied before a user's own
+    // money is spent: a job resolving fewer ranks than `GET /api/ai/config` did
+    // would fail exactly the models the picker had just offered.
+
+    const descriptor = resolveAllowedModel(entry, modelKnowledgeOf(provider));
 
     if (!descriptor) {
       throw new AiInputError(

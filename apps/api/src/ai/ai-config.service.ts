@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { resolveAllowedModel } from './ai-model-resolution';
+import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiSettingsService } from './ai-settings.service';
 import { UserAiCredentialsService } from './user-ai-credentials.service';
@@ -93,9 +93,13 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 //      one this process has never heard of. Both are ordinary, both are
 //      `available: false`, and neither is an error;
 //   3. at least one PERMITTED model can be BUDGETED — that is, `allowedModels`
-//      has an entry whose context window is known, either from the entry itself
-//      (#78) or from the provider's own catalogue, per docs/specs/notes.md
-//      §3.3, which needs a number to check a prompt against;
+//      has an entry `resolveAllowedModel` can put two numbers to: the entry's
+//      own (#78), the build catalogue's, the family the id belongs to, or the
+//      provider's conservative floor (#97), per docs/specs/notes.md §3.3, which
+//      needs a number to check a prompt against. Since #97 the last two ranks
+//      mean this fact fails only when the policy names a provider this build
+//      does not implement — and each published model carries a `source` saying
+//      which rank answered, so a client can show an inference as one;
 //   4. the token ceilings are coherent (a `maxOutputTokens` at or above the
 //      smallest permitted model's whole context window leaves no room for
 //      input, so every generation would refuse).
@@ -205,8 +209,17 @@ export class AiConfigService {
     // An entry that resolves to NOTHING is still omitted rather than published
     // with a guessed context window — see that function for why guessing is
     // wrong in both directions.
+    //
+    // ⚠ SINCE #97 "NOTHING" IS A MUCH NARROWER CASE, and the branch is kept
+    // exactly as it was on purpose. The resolver now falls through to the
+    // provider's family derivation and then to its conservative floor, so a
+    // permitted model is dropped here only when this build has no provider
+    // knowledge at all — a policy naming a vendor this process does not
+    // implement. `source` below is what tells the picker how much of each
+    // number is knowledge and how much is a floor, which is the honest way to
+    // publish an inference rather than suppressing it.
     const models: AiConfigModel[] = policy.providers[providerId].allowedModels
-      .map((entry) => resolveAllowedModel(entry, provider.capabilities.models))
+      .map((entry) => resolveAllowedModel(entry, modelKnowledgeOf(provider)))
       .filter((model): model is NonNullable<typeof model> => model !== null)
       .map((model) => ({
         id: model.id,
@@ -219,6 +232,15 @@ export class AiConfigService {
           policy.maxInputTokens + policy.maxOutputTokens,
         ),
         maxOutputTokens: Math.min(model.maxOutputTokens, policy.maxOutputTokens),
+        // ⚠ THE SOURCE DESCRIBES THE MODEL'S OWN NUMBERS, NOT THE NARROWED ONES
+        // ABOVE (#97). Deployment policy always narrows, and it narrows a
+        // verified window and an inferred one identically — so re-labelling a
+        // capped `catalogue` model as something weaker would tell a user this
+        // build is unsure about a number it verified. What this field answers is
+        // "how did we learn this model's size", which the `Math.min` does not
+        // change.
+        source: model.source,
+        derivedFrom: model.derivedFrom,
       }));
 
     // Fact 4: a model whose effective output ceiling leaves no room for input

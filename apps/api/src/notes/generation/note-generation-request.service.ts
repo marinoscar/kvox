@@ -70,7 +70,10 @@ import {
 
 import { AiBudgetError } from '../../ai/ai-errors';
 import { AiConfigService } from '../../ai/ai-config.service';
-import { resolveAllowedModel } from '../../ai/ai-model-resolution';
+import {
+  modelKnowledgeOf,
+  resolveAllowedModel,
+} from '../../ai/ai-model-resolution';
 import { AiProviderRegistry } from '../../ai/ai-provider.registry';
 import type { AiAllowedModel } from '../../ai/ai-settings.schema';
 import { AiSettingsService } from '../../ai/ai-settings.service';
@@ -241,7 +244,14 @@ export class NoteGenerationRequestService {
    *
    * A model NOTHING can describe is still not refused here — there is no
    * context window to check against, and `resolveModel` has already established
-   * the model is permitted. The job's own check is the backstop.
+   * the model is permitted. The job's own check is the backstop. ⚠ SINCE #97
+   * THAT FALL-THROUGH IS NEARLY UNREACHABLE: `modelKnowledgeOf` carries the
+   * provider's family derivation and its conservative floor as well as its
+   * catalogue, so a permitted model almost always HAS a window to check
+   * against here. The branch is kept because the one case it was written for —
+   * a policy naming a provider this build does not implement — is still real,
+   * and because refusing a generation for want of a number nobody can supply
+   * would be worse than letting the job report it.
    *
    * ⚠ THE DESCRIPTOR COMES FROM THE POLICY ENTRY, NOT STRAIGHT FROM THE BUILD
    * CATALOGUE (#78). An entry may carry its own `contextWindowTokens`, and such
@@ -265,7 +275,7 @@ export class NoteGenerationRequestService {
     );
 
     const descriptor = entry
-      ? resolveAllowedModel(entry, input.provider.capabilities.models)
+      ? resolveAllowedModel(entry, modelKnowledgeOf(input.provider))
       : null;
 
     if (!descriptor) return;

@@ -291,6 +291,19 @@ describe('AiSettingsPage', () => {
         screen.getByRole('button', { name: /stop permitting gpt-4o-mini/i }),
       );
       await user.type(screen.getByLabelText(/^model id$/i), 'gpt-9-turbo');
+
+      // #97: the two number fields are now an OPTIONAL OVERRIDE, collapsed
+      // behind an `Override` press (`Collapse unmountOnExit`) rather than
+      // always present — see `AiModelLimits`. Scoped to the "Add a model by
+      // hand" `Paper` because every permitted-model row also renders its own
+      // `Override` button, and `getByRole` would otherwise be ambiguous.
+      const addModelSection = screen
+        .getByRole('heading', { level: 3, name: /add a model by hand/i })
+        .closest('.MuiPaper-root') as HTMLElement;
+      await user.click(
+        within(addModelSection).getByRole('button', { name: /^override$/i }),
+      );
+
       await user.type(
         screen.getByLabelText(/context window in tokens for gpt-9-turbo/i),
         '250000',
