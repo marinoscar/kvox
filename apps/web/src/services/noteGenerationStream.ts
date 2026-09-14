@@ -1,8 +1,17 @@
 /**
- * The note-generation stream — `GET /api/note-generations/{id}/stream`, over
- * the same fetch-based SSE client the notification stream uses.
+ * The note-generation stream — `GET /api/note-generations/{id}/stream` and
+ * `GET /api/notes/{id}/stream`, over the same fetch-based SSE client the
+ * notification stream uses.
  *
- * Issue #56, epic #45. Thin by design, exactly like
+ * ⚠ TWO ROUTES, ONE STREAM, AND THEREFORE ONE MODULE. The API says so in as
+ * many words (`note-generation-stream.controller.ts`: "the bytes they receive
+ * are identical"); the split exists only because a TEMPLATE PREVIEW has no note
+ * to be addressed through. So this file exports two three-line wrappers over
+ * one implementation rather than two clients — a second copy of the offset
+ * reconciliation below would be a second chance to get "a reconnect replays
+ * from zero" wrong, and it would be got wrong in the half nobody was looking at.
+ *
+ * Issues #56 and #57, epic #45. Thin by design, exactly like
  * `services/notificationStream.ts`: SSE framing, reconnection and backoff live
  * in `services/sse.ts` and are not reimplemented here. What is left is the
  * three things specific to THIS stream — its URL, its three frame names, and
@@ -14,12 +23,14 @@
  *
  * `connectNotificationStream` mounts exactly ONE connection per tab, for the
  * life of the tab, and that must keep being true. This one is its opposite in
- * every respect: opened when a preview starts, closed the moment the generation
- * settles or the component unmounts, and never more than one at a time per
- * panel. Nothing here registers a provider, a context or a module-level
- * singleton — a leaked connection here would be a leaked connection PER
- * PREVIEW, which is why `UserNoteTemplatesPage.test.tsx` asserts the teardown
- * against a fake rather than trusting the effect cleanup to be obviously right.
+ * every respect: opened when a preview or a note generation starts, closed the
+ * moment the generation settles or the component unmounts, and never more than
+ * one at a time per panel or per note page. Nothing here registers a provider,
+ * a context or a module-level singleton — a leaked connection here would be a
+ * leaked connection PER PREVIEW and PER NOTE OPENED, which is why
+ * `UserNoteTemplatesPage.test.tsx` and `NotePage.test.tsx` both assert the
+ * teardown against a fake rather than trusting the effect cleanup to be
+ * obviously right.
  *
  * =============================================================================
  * ⚠ OFFSETS, NOT CONCATENATION — THIS IS WHAT MAKES A RECONNECT HARMLESS
@@ -104,9 +115,11 @@ const ERROR_CLASS_FALLBACKS: Record<NoteStreamErrorClass, string> = {
   auth: 'Your AI provider rejected the key saved for your account.',
   refusal: 'Your AI provider declined to produce this output.',
   rate_limit: 'Your AI provider is rate-limiting your account right now. Try again shortly.',
-  other: 'The preview could not be generated.',
-  timeout: 'The preview took too long and the connection gave up. The generation may still be running.',
-  gone: 'This preview expired before it could be read. Run it again.',
+  other: 'The generation could not be completed.',
+  timeout:
+    'This view stopped waiting. The generation may well still be running — reopen the page to ' +
+    'pick it back up.',
+  gone: 'This generation is no longer available to read. Run it again.',
 };
 
 /** The sentence to render for one `error` frame. Never an empty string. */
@@ -214,9 +227,22 @@ export function applyDelta(buffer: string, frame: NoteStreamDelta): string {
 // The connection
 // =============================================================================
 
-/** The stream's URL, resolved against the same base as every other API call. */
+/** The preview stream's URL, resolved against the same base as every other API call. */
 export function noteGenerationStreamUrl(generationId: string): string {
   return `${API_BASE_URL}/note-generations/${encodeURIComponent(generationId)}/stream`;
+}
+
+/**
+ * The NOTE stream's URL — issue #57.
+ *
+ * Addressed by note id rather than generation id, which is the only form a
+ * page that has just been navigated to can use: `POST /api/notes` returns a
+ * `generationId`, but a user who reloads `/notes/:id`, or opens it from a
+ * notification, holds only the note. The API resolves it to the note's
+ * `currentGenerationId` server-side and the frames are identical.
+ */
+export function noteStreamUrl(noteId: string): string {
+  return `${API_BASE_URL}/notes/${encodeURIComponent(noteId)}/stream`;
 }
 
 export interface NoteGenerationStreamHandlers {
@@ -248,11 +274,48 @@ export function connectNoteGenerationStream(
   generationId: string,
   handlers: NoteGenerationStreamHandlers,
 ): SseConnection {
+  return connectStream(noteGenerationStreamUrl(generationId), handlers);
+}
+
+/**
+ * Attach to the generation currently writing into one NOTE and stream it —
+ * issue #57.
+ *
+ * Identical mechanics to the preview above, including the self-close on a
+ * terminal frame, because it is literally the same function over a different
+ * URL. The only difference a caller sees is in `onDone`: a note's `done` frame
+ * carries a real `currentVersion` (a preview's is `null`), which is the signal
+ * to re-read the note rather than keep rendering the streamed buffer.
+ *
+ * ⚠ THE STREAM IS ADDITIVE AND THE CALLER MUST TREAT IT THAT WAY. `note.generate`
+ * completes the note with no knowledge of whether anyone is connected — the
+ * controller's own header says deleting the whole stream would cost a user the
+ * live view and not one character of a note — so closing this connection is
+ * never cancelling anything, and a page that implied otherwise would be lying.
+ */
+export function connectNoteStream(
+  noteId: string,
+  handlers: NoteGenerationStreamHandlers,
+): SseConnection {
+  return connectStream(noteStreamUrl(noteId), handlers);
+}
+
+/**
+ * The one implementation both wrappers above share.
+ *
+ * Private: a caller naming its own URL would be a caller that could point this
+ * at something that is not a note stream, and the two exported wrappers are
+ * the complete set of routes the API publishes.
+ */
+function connectStream(
+  url: string,
+  handlers: NoteGenerationStreamHandlers,
+): SseConnection {
   let buffer = '';
   let settled = false;
 
   const connection = connectSse({
-    url: noteGenerationStreamUrl(generationId),
+    url,
 
     authorization: () => {
       const token = api.getAccessToken();

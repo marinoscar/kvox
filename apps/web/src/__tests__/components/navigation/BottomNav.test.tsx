@@ -35,7 +35,12 @@ function setPermissions(granted: string[], isAdmin = false) {
 // is in the set since #30 — it is seeded to ALL THREE roles, so an admin
 // fixture without it would be a user that cannot exist, and every assertion
 // below about the bar's four-action ceiling would silently be testing three.
-const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read', 'transcripts:read'];
+const ADMIN_PERMISSIONS = [
+  'users:read',
+  'system_settings:read',
+  'transcripts:read',
+  'notes:read',
+];
 const PHONE = 375;
 
 /** Renders at a phone width, which is the only width this bar exists at. */
@@ -84,37 +89,59 @@ describe('BottomNav', () => {
 
   describe('Destinations', () => {
     it('renders all four destinations for a fully permitted user', () => {
-      // FOUR since #30 added Transcripts — which is the bar's documented
-      // ceiling exactly, not one short of it. See `BottomNav`'s header: a
-      // fifth destination is a redesign, not an addition.
+      // FOUR since #30 added the library — the bar's documented ceiling
+      // exactly, not one short of it. See `BottomNav`'s header: a fifth
+      // destination is a redesign, not an addition.
+      //
+      // ⚠ STILL FOUR AFTER #57, which is the whole point of that issue: Notes
+      // became a second route prefix on the `library` row rather than a fifth
+      // tab. This assertion is the executable form of that decision — a `notes`
+      // destination added later fails here, loudly, before anybody has to
+      // discover at 360px that five labelled tabs do not fit.
       renderPhone();
 
       expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Console' })).toBeInTheDocument();
     });
 
-    it('shows Transcripts to a user holding transcripts:read and nothing else', () => {
+    it('shows Library to a user holding transcripts:read and nothing else', () => {
       // The seeded Viewer. `transcripts:read` is granted to every role, so
       // this is the ordinary user of this application rather than an edge case.
       setPermissions(['transcripts:read'], false);
       renderPhone();
 
-      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
     });
 
+    it('shows Library to a user holding notes:read and nothing else (#57)', () => {
+      // The other half of the row's `anyPermission`. A deployment that revoked
+      // transcripts but kept notes must not lose the only tab that reaches
+      // either — on a phone, a destination with no bottom-bar presence is
+      // effectively hidden.
+      setPermissions(['notes:read'], false);
+      renderPhone();
+
+      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
+    });
+
     it('shows the compact label as visible text but the full label as the accessible name', () => {
-      // A 4-up bar at 375px gives each tab ~90px; "User Settings" does not fit,
-      // and neither does "Transcripts" (eleven characters). Both keep the full
-      // word as their ACCESSIBLE name, so nothing is lost to a screen reader.
+      // A 4-up bar at 375px gives each tab ~90px, which "User Settings" does
+      // not fit into — so it keeps the full phrase as its ACCESSIBLE name and
+      // shows the short one, and nothing is lost to a screen reader.
+      //
+      // `library` is the case where the two fields agree since #57 ("Library"
+      // fits both), which is asserted here rather than left implicit: the split
+      // is still real for `settings`, and a future longer library label must go
+      // back through this same treatment rather than overflow the bar.
       renderPhone();
 
       expect(screen.getByText('Settings')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.getByText('Library')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
     });
 
     it('never renders more than four actions — showLabels depends on it', () => {
@@ -128,12 +155,10 @@ describe('BottomNav', () => {
       setPermissions([]);
       renderPhone();
 
-      // Home and User Settings only: both Transcripts and Console are gated.
+      // Home and User Settings only: both Library and Console are gated.
       expect(screen.getAllByRole('button')).toHaveLength(2);
       expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole('button', { name: 'Transcripts' }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Library' })).not.toBeInTheDocument();
     });
 
     it('gates on permission rather than the admin role', () => {
@@ -213,7 +238,7 @@ describe('BottomNav', () => {
       const user = userEvent.setup();
       renderPhone('/');
 
-      for (const name of ['User Settings', 'Transcripts', 'Console', 'Home']) {
+      for (const name of ['User Settings', 'Library', 'Console', 'Home']) {
         await user.click(screen.getByRole('button', { name }));
         await waitFor(() => {
           expect(screen.getByRole('button', { name })).toHaveClass('Mui-selected');

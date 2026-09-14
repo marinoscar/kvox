@@ -38,11 +38,11 @@
 
 import type { SvgIconComponent } from '@mui/icons-material';
 import HomeIcon from '@mui/icons-material/Home';
-import GraphicEqIcon from '@mui/icons-material/GraphicEq';
+import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
-export type DestinationKey = 'home' | 'transcripts' | 'settings' | 'console';
+export type DestinationKey = 'home' | 'library' | 'settings' | 'console';
 
 /**
  * Does `prefix` own `path`? True when the path equals the prefix or continues
@@ -69,12 +69,25 @@ export function owns(prefix: string, path: string): boolean {
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
   home: ['/'],
-  // `/transcripts` owns its whole subtree: the library, `/transcripts/new`,
-  // `/transcripts/:id` and `/transcripts/:id/history` (#30, #31, epic #19).
-  // One prefix, because every one of those is the same destination as far as
-  // "which tab is lit" is concerned — a viewer drilled into one transcript has
-  // not left the library.
-  transcripts: ['/transcripts'],
+  // TWO PREFIXES, ONE DESTINATION (#57, epic #45). `/transcripts` owns its
+  // whole subtree (the library, `/transcripts/new`, `/transcripts/:id` and
+  // `/transcripts/:id/history` — #30, #31, epic #19) and `/notes` owns its own
+  // (`/notes`, `/notes/new`, `/notes/:id`, `/notes/:id/history`).
+  //
+  // ⚠ THE SECOND PREFIX IS WHY THE DESTINATION WAS RENAMED RATHER THAN A FIFTH
+  // ONE ADDED. Four is the bottom bar's ceiling — see `DESTINATIONS` below and
+  // `BottomNav`'s header — so `notes` could not become a fifth tab without
+  // redesigning that bar. It should not have been one anyway: a transcript and
+  // the note derived from it are two answers to one question ("what do I
+  // have"), which is the same parallel-content judgement
+  // `LibraryPage`'s own Transcripts | Notes tabs make one level down, and the
+  // same one its Mine | Shared tabs make one level below that.
+  //
+  // One entry per prefix and not one merged regex, because both are the same
+  // destination as far as "which tab is lit" is concerned: a reader drilled
+  // into one transcript, or watching one note being written, has not left the
+  // library.
+  library: ['/transcripts', '/notes'],
   settings: ['/settings'],
   console: ['/admin'],
 };
@@ -122,6 +135,11 @@ export interface Destination {
    * Allowlist page, and someone with `system_settings:read` alone must reach
    * the settings pages. Neither may be dropped, and the single-string
    * `permission` field cannot express "or".
+   *
+   * `library` is the second such destination since #57 (epic #45), for the
+   * identical reason: it fronts `transcripts.controller.ts` and
+   * `notes.controller.ts`, and a user entitled to only one of the two must
+   * still reach the surface that holds both.
    *
    * Widening `permission` to `string | string[]` was the alternative and was
    * rejected: an array there reads as ALL by every convention in this codebase
@@ -175,9 +193,17 @@ export function isDestinationVisible(
 }
 
 /**
- * The four destinations, in navigation order: Home, Transcripts, Settings,
+ * The four destinations, in navigation order: Home, Library, Settings,
  * Console. That is the bottom bar's ceiling exactly — see `BottomNav`'s header
  * — so a fifth destination is not an addition, it is a redesign.
+ *
+ * ISSUE #57 (epic #45) TESTED THAT CEILING AND RENAMED RATHER THAN ADDED.
+ * Notes needed a home, and `notes` as a fifth tab would have been a redesign of
+ * the bottom bar to buy a WORSE information architecture — "what do I have"
+ * split across two destinations, with the transcript → note relationship the
+ * epic exists to create invisible in navigation. So `transcripts` became
+ * `library`, owning both `/transcripts` and `/notes`, and the bar stayed at
+ * four.
  *
  * Declaration order IS navigation order on every surface. The rail is the one
  * exception, and only for the tail of the list: it lifts `pinned` destinations
@@ -189,10 +215,11 @@ export function isDestinationVisible(
  *   - `users.controller.ts`           → `users:read`
  *   - `system-settings.controller.ts` → `system_settings:read`
  *   - `transcripts.controller.ts`     → `transcripts:read`
+ *   - `notes.controller.ts`           → `notes:read`
  *
- * `console` is reachable on EITHER of those (see `anyPermission`), because
- * `/admin/settings` fronts pages from both controllers and a user entitled to
- * only one half must still reach the surface. The per-page gates inside
+ * `console` AND `library` are each reachable on EITHER of their two permissions
+ * (see `anyPermission`), because each fronts pages from two controllers and a
+ * user entitled to only one half must still reach the surface. The per-page gates inside
  * `/admin/settings/*` are what decide which cards and routes that user actually
  * gets — `config/adminSections.tsx` declares them, and `App.tsx` wraps each
  * route in the matching `RequirePermission`.
@@ -215,28 +242,50 @@ export const DESTINATIONS: readonly Destination[] = [
     path: '/',
   },
   {
-    // Issue #30, epic #19. Gated on `transcripts:read`, which is the exact
-    // string `transcripts.controller.ts` enforces on every one of its reads
-    // (`@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })`) — verified
-    // against the controller, not assumed, exactly as `console`'s pair was.
+    // Issues #30 (epic #19) and #57 (epic #45). ONE destination over two
+    // route subtrees — see `DESTINATION_ROUTES.library` for why Notes is a
+    // prefix here rather than a fifth row.
     //
-    // The permission is seeded to ALL THREE roles (see the controller's own
-    // header: creating a transcript is the action epic #19 exists to enable
-    // and a new user's default role is Viewer), so in practice this row is
-    // visible to everybody — but the GATE is still the permission rather than
-    // "always", because a deployment that revokes it must lose the row too.
-    key: 'transcripts',
-    label: 'Transcripts',
-    // "Transcripts" is eleven characters and does not fit either surface that
-    // reads this field: a 4-up bottom bar at 360px gives each tab ~90px, and
-    // the collapsed rail is 56px wide. `label` stays the full word — it is the
-    // accessible name on both surfaces and the expanded rail's caption — and
-    // this is the visible short form, exactly the split `settings` already
-    // makes between "User Settings" and "Settings".
+    // ⚠ GATED ON EITHER PERMISSION, NOT ON `transcripts:read` ALONE, and the
+    // pair is verified against the controllers rather than assumed:
+    // `transcripts.controller.ts` carries
+    // `@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })` on its reads and
+    // `notes.controller.ts` carries `PERMISSIONS.NOTES_READ` on its own. A
+    // single `permission: 'transcripts:read'` here would have been the #92 bug
+    // in a new place: a deployment that revoked transcripts but kept notes
+    // would lose the row that is the only way to reach either.
+    //
+    // Both are seeded to ALL THREE roles (both controllers' headers say so:
+    // recording a conversation and turning it into a note are the actions the
+    // two epics exist to enable, and a new account's default role is Viewer),
+    // so in practice this row is visible to everybody — but the GATE is still
+    // the permissions, because a deployment that revokes both must lose the row.
+    //
+    // The per-TAB gate inside the page is separate and is about CONTENT rather
+    // than reachability: `LibraryPage` hides the Transcripts tab from a user
+    // without `transcripts:read` and the Notes tab from one without
+    // `notes:read`. Exactly the split `/admin/settings` already draws between
+    // its own `anyPermission` and its per-card permissions.
+    key: 'library',
+    label: 'Library',
+    // Both fields say "Library" since #57, and the redundancy is the honest
+    // state rather than an oversight: `label` is the accessible name and the
+    // expanded rail's caption, `compactLabel` is what the 56px rail and a 4-up
+    // bottom bar at 360px can physically draw, and "Library" fits both. The
+    // fields stay distinct because `settings` still needs them to be ("User
+    // Settings" / "Settings"), and because the day this label grows is the day
+    // the split is load-bearing again.
     compactLabel: 'Library',
-    Icon: GraphicEqIcon,
+    // NOT the audio waveform this row carried while it was "Transcripts": half
+    // of what it now fronts is prose the user never recorded.
+    Icon: LibraryBooksIcon,
+    // `/transcripts` rather than `/notes`, so the row lands on the tab the
+    // destination has had since #30. A user holding `notes:read` and NOT
+    // `transcripts:read` is redirected on to `/notes` by the route's own
+    // fallback in `App.tsx` — the reachability the `anyPermission` above
+    // promises is kept by the router, not by a second opinion here.
     path: '/transcripts',
-    permission: 'transcripts:read',
+    anyPermission: ['transcripts:read', 'notes:read'],
   },
   {
     key: 'settings',

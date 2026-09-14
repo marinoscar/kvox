@@ -1,32 +1,42 @@
 /**
- * `/transcripts` — the library. Issue #30, epic #19.
+ * The library's Transcripts tab. Issue #30, epic #19; moved here by #57.
  *
  * =============================================================================
- * TABS ARE CORRECT HERE, AND THIS IS THE ONE CASE THE RULE ALLOWS
+ * THIS FILE IS #30's PAGE BODY, UNCHANGED, MINUS ITS CHROME
  * =============================================================================
  *
- * CLAUDE.md's Settings UI Pattern rule 2 forbids adding a settings page as a
- * tab, and permits tabs only for genuinely PARALLEL content — two views of the
- * same question. "Mine" and "Shared with me" are exactly that: one question
- * ("which transcripts can I open?"), one endpoint, one row shape, and the only
- * difference between them is a `scope` query parameter the API already models
- * as a filter. They are not a hierarchy, and neither is reachable "inside" the
- * other. The counter-example the rule was written about —
- * `SystemSettingsPage`'s three tabs — was hierarchical content wearing a tab
- * strip; this is not that.
+ * Issue #57 renamed the destination and gave the library a second tab, which
+ * means the `<h1>`, the primary action and the tab strip now belong to
+ * `pages/LibraryPage.tsx` — a page has one heading, and "Transcripts" is no
+ * longer the page. Everything else about this view is what #30 shipped: the
+ * scope tabs, the debounced search, the status filter, the three empty states,
+ * the two densities and the cursor paging.
  *
- * (This is also not a settings surface at all, so the registry rules do not
- * reach it. `config/destinations.ts` is what declares it, and the AppBar's
- * drill-down table is what handles its children.)
+ * =============================================================================
+ * ITS OWN TABS ARE STILL CORRECT, AND THEY ARE NOW NESTED INSIDE ANOTHER PAIR
+ * =============================================================================
+ *
+ * CLAUDE.md's Settings UI Pattern rule 2 permits tabs for genuinely PARALLEL
+ * content — two views of the same question. "Mine" and "Shared with me" are
+ * exactly that: one question ("which transcripts can I open?"), one endpoint,
+ * one row shape, and the only difference between them is a `scope` query
+ * parameter the API already models as a filter.
+ *
+ * The Transcripts | Notes pair above them is the same judgement one level up
+ * ("what do I have?"), which is why the nesting is a hierarchy of QUESTIONS and
+ * not the hierarchy-wearing-a-tab-strip the rule was written about. The two
+ * pairs do not compete: only one of them is ever the answer to "which library
+ * am I in", and it is the outer one — which is why it, and not this one, is in
+ * the URL.
  *
  * =============================================================================
  * TWO DENSITIES, ONE LIST
  * =============================================================================
  *
- * A phone gets cards with the metadata stacked, and a FAB for the primary
- * action; `sm` and up get a denser row with the same facts on one line. The
- * DATA is identical — this is a layout decision, not a content one — so a
- * transcript never says one thing on a phone and another on a laptop.
+ * A phone gets cards with the metadata stacked; `sm` and up get a denser row
+ * with the same facts on one line. The DATA is identical — this is a layout
+ * decision, not a content one — so a transcript never says one thing on a phone
+ * and another on a laptop.
  */
 
 import Alert from '@mui/material/Alert';
@@ -35,7 +45,6 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CircularProgress from '@mui/material/CircularProgress';
-import Fab from '@mui/material/Fab';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
@@ -52,13 +61,13 @@ import { useTheme } from '@mui/material/styles';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { TranscriptStatusChip } from '../components/transcripts/TranscriptStatusChip';
-import { usePermissions } from '../hooks/usePermissions';
-import { useTranscripts } from '../hooks/useTranscripts';
-import type { TranscriptListItem, TranscriptStatus } from '../services/transcripts';
-import { formatDuration } from '../utils/playbackIntervals';
-import { formatRelativeTime } from '../utils/relativeTime';
-import { TRANSCRIPT_STATUS_FILTERS } from './transcriptsLibraryFilters';
+import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
+import { usePermissions } from '../../hooks/usePermissions';
+import { useTranscripts } from '../../hooks/useTranscripts';
+import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
+import { formatDuration } from '../../utils/playbackIntervals';
+import { formatRelativeTime } from '../../utils/relativeTime';
+import { TRANSCRIPT_STATUS_FILTERS } from '../../pages/transcriptsLibraryFilters';
 
 type ScopeTab = 'owned' | 'shared';
 
@@ -106,6 +115,10 @@ function TranscriptRow({
         }}
       >
         <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+          {/* `h2`: the page's one `h1` is "Library" and there is no heading
+              between it and this row — the tab strip is a `tablist`, not a
+              heading — so `h3` here would skip a level. Asserted by the axe
+              pass in `LibraryPage.test.tsx`, which is where that gets caught. */}
           <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 600 }}>
             {transcript.title}
           </Typography>
@@ -124,7 +137,7 @@ function TranscriptRow({
   );
 }
 
-export function TranscriptsLibraryPage() {
+export function TranscriptsLibraryView() {
   const theme = useTheme();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
@@ -154,33 +167,7 @@ export function TranscriptsLibraryPage() {
   );
 
   return (
-    <Box sx={{ maxWidth: 900, mx: 'auto' }}>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 2,
-          mb: 2,
-        }}
-      >
-        <Typography variant="h5" component="h1">
-          Transcripts
-        </Typography>
-        {/* The FAB is the phone's primary action; at `sm` and up the same
-            action is an ordinary button in the header, where there is room for
-            it and where a floating control would only cover content. */}
-        {canCreate && !isPhone && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/transcripts/new')}
-          >
-            New transcript
-          </Button>
-        )}
-      </Box>
-
+    <Box>
       <Tabs
         value={tab}
         onChange={(_, value: ScopeTab) => setTab(value)}
@@ -291,27 +278,8 @@ export function TranscriptsLibraryPage() {
           </Button>
         </Box>
       )}
-
-      {canCreate && isPhone && (
-        <Fab
-          color="primary"
-          aria-label="New transcript"
-          onClick={() => navigate('/transcripts/new')}
-          sx={{
-            position: 'fixed',
-            right: 16,
-            // Clears the bottom bar, which exists only below `sm` — and this
-            // component only renders below `sm`, so the offset is
-            // unconditional. Same derived relationship to `BottomNav`'s gate
-            // that `TranscriptPlayer`'s mini dock documents at length.
-            bottom: 'calc(72px + env(safe-area-inset-bottom))',
-          }}
-        >
-          <AddIcon />
-        </Fab>
-      )}
     </Box>
   );
 }
 
-export default TranscriptsLibraryPage;
+export default TranscriptsLibraryView;
