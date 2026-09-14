@@ -29,6 +29,7 @@ import { TestAuthModule } from './test-auth/test-auth.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
+import { NotesModule } from './notes/notes.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
 
@@ -194,6 +195,13 @@ import configuration from './config/configuration';
     // deployment AI key. Each user's key lives in `user_ai_credentials` behind
     // a cascading foreign key. See `AiModule`'s own header.
     AiModule,
+
+    // Notes (#49, epic #45): the `note.generate` pipeline. AFTER AiModule
+    // (provider registry, deployment policy, the per-user credential service)
+    // and AFTER TranscriptsModule, which it imports for `materialize()` — a
+    // note is generated from the transcript AS THE USER CORRECTED IT, never
+    // from the AI's original result.
+    NotesModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
