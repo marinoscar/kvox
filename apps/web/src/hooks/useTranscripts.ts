@@ -1,8 +1,8 @@
 /**
  * The transcripts data layer — issue #30, epic #19.
  *
- * Three hooks, one file, for the reason `useJobs.ts` gives about its own three:
- * they are three views of one surface, the viewer mounts two of them together,
+ * Four hooks, one file, for the reason `useJobs.ts` gives about its own three:
+ * they are four views of one surface, the viewer mounts two of them together,
  * and what they genuinely share is a contract — every function resolves rather
  * than throws, and a failure is a STRING the page renders.
  *
@@ -59,6 +59,7 @@ import { ApiError } from '../services/api';
 import {
   getTranscript,
   getTranscriptSegments,
+  getTranscriptSummary,
   getTranscripts,
 } from '../services/transcripts';
 import type {
@@ -68,6 +69,7 @@ import type {
   TranscriptScope,
   TranscriptSegment,
   TranscriptStatus,
+  TranscriptSummary,
 } from '../services/transcripts';
 import { isTranscriptInFlight } from '../utils/transcriptDisplay';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -258,6 +260,100 @@ export function useTranscripts(
   const refresh = useCallback(() => load(false), [load]);
 
   return { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
+}
+
+// =============================================================================
+// The home page's summary
+// =============================================================================
+
+export interface UseTranscriptSummaryResult {
+  summary: TranscriptSummary | null;
+  /** Only true for the FIRST read. A poll never raises it — see below. */
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+/**
+ * The one request the home page makes — issue #32, epic #19.
+ *
+ * ONE CALL, THREE LISTS AND FOUR COUNTS. `GET /api/transcripts/summary` exists
+ * precisely so this page is a single round trip on a phone rather than four
+ * (`?scope=owned`, `?scope=shared`, `?status=processing`, and a count) racing
+ * each other over a cellular link and rendering in whatever order they land.
+ * Do NOT add a second data fetch to the home page to answer a question this
+ * endpoint could answer; extend the endpoint.
+ *
+ * =============================================================================
+ * IT POLLS ONLY WHILE SOMETHING IS MOVING
+ * =============================================================================
+ *
+ * `pollIntervalMs` is derived from the answer, not from a constant: with
+ * `inProgress` non-empty the page is a progress display and the numbers must
+ * move, and with it empty there is nothing on this screen that changes without
+ * the user doing something. A home page polling every five seconds forever is
+ * the overnight-dashboard arithmetic `useVisiblePolling`'s own header does — a
+ * tab left open on a second monitor — except that this is the LANDING PAGE, so
+ * it is the tab most likely to be the one left open.
+ *
+ * The notification stream stays wired up regardless, and that is what covers
+ * the gap the conditional poll opens: a transcript that finishes elsewhere (or
+ * a new share) raises a `transcripts.*` event that refetches immediately, so an
+ * idle home page still notices — it just does not ask every five seconds when
+ * it has no reason to.
+ *
+ * A POLL DOES NOT RAISE `isLoading`, for the same reason the list hook's does
+ * not: the skeleton must appear once, not every five seconds over content that
+ * is already correct.
+ */
+export function useTranscriptSummary(): UseTranscriptSummaryResult {
+  const [summary, setSummary] = useState<TranscriptSummary | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const isMounted = useIsMounted();
+
+  const load = useCallback(
+    async (showLoading: boolean) => {
+      if (showLoading) setIsLoading(true);
+      try {
+        const response = await getTranscriptSummary();
+        if (!isMounted()) return;
+        setSummary(response);
+        setError(null);
+      } catch (err) {
+        // The HELD SUMMARY IS NOT CLEARED on a failed poll. A refresh that
+        // 500s or times out mid-visit would otherwise replace a correct page
+        // with an error banner and nothing else; leaving the rows up and
+        // recording the error is the honest state ("this may be stale"),
+        // matching how the list hook treats `loadMore`.
+        if (isMounted()) setError(messageFor(err, 'Failed to load your transcripts'));
+      } finally {
+        if (isMounted()) setIsLoading(false);
+      }
+    },
+    [isMounted],
+  );
+
+  useEffect(() => {
+    void load(true);
+  }, [load]);
+
+  const hasInFlight = (summary?.inProgress.length ?? 0) > 0;
+  useVisiblePolling(
+    () => void load(false),
+    hasInFlight ? TRANSCRIPT_ACTIVE_POLL_MS : 0,
+  );
+
+  const latestEventId = useLatestTranscriptEventId();
+  useEffect(() => {
+    if (!latestEventId) return;
+    void load(false);
+  }, [latestEventId, load]);
+
+  const refresh = useCallback(() => load(false), [load]);
+
+  return { summary, isLoading, error, refresh };
 }
 
 // =============================================================================

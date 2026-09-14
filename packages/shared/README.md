@@ -5,10 +5,11 @@ two brand colours the web app manifest and the MUI theme both have to agree on.
 
 ## Rebranding a fork
 
-Edit **three lines** in [`index.js`](./index.js):
+Edit **four lines** in [`index.js`](./index.js):
 
 ```js
 exports.APP_NAME = 'Your Product Name';
+exports.TAGLINE = 'Your one-line promise.';
 exports.THEME_COLOR = '#7c3aed';
 exports.BACKGROUND_COLOR = '#ffffff';
 ```
@@ -78,6 +79,7 @@ Keep this list current when you add one.
 | Web theme, `palette.primary.main` (light) | `apps/web/src/theme/light.ts` | `THEME_COLOR` |
 | Brand icons and favicon — generated pixels, not read at runtime | `apps/web/public/icons/*.png`, `apps/web/public/favicon.ico` via `apps/web/scripts/generate-icons.py` | `THEME_COLOR`, `BACKGROUND_COLOR` |
 | Web app manifest (`name`, `short_name`, `description`, `theme_color`, `background_color`) | `apps/web/pwa/manifest.ts` | `APP_NAME`, `THEME_COLOR`, `BACKGROUND_COLOR` |
+| Signed-in home page subtitle | `apps/web/src/components/home/HomeHero.tsx` | `TAGLINE` |
 
 `background_color` above is `BACKGROUND_COLOR`'s only runtime consumer (issue
 #217, epic #215) — it is read directly at build time, so unlike the icon

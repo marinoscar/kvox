@@ -133,6 +133,15 @@ export interface TranscriptListItem {
   currentVersion: number;
   failureReason: string | null;
   access: TranscriptAccessRole;
+  /**
+   * The owner's display name, on EVERY row rather than only shared ones.
+   *
+   * Issue #29 populates it for owned rows too (the caller's own name), which
+   * is what lets a "shared with me" surface render an owner without branching
+   * on `access` first — and what stops a list that mixes both kinds needing
+   * two row types. The API declares it required, so it is not optional here.
+   */
+  ownerName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -405,3 +414,4 @@ export async function retryTranscript(id: string): Promise<TranscriptDetail> {
 export async function cancelTranscript(id: string): Promise<TranscriptDetail> {
   return api.post<TranscriptDetail>(`/transcripts/${encodeURIComponent(id)}/cancel`);
 }
+
