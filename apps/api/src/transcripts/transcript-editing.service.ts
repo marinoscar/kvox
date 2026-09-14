@@ -226,9 +226,19 @@ export class TranscriptEditingService {
         }
 
         if (error instanceof BatchConflictError) {
+          // ⚠ UNDER `details`, NOT AT THE TOP LEVEL. Spec §5 draws the body as
+          // `{ currentVersion, conflicts }`, but this API's global
+          // `HttpExceptionFilter` owns the envelope — it publishes `{ statusCode,
+          // code, message, details }` as the `default` error response on every
+          // operation in the OpenAPI document, reads only those keys, and drops
+          // everything else. A top-level payload here would therefore reach the
+          // client as a bare "An unexpected error occurred" with the conflict
+          // list silently deleted. `details` is where endpoint-specific,
+          // machine-readable data belongs (see that filter's own header), so the
+          // spec's object travels there intact.
           throw new ConflictException({
-            currentVersion: error.currentVersion,
-            conflicts: error.conflicts,
+            message: error.message,
+            details: { currentVersion: error.currentVersion, conflicts: error.conflicts },
           });
         }
 
@@ -434,11 +444,10 @@ export class TranscriptEditingService {
       // carries no per-entity expectations, so a stale view means asking to
       // discard edits the caller has never seen.
       throw new ConflictException({
-        currentVersion: transcript.currentVersion,
-        conflicts: [],
         message:
           `This transcript is at version ${transcript.currentVersion}; you were looking at ` +
           `version ${dto.baseVersion}. Reload and try again.`,
+        details: { currentVersion: transcript.currentVersion, conflicts: [] },
       });
     }
 

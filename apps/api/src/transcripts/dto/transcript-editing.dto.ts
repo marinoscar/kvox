@@ -96,7 +96,16 @@ export const operationsResultSchema = z.object({
 
 export class OperationsResultDto extends createZodDto(operationsResultSchema) {}
 
-/** The body of a 409 from `POST /:id/operations` (spec §5). */
+/**
+ * The `details` object of a 409 from `POST /:id/operations` (spec §5).
+ *
+ * ⚠ IT IS `details`, NOT THE WHOLE BODY. The global `HttpExceptionFilter`
+ * publishes one error envelope for every operation in this API —
+ * `{ statusCode, code, message, details }` — and reads nothing else off a
+ * thrown payload. Spec §5 draws this object at the top level; putting it there
+ * would have it silently dropped, so it travels in the one field the envelope
+ * carries through verbatim.
+ */
 export const operationsConflictSchema = z.object({
   currentVersion: z.number().int(),
   conflicts: z.array(

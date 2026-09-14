@@ -468,9 +468,10 @@ export class TranscriptsController {
       '**Concurrency (409)**: `baseVersion` is informational and may be stale — every ' +
       "op's own `rev` is checked against the current row instead, so two editors " +
       'correcting **different** lines both succeed. Two ops against the same stale entity ' +
-      'answer `409` with `{ currentVersion, conflicts: [{ entity, id, current }] }`, ' +
-      'naming every conflict at once so one re-fetch resolves them all. `current` is ' +
-      '`null` for an entity another editor deleted.\n\n' +
+      'answer `409` whose `details` carries ' +
+      '`{ currentVersion, conflicts: [{ entity, id, current }] }`, naming every conflict at ' +
+      'once so one re-fetch resolves them all. `current` is `null` for an entity another ' +
+      'editor deleted.\n\n' +
       '**Idempotency**: a repeated `clientBatchId` returns the **original** result with ' +
       '`idempotentReplay: true` and creates no second version, so a retry after a dropped ' +
       'connection is always safe.\n\n' +
@@ -487,7 +488,7 @@ export class TranscriptsController {
   @ApiResponse({ status: 404, description: 'No such transcript, or no edit access to it' })
   @ApiResponse({
     status: 409,
-    description: 'A stale `rev` — the body names every conflicting entity',
+    description: 'A stale `rev` — `details` names every conflicting entity',
     type: OperationsConflictDto,
   })
   async operations(
