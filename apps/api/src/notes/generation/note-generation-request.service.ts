@@ -70,7 +70,9 @@ import {
 
 import { AiBudgetError } from '../../ai/ai-errors';
 import { AiConfigService } from '../../ai/ai-config.service';
+import { resolveAllowedModel } from '../../ai/ai-model-resolution';
 import { AiProviderRegistry } from '../../ai/ai-provider.registry';
+import type { AiAllowedModel } from '../../ai/ai-settings.schema';
 import { AiSettingsService } from '../../ai/ai-settings.service';
 import type { AiProvider } from '../../ai/providers/ai-provider.interface';
 import type { SystemAiValue } from '../../common/schemas/settings.schema';
@@ -237,14 +239,34 @@ export class NoteGenerationRequestService {
    * nothing was created. The job re-checks against CURRENT state anyway,
    * because a transcript can grow between this request and that claim.
    *
-   * A model the provider's catalogue does not describe is NOT refused here —
-   * there is no context window to check against, and `resolveModel` has already
-   * established the model is permitted. The job's own check is the backstop.
+   * A model NOTHING can describe is still not refused here — there is no
+   * context window to check against, and `resolveModel` has already established
+   * the model is permitted. The job's own check is the backstop.
+   *
+   * ⚠ THE DESCRIPTOR COMES FROM THE POLICY ENTRY, NOT STRAIGHT FROM THE BUILD
+   * CATALOGUE (#78). An entry may carry its own `contextWindowTokens`, and such
+   * a model — one this build has never heard of, adopted from the discovery
+   * dropdown — is exactly the case that used to fall through the `return`
+   * below. Falling through means an over-long prompt is not refused HERE with
+   * numbers in a 400, but minutes later as a `failed` note the user has to go
+   * and look at. `resolveAllowedModel` is the same function the config probe
+   * and the job use, so all three agree about what this model's window is.
    */
   assertPromptFits(input: PromptFitInput): void {
-    const descriptor = input.provider.capabilities.models.find(
-      (entry) => entry.id === input.model,
+    const block = (
+      input.policy.providers as Record<
+        string,
+        { allowedModels?: AiAllowedModel[] } | undefined
+      >
+    )[input.provider.id];
+
+    const entry = block?.allowedModels?.find(
+      (model) => model.id === input.model,
     );
+
+    const descriptor = entry
+      ? resolveAllowedModel(entry, input.provider.capabilities.models)
+      : null;
 
     if (!descriptor) return;
 
