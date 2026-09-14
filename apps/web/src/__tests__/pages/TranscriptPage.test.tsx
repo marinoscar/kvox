@@ -291,7 +291,12 @@ describe('TranscriptPage — read mode', () => {
     renderPage();
 
     expect(await screen.findByText('Weekly standup')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+    // The title comes from `GET /:id` (transcript detail); this region comes
+    // from `SegmentList`, which only renders it once `GET /:id/segments`
+    // resolves. The two requests race independently, so the title's own
+    // resolution is not evidence the segments have arrived — this must be
+    // awaited on its own rather than queried synchronously right after.
+    expect(await screen.findByRole('region', { name: 'Transcript' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
     expect(screen.getByLabelText('Playback position')).toBeInTheDocument();
   });
@@ -353,7 +358,9 @@ describe('TranscriptPage — read mode', () => {
 
     await act(async () => setViewportWidth(390));
 
-    expect(screen.getByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+    // Same independent-request race as above: the segments region is not
+    // implied by the title having resolved.
+    expect(await screen.findByRole('region', { name: 'Transcript' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
   });
 });
@@ -382,7 +389,10 @@ describe('TranscriptPage — "Preparing audio…"', () => {
     renderPage();
 
     expect(await screen.findByText(/Preparing audio/)).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Transcript' })).toBeInTheDocument();
+    // "Preparing audio" resolves off `GET /:id/audio` (plus the `canPlayType`
+    // stub above); the segments region resolves off the independent
+    // `GET /:id/segments` — awaiting one is not evidence for the other.
+    expect(await screen.findByRole('region', { name: 'Transcript' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument();
     canPlayType.mockRestore();
   });
