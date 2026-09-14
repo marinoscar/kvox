@@ -175,3 +175,140 @@ test.describe('Note generation view', () => {
     await expect(page).toHaveScreenshot('notes-failed-phone-390.png');
   });
 });
+
+// =============================================================================
+// #58 — the detail page, the editor, and the history
+// =============================================================================
+
+/**
+ * Three screens at the same three widths, for the same reason the ones above
+ * are captured there: 390 and 820 sit either side of the `sm` (600px) boundary
+ * that gates the rail, the bottom bar and every dialog's `fullScreen`, and 820
+ * is specifically the tablet band a `md`-gated layout would wrongly hand the
+ * phone treatment to.
+ *
+ * ⚠ THE EDITOR IS CAPTURED AS A TEXTAREA, DELIBERATELY. A note is markdown all
+ * the way down — storage, model output, export source — and the baseline is
+ * partly there so that a future change to a rich-text surface cannot land
+ * silently.
+ */
+
+test.describe('Note detail', () => {
+  for (const [name, viewport] of WIDTHS) {
+    test(`note detail @ ${name}`, async ({ page }) => {
+      await installNotesApi(page);
+      await page.setViewportSize(viewport);
+      await page.goto(harnessUrl({ route: '/notes/n1' }));
+      await waitForInter(page);
+
+      // The PROVENANCE line resolved to a name, not the fallback noun — it
+      // needs a second request per source, so waiting for it keeps the capture
+      // off the frame that still reads "from a transcript".
+      await expect(
+        page.getByRole('link', { name: 'Weekly engineering standup' }),
+      ).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
+
+      await expect(page).toHaveScreenshot(`notes-detail-${name}.png`);
+    });
+  }
+});
+
+test.describe('Note editor', () => {
+  for (const [name, viewport] of WIDTHS) {
+    test(`note editor @ ${name}`, async ({ page }) => {
+      await installNotesApi(page);
+      await page.setViewportSize(viewport);
+      await page.goto(harnessUrl({ route: '/notes/n1' }));
+      await waitForInter(page);
+
+      await page.getByRole('button', { name: 'Edit' }).click();
+
+      await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+
+      await expect(page).toHaveScreenshot(`notes-edit-${name}.png`);
+    });
+  }
+
+  test('note editor preview @ desktop-1440', async ({ page }) => {
+    // The other half of the toggle. Worth its own baseline because it is a
+    // different renderer in the same box, and a layout change that broke it
+    // would be invisible in the write-mode capture above.
+    await installNotesApi(page);
+    await page.setViewportSize(DESKTOP);
+    await page.goto(harnessUrl({ route: '/notes/n1' }));
+    await waitForInter(page);
+
+    await page.getByRole('button', { name: 'Edit' }).click();
+    await page.getByRole('button', { name: 'Preview' }).click();
+
+    await expect(page.getByTestId('note-preview')).toBeVisible();
+
+    await expect(page).toHaveScreenshot('notes-edit-preview-desktop-1440.png');
+  });
+});
+
+test.describe('Note history', () => {
+  for (const [name, viewport] of WIDTHS) {
+    test(`note history @ ${name}`, async ({ page }) => {
+      await installNotesApi(page);
+      await page.setViewportSize(viewport);
+      await page.goto(harnessUrl({ route: '/notes/n1/history' }));
+      await waitForInter(page);
+
+      // ⚠ "Original (AI)" IS THE LABEL THIS BASELINE EXISTS TO PROTECT, beside
+      // the version-1 row whose `author` is null.
+      await expect(page.getByText('Original (AI)')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Read version 1' })).toBeVisible();
+
+      await expect(page).toHaveScreenshot(`notes-history-${name}.png`);
+    });
+  }
+
+  test('note history with a version open @ desktop-1440', async ({ page }) => {
+    await installNotesApi(page);
+    await page.setViewportSize(DESKTOP);
+    await page.goto(harnessUrl({ route: '/notes/n1/history' }));
+    await waitForInter(page);
+
+    await page.getByRole('button', { name: 'Read version 1' }).click();
+
+    await expect(page.getByRole('heading', { name: /Version 1 — the AI/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Restore this version' })).toBeVisible();
+
+    await expect(page).toHaveScreenshot('notes-history-version-desktop-1440.png');
+  });
+});
+
+test.describe('Note export dialog', () => {
+  test('export dialog @ phone-390', async ({ page }) => {
+    // `fullScreen` below `sm` — the phone treatment MUI applies at 600px, and
+    // the width at which a dialog either fits or does not.
+    await installNotesApi(page);
+    await page.setViewportSize(PHONE);
+    await page.goto(harnessUrl({ route: '/notes/n1' }));
+    await waitForInter(page);
+
+    await page.getByRole('button', { name: 'Export' }).click();
+
+    await expect(page.getByRole('radio', { name: 'Markdown' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Word' })).toBeVisible();
+
+    await expect(page).toHaveScreenshot('notes-export-dialog-phone-390.png');
+  });
+
+  test('export dialog @ desktop-1440', async ({ page }) => {
+    await installNotesApi(page);
+    await page.setViewportSize(DESKTOP);
+    await page.goto(harnessUrl({ route: '/notes/n1' }));
+    await waitForInter(page);
+
+    await page.getByRole('button', { name: 'Export' }).click();
+
+    await expect(page.getByRole('radio', { name: 'Markdown' })).toBeVisible();
+
+    await expect(page).toHaveScreenshot('notes-export-dialog-desktop-1440.png');
+  });
+});

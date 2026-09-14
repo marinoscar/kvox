@@ -123,6 +123,70 @@ const TEMPLATES = [
   },
 ];
 
+/**
+ * The version history every history baseline renders — issue #58.
+ *
+ * ⚠ `author: null` ON VERSION 1 IS THE POINT, not an omission: it is the
+ * convention the API publishes for "the AI wrote this", and the baseline exists
+ * partly to protect the "AI" label the page derives from it.
+ */
+const VERSIONS = [
+  {
+    version: 3,
+    kind: 'restore',
+    summary: 'Back to the AI draft',
+    author: { id: 'u1', name: 'Visual Harness' },
+    generationId: null,
+    restoredFromVersion: 1,
+    createdAt: FIXED_ISO,
+  },
+  {
+    version: 2,
+    kind: 'edit',
+    summary: 'Fixed the owner of the rollback plan',
+    author: { id: 'u1', name: 'Visual Harness' },
+    generationId: null,
+    restoredFromVersion: null,
+    createdAt: FIXED_ISO,
+  },
+  {
+    version: 1,
+    kind: 'ai_generated',
+    summary: null,
+    author: null,
+    generationId: 'gen-1',
+    restoredFromVersion: null,
+    createdAt: FIXED_ISO,
+  },
+];
+
+/** The formats the export dialog builds itself from. Published, never hardcoded client-side. */
+const EXPORTERS = [
+  {
+    format: 'markdown',
+    label: 'Markdown',
+    mimeType: 'text/markdown',
+    extension: 'md',
+    options: [
+      {
+        key: 'includeProvenance',
+        label: 'Include the provenance header',
+        description: 'Names the source, the template and the version exported.',
+        type: 'boolean',
+        default: true,
+      },
+    ],
+  },
+  { format: 'pdf', label: 'PDF', mimeType: 'application/pdf', extension: 'pdf', options: [] },
+  {
+    format: 'docx',
+    label: 'Word',
+    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    extension: 'docx',
+    options: [],
+  },
+];
+
 function transcriptRow(id: string, title: string): Record<string, unknown> {
   return {
     id,
@@ -232,6 +296,33 @@ export async function installNotesApi(
       return route.fulfill({ status: 200, contentType: 'text/event-stream', body });
     }
 
+    // ⚠ BEFORE the `/notes/:id` matcher below, which would otherwise swallow
+    // every one of these — the same literal-route-first ordering the API's own
+    // controller has to declare.
+    if (path === '/notes/exporters') {
+      return json(route, { exporters: EXPORTERS });
+    }
+
+    if (/^\/notes\/[^/]+\/versions$/.test(path)) {
+      return json(route, { currentVersion: 3, items: VERSIONS, nextCursor: null });
+    }
+
+    if (/^\/notes\/[^/]+\/versions\/\d+$/.test(path)) {
+      const version = Number(path.split('/').pop());
+      const row = VERSIONS.find((entry) => entry.version === version) ?? VERSIONS[0];
+
+      return json(route, {
+        ...row,
+        noteId: 'n1',
+        body: GENERATED_MARKDOWN,
+        isCurrent: row.version === 3,
+      });
+    }
+
+    if (/^\/notes\/[^/]+\/exports$/.test(path)) {
+      return json(route, { exports: [] });
+    }
+
     if (/^\/notes\/[^/]+$/.test(path)) {
       if (options.failed) {
         return json(
@@ -265,6 +356,9 @@ export async function installNotesApi(
         noteRow('n1', 'Weekly engineering standup — minutes', {
           body: GENERATED_MARKDOWN,
           contextText: null,
+          // Matches `VERSIONS` above, so the detail page and the history page
+          // agree about which version is current in every baseline.
+          currentVersion: 3,
         }),
       );
     }

@@ -73,3 +73,34 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   // is total without a non-null assertion.
   return iso;
 }
+
+/**
+ * "12 March" — an ABSOLUTE date, for a provenance line rather than a feed.
+ *
+ * Issue #58, epic #45. The note page states where the note came from ("Generated
+ * from *Q3 planning call* using *Executive summary*, 12 March"), and "2 months
+ * ago" is the wrong unit for that sentence: provenance is a fact about a
+ * specific recording on a specific day, and a reader comparing the note against
+ * their calendar needs the day, not an interval.
+ *
+ * THE YEAR APPEARS ONLY WHEN IT IS NOT THIS ONE. A date inside the current year
+ * reads as "12 March"; anything older carries its year, because "12 March" on a
+ * three-year-old note is a sentence that quietly lies about when the meeting
+ * happened.
+ *
+ * `Intl.DateTimeFormat` with no locale, like `formatRelativeTime` above: the
+ * browser's own ordering ("12 March" or "March 12") is the one its user expects,
+ * and hardcoding either is how this becomes untranslatable.
+ */
+export function formatShortDate(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return iso;
+
+  const sameYear = then.getFullYear() === now.getFullYear();
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: 'numeric',
+    month: 'long',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  }).format(then);
+}

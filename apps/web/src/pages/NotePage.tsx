@@ -1,48 +1,73 @@
 /**
- * `/notes/:id` — watch a note being written, and read it once it is. Issue #57,
- * epic #45.
+ * `/notes/:id` — read a note, change it, and take it with you. Issues #57 and
+ * #58, epic #45.
  *
- * ⚠ SCOPE. This is the GENERATION view #57 specifies: the live stream, the
- * markdown, the stop affordance, the failure and its Regenerate. Issue #58
- * builds the rest of this page — inline editing, the version history beside it,
- * export — on top of this file rather than instead of it. What is here is real;
- * nothing is stubbed.
+ * #57 landed the GENERATION view: the live stream, the stop affordance, the
+ * failure and its regenerate. #58 builds the rest ON TOP of that file rather
+ * than instead of it — the title is editable, the body has an editor, a save is
+ * a version, a conflict is a decision, and the note can leave the application.
+ * Everything #57 wrote about the stream still holds and is unchanged.
  *
  * =============================================================================
- * THE STREAM IS ADDITIVE. CLOSING THIS PAGE CANCELS NOTHING.
+ * THE STREAM IS ADDITIVE. CLOSING THIS PAGE CANCELS NOTHING. (#57)
  * =============================================================================
  *
  * `note.generate` completes the note — body, version, status, notification —
- * with no knowledge of whether anyone is connected. The API says so in as many
- * words: deleting the whole stream controller would cost a user the live view
- * and not one character of a note. So this page NEVER claims to be cancelling
- * anything, and the stop affordance is called "Stop watching" rather than
- * "Stop": it closes one SSE connection and says, in the same breath, that the
- * note is still being written and a notification will arrive. Labelling it
- * "Stop" or "Cancel" would be the interface lying about what the button does —
- * there is no cancel endpoint for a note generation, by design (the provider
- * has already been paid for the tokens either way).
+ * with no knowledge of whether anyone is connected. So this page never claims
+ * to be cancelling anything, and the stop affordance is "Stop watching" rather
+ * than "Stop": it closes one SSE connection and says, in the same breath, that
+ * the note is still being written. There is no cancel endpoint for a note
+ * generation, by design — the provider has been paid for the tokens either way.
  *
  * =============================================================================
- * THE BODY IS NEVER TRUSTED AS MARKUP
+ * THE BODY IS NEVER TRUSTED AS MARKUP (#57)
  * =============================================================================
  *
- * Everything rendered here is model output, generated from a transcript this
- * application did not write, so it goes through `MarkdownView` — `react-markdown`
- * with `remark-gfm` and NO `rehype-raw`. A `<script>` in the model's output is
- * inert text, not an element, because the renderer builds a React tree and
- * never sets HTML from a string. There is no `dangerouslySetInnerHTML` anywhere
- * in `apps/web` and this page must not be what introduces one.
+ * Everything rendered here is model output generated from a transcript this
+ * application did not write, so it goes through `MarkdownView` —
+ * `react-markdown`, `remark-gfm`, and NO `rehype-raw`. A `<script>` in the
+ * output is inert text, because the renderer builds a React tree and never sets
+ * HTML from a string. The EDITOR'S PREVIEW uses the same component for the same
+ * reason: text a user pastes into their own note is no more trusted markup than
+ * text a model wrote.
  *
  * =============================================================================
- * A FAILURE IS A RECORDED REASON, NEVER "SOMETHING WENT WRONG"
+ * ⚠ NO AUTOSAVE, AND THE DIRTY GUARD IS WHAT REPLACES IT
  * =============================================================================
  *
- * Two sources, in order: the note's own `failureReason` (what the job recorded,
- * and what survives a reload) and the `error` frame's reason (what the stream
- * saw, available seconds earlier and sometimes the more specific of the two).
- * A generic sentence is shown only when neither exists — which for this API
- * means only a frame class that carries no reason at all.
+ * Every save is a version (#48). An autosaving editor would turn a five-minute
+ * edit into thirty history rows and make the history useless for the one thing
+ * it exists for. #58 rejects it by name and accepts the risk it would have
+ * covered — a user navigating away from unsaved text — which is covered instead
+ * by `useUnsavedChangesWarning` (leaving the tab) and by the in-app
+ * confirmation below (leaving the page). See that hook's header for why
+ * `useBlocker` is not used.
+ *
+ * =============================================================================
+ * ⚠ A 409 IS A DECISION, NOT AN ERROR MESSAGE
+ * =============================================================================
+ *
+ * A stale `baseVersion` means somebody else's save landed first and BOTH bodies
+ * are real work. This page re-reads the note so it can show what the other
+ * version contains, then hands the choice to the user through
+ * `NoteConflictDialog`. There is no Retry button anywhere on this path: a retry
+ * would re-send the same text against a fresh version, which is precisely the
+ * silent overwrite the API's version check exists to prevent.
+ *
+ * A 409 whose reason is `generating` is a different thing and gets a different
+ * answer: nothing is in conflict, the generation is simply the only writer
+ * until it settles, so the page says to wait rather than offering a choice
+ * between two texts.
+ *
+ * =============================================================================
+ * ⚠ A MISSING AI KEY MUST NOT LOCK A USER OUT OF THEIR OWN NOTE
+ * =============================================================================
+ *
+ * With `keyConfigured: false` the REGENERATE control is replaced by
+ * `AiKeyRequired` and nothing else changes: the note still reads, still edits,
+ * still saves and still exports. A key is needed to spend money at a provider;
+ * it is not needed to read text this user already owns. A page that gated
+ * everything on it would be holding a user's own work hostage to a credential.
  */
 
 import Alert from '@mui/material/Alert';
@@ -50,31 +75,59 @@ import AlertTitle from '@mui/material/AlertTitle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
-import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import { useCallback, useEffect, useState } from 'react';
-import { Link as RouterLink, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 
+import { AiKeyRequired } from '../components/ai/AiKeyRequired';
 import { MarkdownView } from '../components/notes/MarkdownView';
+import { NoteBodyEditor } from '../components/notes/NoteBodyEditor';
+import type { NoteEditorView } from '../components/notes/NoteBodyEditor';
+import { NoteConflictDialog } from '../components/notes/NoteConflictDialog';
+import { NoteExportDialog } from '../components/notes/NoteExportDialog';
+import { NoteProvenance } from '../components/notes/NoteProvenance';
 import { NoteStatusChip } from '../components/notes/NoteStatusChip';
+import { RegenerateNoteDialog } from '../components/notes/RegenerateNoteDialog';
+import { useAiConfig } from '../hooks/useAiConfig';
+import { useNoteSourceName } from '../hooks/useNoteSourceNames';
 import { isNoteInFlight, useNote } from '../hooks/useNotes';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { ApiError } from '../services/api';
 import { connectNoteStream, describeStreamError } from '../services/noteGenerationStream';
 import type { SseConnection } from '../services/noteGenerationStream';
-import { regenerateNote } from '../services/notes';
-import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../utils/noteSource';
-import { formatRelativeTime } from '../utils/relativeTime';
+import {
+  getNote,
+  noteConflictCurrentVersion,
+  noteConflictReason,
+  regenerateNote,
+  updateNote,
+} from '../services/notes';
 
 export function NotePage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { note, isLoading, error, refresh, setNote } = useNote(id);
+  const { keyConfigured, isLoading: isAiLoading } = useAiConfig();
+  const sourceName = useNoteSourceName(note);
 
   /** The buffer the stream has produced, offset-reconciled by the service. */
   const [streamed, setStreamed] = useState('');
@@ -87,18 +140,50 @@ export function NotePage() {
    */
   const [watching, setWatching] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
+
+  // --- Editing -------------------------------------------------------------
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [editorView, setEditorView] = useState<NoteEditorView>('write');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // --- The title, edited in place ------------------------------------------
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState<string | null>(null);
+
+  // --- The 409 -------------------------------------------------------------
+  const [conflict, setConflict] = useState<
+    { baseVersion: number; currentVersion: number | null; theirs: string | null } | null
+  >(null);
+
+  // --- Leaving with unsaved work -------------------------------------------
+  const [pendingLeave, setPendingLeave] = useState<string | null>(null);
+
+  // --- The other two dialogs -----------------------------------------------
+  const [exportOpen, setExportOpen] = useState(false);
+  const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
   const inFlight = note ? isNoteInFlight(note.status) : false;
+  const isDirty = isEditing && note !== null && draft !== note.body;
 
-  // Reset EVERYTHING stream-shaped when the note changes. `/notes/a` →
-  // `/notes/b` must not render a's half-streamed buffer under b's heading, and
-  // must not inherit a's "you stopped watching" state either.
+  // The browser's own confirmation. The in-app half is `pendingLeave` below.
+  useUnsavedChangesWarning(isDirty);
+
+  // Reset EVERYTHING page-shaped when the note changes. `/notes/a` →
+  // `/notes/b` must not render a's half-streamed buffer or a's draft under b's
+  // heading, and must not inherit a's "you stopped watching" state either.
   useEffect(() => {
     setStreamed('');
     setStreamError(null);
     setWatching(true);
+    setIsEditing(false);
+    setDraft('');
+    setSaveError(null);
+    setTitleDraft(null);
+    setConflict(null);
   }, [id]);
 
   useEffect(() => {
@@ -116,32 +201,175 @@ export function NotePage() {
       onError: (failure) => {
         setStreamError(describeStreamError(failure));
         // The note's own `failureReason` is the durable record of this, and it
-        // is what a reload will show — so read it rather than leaving the page
-        // rendering only a frame that no longer exists anywhere.
+        // is what a reload will show.
         void refresh();
       },
     });
 
     // ⚠ THE TEARDOWN IS LOAD-BEARING, not hygiene. Navigating away mid-stream
-    // must close the socket; without this, every note opened during one
-    // session leaves a connection held open against a page that is gone.
+    // must close the socket.
     return () => connection.close();
   }, [id, inFlight, refresh, watching]);
 
+  // ---------------------------------------------------------------------------
+  // Editing the body
+  // ---------------------------------------------------------------------------
+
+  const startEditing = useCallback(() => {
+    if (!note) return;
+    setDraft(note.body);
+    setEditorView('write');
+    setSaveError(null);
+    setIsEditing(true);
+  }, [note]);
+
+  const cancelEditing = useCallback(() => {
+    setIsEditing(false);
+    setDraft('');
+    setSaveError(null);
+  }, []);
+
+  /**
+   * Save, and treat the refusal as the thing it is.
+   *
+   * ⚠ `baseVersion` IS THE VERSION THIS DRAFT WAS OPENED AGAINST, read off the
+   * note the page is holding. Sending anything else — a version re-read at save
+   * time, say — would defeat the check entirely: the whole point is to send the
+   * number the user's text is based on and let the server decide.
+   */
+  const save = useCallback(async () => {
+    if (!id || !note) return;
+
+    const baseVersion = note.currentVersion;
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const saved = await updateNote(id, { body: draft, baseVersion });
+
+      setNote(saved);
+      setIsEditing(false);
+      setDraft('');
+    } catch (err) {
+      const reason = noteConflictReason(err);
+
+      if (reason === 'stale_base_version') {
+        // Open the dialog IMMEDIATELY with what the 409 itself carried, then
+        // fill in the other body when the re-read lands. A conflict dialog that
+        // waited for a second round trip would leave the user staring at a
+        // spinner over their own unsaved text.
+        setConflict({
+          baseVersion,
+          currentVersion: noteConflictCurrentVersion(err),
+          theirs: null,
+        });
+
+        try {
+          const fresh = await getNote(id);
+
+          setNote(fresh);
+          setConflict((current) =>
+            current === null
+              ? null
+              : {
+                  ...current,
+                  currentVersion: current.currentVersion ?? fresh.currentVersion,
+                  theirs: fresh.body,
+                },
+          );
+        } catch {
+          // The dialog still works: it names the version, shows the user's own
+          // text and offers the copy. Only the other half is missing, and it
+          // says so rather than claiming the note is empty.
+          setConflict((current) =>
+            current === null ? null : { ...current, theirs: null },
+          );
+        }
+
+        return;
+      }
+
+      if (reason === 'generating') {
+        setSaveError(
+          'This note is being written right now. Your text is still here — save again once the generation finishes.',
+        );
+
+        return;
+      }
+
+      setSaveError(
+        err instanceof ApiError ? err.message : 'Your changes could not be saved',
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }, [draft, id, note, setNote]);
+
+  /** Take the server's version and lose the draft. Only ever a user's choice. */
+  const discardAndReload = useCallback(() => {
+    setConflict(null);
+    setIsEditing(false);
+    setDraft('');
+    setSaveError(null);
+    void refresh();
+  }, [refresh]);
+
+  // ---------------------------------------------------------------------------
+  // Editing the title
+  // ---------------------------------------------------------------------------
+
+  /**
+   * ⚠ A RENAME SENDS NO `baseVersion` AND CREATES NO VERSION. The API is
+   * explicit about it: a title is metadata about the note, not content of it,
+   * so recording a rename would put a no-op in the history that a later restore
+   * could "undo" into a name nobody chose.
+   */
+  const saveTitle = useCallback(async () => {
+    if (!id || !note || titleDraft === null) return;
+
+    const next = titleDraft.trim();
+
+    if (next.length === 0 || next === note.title) {
+      setTitleDraft(null);
+      setTitleError(null);
+
+      return;
+    }
+
+    try {
+      const saved = await updateNote(id, { title: next });
+
+      setNote(saved);
+      setTitleDraft(null);
+      setTitleError(null);
+    } catch (err) {
+      setTitleError(
+        err instanceof ApiError ? err.message : 'The title could not be changed',
+      );
+    }
+  }, [id, note, setNote, titleDraft]);
+
+  // ---------------------------------------------------------------------------
+  // Regeneration
+  // ---------------------------------------------------------------------------
+
   const handleRegenerate = useCallback(async () => {
     if (!id) return;
+
     setIsRegenerating(true);
     setRegenerateError(null);
     setStreamError(null);
     setStreamed('');
+
     try {
       const result = await regenerateNote(id);
+
       // Adopt the returned row immediately — it is already `generating` — so
-      // the stream effect below re-opens on this render rather than after a
-      // poll. `regenerate` answers with the same shape `create` does precisely
-      // so a client does not have to re-read to find that out.
+      // the stream effect re-opens on this render rather than after a poll.
       setNote(result.note);
       setWatching(true);
+      setRegenerateOpen(false);
     } catch (err) {
       setRegenerateError(
         err instanceof ApiError ? err.message : 'The note could not be regenerated',
@@ -150,6 +378,27 @@ export function NotePage() {
       setIsRegenerating(false);
     }
   }, [id, setNote]);
+
+  // ---------------------------------------------------------------------------
+  // Leaving the page with unsaved work
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Intercept an in-app link while the editor is dirty.
+   *
+   * The link keeps its `href` — so it is still a real link, still
+   * middle-clickable and still readable by assistive technology — and the
+   * default is prevented only when there is something to lose.
+   */
+  const guardLeaving = useCallback(
+    (to: string) => (event: { preventDefault: () => void }) => {
+      if (!isDirty) return;
+
+      event.preventDefault();
+      setPendingLeave(to);
+    },
+    [isDirty],
+  );
 
   if (isLoading) {
     return (
@@ -167,51 +416,113 @@ export function NotePage() {
     );
   }
 
-  const sourceRef = noteSourceRef(note);
-  const sourcePath = noteSourcePath(note);
-  const sourceLabel = sourceRef ? noteSourceFallbackLabel(sourceRef.type) : null;
-
   // The streamed buffer while it is being written; the committed body after.
   // Never both, and never the buffer once the row has the real thing.
   const body = inFlight && streamed ? streamed : note.body;
+  const canEdit = !inFlight && note.status !== 'deleting';
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto' }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 1 }}
+        sx={{ alignItems: { sm: 'flex-start' }, justifyContent: 'space-between', mb: 1 }}
       >
-        <Typography variant="h5" component="h1" sx={{ minWidth: 0 }}>
-          {note.title}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+        {titleDraft === null ? (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+            <Typography variant="h5" component="h1" sx={{ minWidth: 0 }}>
+              {note.title}
+            </Typography>
+            <Tooltip title="Rename this note">
+              <IconButton
+                size="small"
+                aria-label="Rename this note"
+                onClick={() => {
+                  setTitleDraft(note.title);
+                  setTitleError(null);
+                }}
+              >
+                <EditIcon fontSize="inherit" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ) : (
+          <Box
+            component="form"
+            sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flex: 1, minWidth: 0 }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveTitle();
+            }}
+          >
+            <TextField
+              size="small"
+              fullWidth
+              autoFocus
+              label="Title"
+              value={titleDraft}
+              error={titleError !== null}
+              helperText={titleError ?? undefined}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onKeyDown={(event) => {
+                // Escape abandons the rename. A title edit holds no versioned
+                // content, so there is nothing here worth a confirmation.
+                if (event.key === 'Escape') {
+                  setTitleDraft(null);
+                  setTitleError(null);
+                }
+              }}
+            />
+            <IconButton size="small" type="submit" aria-label="Save the title">
+              <CheckIcon fontSize="inherit" />
+            </IconButton>
+            <IconButton
+              size="small"
+              aria-label="Cancel renaming"
+              onClick={() => {
+                setTitleDraft(null);
+                setTitleError(null);
+              }}
+            >
+              <CloseIcon fontSize="inherit" />
+            </IconButton>
+          </Box>
+        )}
+
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}
+        >
           <NoteStatusChip status={note.status} />
+          <Button
+            size="small"
+            startIcon={<FileDownloadOutlinedIcon />}
+            onClick={() => setExportOpen(true)}
+            // Exporting is a READ. It stays available with no AI key, and while
+            // a regeneration is running — an export names the version it
+            // rendered, so there is no ambiguity about what came out.
+            disabled={note.currentVersion === 0}
+          >
+            Export
+          </Button>
           <Button
             size="small"
             startIcon={<HistoryIcon />}
             component={RouterLink}
             to={`/notes/${note.id}/history`}
+            onClick={guardLeaving(`/notes/${note.id}/history`)}
           >
             History
           </Button>
         </Stack>
       </Stack>
 
-      <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 2 }}>
-        {formatRelativeTime(note.createdAt)}
-        {sourceLabel ? ' · from ' : ''}
-        {sourceLabel &&
-          (sourcePath ? (
-            <Link component={RouterLink} to={sourcePath}>
-              {sourceLabel}
-            </Link>
-          ) : (
-            sourceLabel
-          ))}
-        {note.templateName ? ` · ${note.templateName}` : ''}
-        {note.model ? ` · ${note.model}` : ''}
-      </Typography>
+      {/* ⚠ ON SCREEN, NOT IN A MENU. The epic's trust-and-provenance premise
+          made concrete — see `NoteProvenance`'s own header. */}
+      <Box sx={{ mb: 2 }}>
+        <NoteProvenance note={note} sourceName={sourceName} />
+      </Box>
 
       {inFlight && (
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -224,9 +535,8 @@ export function NotePage() {
               <Typography variant="subtitle2" component="h2">
                 {watching ? 'Writing your note…' : 'Still writing in the background'}
               </Typography>
-              {/* THE HONEST SENTENCE. Said whether or not the user is
-                  watching, because the thing it promises is true either way and
-                  it is what makes leaving this page a reasonable thing to do. */}
+              {/* THE HONEST SENTENCE. Said whether or not the user is watching,
+                  because the thing it promises is true either way. */}
               <Typography variant="caption" color="text.secondary">
                 You can close this page — the note keeps being written and a
                 notification will arrive when it is ready.
@@ -252,15 +562,17 @@ export function NotePage() {
           severity="error"
           sx={{ mb: 2 }}
           action={
-            <Button
-              color="inherit"
-              size="small"
-              startIcon={<RefreshIcon />}
-              onClick={() => void handleRegenerate()}
-              disabled={isRegenerating}
-            >
-              {isRegenerating ? 'Starting…' : 'Regenerate'}
-            </Button>
+            keyConfigured ? (
+              <Button
+                color="inherit"
+                size="small"
+                startIcon={<RefreshIcon />}
+                onClick={() => setRegenerateOpen(true)}
+                disabled={isRegenerating}
+              >
+                Regenerate
+              </Button>
+            ) : undefined
           }
         >
           <AlertTitle>This note could not be generated</AlertTitle>
@@ -273,18 +585,22 @@ export function NotePage() {
         </Alert>
       )}
 
-      {/* A stream error that has NOT (yet) become a failed row: the reader gave
-          up, or the row vanished. Distinct from the alert above, which is about
-          the generation. */}
+      {/* A stream error that has NOT (yet) become a failed row. */}
       {streamError && note.status !== 'failed' && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           {streamError}
         </Alert>
       )}
 
-      {regenerateError && (
+      {regenerateError && !regenerateOpen && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {regenerateError}
+        </Alert>
+      )}
+
+      {saveError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {saveError}
         </Alert>
       )}
 
@@ -293,24 +609,74 @@ export function NotePage() {
         sx={{ p: { xs: 2, sm: 3 } }}
         // ⚠ THE LIVE REGION. `polite`, so a screen-reader user hears the note
         // arriving without it interrupting whatever they are reading, and
-        // `aria-busy` while it is still being written so assistive technology
-        // knows the region is not finished. Named, because an unnamed `region`
-        // is a landmark a user cannot identify — and because axe is right to
-        // say so.
+        // `aria-busy` while it is still being written.
         component="section"
         role="region"
         aria-label="Note"
         aria-live="polite"
         aria-busy={inFlight}
       >
-        {body ? (
-          <MarkdownView>{body}</MarkdownView>
+        {isEditing ? (
+          <Stack spacing={2}>
+            <NoteBodyEditor
+              value={draft}
+              onChange={setDraft}
+              view={editorView}
+              onViewChange={setEditorView}
+              disabled={isSaving}
+            />
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={1}
+              sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}
+            >
+              {/* NO AUTOSAVE, SAID OUT LOUD. A user who expects one and does
+                  not get it loses work; this is the cheapest possible way to
+                  stop that, and it also explains why the history stays
+                  readable. */}
+              <Typography variant="caption" color="text.secondary">
+                Saving records a new version — there is no autosave, so nothing is
+                written until you press Save.
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                <Button onClick={cancelEditing} disabled={isSaving}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={() => void save()}
+                  disabled={isSaving || !isDirty}
+                >
+                  {isSaving ? 'Saving…' : 'Save'}
+                </Button>
+              </Stack>
+            </Stack>
+          </Stack>
+        ) : body ? (
+          <>
+            <MarkdownView>{body}</MarkdownView>
+            {canEdit && (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Button size="small" startIcon={<EditIcon />} onClick={startEditing}>
+                  Edit
+                </Button>
+              </>
+            )}
+          </>
         ) : inFlight ? (
           <Typography color="text.secondary">
             Waiting for the first words from your AI provider…
           </Typography>
         ) : (
-          <Typography color="text.secondary">This note is empty.</Typography>
+          <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
+            <Typography color="text.secondary">This note is empty.</Typography>
+            {canEdit && (
+              <Button size="small" startIcon={<EditIcon />} onClick={startEditing}>
+                Edit
+              </Button>
+            )}
+          </Stack>
         )}
       </Paper>
 
@@ -323,6 +689,98 @@ export function NotePage() {
           </Typography>
         </>
       )}
+
+      {/* ⚠ THE REGENERATE CONTROL, AND THE ONE THING THAT REPLACES IT. Reading,
+          editing and exporting above are untouched by a missing key. */}
+      {!isAiLoading && note.status !== 'failed' && (
+        <Box sx={{ mt: 3 }}>
+          {keyConfigured ? (
+            <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+              <Button
+                startIcon={<RefreshIcon />}
+                onClick={() => setRegenerateOpen(true)}
+                disabled={inFlight || isRegenerating}
+              >
+                Regenerate
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                Writes this note again on your own AI account. The current text is kept as
+                a version.
+              </Typography>
+            </Stack>
+          ) : (
+            <AiKeyRequired />
+          )}
+        </Box>
+      )}
+      {!isAiLoading && note.status === 'failed' && !keyConfigured && (
+        <Box sx={{ mt: 3 }}>
+          <AiKeyRequired />
+        </Box>
+      )}
+
+      <NoteConflictDialog
+        open={conflict !== null}
+        baseVersion={conflict?.baseVersion ?? note.currentVersion}
+        currentVersion={conflict?.currentVersion ?? null}
+        mine={draft}
+        theirs={conflict?.theirs ?? null}
+        onKeepEditing={() => setConflict(null)}
+        onDiscardAndReload={discardAndReload}
+      />
+
+      <NoteExportDialog
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        noteId={note.id}
+        currentVersion={note.currentVersion}
+      />
+
+      <RegenerateNoteDialog
+        open={regenerateOpen}
+        currentVersion={note.currentVersion}
+        templateName={note.templateName}
+        busy={isRegenerating}
+        error={regenerateError}
+        onCancel={() => {
+          setRegenerateOpen(false);
+          setRegenerateError(null);
+        }}
+        onConfirm={() => void handleRegenerate()}
+      />
+
+      <Dialog
+        open={pendingLeave !== null}
+        onClose={() => setPendingLeave(null)}
+        aria-labelledby="note-leave-title"
+      >
+        <DialogTitle id="note-leave-title">Leave without saving?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This note has changes you have not saved. There is no autosave — leaving now
+            loses them.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={() => setPendingLeave(null)}>
+            Stay and keep editing
+          </Button>
+          <Button
+            color="error"
+            onClick={() => {
+              const to = pendingLeave;
+
+              setPendingLeave(null);
+              setIsEditing(false);
+              setDraft('');
+
+              if (to) navigate(to);
+            }}
+          >
+            Leave and lose them
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
