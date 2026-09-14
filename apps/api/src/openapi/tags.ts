@@ -115,6 +115,18 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'preferences against it.',
       },
       {
+        name: 'Transcription',
+        description:
+          'Speech-to-text: which provider this deployment uses, its region and model, how ' +
+          'audio reaches it, and what happens to it afterwards. The admin half is gated on ' +
+          '`system_settings:read`/`:write`, because this configuration IS a namespace of the ' +
+          'system settings row; `GET /api/transcription/config` alongside it is a narrow ' +
+          'capability probe readable by any signed-in user, exactly like ' +
+          '`GET /api/notifications/config`. The provider API key is write-only: it is held in ' +
+          'the encrypted credential store, is never returned by any endpoint, and submitting ' +
+          'it empty preserves the stored value.',
+      },
+      {
         name: 'Push Configuration',
         description:
           'Runtime-configurable Web Push (VAPID) keys: generate, rotate, enable/disable and ' +

@@ -1,0 +1,220 @@
+{
+  "id": "6t9x-two-speakers",
+  "status": "completed",
+  "audio_url": "https://cdn.example.invalid/meeting.mp3",
+  "audio_duration": 27.5,
+  "language_code": "en_us",
+  "speech_model": "universal",
+  "text": "Good morning everyone. Thanks for joining the design review. Happy to be here. I have a few questions about the timeline. Of course, let's take them one at a time.",
+  "confidence": 0.95,
+  "utterances": [
+    {
+      "speaker": "A",
+      "start": 1200,
+      "end": 4040,
+      "text": "Good morning everyone. Thanks for joining the design review.",
+      "confidence": 0.95,
+      "words": [
+        {
+          "text": "Good",
+          "start": 1200,
+          "end": 1480,
+          "confidence": 0.96
+        },
+        {
+          "text": "morning",
+          "start": 1520,
+          "end": 1800,
+          "confidence": 0.96
+        },
+        {
+          "text": "everyone.",
+          "start": 1840,
+          "end": 2120,
+          "confidence": 0.96
+        },
+        {
+          "text": "Thanks",
+          "start": 2160,
+          "end": 2440,
+          "confidence": 0.96
+        },
+        {
+          "text": "for",
+          "start": 2480,
+          "end": 2760,
+          "confidence": 0.96
+        },
+        {
+          "text": "joining",
+          "start": 2800,
+          "end": 3080,
+          "confidence": 0.96
+        },
+        {
+          "text": "the",
+          "start": 3120,
+          "end": 3400,
+          "confidence": 0.96
+        },
+        {
+          "text": "design",
+          "start": 3440,
+          "end": 3720,
+          "confidence": 0.96
+        },
+        {
+          "text": "review.",
+          "start": 3760,
+          "end": 4040,
+          "confidence": 0.96
+        }
+      ]
+    },
+    {
+      "speaker": "B",
+      "start": 4440,
+      "end": 8240,
+      "text": "Happy to be here. I have a few questions about the timeline.",
+      "confidence": 0.93,
+      "words": [
+        {
+          "text": "Happy",
+          "start": 4440,
+          "end": 4720,
+          "confidence": 0.96
+        },
+        {
+          "text": "to",
+          "start": 4760,
+          "end": 5040,
+          "confidence": 0.96
+        },
+        {
+          "text": "be",
+          "start": 5080,
+          "end": 5360,
+          "confidence": 0.96
+        },
+        {
+          "text": "here.",
+          "start": 5400,
+          "end": 5680,
+          "confidence": 0.96
+        },
+        {
+          "text": "I",
+          "start": 5720,
+          "end": 6000,
+          "confidence": 0.96
+        },
+        {
+          "text": "have",
+          "start": 6040,
+          "end": 6320,
+          "confidence": 0.96
+        },
+        {
+          "text": "a",
+          "start": 6360,
+          "end": 6640,
+          "confidence": 0.96
+        },
+        {
+          "text": "few",
+          "start": 6680,
+          "end": 6960,
+          "confidence": 0.96
+        },
+        {
+          "text": "questions",
+          "start": 7000,
+          "end": 7280,
+          "confidence": 0.96
+        },
+        {
+          "text": "about",
+          "start": 7320,
+          "end": 7600,
+          "confidence": 0.96
+        },
+        {
+          "text": "the",
+          "start": 7640,
+          "end": 7920,
+          "confidence": 0.96
+        },
+        {
+          "text": "timeline.",
+          "start": 7960,
+          "end": 8240,
+          "confidence": 0.96
+        }
+      ]
+    },
+    {
+      "speaker": "A",
+      "start": 8740,
+      "end": 11580,
+      "text": "Of course, let's take them one at a time.",
+      "confidence": 0.97,
+      "words": [
+        {
+          "text": "Of",
+          "start": 8740,
+          "end": 9020,
+          "confidence": 0.96
+        },
+        {
+          "text": "course,",
+          "start": 9060,
+          "end": 9340,
+          "confidence": 0.96
+        },
+        {
+          "text": "let's",
+          "start": 9380,
+          "end": 9660,
+          "confidence": 0.96
+        },
+        {
+          "text": "take",
+          "start": 9700,
+          "end": 9980,
+          "confidence": 0.96
+        },
+        {
+          "text": "them",
+          "start": 10020,
+          "end": 10300,
+          "confidence": 0.96
+        },
+        {
+          "text": "one",
+          "start": 10340,
+          "end": 10620,
+          "confidence": 0.96
+        },
+        {
+          "text": "at",
+          "start": 10660,
+          "end": 10940,
+          "confidence": 0.96
+        },
+        {
+          "text": "a",
+          "start": 10980,
+          "end": 11260,
+          "confidence": 0.96
+        },
+        {
+          "text": "time.",
+          "start": 11300,
+          "end": 11580,
+          "confidence": 0.96
+        }
+      ]
+    }
+  ],
+  "error": null
+}

@@ -1,0 +1,11 @@
+{
+  "id": "6t9x-failed",
+  "status": "error",
+  "audio_duration": null,
+  "language_code": null,
+  "speech_model": "universal",
+  "text": null,
+  "utterances": null,
+  "words": null,
+  "error": "Audio file does not appear to contain audio."
+}

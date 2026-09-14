@@ -55,6 +55,29 @@ export const systemSettingsResponseSchema = z.object({
     startedAt: z.string().nullable(),
     startedById: z.string().nullable(),
   }),
+  // #23, epic #19. Published from the day the namespace exists, for the reason
+  // the operations blocks above are: a block the response omits is a block no
+  // client can echo back in a PUT, which would leave `replaceSettings`
+  // carrying it forward blind forever. The provider API KEY is deliberately
+  // absent and cannot appear here — it is never part of this namespace.
+  transcription: z.object({
+    enabled: z.boolean(),
+    provider: z.enum(['assemblyai']).nullable(),
+    providers: z.object({
+      assemblyai: z.object({
+        region: z.enum(['us', 'eu']),
+        speechModel: z.string(),
+      }),
+    }),
+    audioDelivery: z.enum(['presigned_url', 'upload']),
+    presignedUrlTtlMinutes: z.number(),
+    deleteRemoteAfterIngest: z.boolean(),
+    defaultLanguage: z.string().nullable(),
+    transcodeNodeOffloadEnabled: z.boolean(),
+    playback: z.object({
+      bitrateKbps: z.number(),
+    }),
+  }),
   updatedAt: z.iso.datetime(),
   updatedBy: z
     .object({
