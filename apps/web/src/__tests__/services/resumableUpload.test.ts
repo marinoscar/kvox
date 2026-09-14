@@ -19,12 +19,15 @@ import { server } from '../mocks/server';
 import { createFakeXhrFactory, type FakeXhrController } from '../utils/fakeXhr';
 import {
   backoffDelayMs,
+  cspBlockedUploadMessage,
+  defaultUploadRuntime,
   detectPartConcurrency,
   DESKTOP_PART_CONCURRENCY,
   MOBILE_PART_CONCURRENCY,
   resumeUpload,
   startUpload,
   createTranscriptUpload,
+  type CspViolation,
   type UploadInitResponse,
   type UploadRuntime,
   type UploadStatusResponse,
@@ -82,6 +85,28 @@ describe('resumable upload engine', () => {
   let completeCalls: number;
   let abortCalls: number;
   let partRequests: number[][];
+  /** The handler `UploadEngine` last subscribed with, or `null` once unsubscribed. */
+  let cspHandler: ((violation: CspViolation) => void) | null;
+  let cspSubscribeCount: number;
+  let cspUnsubscribeCount: number;
+
+  /**
+   * A controllable stand-in for `subscribeToCspViolations`: tests dispatch a
+   * violation by calling `cspHandler?.(...)` directly, and the subscribe/
+   * unsubscribe counters pin the engine's listener lifecycle (attached once
+   * per `start()`, detached on pause/cancel/fail/complete).
+   */
+  function fakeOnCspViolation(handler: (violation: CspViolation) => void): () => void {
+    cspHandler = handler;
+    cspSubscribeCount += 1;
+    let unsubscribed = false;
+    return () => {
+      if (unsubscribed) return;
+      unsubscribed = true;
+      if (cspHandler === handler) cspHandler = null;
+      cspUnsubscribeCount += 1;
+    };
+  }
 
   beforeEach(() => {
     xhr = createFakeXhrFactory();
@@ -91,6 +116,9 @@ describe('resumable upload engine', () => {
     completeCalls = 0;
     abortCalls = 0;
     partRequests = [];
+    cspHandler = null;
+    cspSubscribeCount = 0;
+    cspUnsubscribeCount = 0;
 
     runtime = {
       now: () => clock,
@@ -106,6 +134,7 @@ describe('resumable upload engine', () => {
         return globalThis.setTimeout(handler, 0) as unknown as number;
       },
       clearTimeout: (handle) => globalThis.clearTimeout(handle),
+      onCspViolation: fakeOnCspViolation,
     };
 
     server.use(
@@ -472,6 +501,260 @@ describe('resumable upload engine', () => {
       expect(upload.getProgress().phase).toBe('uploading');
 
       await upload.cancel();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
+
+  describe('CSP-blocked part PUTs — issue #84', () => {
+    it('fails fast with exactly one PUT attempt when the violation arrives before the XHR error', async () => {
+      const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+        runtime: { ...runtime, concurrency: () => 1 },
+        retry: { maxAttempts: 5, baseMs: 100, maxMs: 1000 },
+      });
+
+      const first = await xhr.waitForPending(1);
+      const fullUrl = first[0].url;
+      const origin = new URL(fullUrl).origin;
+
+      // Real Chromium reports the FULL presigned URL, query string included.
+      cspHandler?.({ blockedURI: fullUrl, directive: 'connect-src' });
+      first[0].networkError();
+
+      const outcome = await upload.whenSettled();
+      expect(outcome.status).toBe('failed');
+      expect(outcome.error).toBe(cspBlockedUploadMessage(origin));
+      expect(upload.getProgress().error).toBe(cspBlockedUploadMessage(origin));
+
+      // No retry loop was ever entered: one PUT, no backoff, no re-presign.
+      expect(xhr.requests).toHaveLength(1);
+      expect(delays).toHaveLength(0);
+      expect(partRequests).toHaveLength(0);
+    });
+
+    it('fails after the first backoff when the violation (bare origin) arrives after the XHR error', async () => {
+      const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+        runtime: { ...runtime, concurrency: () => 1 },
+        retry: { maxAttempts: 5, baseMs: 1, maxMs: 10 },
+      });
+
+      const first = await xhr.waitForPending(1);
+      const origin = new URL(first[0].url).origin;
+
+      first[0].networkError();
+      // Let the engine's immediate post-error check run (and find nothing)
+      // and its backoff timer be scheduled, before the violation arrives.
+      await tick();
+      expect(delays).toHaveLength(1);
+
+      // Some browsers report a bare origin rather than the full URL.
+      cspHandler?.({ blockedURI: origin, directive: 'connect-src' });
+
+      const outcome = await upload.whenSettled();
+      expect(outcome.status).toBe('failed');
+      expect(outcome.error).toBe(cspBlockedUploadMessage(origin));
+
+      // The second (post-backoff) check caught it: no second PUT was sent.
+      expect(xhr.requests).toHaveLength(1);
+      expect(delays).toHaveLength(1);
+    });
+
+    it('ignores violations for other origins, non-connect-src directives, and unparseable blockedURIs', async () => {
+      const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+        runtime: { ...runtime, concurrency: () => 1 },
+        retry: { maxAttempts: 2, baseMs: 1, maxMs: 10 },
+      });
+
+      const first = await xhr.waitForPending(1);
+
+      // A different origin, correct directive.
+      cspHandler?.({
+        blockedURI: 'https://not-the-storage-origin.example.com/x',
+        directive: 'connect-src',
+      });
+      // The right origin, wrong directives.
+      cspHandler?.({ blockedURI: first[0].url, directive: 'img-src' });
+      cspHandler?.({ blockedURI: first[0].url, directive: 'script-src' });
+      // A CSP keyword, not a URL — deliberately unparseable.
+      cspHandler?.({ blockedURI: 'inline', directive: 'connect-src' });
+
+      first[0].networkError();
+      const second = await xhr.waitForRequests(2);
+      second[1].networkError();
+
+      const outcome = await upload.whenSettled();
+      expect(outcome.status).toBe('failed');
+      expect(outcome.error).toMatch(/^Part 1 failed after 2 attempts$/);
+      expect(xhr.requests).toHaveLength(2);
+    });
+
+    it('does not treat an HTTP error as a CSP block, even with a violation recorded for that origin', async () => {
+      const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+        runtime: { ...runtime, concurrency: () => 1 },
+        retry: { maxAttempts: 2, baseMs: 1, maxMs: 10 },
+      });
+
+      const first = await xhr.waitForPending(1);
+      cspHandler?.({ blockedURI: first[0].url, directive: 'connect-src' });
+      // A real HTTP response (e.g. S3 500), not a status-0 network drop.
+      first[0].respond(500);
+
+      const second = await xhr.waitForRequests(2);
+      second[1].respond(500);
+
+      const outcome = await upload.whenSettled();
+      expect(outcome.status).toBe('failed');
+      expect(outcome.error).toMatch(/^Part 1 failed after 2 attempts$/);
+      expect(outcome.error).not.toContain('Content Security Policy');
+    });
+
+    describe('listener lifecycle', () => {
+      it('subscribes once on start, unsubscribes on pause, and re-subscribes on resume', async () => {
+        const upload = startUpload(makeFile(), makeInit(), { runtime });
+        await xhr.waitForPending(2);
+        expect(cspSubscribeCount).toBe(1);
+        expect(cspUnsubscribeCount).toBe(0);
+
+        upload.pause();
+        expect(cspUnsubscribeCount).toBe(1);
+
+        upload.resume();
+        await xhr.waitForPending(2);
+        expect(cspSubscribeCount).toBe(2);
+        expect(cspUnsubscribeCount).toBe(1);
+
+        await upload.cancel();
+        expect(cspUnsubscribeCount).toBe(2);
+      });
+
+      it('never double-subscribes across repeated start() calls', async () => {
+        const upload = startUpload(makeFile(), makeInit(), { runtime });
+        await xhr.waitForPending(2);
+        upload.start();
+        upload.start();
+        expect(cspSubscribeCount).toBe(1);
+
+        await upload.cancel();
+      });
+
+      it('unsubscribes when the browser goes offline and re-subscribes when it returns', async () => {
+        const upload = startUpload(makeFile(), makeInit(), { runtime });
+        await xhr.waitForPending(2);
+        expect(cspSubscribeCount).toBe(1);
+
+        online = false;
+        window.dispatchEvent(new Event('offline'));
+        expect(cspUnsubscribeCount).toBe(1);
+
+        online = true;
+        window.dispatchEvent(new Event('online'));
+        await xhr.waitForPending(2);
+        expect(cspSubscribeCount).toBe(2);
+
+        await upload.cancel();
+      });
+
+      it('unsubscribes on terminal failure', async () => {
+        const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+          runtime: { ...runtime, concurrency: () => 1 },
+          retry: { maxAttempts: 1, baseMs: 1, maxMs: 10 },
+        });
+        const first = await xhr.waitForPending(1);
+        expect(cspSubscribeCount).toBe(1);
+
+        first[0].networkError();
+
+        const outcome = await upload.whenSettled();
+        expect(outcome.status).toBe('failed');
+        expect(cspUnsubscribeCount).toBe(1);
+      });
+
+      it('unsubscribes on cancel', async () => {
+        const upload = startUpload(makeFile(), makeInit(), { runtime });
+        await xhr.waitForPending(2);
+        expect(cspSubscribeCount).toBe(1);
+
+        await upload.cancel();
+        expect(cspUnsubscribeCount).toBe(1);
+      });
+
+      it('unsubscribes on successful completion', async () => {
+        const upload = startUpload(makeFile(PART_SIZE), makeInit({ totalParts: 1 }), {
+          runtime: { ...runtime, concurrency: () => 1 },
+        });
+        const first = await xhr.waitForPending(1);
+        expect(cspSubscribeCount).toBe(1);
+
+        first[0].respond();
+
+        const outcome = await upload.whenSettled();
+        expect(outcome.status).toBe('completed');
+        expect(cspUnsubscribeCount).toBe(1);
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+
+  describe('cspBlockedUploadMessage', () => {
+    it('names the blocked origin and the STORAGE_CSP_ORIGIN setting', () => {
+      const message = cspBlockedUploadMessage('https://storage.example.com');
+      expect(message).toContain('https://storage.example.com');
+      expect(message).toContain('STORAGE_CSP_ORIGIN');
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+
+  describe('defaultUploadRuntime.onCspViolation (real DOM listener)', () => {
+    it('maps blockedURI and effectiveDirective from a real securitypolicyviolation event, and stops after unsubscribe', () => {
+      const handler = vi.fn();
+      const unsubscribe = defaultUploadRuntime.onCspViolation(handler);
+
+      const event = new Event('securitypolicyviolation');
+      Object.defineProperty(event, 'blockedURI', {
+        value: 'https://blocked.example.com/part-1?sig=x',
+        configurable: true,
+      });
+      Object.defineProperty(event, 'effectiveDirective', {
+        value: 'connect-src',
+        configurable: true,
+      });
+      Object.defineProperty(event, 'violatedDirective', {
+        value: "connect-src 'self'",
+        configurable: true,
+      });
+
+      document.dispatchEvent(event);
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledWith({
+        blockedURI: 'https://blocked.example.com/part-1?sig=x',
+        directive: 'connect-src',
+      });
+
+      unsubscribe();
+      document.dispatchEvent(event);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to violatedDirective when effectiveDirective is absent', () => {
+      const handler = vi.fn();
+      const unsubscribe = defaultUploadRuntime.onCspViolation(handler);
+
+      const event = new Event('securitypolicyviolation');
+      Object.defineProperty(event, 'blockedURI', { value: 'inline', configurable: true });
+      Object.defineProperty(event, 'violatedDirective', {
+        value: 'connect-src',
+        configurable: true,
+      });
+
+      document.dispatchEvent(event);
+
+      expect(handler).toHaveBeenCalledWith({ blockedURI: 'inline', directive: 'connect-src' });
+      unsubscribe();
     });
   });
 

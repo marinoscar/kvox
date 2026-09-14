@@ -53,8 +53,17 @@ services:
       NGINX_ENVSUBST_FILTER: STORAGE_CSP_ORIGIN
       # Browser-visible origin of the object store (scheme://host[:port]), e.g.
       # https://s3.eu-west-1.amazonaws.com or http://localhost:9000 for MinIO.
-      # Empty by default: a deployment that uploads nothing needs no value, and
-      # the policy then reads exactly as it did before this existed.
+      #
+      # DERIVED FROM S3_BUCKET/S3_REGION WHEN NOT SET (issue #84). An explicit,
+      # non-empty value always wins. Unset or empty, with S3_BUCKET set, it
+      # becomes https://<bucket>.s3.<region>.amazonaws.com — the exact host the
+      # AWS SDK presigner puts in part and download URLs. The old empty default
+      # was silently fatal: the policy read `connect-src 'self'`, the browser
+      # blocked every part PUT with nothing but a status-0 "network error", and
+      # uploads died at 0% with no request ever reaching the bucket. Set it
+      # explicitly for MinIO/LocalStack (S3_ENDPOINT), a dotted bucket name
+      # (path-style URLs) or a CDN in front of the bucket. With no bucket at
+      # all it stays empty and the policy reads as it did before.
       #
       # ⚠ THE `:-` DEFAULT IS LOAD-BEARING, not tidiness. The image's template
       # script builds envsubst's variable list by matching NGINX_ENVSUBST_FILTER
@@ -63,7 +72,7 @@ services:
       # substituting EVERYTHING, which would blank nginx's own $uri and
       # $csp_policy and leave the policy map broken. Always define it, even
       # when it is empty.
-      STORAGE_CSP_ORIGIN: ${STORAGE_CSP_ORIGIN:-}
+      STORAGE_CSP_ORIGIN: ${STORAGE_CSP_ORIGIN:-${S3_BUCKET:+https://${S3_BUCKET}.s3.${S3_REGION:-us-east-1}.amazonaws.com}}
     depends_on:
       - api
       - web
