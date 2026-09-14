@@ -111,9 +111,12 @@ export class UserDataController {
       'fans out across several tables and object storage and outlives this request.\n\n' +
       '⚠ **There is no path back.** Deleted transcripts, notes and files are not recoverable ' +
       'from this application.\n\n' +
-      '**Scopes.** `transcripts`, `notes` and `files` each remove one category; `content` is ' +
-      'transcripts + notes + your own note templates; `everything` is `content` + `files` + ' +
-      'your AI provider keys + your personal access tokens.\n\n' +
+      '**Scopes.** `transcripts` removes your transcripts. `notes` removes your notes **and ' +
+      'your own custom note templates** — a template is the recipe a note was generated ' +
+      'from, and it has no meaning once the notes are gone. `files` removes your plain ' +
+      'uploads only: a transcript\'s audio and a note\'s export belong to those, not here. ' +
+      '`content` is `transcripts` + `notes`. `everything` is `content` + `files` + your AI ' +
+      'provider keys + your personal access tokens.\n\n' +
       '**Your account survives.** No scope deletes your user record, your settings, your ' +
       'roles or your session — you stay signed in. `everything` revokes your API tokens, so ' +
       'any CLI or script using one will need a new token.\n\n' +
