@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kvox.dev/schemas/kvox.transcript/v1",
+  "title": "kvox.transcript/v1",
+  "description": "Public, versioned JSON export format for a KVox transcript. See docs/specs/transcription.md §8.2 for the full rationale. This schema is a contract with the outside world: a field is never removed or repurposed, only added — a breaking change ships as kvox.transcript/v2 with its own $id, and a v1 exporter keeps shipping v1 forever.",
+  "type": "object",
+  "required": ["schema", "transcript"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "kvox.transcript/v1",
+      "description": "Format identifier and version, always this literal string. A consumer should switch on this field rather than assume the shape of an unversioned JSON blob."
+    },
+    "transcript": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "language",
+        "durationMs",
+        "version",
+        "createdAt",
+        "exportedAt",
+        "speakers",
+        "segments"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "KVox's internal transcript id. Opaque to a consumer; useful only for round-tripping back into KVox." },
+        "title": { "type": "string" },
+        "language": {
+          "type": ["string", "null"],
+          "description": "BCP-47-ish language tag as reported by the provider (e.g. \"en\"), or null when language detection was not used and none was set."
+        },
+        "durationMs": { "type": "integer", "minimum": 0 },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The transcript_versions.version this export was materialized from. Version 1 is always the unedited AI original."
+        },
+        "author": {
+          "type": ["object", "null"],
+          "description": "Who authored this version. Null for version 1 (kind: ai_original) and for a restore whose restored_from_version was itself the AI original.",
+          "additionalProperties": false,
+          "properties": {
+            "displayName": { "type": "string" },
+            "email": { "type": "string", "format": "email" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the exported VERSION was created (transcript_versions.created_at), not when the export file was rendered." },
+        "exportedAt": { "type": "string", "format": "date-time", "description": "When this export document was rendered." },
+        "provider": {
+          "type": ["object", "null"],
+          "description": "Which transcription provider produced the AI original. Null is not expected in practice (every transcript has one) but is legal so a hand-authored or fully-manual transcript created by a future import path is still valid against this schema.",
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "description": "e.g. \"assemblyai\"" },
+            "model": { "type": ["string", "null"], "description": "The provider's own model/version identifier, when it reports one." }
+          }
+        },
+        "speakers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "displayName"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "description": "Stable within this transcript; a segment's speakerId refers back to this." },
+              "displayName": { "type": "string" },
+              "talkTimeMs": { "type": "integer", "minimum": 0, "description": "Sum of this speaker's segment durations, provided as a convenience — a consumer can always recompute it from segments." }
+            }
+          }
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "speakerId", "startMs", "endMs", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "speakerId": { "type": "string" },
+              "startMs": { "type": "integer", "minimum": 0 },
+              "endMs": { "type": "integer", "minimum": 0 },
+              "text": { "type": "string" },
+              "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+              "wordsAlignment": {
+                "type": "string",
+                "enum": ["exact", "interpolated", "none"],
+                "description": "Whether the word-level timings below are the provider's own, reconstructed by interpolation across an edit, or not meaningfully alignable (evenly spread as a last resort). See docs/specs/transcription.md §3.4."
+              },
+              "words": {
+                "type": "array",
+                "description": "Omitted, or an empty array, when the export options did not request word timings.",
+                "items": {
+                  "type": "object",
+                  "required": ["text", "startMs", "endMs"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "text": { "type": "string" },
+                    "startMs": { "type": "integer", "minimum": 0 },
+                    "endMs": { "type": "integer", "minimum": 0 },
+                    "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema": "kvox.transcript/v1",
+      "transcript": {
+        "id": "cltx_9f3a1c",
+        "title": "Weekly sync — Sept 10",
+        "language": "en",
+        "durationMs": 1834200,
+        "version": 4,
+        "author": { "displayName": "Oscar Marin", "email": "oscar@marin.cr" },
+        "createdAt": "2026-09-10T15:04:22.000Z",
+        "exportedAt": "2026-09-13T18:20:00.000Z",
+        "provider": { "id": "assemblyai", "model": "best" },
+        "speakers": [
+          { "id": "spk_a", "displayName": "Oscar", "talkTimeMs": 920100 },
+          { "id": "spk_b", "displayName": "Priya", "talkTimeMs": 741300 }
+        ],
+        "segments": [
+          {
+            "id": "seg_1",
+            "speakerId": "spk_a",
+            "startMs": 0,
+            "endMs": 4210,
+            "text": "Let's get started, thanks everyone for joining.",
+            "confidence": 0.97,
+            "wordsAlignment": "exact",
+            "words": [
+              { "text": "Let's", "startMs": 0, "endMs": 320, "confidence": 0.98 },
+              { "text": "get", "startMs": 340, "endMs": 520, "confidence": 0.99 }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
