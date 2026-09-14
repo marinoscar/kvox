@@ -54,11 +54,15 @@
  * is `false` (rail expanded, subject to the width gates) whether `settings` is
  * `null` from the very first render or after the fetch has failed — so the
  * rail's rendered output never changes across that fetch settling. No spec
- * needs to wait on it. Other pages this harness can route to (`HomePage`'s
- * `UserProfileCard`, the leaf `/admin/settings/*` and `/settings/*` pages) make
- * their own such calls; specs that visit them scope their screenshot to the
- * `AppBar`/rail element rather than the full page, so that race can never
- * appear in a baseline.
+ * needs to wait on it. Other pages this harness can route to (the leaf
+ * `/admin/settings/*` and `/settings/*` pages) make their own such calls;
+ * specs that visit them scope their screenshot to the `AppBar`/rail element
+ * rather than the full page, so that race can never appear in a baseline.
+ *
+ * `HomePage` is the exception, as of issue #32: it is a real page body driven
+ * by `GET /api/transcripts/summary`, so `tests/visual/specs/home.spec.ts`
+ * mocks the API with `page.route` and captures the whole page, exactly as the
+ * transcript specs already do.
  */
 
 import React, { Suspense, lazy } from 'react';

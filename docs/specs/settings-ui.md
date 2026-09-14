@@ -34,7 +34,8 @@ every consumer reads instead of each keeping its own opinion.
 The failure this fixes already had a name and a fix one layer down. Issue #55
 (epic #51) found that the app's *top-level* navigation — Home, Settings,
 Console — used to be spelled out independently in `App.tsx`, `Sidebar.tsx`,
-`UserMenu.tsx` and `home/QuickActions.tsx`, each with its own permission
+`UserMenu.tsx` and `home/QuickActions.tsx` (deleted by issue #32, which
+rebuilt the home page around transcripts), each with its own permission
 check. `config/destinations.ts`'s own header records the concrete casualty:
 "a Contributor holding `system_settings:read` ended up with a working System
 Settings page, a menu entry pointing at it, and no sidebar row: three gates,

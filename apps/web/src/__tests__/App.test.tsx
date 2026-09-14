@@ -120,6 +120,24 @@ function signInAs(permissions: string[], roles: string[] = ['viewer']) {
   );
 }
 
+/**
+ * "The router landed on `/`" — the marker these redirect tests actually mean.
+ *
+ * It used to be `getByText(/welcome back/i)`, the template home page's banner.
+ * Issue #32 rebuilt that page around transcripts and the banner is gone; the
+ * stable landmark is now the greeting, which is the page's `h1` and the only
+ * one on the document. Matched on the PREFIX rather than the whole string so
+ * these tests assert "we are on Home", not "the greeting currently reads this",
+ * which is not what any of them is about.
+ *
+ * The page is now asynchronous (a skeleton, then content, driven by
+ * `GET /api/transcripts/summary` — answered by the default MSW handler), so
+ * every call site wraps this in the `waitFor` it already had.
+ */
+function expectOnHomePage() {
+  expect(screen.getByRole('heading', { level: 1, name: /^Hi,/ })).toBeInTheDocument();
+}
+
 describe('App', () => {
   it('renders without crashing and shows login page initially', async () => {
     render(
@@ -132,10 +150,16 @@ describe('App', () => {
     // The App will make an API call to check auth, MSW will handle it
     await waitFor(
       () => {
-        // Should either show login page or home page depending on mock auth state
-        const welcomeText = screen.queryByText(/Welcome/i);
-        const homeText = screen.queryByText(/Home Page/i);
-        expect(welcomeText || homeText).toBeTruthy();
+        // Either page is acceptable here — this test only asserts the app
+        // mounts and routes at all, not which way the auth probe went. Both
+        // arms are the destination's `h1`: the login card's "Welcome", or the
+        // signed-in home page's greeting (issue #32 replaced that page's
+        // "Welcome back" banner, so matching on "Welcome" alone would now
+        // answer only for the logged-OUT arm and silently stop covering the
+        // other one).
+        const loginHeading = screen.queryByRole('heading', { level: 1, name: /Welcome/i });
+        const homeHeading = screen.queryByRole('heading', { level: 1, name: /^Hi,/ });
+        expect(loginHeading || homeHeading).toBeTruthy();
       },
       { timeout: 5000 },
     );
@@ -166,7 +190,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expectOnHomePage(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: /system settings/i })).not.toBeInTheDocument();
@@ -181,7 +205,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expectOnHomePage(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();
@@ -453,7 +477,7 @@ describe('App', () => {
           </MemoryRouter>,
         );
 
-        await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+        await waitFor(() => expectOnHomePage(), {
           timeout: 5000,
         });
       },
@@ -497,7 +521,7 @@ describe('App', () => {
           </MemoryRouter>,
         );
 
-        await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+        await waitFor(() => expectOnHomePage(), {
           timeout: 5000,
         });
       },
@@ -555,7 +579,7 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+      await waitFor(() => expectOnHomePage(), {
         timeout: 5000,
       });
       expect(screen.queryByRole('heading', { name: 'Admin Users' })).not.toBeInTheDocument();

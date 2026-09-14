@@ -1,4 +1,4 @@
-import { APP_NAME, THEME_COLOR, BACKGROUND_COLOR } from '@app/shared';
+import { APP_NAME, TAGLINE, THEME_COLOR, BACKGROUND_COLOR } from '@app/shared';
 
 // =============================================================================
 // The web app manifest  (issue #217, epic #215)
@@ -79,7 +79,15 @@ export function buildManifest(): WebAppManifest {
     id: '/',
     name: APP_NAME,
     short_name: APP_NAME,
-    description: `${APP_NAME} — sign in to manage your account and settings.`,
+    // THE VISION, NOT THE TEMPLATE (issue #32, epic #19). This string is the
+    // one-line pitch an OS install prompt and an app-store-style listing show
+    // beside the icon, and until #32 it still described the scaffold this
+    // product was forked from ("sign in to manage your account and settings"),
+    // which said nothing about what the application does. Built from `TAGLINE`
+    // rather than restating it, for the reason every other value here is:
+    // a fork rewrites its promise in `packages/shared/identity.json` and a
+    // manifest holding a second copy would quietly keep the old one.
+    description: `${APP_NAME} — ${TAGLINE} Record a conversation, get a transcript that knows who spoke, and correct it until it is right.`,
     start_url: '/?source=pwa',
     scope: '/',
     display: 'standalone',
