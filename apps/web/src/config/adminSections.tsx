@@ -37,6 +37,7 @@ import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsAc
 import BuildCircleOutlinedIcon from '@mui/icons-material/BuildCircleOutlined';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import RecordVoiceOverOutlinedIcon from '@mui/icons-material/RecordVoiceOverOutlined';
+import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
 import PeopleIcon from '@mui/icons-material/People';
 // Operations (#266, epic #254). One icon per card, including the two cards
 // whose pages land in later issues — the card is declared now, so its icon is
@@ -189,6 +190,38 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
           'Choose the speech-to-text provider, hold its API key, and control what happens to audio once it has been transcribed.',
         Icon: RecordVoiceOverOutlinedIcon,
         path: '/admin/settings/transcription',
+        permission: 'system_settings:read',
+      },
+      {
+        // Issue #55, epic #45. `system_settings:read` is the string
+        // `ai-settings.controller.ts` enforces on its GET — the registry never
+        // invents a permission, it mirrors one. As with `Transcription` above,
+        // it is literally the same row: this page edits the `ai` NAMESPACE of
+        // the `global` system_settings document, which
+        // `system-settings.controller.ts` already gates on exactly these
+        // strings, so a permission pair of its own would mean the same bytes
+        // were reachable under two different authorities.
+        //
+        // ⚠ THE CONTRAST WITH `Transcription` IS THE INTERESTING PART: that
+        // card's page holds a DEPLOYMENT API key, and this one holds NONE.
+        // Epic #45 has no deployment-wide AI key — every key belongs to an
+        // individual user (`/settings/ai`) and is billed to their own provider
+        // account, and `ai-settings.schema.ts` carries a compile-time proof
+        // that no secret-bearing field can enter this settings document. So
+        // this card is policy only, and the page says so in its own copy
+        // rather than leaving an administrator to hunt for a key field that
+        // does not exist.
+        //
+        // Saving needs `system_settings:write`, which the PAGE gates
+        // internally by disabling its controls: the card gate is about
+        // REACHABILITY, and "which models may this deployment use, and under
+        // what ceilings" is worth reading for anyone answering "why was my
+        // note refused".
+        title: 'AI',
+        description:
+          'Choose which AI models this deployment permits, and the token, timeout and document ceilings every generation runs under.',
+        Icon: AutoAwesomeOutlinedIcon,
+        path: '/admin/settings/ai',
         permission: 'system_settings:read',
       },
       {
