@@ -131,8 +131,15 @@ export default function HomePage() {
    * is consulted too, so an account that owns transcripts none of which
    * landed in the newest eight (not a state the API produces today, but not
    * one this page should assume away) never sees the empty state either.
+   *
+   * ⚠ `summary !== null` IS THE LOAD-BEARING CLAUSE. Without it, a summary
+   * request that FAILED — where every list is empty because nothing was ever
+   * read, not because nothing exists — renders "You have no transcripts yet"
+   * over the top of the error alert, which is the page confidently telling a
+   * user with a hundred recordings that they have none.
    */
   const isNewUser =
+    summary !== null &&
     recent.length === 0 &&
     sharedWithMe.length === 0 &&
     inProgress.length === 0 &&

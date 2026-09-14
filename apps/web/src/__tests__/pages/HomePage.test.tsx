@@ -185,6 +185,22 @@ describe('HomePage — data', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
   });
 
+  it('does not claim the user has no transcripts when the read simply failed', async () => {
+    // Every list is empty because nothing was ever read, not because nothing
+    // exists — rendering the first-run walkthrough there tells a user with a
+    // hundred recordings that they have none.
+    server.use(
+      http.get(`${API_BASE}/transcripts/summary`, () => HttpResponse.error()),
+      http.get(`${API_BASE}/transcription/config`, () =>
+        HttpResponse.json({ data: TRANSCRIPTION_AVAILABLE }),
+      ),
+    );
+    renderHome();
+    await screen.findByRole('alert');
+
+    expect(screen.queryByRole('heading', { name: 'Start here' })).not.toBeInTheDocument();
+  });
+
   it('treats 403 as a permission problem in words the user can act on', async () => {
     server.use(
       http.get(`${API_BASE}/transcripts/summary`, () =>
