@@ -63,6 +63,10 @@ const UserTokensPage = lazy(() => import('./pages/UserTokensPage'));
 // Issue #55, epic #45 — the user's OWN AI provider key. Every AI surface in
 // that epic is unreachable until this page has been used once.
 const UserAiPage = lazy(() => import('./pages/UserAiPage'));
+// Issue #56, epic #45 — the note template editor and its live AI preview. It
+// renders `AiKeyRequired` and nothing else until `UserAiPage` above has been
+// used, so the two are ordered here the way the setup actually happens.
+const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -386,6 +390,15 @@ function AppRoutes() {
                       `RequirePermission` here would be a gate the API does not
                       have. */}
                   <Route path="/settings/ai" element={<UserAiPage />} />
+                  {/* Issue #56, epic #45. Ungated like every `/settings/*`
+                      sibling: `note-templates.controller.ts` enforces
+                      `note_templates:read` / `note_templates:write`, and BOTH
+                      are seeded to all three roles — so a `RequirePermission`
+                      here would deny nobody while inventing a gate the API
+                      does not have. The page's own real gate is
+                      `keyConfigured`, which is a capability rather than an
+                      authorization and is therefore checked in the page. */}
+                  <Route path="/settings/note-templates" element={<UserNoteTemplatesPage />} />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
                   {/* Route-level AUTHORIZATION, not just authentication.
                       `ProtectedRoute` above only establishes that someone is
