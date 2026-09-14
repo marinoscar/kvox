@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiSettingsService } from './ai-settings.service';
 import { UserAiCredentialsService } from './user-ai-credentials.service';
@@ -42,16 +43,59 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 //      different sentences with different fixes and different people to talk to.
 //
 // -----------------------------------------------------------------------------
+// `provider` IS INDEPENDENT OF `available` TOO — AND NOT NOTICING THAT WAS A BUG
+// -----------------------------------------------------------------------------
+//
+// The two fields answer different questions, and only one of them is about
+// permission:
+//
+//   • `provider`/`providerLabel` answer WHICH VENDOR A KEY WOULD BELONG TO. It
+//     is a naming question, and it has an answer the moment an administrator's
+//     settings row names a provider this build has a registry entry for.
+//   • `available` answers MAY AI BE USED RIGHT NOW. That is the four-fact
+//     conjunction below, and the master switch is one of the four.
+//
+// Issue #83 is what conflating them costs, and the loop is closed at both ends.
+// `DEFAULT_SYSTEM_SETTINGS.ai` ships `enabled: false` with `provider: 'openai'`,
+// so EVERY fresh deployment starts in the state where a provider is named but
+// the switch is off. This method used to blank `provider` in that state; the key
+// form on `/settings/ai` derives its whole enablement from `config.provider`, so
+// no user could save a key. An administrator could not break the tie either:
+// populating `allowedModels` through "Load models from provider" calls the
+// vendor with THEIR OWN key, which they were equally unable to save. Nobody
+// could go first. A field that exists to name a vendor had been made to also
+// mean "you are allowed to proceed", and the second meaning ate the first.
+//
+// So: `provider` is resolved ONCE, before any branch, and travels through BOTH
+// returns. `provider: null` is now reserved for the two cases where there
+// genuinely is no vendor to name, and those two remain indistinguishable to a
+// client on purpose (there is nothing useful it could do differently):
+//
+//   a. `ai.provider` is null — nobody has chosen a vendor;
+//   b. `ai.provider` names a provider THIS BUILD has never heard of — a
+//      deployment rolled back across the addition of a provider. Naming it
+//      anyway would hand a client a vendor id no code here can act on.
+//
+// "A real provider is chosen, but AI is switched off or nothing is permitted
+// yet" is NOT one of those cases and must never return null again. Nothing else
+// about the not-available branch changes: `available` stays `false`, and
+// `models: []` / `defaultModel: null` stay empty, because a client must not be
+// handed a model the server would refuse the moment it was used.
+//
+// -----------------------------------------------------------------------------
 // `available` IS A CONJUNCTION OF FOUR FACTS, AND ALL FOUR ARE NECESSARY
 // -----------------------------------------------------------------------------
 //
 //   1. the master switch is on;
-//   2. the provider is REGISTERED IN THIS BUILD — a deployment rolled back
-//      across the addition of a provider has a settings row naming one this
-//      process has never heard of;
-//   3. at least one PERMITTED model is also a model this build can budget —
-//      the intersection of `allowedModels` and the provider's catalogue, per
-//      docs/specs/notes.md §3.3, which needs a context window to check against;
+//   2. a provider is CHOSEN (`ai.provider` is not null) and is REGISTERED IN
+//      THIS BUILD — a fresh deployment has chosen nobody, and a deployment
+//      rolled back across the addition of a provider has a settings row naming
+//      one this process has never heard of. Both are ordinary, both are
+//      `available: false`, and neither is an error;
+//   3. at least one PERMITTED model can be BUDGETED — that is, `allowedModels`
+//      has an entry whose context window is known, either from the entry itself
+//      (#78) or from the provider's own catalogue, per docs/specs/notes.md
+//      §3.3, which needs a number to check a prompt against;
 //   4. the token ceilings are coherent (a `maxOutputTokens` at or above the
 //      smallest permitted model's whole context window leaves no room for
 //      input, so every generation would refuse).
@@ -60,7 +104,8 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 // disabled control to a failed generation minutes later — which, here, is a
 // failure the user has already paid their own provider for.
 //
-// ⚠ IT DOES NOT DEPEND ON `keyConfigured`. See consequence 3 above.
+// ⚠ IT DOES NOT DEPEND ON `keyConfigured`, AND IT IS NOT WHAT `provider`
+// REPORTS. See the two sections above.
 // =============================================================================
 
 @Injectable()
@@ -81,21 +126,61 @@ export class AiConfigService {
    */
   async getConfig(userId: string): Promise<AiConfigResponse> {
     const policy = await this.settings.get();
-    const provider = this.registry.get('openai');
+
+    // ⚠ RESOLVED THROUGH THE POLICY'S OWN `provider` AXIS, never a hardcoded
+    // `'openai'` (#78). The literal that used to be here was the reason adding
+    // a second OpenAI-compatible vendor would have required editing this file:
+    // a deployment could name the new provider in its settings and this probe
+    // would have gone on describing the old one.
+    //
+    // `provider: null` — nobody has chosen one — takes the SAME path as a
+    // provider this build has never heard of, which is `available: false` and
+    // never a throw. Both are ordinary states (a fresh installation; a rollback
+    // across the addition of a provider), and a client asking "may I offer
+    // this?" that gets a 500 has learned nothing it can act on.
+    const providerId = policy.provider;
+    const provider = providerId ? this.registry.get(providerId) : undefined;
 
     // Resolved regardless of `available`, and deliberately: a user must be able
     // to save and verify their key BEFORE an administrator finishes turning the
     // feature on, and a client rendering a disabled control still wants to say
     // "your key is set up" rather than nothing.
+    //
+    // ⚠ THE SAME ARGUMENT APPLIES WORD FOR WORD TO THE TWO LINES BELOW, and
+    // issue #83 is what it cost to have made it for only one of the three. A
+    // key belongs to a VENDOR; a form that cannot name the vendor cannot offer
+    // to save the key; so blanking `provider` while AI is switched off is
+    // exactly as breaking as blanking `keyConfigured` would be. These three
+    // values are resolved together, above every branch, so the next branch
+    // added here inherits the independence instead of having to remember it.
     const keyConfigured = provider
       ? await this.credentials.hasKey(userId, provider.id)
       : false;
+    const resolvedProvider = provider?.id ?? null;
+    const resolvedProviderLabel = provider?.label ?? null;
 
-    if (!policy.enabled || !provider) {
+    if (!policy.enabled || !providerId || !provider) {
       return {
+        // Fact 1 or fact 2 has failed. Nothing may be generated right now, and
+        // this is the ordinary state of a deployment nobody has finished
+        // setting up — not an error.
         available: false,
-        provider: null,
-        providerLabel: null,
+        // ⚠ CARRIED THROUGH, NOT BLANKED (#83). Null here would mean "there is
+        // no vendor to name", which is false: an administrator named one and
+        // this build knows it. The key form reads this field to decide which
+        // vendor it is collecting a key FOR, and a user has to be able to get a
+        // key in place before the switch is flipped — otherwise the first
+        // administrator of a fresh deployment cannot load the model list their
+        // own key is needed to fetch, and setup deadlocks with no error
+        // anywhere. It stays null only in the two genuinely nameless cases,
+        // which is `provider === undefined` above.
+        provider: resolvedProvider,
+        providerLabel: resolvedProviderLabel,
+        // Empty on purpose, and NOT for the same reason. A model list is an
+        // offer, and every model on it here would be refused the moment it was
+        // used — either the master switch is off or nothing has been permitted
+        // yet. Naming the vendor costs a client nothing; handing it a model it
+        // cannot use costs it a failed generation.
         models: [],
         defaultModel: null,
         maxInputTokens: policy.maxInputTokens,
@@ -104,18 +189,25 @@ export class AiConfigService {
       };
     }
 
-    // Fact 3: the INTERSECTION, in the policy's own order so an administrator's
-    // preferred ordering survives to the model picker. A permitted model this
-    // build cannot budget is omitted rather than published with a guessed
-    // context window — `GET /api/ai-settings`'s `unknownModels` is where an
-    // administrator is told about it.
-    const byId = new Map(
-      provider.capabilities.models.map((model) => [model.id, model]),
-    );
-
-    const models: AiConfigModel[] = policy.providers.openai.allowedModels
-      .map((id) => byId.get(id))
-      .filter((model): model is NonNullable<typeof model> => model !== undefined)
+    // Fact 3: every permitted model this deployment can BUDGET, in the policy's
+    // own order so an administrator's preferred ordering survives to the model
+    // picker.
+    //
+    // ⚠ NO LONGER A PLAIN INTERSECTION WITH THE BUILD CATALOGUE (#78). A policy
+    // entry may carry its own `contextWindowTokens` and `maxOutputTokens`, and
+    // such a model is published here even though no release of this application
+    // has heard of it — otherwise model discovery would list sixty models an
+    // administrator could permit and this endpoint would offer the four
+    // hardcoded ones. `resolveAllowedModel` is the ONE implementation of that
+    // precedence and `AiSettingsService` calls the same function to decide what
+    // to report as `unknownModels`, so the two answers cannot drift.
+    //
+    // An entry that resolves to NOTHING is still omitted rather than published
+    // with a guessed context window — see that function for why guessing is
+    // wrong in both directions.
+    const models: AiConfigModel[] = policy.providers[providerId].allowedModels
+      .map((entry) => resolveAllowedModel(entry, provider.capabilities.models))
+      .filter((model): model is NonNullable<typeof model> => model !== null)
       .map((model) => ({
         id: model.id,
         label: model.label,
@@ -139,16 +231,19 @@ export class AiConfigService {
     // The configured default when it survived the intersection, otherwise the
     // first usable model — never a model that is not on the list, which is the
     // one value a client would offer and the server would then refuse.
-    const configuredDefault = policy.providers.openai.defaultModel;
+    const configuredDefault = policy.providers[providerId].defaultModel;
     const defaultModel =
       usable.find((model) => model.id === configuredDefault)?.id ??
       usable[0]?.id ??
       null;
 
     return {
+      // Facts 1 and 2 held to get here; `usable` is facts 3 and 4. Note that
+      // this can still be `false` while `provider` below is non-null — that is
+      // the whole point of the two fields being separate.
       available: usable.length > 0,
-      provider: provider.id,
-      providerLabel: provider.label,
+      provider: resolvedProvider,
+      providerLabel: resolvedProviderLabel,
       models: usable,
       defaultModel,
       maxInputTokens: policy.maxInputTokens,

@@ -7,7 +7,9 @@ import {
   AiInputError,
   AiRefusedError,
 } from '../../ai/ai-errors';
+import { resolveAllowedModel } from '../../ai/ai-model-resolution';
 import { AiProviderRegistry } from '../../ai/ai-provider.registry';
+import type { AiAllowedModel } from '../../ai/ai-settings.schema';
 import { AiSettingsService } from '../../ai/ai-settings.service';
 import { createProviderContext } from '../../ai/providers/ai-provider.interface';
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
@@ -240,23 +242,29 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       );
     }
 
-    const allowed = readAllowedModels(policy.providers, provider.id);
+    const allowed = readAllowedModelEntries(policy.providers, provider.id);
+    const entry = allowed.find((model) => model.id === generation.model);
 
-    if (!allowed.includes(generation.model)) {
+    if (!entry) {
       throw new AiInputError(
         `The model "${generation.model}" is not permitted by this deployment. ` +
           'Choose one your administrator has allowed and generate again.',
       );
     }
 
-    const descriptor = provider.capabilities.models.find(
-      (model) => model.id === generation.model,
-    );
+    // ⚠ RESOLVED WITH THE SHARED HELPER (#78), not by looking the id up in
+    // `capabilities.models` directly. A policy entry may carry its own context
+    // window for a model this build has never heard of, and that is exactly the
+    // model an administrator adopts from the discovery dropdown. Looking only
+    // at the build catalogue here would let `GET /api/ai/config` offer such a
+    // model, let the request-time budget check pass, and then fail the job —
+    // after the note row exists and the user is watching it generate.
+    const descriptor = resolveAllowedModel(entry, provider.capabilities.models);
 
     if (!descriptor) {
       throw new AiInputError(
-        `This version of the application does not know the model "${generation.model}", ` +
-          'so it cannot work out how much text will fit.',
+        `This deployment has no context window recorded for the model "${generation.model}", ` +
+          'so it cannot work out how much text will fit. An administrator can add one on the AI settings page.',
       );
     }
 
@@ -502,15 +510,27 @@ export function describe(error: unknown): string {
 }
 
 /**
- * The models this deployment permits for one provider.
+ * The models this deployment permits for one provider, as normalised entries.
  *
  * TOTAL OVER THE SETTINGS BLOB, which is JSONB that a rollback across a
  * settings change can leave in any shape at all. An unreadable block permits
  * NOTHING rather than everything: the deployment's allow-list is its only lever
  * over which vendor models its content reaches, so the safe direction when the
  * lever cannot be read is closed.
+ *
+ * ⚠ IT ACCEPTS BOTH ENTRY SHAPES, AND MUST (#78). Two of them exist in live
+ * data at the same time: the bare `"gpt-4o"` every pre-#78 row contains, and
+ * the `{ id, contextWindowTokens, maxOutputTokens }` object an administrator
+ * saves after picking a model this build has never heard of. A reader that
+ * understood only strings would silently drop every object entry — and because
+ * this function is what decides whether a model is PERMITTED, the symptom would
+ * be every generation against a newly adopted model failing with "not permitted
+ * by this deployment" while the settings page cheerfully showed it permitted.
  */
-export function readAllowedModels(providers: unknown, providerId: string): string[] {
+export function readAllowedModelEntries(
+  providers: unknown,
+  providerId: string,
+): AiAllowedModel[] {
   if (typeof providers !== 'object' || providers === null || Array.isArray(providers)) {
     return [];
   }
@@ -525,5 +545,34 @@ export function readAllowedModels(providers: unknown, providerId: string): strin
 
   if (!Array.isArray(models)) return [];
 
-  return models.filter((model): model is string => typeof model === 'string');
+  return models
+    .map((model): AiAllowedModel | null => {
+      if (typeof model === 'string') return { id: model };
+
+      if (typeof model !== 'object' || model === null || Array.isArray(model)) {
+        return null;
+      }
+
+      const record = model as Record<string, unknown>;
+      if (typeof record.id !== 'string' || record.id.length === 0) return null;
+
+      return {
+        id: record.id,
+        label: typeof record.label === 'string' ? record.label : undefined,
+        // Read defensively field by field rather than spread: this is raw
+        // JSONB, and a `contextWindowTokens` that arrived as the string
+        // `"128000"` must read as absent (so the catalogue answers, or the
+        // model is refused) rather than as a number the budget then compares
+        // against.
+        contextWindowTokens:
+          typeof record.contextWindowTokens === 'number'
+            ? record.contextWindowTokens
+            : undefined,
+        maxOutputTokens:
+          typeof record.maxOutputTokens === 'number'
+            ? record.maxOutputTokens
+            : undefined,
+      };
+    })
+    .filter((entry): entry is AiAllowedModel => entry !== null);
 }

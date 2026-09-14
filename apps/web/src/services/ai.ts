@@ -39,9 +39,29 @@
  * carries a compile-time proof of it), and it is the whole reason the admin page
  * has no key field: every AI key in this application belongs to an individual
  * user and is billed to them.
+ *
+ * =============================================================================
+ * #78 WIDENED THE MODEL POLICY, AND ADDED THE ONE EXCEPTION TO THE RULE ABOVE
+ * =============================================================================
+ *
+ * `allowedModels` used to be `string[]`, resolved against a four-entry
+ * catalogue compiled into the API — so the deployment's model policy was a
+ * SUBSET of an array shipped in a release, and adopting a model the vendor
+ * shipped last week required one. Since #78 an entry may carry its own context
+ * window and output ceiling ({@link AiAllowedModel}), and
+ * {@link discoverAiModels} asks the vendor what actually exists.
+ *
+ * ⚠ THAT ONE CALL IS THE ONLY PLACE IN THIS MODULE WHERE A KEY IS SPENT
+ * WITHOUT APPEARING IN A TYPE. `GET /api/ai-settings/models` has no request
+ * body at all; the API authenticates it with the CALLING ADMINISTRATOR'S own
+ * stored key, because there is no deployment key to use. So the one-way rule
+ * above still holds — no key travels through this module — but the COST does:
+ * the call bills a real request to the person who clicked it, which is why it
+ * hangs off an explicit button and never off a mount effect, and why a caller
+ * with no key of their own gets a 409 rather than an empty list.
  */
 
-import { api } from './api';
+import { api, ApiError } from './api';
 
 // =============================================================================
 // GET /api/ai/config — the capability probe
@@ -159,6 +179,21 @@ export interface AiProviderCapabilities {
   models: AiModelDescriptor[];
   /** Always true — every registered provider streams. */
   streaming: true;
+  /**
+   * Whether this provider implements `GET /api/ai-settings/models` (#78).
+   *
+   * ⚠ THIS IS THE ONLY THING THE ADMIN PAGE MAY GATE THE "LOAD MODELS" BUTTON
+   * ON. It is `boolean`, not the literal `true` that `streaming` is, and the
+   * difference is real rather than stylistic: streaming is not a capability a
+   * provider may decline (§5's durable buffer has nothing to append without
+   * it), whereas discovery genuinely is optional — a vendor with no list
+   * endpoint, or a gateway that refuses one, is a perfectly registrable
+   * provider whose admin form simply falls back to typing model ids by hand.
+   *
+   * The API refuses at boot to register a provider that declares this `true`
+   * with no `listModels`, so a client may trust it without a second check.
+   */
+  modelDiscovery: boolean;
 }
 
 /** One admin-form field a provider needs — the API describes its own form. */
@@ -180,6 +215,70 @@ export interface AiProviderDescription {
 }
 
 /**
+ * Providers this build can be configured to use.
+ *
+ * Mirrors `AI_PROVIDER_IDS` in `ai-settings.schema.ts`. A UNION RATHER THAN
+ * `string` because it is a `z.enum` on the wire: the page's provider `Select`
+ * writes straight into `UpdateAiSettingsInput.provider`, and a widened type
+ * there would let a typo compile into a 400 nobody discovers until save.
+ */
+export type AiProviderId = 'openai';
+
+/**
+ * One entry of a provider's `allowedModels` list (#78).
+ *
+ * ⚠ ALWAYS AN OBJECT ON THE WAY BACK, EVEN THOUGH A BARE STRING IS ACCEPTED ON
+ * THE WAY IN. `aiAllowedModelEntrySchema` is a union with a normalising
+ * transform, so a legacy stored `"gpt-4o"` reads back as `{ id: 'gpt-4o' }`
+ * with the three optional fields simply absent. That is why this client type is
+ * NOT a union: every consumer here sees objects only, and the one place the
+ * string form could still matter — a request body — is served by sending
+ * objects unconditionally. A `typeof entry === 'string'` branch anywhere in
+ * `apps/web` would be dead code that looks load-bearing.
+ *
+ * ⚠ THE TWO NUMBERS OVERRIDE THE BUILD CATALOGUE, they do not supplement it.
+ * `resolveAllowedModel` (`apps/api/src/ai/ai-model-resolution.ts`) takes the
+ * entry's own number first, the registered provider's descriptor second, and
+ * `null` third — and `null` means the model can be SAVED but never OFFERED,
+ * because docs/specs/notes.md §3.3's token budget has no safe reading of an
+ * unknown context window. That precedence is why the editor on the settings
+ * page asks for both numbers exactly when the id resolves to no descriptor,
+ * and why it must ask for BOTH: a half-known model resolves to nothing.
+ *
+ * ⚠ NO SECRET-BEARING FIELD MAY BE ADDED HERE. A per-model `apiKey` ("this one
+ * model is on a different account") is the deployment-wide fallback credential
+ * docs/specs/notes.md §9 rejected, one level deeper; `ai-settings.schema.ts`
+ * carries a compile-time proof against it and this type must not drift past it.
+ */
+export interface AiAllowedModel {
+  /** The provider's own model id. The only required field. */
+  id: string;
+  /** What a model picker shows. Falls back to the catalogue's label, then the id. */
+  label?: string;
+  /** Total context window, in tokens. 1,024–10,000,000 — see {@link AI_MODEL_BOUNDS}. */
+  contextWindowTokens?: number;
+  /** Most tokens one completion may produce. 64–1,000,000. */
+  maxOutputTokens?: number;
+}
+
+/**
+ * Bounds on the two per-model numbers, mirrored from `aiAllowedModelSchema`.
+ *
+ * HERE RATHER THAN IN THE PAGE because both the permitted-model rows and the
+ * discovery dialog collect the same two numbers, and two copies of a bound is
+ * how one of them quietly stops matching the API. Validating client-side
+ * PREVENTS a 400 rather than reporting one — the schema still enforces it, so
+ * this is a courtesy, never the guarantee.
+ */
+export const AI_MODEL_BOUNDS = {
+  contextWindowTokens: { min: 1_024, max: 10_000_000 },
+  maxOutputTokens: { min: 64, max: 1_000_000 },
+} as const;
+
+/** Most entries `allowedModels` accepts — `z.array(...).max(50)`. */
+export const AI_ALLOWED_MODELS_MAX = 50;
+
+/**
  * The stored AI policy.
  *
  * ⚠ NO FIELD HERE CAN HOLD AN API KEY, and that is the API's shape rather than
@@ -187,10 +286,23 @@ export interface AiProviderDescription {
  */
 export interface AiSettings {
   enabled: boolean;
+  /**
+   * The active provider, or `null` when none has been chosen (#78).
+   *
+   * ⚠ AN AXIS SEPARATE FROM `enabled`, field for field with
+   * `TranscriptionSettings.provider` and for its reason: an administrator can
+   * switch AI off for an incident without losing the vendor choice, and can
+   * switch vendors without touching the master switch. `null` is a PERSISTED
+   * FACT ("nobody has chosen one"), not an absent key — which is why the page's
+   * `Select` carries an explicit "None" option rather than an empty value that
+   * would be indistinguishable from "not loaded yet".
+   */
+  provider: AiProviderId | null;
   providers: {
     openai: {
       baseUrl: string;
-      allowedModels: string[];
+      /** Normalised to objects on read, whatever was stored. See {@link AiAllowedModel}. */
+      allowedModels: AiAllowedModel[];
       defaultModel: string;
     };
   };
@@ -207,7 +319,16 @@ export interface AiSettingsAdminView {
   /** Every registered provider, with its models and form fields. */
   providers: AiProviderDescription[];
   /**
-   * Model ids the policy permits that no registered provider declares.
+   * Model ids the policy permits that this deployment cannot budget for.
+   *
+   * ⚠ SINCE #78 THIS MEANS "UNRESOLVABLE", NOT "NOT IN THE BUILD CATALOGUE".
+   * An entry carrying its own `contextWindowTokens` and `maxOutputTokens` is
+   * perfectly usable and is NOT listed here, even though no release of this
+   * application has heard of the model — that is the entire point of the
+   * widened entry type. What remains listed is an entry with neither its own
+   * numbers nor a catalogue descriptor: a typo, or a model somebody permitted
+   * before the numbers were known.
+   *
    * Reported rather than silently dropped: such a model can never be offered,
    * and an administrator who mistyped one would otherwise have nothing to
    * explain why it disappeared.
@@ -222,11 +343,29 @@ export interface AiSettingsAdminView {
 /** `PUT /api/ai-settings` — a partial update. One level deep, like the API's PATCH schema. */
 export interface UpdateAiSettingsInput {
   enabled?: boolean;
+  /**
+   * ⚠ `null` IS A VALUE HERE, NOT AN ABSENCE. `provider: null` means "no vendor
+   * is active"; omitting the key means "leave the stored vendor alone". The
+   * API's merge tells the two apart with `!== undefined` rather than `??`
+   * precisely so the first is not silently the second — so a client that sent
+   * `undefined` meaning "clear it" would find the change quietly discarded.
+   */
+  provider?: AiProviderId | null;
   providers?: {
     openai?: {
       baseUrl?: string;
-      /** REPLACES wholesale — a merging list could never express "stop permitting this model". */
-      allowedModels?: string[];
+      /**
+       * REPLACES wholesale — a merging list could never express "stop
+       * permitting this model".
+       *
+       * The API also accepts a bare id per entry, for ever, because every
+       * deployment that saved a policy before #78 has bare strings stored.
+       * ⚠ THIS CLIENT NEVERTHELESS ALWAYS SENDS OBJECTS: the string form exists
+       * so old *stored* data stays readable, not as a shorthand worth using,
+       * and a client that mixed the two would drop the numbers an administrator
+       * typed for exactly the models that need them.
+       */
+      allowedModels?: AiAllowedModel[];
       defaultModel?: string;
     };
   };
@@ -253,6 +392,90 @@ export interface AiReachabilityTest {
   ok: boolean;
   latencyMs: number;
   detail: string;
+}
+
+// =============================================================================
+// GET /api/ai-settings/models — live model discovery (#78)
+// =============================================================================
+
+/**
+ * One model the provider's own API reported.
+ *
+ * ⚠ NOT AN {@link AiModelDescriptor}, AND THE DIFFERENCE IS THE POINT. A
+ * descriptor PROMISES both numbers because the §3.3 token budget cannot run
+ * without them; a vendor's `GET /models` response carries NEITHER for any
+ * provider this build talks to. So the vendor says what EXISTS, the build
+ * catalogue says what can be BUDGETED, and `known` is the join between them.
+ *
+ * ⚠ `known: false` IMPLIES BOTH NUMBERS ARE `null`. They are not merely
+ * "possibly missing" — the API has no third source to fill them from. `null`
+ * means "nobody said", NOT "unlimited" and NOT "zero", so a client offering
+ * such a model to be permitted must collect both numbers from the
+ * administrator first; saving it without them stores a model that is listed
+ * back happily and silently never offered to a single user.
+ */
+export interface AiDiscoveredModel {
+  /** The provider's own model id, exactly as its API spelled it. */
+  id: string;
+  /** A display name. Falls back to the id — never a prettified guess. */
+  label: string;
+  /** True when this build can budget against it, so permitting it needs no input. */
+  known: boolean;
+  /** From the build catalogue when `known`, otherwise `null`. */
+  contextWindowTokens: number | null;
+  /** From the build catalogue when `known`, otherwise `null`. */
+  maxOutputTokens: number | null;
+}
+
+/**
+ * What `GET /api/ai-settings/models` answers.
+ *
+ * ⚠ `ok: false` ARRIVES AS A **200**, not an exception — the same convention
+ * `testAiCredential` and `testAiReachability` follow. A vendor refusing a key
+ * is a SUCCESSFUL DIAGNOSIS, and `detail` is the whole value of the call: it
+ * distinguishes "the key is wrong", "the account has no credit" and "the
+ * endpoint is unreachable", three fixes that look identical from a failed
+ * generation an hour later. Show it verbatim either way.
+ *
+ * `models` is EMPTY whenever `ok` is false — never partial, so a client need
+ * not decide whether a short list is a truncation.
+ */
+export interface AiModelDiscovery {
+  ok: boolean;
+  detail: string;
+  /** Known models first, then alphabetically. Empty when `ok` is false. */
+  models: AiDiscoveredModel[];
+}
+
+/**
+ * The machine-readable `details.reason` a discovery 409 carries.
+ *
+ * One member today, and a union anyway so a future reason is a compile error at
+ * every `switch` rather than a silently unhandled string.
+ */
+export type AiDiscoveryConflictReason = 'ai_key_missing';
+
+/**
+ * Read the reason out of a discovery 409 — the ONE place this client does.
+ *
+ * ⚠ THE REASON IS NESTED UNDER `details`, NOT A TOP-LEVEL `code`. The API's
+ * global exception filter DERIVES `code` from the HTTP status and overwrites
+ * whatever an exception supplied, so `err.code` here is `CONFLICT` and carries
+ * no information. A page reading `err.code === 'ai_key_missing'` would compile,
+ * never match, and silently degrade the one 409 with a specific fix into a
+ * generic red box. Modelled on `noteConflictReason` in `services/notes.ts`,
+ * which exists for the identical reason.
+ */
+export function aiDiscoveryConflictReason(
+  err: unknown,
+): AiDiscoveryConflictReason | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+
+  const details = err.details;
+  if (typeof details !== 'object' || details === null) return null;
+
+  const reason = (details as { reason?: unknown }).reason;
+  return typeof reason === 'string' ? (reason as AiDiscoveryConflictReason) : null;
 }
 
 // =============================================================================
@@ -329,6 +552,43 @@ export async function updateAiSettings(
         ? undefined
         : { 'If-Match': String(expectedVersion) },
   });
+}
+
+/**
+ * `GET /api/ai-settings/models` — `system_settings:write`, not `:read` (#78).
+ *
+ * ⚠ THIS SPENDS A REAL VENDOR CALL ON THE CALLING ADMINISTRATOR'S OWN API KEY.
+ * This deployment stores no AI key of any kind, so discovery has to
+ * authenticate as somebody, and the only somebody available is the person
+ * clicking the button. That is also why the route is gated on write: looking at
+ * settings is not probing a third party. It is not a call to make on mount —
+ * every invocation costs the administrator a request against their own account
+ * — so it is wired to an explicit button and never to an effect.
+ *
+ * ⚠ RESOLVES ON A REFUSED PROBE, like every other `/test`-shaped call in this
+ * module: read {@link AiModelDiscovery.ok} and render `detail` either way. It
+ * REJECTS for the two real failures, which need different sentences:
+ *   • **400** — no provider is active and none was named, the named provider is
+ *     not implemented by this build, or it cannot list models at all;
+ *   • **409** — *the caller* has saved no key. {@link aiDiscoveryConflictReason}
+ *     is how that is told apart from a generic conflict, and it must be, since
+ *     the fix is on a different page.
+ *
+ * `provider` defaults to the ACTIVE one. Naming a different one lets an
+ * administrator inspect a catalogue BEFORE switching to it — the same "prove
+ * what you typed, not what you committed" workflow the `baseUrl` override on
+ * `testAiReachability` serves.
+ */
+export async function discoverAiModels(
+  provider?: string | null,
+): Promise<AiModelDiscovery> {
+  // Built with `URLSearchParams` rather than a template literal so an id
+  // carrying a `&` or a space cannot split the query string. Omitted entirely
+  // when absent: `?provider=` with an empty value is a `min(1)` violation and a
+  // 400, where "use the active provider" is what was meant.
+  const query = provider ? `?${new URLSearchParams({ provider }).toString()}` : '';
+
+  return api.get<AiModelDiscovery>(`${SETTINGS_BASE}/models${query}`);
 }
 
 /**

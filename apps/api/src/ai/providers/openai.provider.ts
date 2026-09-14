@@ -16,6 +16,7 @@ import {
 import type {
   AiConnectionTest,
   AiDelta,
+  AiDiscoveredModel,
   AiFinishReason,
   AiGenerateRequest,
   AiModelDescriptor,
@@ -160,6 +161,65 @@ const MODELS: AiModelDescriptor[] = [
 ];
 
 /**
+ * Substrings in a model id that mean "this is not a chat model" (#78).
+ *
+ * ⚠ A CONVENIENCE OVER AN UNSTRUCTURED VENDOR LIST, AND NOTHING MORE. OpenAI's
+ * `GET /models` returns one flat array with no `capability` field of any kind:
+ * embeddings, text-to-speech voices, Whisper, moderation endpoints, image
+ * models and chat models all arrive as bare ids, and an administrator opening a
+ * model dropdown does not want to scroll past `text-embedding-3-small` to find
+ * `gpt-4o`. This list is how that dropdown stays short.
+ *
+ * ⚠ IT MUST NEVER BE THE THING THAT MAKES A MODEL UNUSABLE. Filtering here
+ * removes an id from a SUGGESTION LIST; it does not remove it from the policy,
+ * and `aiAllowedModelSchema` accepts any id an administrator types by hand —
+ * `POST/PUT /api/ai-settings` never consults this list. That separation is
+ * deliberate and load-bearing: a heuristic over ids a vendor invents on its own
+ * schedule WILL be wrong eventually (a chat model named after an audio feature,
+ * a gateway exposing something in a private namespace), and the cost of being
+ * wrong has to be "you type six characters", never "this deployment cannot use
+ * a model that works".
+ *
+ * A MISS IS CHEAP IN BOTH DIRECTIONS, which is why the list is short and
+ * literal rather than clever: a false negative shows one extra row; a false
+ * positive hides a row an administrator can still type.
+ */
+const NON_CHAT_MODEL_MARKERS = [
+  'embedding',
+  'whisper',
+  'tts',
+  'dall-e',
+  'moderation',
+  'audio',
+  'image',
+  'realtime',
+  'transcribe',
+  'speech',
+  'rerank',
+  'guard',
+];
+
+/**
+ * One entry of `GET /models`, as far as this file reads it.
+ *
+ * ⚠ `id` IS THE ONLY FIELD THIS BUILD RELIES ON, deliberately. The vendor's
+ * list carries `created` and `owned_by` and no context window, no output
+ * ceiling and no display name — see {@link AiDiscoveredModel} for why those
+ * two absences are the reason discovery returns its own type rather than an
+ * `AiModelDescriptor`. An OpenAI-COMPATIBLE gateway is only obliged to get `id`
+ * right, and several get nothing else right, so reading more would be reading
+ * fiction.
+ */
+interface OpenAiModelListEntry {
+  id?: unknown;
+}
+
+/** The `GET /models` envelope. `data` is the array; everything else is ignored. */
+interface OpenAiModelListResponse {
+  data?: unknown;
+}
+
+/**
  * Average characters per token, for {@link OpenAiProvider.countTokens}.
  *
  * FOUR is the well-known rule of thumb for English prose under a BPE
@@ -227,6 +287,17 @@ function asFiniteNumber(value: unknown): number | null {
 function containsAny(haystack: string, needles: string[]): boolean {
   const lowered = haystack.toLowerCase();
   return needles.some((needle) => lowered.includes(needle));
+}
+
+/**
+ * Is this id plausibly a chat model? See {@link NON_CHAT_MODEL_MARKERS} for the
+ * standing warning that this is a convenience, never a gate.
+ *
+ * EXPORTED SO IT CAN BE ASSERTED DIRECTLY, because a heuristic nobody can test
+ * in isolation is a heuristic that quietly rots as the marker list grows.
+ */
+export function looksLikeChatModel(id: string): boolean {
+  return !containsAny(id, NON_CHAT_MODEL_MARKERS);
 }
 
 /**
@@ -361,6 +432,14 @@ export class OpenAiProvider
   readonly capabilities: AiProviderCapabilities = {
     models: MODELS,
     streaming: true,
+    // TRUE, AND `listModels` BELOW IS WHAT MAKES THAT LEGAL (#78) — the
+    // registry refuses this provider at boot if the two disagree. `GET /models`
+    // is the one route every OpenAI-compatible gateway implements, which is a
+    // large part of why discovery is worth having at all: an enterprise proxy
+    // or a self-hosted vLLM answers it with ITS OWN model list, so the admin
+    // dropdown describes the endpoint this deployment actually calls rather
+    // than OpenAI's public catalogue.
+    modelDiscovery: true,
   };
 
   /**
@@ -388,8 +467,14 @@ export class OpenAiProvider
       label: 'Permitted models',
       type: 'string-list',
       helpText:
-        "Model ids users of this deployment may generate with. This is the deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An empty list permits nothing.",
+        "Models users of this deployment may generate with. This is the deployment's only lever over which vendor models its content reaches — the key and the bill are each user's own. An empty list permits nothing. Load the live list from the provider, or type an id by hand; a model this build does not recognise also needs its context window and output ceiling, which the vendor publishes.",
       required: false,
+      // `[]` STILL, and still a `string-list`: an entry may now be an object
+      // (#78), but a bare id remains a legal way to write one and is what the
+      // normalising schema turns into `{ id }`. A descriptor type of its own
+      // would have to be understood by every provider's form; describing the
+      // simple case and letting the model dialog handle the rest costs nothing
+      // and keeps `AiProviderFieldDescriptor` a closed union.
       defaultValue: [],
     },
     {
@@ -518,6 +603,121 @@ export class OpenAiProvider
           'The request never got an HTTP response, so this is a network or configuration problem rather than a credential one.',
       };
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Model discovery (#78)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `GET {baseUrl}/models` — the same route `testConnection` probes, read for
+   * its CONTENT rather than for its status code.
+   *
+   * WHY THIS IS WORTH A VENDOR CALL AT ALL. Before it, an administrator
+   * configured `allowedModels` by typing model ids into a textarea, with this
+   * build's four-entry `MODELS` catalogue as the only validation — so adopting
+   * a model the vendor shipped last week required a release of this
+   * application, and a typo produced a policy that saved cleanly and offered
+   * nobody anything. The vendor's own list is the authority on what exists;
+   * `MODELS` remains the authority on what can be BUDGETED, and `known` is the
+   * join.
+   *
+   * ⚠ THROWS ON REFUSAL, unlike `testConnection` two methods up. The contract
+   * difference is stated on `AiProvider.listModels`: a probe's failure IS its
+   * answer, whereas a list has no partial form, so the decision of whether a
+   * refusal is a 200 diagnosis belongs to the caller. `AiSettingsService
+   * .discoverModels` is that caller and does exactly that. Errors go through
+   * the SAME `assertOk` the generation path uses, so a revoked key produces one
+   * `AiAuthError` with one sentence whichever route noticed first.
+   *
+   * ⚠ `ctx` IS NEVER LOGGED, in this method or anywhere near it. The key is an
+   * individual person's, and the only variables permitted in a log line here
+   * are counts.
+   */
+  async listModels(
+    ctx: AiProviderContext<OpenAiSettings>,
+  ): Promise<AiDiscoveredModel[]> {
+    const response = await this.fetchImpl(
+      `${this.baseUrl(ctx.settings)}/models`,
+      {
+        method: 'GET',
+        headers: this.authHeaders(ctx.apiKey),
+        // The PROBE budget, not the generation one: this is a metadata read
+        // that either answers promptly or is not going to, and an administrator
+        // is watching a spinner. `ai.requestTimeoutMs` is minutes long because
+        // a streamed completion legitimately runs for minutes; nothing about
+        // that reasoning applies to a list of strings.
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      },
+    );
+
+    await this.assertOk(response, 'list the models this API key can reach');
+
+    let payload: OpenAiModelListResponse;
+    try {
+      payload = (await response.json()) as OpenAiModelListResponse;
+    } catch {
+      // A 2xx whose body is not JSON is a gateway problem, not a credential
+      // one, and it is worth another attempt — so a plain Error rather than one
+      // of the terminal domain classes. The message deliberately carries
+      // nothing from the body: this is the one place an HTML error page from an
+      // intercepting proxy would otherwise be echoed back to a settings page.
+      throw new Error(
+        'The provider answered the model list request with a body this application could not read as JSON. That is usually a proxy or gateway in front of the API rather than the API itself.',
+      );
+    }
+
+    const entries = Array.isArray(payload.data)
+      ? (payload.data as OpenAiModelListEntry[])
+      : [];
+
+    const catalogue = new Map(MODELS.map((model) => [model.id, model]));
+
+    const discovered = entries
+      .map((entry) => asString(entry?.id))
+      .filter((id): id is string => id !== null)
+      // Deduplicated because a gateway aggregating several upstreams can list
+      // the same id twice, and a duplicated row in a dropdown reads as a bug in
+      // this application.
+      .filter((id, index, all) => all.indexOf(id) === index)
+      .filter((id) => looksLikeChatModel(id))
+      .map((id): AiDiscoveredModel => {
+        const descriptor = catalogue.get(id);
+
+        return {
+          id,
+          // The catalogue's human name when this build has one; the raw id
+          // otherwise. NEVER a prettified guess — a label this application
+          // invented for a model it knows nothing about would look exactly like
+          // one it can budget for, which is the distinction `known` exists to
+          // make.
+          label: descriptor?.label ?? id,
+          known: descriptor !== undefined,
+          // `null`, NOT a default. The vendor's list carries neither number,
+          // and a guessed context window is how a prompt that would have fit
+          // gets refused — or one that does not gets submitted and billed to
+          // the user. An administrator supplies them per model in the policy;
+          // see `aiAllowedModelSchema`.
+          contextWindowTokens: descriptor?.contextWindowTokens ?? null,
+          maxOutputTokens: descriptor?.maxOutputTokens ?? null,
+        };
+      });
+
+    // KNOWN FIRST, THEN ALPHABETICALLY. The models this build can budget
+    // without any further input are the ones an administrator can permit with
+    // one click, so they belong at the top; everything else is a flat
+    // alphabetical list because a vendor's own ordering (creation date, in
+    // OpenAI's case) is meaningless to the person reading it.
+    discovered.sort((a, b) => {
+      if (a.known !== b.known) return a.known ? -1 : 1;
+      return a.id.localeCompare(b.id);
+    });
+
+    this.logger.debug(
+      `Discovered ${discovered.length} chat-capable model(s) from the provider's model list.`,
+    );
+
+    return discovered;
   }
 
   // ---------------------------------------------------------------------------

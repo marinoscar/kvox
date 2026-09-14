@@ -196,6 +196,32 @@ export interface UploadRuntime {
   clearTimeout(handle: number): void;
   /** Parts uploaded in parallel. See `detectPartConcurrency`. */
   concurrency(): number;
+  /**
+   * Subscribe to Content Security Policy violations. Returns an unsubscribe
+   * function. See `cspBlockedUploadMessage` for why the engine listens at all.
+   */
+  onCspViolation(handler: (violation: CspViolation) => void): () => void;
+}
+
+/** The two fields of a `SecurityPolicyViolationEvent` the engine reads. */
+export interface CspViolation {
+  /** A full URL, a bare origin, or a keyword (`inline`, `eval`) — browsers vary. */
+  blockedURI: string;
+  /** `effectiveDirective`, falling back to `violatedDirective`. */
+  directive: string;
+}
+
+function subscribeToCspViolations(handler: (violation: CspViolation) => void): () => void {
+  if (typeof document === 'undefined') return () => undefined;
+  const listener = (event: Event) => {
+    const violation = event as SecurityPolicyViolationEvent;
+    handler({
+      blockedURI: violation.blockedURI ?? '',
+      directive: violation.effectiveDirective || violation.violatedDirective || '',
+    });
+  };
+  document.addEventListener('securitypolicyviolation', listener);
+  return () => document.removeEventListener('securitypolicyviolation', listener);
 }
 
 /** Parallel part uploads on a phone. */
@@ -243,6 +269,7 @@ export const defaultUploadRuntime: UploadRuntime = {
   setTimeout: (handler, ms) => globalThis.setTimeout(handler, ms) as unknown as number,
   clearTimeout: (handle) => globalThis.clearTimeout(handle),
   concurrency: () => detectPartConcurrency(),
+  onCspViolation: (handler) => subscribeToCspViolations(handler),
 };
 
 // =============================================================================
@@ -365,6 +392,46 @@ export class UploadFailedError extends Error {
   }
 }
 
+/**
+ * The failure message for a part PUT the browser refused to send because of
+ * this site's Content Security Policy.
+ *
+ * ⚠️ WHY CSP IS SPECIAL-CASED RATHER THAN RETRIED LIKE ANY NETWORK ERROR.
+ *
+ * A PUT blocked by `connect-src` never leaves the device, and to
+ * `XMLHttpRequest` it is indistinguishable from a dropped connection: `onerror`,
+ * status 0, no body, no reason. Left to the ordinary retry loop the engine
+ * spends every attempt and its backoff on a policy decision that is identical
+ * on every try, then reports `Part N failed after N attempts` — which reads as
+ * a flaky network and sends the user to find better Wi-Fi, when the only fix
+ * is an operator adding the storage origin to the policy (issue #84). The
+ * `securitypolicyviolation` DOM event is the one signal that tells the two
+ * apart, so the engine listens for it and fails fast with a message naming
+ * the origin and the setting. Every other part targets the same origin under
+ * the same policy, so failing the whole upload loses nothing.
+ */
+export function cspBlockedUploadMessage(origin: string): string {
+  return (
+    `Your browser blocked the upload to storage (${origin}) because of this site's ` +
+    'Content Security Policy. An administrator needs to add that origin to STORAGE_CSP_ORIGIN.'
+  );
+}
+
+/**
+ * The origin of an absolute URL or bare origin, or `null` for anything that
+ * does not parse (`inline`, `eval`, an empty string). Deliberately no base URL:
+ * resolving a CSP keyword against `location` would turn it into this page's
+ * own origin.
+ */
+function originOf(value: string): string | null {
+  try {
+    const origin = new URL(value).origin;
+    return origin === 'null' ? null : origin;
+  } catch {
+    return null;
+  }
+}
+
 /** Internal: a PUT was aborted by pause/cancel. Never surfaces to callers. */
 class PartAbortedError extends Error {
   constructor() {
@@ -475,6 +542,12 @@ class UploadEngine implements ResumableUpload {
   private readonly onOffline = () => this.handleOffline();
   private readonly onOnline = () => this.handleOnline();
 
+  /** Origins this upload has sent (or tried to send) a part PUT to. */
+  private readonly partOrigins = new Set<string>();
+  /** Part origins a `connect-src` violation has been reported for. Never cleared. */
+  private readonly cspBlockedOrigins = new Set<string>();
+  private cspUnsubscribe: (() => void) | null = null;
+
   constructor(config: UploadEngineConfig, options: ResumableUploadOptions = {}) {
     this.file = config.file;
     this.objectId = config.objectId;
@@ -536,6 +609,7 @@ class UploadEngine implements ResumableUpload {
     this.waitingForNetwork = false;
     this.phase = 'uploading';
     this.error = null;
+    this.attachCspListener();
     this.emit();
     this.pump();
   }
@@ -684,6 +758,13 @@ class UploadEngine implements ResumableUpload {
         this.inFlightBytes.set(partNumber, 0);
         this.emit();
 
+        // A status-0 failure may be a CSP block (see `cspBlockedUploadMessage`).
+        // The violation event can be dispatched before OR after `onerror`, so
+        // this is checked twice: now, and again after the backoff below, by
+        // which time the event has certainly arrived.
+        const isNetworkError = !(err instanceof PartHttpError);
+        if (isNetworkError) this.throwIfCspBlocked(partNumber, url);
+
         if (attempt === this.retry.maxAttempts) {
           throw new UploadFailedError(
             `Part ${partNumber} failed after ${attempt} attempts`,
@@ -693,8 +774,22 @@ class UploadEngine implements ResumableUpload {
         }
 
         await this.delay(backoffDelayMs(attempt, this.retry, this.runtime.random()));
+
+        if (isNetworkError && generation === this.generation) {
+          this.throwIfCspBlocked(partNumber, url);
+        }
       }
     }
+  }
+
+  /**
+   * Throw a terminal `UploadFailedError` — no further attempts, no re-presign —
+   * when a `connect-src` violation has been recorded for this part's origin.
+   */
+  private throwIfCspBlocked(partNumber: number, url: string): void {
+    const origin = originOf(url);
+    if (origin === null || !this.cspBlockedOrigins.has(origin)) return;
+    throw new UploadFailedError(cspBlockedUploadMessage(origin), partNumber);
   }
 
   /** The one place `XMLHttpRequest` is used. See the file header for why. */
@@ -739,6 +834,11 @@ class UploadEngine implements ResumableUpload {
         cleanup();
         reject(new PartAbortedError());
       };
+
+      // Recorded BEFORE the send, so a violation dispatched for this request
+      // always finds its origin already known.
+      const origin = originOf(url);
+      if (origin !== null) this.partOrigins.add(origin);
 
       xhr.open('PUT', url, true);
       // NO `Authorization` HEADER, and no `withCredentials`. The presigned URL
@@ -843,6 +943,35 @@ class UploadEngine implements ResumableUpload {
     this.networkListenersAttached = false;
   }
 
+  // ---------------------------------------------------------------------------
+  // Content Security Policy — see `cspBlockedUploadMessage`
+  // ---------------------------------------------------------------------------
+
+  /** Idempotent. Attached only while parts can be in flight. */
+  private attachCspListener(): void {
+    if (this.cspUnsubscribe) return;
+    this.cspUnsubscribe = this.runtime.onCspViolation((violation) =>
+      this.handleCspViolation(violation),
+    );
+  }
+
+  private detachCspListener(): void {
+    const unsubscribe = this.cspUnsubscribe;
+    this.cspUnsubscribe = null;
+    unsubscribe?.();
+  }
+
+  private handleCspViolation(violation: CspViolation): void {
+    // Older browsers may report the directive with its value attached.
+    if (violation.directive.trim().split(/\s+/)[0] !== 'connect-src') return;
+    // `blockedURI` is a full URL in some browsers and a bare origin in others;
+    // comparing origins accepts both. A violation for an origin this upload
+    // never targeted belongs to something else on the page.
+    const origin = originOf(violation.blockedURI);
+    if (origin === null || !this.partOrigins.has(origin)) return;
+    this.cspBlockedOrigins.add(origin);
+  }
+
   private handleOffline(): void {
     if (this.phase !== 'uploading') return;
     this.stopInFlight('paused');
@@ -869,6 +998,9 @@ class UploadEngine implements ResumableUpload {
     this.generation += 1;
     this.phase = phase;
     this.running = 0;
+    // Pause, offline, cancel and fail all pass through here; `start()`
+    // re-attaches on resume.
+    this.detachCspListener();
     for (const [partNumber, xhr] of this.activeXhrs) {
       this.inFlightBytes.delete(partNumber);
       this.requeue(partNumber);
@@ -896,6 +1028,8 @@ class UploadEngine implements ResumableUpload {
   private finish(status: UploadOutcome['status'], error: string | null): void {
     this.phase = status === 'completed' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'failed';
     this.error = error;
+    // Covers `complete()`, the one terminal path that skips `stopInFlight`.
+    this.detachCspListener();
     if (status === 'completed') {
       // Credit every part: a resumed upload never sent the parts S3 already
       // held, so summing observed bytes would finish a resumed 2 GB file at
