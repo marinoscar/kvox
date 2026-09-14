@@ -46,9 +46,20 @@ import type {
 //     is permanently unavailable for a reason no error mentions. Refusing at
 //     registration turns that into a boot failure naming the provider.
 //
+//   • A provider declaring `capabilities.modelDiscovery` with NO `listModels`
+//     method (#78) — the same check `TranscriptionProviderRegistry` makes for
+//     `capabilities.cancel`, and the same argument: an advertised capability
+//     with no method is a `TypeError` in the path least likely to have been
+//     exercised. Here that path is an administrator pressing "load models from
+//     the provider" on a page opened once a quarter, and the exception would
+//     surface as a 500 with a stack frame instead of as the misconfiguration it
+//     is. One line at boot, where the fix is obvious.
+//
 // There is no `capabilities.streaming` check, deliberately: the interface types
 // that field as the literal `true`, so a non-streaming provider does not
-// compile and there is nothing left for a runtime check to catch.
+// compile and there is nothing left for a runtime check to catch. Note the
+// asymmetry with `modelDiscovery`, which IS `boolean` — discovery is genuinely
+// declinable, streaming is not.
 // =============================================================================
 
 @Injectable()
@@ -79,6 +90,16 @@ export class AiProviderRegistry {
     ) {
       throw new Error(
         `AI provider "${provider.id}" declares no models. A provider with an empty model catalogue can never be generated with — the deployment's allowedModels policy is intersected with this list — so it would advertise a feature that is permanently unavailable.`,
+      );
+    }
+
+    if (
+      provider.capabilities.modelDiscovery &&
+      typeof provider.listModels !== 'function'
+    ) {
+      throw new Error(
+        `AI provider "${provider.id}" declares capabilities.modelDiscovery but implements no listModels(). ` +
+          'Either implement it or set the capability to false — an advertised capability with no method is a TypeError in the model-discovery path, which an administrator reaches from a settings page and nothing else exercises.',
       );
     }
 
@@ -124,6 +145,12 @@ export class AiProviderRegistry {
    * method on a path that ends in `JSON.stringify`, and would let a caller
    * mutate `fieldDescriptors` or `models` in place for everyone. Every array is
    * copied for the same reason.
+   *
+   * `capabilities` is spread WHOLESALE rather than field by field, so
+   * `modelDiscovery` (#78) and anything a later issue adds reach the admin form
+   * without a second edit here. The admin page reads it to decide whether to
+   * offer "load models from the provider" at all, so a provider that cannot
+   * discover renders a plain text field instead of a dead button.
    */
   describeAll(): AiProviderDescription[] {
     return this.all().map((provider) => ({

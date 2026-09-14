@@ -124,6 +124,8 @@ class FakeProvider implements AiProvider<unknown> {
       },
     ],
     streaming: true as const,
+    // #78: the fake implements no `listModels`, so it declares none.
+    modelDiscovery: false,
   };
   readonly settingsSchema = z.unknown();
   readonly fieldDescriptors = [];
