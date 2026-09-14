@@ -18,7 +18,12 @@ services:
       # inline React Refresh preamble script that `script-src 'self'` blocks,
       # which leaves the app a blank page; this policy permits it.
       # Development only.
-      - ../nginx/csp.dev.conf:/etc/nginx/csp.conf:ro
+      #
+      # ⚠ THE CONTAINER PATH MUST MATCH base.compose.yml'S EXACTLY, or Compose
+      # keeps BOTH mounts and the strict policy wins. Since #21 that path is
+      # the envsubst template, not /etc/nginx/csp.conf — the rendering (and
+      # therefore ${STORAGE_CSP_ORIGIN}) is inherited from base unchanged.
+      - ../nginx/csp.dev.conf:/etc/nginx/templates/csp.conf.template:ro
 
   # ---------------------------------------------------------------------------
   # API - Development overrides
