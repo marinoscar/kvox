@@ -8,6 +8,7 @@ import {
   PERMISSIONS,
   ROLE_PERMISSIONS,
   DEFAULT_SYSTEM_SETTINGS,
+  NOTE_TEMPLATES,
 } from './seed-data';
 
 // Prisma 7 requires a driver adapter — PrismaClient can no longer be
@@ -132,6 +133,47 @@ async function seedInitialAdminAllowlist() {
   }
 }
 
+async function seedNoteTemplates() {
+  console.log('Seeding built-in note templates...');
+
+  // Idempotent by the template's own fixed `id` (see the block comment above
+  // `NOTE_TEMPLATES` in seed-data.ts for why there is no separate slug
+  // column to key on instead). `update` re-asserts every seeded field so an
+  // edit to this file's seed text (prose or structured field alike) lands
+  // on a re-run; `ownerId` is never part of `update` because it is never
+  // allowed to change — a built-in stays built-in. This never touches a
+  // user's own duplicate-and-edit copy (`note_templates.duplicate`,
+  // docs/specs/notes.md §7.3), which always gets a fresh, random `id`
+  // distinct from every one of these fixed ones.
+  for (const template of NOTE_TEMPLATES) {
+    await prisma.noteTemplate.upsert({
+      where: { id: template.id },
+      update: {
+        name: template.name,
+        description: template.description,
+        instructions: template.instructions,
+        outputFormat: template.outputFormat,
+        structure: template.structure,
+        tone: template.tone,
+        length: template.length,
+      },
+      create: {
+        id: template.id,
+        ownerId: null,
+        name: template.name,
+        description: template.description,
+        instructions: template.instructions,
+        outputFormat: template.outputFormat,
+        structure: template.structure,
+        tone: template.tone,
+        length: template.length,
+      },
+    });
+  }
+
+  console.log(`✓ Seeded ${NOTE_TEMPLATES.length} built-in note templates`);
+}
+
 // =============================================================================
 // Main Seed Function
 // =============================================================================
@@ -144,6 +186,7 @@ async function main() {
   await seedRolePermissions();
   await seedSystemSettings();
   await seedInitialAdminAllowlist();
+  await seedNoteTemplates();
 
   console.log('\n✓ Database seeding completed successfully');
 }

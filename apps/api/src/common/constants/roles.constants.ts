@@ -141,6 +141,48 @@ export const PERMISSIONS = {
   // about someone's private conversation (spec §6.1).
   TRANSCRIPTS_READ: 'transcripts:read',
   TRANSCRIPTS_WRITE: 'transcripts:write',
+
+  // Notes (#48, epic #45).
+  //
+  // GRANTED TO ALL THREE ROLES, mirroring `transcripts:*` exactly and for
+  // the identical reason (docs/specs/notes.md §6.3): generating a note is
+  // the core product action this epic exists to enable, and a fresh
+  // account's default role is Viewer. `notes:read` gates every note read
+  // (list, get, versions, the generation stream); `notes:write` gates
+  // create/regenerate/edit/delete AND, per spec §6.3, gates
+  // `POST /api/note-templates/:id/preview` — a preview reads a template
+  // (covered by `note_templates:read`) but its ACTION is generating real
+  // content through the caller's own AI key, the same mechanism
+  // `note.generate` runs, so it is gated by the permission that governs
+  // generating, not by any permission belonging to the template CRUD
+  // surface.
+  //
+  // THERE IS DELIBERATELY NO `notes:read_any` — not even for an admin. A
+  // note is derived from somebody's private conversation, exactly like a
+  // transcript (see the `transcripts:*` comment above), and no permission
+  // string for reading another user's note exists anywhere in this design,
+  // for any role, ever. `NoteAccessService.require` answers a caller with
+  // no access a plain 404, never a 403, for the identical reason
+  // `TranscriptAccessService` does.
+  NOTES_READ: 'notes:read',
+  NOTES_WRITE: 'notes:write',
+
+  // Note templates (#48, epic #45).
+  //
+  // A SEPARATE PAIR FROM `notes:*`, not folded in — the same "a permission
+  // split at the API is never re-merged in the registry" discipline
+  // `docs/specs/settings-ui.md` §3 states for `nodes:read` staying apart
+  // from `jobs:read`: templates and notes are governed by two different
+  // controllers with two different write surfaces (editing a recipe versus
+  // generating content). `note_templates:write` gates creating, editing and
+  // deleting a user's OWN custom templates only — it does not gate
+  // built-ins, which are immutable through the API regardless of any
+  // permission any role holds (a built-in's `PATCH`/`DELETE` answers 403,
+  // a deliberate divergence from `notes:*`'s 404-never-403 posture, because
+  // a built-in template's existence is public by design — see
+  // docs/specs/notes.md §7.2).
+  NOTE_TEMPLATES_READ: 'note_templates:read',
+  NOTE_TEMPLATES_WRITE: 'note_templates:write',
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

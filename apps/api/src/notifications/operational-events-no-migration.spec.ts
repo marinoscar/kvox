@@ -59,6 +59,15 @@ const MIGRATIONS_AT_288 = [
   // transcript_shares, transcript_exports). A data model for audio
   // transcription, and equally not about notifications.
   '20260914130000_add_transcripts',
+  // #48 (epic #45): the five note tables (notes, note_templates,
+  // note_generations, note_versions, note_exports) and their RBAC/built-in
+  // template seed. A data model for AI-generated notes, and equally not
+  // about notifications — the three notification events this feature adds
+  // later (notes.note_ready, notes.note_failed, notes.preview_failed,
+  // docs/specs/notes.md's own "Notifying somebody about a note" section)
+  // follow the identical registry-entry-only recipe #288 exists to prove,
+  // with no schema of their own either.
+  '20260914140000_add_notes',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

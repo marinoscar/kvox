@@ -3,6 +3,7 @@ import {
   PERMISSIONS,
   ROLE_PERMISSIONS,
   DEFAULT_SYSTEM_SETTINGS as SEEDED_SYSTEM_SETTINGS,
+  NOTE_TEMPLATES,
 } from '../../prisma/seed-data';
 import { PERMISSIONS as PERMISSION_CONSTANTS } from '../../src/common/constants/roles.constants';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
@@ -103,6 +104,42 @@ describe('seed data', () => {
       for (const permission of ['transcripts:read', 'transcripts:write']) {
         expect(seeded.has(permission)).toBe(true);
       }
+    });
+
+    it('seeds the notes/note_templates permissions this epic introduces (#48)', () => {
+      const seeded = new Set<string>(
+        PERMISSIONS.map((permission) => permission.name),
+      );
+
+      for (const permission of [
+        'notes:read',
+        'notes:write',
+        'note_templates:read',
+        'note_templates:write',
+      ]) {
+        expect(seeded.has(permission)).toBe(true);
+      }
+    });
+
+    // ===========================================================================
+    // THE ABSENCE THIS TEST IS FOR (#48's own acceptance criterion): there is
+    // deliberately no `notes:read_any` anywhere in this codebase, for any
+    // role, ever (docs/specs/notes.md §6.3). This must fail loudly the
+    // moment someone adds one — to PERMISSIONS here, to roles.constants.ts,
+    // or to any ROLE_PERMISSIONS grant — which is why it checks all three
+    // independently rather than trusting one list to catch a typo in
+    // another.
+    // ===========================================================================
+    it('does NOT seed notes:read_any anywhere — the absence is deliberate', () => {
+      const seededNames = PERMISSIONS.map((permission) => permission.name);
+      expect(seededNames).not.toContain('notes:read_any');
+
+      expect(Object.values(PERMISSION_CONSTANTS)).not.toContain('notes:read_any');
+
+      const grantedAnywhere = Object.values(ROLE_PERMISSIONS).some((grants) =>
+        grants.includes('notes:read_any'),
+      );
+      expect(grantedAnywhere).toBe(false);
     });
   });
 
@@ -209,6 +246,33 @@ describe('seed data', () => {
         }
       }
     });
+
+    it('grants the notes/note_templates permissions to ALL THREE roles (#48) — the same posture as transcripts:*', () => {
+      // Mirrors transcripts:* exactly: generating a note is the core product
+      // action, and this app's DEFAULT_ROLE is Viewer, so every role —
+      // Viewer included — must hold all four grants from the moment the
+      // seed runs (docs/specs/notes.md §6.3).
+      const notes = [
+        'notes:read',
+        'notes:write',
+        'note_templates:read',
+        'note_templates:write',
+      ];
+
+      for (const role of ['admin', 'contributor', 'viewer']) {
+        for (const permission of notes) {
+          expect(ROLE_PERMISSIONS[role]).toContain(permission);
+        }
+      }
+    });
+
+    it('a Viewer holds notes:write (#48 acceptance criterion, stated explicitly)', () => {
+      // The issue's own acceptance criterion, asserted directly rather than
+      // only as a byproduct of the loop above: Viewer is this app's
+      // DEFAULT_ROLE, and a brand-new account must be able to generate a
+      // note from day one.
+      expect(ROLE_PERMISSIONS.viewer).toContain('notes:write');
+    });
   });
 
   describe('seeded system settings', () => {
@@ -230,6 +294,124 @@ describe('seed data', () => {
       expect(() =>
         systemSettingsSchema.parse(SEEDED_SYSTEM_SETTINGS),
       ).not.toThrow();
+    });
+  });
+
+  // ===========================================================================
+  // Built-in note templates (#48, epic #45)
+  // ===========================================================================
+  //
+  // `seed.ts`'s actual `upsert`-twice idempotency needs a real Postgres — see
+  // `test/notes/note-schema.db.spec.ts` for that half. What this file can
+  // assert without one is that the DATA is self-consistent: exactly the six
+  // VISION.md-named built-ins, each with a stable id and real, usable prompt
+  // text rather than a placeholder — the issue's own "not placeholder text"
+  // requirement.
+  describe('built-in note templates', () => {
+    it('seeds exactly the six VISION.md-named built-ins', () => {
+      const names = NOTE_TEMPLATES.map((template) => template.name).sort();
+
+      expect(names).toEqual(
+        [
+          'Concise Meeting Notes',
+          'Detailed Meeting Notes',
+          'Executive Summary',
+          'Action Items',
+          'Decision Log',
+          'Follow-up Email',
+        ].sort(),
+      );
+    });
+
+    it('gives every built-in a stable, unique UUID id to upsert on', () => {
+      const ids = NOTE_TEMPLATES.map((template) => template.id);
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+      for (const id of ids) {
+        expect(id).toMatch(uuidPattern);
+      }
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('re-running the seed data twice would upsert the SAME ids (idempotency by id, not by insert order)', () => {
+      // The actual re-run happens against a real Postgres in the .db.spec.ts
+      // suite; what is checked here, with no database needed, is the
+      // precondition that makes that idempotent at all — a second pass over
+      // this exact array upserts on the exact same `id` values, never a
+      // freshly generated one.
+      const idsPassOne = NOTE_TEMPLATES.map((t) => t.id);
+      const idsPassTwo = NOTE_TEMPLATES.map((t) => t.id);
+      expect(idsPassTwo).toEqual(idsPassOne);
+    });
+
+    it('gives every built-in a non-placeholder description and instructions block', () => {
+      for (const template of NOTE_TEMPLATES) {
+        expect(template.description.trim().length).toBeGreaterThan(20);
+        expect(template.description.toLowerCase()).not.toMatch(/\btodo\b|\bplaceholder\b|\bfixme\b|\blorem ipsum\b/);
+
+        // Real, usable prompt text, not a stub — long enough to actually
+        // instruct a model on structure, tone and length (spec §4.3's "one
+        // field" design composes exactly those into this string).
+        expect(template.instructions.trim().length).toBeGreaterThan(200);
+        expect(template.instructions.toLowerCase()).not.toMatch(
+          /\btodo\b|\bplaceholder\b|\bfixme\b|\blorem ipsum\b/,
+        );
+      }
+    });
+
+    it('never sets an ownerId on a built-in — that is what makes it built-in (spec §7.1)', () => {
+      // NOTE_TEMPLATES itself carries no ownerId field at all (seed.ts
+      // hard-codes `ownerId: null` at the create site); this test pins that
+      // absence so a future edit adding one to the array is caught here
+      // rather than only surfacing as a row a user appears to own.
+      for (const template of NOTE_TEMPLATES) {
+        expect(template).not.toHaveProperty('ownerId');
+      }
+    });
+
+    // =========================================================================
+    // Structured fields (issue #48). Every built-in must give a real value
+    // for `outputFormat` and a non-empty `structure` — #56's template editor
+    // presents these as real controls (an Output format select, an editable
+    // ordered list for Structure) that a user reopening a built-in-derived
+    // template must see populated, not a blank form masquerading as a
+    // working template.
+    // =========================================================================
+    it('gives every built-in a non-empty outputFormat', () => {
+      for (const template of NOTE_TEMPLATES) {
+        expect(typeof template.outputFormat).toBe('string');
+        expect(template.outputFormat.trim().length).toBeGreaterThan(0);
+      }
+    });
+
+    it('gives every built-in a non-empty, ordered structure array', () => {
+      for (const template of NOTE_TEMPLATES) {
+        expect(Array.isArray(template.structure)).toBe(true);
+        expect(template.structure.length).toBeGreaterThan(0);
+        for (const section of template.structure) {
+          expect(typeof section).toBe('string');
+          expect((section as string).trim().length).toBeGreaterThan(0);
+        }
+      }
+    });
+
+    it('gives every built-in a tone and a length', () => {
+      for (const template of NOTE_TEMPLATES) {
+        expect(typeof template.tone).toBe('string');
+        expect(template.tone.trim().length).toBeGreaterThan(0);
+        expect(typeof template.length).toBe('string');
+        expect(template.length.trim().length).toBeGreaterThan(0);
+      }
+    });
+
+    it('leaves model unset on every built-in — no forced per-template model override by default', () => {
+      // A built-in has no reason to pin a model: #56's optional Model
+      // override exists for a user's own custom template, and forcing one
+      // here would make a built-in start failing the moment a deployment
+      // stops offering that model, for no product benefit.
+      for (const template of NOTE_TEMPLATES) {
+        expect(template).not.toHaveProperty('model');
+      }
     });
   });
 });

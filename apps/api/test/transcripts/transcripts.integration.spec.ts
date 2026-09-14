@@ -28,7 +28,12 @@ import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
 //   * creation over the provider's size limit gets **400**;
 //   * creation with transcription unconfigured gets **409**;
 //   * `GET /:id` and `GET /:id/segments` carry a weak ETag and answer `304`
-//     with **no body** on a matching `If-None-Match`.
+//     with **no body** on a matching `If-None-Match`;
+//   * `DELETE /:id` is **409** while a note still names this transcript as its
+//     source, and the transcript is NOT moved to `deleting` (issue #48, epic
+//     #45 — `notes.source_transcript_id` is `Restrict`, so without the
+//     pre-check the refusal arrives later as a foreign-key violation inside
+//     `transcript.purge`).
 //
 // Everything except `PrismaService`, `CredentialsService` and the storage
 // provider is what `AppModule` wires — the same boundary a production request
@@ -481,6 +486,121 @@ describe('Transcripts Integration', () => {
         .expect(200);
 
       expect(response.body.data.kind).toBe('original');
+    });
+  });
+
+  // ==========================================================================
+  // Delete, and the notes that block it (issue #48, epic #45)
+  // ==========================================================================
+
+  describe('DELETE /api/transcripts/:id', () => {
+    const NOTE_A = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+    const NOTE_B = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+
+    /** An owner of the stock `ready` transcript. */
+    const asOwner = async () => {
+      const owner = await createMockTestUser(context, { email: 'deleter@example.com' });
+
+      prismaMock.transcript.findUnique.mockResolvedValue(
+        transcriptRow({ ownerId: owner.id }),
+      );
+      prismaMock.transcript.update.mockResolvedValue(
+        transcriptRow({ ownerId: owner.id, status: 'deleting' }),
+      );
+
+      return owner;
+    };
+
+    it('deletes as before when nothing was generated from it', async () => {
+      const owner = await asOwner();
+      prismaMock.note.findMany.mockResolvedValue([]);
+
+      await request(context.app.getHttpServer())
+        .delete(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .expect(204);
+
+      expect(prismaMock.transcript.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'deleting' }),
+        }),
+      );
+    });
+
+    it('is 409 naming the blocking notes, and does NOT move the transcript to `deleting`', async () => {
+      const owner = await asOwner();
+
+      prismaMock.note.findMany.mockResolvedValue([
+        { id: NOTE_A, title: 'Action items', deletedAt: null },
+        { id: NOTE_B, title: 'Exec summary', deletedAt: null },
+      ]);
+
+      const response = await request(context.app.getHttpServer())
+        .delete(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .expect(409);
+
+      // The ids AND titles travel in `details` — the web app lists the notes
+      // standing in the way rather than only reporting a refusal.
+      expect(response.body.details).toEqual({
+        blockingCount: 2,
+        pendingPurgeCount: 0,
+        notes: [
+          { id: NOTE_A, title: 'Action items', pendingPurge: false },
+          { id: NOTE_B, title: 'Exec summary', pendingPurge: false },
+        ],
+      });
+      expect(response.body.message).toMatch(/2 notes/);
+
+      // A refused delete leaves the transcript exactly as it was.
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('still blocks — and says so honestly — when every blocking note is soft-deleted', async () => {
+      // A note's soft delete sets `deleted_at` and leaves the foreign key in
+      // place, so the database-level delete would STILL fail. Counting only
+      // live notes here would hand `transcript.purge` the violation this
+      // pre-check exists to prevent.
+      const owner = await asOwner();
+
+      prismaMock.note.findMany.mockResolvedValue([
+        { id: NOTE_A, title: 'Action items', deletedAt: new Date('2026-09-14T00:00:00.000Z') },
+      ]);
+
+      const response = await request(context.app.getHttpServer())
+        .delete(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .expect(409);
+
+      expect(response.body.message).toMatch(/deleted note/i);
+      expect(response.body.message).toMatch(/try again shortly/i);
+      expect(response.body.details).toEqual({
+        blockingCount: 1,
+        pendingPurgeCount: 1,
+        notes: [{ id: NOTE_A, title: 'Action items', pendingPurge: true }],
+      });
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('leaves a non-owner on 404, never 403 and never a 409 (spec §6.1)', async () => {
+      // The pre-check must not become a way to learn that a stranger's
+      // transcript exists — access is decided first, and its answer is 404.
+      const stranger = await createMockTestUser(context, { email: 'nosy@example.com' });
+
+      prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
+      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+      prismaMock.note.findMany.mockResolvedValue([
+        { id: NOTE_A, title: 'Action items', deletedAt: null },
+      ]);
+
+      const response = await request(context.app.getHttpServer())
+        .delete(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(stranger.accessToken))
+        .expect(404);
+
+      expect(response.body.message).toBe('Transcript not found');
+      expect(prismaMock.note.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
     });
   });
 });

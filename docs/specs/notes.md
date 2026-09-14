@@ -376,15 +376,27 @@ inputs both times.
 ```ts
 function assemblePrompt(input: {
   templateInstructions: string;
+  templateOutputFormat: string;
+  templateStructure: string[];
+  templateTone: string | null;
+  templateLength: string | null;
   contextText: string | null;
   sourceText: string;
 }): { systemPrompt: string; userContent: string };
 ```
 
-The system role carries the template's instructions; the user role carries
-the optional context, then the source text, **in that fixed order**:
+The system role carries the template's instructions **and its structured
+fields** — `output_format`, `structure`, `tone`, `length` (§4.3) — composed
+into one coherent instruction block by `assemblePrompt` itself, here, at read
+time; the user role carries the optional context, then the source text, **in
+that fixed order**:
 
-1. **Template instructions, in the system role.** Least likely to be
+1. **Template instructions and structured fields, in the system role.**
+   `assemblePrompt` is where `instructions` and the guided sub-fields
+   actually become one prompt — composition happens on every call, not once
+   at save time, which is exactly what lets §4.3's editor read the sub-fields
+   straight back out of the stored row instead of trying to parse them back
+   out of flattened prose. Composed or not, this block is least likely to be
    overridden or diluted by whatever the source text turns out to contain —
    this is "the job," and it needs to stay stable regardless of how large or
    strange the transcript that follows is.
@@ -412,8 +424,10 @@ the optional context, then the source text, **in that fixed order**:
   *says* — the identical "one document shape, several renderers" discipline
   `docs/specs/transcription.md` §8.1 already states for the exporters
   themselves.
-- **`note`**: the source note's current `note_versions.body` — already plain
-  markdown, read directly, no conversion needed.
+- **`note`**: the source note's `notes.body` — by §4.1's invariant always
+  identical to its `note_versions` row at `current_version`, so this reads the
+  denormalized live copy directly rather than joining to the version table —
+  already plain markdown, no conversion needed.
 - **`document`**: the extracted plain text `note.source.extract` produced
   (§4's storage discussion) — never the raw uploaded bytes; `note.generate`
   has no PDF parser of its own and is not meant to grow one.
@@ -474,13 +488,50 @@ established for transcripts.
 | Group | Columns |
 |---|---|
 | Identity | `id`, `owner_id` (FK `users`, **Cascade**), `title` |
+| Content | `body` (`@db.Text`, markdown) — the note's live working copy; see below |
 | State | `status` (`NoteStatus`, §1.1), `current_version` (int, default 0), `current_generation_id` (FK `note_generations`, `SetNull`, nullable) |
 | Source | `source_type` (`'transcript' \| 'note' \| 'document'`), `source_transcript_id?` (FK `transcripts`, **Restrict**), `source_note_id?` (FK `notes`, self-relation, **Restrict**), `source_object_id?` (FK `storage_objects`, **Restrict**) — exactly one of the three is set, matching `source_type` |
 | Template | `template_id?` (FK `note_templates`, **`SetNull`**) |
+| Provenance | `provider?`, `model?` — which `AiProvider` and which model produced the current `body` |
 | Context | `context_text?` (the optional free-text Context, §3.1) |
 | Failure | `failure_reason?` |
 | Timestamps | `deleted_at?`, `created_at`, `updated_at` |
 | Indexes | `(owner_id, updated_at desc)`, `(status)` |
+
+**`body` is a denormalized live copy, and by invariant it always equals the
+`note_versions` row named by `current_version` — the version rows (§4.5) are
+the immutable history; `notes.body` is the one column a reader touches to see
+the note as it stands today.** Reading through to `note_versions` on every
+request was the obvious alternative, and it loses on the two paths that
+matter most: `GET /api/notes` renders a title and a body snippet for a whole
+page of results, so a join (or a second query) to find each row's current
+version would run on every single list render, not on some rare detail view;
+and §5.1's streaming handler's entire job, at the moment a generation
+finishes, is to persist exactly one thing — the read-through design would
+still need the version row *and* would then need a second write for
+`current_version`/`updated_at` anyway, so denormalizing `body` costs nothing
+extra at write time while saving a join on every read. The invariant this
+duplication rests on is cheap to hold precisely because it has only two kinds
+of writer for a note's entire life, both of which already write a
+`note_versions` row in the same transaction they touch `body` in: `note
+.generate`'s completion transaction (§5.1), and an explicit `PATCH
+/api/notes/:id` edit (§6). There is no third path that could ever update one
+column without the other, which is what makes "these two must agree" a
+statement the schema can afford to leave unenforced by a trigger rather than
+a promise that needs one.
+
+**`provider?`/`model?` record which provider and model produced the *current*
+body**, set in the same transaction as `body` itself and left untouched by a
+manual `edit` version (§4.5, §6) — an edit changes prose, not provenance.
+Without these two columns, the note detail page's "Generated with OpenAI
+(gpt-4o)" line would have to join back to whichever `note_generations` row
+produced `current_version` — and that row has no permanence guarantee on the
+note's behalf: a `kind: 'preview'` row is hard-deleted outright (§4.4), and
+even an ordinary `create`/`regenerate` row is exactly the kind of thing
+`notes.housekeeping` (§8.6) is free to sweep well after the note itself is
+still being read. Denormalizing `provider`/`model` onto `notes` means the one
+fact the detail page states about its own content cannot go missing because
+some unrelated row aged out.
 
 **Why the three source columns `Restrict` while `owner_id` `Cascade`s — the
 same sideways-pointer reasoning `docs/specs/transcription.md` §3.1 already
@@ -558,14 +609,53 @@ invariant extends to every consumer of it).
 |---|---|
 | `id`, `owner_id?` (FK `users`, **Cascade**) | `NULL` = built-in (§7) — the same "null means something specific and permanent" convention `transcript_speakers.label` uses (`docs/specs/transcription.md` §3.2), applied to ownership instead of provider labelling |
 | `name`, `description` | |
-| `instructions` (`@db.Text`) | **One** field, not several structured knobs for tone/length/structure. The web Templates manager (#56) presents guided sub-fields (tone, length, structure) as a form **convenience** composed client-side into this single string before saving — the server's contract stays one field because `assemblePrompt` (§3.1) already treats the whole thing as one coherent instruction block, and a stored schema with more moving parts than the prompt actually uses is exactly the kind of surface a fork would then have to keep in sync with `prompt-assembly.ts` by hand |
+| `instructions` (`@db.Text`) | The free-text prompt body — what the user actually writes, in their own words, distinct from the structured fields below |
+| `output_format` | Meeting notes / summary / email / bullet list / custom — a fixed set the editor renders as a picker |
+| `structure` (`Json @db.JsonB`) | The ordered list of sections/headings the form edits as a reorderable list — the one shape a JSON array captures directly and a single prose field cannot preserve order or identity for |
+| `tone?`, `length?` | |
+| `model?` | An optional per-template override of which model to generate with. Bounded by deployment policy **at selection time**, against `GET /api/ai/config`'s permitted list (§6.4) — not by this column, which just remembers the user's choice; a model the deployment later withdraws is caught the same way an unavailable model is caught anywhere else this epic reads that list, not by a constraint on this table |
+| `is_archived` | Hides a template from the default list/picker view without deleting the row. This is a genuinely different action from `DELETE`, not a softer version of it: `template_id` `SetNull`s rather than `Restrict`s (§4.1), so deleting a template a user no longer wants is already possible even after it has produced notes — but deleting forfeits the definition permanently, with no `duplicated_from_id` (§7.3) to recover it from. Archiving keeps the row — still duplicable, still inspectable, reversible by un-archiving — while taking it out of the everyday list, for a user who wants "not right now" rather than "gone" |
 | `created_at`, `updated_at` | |
+| `@@unique([owner_id, name])` | Postgres's NULLS-DISTINCT behaviour — the same free property `docs/specs/transcription.md` §4's Database Tables entry notes for `transcript_versions.clientBatchId` — means this constrains only **owned** rows against each other. Any number of `owner_id IS NULL` built-ins may share a `name` as far as this index is concerned, so "no two of *your* templates can be called the same thing" is enforced with no second, narrower partial index needed to carve the built-ins back out |
 
 No `is_built_in` boolean: it would be a second, independently-settable
 statement of a fact `owner_id IS NULL` already states, which is the identical
 "presence is the declaration, never a flag that can disagree with it"
 argument `apps/api/src/jobs/job-handler.interface.ts` makes for node
 eligibility.
+
+**Why the template is `instructions` plus five structured columns, and not
+one prose field the editor composes client-side before saving — and why an
+earlier version of this section argued exactly the opposite.** That earlier
+argument said a form presenting tone/length/structure as guided sub-fields
+could compose them into `instructions` as a single string at save time,
+keeping the server's stored contract to one field because `assemblePrompt`
+treats the whole thing as one block regardless. The argument is wrong, and
+wrong in a way worth stating rather than quietly reversing: composing
+structured input into prose at save time is a **one-way** function. Once
+"formal tone, three sections, action items, 200 words" has been flattened
+into a sentence inside `instructions`, there is no path back to the fields
+that produced it — the user who reopens their template a week later to
+change just the tone finds a wall of prose instead of the picker they filled
+in, and has to either reverse-engineer what they meant from the flattened
+text or abandon it and start over. Issue #56's own description of the editor
+states the requirement directly: it is "fields over #48's columns, each a
+real control," and its acceptance criteria require the model picker and the
+structure list to render from **saved** state on reopen — not parsed back out
+of `instructions`. A save path a form's own load path cannot undo is not a
+convenience layered over one field; it is a broken editor wearing a
+convenience's clothing.
+
+`assemblePrompt` (§3.1) reads every one of these columns, not `instructions`
+alone — `output_format`, `structure`, `tone` and `length` compose into the
+system prompt at generation time, inside the same pure function, so the "one
+coherent instruction block" the earlier argument was protecting still exists
+exactly as before. What moves is *when* the composition happens: at **read**
+time, inside a pure function already required to run twice per identical
+inputs (§3.1, §3.3), rather than at **write** time, irreversibly, inside the
+save endpoint. Nothing about keeping `prompt-assembly.ts` in step with the
+stored schema gets harder — the schema simply stops discarding information
+the prompt still needs to reconstruct.
 
 ### 4.4 `note_generations`
 
@@ -576,7 +666,7 @@ back to `notes` for a generation that might have no note to join to.
 
 | Group | Columns |
 |---|---|
-| Identity | `id`, `note_id?` (FK `notes`, **Cascade**, `NULL` for a preview), `kind` (`'create' \| 'regenerate' \| 'preview'`) |
+| Identity | `id`, `note_id?` (FK `notes`, **Cascade**, `NULL` for a preview), `kind` (`'create' \| 'regenerate' \| 'preview'`), `job_id?` (`@unique`, `SetNull`) |
 | State | `status` (`GenerationStatus`, §1.2), `error_class?` (`'auth' \| 'refusal' \| 'rate_limit' \| 'other'`), `error_detail?` |
 | Inputs (denormalized) | `template_id?` (FK `note_templates`, `SetNull`), `template_name_snapshot`, `context_text?`, `source_type`, `source_transcript_id?`, `source_note_id?`, `source_object_id?`, `provider_id`, `model` |
 | The stream | `content` (`@db.Text`, append-only), `last_event_id` (int, default 0, §5's SSE `id:`) |
@@ -589,6 +679,24 @@ back to `notes` for a generation that might have no note to join to.
 preview generation (it has no `note_id`), so there is nothing a soft-expiry
 status would need to be visible *to*.
 
+**`job_id?` is nullable and `SetNull`, the identical shape `note_exports
+.job_id` gets in §4.6 and the exact precedent `DatabaseBackupRun.jobId` and
+`TranscriptExport.jobId` already set: this row's own lifetime is independent
+of `job.history.purge`'s retention schedule for the underlying `jobs` row.**
+A generation is read back for as long as its note (or, for a preview, its
+`expires_at` TTL) says it should be — §5's stream, and the detail page's
+provenance line (§4.1) — and neither span is obliged to match how long the
+queue keeps a settled job's history around. Were `note_generations` to
+instead hold no
+column of its own and rely on `jobs.subject_id` pointing the other way (as
+§3.3's job payload does, carrying `{ generationId }` so the running job knows
+*which row to write to*), a generation older than the purge window would lose
+every trace of which job ever produced it the moment that job row aged out —
+an ordinary background sweep silently amputating a fact the note detail page
+still needs. `SetNull` means the reverse: the job can go, and the generation
+simply loses a link to a job that no longer matters, exactly as `note_exports
+.job_id` already does for exports.
+
 ### 4.5 `note_versions`
 
 Mirrors `transcript_versions` (`docs/specs/transcription.md` §3, §4.4–4.5)
@@ -599,6 +707,7 @@ exactly in spirit, with one deliberate structural difference:
 | `id`, `note_id` (**Cascade**), `version` (int) | |
 | `kind` (`'ai_generated' \| 'edit' \| 'restore'`) | |
 | `body` (`@db.Text`) | **The full markdown**, not an operation log — see below |
+| `summary?` | A short, one-line description of what this version changed — *"Regenerated with a shorter, more formal tone"*; *"Restored to version 1"*; *"Fixed the action items list"* — read by the version history list so it can render one line per row without loading `body` for every version listed, the same "a list renders a snippet, not the whole document" reasoning §4.1 makes for denormalizing `notes.body` itself, applied here to history rather than to the current row |
 | `author_id?` (FK `users`, `SetNull`) | `NULL` means "the AI," the identical convention `transcript_versions.author_id` uses |
 | `generation_id?` (FK `note_generations`, `SetNull`) | Which generation produced this version, for `kind: 'ai_generated'`; `NULL` for `edit`/`restore` |
 | `restored_from_version?` | For `kind: 'restore'`, mirroring `transcripts.restored_from_version` |
@@ -678,8 +787,9 @@ everything after position N" — which a single `content` column answers with
 a substring slice. A chunks table would need an `ORDER BY` range query on
 every poll and grows without bound for the length of one generation, for no
 capability the single column lacks; it also would not double, the way
-`content` does, as the literal input to the `note_versions.body` write on
-completion.
+`content` does, as the literal input to both writes completion makes in one
+transaction — the new `note_versions.body` row, and `notes.body` itself, kept
+equal to it by §4.1's invariant.
 
 ### 5.2 The SSE endpoint
 
@@ -935,9 +1045,17 @@ owns.
 caller can read — a built-in, or another one of their own, for a
 "start from a variant" flow — and creates a new row with `owner_id:
 callerId`, copying `name` (suffixed, e.g. `"Concise Meeting Notes (copy)"`),
-`description`, and `instructions` verbatim. This is what lets a first-run
-account produce a usable note without authoring anything, and what lets any
-account customise a built-in without losing the original.
+`description`, `instructions`, `output_format`, `structure`, `tone`, `length`
+and `model` verbatim (`is_archived` resets to `false` — a duplicate of an
+archived template is a fresh, active starting point, not an archived one).
+Copying every column, not merely `instructions`, is §4.3's round-trip
+argument applied one step earlier than editing: a "start from a variant" flow
+that dropped the source template's structure/tone/length on the way in would
+hand the user a form they still have to refill from scratch, the exact
+failure §4.3 rejects composing those fields away in the first place. This is
+what lets a first-run account produce a usable note without authoring
+anything, and what lets any account customise a built-in without losing the
+original.
 
 **No `duplicated_from_id` is tracked.** Unlike a note's source (§4.1's
 `Restrict` trio — genuine evidence a note must stay connected to per
@@ -1271,11 +1389,16 @@ the list this spec was designed against — the same purpose
 | `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `token-budget.spec.ts`, including a property test over the two call sites |
 | An over-budget `POST /api/notes` is refused with a 400 naming both the estimated and the allowed token counts, and creates no note, no generation row, and enqueues no job | `apps/api/test/notes/notes-create.e2e.spec.ts` |
 | `notes.status` and `note_generations.status` follow exactly the transitions §1's tables state, including `deleting` being refused with 409 while `status = 'generating'` | `apps/api/src/notes/notes.service.spec.ts` and an e2e state-machine walk |
+| `notes.body`/`provider`/`model` are updated only by `note.generate`'s completion transaction or an explicit `PATCH`, and always equal `note_versions.body` at `current_version` after either | `apps/api/src/notes/notes.service.spec.ts`, asserting the invariant after a generate, a regenerate, and a manual edit |
 | The SSE endpoint's frame shape, `id:` sequencing, `Last-Event-ID` resume (including a request-time reload with no `EventSource` to remember an id), and every termination condition in §5.2 | `apps/api/src/notes/generation/note-generation-stream.controller.spec.ts`, against an injected clock and a fake provider stream |
 | A client disconnect never affects the underlying job's execution | An integration test that closes the SSE connection mid-generation and asserts the job still commits a version |
 | No access to a note or a generation is ever a 403; a built-in template's edit attempt is a 403, not a 404 | An RBAC matrix e2e distinguishing the two cases explicitly, per §6.1 and §7.2 |
 | `notes:read`/`write` and `note_templates:read`/`write` are seeded for Admin, Contributor and Viewer; no `notes:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
 | `POST /api/note-templates/:id/preview` is gated on `notes:write`, not `note_templates:write` | An RBAC e2e asserting a caller with only `note_templates:read` gets 403 from preview |
+| `@@unique([owner_id, name])` on `note_templates` rejects two of one owner's templates sharing a name, but two `owner_id IS NULL` built-ins may share a name | `apps/api/test/prisma/note-templates.constraints.spec.ts` |
+| A saved template's `output_format`/`structure`/`tone`/`length`/`model` round-trip through save and reload unchanged — the editor never has to parse them back out of `instructions` | `apps/web/src/__tests__/pages/NoteTemplatesPage.test.tsx`, per issue #56's own acceptance criteria |
+| `note_generations.job_id` survives `job.history.purge` deleting the underlying `jobs` row (`SetNull`, not cascade) | `apps/api/test/jobs/job-history-purge.task.spec.ts`, extended to assert a `note_generations` row with a purged `job_id` |
+| `note_versions.summary` is set on save and read by the version history list without a `body` fetch | `apps/api/src/notes/notes.service.spec.ts` and `apps/web/src/__tests__/pages/NoteHistoryPage.test.tsx` |
 | `DELETE /api/transcripts/:id` 409s naming the blocking note id(s) when a note still references it as its source | `apps/api/test/transcripts/transcripts-delete.e2e.spec.ts`, extended |
 | The `user_ai_credentials` row cascades on user delete; the stored key never appears in a response body, a log line, or an audit `meta` | A dedicated assertion sweeping every response and captured log line, following `email-settings.service.spec.ts`'s existing technique |
 | `TranscriptExporterRegistry`'s existing test suite passes unmodified after the generic `ExporterRegistry<TDoc>` extraction | `transcript-exporter.registry.spec.ts`, run as-is against the refactored class |
