@@ -74,6 +74,30 @@ vi.mock('../pages/UserNotificationsPage', () => ({
   default: () => <h1>User Notifications Page</h1>,
 }));
 
+/**
+ * The four transcript routes from issue #30, epic #19. Same rationale as every
+ * stand-in above, with one extra reason specific to these: the real pages open
+ * an SSE-fed poll, a file picker and an `HTMLAudioElement` respectively, none of
+ * which this route-guard suite is about and all of which jsdom would have to be
+ * taught about for no gain. Distinct headings, so a mis-wired route cannot pass
+ * by rendering a sibling.
+ */
+vi.mock('../pages/TranscriptsLibraryPage', () => ({
+  default: () => <h1>Transcripts Library Page</h1>,
+}));
+
+vi.mock('../pages/NewTranscriptPage', () => ({
+  default: () => <h1>New Transcript Page</h1>,
+}));
+
+vi.mock('../pages/TranscriptPage', () => ({
+  default: () => <h1>Transcript Viewer Page</h1>,
+}));
+
+vi.mock('../pages/TranscriptHistoryPage', () => ({
+  default: () => <h1>Transcript History Page</h1>,
+}));
+
 const API_BASE = '*/api';
 
 /** Overrides `GET /auth/me` for one test, so the route tree sees this user. */
@@ -335,6 +359,105 @@ describe('App', () => {
         { timeout: 5000 },
       );
     });
+  });
+
+  /**
+   * Issue #30, epic #19. Four routes, two permissions, and one asymmetry worth
+   * asserting explicitly: `/transcripts/new` is the ONLY one gated on
+   * `transcripts:write`, and its fallback is `/transcripts` rather than `/` —
+   * a user who may read but not create should land on the library they CAN
+   * reach, not on the home page.
+   */
+  describe('Transcript routes', () => {
+    const READER = ['transcripts:read'];
+
+    it.each([
+      ['/transcripts', 'Transcripts Library Page'],
+      ['/transcripts/abc-123', 'Transcript Viewer Page'],
+      ['/transcripts/abc-123/history', 'Transcript History Page'],
+    ])('renders %s as %s for a user holding transcripts:read', async (path, heading) => {
+      signInAs(READER);
+
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () => expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+
+      // Isolation: `/transcripts/new` and `/transcripts/:id` both match a
+      // two-segment path, and React Router ranks the literal higher — a
+      // regression there would render the viewer for `/transcripts/new`.
+      const allHeadings = [
+        'Transcripts Library Page',
+        'New Transcript Page',
+        'Transcript Viewer Page',
+        'Transcript History Page',
+      ];
+      for (const other of allHeadings.filter((h) => h !== heading)) {
+        expect(screen.queryByRole('heading', { name: other })).not.toBeInTheDocument();
+      }
+    });
+
+    it('renders /transcripts/new for a user holding transcripts:write', async () => {
+      signInAs(['transcripts:read', 'transcripts:write']);
+
+      render(
+        <MemoryRouter initialEntries={['/transcripts/new']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () =>
+          expect(
+            screen.getByRole('heading', { name: 'New Transcript Page' }),
+          ).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+
+    it('sends a read-only user from /transcripts/new to the library, not to home', async () => {
+      signInAs(READER);
+
+      render(
+        <MemoryRouter initialEntries={['/transcripts/new']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () =>
+          expect(
+            screen.getByRole('heading', { name: 'Transcripts Library Page' }),
+          ).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+      expect(
+        screen.queryByRole('heading', { name: 'New Transcript Page' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it.each(['/transcripts', '/transcripts/abc-123', '/transcripts/abc-123/history'])(
+      'redirects a user without transcripts:read away from %s',
+      async (path) => {
+        signInAs(['user_settings:read']);
+
+        render(
+          <MemoryRouter initialEntries={[path]}>
+            <App />
+          </MemoryRouter>,
+        );
+
+        await waitFor(() => expect(screen.getByText(/welcome back/i)).toBeInTheDocument(), {
+          timeout: 5000,
+        });
+      },
+    );
   });
 
   /**

@@ -331,6 +331,97 @@ describe('AppBar', () => {
     });
   });
 
+  /**
+   * Issue #30, epic #19. `DRILL_DOWN_ROUTES` — the table consulted AFTER the
+   * two settings registries. Every assertion below is about a path NO registry
+   * claims, which before #30 fell through to `null` and kept the wordmark: a
+   * phone opening a transcript got the product's name in the header and no way
+   * back up.
+   */
+  describe('Drill-down on transcript routes (#30)', () => {
+    it('shows Back + "Transcript" on a transcript, going up to the library', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/transcripts/abc-123' } });
+
+      expect(screen.getByText('Transcript')).toBeInTheDocument();
+      expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      // STRUCTURAL up, never `navigate(-1)` — the same rule the settings
+      // surfaces follow, and it matters more here: a transcript is the most
+      // likely page in this app to be arrived at from a notification, where
+      // the previous history entry is another site entirely.
+      expect(mockNavigate).toHaveBeenCalledWith('/transcripts');
+    });
+
+    it('goes up from version history to the TRANSCRIPT, not to the library', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, {
+        wrapperOptions: { route: '/transcripts/abc-123/history' },
+      });
+
+      // The more specific pattern wins: `/transcripts/:id` would otherwise
+      // claim this path and send Back one level too far.
+      expect(screen.getByText('Version history')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/transcripts/abc-123');
+    });
+
+    it('shows Back + "New transcript" on the create route', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/transcripts/new' } });
+
+      expect(screen.getByText('New transcript')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      expect(mockNavigate).toHaveBeenCalledWith('/transcripts');
+    });
+
+    it('keeps the wordmark on the LIBRARY itself — it is a destination, not a drill-down', () => {
+      // `/transcripts` has a bottom-bar tab of its own, so a back arrow there
+      // would be a second, contradictory answer to "where am I".
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/transcripts' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the wordmark on a transcript route at >= sm', () => {
+      setViewportWidth(600);
+      render(<AppBar />, { wrapperOptions: { route: '/transcripts/abc-123' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('does not claim a look-alike path (segment-boundary match)', () => {
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/transcriptsfoo/abc' } });
+
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('leaves the settings surfaces resolution completely unchanged', () => {
+      // The regression guard for the ORDER of the two tables: the settings
+      // registries are consulted first, so adding `DRILL_DOWN_ROUTES` must not
+      // be able to relabel a settings page. If this ever fails, the new table
+      // is being reached for a path a registry claims.
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/admin/settings/users' } });
+
+      expect(screen.getByText('Users & Allowlist')).toBeInTheDocument();
+    });
+  });
+
   describe('Coupled-gate invariant (AppBar vs. SettingsHub)', () => {
     /**
      * `common/Layout.tsx` documents FIVE gates, all `theme.breakpoints.down('sm')`
