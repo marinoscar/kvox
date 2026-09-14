@@ -1,27 +1,37 @@
 /**
- * The two numbers a model this build has never heard of needs — issue #78,
- * epic #45.
+ * The two per-model token numbers — issue #78, epic #45; made OPTIONAL by #97.
  *
  * =============================================================================
- * WHY THIS PAIR EXISTS AT ALL, AND WHY IT IS ONE COMPONENT AND NOT TWO
+ * ⚠ WHAT #97 CHANGED, AND WHY THE OLD RULE HAS TO GO RATHER THAN BE SOFTENED
  * =============================================================================
  *
- * `resolveAllowedModel` (`apps/api/src/ai/ai-model-resolution.ts`) requires
- * BOTH `contextWindowTokens` and `maxOutputTokens` to resolve an entry, and its
- * header states why neither may be defaulted: docs/specs/notes.md §3.3's budget
- * subtracts the output allowance from the window to get the input allowance, so
- * a descriptor missing the second has nothing to subtract, and the two
- * plausible repairs are both wrong — falling back to the deployment ceiling
- * silently promises an output length the model may refuse, and treating it as
- * zero publishes a model that can produce nothing.
+ * These two fields used to be REQUIRED for any model the build catalogue did not
+ * carry, because `resolveAllowedModel` (`apps/api/src/ai/ai-model-resolution.ts`)
+ * had nothing else to fall back on: docs/specs/notes.md §3.3's budget subtracts
+ * the output allowance from the window to get the input allowance, so an entry
+ * missing either number resolved to nothing and was silently never offered. The
+ * only safe client behaviour was to refuse to permit the model until somebody
+ * typed both.
  *
- * ⚠ SO A HALF-ANSWERED MODEL IS AN UNANSWERED MODEL. That is the whole reason
- * these two fields are one component with one validator rather than two
- * independent inputs: an administrator who fills in the window and leaves the
- * output ceiling blank has, from the API's point of view, told this deployment
- * nothing at all — the entry saves, lists back, and is silently never offered
- * to a single user. Binding them together is how "you must answer both" becomes
- * visible at the moment of typing instead of days later.
+ * That was correct and it was unusable. A vendor ships a dated snapshot per
+ * model per release — `gpt-5.4-mini-2026-03-17` — so the discovery dialog
+ * presented forty-odd rows, each with two red required boxes, and permitting a
+ * model meant leaving the application to read vendor documentation. Issue #97
+ * fixed it where it belonged, in resolution: a dated snapshot now resolves to
+ * its family's real limits, and anything else to a conservative floor. There is
+ * no longer such a thing as an entry that cannot be budgeted.
+ *
+ * ⚠ SO THE `required` FLAG IS GONE FROM THIS MODULE ENTIRELY, not defaulted to
+ * false. A boolean nothing sets is a boolean somebody re-enables by accident —
+ * and the message it carried ("this build does not know this model, so it cannot
+ * be offered without this number") is now a false statement about how the API
+ * behaves. Deleting the parameter makes reintroducing the demand a deliberate
+ * edit to this file rather than one `true` at a call site.
+ *
+ * WHAT THESE FIELDS ARE NOW: an OVERRIDE. An administrator uses them when they
+ * know better than the server's inference — most usefully to raise a
+ * `source: 'default'` floor to the vendor's real window so large sources stop
+ * being refused. Blank is the ordinary, complete, correct state.
  *
  * =============================================================================
  * THE DRAFT IS TWO STRINGS, NOT TWO NUMBERS
@@ -35,10 +45,26 @@
  * exactly one parse at the boundary ({@link parseModelNumbers}) — the same
  * discipline the token-ceiling fields on `AiSettingsPage` already use.
  *
- * An EMPTY string means "not supplied", which is a legitimate saved state for a
- * model the build catalogue already describes: the entry simply omits the field
- * and `resolveAllowedModel` falls through to the catalogue. It is only an error
- * when nothing else can answer — which is what `required` below expresses.
+ * An EMPTY string means "not supplied", and since #97 that is never an error in
+ * itself: the entry simply omits the field and the API resolves the number.
+ *
+ * =============================================================================
+ * ⚠ VALIDATION NOW ONLY EVER FIRES ON SOMETHING SOMEBODY TYPED
+ * =============================================================================
+ *
+ * Three things are genuinely wrong and are reported inline: a value that is not
+ * a whole number, one outside `aiAllowedModelSchema`'s bounds, and an output
+ * ceiling larger than the context window it has to fit inside. Nothing else may
+ * block a save. In particular a BLANK field is never an error, and neither is a
+ * lone override — the missing half falls back to the resolved value rather than
+ * to nothing, so half an override is partial, not fatal.
+ *
+ * The third check needs a number the administrator may not have typed, which is
+ * why {@link validateModelNumbers} takes the EFFECTIVE limits: overriding only
+ * the output ceiling is the common case, and comparing it against nothing would
+ * let 200,000 output tokens sit inside a 128,000-token window unremarked. The
+ * error is attached to the field that was actually typed, because an error on a
+ * box somebody never touched is an error with no obvious fix.
  *
  * The bounds are imported from `services/ai`, never retyped here: two copies of
  * a bound is how one of them quietly stops matching `aiAllowedModelSchema`.
@@ -55,11 +81,22 @@ export interface ModelNumbersDraft {
   maxOutputTokens: string;
 }
 
-/** An empty draft — the state a freshly added, unknown model starts in. */
+/** An empty draft — and since #97, the state nearly every model stays in. */
 export const EMPTY_MODEL_NUMBERS: ModelNumbersDraft = {
   contextWindowTokens: '',
   maxOutputTokens: '',
 };
+
+/**
+ * The numbers that apply when the administrator overrides neither (#97).
+ *
+ * `null` per field means "nobody could say" — not zero and not unlimited. It is
+ * rendered as an absence and compared against nothing.
+ */
+export interface EffectiveModelLimits {
+  contextWindowTokens: number | null;
+  maxOutputTokens: number | null;
+}
 
 /** Turn stored (possibly absent) numbers back into an editable draft. */
 export function toModelNumbersDraft(
@@ -83,18 +120,18 @@ function boundMessage(bound: { min: number; max: number }): string {
   return `Must be a whole number between ${bound.min.toLocaleString()} and ${bound.max.toLocaleString()} tokens.`;
 }
 
-function fieldError(
+/**
+ * Read one field, distinguishing "blank" from "typed but wrong".
+ *
+ * Returns `undefined` for blank — which is NOT an error and never has been
+ * since #97 — and `null` for a value that was typed and cannot be used.
+ */
+function readField(
   raw: string,
   bound: { min: number; max: number },
-  required: boolean,
-): string | null {
+): number | null | undefined {
   const trimmed = raw.trim();
-
-  if (trimmed.length === 0) {
-    return required
-      ? 'This build does not know this model, so it cannot be offered without this number.'
-      : null;
-  }
+  if (trimmed.length === 0) return undefined;
 
   const parsed = Number.parseInt(trimmed, 10);
   // `String(parsed) !== trimmed` catches `1e6`, `1024.5` and `12abc`, all of
@@ -106,36 +143,66 @@ function fieldError(
     parsed < bound.min ||
     parsed > bound.max
   ) {
-    return boundMessage(bound);
+    return null;
   }
 
-  return null;
+  return parsed;
 }
 
 /**
- * Validate a draft.
+ * Validate a draft against what would apply if it were left blank.
  *
- * `required` is true exactly when the model resolves to NO build-catalogue
- * descriptor — the caller decides that, because only it knows the catalogue.
- * Mirrors `aiAllowedModelSchema`'s bounds so a 400 is PREVENTED rather than
- * reported; the schema remains the guarantee.
+ * ⚠ THERE IS NO `required` PARAMETER AND THERE MUST NOT BE ONE — see the file
+ * header. A blank field is always valid. Mirrors `aiAllowedModelSchema`'s bounds
+ * so a 400 is PREVENTED rather than reported; the schema remains the guarantee.
  */
 export function validateModelNumbers(
   draft: ModelNumbersDraft,
-  required: boolean,
+  effective?: EffectiveModelLimits,
 ): ModelNumbersErrors {
-  return {
-    contextWindowTokens: fieldError(
-      draft.contextWindowTokens,
-      AI_MODEL_BOUNDS.contextWindowTokens,
-      required,
-    ),
-    maxOutputTokens: fieldError(
-      draft.maxOutputTokens,
-      AI_MODEL_BOUNDS.maxOutputTokens,
-      required,
-    ),
+  const context = readField(
+    draft.contextWindowTokens,
+    AI_MODEL_BOUNDS.contextWindowTokens,
+  );
+  const output = readField(draft.maxOutputTokens, AI_MODEL_BOUNDS.maxOutputTokens);
+
+  const errors: ModelNumbersErrors = {
+    contextWindowTokens:
+      context === null ? boundMessage(AI_MODEL_BOUNDS.contextWindowTokens) : null,
+    maxOutputTokens:
+      output === null ? boundMessage(AI_MODEL_BOUNDS.maxOutputTokens) : null,
   };
+
+  // The cross-field check, against the numbers that would actually be in force:
+  // a typed value where there is one, the resolved value otherwise. Skipped
+  // entirely if either side is already flagged, so one mistyped digit does not
+  // produce two red boxes saying different things about the same keystroke.
+  if (errors.contextWindowTokens || errors.maxOutputTokens) return errors;
+
+  const effectiveContext = context ?? effective?.contextWindowTokens ?? null;
+  const effectiveOutput = output ?? effective?.maxOutputTokens ?? null;
+
+  if (
+    effectiveContext !== null &&
+    effectiveOutput !== null &&
+    effectiveOutput > effectiveContext
+  ) {
+    const message =
+      `The output ceiling cannot exceed the context window (${effectiveContext.toLocaleString()} tokens) — ` +
+      'a completion has to fit inside it.';
+    // Attached to whichever box was actually typed in, preferring the output
+    // ceiling when both were: an error on a field somebody never touched reads
+    // as a bug in the form rather than as something to correct.
+    if (output !== undefined) {
+      errors.maxOutputTokens = message;
+    } else {
+      errors.contextWindowTokens =
+        'The context window cannot be smaller than the output ceiling ' +
+        `(${effectiveOutput.toLocaleString()} tokens) that applies to this model.`;
+    }
+  }
+
+  return errors;
 }
 
 /** Whether a draft has anything wrong with it. */
@@ -143,7 +210,7 @@ export function hasModelNumbersError(errors: ModelNumbersErrors): boolean {
   return !!errors.contextWindowTokens || !!errors.maxOutputTokens;
 }
 
-/** True when the administrator has typed something into either field. */
+/** True when the administrator has typed nothing into either field. */
 export function isModelNumbersEmpty(draft: ModelNumbersDraft): boolean {
   return (
     draft.contextWindowTokens.trim().length === 0 &&
@@ -155,12 +222,11 @@ export function isModelNumbersEmpty(draft: ModelNumbersDraft): boolean {
  * The one parse, at the boundary.
  *
  * Returns `undefined` for a blank field so the entry OMITS it — which is not
- * the same as sending `null`, and matters: an omitted field lets
- * `resolveAllowedModel` fall through to the build catalogue, which is exactly
- * what a known model wants. Assumes the draft has already been validated; a
- * value that cannot be parsed is dropped rather than sent as `NaN`, because
- * `JSON.stringify(NaN)` is `null` and would be refused by the schema with a
- * message about a type, not about a range.
+ * the same as sending `null`, and matters: an omitted field lets the API resolve
+ * the number itself, which since #97 is what almost every entry wants. Assumes
+ * the draft has already been validated; a value that cannot be parsed is dropped
+ * rather than sent as `NaN`, because `JSON.stringify(NaN)` is `null` and would
+ * be refused by the schema with a message about a type, not about a range.
  */
 export function parseModelNumbers(draft: ModelNumbersDraft): {
   contextWindowTokens?: number;
@@ -184,27 +250,36 @@ export interface AiModelNumberFieldsProps {
    * Disambiguates the labels for assistive technology.
    *
    * ⚠ REQUIRED, AND IT MUST BE THE MODEL ID. Several of these pairs can be on
-   * screen at once — one per unknown permitted model, and one per checked
-   * unknown model in the discovery dialog — and a screen-reader user hearing
-   * "Context window" six times with nothing to tell them apart cannot fill the
-   * form in. The visible label stays short; the accessible name carries the id.
+   * screen at once — one per model whose override is open — and a screen-reader
+   * user hearing "Context window" six times with nothing to tell them apart
+   * cannot fill the form in. The visible label stays short; the accessible name
+   * carries the id.
    */
   modelId: string;
   draft: ModelNumbersDraft;
   errors: ModelNumbersErrors;
   onChange: (next: ModelNumbersDraft) => void;
   disabled?: boolean;
-  /** Whether this build can answer for the model. Drives the fallback help text. */
-  required: boolean;
+  /**
+   * What applies to each field when it is left blank, shown as its helper text.
+   *
+   * Naming the number somebody is about to replace is the difference between
+   * "type something here" and "this is 128,000 unless you say otherwise" — and
+   * it is the only way an administrator can tell whether overriding is worth
+   * doing at all.
+   */
+  effective?: EffectiveModelLimits;
 }
 
 /**
- * The pair, rendered.
+ * The pair, rendered as OPTIONAL overrides.
  *
- * Stacks at `xs`, side by side from `sm` — with `sx` breakpoint values only.
- * ⚠ NOTHING HERE MOUNTS, UNMOUNTS OR RE-GATES ON A BREAKPOINT, so Settings UI
- * Pattern rule 5's five coupled gates are untouched by construction: there is
- * no `useMediaQuery` in this file and there must not be one.
+ * No asterisk, no error state on a blank field, and helper text that names what
+ * applies if nothing is typed. Stacks at `xs`, side by side from `sm` — with
+ * `sx` breakpoint values only. ⚠ NOTHING HERE MOUNTS, UNMOUNTS OR RE-GATES ON A
+ * BREAKPOINT, so Settings UI Pattern rule 5's five coupled gates are untouched
+ * by construction: there is no `useMediaQuery` in this file and there must not
+ * be one.
  */
 export function AiModelNumberFields({
   modelId,
@@ -212,11 +287,12 @@ export function AiModelNumberFields({
   errors,
   onChange,
   disabled,
-  required,
+  effective,
 }: AiModelNumberFieldsProps) {
-  const fallbackHelp = required
-    ? 'Read these off the vendor’s model documentation.'
-    : 'Optional — leave blank to use the value this build already knows.';
+  const fallbackHelp = (value: number | null | undefined): string =>
+    value === null || value === undefined
+      ? 'Optional — leave blank unless you need to set this yourself.'
+      : `Optional — ${value.toLocaleString()} is used if you leave this blank.`;
 
   return (
     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ width: '100%' }}>
@@ -230,9 +306,10 @@ export function AiModelNumberFields({
           onChange({ ...draft, contextWindowTokens: event.target.value })
         }
         disabled={disabled}
-        required={required}
         error={!!errors.contextWindowTokens}
-        helperText={errors.contextWindowTokens ?? fallbackHelp}
+        helperText={
+          errors.contextWindowTokens ?? fallbackHelp(effective?.contextWindowTokens)
+        }
         slotProps={{
           htmlInput: {
             'aria-label': `Context window in tokens for ${modelId}`,
@@ -249,9 +326,8 @@ export function AiModelNumberFields({
         value={draft.maxOutputTokens}
         onChange={(event) => onChange({ ...draft, maxOutputTokens: event.target.value })}
         disabled={disabled}
-        required={required}
         error={!!errors.maxOutputTokens}
-        helperText={errors.maxOutputTokens ?? fallbackHelp}
+        helperText={errors.maxOutputTokens ?? fallbackHelp(effective?.maxOutputTokens)}
         slotProps={{
           htmlInput: {
             'aria-label': `Maximum output tokens for ${modelId}`,
