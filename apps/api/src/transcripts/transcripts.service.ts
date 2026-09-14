@@ -20,8 +20,11 @@
 //   • transcription not configured → 409. The request was well-formed; the
 //     DEPLOYMENT is not ready. A 400 would blame the caller for an
 //     administrator's unfinished setup.
-//   • file too large, or a type the provider will not take → 400. The caller
-//     can fix this by picking a different file, which is what 400 means.
+//   • file too large, or a file that is not audio or video at all → 400. The
+//     caller can fix this by picking a different file, which is what 400
+//     means. Note the second half is NOT "a type the provider will not take":
+//     the type gate is `TRANSCRIPT_SOURCE_MIME_TYPES`, deliberately wider than
+//     the provider's own accepted list — see the ⚠ above `initUpload` below.
 //   • no `transcripts:write` → 403, from the guard, before any of this runs.
 //
 // All three are checked BEFORE `initUpload`, so a rejected request leaves no
