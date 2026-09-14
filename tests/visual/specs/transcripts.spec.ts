@@ -113,7 +113,7 @@ test.describe('Transcript viewer', () => {
       // The player only mounts once `GET /:id/audio` has answered AND the
       // browser has accepted the source — capturing before that would bake the
       // "Preparing audio…" notice into a baseline meant to show the transport.
-      await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
       // The duration readout is the last thing to settle (it comes from
       // `loadedmetadata`), and it is on screen in every one of these captures.
       await expect(page.getByText('0:00 / 0:48')).toBeVisible();
@@ -131,7 +131,7 @@ test.describe('Transcript viewer', () => {
     await page.goto(harnessUrl({ route: '/transcripts/t1' }));
     await waitForInter(page);
 
-    await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Play only Ana Ruiz' }).click();
     await expect(page.getByText('Only: Ana Ruiz')).toBeVisible();
 
@@ -147,7 +147,7 @@ test.describe('Transcript viewer', () => {
     await page.goto(harnessUrl({ route: '/transcripts/t1' }));
     await waitForInter(page);
 
-    await expect(page.getByText('Transcribing')).toBeVisible();
+    await expect(page.getByText('Transcribing', { exact: true })).toBeVisible();
 
     await expect(page).toHaveScreenshot('transcripts-viewer-processing-phone-390.png');
   });
@@ -160,7 +160,7 @@ test.describe('Transcript viewer', () => {
     await page.goto(harnessUrl({ route: '/transcripts/t1' }));
     await waitForInter(page);
 
-    await expect(page.getByText('Transcribing')).toBeVisible();
+    await expect(page.getByText('Transcribing', { exact: true })).toBeVisible();
 
     await expect(page).toHaveScreenshot('transcripts-viewer-processing-desktop-1440.png');
   });
