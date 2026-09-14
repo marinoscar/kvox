@@ -24,8 +24,13 @@
  * EMPTY set means no filter at all, never "play nothing".
  */
 
+import MergeIcon from '@mui/icons-material/Merge';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
@@ -85,6 +90,25 @@ interface SpeakerFilterProps {
   selectedSpeakerIds: readonly string[];
   onToggleSpeaker: (speakerId: string) => void;
   variant: 'chips' | 'panel';
+
+  // --- Corrections (#31). All optional; absent means #30's read-only filter. --
+  /**
+   * Mount the correction affordances.
+   *
+   * On a PHONE this also changes what tapping a chip does: it opens the
+   * speaker's action sheet (rename / merge into… / play only) rather than
+   * toggling playback directly. That is the three-tap merge the vision asks
+   * for, and it costs the playback filter exactly one extra tap — the right
+   * trade, because merging is the correction this epic exists for and filtering
+   * playback is not.
+   */
+  editable?: boolean;
+  onOpenSpeakerActions?: (speakerId: string, anchor: HTMLElement) => void;
+  /** Ticked for a desktop multi-speaker merge. */
+  mergeSelection?: readonly string[];
+  onToggleMergeSelection?: (speakerId: string) => void;
+  /** Opens the merge dialog. Enabled only from two speakers up. */
+  onMerge?: () => void;
 }
 
 export function SpeakerFilter({
@@ -93,6 +117,11 @@ export function SpeakerFilter({
   selectedSpeakerIds,
   onToggleSpeaker,
   variant,
+  editable = false,
+  onOpenSpeakerActions,
+  mergeSelection,
+  onToggleMergeSelection,
+  onMerge,
 }: SpeakerFilterProps) {
   const theme = useTheme();
   const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
@@ -101,6 +130,7 @@ export function SpeakerFilter({
     [segments, speakers],
   );
   const selected = useMemo(() => new Set(selectedSpeakerIds), [selectedSpeakerIds]);
+  const ticked = useMemo(() => new Set(mergeSelection ?? []), [mergeSelection]);
 
   if (speakers.length === 0) return null;
 
@@ -143,9 +173,16 @@ export function SpeakerFilter({
             <Chip
               key={stat.speaker.id}
               clickable
-              onClick={() => onToggleSpeaker(stat.speaker.id)}
-              aria-pressed={isSelected}
-              aria-label={actionLabel(stat)}
+              onClick={(event) =>
+                editable
+                  ? onOpenSpeakerActions?.(stat.speaker.id, event.currentTarget)
+                  : onToggleSpeaker(stat.speaker.id)
+              }
+              aria-pressed={editable ? undefined : isSelected}
+              aria-haspopup={editable ? 'menu' : undefined}
+              aria-label={
+                editable ? `Actions for ${stat.speaker.displayName}` : actionLabel(stat)
+              }
               variant={isSelected ? 'filled' : 'outlined'}
               label={
                 <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
@@ -174,6 +211,8 @@ export function SpeakerFilter({
     );
   }
 
+  const tickedCount = ticked.size;
+
   return (
     <Box>
       {/* `h2`, not `h3`: the page's only `h1` is the transcript's title, and a
@@ -195,7 +234,39 @@ export function SpeakerFilter({
                carrying `role="button"` is an `aria-allowed-role` violation —
                so making the button the list item fixes one by causing the
                other. The nesting satisfies both. */
-            <ListItem key={stat.speaker.id} disablePadding>
+            <ListItem
+              key={stat.speaker.id}
+              disablePadding
+              secondaryAction={
+                editable ? (
+                  <IconButton
+                    edge="end"
+                    size="small"
+                    aria-label={`Actions for ${stat.speaker.displayName}`}
+                    onClick={(event) =>
+                      onOpenSpeakerActions?.(stat.speaker.id, event.currentTarget)
+                    }
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                ) : undefined
+              }
+            >
+              {editable && (
+                <Checkbox
+                  size="small"
+                  edge="start"
+                  checked={ticked.has(stat.speaker.id)}
+                  onChange={() => onToggleMergeSelection?.(stat.speaker.id)}
+                  // Named for the OUTCOME, not the widget. "Checkbox, Ana" says
+                  // nothing about what ticking it will let you do.
+                  slotProps={{
+                    input: {
+                      'aria-label': `Select ${stat.speaker.displayName} to merge`,
+                    },
+                  }}
+                />
+              )}
               <ListItemButton
                 selected={isSelected}
                 onClick={() => onToggleSpeaker(stat.speaker.id)}
@@ -227,6 +298,22 @@ export function SpeakerFilter({
           );
         })}
       </List>
+
+      {editable && (
+        <Button
+          fullWidth
+          size="small"
+          startIcon={<MergeIcon />}
+          // Disabled below two, because a merge of one speaker is not a
+          // narrower version of a merge — it is nothing at all, and an enabled
+          // button that does nothing is worse than one that says why it cannot.
+          disabled={tickedCount < 2}
+          onClick={onMerge}
+          sx={{ mt: 1 }}
+        >
+          {tickedCount >= 2 ? `Merge ${tickedCount} speakers` : 'Merge speakers'}
+        </Button>
+      )}
     </Box>
   );
 }

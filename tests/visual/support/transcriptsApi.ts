@@ -106,6 +106,54 @@ const LIST_ITEMS = [
   }),
 ];
 
+/**
+ * Four versions across two days and two authors — enough for the history page
+ * to have something to GROUP, which is the whole thing that baseline protects.
+ * `author: null` on version 1 is the schema's "the AI", not a missing value.
+ */
+const VERSIONS = [
+  {
+    version: 4,
+    kind: 'edit',
+    summary: 'Edited 2 segments',
+    author: { id: 'u1', name: 'Ana Ruiz', email: 'ana@example.com' },
+    restoredFromVersion: null,
+    hasSnapshot: false,
+    opCount: 2,
+    createdAt: '2024-03-01T09:00:00.000Z',
+  },
+  {
+    version: 3,
+    kind: 'edit',
+    summary: 'Merged Speaker 3 into Ana Ruiz',
+    author: { id: 'u1', name: 'Ana Ruiz', email: 'ana@example.com' },
+    restoredFromVersion: null,
+    hasSnapshot: false,
+    opCount: 1,
+    createdAt: '2024-03-01T08:40:00.000Z',
+  },
+  {
+    version: 2,
+    kind: 'edit',
+    summary: 'Edited 1 segment',
+    author: { id: 'u2', name: 'Ben Olsen', email: 'ben@example.com' },
+    restoredFromVersion: null,
+    hasSnapshot: false,
+    opCount: 1,
+    createdAt: '2024-02-28T16:10:00.000Z',
+  },
+  {
+    version: 1,
+    kind: 'ai_original',
+    summary: null,
+    author: null,
+    restoredFromVersion: null,
+    hasSnapshot: true,
+    opCount: 0,
+    createdAt: '2024-02-28T15:00:00.000Z',
+  },
+];
+
 const DETAIL = {
   ...listItem('t1', 'Weekly engineering standup'),
   speakers: SPEAKERS,
@@ -214,6 +262,61 @@ export async function installTranscriptsApi(
       // library's third empty state and worth a baseline of its own later.
       const items = options.empty || scope === 'shared' ? [] : LIST_ITEMS;
       return json(route, { items, nextCursor: null });
+    }
+
+    // -------------------------------------------------------------------------
+    // The correction routes (#31)
+    // -------------------------------------------------------------------------
+    //
+    // Fixed, like everything else here: the version list's timestamps are
+    // absolute (the history page renders `formatRelativeTime`, so a
+    // `Date.now()`-relative fixture would re-baseline itself daily) and the
+    // search answers a match count that cannot drift.
+
+    if (/^\/transcripts\/[^/]+\/versions$/.test(path)) {
+      return json(route, { currentVersion: 4, items: VERSIONS, nextCursor: null });
+    }
+
+    if (/^\/transcripts\/[^/]+\/versions\/\d+$/.test(path)) {
+      const version = Number(path.split('/').pop());
+      return json(route, {
+        ...(VERSIONS.find((item) => item.version === version) ?? VERSIONS[0]),
+        currentVersion: 4,
+        speakers: SPEAKERS,
+        segments: SEGMENTS,
+      });
+    }
+
+    if (/^\/transcripts\/[^/]+\/search$/.test(path)) {
+      const q = url.searchParams.get('q') ?? '';
+      return json(route, {
+        q,
+        matchCase: false,
+        wholeWord: false,
+        speakerId: null,
+        total: 6,
+        segmentCount: 6,
+        truncated: false,
+        matches: SEGMENTS.filter((_, index) => index % 2 === 0).map((segment) => ({
+          segmentId: segment.id,
+          speakerId: segment.speakerId,
+          startMs: segment.startMs,
+          start: 9,
+          end: 18,
+          preview: 'the migration finished',
+        })),
+      });
+    }
+
+    if (/^\/transcripts\/[^/]+\/operations$/.test(path)) {
+      return json(route, {
+        version: 5,
+        summary: 'Merged Speaker 3 into Ana Ruiz',
+        idempotentReplay: false,
+        speakers: SPEAKERS,
+        segments: SEGMENTS,
+        merges: [],
+      });
     }
 
     if (/^\/transcripts\/[^/]+\/segments$/.test(path)) {

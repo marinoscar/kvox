@@ -94,6 +94,7 @@ const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
 const TranscriptsLibraryPage = lazy(() => import('../src/pages/TranscriptsLibraryPage'));
 const NewTranscriptPage = lazy(() => import('../src/pages/NewTranscriptPage'));
 const TranscriptPage = lazy(() => import('../src/pages/TranscriptPage'));
+const TranscriptHistoryPage = lazy(() => import('../src/pages/TranscriptHistoryPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 
@@ -267,6 +268,21 @@ function HarnessRoutes() {
                 fallback={<Navigate to="/" replace />}
               >
                 <TranscriptPage />
+              </RequirePermission>
+            }
+          />
+          {/* The version-history drill-down (#31). Registered here for the
+              same reason as its three siblings: a route the harness cannot
+              reach is a route this suite silently stops asserting pixels
+              for. Gate copied verbatim from `App.tsx`. */}
+          <Route
+            path="/transcripts/:id/history"
+            element={
+              <RequirePermission
+                permission="transcripts:read"
+                fallback={<Navigate to="/" replace />}
+              >
+                <TranscriptHistoryPage />
               </RequirePermission>
             }
           />

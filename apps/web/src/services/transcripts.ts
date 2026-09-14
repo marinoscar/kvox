@@ -414,3 +414,4 @@ export async function retryTranscript(id: string): Promise<TranscriptDetail> {
 export async function cancelTranscript(id: string): Promise<TranscriptDetail> {
   return api.post<TranscriptDetail>(`/transcripts/${encodeURIComponent(id)}/cancel`);
 }
+
