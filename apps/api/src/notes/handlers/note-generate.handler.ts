@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { aiProviderThrottleKey, NOTE_GENERATE_JOB_TYPE } from '../job-types';
 import {
   NoteGenerationService,
+  readPayloadTemplate,
   readPayloadUserId,
   type GenerationErrorClass,
   type GenerationWithNote,
@@ -285,16 +286,36 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     // -------------------------------------------------------------------------
     // 4. The template, and the source AS THE USER CORRECTED IT.
     // -------------------------------------------------------------------------
+    //
+    // ⚠ ONE SOURCE FOR THE TEMPLATE, CHOSEN BY A COLUMN, NEVER A MERGE (#50).
+    // `template_id` set means the stored row, every time — that is a real note's
+    // path and a preview OF A SAVED TEMPLATE's path, and they are the same code
+    // rather than two codes that agree. `template_id` NULL means this is a
+    // preview of an UNSAVED body, whose five columns can only have travelled in
+    // the job payload because `note_generations` has no columns for them.
+    //
+    // This branch is what makes "one generation mechanism, two entry points"
+    // (issue #50) structural: whichever way the template arrived, everything
+    // below this point — assembly, budget, streaming, the error taxonomy — is
+    // the identical code operating on the identical five values.
     const template = generation.templateId
       ? await this.prisma.noteTemplate.findUnique({ where: { id: generation.templateId } })
-      : null;
+      : readPayloadTemplate(job.payload);
 
     if (!template) {
-      // `note_generations.template_id` is `SetNull`: the template this note was
-      // set up with can legitimately have been deleted between the request and
-      // this job. The snapshot NAME survives (that is what it is for), but the
-      // instructions do not, and generating from a guessed default would
-      // produce a note the user never asked for.
+      // Two ways to get here, one sentence each, because they have different
+      // causes and different fixes.
+      //
+      // A STORED TEMPLATE THAT IS GONE: `note_generations.template_id` is
+      // `SetNull`, so the template this note was set up with can legitimately
+      // have been deleted between the request and this job. The snapshot NAME
+      // survives (that is what it is for), but the instructions do not, and
+      // generating from a guessed default would produce a note the user never
+      // asked for.
+      //
+      // A PREVIEW WHOSE PAYLOAD CARRIES NO READABLE SNAPSHOT: a payload written
+      // by another build, or hand-edited. Same outcome — there is nothing to
+      // generate from — reported as a domain failure rather than a crash.
       throw new AiInputError(
         `The template "${generation.templateNameSnapshot}" no longer exists, so this note ` +
           'cannot be generated from it. Choose another template and try again.',

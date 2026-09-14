@@ -377,3 +377,77 @@ export function readPayloadUserId(payload: Prisma.JsonValue | null): string | nu
 export function countWords(text: string): number {
   return text.split(/\s+/).filter((word) => word.length > 0).length;
 }
+
+/**
+ * The five template columns `assemblePrompt` reads, as a job payload may carry
+ * them.
+ *
+ * ⚠ A SNAPSHOT, NOT A REFERENCE — and the ONLY case in which one travels. See
+ * {@link readPayloadTemplate}.
+ */
+export interface PayloadTemplateSnapshot {
+  instructions: string;
+  outputFormat: string;
+  structure: string[];
+  tone: string | null;
+  length: string | null;
+}
+
+/**
+ * The UNSAVED template a preview is generating from, when the payload names one.
+ *
+ * ⚠ A SEAM FOR PREVIEWS OF AN UNSAVED TEMPLATE, AND ONLY THAT — the exact
+ * counterpart of {@link readPayloadUserId} above, added by the same issue (#50)
+ * for the same reason. `POST /api/note-templates/preview` accepts a template
+ * body INLINE so the editor can try edits it has not saved; `note_generations`
+ * has columns for a generation's inputs but not for the five template columns,
+ * so an inline body has nowhere but the payload to live. Reading it here keeps
+ * the preview issue to "enqueue with a snapshot" rather than a schema change.
+ *
+ * ⚠ IT IS READ **ONLY** WHEN `template_id` IS NULL (see the handler). A preview
+ * of a SAVED template — the common case — sets `template_id` and carries no
+ * snapshot at all, so the job reads the row exactly as a real generation does.
+ * That is what makes "one generation mechanism, two entry points" true by
+ * construction rather than by two code paths being kept in step: there is only
+ * ever one source for the template, and which one it is is decided by a column,
+ * not by a merge.
+ *
+ * TOTAL OVER GARBAGE, like every other payload reader in this file: the payload
+ * is JSONB written by a possibly-earlier build. Anything not positively
+ * recognised is `null`, which the handler turns into a readable domain failure
+ * rather than a crash. `structure` is passed through untouched — the handler
+ * normalises it with `parseTemplateStructure`, the SAME total reader the stored
+ * path uses, so a malformed entry is dropped identically on both paths.
+ */
+export function readPayloadTemplate(
+  payload: Prisma.JsonValue | null,
+): PayloadTemplateSnapshot | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>).template;
+
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const template = value as Record<string, unknown>;
+
+  const instructions = template.instructions;
+  const outputFormat = template.outputFormat;
+
+  if (typeof instructions !== 'string' || typeof outputFormat !== 'string') {
+    return null;
+  }
+
+  return {
+    instructions,
+    outputFormat,
+    structure: Array.isArray(template.structure)
+      ? template.structure.filter((entry): entry is string => typeof entry === 'string')
+      : [],
+    tone: typeof template.tone === 'string' ? template.tone : null,
+    length: typeof template.length === 'string' ? template.length : null,
+  };
+}
