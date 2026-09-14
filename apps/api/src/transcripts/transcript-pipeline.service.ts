@@ -43,6 +43,7 @@ import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
 import {
   TRANSCODE_JOB_TYPE,
   TRANSCRIPT_PURGE_JOB_TYPE,
@@ -52,6 +53,7 @@ import {
   TRANSCRIPTION_POLL_JOB_TYPE,
   TRANSCRIPTION_SUBMIT_JOB_TYPE,
 } from './job-types';
+import { resolveTargetBitrateKbps } from './media/audio-transcode';
 import { firstPollDelayMs } from './poll-schedule';
 
 /**
@@ -94,6 +96,7 @@ export class TranscriptPipelineService {
     private readonly registry: JobHandlerRegistry,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
+    private readonly transcriptionSettings: TranscriptionSettingsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -222,6 +225,15 @@ export class TranscriptPipelineService {
    * and it is load-bearing: it makes the job reuse the node data plane's
    * existing `resolveStorageObjectInput` unchanged. The transcript id travels
    * in the payload instead.
+   *
+   * ⚠ THE PAYLOAD ALSO CARRIES `bitrateKbps`, AND THAT IS THE ONLY WAY A NODE
+   * CAN LEARN IT (issue #26). A worker node reads no system settings — it has
+   * no database — so a deployment that moved `transcription.playback
+   * .bitrateKbps` off the default would silently get the default back from
+   * every node-executed transcode, and identical jobs would produce different
+   * files depending on which executor claimed them. Putting the number on the
+   * job is the same principle the data plane already follows for the upload
+   * key: THE SERVER DECIDES, the node is told.
    */
   async enqueueTranscode(transcript: Transcript): Promise<boolean> {
     if (!this.registry.get(TRANSCODE_JOB_TYPE)) {
@@ -238,7 +250,7 @@ export class TranscriptPipelineService {
       reason: 'upload',
       subjectType: 'storage_object',
       subjectId: transcript.sourceObjectId,
-      payload: { transcriptId: transcript.id },
+      payload: { transcriptId: transcript.id, bitrateKbps: await this.playbackBitrateKbps() },
     });
 
     await this.prisma.transcript.updateMany({
@@ -367,6 +379,29 @@ export class TranscriptPipelineService {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * The deployment's playback target bitrate, in kbit/s.
+   *
+   * Read at ENQUEUE time rather than at run time because it has to travel in
+   * the payload (see `enqueueTranscode`), and a settings read that fails must
+   * not stop a rendition being produced — the default is a perfectly good
+   * answer and no rendition is not.
+   */
+  private async playbackBitrateKbps(): Promise<number> {
+    try {
+      const policy = await this.transcriptionSettings.get();
+
+      return resolveTargetBitrateKbps(policy.playback.bitrateKbps);
+    } catch (error) {
+      this.logger.warn(
+        'Could not read transcription.playback.bitrateKbps for the transcode payload; ' +
+          `using the default: ${error instanceof Error ? error.message : String(error)}`,
+      );
+
+      return resolveTargetBitrateKbps(undefined);
+    }
+  }
+
   /** The transcript this job is about, or `null` if it is gone or deleted. */
   async loadForJob(payload: Prisma.JsonValue | null): Promise<Transcript | null> {
     const transcriptId = readTranscriptId(payload);
@@ -421,6 +456,25 @@ export function readPollDelayMs(payload: Prisma.JsonValue | null): number | null
   }
 
   const value = (payload as Record<string, unknown>).delayMs;
+
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+/**
+ * The target bitrate inside a `media.audio.transcode` payload, or `null`.
+ *
+ * TOTAL OVER GARBAGE, like its two neighbours above, and for a reason specific
+ * to this field: a job enqueued by a build BEFORE issue #26 added the number
+ * carries no `bitrateKbps` at all, and that job is still perfectly runnable —
+ * "the deployment's current setting" is the right answer for it, which is what
+ * `null` tells the handler to go and read.
+ */
+export function readTranscodeBitrateKbps(payload: Prisma.JsonValue | null): number | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+
+  const value = (payload as Record<string, unknown>).bitrateKbps;
 
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }

@@ -72,22 +72,21 @@ export class FfmpegError extends Error {
   }
 }
 
-export interface FfmpegServiceOptions {
-  ffmpegCommand?: string;
-  ffprobeCommand?: string;
-}
-
 @Injectable()
 export class FfmpegService {
   private readonly logger = new Logger(FfmpegService.name);
 
-  private readonly ffmpeg: string;
-  private readonly ffprobe: string;
-
-  constructor(options: FfmpegServiceOptions = {}) {
-    this.ffmpeg = options.ffmpegCommand ?? FFMPEG_COMMAND;
-    this.ffprobe = options.ffprobeCommand ?? FFPROBE_COMMAND;
-  }
+  /**
+   * ⚠ NO CONSTRUCTOR ARGUMENTS, DELIBERATELY. An `options = {}` parameter
+   * reads fine and makes this class UNCONSTRUCTIBLE BY NEST: the container
+   * sees one parameter with no injection token and refuses the whole module
+   * with "can't resolve dependencies … at index [0]" — at application start,
+   * in every integration test, for a convenience nothing needed. The two
+   * binaries are resolved through PATH, which is the seam an environment
+   * already has.
+   */
+  private readonly ffmpeg = FFMPEG_COMMAND;
+  private readonly ffprobe = FFPROBE_COMMAND;
 
   /**
    * Measure an input, which may be a local path or a URL.
@@ -146,8 +145,11 @@ export class FfmpegService {
           ...(timeoutMs > 0 ? { timeout: timeoutMs } : {}),
         },
         (error, stdout, stderr) => {
-          const out = typeof stdout === 'string' ? stdout : stdout.toString();
-          const err = typeof stderr === 'string' ? stderr : stderr.toString();
+          // `execFile`'s overload resolution gives these `string` here (no
+          // `encoding: 'buffer'`), but the values are read back from a child
+          // process and a defensive `String()` costs nothing.
+          const out = String(stdout ?? '');
+          const err = String(stderr ?? '');
 
           if (error) {
             const detail = err.trim().slice(-STDERR_LIMIT) || error.message;
