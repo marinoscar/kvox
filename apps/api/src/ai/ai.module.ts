@@ -95,6 +95,20 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
   // credential service to resolve the calling user's own key at the moment of
   // use. The config service is deliberately NOT exported — it is one projection
   // for one endpoint in this module.
-  exports: [AiProviderRegistry, AiSettingsService, UserAiCredentialsService],
+  exports: [
+    AiProviderRegistry,
+    AiSettingsService,
+    UserAiCredentialsService,
+    // ⚠ ADDED BY #50, AND FOR THE NARROW REASON THAT EXPORTS IN THIS REPOSITORY
+    // ARE ADDED FOR: somebody now imports it. `POST /api/note-templates/preview`
+    // has to answer the same two questions `GET /api/ai/config` answers — is
+    // this deployment able to generate at all, and does THIS caller have a key —
+    // before it queues a real, billable generation. Re-deriving that from
+    // `AiSettingsService` + the registry inside the notes module would be a
+    // second implementation of the four-fact `available` conjunction, which
+    // could then report the feature usable on a deployment the config probe
+    // (and therefore the UI) calls unavailable.
+    AiConfigService,
+  ],
 })
 export class AiModule {}
