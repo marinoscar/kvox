@@ -406,6 +406,132 @@ describe('ObjectsService', () => {
       );
     });
 
+    // =========================================================================
+    // The `options.allowedMimeTypes` override (issue #79) — a module's own
+    // allowlist REPLACES `storage.allowedMimeTypes` for that call, it never
+    // extends it. See the ⚠ block comment above `initUpload` in
+    // `objects.service.ts` for the full reasoning.
+    // =========================================================================
+    describe('allowedMimeTypes override (#79)', () => {
+      beforeEach(() => {
+        mockStorageProvider.initMultipartUpload.mockResolvedValue({
+          uploadId: 'u',
+          key: 'k',
+        });
+        mockStorageProvider.getBucket.mockReturnValue('test-bucket');
+        mockPrisma.storageObject.create.mockResolvedValue({
+          ...mockStorageObject,
+        } as any);
+      });
+
+      // THE ACTUAL DEFECT. A deployment whose `.env` predates #21 — no
+      // `audio/*` entry at all — rejected every Android `.m4a` recording with
+      // a message about images and PDFs. This is the test that would have
+      // caught it: the module's own `allowedMimeTypes` must win even though
+      // the configured list has no audio entry whatsoever.
+      it('accepts an Android .m4a recording when the configured allowlist predates #21 and carries no audio/* entry', async () => {
+        configValues['storage.allowedMimeTypes'] = [
+          'image/*',
+          'application/pdf',
+          'video/*',
+        ];
+
+        const dto = {
+          name: 'rec.m4a',
+          size: 1024,
+          mimeType: 'audio/x-m4a',
+        };
+
+        await expect(
+          service.initUpload(dto, testUserId, {
+            allowedMimeTypes: ['audio/*', 'video/*'],
+          }),
+        ).resolves.toBeDefined();
+
+        expect(mockPrisma.storageObject.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ mimeType: 'audio/x-m4a' }),
+          }),
+        );
+      });
+
+      // Proves the override is what makes the difference, not some unrelated
+      // loosening elsewhere: the identical call, minus the override, must
+      // still fail against that same pre-#21 configured list.
+      it('rejects the identical call when no override is supplied', async () => {
+        configValues['storage.allowedMimeTypes'] = [
+          'image/*',
+          'application/pdf',
+          'video/*',
+        ];
+
+        const dto = {
+          name: 'rec.m4a',
+          size: 1024,
+          mimeType: 'audio/x-m4a',
+        };
+
+        await expect(service.initUpload(dto, testUserId)).rejects.toThrow(
+          BadRequestException,
+        );
+      });
+
+      // REPLACE, NOT EXTEND. A merge-instead-of-replace regression would let
+      // this through because `image/*` is still in the configured list.
+      it('rejects a type the operator allows generically once a module supplies its own narrower list', async () => {
+        configValues['storage.allowedMimeTypes'] = ['image/*'];
+
+        const dto = {
+          name: 'photo.png',
+          size: 1024,
+          mimeType: 'image/png',
+        };
+
+        await expect(
+          service.initUpload(dto, testUserId, {
+            allowedMimeTypes: ['audio/*'],
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockStorageProvider.initMultipartUpload).not.toHaveBeenCalled();
+      });
+
+      // THE 400 NAMES WHICHEVER LIST WAS ACTUALLY ENFORCED. A rejection here
+      // must point at the override — `application/pdf` (from the configured
+      // list, which had no say in this call) must be absent, or a transcript
+      // upload rejection sends the user to fix a setting they cannot see and
+      // that never governed the request.
+      it('names the override\'s entries in the 400, never the configured list\'s', async () => {
+        configValues['storage.allowedMimeTypes'] = [
+          'image/*',
+          'application/pdf',
+          'video/*',
+        ];
+
+        const dto = {
+          name: 'sheet.xlsx',
+          size: 1024,
+          mimeType: 'application/vnd.ms-excel',
+        };
+
+        // Single call, single captured outcome: a resolve becomes `null`, not
+        // a thrown-and-immediately-caught Error, so there is no path by which
+        // this test can pass without `initUpload` actually rejecting.
+        const error = await service
+          .initUpload(dto, testUserId, {
+            allowedMimeTypes: ['audio/*', 'video/*'],
+          })
+          .then(
+            () => null,
+            (e: BadRequestException) => e,
+          );
+
+        expect(error).toBeInstanceOf(BadRequestException);
+        expect(error!.message).toContain('audio/*, video/*');
+        expect(error!.message).not.toContain('application/pdf');
+        expect(error!.message).not.toContain('image/*');
+      });
+    });
+
     it('should call storage provider initMultipartUpload', async () => {
       const dto = {
         name: 'test.pdf',

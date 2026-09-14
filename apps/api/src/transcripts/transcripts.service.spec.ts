@@ -189,6 +189,50 @@ describe('TranscriptsService', () => {
       );
     });
 
+    // Issue #79: `create` must gate the upload on the transcription allowlist
+    // — the whole audio and video families — NOT on `storage.allowedMimeTypes`
+    // (the operator's policy for arbitrary uploads through
+    // `POST /api/storage/objects*`). Asserting the literal array, not
+    // `expect.any(Array)`, because `expect.any(Array)` would pass just as
+    // happily if `create` started passing `[]` or the wrong families.
+    //
+    // `TRANSCRIPT_SOURCE_MIME_TYPES` is a module-private constant in
+    // `transcripts.service.ts` (not exported), so the literal is asserted
+    // directly rather than imported.
+    it('gates the upload on audio/video, not the operator\'s generic upload allowlist (#79)', async () => {
+      await service.create(dto, USER);
+
+      expect(objects.initUpload).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'meeting.mp3' }),
+        USER.id,
+        {
+          managedBy: TRANSCRIPTS_MANAGED_BY,
+          allowedMimeTypes: ['audio/*', 'video/*'],
+        },
+      );
+    });
+
+    // The end-to-end-ish case at this layer: an Android .m4a recording —
+    // `audio/x-m4a`, the exact type issue #79 was filed over — reaches
+    // `initUpload` at all, rather than being turned away earlier by the
+    // size/provider pre-flight checks this method runs first.
+    it('lets a .m4a / audio/x-m4a source through the pre-flight checks to initUpload (#79)', async () => {
+      const m4aDto = {
+        source: { name: 'recording.m4a', size: 500_000, mimeType: 'audio/x-m4a' },
+      };
+
+      await expect(service.create(m4aDto, USER)).resolves.toBeDefined();
+
+      expect(objects.initUpload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'recording.m4a',
+          mimeType: 'audio/x-m4a',
+        }),
+        USER.id,
+        expect.objectContaining({ allowedMimeTypes: ['audio/*', 'video/*'] }),
+      );
+    });
+
     it('returns the transcript AND its upload, so one action is one call', async () => {
       const result = await service.create(dto, USER);
 
