@@ -95,11 +95,19 @@ const COPY: Record<UserDataScope, ScopeCopy> = {
     confirmLabel: 'Delete recordings',
   },
   notes: {
+    // ⚠ NOTE TEMPLATES TRAVEL WITH NOTES, and this dialog is the only place a
+    // user finds that out before it happens. `scopeIncludes` in
+    // `apps/api/src/user-data/job-types.ts` maps the `noteTemplates` category
+    // onto the `notes` scope deliberately — a template is the recipe a note was
+    // generated from — but nothing about the word "notes", or about the row
+    // this dialog opens from, implies it. Copy that omitted it would be
+    // accurate about the noun and wrong about the outcome.
     title: 'Delete all notes?',
     consequence:
       'Every note you have is deleted, along with its full version history and any ' +
-      'exports of it. The recordings and documents the notes were generated from are ' +
-      'kept, as are your note templates.',
+      'exports of it — and so are your own custom note templates, which are the recipes ' +
+      'those notes were generated from. Built-in templates are not yours to delete and ' +
+      'are unaffected. The recordings and documents the notes came from are kept.',
     confirmLabel: 'Delete notes',
   },
   files: {
@@ -107,7 +115,7 @@ const COPY: Record<UserDataScope, ScopeCopy> = {
     consequence:
       'Every file you uploaded to storage directly is deleted. Audio belonging to a ' +
       'recording, and documents a note was generated from, are managed by those features ' +
-      'and are not touched by this.',
+      'and are not touched by this. Your note templates are not files and are kept.',
     confirmLabel: 'Delete files',
   },
   content: {

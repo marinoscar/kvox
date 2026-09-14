@@ -42,12 +42,15 @@
  * component, and so a test can import the same source of truth the UI uses
  * instead of hardcoding "EVERYTHING" a third time.
  *
- * ⚠ THE UPPERCASING IS NOT DERIVED AT RUNTIME. `scope.toUpperCase()` would be
- * shorter and would be wrong in the way that matters: it would keep compiling,
- * and keep producing a plausible-looking string, on the day the API's literal
- * for a new scope stops being a straight uppercasing of its id. The record is
- * `Record<UserDataScope, string>`, so adding a scope to the union without
- * adding its literal here is a compile error rather than a 400 in production.
+ * ⚠ THE UPPERCASING IS WRITTEN OUT, NOT DERIVED. The API's own
+ * `confirmationFor(scope)` (`apps/api/src/user-data/job-types.ts`) is
+ * `scope.toUpperCase()`, and mirroring that one-liner here would be shorter —
+ * but it would be a SECOND, independently-written definition of the rule, which
+ * is exactly the drift that file's own header warns about for the scope strings
+ * themselves. A `Record<UserDataScope, string>` fails differently and better:
+ * adding a scope to the union without adding its word is a compile error here,
+ * where `scope.toUpperCase()` would keep compiling and keep producing a
+ * plausible-looking string that the API refuses with a 400 in production.
  */
 
 import { api } from './api';
@@ -101,14 +104,17 @@ export interface UserDataDeletion {
 /** `POST /api/user-data/deletions` request body. */
 export interface CreateUserDataDeletionInput {
   scope: UserDataScope;
-  /** Must equal `USER_DATA_CONFIRMATION[scope]`; the API enforces it as a Zod literal. */
+  /** Must equal `USER_DATA_CONFIRMATION[scope]`; a mismatch is a 400 naming the expected word. */
   confirmation: string;
 }
 
 /**
- * The exact strings the API's Zod literals require — one per scope, all
- * different. See the file header for why this is a written-out record rather
- * than `scope.toUpperCase()`.
+ * The exact strings the API requires — one per scope, all different.
+ *
+ * Checked in `UserDataService.requestDeletion` against `confirmationFor(scope)`
+ * and answered with a **400** naming the expected word when it does not match.
+ * See the file header for why this is a written-out record rather than
+ * `scope.toUpperCase()`.
  */
 export const USER_DATA_CONFIRMATION: Record<UserDataScope, string> = {
   transcripts: 'TRANSCRIPTS',
