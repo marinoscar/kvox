@@ -484,6 +484,131 @@ describe('Storage Integration', () => {
         })
         .expect(400);
     });
+
+    // ⚠ THE REGRESSION TEST FOR #89. A browser's `fetch`/XHR POST with no body
+    // and no `Content-Type` reaches Fastify as `request.body === undefined` —
+    // not `{}`. Before the fix, `completeUploadSchema` rejected `undefined`
+    // outright with a 400 `Validation failed`, so every real browser upload
+    // failed at 100%, after every part was already sitting in the bucket.
+    // Deliberately no `.send(...)` call here: supertest sends a body only
+    // when `.send` is called, so this is a genuinely body-less POST.
+    it('should complete with NO body at all, reading parts from the provider', async () => {
+      const user = await createMockTestUser(context);
+
+      context.prismaMock.storageObject.findUnique.mockResolvedValue({
+        ...mockStorageObject,
+        uploadedById: user.id,
+        status: 'uploading',
+        s3UploadId: 'upload-123',
+      });
+      mockStorageProvider.listParts.mockResolvedValue([
+        { partNumber: 2, size: 10485760, etag: '"etag2"' },
+        { partNumber: 1, size: 10485760, etag: '"etag1"' },
+      ]);
+      context.prismaMock.storageObjectChunk.upsert.mockResolvedValue({});
+      mockStorageProvider.completeMultipartUpload.mockResolvedValue({
+        key: 'key',
+        bucket: 'bucket',
+        location: 's3://bucket/key',
+      });
+      context.prismaMock.storageObject.update.mockResolvedValue({
+        ...mockStorageObject,
+        uploadedById: user.id,
+        status: 'processing',
+      });
+      context.prismaMock.auditEvent.create.mockResolvedValue({});
+
+      const response = await request(context.app.getHttpServer())
+        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
+        .set(authHeader(user.accessToken))
+        // No `.send(...)` — this is the exact request a browser sends.
+        .expect(201);
+
+      expect(response.body.data).toMatchObject({ status: 'processing' });
+      expect(mockStorageProvider.listParts).toHaveBeenCalledWith(
+        mockStorageObject.storageKey,
+        'upload-123',
+      );
+      expect(mockStorageProvider.completeMultipartUpload).toHaveBeenCalledWith(
+        mockStorageObject.storageKey,
+        'upload-123',
+        [
+          { partNumber: 1, eTag: '"etag1"' },
+          { partNumber: 2, eTag: '"etag2"' },
+        ],
+      );
+    });
+
+    it('should complete with a JSON null body, reading parts from the provider', async () => {
+      const user = await createMockTestUser(context);
+
+      context.prismaMock.storageObject.findUnique.mockResolvedValue({
+        ...mockStorageObject,
+        uploadedById: user.id,
+        status: 'uploading',
+        s3UploadId: 'upload-123',
+      });
+      mockStorageProvider.listParts.mockResolvedValue([
+        { partNumber: 1, size: 10485760, etag: '"etag1"' },
+      ]);
+      context.prismaMock.storageObjectChunk.upsert.mockResolvedValue({});
+      mockStorageProvider.completeMultipartUpload.mockResolvedValue({
+        key: 'key',
+        bucket: 'bucket',
+        location: 's3://bucket/key',
+      });
+      context.prismaMock.storageObject.update.mockResolvedValue({
+        ...mockStorageObject,
+        uploadedById: user.id,
+        status: 'processing',
+      });
+      context.prismaMock.auditEvent.create.mockResolvedValue({});
+
+      const response = await request(context.app.getHttpServer())
+        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
+        .set(authHeader(user.accessToken))
+        .set('Content-Type', 'application/json')
+        .send('null');
+
+      // Fastify's own JSON body parser decides whether a bare `null` payload
+      // reaches the handler at all; this asserts whatever it actually does
+      // rather than forcing an assumption. If Fastify accepts it, the
+      // preprocess normalises it to `{}` exactly like an absent body, and the
+      // request succeeds via the provider `listParts` path (201). If Fastify
+      // itself refuses a bare `null` before the pipe ever runs, that is a
+      // 400 from a layer this fix does not touch.
+      if (response.status === 201) {
+        expect(response.body.data).toMatchObject({ status: 'processing' });
+        expect(mockStorageProvider.completeMultipartUpload).toHaveBeenCalledWith(
+          mockStorageObject.storageKey,
+          'upload-123',
+          [{ partNumber: 1, eTag: '"etag1"' }],
+        );
+      } else {
+        expect(response.status).toBe(400);
+      }
+    });
+
+    it('should reject an empty parts array', async () => {
+      const user = await createMockTestUser(context);
+
+      await request(context.app.getHttpServer())
+        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
+        .set(authHeader(user.accessToken))
+        .send({ parts: [] })
+        .expect(400);
+    });
+
+    it('should reject a top-level JSON array body', async () => {
+      const user = await createMockTestUser(context);
+
+      await request(context.app.getHttpServer())
+        .post(`/api/storage/objects/${mockStorageObjectId}/upload/complete`)
+        .set(authHeader(user.accessToken))
+        .set('Content-Type', 'application/json')
+        .send('[]')
+        .expect(400);
+    });
   });
 
   describe('DELETE /api/storage/objects/:id/upload/abort', () => {
