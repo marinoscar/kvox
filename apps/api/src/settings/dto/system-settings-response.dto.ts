@@ -88,6 +88,7 @@ export const systemSettingsResponseSchema = z.object({
   // belongs to an individual user and lives in `user_ai_credentials`.
   ai: z.object({
     enabled: z.boolean(),
+    provider: z.enum(['openai']).nullable(),
     providers: z.object({
       openai: z.object({
         baseUrl: z.string(),

@@ -46,9 +46,11 @@ import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
 // -----------------------------------------------------------------------------
 //
 //   1. the master switch is on;
-//   2. the provider is REGISTERED IN THIS BUILD — a deployment rolled back
-//      across the addition of a provider has a settings row naming one this
-//      process has never heard of;
+//   2. a provider is CHOSEN (`ai.provider` is not null) and is REGISTERED IN
+//      THIS BUILD — a fresh deployment has chosen nobody, and a deployment
+//      rolled back across the addition of a provider has a settings row naming
+//      one this process has never heard of. Both are ordinary, both are
+//      `available: false`, and neither is an error;
 //   3. at least one PERMITTED model is also a model this build can budget —
 //      the intersection of `allowedModels` and the provider's catalogue, per
 //      docs/specs/notes.md §3.3, which needs a context window to check against;
@@ -81,7 +83,20 @@ export class AiConfigService {
    */
   async getConfig(userId: string): Promise<AiConfigResponse> {
     const policy = await this.settings.get();
-    const provider = this.registry.get('openai');
+
+    // ⚠ RESOLVED THROUGH THE POLICY'S OWN `provider` AXIS, never a hardcoded
+    // `'openai'` (#78). The literal that used to be here was the reason adding
+    // a second OpenAI-compatible vendor would have required editing this file:
+    // a deployment could name the new provider in its settings and this probe
+    // would have gone on describing the old one.
+    //
+    // `provider: null` — nobody has chosen one — takes the SAME path as a
+    // provider this build has never heard of, which is `available: false` and
+    // never a throw. Both are ordinary states (a fresh installation; a rollback
+    // across the addition of a provider), and a client asking "may I offer
+    // this?" that gets a 500 has learned nothing it can act on.
+    const providerId = policy.provider;
+    const provider = providerId ? this.registry.get(providerId) : undefined;
 
     // Resolved regardless of `available`, and deliberately: a user must be able
     // to save and verify their key BEFORE an administrator finishes turning the
@@ -91,7 +106,7 @@ export class AiConfigService {
       ? await this.credentials.hasKey(userId, provider.id)
       : false;
 
-    if (!policy.enabled || !provider) {
+    if (!policy.enabled || !providerId || !provider) {
       return {
         available: false,
         provider: null,
@@ -113,7 +128,7 @@ export class AiConfigService {
       provider.capabilities.models.map((model) => [model.id, model]),
     );
 
-    const models: AiConfigModel[] = policy.providers.openai.allowedModels
+    const models: AiConfigModel[] = policy.providers[providerId].allowedModels
       .map((id) => byId.get(id))
       .filter((model): model is NonNullable<typeof model> => model !== undefined)
       .map((model) => ({
@@ -139,7 +154,7 @@ export class AiConfigService {
     // The configured default when it survived the intersection, otherwise the
     // first usable model — never a model that is not on the list, which is the
     // one value a client would offer and the server would then refuse.
-    const configuredDefault = policy.providers.openai.defaultModel;
+    const configuredDefault = policy.providers[providerId].defaultModel;
     const defaultModel =
       usable.find((model) => model.id === configuredDefault)?.id ??
       usable[0]?.id ??

@@ -119,6 +119,33 @@ export const systemAiSchema = z.object({
   /** Master switch. No completion is requested from any provider while false. */
   enabled: z.boolean(),
 
+  /**
+   * The active provider, or `null` when none has been chosen.
+   *
+   * ⚠ NULLABLE RATHER THAN OPTIONAL, field for field with
+   * `systemTranscriptionSchema.provider` and for its reason: "nobody has chosen
+   * one" is a PERSISTED FACT the settings page renders, not an absent key whose
+   * meaning every reader has to guess. An optional key would make
+   * `provider === undefined` mean "unset" in a fresh row, "the merge dropped it"
+   * after a partial PATCH, and "this build's schema does not model it" after a
+   * rollback — three different situations that a `null` distinguishes from none
+   * of them, because it is written down.
+   *
+   * AN AXIS SEPARATE FROM `enabled`, also as transcription has it: an
+   * administrator can switch AI off for a migration or an incident without
+   * losing the vendor choice, and can switch vendors without touching the
+   * master switch.
+   *
+   * ⚠ THIS FIELD IS WHY NOTHING ABOVE `ai-provider.registry.ts` MAY HARDCODE
+   * `'openai'`. Before it existed, every consumer resolved the one registered
+   * provider by name, so adding a second OpenAI-compatible vendor would have
+   * meant editing `AiConfigService`, `AiSettingsService` and every future
+   * consumer in the same release. The point of the axis is that adding a
+   * provider costs one class and one entry in {@link AI_PROVIDER_IDS} — see the
+   * `this.registry.get(policy.provider)` calls that replaced those literals.
+   */
+  provider: z.enum(AI_PROVIDER_IDS).nullable(),
+
   /** Per-provider configuration; every provider's block is always present. */
   providers: aiProvidersSchema,
 
@@ -198,6 +225,12 @@ export type SystemAiValue = z.infer<typeof systemAiSchema>;
  */
 export const systemAiPatchSchema = z.object({
   enabled: z.boolean().optional(),
+  // `.nullable().optional()` — TWO different absences, and the merge in
+  // `system-settings.service.ts` must tell them apart with `!== undefined`
+  // rather than `??`. `null` is a VALUE here ("no provider is active"), so a
+  // `??` merge would make "unset the provider" a silent no-op — the same trap
+  // `maintenance.startedAt` and `transcription.defaultLanguage` document.
+  provider: z.enum(AI_PROVIDER_IDS).nullable().optional(),
   providers: z
     .object({
       openai: z
