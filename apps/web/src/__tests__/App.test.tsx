@@ -75,15 +75,34 @@ vi.mock('../pages/UserNotificationsPage', () => ({
 }));
 
 /**
- * The four transcript routes from issue #30, epic #19. Same rationale as every
- * stand-in above, with one extra reason specific to these: the real pages open
- * an SSE-fed poll, a file picker and an `HTMLAudioElement` respectively, none of
- * which this route-guard suite is about and all of which jsdom would have to be
- * taught about for no gain. Distinct headings, so a mis-wired route cannot pass
- * by rendering a sibling.
+ * The four transcript routes from issue #30, epic #19, and the four note
+ * routes from #57, epic #45. Same rationale as every stand-in above, with one
+ * extra reason specific to these: the real pages open an SSE-fed poll, a file
+ * picker and an `HTMLAudioElement` respectively, none of which this route-guard
+ * suite is about and all of which jsdom would have to be taught about for no
+ * gain. Distinct headings, so a mis-wired route cannot pass by rendering a
+ * sibling.
+ *
+ * ⚠ ONE STAND-IN SERVES TWO ROUTES. `/transcripts` and `/notes` render the SAME
+ * `LibraryPage` — the tab is the URL (#57) — so this mock is what both land on,
+ * and the assertions below distinguish them by the PATH the router kept rather
+ * than by two different headings. A second stand-in would have been a second
+ * page, which is precisely what this design does not have.
  */
-vi.mock('../pages/TranscriptsLibraryPage', () => ({
-  default: () => <h1>Transcripts Library Page</h1>,
+vi.mock('../pages/LibraryPage', () => ({
+  default: () => <h1>Library Page</h1>,
+}));
+
+vi.mock('../pages/NewNotePage', () => ({
+  default: () => <h1>New Note Page</h1>,
+}));
+
+vi.mock('../pages/NotePage', () => ({
+  default: () => <h1>Note Page</h1>,
+}));
+
+vi.mock('../pages/NoteHistoryPage', () => ({
+  default: () => <h1>Note History Page</h1>,
 }));
 
 vi.mock('../pages/NewTranscriptPage', () => ({
@@ -396,7 +415,7 @@ describe('App', () => {
     const READER = ['transcripts:read'];
 
     it.each([
-      ['/transcripts', 'Transcripts Library Page'],
+      ['/transcripts', 'Library Page'],
       ['/transcripts/abc-123', 'Transcript Viewer Page'],
       ['/transcripts/abc-123/history', 'Transcript History Page'],
     ])('renders %s as %s for a user holding transcripts:read', async (path, heading) => {
@@ -417,7 +436,7 @@ describe('App', () => {
       // two-segment path, and React Router ranks the literal higher — a
       // regression there would render the viewer for `/transcripts/new`.
       const allHeadings = [
-        'Transcripts Library Page',
+        'Library Page',
         'New Transcript Page',
         'Transcript Viewer Page',
         'Transcript History Page',
@@ -456,9 +475,7 @@ describe('App', () => {
 
       await waitFor(
         () =>
-          expect(
-            screen.getByRole('heading', { name: 'Transcripts Library Page' }),
-          ).toBeInTheDocument(),
+          expect(screen.getByRole('heading', { name: 'Library Page' })).toBeInTheDocument(),
         { timeout: 5000 },
       );
       expect(
@@ -480,6 +497,109 @@ describe('App', () => {
         await waitFor(() => expectOnHomePage(), {
           timeout: 5000,
         });
+      },
+    );
+
+    it('sends a notes-only user from /transcripts to the Notes tab, not to home (#57)', async () => {
+      // The `library` destination is reachable on EITHER permission, and its
+      // `path` is `/transcripts` — so this user clicks the row they were
+      // legitimately shown and arrives at a route they cannot read. Bouncing
+      // them to `/` would be the #92 bug: a nav row promising a surface the
+      // router refuses. One tab sideways is the half they CAN read.
+      signInAs(['notes:read']);
+
+      render(
+        <MemoryRouter initialEntries={['/transcripts']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () =>
+          expect(screen.getByRole('heading', { name: 'Library Page' })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+  });
+
+  /**
+   * Issue #57, epic #45. Four routes, two permissions, and the same asymmetry
+   * the transcript block above asserts: `/notes/new` is the only one gated on
+   * `notes:write`, and its fallback is `/notes` rather than `/`.
+   */
+  describe('Note routes', () => {
+    const READER = ['notes:read'];
+
+    it.each([
+      ['/notes', 'Library Page'],
+      ['/notes/abc-123', 'Note Page'],
+      ['/notes/abc-123/history', 'Note History Page'],
+    ])('renders %s as %s for a user holding notes:read', async (path, heading) => {
+      signInAs(READER);
+
+      render(
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () => expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+
+      // Isolation: `/notes/new` and `/notes/:id` both match a two-segment
+      // path, and React Router ranks the literal higher — a regression there
+      // would render the note viewer for `/notes/new`.
+      const allHeadings = ['Library Page', 'New Note Page', 'Note Page', 'Note History Page'];
+      for (const other of allHeadings.filter((h) => h !== heading)) {
+        expect(screen.queryByRole('heading', { name: other })).not.toBeInTheDocument();
+      }
+    });
+
+    it('renders /notes/new for a user holding notes:write', async () => {
+      signInAs(['notes:read', 'notes:write']);
+
+      render(
+        <MemoryRouter initialEntries={['/notes/new']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () => expect(screen.getByRole('heading', { name: 'New Note Page' })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+    });
+
+    it('sends a read-only user from /notes/new to the library, not to home', async () => {
+      signInAs(READER);
+
+      render(
+        <MemoryRouter initialEntries={['/notes/new']}>
+          <App />
+        </MemoryRouter>,
+      );
+
+      await waitFor(
+        () => expect(screen.getByRole('heading', { name: 'Library Page' })).toBeInTheDocument(),
+        { timeout: 5000 },
+      );
+      expect(screen.queryByRole('heading', { name: 'New Note Page' })).not.toBeInTheDocument();
+    });
+
+    it.each(['/notes', '/notes/abc-123', '/notes/abc-123/history'])(
+      'redirects a user without notes:read away from %s',
+      async (path) => {
+        signInAs(['user_settings:read']);
+
+        render(
+          <MemoryRouter initialEntries={[path]}>
+            <App />
+          </MemoryRouter>,
+        );
+
+        await waitFor(() => expectOnHomePage(), { timeout: 5000 });
       },
     );
   });

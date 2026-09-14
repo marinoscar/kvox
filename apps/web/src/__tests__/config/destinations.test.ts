@@ -53,6 +53,12 @@ describe('destinations — route ownership', () => {
         '/transcripts/new',
         '/transcripts/:id',
         '/transcripts/:id/history',
+        // #57, epic #45 — the four note routes, the library destination's
+        // second subtree.
+        '/notes',
+        '/notes/new',
+        '/notes/:id',
+        '/notes/:id/history',
         '/admin',
         '/admin/users',
         '/admin/settings',
@@ -189,9 +195,9 @@ describe('destinations — reachability regression', () => {
     }
   });
 
-  it('offers four destinations: Home, Transcripts, Settings and the merged Console', () => {
+  it('offers four destinations: Home, Library, Settings and the merged Console', () => {
     // Three after #92 merged the two admin rows; FOUR since #30 added the
-    // transcripts library. `/admin/users` is still not a destination PATH
+    // library. `/admin/users` is still not a destination PATH
     // while staying a resolvable route — it redirects to
     // `/admin/settings/users`, and the assertion above is what proves the
     // merge cost no reachability.
@@ -203,14 +209,14 @@ describe('destinations — reachability regression', () => {
     ]);
   });
 
-  it('keeps Home, Transcripts, Settings, Console as the declared ORDER', () => {
+  it('keeps Home, Library, Settings, Console as the declared ORDER', () => {
     // Declaration order IS navigation order on the bottom bar and in the user
     // menu (the rail only lifts `pinned` rows to its foot). Sorting the array
     // above proves membership and says nothing about sequence, so the two
     // assertions are deliberately separate.
     expect(DESTINATIONS.map((destination) => destination.key)).toEqual([
       'home',
-      'transcripts',
+      'library',
       'settings',
       'console',
     ]);
@@ -266,38 +272,77 @@ describe('destinations — the table itself', () => {
     expect(byKey.settings.permission).toBeUndefined();
   });
 
-  it('gates Transcripts on the exact string transcripts.controller.ts enforces (#30)', () => {
-    // Verified against the controller, not assumed: every route on
-    // `TranscriptsController` carries
-    // `@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })` on its reads.
-    // The permission is seeded to all three roles, so in practice the row is
-    // visible to everybody — but the GATE has to be the permission, because a
-    // deployment that revokes it must lose the row.
+  it('gates Library on EITHER controller permission, never on one alone (#30, #57)', () => {
+    // Verified against the controllers, not assumed:
+    //   transcripts.controller.ts → PERMISSIONS.TRANSCRIPTS_READ
+    //   notes.controller.ts       → PERMISSIONS.NOTES_READ
+    //
+    // Both, because this one row fronts both subtrees since #57. The obvious
+    // way to get it wrong while renaming the destination is to keep whichever
+    // permission was already typed here and silently leave Notes gated on
+    // transcripts — which locks a notes-only user out of the only row that
+    // reaches either. Both are seeded to all three roles, so in practice the
+    // row is visible to everybody; the GATE still has to be the permissions,
+    // because a deployment that revokes both must lose the row.
     const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
-    expect(byKey.transcripts.permission).toBe('transcripts:read');
-    expect(byKey.transcripts.anyPermission).toBeUndefined();
+    expect(byKey.library.permission).toBeUndefined();
+    expect([...(byKey.library.anyPermission ?? [])].sort()).toEqual([
+      'notes:read',
+      'transcripts:read',
+    ]);
 
     const holding = (granted: string[]) => (permission: string) =>
       granted.includes(permission);
-    expect(isDestinationVisible(byKey.transcripts, holding(['transcripts:read']))).toBe(
-      true,
-    );
-    expect(isDestinationVisible(byKey.transcripts, holding([]))).toBe(false);
+    expect(isDestinationVisible(byKey.library, holding(['transcripts:read']))).toBe(true);
+    expect(isDestinationVisible(byKey.library, holding(['notes:read']))).toBe(true);
+    expect(isDestinationVisible(byKey.library, holding([]))).toBe(false);
     // The admin ROLE grants nothing here, exactly as for Console.
-    expect(isDestinationVisible(byKey.transcripts, holding(['rbac:manage']))).toBe(false);
+    expect(isDestinationVisible(byKey.library, holding(['rbac:manage']))).toBe(false);
+  });
+
+  it('labels the Library row "Library" on every surface (#57)', () => {
+    // The rail caption, the user-menu row and the bottom-bar tab all read one
+    // of these two fields, and #57's whole premise is that the destination is
+    // the LIBRARY rather than the transcripts half of it. A row still reading
+    // "Transcripts" would be a bar that names one of the two tabs behind it.
+    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
+    expect(byKey.library.label).toBe('Library');
+    expect(byKey.library.compactLabel).toBe('Library');
   });
 
   it('owns the whole /transcripts subtree, children included (#30)', () => {
     // One prefix covers the library, the New-transcript flow, the viewer and
     // #31's history page: a reader drilled into one transcript has not left
     // the library, so the tab stays lit.
-    expect(resolveActiveDestination('/transcripts')).toBe('transcripts');
-    expect(resolveActiveDestination('/transcripts/new')).toBe('transcripts');
-    expect(resolveActiveDestination('/transcripts/abc-123')).toBe('transcripts');
-    expect(resolveActiveDestination('/transcripts/abc-123/history')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts')).toBe('library');
+    expect(resolveActiveDestination('/transcripts/new')).toBe('library');
+    expect(resolveActiveDestination('/transcripts/abc-123')).toBe('library');
+    expect(resolveActiveDestination('/transcripts/abc-123/history')).toBe('library');
     // …and stops at the segment boundary, like every other prefix here.
     expect(resolveActiveDestination('/transcriptsfoo')).toBeNull();
     expect(resolveActiveDestination('/transcripts-archive')).toBeNull();
+  });
+
+  it('owns the whole /notes subtree too, on the SAME destination (#57)', () => {
+    // The claim the rename rests on: switching between the library's two tabs
+    // never changes which navigation row is lit, because both prefixes belong
+    // to one destination. If `/notes` ever resolved to anything else, the
+    // bottom bar would drop its highlight halfway through one page.
+    expect(resolveActiveDestination('/notes')).toBe('library');
+    expect(resolveActiveDestination('/notes/new')).toBe('library');
+    expect(resolveActiveDestination('/notes/abc-123')).toBe('library');
+    expect(resolveActiveDestination('/notes/abc-123/history')).toBe('library');
+    // …and stops at the segment boundary, like every other prefix here.
+    expect(resolveActiveDestination('/notesfoo')).toBeNull();
+    expect(resolveActiveDestination('/notes-archive')).toBeNull();
+  });
+
+  it('keeps the destination set at four despite owning a second subtree (#57)', () => {
+    // The whole argument for renaming rather than adding. Asserted beside the
+    // ceiling check below so the two cannot be read apart: `notes` must not
+    // reappear as a fifth key, under any label.
+    expect(DESTINATIONS.map((d) => d.key)).not.toContain('notes');
+    expect(DESTINATIONS).toHaveLength(4);
   });
 
   it('marks Console pinned and leaves Home and Settings as ordinary list rows (#105)', () => {
@@ -454,6 +499,31 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
     // that the assertion below rejects via the length check.
     return [];
   }
+
+  it('gates the library\u2019s two routes on exactly the permissions the destination allows (#57)', () => {
+    // The same invariant as the Console one below, applied to the destination
+    // #57 created — and it needs the UNION of two routes rather than one
+    // route's array, because the library's two halves are two separate routes
+    // with one gate each.
+    //
+    // What this catches: `/notes` gated on `transcripts:read` (a notes-only
+    // user bounced off the tab the row promised them), or the destination
+    // widened to a permission no route under it enforces (a row that appears
+    // and then redirects).
+    const gates = [
+      declaredRoutePermissions('/transcripts'),
+      declaredRoutePermissions('/notes'),
+    ].flat();
+    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
+    const destinationPermissions = [...(byKey.library.anyPermission ?? [])];
+
+    // Guards the parser: two empty arrays would compare equal and prove
+    // nothing.
+    expect(gates.length, 'the library routes have no parsed permission gates').toBe(2);
+    expect(destinationPermissions.length).toBe(2);
+
+    expect([...new Set(gates)].sort()).toEqual([...destinationPermissions].sort());
+  });
 
   it('gates /admin/settings on exactly the permissions the console destination allows', () => {
     const routePermissions = declaredRoutePermissions('/admin/settings');

@@ -50,10 +50,18 @@ function setPrefs(railCollapsed: boolean) {
 }
 
 // The seeded `admin` role's navigation-relevant permissions. `transcripts:read`
-// joined the set with #30: it is seeded to ALL THREE roles, so an admin fixture
-// without it would be a user that cannot exist — and the row-count assertions
-// below would silently be measuring a rail with one row missing.
-const ADMIN_PERMISSIONS = ['users:read', 'system_settings:read', 'transcripts:read'];
+// joined the set with #30 and `notes:read` with #57: both are seeded to ALL
+// THREE roles, so an admin fixture without them would be a user that cannot
+// exist — and the row-count assertions below would silently be measuring a rail
+// with one row missing. The two together are what make the ONE `library` row
+// visible; either alone would also do it (see its `anyPermission`), which is
+// asserted separately below rather than relied on here.
+const ADMIN_PERMISSIONS = [
+  'users:read',
+  'system_settings:read',
+  'transcripts:read',
+  'notes:read',
+];
 
 describe('NavigationRail', () => {
   beforeEach(() => {
@@ -64,7 +72,9 @@ describe('NavigationRail', () => {
 
   describe('Destinations', () => {
     it('renders all four destinations for a fully permitted user', () => {
-      // FOUR since #30 added Transcripts. Still ONE admin row, not two: issue
+      // FOUR since #30 added the library — still four after #57 renamed it
+      // and gave it a second route subtree, which is the whole point of that
+      // change. Still ONE admin row, not two: issue
       // #92 merged `User Management` and `System Settings` into `Console`,
       // because two rows both matching `/admin/*` give the rail two active
       // candidates on every admin route.
@@ -75,19 +85,32 @@ describe('NavigationRail', () => {
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
       expect(within(nav).getAllByRole('link')).toHaveLength(4);
       expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Library' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Console' })).toBeInTheDocument();
     });
 
-    it('hides Transcripts from a user without transcripts:read (#30)', () => {
+    it('hides Library from a user holding NEITHER of its permissions (#30, #57)', () => {
       // `setPermissions([])` in the outer `beforeEach`, so this is the same
       // "grants nothing" fixture the Console assertion below uses.
       render(<NavigationRail />);
 
-      expect(
-        screen.queryByRole('link', { name: 'Transcripts' }),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Library' })).not.toBeInTheDocument();
+    });
+
+    it('shows Library to a user holding EITHER of its permissions (#57)', () => {
+      // The row fronts two controllers since #57, so a deployment that revokes
+      // one must not lose the only way to reach the other. Both directions are
+      // asserted, because keeping whichever permission was already written here
+      // and silently dropping the new one is exactly how this gets broken.
+      setPermissions(['transcripts:read']);
+      const first = render(<NavigationRail />);
+      expect(screen.getByRole('link', { name: 'Library' })).toBeInTheDocument();
+      first.unmount();
+
+      setPermissions(['notes:read']);
+      render(<NavigationRail />);
+      expect(screen.getByRole('link', { name: 'Library' })).toBeInTheDocument();
     });
 
     it('hides Console from a user holding neither admin permission', () => {

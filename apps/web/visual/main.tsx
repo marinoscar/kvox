@@ -91,10 +91,15 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
 const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
-const TranscriptsLibraryPage = lazy(() => import('../src/pages/TranscriptsLibraryPage'));
+const LibraryPage = lazy(() => import('../src/pages/LibraryPage'));
 const NewTranscriptPage = lazy(() => import('../src/pages/NewTranscriptPage'));
 const TranscriptPage = lazy(() => import('../src/pages/TranscriptPage'));
 const TranscriptHistoryPage = lazy(() => import('../src/pages/TranscriptHistoryPage'));
+// Notes (#57, epic #45). Registered for the same reason every route in this
+// file is: a route the harness cannot reach is a route this suite silently
+// stops asserting pixels for.
+const NewNotePage = lazy(() => import('../src/pages/NewNotePage'));
+const NotePage = lazy(() => import('../src/pages/NotePage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 
@@ -143,6 +148,18 @@ const DEFAULT_PERMISSIONS = [
   // the nav baselines would silently stop asserting the fourth destination.
   'transcripts:read',
   'transcripts:write',
+  // Notes (#57, epic #45). Present for the same reason the transcript pair is,
+  // and with one addition specific to them: the `library` destination is
+  // reachable on EITHER `transcripts:read` or `notes:read`, and the library
+  // page shows only the tabs the user can open — so a harness user without
+  // these would screenshot a library with its Notes tab silently missing.
+  'notes:read',
+  'notes:write',
+  'note_templates:read',
+  'note_templates:write',
+  // `GET /api/storage/objects/:id` is what resolves a note row's source name
+  // and a document's extraction progress. Seeded to every role.
+  'storage:read',
 ];
 
 interface HarnessParams {
@@ -243,9 +260,9 @@ function HarnessRoutes() {
             element={
               <RequirePermission
                 permission="transcripts:read"
-                fallback={<Navigate to="/" replace />}
+                fallback={<Navigate to="/notes" replace />}
               >
-                <TranscriptsLibraryPage />
+                <LibraryPage />
               </RequirePermission>
             }
           />
@@ -283,6 +300,37 @@ function HarnessRoutes() {
                 fallback={<Navigate to="/" replace />}
               >
                 <TranscriptHistoryPage />
+              </RequirePermission>
+            }
+          />
+
+          {/* Notes (#57, epic #45). `/notes` renders the SAME `LibraryPage`
+              `/transcripts` does — the tab is the route. Gates copied verbatim
+              from `App.tsx`, like every other guarded route in this file. */}
+          <Route
+            path="/notes"
+            element={
+              <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
+                <LibraryPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/notes/new"
+            element={
+              <RequirePermission
+                permission="notes:write"
+                fallback={<Navigate to="/notes" replace />}
+              >
+                <NewNotePage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/notes/:id"
+            element={
+              <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
+                <NotePage />
               </RequirePermission>
             }
           />

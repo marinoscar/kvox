@@ -93,6 +93,19 @@ export const mockAdminUser: MockUser = {
     // silently be testing a bar and a rail with no Transcripts row.
     'transcripts:read',
     'transcripts:write',
+    // Present because the seeded `admin` role grants them (#53, epic #45) —
+    // and because `notes:read`/`:write` are seeded to ALL THREE roles, an admin
+    // fixture without them is a user that cannot exist. Without them, every
+    // test rendering the real library with this fixture would silently be
+    // testing a page whose Notes tab is not there.
+    'notes:read',
+    'notes:write',
+    'note_templates:read',
+    'note_templates:write',
+    // Seeded to every role. `GET /api/storage/objects/:id` is what resolves a
+    // note row's source name and an uploaded document's extraction progress.
+    'storage:read',
+    'storage:write',
   ],
   isActive: true,
   createdAt: new Date().toISOString(),

@@ -88,7 +88,10 @@ const SETTINGS_SURFACES: {
  *
  * `/transcripts` itself is deliberately absent: it is a DESTINATION (the
  * bottom bar lights its tab), not a drill-down, so it keeps the wordmark
- * exactly as `/` and `/settings`'s own hub do not.
+ * exactly as `/` and `/settings`'s own hub do not. `/notes` is absent for
+ * exactly the same reason since #57 — it is the OTHER tab of the same
+ * destination, not a page below it — while `/notes/new`, `/notes/:id` and
+ * `/notes/:id/history` are drill-downs and are listed below.
  */
 const DRILL_DOWN_ROUTES: {
   pattern: RegExp;
@@ -112,6 +115,32 @@ const DRILL_DOWN_ROUTES: {
     pattern: /^\/transcripts\/([^/]+)\/?$/,
     title: 'Transcript',
     upPath: () => '/transcripts',
+  },
+  // Notes (#57, epic #45). MOST SPECIFIC FIRST, like the transcript block
+  // above and load-bearing for the same reason: `/notes/:id` would otherwise
+  // claim `/notes/abc/history`.
+  //
+  // ⚠ EVERY `upPath` HERE IS `/notes`, NOT `/transcripts`. They are the same
+  // destination, but a user who drilled into a note belongs back on the tab
+  // they came from — the tab IS the URL (`pages/libraryTabs.ts`), so going up
+  // to `/transcripts` would silently switch which half of the library they are
+  // looking at.
+  {
+    pattern: /^\/notes\/new\/?$/,
+    title: 'New note',
+    upPath: () => '/notes',
+  },
+  {
+    // Issue #58 builds the page; the header treatment is wired here so the
+    // route is not reachable-but-unescapable on a phone the day it lands.
+    pattern: /^\/notes\/([^/]+)\/history\/?$/,
+    title: 'Version history',
+    upPath: (match) => `/notes/${match[1]}`,
+  },
+  {
+    pattern: /^\/notes\/([^/]+)\/?$/,
+    title: 'Note',
+    upPath: () => '/notes',
   },
 ];
 

@@ -6,14 +6,20 @@
  * Material 3 acknowledges it has no recommended drawer replacement at this
  * size, which is why the answer is a bottom bar and nothing else.
  *
- * FOUR ACTIONS IS THE CEILING, and since issue #30 added `transcripts` this app
- * has exactly four destinations — the ceiling is REACHED, not approached, for an
- * admin holding every permission. `showLabels` stays on only because of that;
- * five labelled tabs do not fit at 360px, so a fifth destination is not an
- * addition but a redesign (an overflow tab, or labels off). Do not add one here
- * without resolving that first, and note that the tabs each user actually sees
- * is permission-dependent: `transcripts` and `console` are both gated, so a
- * Viewer who somehow holds neither sees two.
+ * FOUR ACTIONS IS THE CEILING, and since issue #30 added the library
+ * destination this app has exactly four — the ceiling is REACHED, not
+ * approached, for an admin holding every permission. `showLabels` stays on only
+ * because of that; five labelled tabs do not fit at 360px, so a fifth
+ * destination is not an addition but a redesign (an overflow tab, or labels
+ * off). Do not add one here without resolving that first, and note that the
+ * tabs each user actually sees is permission-dependent: `library` and `console`
+ * are both gated, so a user who somehow holds neither of either pair sees two.
+ *
+ * ISSUE #57 (epic #45) IS THE WORKED EXAMPLE OF THAT RULE BEING HONOURED. Notes
+ * needed somewhere to live; rather than a fifth tab, `transcripts` became
+ * `library` and took `/notes` as a second owned prefix. This file did not
+ * change — that is the point of reading the destination model rather than
+ * holding an opinion about which paths exist.
  *
  * ACTIVE STATE COMES FROM THE DESTINATION MODEL, NOT A PATH PREFIX
  * (`config/destinations.ts`). The `startsWith` chain this replaces would have
