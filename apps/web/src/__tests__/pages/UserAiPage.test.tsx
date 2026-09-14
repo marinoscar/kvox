@@ -455,6 +455,66 @@ describe('UserAiPage', () => {
       // against, and a Save that 400s would be worse than a disabled one.
       expect(screen.getByLabelText(/^API key$/i)).toBeDisabled();
       expect(screen.getByRole('button', { name: /save key/i })).toBeDisabled();
+      // #83: this is the ONE state where the original warning is true, and the
+      // new "not switched on yet" notice — which presumes a vendor IS chosen —
+      // must not also render here.
+      expect(
+        screen.queryByText(/ai is not switched on yet — your key is still worth adding/i),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // #83: a vendor IS chosen, but the deployment has not switched AI on yet
+  // ==========================================================================
+  //
+  // This is the fresh-deployment state that #83 was actually filed about:
+  // `ai.provider` defaults to `'openai'` and `ai.enabled` defaults to `false`,
+  // so `provider !== null && !available` is what every new deployment starts
+  // in — not the `provider === null` case above, which the old code (wrongly)
+  // treated as the only "AI isn't ready" state. The old warning
+  // ("An administrator has not chosen an AI provider […] your key is not the
+  // missing piece") was FALSE here, and it is the sentence that misdirected
+  // the original report.
+
+  describe('#83: a provider is chosen but AI is not switched on yet', () => {
+    it('leaves the key form fully usable — field, Save once typed, and Test — and saves against the chosen provider', async () => {
+      const user = userEvent.setup();
+      setup({ config: { available: false } }); // provider: 'openai', providerLabel: 'OpenAI' (baseConfig)
+      await renderPage();
+
+      const field = screen.getByLabelText(/^API key$/i);
+      expect(field).toBeEnabled();
+      // Nothing typed yet — Save is disabled for the ordinary "empty box"
+      // reason, not because the deployment isn't ready.
+      expect(screen.getByRole('button', { name: /save key/i })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /test key/i })).toBeEnabled();
+
+      await user.type(field, RAW_KEY);
+      expect(screen.getByRole('button', { name: /save key/i })).toBeEnabled();
+
+      await user.click(screen.getByRole('button', { name: /save key/i }));
+
+      await waitFor(() => expect(mockSave).toHaveBeenCalledTimes(1));
+      expect(mockSave).toHaveBeenCalledWith({ provider: 'openai', apiKey: RAW_KEY });
+    });
+
+    it('renders the new info notice, and NOT the old "no provider" warning', async () => {
+      setup({ config: { available: false } });
+      await renderPage();
+
+      expect(
+        await screen.findByText(/ai is not switched on yet — your key is still worth adding/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/an administrator has chosen openai/i)).toBeInTheDocument();
+      // The false claim that misdirected the original report must be absent,
+      // not merely unasserted — a provider genuinely IS chosen here.
+      expect(
+        screen.queryByText(/an administrator has not chosen an ai provider/i),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/your key is not the missing piece/i),
+      ).not.toBeInTheDocument();
     });
   });
 
