@@ -1181,6 +1181,11 @@ export class SystemSettingsService {
           dto.ai?.maxOutputTokens ?? currentValue.ai.maxOutputTokens,
         requestTimeoutMs:
           dto.ai?.requestTimeoutMs ?? currentValue.ai.requestTimeoutMs,
+        // #87. A plain `??`: every value of this enum is meaningful and none of
+        // them is `null`, so "absent means leave it alone" is the whole rule
+        // here — unlike `provider` two blocks up.
+        reasoningEffort:
+          dto.ai?.reasoningEffort ?? currentValue.ai.reasoningEffort,
         maxDocumentBytes:
           dto.ai?.maxDocumentBytes ?? currentValue.ai.maxDocumentBytes,
       },

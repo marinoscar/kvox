@@ -1,5 +1,7 @@
 import type { ZodType } from 'zod';
 
+import type { AiReasoningEffort } from '../ai-settings.schema';
+
 // =============================================================================
 // AiProvider (issue #47, epic #45)
 // =============================================================================
@@ -243,6 +245,23 @@ export interface AiGenerateRequest {
    * own, much shorter, notion of patience.
    */
   timeoutMs?: number;
+  /**
+   * How hard a reasoning model may think before it answers (#87).
+   *
+   * Read from `ai.reasoningEffort`. OPTIONAL, AND SAFE TO IGNORE — a provider
+   * whose vendor has no such notion simply drops it, which is why this is a
+   * request field rather than a method on {@link AiProvider}: a capability
+   * every implementation must declare an opinion about is a capability the next
+   * provider has to write a line of code to say "no" to.
+   *
+   * ⚠ WHATEVER A PROVIDER DOES WITH IT, IT MUST NOT CHANGE
+   * {@link AiGenerateRequest.maxOutputTokens}. Reasoning tokens are billed and
+   * counted as output and come out of that same ceiling — so a provider that
+   * "helpfully" raised the ceiling to make room for thinking would be spending
+   * a user's own money on a decision the deployment's policy did not take. See
+   * `ai.reasoningEffort` in `../ai-settings.schema.ts`.
+   */
+  reasoningEffort?: AiReasoningEffort;
 }
 
 /** Why the provider stopped producing tokens. */
