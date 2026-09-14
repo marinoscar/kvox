@@ -191,6 +191,40 @@ export interface NoteVersionsResponse {
   nextCursor: string | null;
 }
 
+/**
+ * One version, read in full — `GET /api/notes/{id}/versions/{version}`.
+ *
+ * ⚠ A STORED SNAPSHOT, NOT A REPLAY. Every `note_versions` row holds the whole
+ * markdown body (a note is a page or two of prose, spec §4.5), so reading an
+ * old version is one row read and **version 1 is always retrievable** — which
+ * is what lets the history page promise that the AI's original can never be
+ * lost, no matter how many edits sit on top of it.
+ */
+export interface NoteVersionDetail extends NoteVersion {
+  noteId: string;
+  /** The full markdown AS IT WAS at this version. */
+  body: string;
+  isCurrent: boolean;
+}
+
+/**
+ * `PATCH /api/notes/{id}` — the title, the body, or both.
+ *
+ * ⚠ `baseVersion` IS REQUIRED WHENEVER `body` IS PRESENT, and the API refuses a
+ * body without one with a 400. It is optional in this type for the same reason
+ * it is optional in the API's schema: a RENAME carries no version, because a
+ * title is metadata about the note rather than versioned content of it.
+ */
+export interface UpdateNoteInput {
+  title?: string;
+  body?: string;
+  /** The `currentVersion` being edited. Required alongside `body`. */
+  baseVersion?: number;
+  summary?: string;
+  /** Idempotency key — a repeat returns the ORIGINAL result and adds no version. */
+  clientBatchId?: string;
+}
+
 export interface NoteListParams {
   status?: NoteStatus;
   sourceType?: NoteSourceType;
@@ -268,6 +302,28 @@ export function noteConflictReason(err: unknown): NoteConflictReason | null {
   return typeof reason === 'string' ? (reason as NoteConflictReason) : null;
 }
 
+/**
+ * What the note is ACTUALLY at, from a `stale_base_version` 409.
+ *
+ * The API publishes `details.currentVersion` as a real schema (`NoteConflictDto`)
+ * precisely so a client can show the user what it was about to overwrite. A
+ * conflict UI that could not name the other version would have nothing to offer
+ * but "try again", and retrying a stale save is the one response that is
+ * definitely wrong — it would overwrite the version the 409 exists to protect.
+ *
+ * `null` for a 409 that names no version, so a caller falls back to re-reading
+ * the note rather than rendering `undefined`.
+ */
+export function noteConflictCurrentVersion(err: unknown): number | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+
+  const details = err.details;
+  if (typeof details !== 'object' || details === null) return null;
+
+  const version = (details as { currentVersion?: unknown }).currentVersion;
+  return typeof version === 'number' ? version : null;
+}
+
 // =============================================================================
 // Reads
 // =============================================================================
@@ -313,6 +369,16 @@ export async function getNoteVersions(
   const suffix = query.toString();
   return api.get<NoteVersionsResponse>(
     `/notes/${encodeURIComponent(id)}/versions${suffix ? `?${suffix}` : ''}`,
+  );
+}
+
+/** `GET /api/notes/{id}/versions/{version}` — one version, body included. */
+export async function getNoteVersion(
+  id: string,
+  version: number,
+): Promise<NoteVersionDetail> {
+  return api.get<NoteVersionDetail>(
+    `/notes/${encodeURIComponent(id)}/versions/${encodeURIComponent(String(version))}`,
   );
 }
 
@@ -369,6 +435,40 @@ export async function getNoteDocumentExtraction(
  */
 export async function createNote(input: CreateNoteInput): Promise<CreateNoteResult> {
   return api.post<CreateNoteResult>('/notes', input);
+}
+
+/**
+ * `PATCH /api/notes/{id}` — save an edit.
+ *
+ * REJECTS WITH A 409 THE CALLER MUST BRANCH ON, never render as an error
+ * message: `stale_base_version` means somebody else's save landed first and
+ * both versions are real. {@link noteConflictReason} names the branch and
+ * {@link noteConflictCurrentVersion} names the version to show.
+ */
+export async function updateNote(id: string, input: UpdateNoteInput): Promise<Note> {
+  return api.patch<Note>(`/notes/${encodeURIComponent(id)}`, input);
+}
+
+/**
+ * `POST /api/notes/{id}/versions/{version}/restore`.
+ *
+ * ⚠ APPENDS, NEVER REWRITES. The restore is recorded as a NEW version whose
+ * body is the old one's; every version in between — including the one that was
+ * current a moment ago — stays exactly as it was. `baseVersion` must EQUAL the
+ * note's `currentVersion` here (unlike a `PATCH`, which merely checks it),
+ * because a restore carries no per-entity expectations of its own and a stale
+ * view would be asking to discard edits the caller has never seen.
+ */
+export async function restoreNoteVersion(
+  id: string,
+  version: number,
+  baseVersion: number,
+  summary?: string,
+): Promise<Note> {
+  return api.post<Note>(
+    `/notes/${encodeURIComponent(id)}/versions/${encodeURIComponent(String(version))}/restore`,
+    summary ? { baseVersion, summary } : { baseVersion },
+  );
 }
 
 /** `POST /api/notes/{id}/regenerate` — the only retry path. */
