@@ -107,6 +107,40 @@ export const PERMISSIONS = {
   // permission `PushConfigController` never checks.
   PUSH_READ: 'push:read',
   PUSH_WRITE: 'push:write',
+
+  // Transcripts (#24, epic #19).
+  //
+  // GRANTED TO ALL THREE ROLES — Admin, Contributor AND Viewer — which is
+  // the OPPOSITE posture from every operational pair above (`nodes:*`,
+  // `broadcasts:*`, `push:*`, `db_backup:*`, all Admin-only). Those exist to
+  // gate infrastructure and organisation-wide broadcast authority a fresh
+  // account should not start with; transcribing a recording is the core
+  // action this product exists to let someone do, and a new user's default
+  // role is Viewer (`DEFAULT_ROLE` below). A permission model that left a
+  // brand-new signup unable to record their first conversation until an
+  // admin promoted them would contradict the product's own onboarding.
+  // `transcripts:read` gates every read endpoint (list, get, segments,
+  // words, versions, exporters); `transcripts:write` is the ADDITIONAL
+  // requirement `TranscriptAccessService`'s `edit`-level check applies on
+  // top of a share (docs/specs/transcription.md §6.1-6.2) — a viewer share
+  // can never correct a transcript no matter what a future role grants,
+  // because a share caps the ceiling an RBAC permission can raise a user
+  // to, never the floor.
+  //
+  // THERE IS DELIBERATELY NO `transcripts:read_any`. Every other "any"-scoped
+  // permission in this codebase (`storage:read_any`, all of `db_backup:*`,
+  // `nodes:*` over the whole fleet) exists because the resource it governs is
+  // either infrastructure or explicitly shared organisational state. A
+  // transcript is neither — it is somebody's private recorded conversation —
+  // and no permission string exists for reading another user's transcript
+  // because that access is out of scope for this feature, not merely unused
+  // today (spec §6.2, §10). The corollary this permission pair does NOT
+  // change: `TranscriptAccessService.require` answers a caller with no
+  // access a plain 404, never a 403 — a 403 would confirm the transcript
+  // exists, which is itself information a stranger has no business learning
+  // about someone's private conversation (spec §6.1).
+  TRANSCRIPTS_READ: 'transcripts:read',
+  TRANSCRIPTS_WRITE: 'transcripts:write',
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
