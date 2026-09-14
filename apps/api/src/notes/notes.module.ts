@@ -8,15 +8,19 @@ import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { NoteAccessService } from './access/note-access.service';
 import { NoteGenerationAccessService } from './access/note-generation-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import {
   NOTE_STREAM_TUNING,
   NoteGenerationStreamService,
 } from './generation/note-generation-stream.service';
+import { NoteGenerationRequestService } from './generation/note-generation-request.service';
 import { NoteGenerationService } from './generation/note-generation.service';
 import { NoteSourceService } from './generation/note-source.service';
 import { NoteGenerateHandler } from './handlers/note-generate.handler';
+import { NotePurgeHandler } from './handlers/note-purge.handler';
+import { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler';
 import { NoteSourceExtractHandler } from './handlers/note-source-extract.handler';
 import { NoteGenerationStreamController } from './note-generation-stream.controller';
 import { NoteObjectsService } from './note-objects.service';
@@ -25,6 +29,9 @@ import { NoteSourcesService } from './note-sources.service';
 import { NoteTemplatePreviewService } from './note-template-preview.service';
 import { NoteTemplatesController } from './note-templates.controller';
 import { NoteTemplatesService } from './note-templates.service';
+import { NotesController } from './notes.controller';
+import { NotesService } from './notes.service';
+import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 
 // =============================================================================
 // NotesModule (issue #49, epic #45)
@@ -79,11 +86,16 @@ import { NoteTemplatesService } from './note-templates.service';
     StorageProvidersModule,
     SettingsModule,
   ],
-  // #51's ONE ROUTE (`POST /api/notes/sources/documents`), #50's SEVEN
+  // #53's TEN NOTE ROUTES (`/api/notes/*`), #51's ONE
+  // (`POST /api/notes/sources/documents`), #50's SEVEN
   // (`/api/note-templates/*`) and #52's TWO SSE readers
-  // (`GET /api/notes/:id/stream`, `GET /api/note-generations/:id/stream`). The
-  // rest of the NOTE routes are still #53's.
+  // (`GET /api/notes/:id/stream`, `GET /api/note-generations/:id/stream`).
+  //
+  // ⚠ `NoteSourcesController` IS DECLARED ON `notes/sources`, A LITERAL PREFIX,
+  // which is why it does not collide with `NotesController`'s `:id` parameter
+  // route: the two share no method-and-path pair.
   controllers: [
+    NotesController,
     NoteSourcesController,
     NoteTemplatesController,
     NoteGenerationStreamController,
@@ -92,6 +104,17 @@ import { NoteTemplatesService } from './note-templates.service';
     NoteGenerationService,
     NoteSourceService,
     NoteGenerateHandler,
+    // The notes themselves (#53). `NoteAccessService` is the ONE place that
+    // decides 404-never-403 for a note, and the shape note sharing will extend
+    // rather than replace — see its header.
+    NoteAccessService,
+    NoteGenerationRequestService,
+    NotesService,
+    // `note.purge` and `notes.housekeeping`, plus the ten-minute `@Cron` that
+    // only ENQUEUES the latter (CLAUDE.md rule 1).
+    NotePurgeHandler,
+    NotesHousekeepingHandler,
+    NotesHousekeepingTask,
     // Document sources (#51). `NoteObjectsService` is the only thing in this
     // module that writes a `storage_objects` row, and every row it writes is
     // `managed_by: 'notes'`.
