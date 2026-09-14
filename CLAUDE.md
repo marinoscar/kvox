@@ -593,7 +593,8 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
 - `DELETE /api/admin/push-config` - Delete both the credential and the settings row (body `{"confirmation":"REMOVE"}`) (`push:write`)
 
 ### Transcripts
-Audio in, a diarized and timestamped transcript out (issue #25, epic #19).
+Audio in, a diarized and timestamped transcript out, and the corrections that
+make it the user's rather than the AI's (issues #25 and #27, epic #19).
 Gated on `transcripts:read`/`transcripts:write`, both seeded to **every** role
 including Viewer. Per-transcript access is the owner, plus whoever they shared
 it with (`viewer` reads, `editor` also edits); `edit` additionally requires
@@ -616,6 +617,33 @@ here.
 - `DELETE /api/transcripts/{id}` - Owner only. Soft-deletes to `deleting` and queues `transcript.purge`; there is no path back
 - `POST /api/transcripts/{id}/retry` - Owner only. **The stage is derived from the row, not chosen by the caller** — a transcript the provider already accepted is re-polled, never re-submitted, so one recording never becomes two remote jobs
 - `POST /api/transcripts/{id}/cancel` - Owner only. Cancels on the provider when it can, and marks the transcript either way
+- `POST /api/transcripts/{id}/operations` - Apply up to 200 correction ops in **one transaction** and record them as a version (`transcripts:write` + `edit`). `baseVersion` is informational; the per-entity `rev` on every op is the real check, so two editors correcting **different** lines both succeed. A stale `rev` is a **409** whose `details` carries `{ currentVersion, conflicts: [{ entity, id, current }] }` — every conflict at once, `current: null` for an entity somebody deleted. A repeated `clientBatchId` returns the **original** result and creates no second version
+- `GET /api/transcripts/{id}/search?q&matchCase&wholeWord&speakerId` - Literal match list and an **exact** total, for the find & replace preview (`transcripts:read`)
+- `GET /api/transcripts/{id}/versions?cursor` - The history, newest first. `author: null` **means the AI**, not a missing value
+- `GET /api/transcripts/{id}/versions/{v}` - One materialized version, without word timings
+- `POST /api/transcripts/{id}/versions/{v}/restore` - Appends a `restore` version; **history is never rewritten** and v1 is always retrievable. `baseVersion` here **must match** `currentVersion` (unlike `/operations`), because a restore carries no per-op expectations and a stale view would discard edits the caller never saw
+
+Three correction rules that are easy to break from a neighbouring file:
+
+1. **Everything in `apps/api/src/transcripts/editing/` is pure and must stay
+   that way.** No `PrismaService`, no `@Injectable`, no `randomUUID()` inside a
+   reducer. `materialize()` replays a version log through *the same functions*
+   the live edit path calls, which is what makes `materialize(currentVersion)
+   == the live tables` true **by construction** (spec §4.4) rather than by two
+   implementations being kept in step. A reducer that could read a row is a
+   reducer the replay path could not call.
+2. **`transcript.find_replace` is expanded into concrete `segment.update_text`
+   ops before anything is recorded** (spec §4.2), and every server-chosen value
+   — a split's `newSegmentId` and resolved `atWordIndex`, a `speaker.create`'s
+   `speakerId` and `colorIndex` — is chosen at the same moment. A recorded
+   find & replace would replay through a *future* matcher; a `randomUUID()` in
+   a reducer would give every replay different ids. Both are the same bug.
+3. **A snapshot is a compaction of replay work, never a second source of
+   truth.** `transcript.snapshot` reads `current_version` and the state together
+   under `REPEATABLE READ` and links the snapshot to the version that read
+   actually saw — never to the one its payload named. Version 1 is the one
+   version no sequence of ops can rebuild, which is why it is snapshotted
+   unconditionally.
 
 ### Transcription Settings (Admin-only)
 Speech-to-text provider configuration (issue #23, epic #19) — which vendor, its

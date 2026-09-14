@@ -2,8 +2,9 @@
 // TranscriptsController (issue #25, epic #19)
 // =============================================================================
 //
-// Ten routes. Everything a user does with a transcript short of editing it
-// (#28), sharing it (#29) or exporting it (#31).
+// Fifteen routes: the ten reads and lifecycle actions of issue #25, plus the
+// five corrections routes of issue #27 — apply a batch of ops, search, browse
+// the version history, read one version, restore one.
 //
 // -----------------------------------------------------------------------------
 // TWO PERMISSIONS, AND A SHARE CAPS WHAT EITHER CAN REACH
@@ -49,6 +50,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -57,6 +59,7 @@ import {
   Res,
 } from '@nestjs/common';
 import {
+  ApiBody,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -93,6 +96,26 @@ import {
   type TranscriptWordsQueryDto,
   type UpdateTranscriptDto,
 } from './dto/transcript.dto';
+import {
+  ApplyOperationsBodyDto,
+  OperationsConflictDto,
+  OperationsResultDto,
+  RestoreVersionBodyDto,
+  TranscriptSearchDto,
+  TranscriptSearchQueryParamsDto,
+  TranscriptVersionDetailDto,
+  TranscriptVersionsDto,
+  TranscriptVersionsQueryParamsDto,
+  applyOperationsSchema,
+  restoreVersionSchema,
+  transcriptSearchQuerySchema,
+  transcriptVersionsQuerySchema,
+  type ApplyOperationsDto,
+  type RestoreVersionDto,
+  type TranscriptSearchQueryDto,
+  type TranscriptVersionsQueryDto,
+} from './dto/transcript-editing.dto';
+import { TranscriptEditingService } from './transcript-editing.service';
 import { TranscriptsService } from './transcripts.service';
 
 /**
@@ -132,7 +155,10 @@ export function matchesETag(header: string | undefined, etag: string): boolean {
 @ApiTags('Transcripts')
 @Controller('transcripts')
 export class TranscriptsController {
-  constructor(private readonly transcripts: TranscriptsService) {}
+  constructor(
+    private readonly transcripts: TranscriptsService,
+    private readonly editing: TranscriptEditingService,
+  ) {}
 
   // ===========================================================================
   // Create
@@ -416,6 +442,177 @@ export class TranscriptsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.transcripts.cancel(id, user);
+  }
+
+  // ===========================================================================
+  // Corrections, versions and restore (issue #27, spec §4-§5)
+  // ===========================================================================
+
+  @Post(':id/operations')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
+  @ApiOperation({
+    summary: 'Apply a batch of corrections',
+    description:
+      'The write half of "AI proposes, the user controls the truth". Up to 200 ops are ' +
+      'applied **in one transaction** and recorded as a new version that can be browsed ' +
+      'and restored; nothing is ever overwritten in place.\n\n' +
+      '**Ops**: `segment.update_text`, `segment.set_speaker`, `segment.split` (by ' +
+      '`atWordIndex` **or** `atCharOffset`, never both), `segment.join` (adjacent only), ' +
+      '`segment.delete`, `speaker.rename`, `speaker.create`, `speaker.merge`, and ' +
+      '`transcript.find_replace`.\n\n' +
+      '`transcript.find_replace` is **expanded server-side into concrete ' +
+      '`segment.update_text` ops before the version is recorded**, so replaying a version ' +
+      'can never be changed later by a change to how matches are found. Matching is ' +
+      'literal — never a regular expression — with optional case sensitivity, ' +
+      'Unicode-aware whole-word boundaries, and an optional speaker scope.\n\n' +
+      '**Concurrency (409)**: `baseVersion` is informational and may be stale — every ' +
+      "op's own `rev` is checked against the current row instead, so two editors " +
+      'correcting **different** lines both succeed. Two ops against the same stale entity ' +
+      'answer `409` whose `details` carries ' +
+      '`{ currentVersion, conflicts: [{ entity, id, current }] }`, naming every conflict at ' +
+      'once so one re-fetch resolves them all. `current` is `null` for an entity another ' +
+      'editor deleted.\n\n' +
+      '**Idempotency**: a repeated `clientBatchId` returns the **original** result with ' +
+      '`idempotentReplay: true` and creates no second version, so a retry after a dropped ' +
+      'connection is always safe.\n\n' +
+      'Word timings survive the edit: unchanged words keep the provider\'s own times, ' +
+      'changed ones are re-aligned by token LCS and the segment becomes ' +
+      '`wordsAlignment: interpolated`. A split divides the word array; a join ' +
+      'concatenates it.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiBody({ type: ApplyOperationsBodyDto })
+  @ApiDataResponse(OperationsResultDto, { description: 'The new version and the corrected state' })
+  @ApiResponse({ status: 400, description: 'An op is structurally impossible, or the batch is malformed' })
+  @ApiResponse({ status: 403, description: 'The caller can view this transcript but lacks `transcripts:write`' })
+  @ApiResponse({ status: 404, description: 'No such transcript, or no edit access to it' })
+  @ApiResponse({
+    status: 409,
+    description: 'A stale `rev` — `details` names every conflicting entity',
+    type: OperationsConflictDto,
+  })
+  async operations(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(applyOperationsSchema)) dto: ApplyOperationsDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.editing.applyOperations(id, dto, user);
+  }
+
+  @Get(':id/search')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'Find text in a transcript',
+    description:
+      'The preview behind the find & replace UI: every occurrence of `q`, with the segment ' +
+      'it is in, where in the media that segment starts, the offsets inside its text, and ' +
+      'a short excerpt.\n\n' +
+      'Matching is **literal, never a regular expression** — a regex engine fed end-user ' +
+      'input is a ReDoS surface and is the wrong tool for somebody correcting a misheard ' +
+      'name. `matchCase` and `wholeWord` are the two options, and `wholeWord` uses ' +
+      'Unicode-aware boundaries rather than `\\b`, so a search for `os` does not match ' +
+      'inside `José`.\n\n' +
+      '`total` is always the exact number of occurrences, even when `matches` was ' +
+      'truncated to `limit` — a preview that under-reported would understate what a ' +
+      'replacement is about to rewrite.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiQuery({ name: 'q', required: true, type: String })
+  @ApiQuery({ name: 'matchCase', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'wholeWord', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'speakerId', required: false, type: String, format: 'uuid' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: '1-500 (default 500)' })
+  @ApiDataResponse(TranscriptSearchDto, { description: 'Matches and the exact total' })
+  @ApiResponse({ status: 404, description: 'No such transcript, or no access to it' })
+  async search(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(transcriptSearchQuerySchema)) query: TranscriptSearchQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.editing.search(id, query, user);
+  }
+
+  @Get(':id/versions')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'Browse the version history',
+    description:
+      'Every save, newest first, cursor-paginated. Each entry carries the human-readable ' +
+      '`summary` generated when it was recorded, who saved it, and — for a restore — which ' +
+      'version it was restored from.\n\n' +
+      '**`author: null` means the AI**, not a missing value: version 1 is `ai_original` ' +
+      'and is the provider\'s own output. It is permanent for the life of the transcript ' +
+      'and nothing in this API ever deletes a version row.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiQuery({ name: 'cursor', required: false, type: String, description: '`nextCursor` from the previous page' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: '1-100 (default 20)' })
+  @ApiDataResponse(TranscriptVersionsDto, { description: 'One page of versions' })
+  @ApiResponse({ status: 404, description: 'No such transcript, or no access to it' })
+  async versions(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(transcriptVersionsQuerySchema)) query: TranscriptVersionsQueryDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.editing.listVersions(id, query, user);
+  }
+
+  @Get(':id/versions/:version')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'Read one version',
+    description:
+      'The transcript as it stood at this version: the nearest snapshot at or before it, ' +
+      'with every later version\'s ops replayed through the same reducers the live edit ' +
+      'path uses — so what you read here is what was actually saved.\n\n' +
+      'Segments come back **without word timings**, exactly as ' +
+      '`GET /api/transcripts/{id}/segments` does, because a history browser renders text.' +
+      '\n\n**409** while a version older than the first snapshot is still unreachable: ' +
+      'version 1 cannot be rebuilt from ops (it is what the provider said, not a change to ' +
+      'anything), so it is reachable once its `transcript.snapshot` job has run.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiParam({ name: 'version', type: Number })
+  @ApiDataResponse(TranscriptVersionDetailDto, { description: 'The materialized version' })
+  @ApiResponse({ status: 404, description: 'No such transcript or version, or no access' })
+  @ApiResponse({ status: 409, description: 'This version has no snapshot to rebuild from yet' })
+  async version(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('version', ParseIntPipe) version: number,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.editing.getVersion(id, version, user);
+  }
+
+  @Post(':id/versions/:version/restore')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
+  @ApiOperation({
+    summary: 'Restore an earlier version',
+    description:
+      '**History is never rewritten.** A restore records a NEW version ' +
+      '(`kind: restore`, `ops: [{ op: "restore", fromVersion }]`), replaces the ' +
+      'current-state tables with that version\'s content in one transaction, and queues a ' +
+      'snapshot. Every version in between — including the one that existed immediately ' +
+      'before this call — stays exactly as it was, and **version 1, the AI original, is ' +
+      'always retrievable**.\n\n' +
+      '`baseVersion` **must equal the transcript\'s current version**, unlike ' +
+      '`POST /:id/operations` where it is informational: a correction batch carries a ' +
+      '`rev` on every op that says what it expects, and a restore carries no such thing — ' +
+      'so a stale view means asking to discard edits the caller has never seen.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiParam({ name: 'version', type: Number })
+  @ApiBody({ type: RestoreVersionBodyDto })
+  @ApiDataResponse(OperationsResultDto, { description: 'The new `restore` version and its state' })
+  @ApiResponse({ status: 404, description: 'No such transcript or version, or no edit access' })
+  @ApiResponse({ status: 409, description: '`baseVersion` is stale, or that version is already current' })
+  async restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('version', ParseIntPipe) version: number,
+    @Body(new ZodValidationPipe(restoreVersionSchema)) dto: RestoreVersionDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.editing.restore(id, version, dto, user);
   }
 
   // ===========================================================================

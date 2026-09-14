@@ -1227,19 +1227,22 @@ one must too:
 
 ### Inventory and Time Budget
 
-As of this writing there are **17 suites / 119 tests** in this tier:
+As of this writing there are **23 suites / 203 tests** in this tier:
 
 | Location | Suites | What the group proves |
 |---|---|---|
-| `apps/api/test/jobs/` | 6 | The queue's real-Postgres guarantees: the `FOR UPDATE SKIP LOCKED` claim never double-claims, enqueue dedup survives a race on the partial unique index, the lease reaper's three stuck-recovery signals each really match the rows they claim to (including `NULL < threshold` being `NULL`, not `false`), history purge is atomic and its counters conserve across a deliberate mid-transaction failure, insights queries are lock-free and numerically exact across a purge, and the three hand-written partial indexes on `jobs` actually exist after migration. |
-| `apps/api/test/nodes/` | 4 | The fleet's real-Postgres guarantees: `worker_nodes`/`node_credentials` constraints and `jobs.claimed_by_node_id`'s `ON DELETE SET NULL` behavior, a node and the in-process worker never claiming the same row, the fleet lifecycle (heartbeat cutoffs, the FK's null-not-cascade behavior, the reaper picking up a job orphaned by a deleted node), and the `example.checksum` job running its entire real path — enqueue, claim, download URL, hash, submit, persist, settle. |
+| `apps/api/test/jobs/` | 7 | The queue's real-Postgres guarantees: the `FOR UPDATE SKIP LOCKED` claim never double-claims, enqueue dedup survives a race on the partial unique index, the lease reaper's three stuck-recovery signals each really match the rows they claim to (including `NULL < threshold` being `NULL`, not `false`), history purge is atomic and its counters conserve across a deliberate mid-transaction failure, insights queries are lock-free and numerically exact across a purge, and the three hand-written partial indexes on `jobs` actually exist after migration. |
+| `apps/api/test/nodes/` | 5 | The fleet's real-Postgres guarantees: `worker_nodes`/`node_credentials` constraints and `jobs.claimed_by_node_id`'s `ON DELETE SET NULL` behavior, a node and the in-process worker never claiming the same row, the fleet lifecycle (heartbeat cutoffs, the FK's null-not-cascade behavior, the reaper picking up a job orphaned by a deleted node), and the `example.checksum` job running its entire real path — enqueue, claim, download URL, hash, submit, persist, settle. |
 | `apps/api/test/broadcasts/` | 1 | The `NotificationBroadcast` schema's hand-declared indexes and column defaults are actually applied by the migration, not merely declared in `schema.prisma`. |
-| `apps/api/src/db-backup/` | 2 | The cluster primitives a restore's swap is built from — `CREATE`/`RENAME`/`DROP DATABASE` from the maintenance connection, a rename onto a taken name failing rather than overwriting, no leaked session, a subselect FK resolving to `NULL` instead of aborting — and that the single-active-backup-run constraint is enforced by a real partial unique index, not by a `findFirst`-then-`create` race in the service. |
+| `apps/api/src/db-backup/` | 4 | The cluster primitives a restore's swap is built from — `CREATE`/`RENAME`/`DROP DATABASE` from the maintenance connection, a rename onto a taken name failing rather than overwriting, no leaked session, a subselect FK resolving to `NULL` instead of aborting — and that the single-active-backup-run constraint is enforced by a real partial unique index, not by a `findFirst`-then-`create` race in the service. |
+| `apps/api/test/transcripts/` | 2 | The transcript data model's real constraints (the hand-written partial unique index on `(transcript_id, label)`, the `Restrict` FK protecting a transcript's source object, the version sequence and the `client_batch_id` idempotency key), and — issue #27 — the corrections seam end to end: two editors racing the conditional `current_version` bump, a stale `rev` answering 409 with the real conflict list, a retried `clientBatchId` (including one that races its own original) creating no second version, a restore appending rather than rewinding, and the spec §4.4 property that `materialize(currentVersion)` equals the live tables after a random sequence of op batches. It also carries the 10-hour benchmark (6,000 segments): the measured numbers are printed on every run, and the asserted ceilings are deliberately generous multiples of issue #27's 500 ms / 2 s targets so a loaded runner cannot make the suite flaky. |
 | `apps/api/test/integration/` | 4 | See below — the four specs added in Phase 8 of epic #254. |
 
 Measured wall clock for the whole tier, run in isolation: **≈14s before**
 Phase 8 added the four `test/integration/*.db.spec.ts` specs below, **≈27–31s
-after** (higher under CPU contention). Each of those four files also carries
+after** (higher under CPU contention), and **≈45–50s** since issue #27 added
+`transcript-corrections.db.spec.ts`, whose 6,000-segment fixture is seeded,
+snapshotted and materialized for real. Each of those four files also carries
 its own measured per-file estimate in its own header comment — see those
 headers rather than this table for a per-file breakdown.
 
