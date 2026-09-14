@@ -109,17 +109,20 @@ describe('TranscriptSharingService', () => {
   // ---------------------------------------------------------------------------
 
   describe('list', () => {
-    it('demands OWNER access — a recipient enumerating the others gets a 404', async () => {
-      await service.list(TRANSCRIPT_ID, OWNER);
+    it('asks for VIEW and no write permission — reading the list writes nothing', () => {
+      // `require` turns any level above `view` into a `transcripts:write`
+      // check, so asking for `'own'` here would refuse an owner whose role lost
+      // that permission the chance to SEE who they shared with.
+      void service.list(TRANSCRIPT_ID, OWNER);
 
-      expect(access.require).toHaveBeenCalledWith(OWNER.id, TRANSCRIPT_ID, 'own');
+      expect(access.require).toHaveBeenCalledWith(OWNER.id, TRANSCRIPT_ID, 'view');
     });
 
-    it('does not pass permissions, so reading the list never needs transcripts:write', () => {
-      // Reading writes nothing; `assertWritePermission` fires for any level
-      // above `view`, so a fourth argument here would refuse an owner whose
-      // role lost the write permission the chance to SEE who they shared with.
-      expect(access.require).not.toHaveBeenCalled();
+    it('404s a recipient enumerating the other recipients', async () => {
+      access.require.mockResolvedValue({ transcript: transcriptRow, role: 'editor' });
+
+      await expect(service.list(TRANSCRIPT_ID, OWNER)).rejects.toThrow(NotFoundException);
+      expect(prisma.transcriptShare.findMany).not.toHaveBeenCalled();
     });
 
     it('returns each recipient with their address, name and role', async () => {

@@ -76,7 +76,10 @@ import type {
   UpdateTranscriptShareDto,
 } from './dto/transcript-share.dto';
 import { ShareLookupThrottleService } from './share-lookup-throttle.service';
-import { TranscriptAccessService } from './transcript-access.service';
+import {
+  TRANSCRIPT_NOT_FOUND_MESSAGE,
+  TranscriptAccessService,
+} from './transcript-access.service';
 
 /** One share, as every response in this service returns it. */
 export interface TranscriptShareItem {
@@ -120,17 +123,22 @@ export class TranscriptSharingService {
 
   /** `GET /api/transcripts/:id/shares` — owner only. */
   async list(transcriptId: string, user: RequestUser): Promise<{ items: TranscriptShareItem[] }> {
-    // `'own'` and NOT `'view'`: the share list is the owner's address book for
-    // this recording, and a viewer enumerating the other recipients would learn
-    // about people who never agreed to be visible to them.
+    // ⚠ `'view'` PLUS AN EXPLICIT OWNER CHECK, RATHER THAN `'own'`, and the
+    // difference is a permission rather than a level. `require` turns ANY level
+    // above `view` into a `transcripts:write` check, because both of the levels
+    // above it mutate — but READING the share list writes nothing, and an owner
+    // whose role lost `transcripts:write` must still be able to see who they
+    // shared with even though they can no longer change it. Asking for `view`
+    // and rejecting a non-owner here gets the owner-only rule without borrowing
+    // a write check to enforce it.
     //
-    // ⚠ `permissions` is deliberately NOT passed. `assertWritePermission` turns
-    // any level above `view` into a `transcripts:write` check, and READING the
-    // share list writes nothing — an owner whose role somehow lost
-    // `transcripts:write` can still see who they shared with, they just cannot
-    // change it. The three mutations below pass `user.permissions` and so do
-    // get that check.
-    await this.access.require(user.id, transcriptId, 'own');
+    // Owner-only and NOT viewer-or-better: the share list is this recording's
+    // address book, and a recipient enumerating the others would learn about
+    // people who never agreed to be visible to them. They get the same 404 a
+    // stranger gets, from the same shared message.
+    const { role } = await this.access.require(user.id, transcriptId, 'view');
+
+    if (role !== 'owner') throw new NotFoundException(TRANSCRIPT_NOT_FOUND_MESSAGE);
 
     return { items: await this.shareItems(transcriptId) };
   }
