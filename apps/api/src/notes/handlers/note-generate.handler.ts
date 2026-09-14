@@ -400,6 +400,12 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       userContent: prompt.userContent,
       maxOutputTokens: budget.maxOutputTokens,
       timeoutMs: policy.requestTimeoutMs,
+      // #87. DEPLOYMENT POLICY, passed through unchanged — not a per-note or
+      // per-template choice. ⚠ It does NOT widen `maxOutputTokens` above:
+      // reasoning tokens are billed and counted as output and are drawn from
+      // that same budget, so a higher effort buys thinking out of the note's
+      // own room rather than out of thin air. See `ai.reasoningEffort`.
+      reasoningEffort: policy.reasoningEffort,
     })) {
       if (event.kind === 'delta') {
         flusher.append(event.text);
