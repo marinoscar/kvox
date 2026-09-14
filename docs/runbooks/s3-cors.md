@@ -178,8 +178,41 @@ need different fixes (bucket rule vs. `STORAGE_CSP_ORIGIN`).
 
 **The console says `Refused to connect to … because it violates the following
 Content Security Policy directive: "connect-src 'self'"`.** This is *not* a
-bucket problem. `STORAGE_CSP_ORIGIN` is unset or wrong. Set it in
-`infra/compose/.env` to the bucket's origin and restart nginx.
+bucket problem. `STORAGE_CSP_ORIGIN` is unset (and not derivable — see below)
+or wrong. Set it explicitly in `infra/compose/.env` to the bucket's origin and
+recreate nginx (see "Applying the fix" below).
+
+**Symptom, end to end: an upload sits at 0% and then every part reports "Part
+N failed after 5 attempts" (or, on a build with the CSP-specific check, a
+single error naming `STORAGE_CSP_ORIGIN` instead of five retries), zero parts
+ever show up in the bucket, and the served policy reads `connect-src 'self'
+;` with nothing after it.** Check the policy nginx is actually serving:
+
+```bash
+curl -s -D - -o /dev/null https://<host>/ | grep -i content-security-policy
+```
+
+If `connect-src` lists only `'self'`, `STORAGE_CSP_ORIGIN` was empty (or,
+before this was fixed, simply unset by default) when nginx started.
+`STORAGE_CSP_ORIGIN` now derives to the AWS virtual-hosted origin
+(`https://<bucket>.s3.<region>.amazonaws.com`) automatically when it is left
+empty and `S3_BUCKET`/`S3_REGION` are set for plain AWS S3 — see the comment
+above `STORAGE_CSP_ORIGIN=` in `infra/compose/.env.example`. It still needs
+setting **explicitly** for MinIO/LocalStack/any `S3_ENDPOINT`, a bucket name
+containing dots, or a CDN/custom domain in front of the bucket — the derived
+value is wrong or absent in each of those cases.
+
+**Applying the fix.** Nginx renders `csp.conf`'s template with `envsubst`
+**only once, at container start** — editing `.env` and sending nginx a reload
+does nothing, because the rendered file on disk does not change. Recreate the
+container instead:
+
+```bash
+docker compose -f base.compose.yml -f dev.compose.yml up -d --force-recreate nginx
+```
+
+Then re-run the `curl` check above to confirm `connect-src` now lists the
+bucket's origin.
 
 **Uploads work; playback does not.** `Range` is missing from `AllowedHeaders`,
 or `media-src` is missing the storage origin. Both produce the same silent
