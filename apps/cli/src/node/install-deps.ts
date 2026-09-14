@@ -2,21 +2,25 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 
 import { CLI_NAME } from '../branding.js';
-import { isWritable } from './capabilities.js';
+import { binaryCapability, isWritable, probeCapabilities } from './capabilities.js';
 
 // =============================================================================
 // `node install-deps` — a framework, deliberately  (issue #276, epic #254)
 // =============================================================================
 //
-// ⚠ THIS IS THE ONE PLACE IN THE EPIC WHERE FULL PARITY IS KNOWINGLY REDUCED,
-// and the reason is that the parity target is entirely domain-specific. The
-// application this design comes from installs ffmpeg, OCR language data, ML
-// models and a face-detection sidecar. None of those exist here, and inventing
-// equivalents would be inventing dependencies a template does not have — which
-// is worse than shipping nothing, because a fork would then have to work out
-// which of the steps were real.
+// ⚠ THIS WAS THE ONE PLACE IN EPIC #254 WHERE FULL PARITY WAS KNOWINGLY
+// REDUCED, and the reason was that the parity target was entirely
+// domain-specific: the application this design comes from installs ffmpeg, OCR
+// language data, ML models and a face-detection sidecar, and inventing
+// equivalents would have been inventing dependencies a template did not have.
 //
-// So what ships is the STRUCTURE: ordered steps, a per-step outcome of
+// Issue #26 gave it a REAL one. `media.audio.transcode` needs `ffmpeg` (which
+// ships `ffprobe`) on any node that claims it, and a node running outside a
+// container has no image to have baked it in — so `ffmpeg` below is the worked
+// example of a genuine package step, and the thing a fork copies rather than a
+// structure a fork has to imagine filling.
+//
+// What ships is still, first, the STRUCTURE: ordered steps, a per-step outcome of
 // `skipped | installed | failed | unsupported`, distro detection, an explicit
 // sudo announcement, and `--dry-run`. A fork fills in its own steps, and the
 // README documents that as the extension point.
@@ -110,6 +114,19 @@ export function detectDistro(options?: { platform?: NodeJS.Platform | undefined;
  * Both are generic and both are real — they are the two things every worker
  * needs regardless of what it computes. A fork appends beside them.
  */
+/**
+ * Package name for ffmpeg, per distribution family.
+ *
+ * The same on all three that package it, which is worth stating rather than
+ * leaving as a coincidence: the step below is still written as a lookup so a
+ * family whose name differs is one entry rather than a rewritten `install`.
+ */
+const FFMPEG_PACKAGES: Partial<Record<DistroInfo['family'], { command: string; args: string[] }>> = {
+  debian: { command: 'apt-get', args: ['install', '-y', 'ffmpeg'] },
+  rhel: { command: 'dnf', args: ['install', '-y', 'ffmpeg'] },
+  alpine: { command: 'apk', args: ['add', '--no-cache', 'ffmpeg'] },
+};
+
 export const DEFAULT_INSTALL_STEPS: InstallStep[] = [
   {
     id: 'state-dir',
@@ -136,6 +153,57 @@ export const DEFAULT_INSTALL_STEPS: InstallStep[] = [
       throw new Error(
         `This ${CLI_NAME} needs Node.js 20 or newer; ${process.versions.node} is installed. Upgrade Node, then re-run.`,
       );
+    },
+  },
+  {
+    // -------------------------------------------------------------------------
+    // ffmpeg — for `media.audio.transcode` (#26, epic #19)
+    // -------------------------------------------------------------------------
+    //
+    // ⚠ INSTALLED UNCONDITIONALLY RATHER THAN "ONLY IF THIS NODE DECLARES THE
+    // TYPE", and the ordering is why: `install-deps` is what an operator runs
+    // BEFORE the worker has ever started, so there is no `--types` to consult
+    // and no config file to read. A step that tried would either skip the
+    // install on a fresh machine (the case it exists for) or need the worker
+    // running first, which is the thing it is preparing for.
+    //
+    // It is `skipped` the moment both binaries are on PATH, so on a machine
+    // that will never run this type the cost is one `which` per binary.
+    //
+    // NOT AUTOMATED ON macOS OR WINDOWS: `brew`/`winget` install into a user's
+    // own environment and frequently need a licence prompt or a cask, which a
+    // subcommand must not answer on somebody's behalf. Those report
+    // `unsupported` with the one-line command to run.
+    id: 'ffmpeg',
+    label: 'ffmpeg and ffprobe (media.audio.transcode)',
+    requiresSudo: true,
+    supported: (context) => FFMPEG_PACKAGES[context.distro.family] !== undefined,
+    detect: () => {
+      const probe = probeCapabilities({ binaries: ['ffmpeg', 'ffprobe'] });
+      const satisfied = new Set(probe.capabilities);
+
+      // BOTH, not either: the executor runs them as two programs, and a build
+      // with only `ffmpeg` fails every job at the probe step.
+      return (
+        satisfied.has(binaryCapability('ffmpeg')) && satisfied.has(binaryCapability('ffprobe'))
+      );
+    },
+    install: (context) => {
+      const pkg = FFMPEG_PACKAGES[context.distro.family];
+
+      if (pkg === undefined) {
+        throw new Error(
+          `No ffmpeg package is known for "${context.distro.id}". Install ffmpeg by hand, then re-run.`,
+        );
+      }
+
+      if (context.dryRun) {
+        context.log(`Would run: sudo ${pkg.command} ${pkg.args.join(' ')}`);
+
+        return;
+      }
+
+      context.run(pkg.command, pkg.args);
     },
   },
 ];
