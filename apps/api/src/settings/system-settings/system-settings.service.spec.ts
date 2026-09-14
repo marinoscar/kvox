@@ -34,6 +34,11 @@ const OPERATIONS_DEFAULTS = {
   // above — `readKnownSettings` fills it and the merge writes it back — so an
   // "exactly this value reached Prisma" assertion has to expect it.
   transcription: DEFAULT_SYSTEM_SETTINGS.transcription,
+  // #47, epic #45. Materialised by every write path for the same reason — and
+  // note that it carries NO key of any kind: this namespace is deployment
+  // policy only, because every AI key belongs to an individual user and lives
+  // in `user_ai_credentials`.
+  ai: DEFAULT_SYSTEM_SETTINGS.ai,
 };
 
 describe('SystemSettingsService', () => {

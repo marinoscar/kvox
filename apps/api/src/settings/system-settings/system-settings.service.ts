@@ -20,6 +20,7 @@ import {
   systemDatabaseBackupSchema,
   systemMaintenanceSchema,
   systemTranscriptionSchema,
+  systemAiSchema,
   MAX_DISABLED_NOTIFICATION_EVENTS,
   type SystemNotificationsValue,
   type SystemMaintenanceValue,
@@ -27,6 +28,7 @@ import {
   type SystemNodesValue,
   type SystemDatabaseBackupValue,
   type SystemTranscriptionValue,
+  type SystemAiValue,
 } from '../../common/schemas/settings.schema';
 
 const SETTINGS_KEY = 'global';
@@ -350,6 +352,13 @@ export class SystemSettingsService {
         systemTranscriptionSchema,
         DEFAULT_SYSTEM_SETTINGS.transcription,
       ),
+      // AI policy (#47, epic #45). Same helper, same contract: whatever is on
+      // disk, what comes back validates.
+      ai: this.readNamespace(
+        root?.ai,
+        systemAiSchema,
+        DEFAULT_SYSTEM_SETTINGS.ai,
+      ),
     };
   }
 
@@ -612,6 +621,7 @@ export class SystemSettingsService {
       databaseBackup: value.databaseBackup,
       maintenance: value.maintenance,
       transcription: value.transcription,
+      ai: value.ai,
       security: this.readSecurityPolicy(),
       updatedAt: row.updatedAt,
       updatedBy: row.updatedByUser,
@@ -850,6 +860,38 @@ export class SystemSettingsService {
     });
 
     return this.readKnownSettings(row?.value).transcription;
+  }
+
+  /**
+   * The AI policy — whether AI is on, which endpoint is called, which models
+   * are permitted, and the token/time ceilings on one request (#47, epic #45).
+   *
+   * A NARROW ACCESSOR for the same three reasons `getTranscriptionPolicy`
+   * above gives, and one that is sharper here: `GET /api/ai/config` is reachable
+   * by every account holding `notes:read`, which is seeded to ALL THREE ROLES,
+   * so this is among the most frequently reached settings reads in the
+   * application — and it must not materialise a settings row as a side effect
+   * of an ordinary user loading a page.
+   *
+   * ⚠ IT RESOLVES NO CREDENTIAL, and unlike `getTranscriptionPolicy` it never
+   * could: there is no deployment AI key. Which key is used is decided by WHO
+   * IS CALLING, not by this policy — `UserAiCredentialsService` resolves the
+   * caller's own row — so the "second read path picks the wrong credential"
+   * hazard that accessor guards against does not exist on this axis at all.
+   *
+   * Degrades exactly as every other read here does: a missing row, a `null`
+   * value or a malformed one yields `DEFAULT_SYSTEM_SETTINGS.ai` through
+   * `readKnownSettings` — which reads as `enabled: false` with an empty model
+   * allow-list, so a damaged row cannot start sending anybody's content to a
+   * third party by accident.
+   */
+  async getAiPolicy(): Promise<SystemAiValue> {
+    const row = await this.prisma.systemSettings.findUnique({
+      where: { key: SETTINGS_KEY },
+      select: { value: true },
+    });
+
+    return this.readKnownSettings(row?.value).ai;
   }
 
   /**
@@ -1099,6 +1141,37 @@ export class SystemSettingsService {
             dto.transcription?.playback?.bitrateKbps ??
             currentValue.transcription.playback.bitrateKbps,
         },
+      },
+      // AI policy (#47, epic #45). Field by field like its neighbours.
+      //
+      // `allowedModels` uses `??`, which is correct here and NOT the
+      // `maintenance.startedAt` case: `null` is not a meaningful value for this
+      // field (the schema types it as a non-nullable array), so absent is the
+      // only "leave it alone" there is, and an explicit `[]` — which `??`
+      // correctly lets through — is how an administrator says "permit nothing".
+      // Replacing rather than merging the array is RFC 7396's rule and the only
+      // one that can express removing a model.
+      ai: {
+        enabled: dto.ai?.enabled ?? currentValue.ai.enabled,
+        providers: {
+          openai: {
+            baseUrl:
+              dto.ai?.providers?.openai?.baseUrl ??
+              currentValue.ai.providers.openai.baseUrl,
+            allowedModels:
+              dto.ai?.providers?.openai?.allowedModels ??
+              currentValue.ai.providers.openai.allowedModels,
+            defaultModel:
+              dto.ai?.providers?.openai?.defaultModel ??
+              currentValue.ai.providers.openai.defaultModel,
+          },
+        },
+        maxInputTokens:
+          dto.ai?.maxInputTokens ?? currentValue.ai.maxInputTokens,
+        maxOutputTokens:
+          dto.ai?.maxOutputTokens ?? currentValue.ai.maxOutputTokens,
+        requestTimeoutMs:
+          dto.ai?.requestTimeoutMs ?? currentValue.ai.requestTimeoutMs,
       },
       maintenance: {
         enabled: dto.maintenance?.enabled ?? currentValue.maintenance.enabled,
