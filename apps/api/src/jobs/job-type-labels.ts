@@ -124,6 +124,12 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'note.export': 'Note export',
   'note.purge': 'Note purge',
   'notes.housekeeping': 'Note housekeeping',
+  // The user-facing Danger Zone (#80). "Account data deletion" rather than
+  // "User data purge": an operator meeting this row in the job list is meeting
+  // the most destructive thing an ordinary account can ask this application to
+  // do, and the label should say so in the words the user was shown, not in
+  // the module's internal noun.
+  'user.data.purge': 'Account data deletion',
 };
 
 /**
