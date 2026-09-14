@@ -3,6 +3,12 @@ import { Writable } from 'node:stream';
 
 import { AiInputError } from '../../ai/ai-errors';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NoteObjectsService } from '../note-objects.service';
+import {
+  EXTRACTED_OBJECT_ID_KEY,
+  readExtractedObjectId,
+  readExtractionMetadata,
+} from '../source-metadata';
 import { buildExportDocument } from '../../transcripts/export/export-document';
 import { MarkdownTranscriptExporter } from '../../transcripts/export/markdown.exporter';
 import { TranscriptMaterializeService } from '../../transcripts/transcript-materialize.service';
@@ -77,14 +83,18 @@ export interface SourceSelector {
 }
 
 /**
- * The metadata key #51 records the extracted-text object under.
+ * The metadata key `note.source.extract` records the extracted-text object
+ * under, and the total reader for it.
  *
- * Declared HERE as well as by #51 for the same reason a job type string is
- * declared before its handler exists: the writer and the reader are different
- * issues, and a constant both import is the only arrangement in which they
- * cannot spell it differently.
+ * ⚠ RE-EXPORTED, NOT DEFINED HERE, since #51. They now live in
+ * `notes/source-metadata.ts` — a pure module with no Nest and no Prisma — so
+ * that the WRITER (the extraction handler) and the READER (this service) import
+ * one definition rather than two that can drift. #49 declared them here first,
+ * before a writer existed; the re-export keeps every existing importer working
+ * and keeps the reason the constant exists at all visible from the seam it was
+ * written for.
  */
-export const EXTRACTED_OBJECT_ID_KEY = 'extractedObjectId';
+export { EXTRACTED_OBJECT_ID_KEY, readExtractedObjectId };
 
 @Injectable()
 export class NoteSourceService {
@@ -94,6 +104,7 @@ export class NoteSourceService {
     private readonly prisma: PrismaService,
     private readonly materialize: TranscriptMaterializeService,
     private readonly markdown: MarkdownTranscriptExporter,
+    private readonly objects: NoteObjectsService,
   ) {}
 
   /**
@@ -250,28 +261,38 @@ export class NoteSourceService {
   }
 
   // ---------------------------------------------------------------------------
-  // document — THE SEAM FOR ISSUE #51
+  // document — FILLED IN BY ISSUE #51
   // ---------------------------------------------------------------------------
 
   /**
    * The extracted plain text of an uploaded document.
    *
-   * ⚠ ISSUE #51 FILLS THIS IN, AND THIS METHOD IS THE WHOLE SEAM. The contract
-   * is already fixed by spec §4.7 and needs no schema: `note.source.extract`
-   * writes a SECOND `storage_objects` row holding the extracted plain text and
-   * records its id in the FIRST object's own `metadata` as
+   * ⚠ IT READS THE EXTRACTED TEXT OBJECT, NEVER THE RAW UPLOADED BYTES. The
+   * contract is docs/specs/notes.md §4.7 and it needs no schema:
+   * `note.source.extract` writes a SECOND `storage_objects` row holding the
+   * plain text and records its id in the FIRST object's own `metadata` as
    * `{ extractedObjectId }`. This method reads that key, downloads that object,
-   * and returns its contents.
+   * and returns its contents. `note.generate` has no PDF parser, is not meant
+   * to grow one, and handing a model base64 PDF bytes would spend the user's
+   * own money producing confident nonsense.
    *
-   * Until then it fails CLEANLY — a domain error with a sentence, not a thrown
-   * bug and not a half-built download path. Two things it must never become:
+   * ⚠ IT NEVER RETURNS AN EMPTY STRING AS "the document had no text". An empty
+   * source produces a fluent note about nothing, which is exactly the invisible
+   * failure the token budget's refusal exists to avoid. Every way of arriving
+   * at no text is an `AiInputError` with a sentence instead.
    *
-   *   • it must never read the RAW UPLOADED BYTES. `note.generate` has no PDF
-   *     parser, is not meant to grow one, and handing a model a base64 PDF
-   *     would spend the user's own money producing confident nonsense.
-   *   • it must never return an empty string as "the document had no text".
-   *     An empty source produces a fluent note about nothing, which is exactly
-   *     the invisible failure the token budget's refusal exists to avoid.
+   * THE THREE "not ready" CASES ARE DISTINGUISHED, because they need different
+   * sentences and only one of them is worth waiting for:
+   *
+   *   • extraction RECORDED A PERMANENT FAILURE (an encrypted PDF, a scan with
+   *     no text layer, a corrupt file) — the stored message is shown verbatim,
+   *     because it is the one that says what to do about it, and for the
+   *     scanned case that OCR is not supported;
+   *   • extraction HAS NOT RUN YET — the job is queued or running, and the
+   *     honest answer is "try again in a moment";
+   *   • extraction SAYS it succeeded but the text object is gone — a purge or a
+   *     bucket lifecycle rule got there first, which is not something a retry
+   *     fixes.
    */
   private async resolveDocument(objectId: string | null): Promise<ResolvedSource> {
     if (!objectId) {
@@ -280,7 +301,9 @@ export class NoteSourceService {
 
     const object = await this.prisma.storageObject.findUnique({
       where: { id: objectId },
-      select: { id: true, filename: true, metadata: true },
+      // ⚠ `name`, NOT `filename` — `storage_objects` has no `filename` column,
+      // and selecting one is a runtime Prisma error rather than a type error.
+      select: { id: true, name: true, metadata: true },
     });
 
     if (!object) {
@@ -289,31 +312,65 @@ export class NoteSourceService {
 
     const extractedObjectId = readExtractedObjectId(object.metadata);
 
-    this.logger.warn(
-      `Note generation asked for document source ${object.id} ` +
-        `(extracted text object: ${extractedObjectId ?? 'none'}), which this build cannot read`,
-    );
+    if (!extractedObjectId) {
+      throw new AiInputError(this.describeMissingExtraction(object.name, object.metadata));
+    }
 
-    throw new AiInputError(
-      `Notes cannot yet be generated from uploaded documents such as "${object.filename}". ` +
-        'Choose a transcript or another note as the source.',
+    const buffer = await this.objects.downloadBuffer(extractedObjectId);
+
+    if (!buffer) {
+      this.logger.warn(
+        `Document ${object.id} names extracted text object ${extractedObjectId}, which has no ` +
+          'bytes — it was deleted after extraction recorded it',
+      );
+
+      throw new AiInputError(
+        `The text extracted from "${object.name}" is no longer available. Upload the document ` +
+          'again to generate a note from it.',
+      );
+    }
+
+    const text = buffer.toString('utf8');
+
+    if (text.trim().length === 0) {
+      // Defence in depth: the extractor refuses to record an empty success and
+      // the node result schema refuses to accept one, so reaching here means a
+      // row written by something neither of those guards. It is still a
+      // sentence rather than a fluent note about nothing.
+      throw new AiInputError(
+        `No text could be read from "${object.name}", so there is nothing to write a note from.`,
+      );
+    }
+
+    return { text, describe: `document ${object.id} (extracted text ${extractedObjectId})` };
+  }
+
+  /**
+   * Why this document has no extracted text yet, in a sentence.
+   *
+   * The recorded failure message is preferred over anything this method could
+   * compose, because it was written for the person who uploaded the file and
+   * names the specific condition — including, for a scanned PDF, that OCR is
+   * not supported. Falling back to "still being read" for an absent block is
+   * correct: a source object with no extraction block at all is one whose job
+   * has not settled.
+   */
+  private describeMissingExtraction(name: string, metadata: unknown): string {
+    const recorded = readExtractionMetadata(metadata);
+
+    if (recorded?.status === 'unextractable' && typeof recorded.message === 'string') {
+      return recorded.message;
+    }
+
+    if (recorded?.status === 'unextractable') {
+      return (
+        `No text could be read from "${name}", so there is nothing to write a note from.`
+      );
+    }
+
+    return (
+      `"${name}" is still being read. Its text has not finished extracting yet — try again in ` +
+      'a moment.'
     );
   }
-}
-
-/**
- * `{ extractedObjectId }` out of a storage object's metadata, or `null`.
- *
- * TOTAL OVER GARBAGE: `metadata` is JSONB written by another module and
- * possibly an earlier build, so it can be null, a string, an array, or an
- * object with the wrong field — every one of which means "no extracted text".
- */
-export function readExtractedObjectId(metadata: unknown): string | null {
-  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
-    return null;
-  }
-
-  const value = (metadata as Record<string, unknown>)[EXTRACTED_OBJECT_ID_KEY];
-
-  return typeof value === 'string' && value.length > 0 ? value : null;
 }
