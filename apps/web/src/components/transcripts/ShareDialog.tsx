@@ -401,7 +401,6 @@ export function ShareDialog({
                       gap: 1,
                       alignItems: { xs: 'flex-start', sm: 'center' },
                     }}
-                    secondaryAction={null}
                   >
                     <ListItemText
                       primary={shareDisplayLabel(share)}
