@@ -39,7 +39,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { StorageObject } from '@prisma/client';
-import { Readable } from 'node:stream';
+import { PassThrough, Readable, Transform } from 'node:stream';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectsService } from '../storage/objects/objects.service';
@@ -124,6 +124,96 @@ export class NoteObjectsService {
     );
 
     return object;
+  }
+
+  /**
+   * Stream bytes into object storage, recording the row once the upload lands.
+   *
+   * The counterpart to `put` for a producer that does not have a Buffer: a
+   * `note.export` renderer writes a PDF or a DOCX into `body` as it goes and
+   * the exporter contract (`apps/api/src/export/exporter-registry.ts`) forbids
+   * it from returning one. Cloned from `TranscriptObjectsService.putStream`
+   * exactly, including the metering `Transform`, for the reason this file's
+   * header already gives about `managed_by`.
+   *
+   * ⚠ THE SIZE IS METERED, NOT DECLARED. A caller cannot know a rendered PDF's
+   * byte length before rendering it, and a `storage_objects.size` copied from
+   * an estimate is a row that lies about the file it names.
+   */
+  putStream(input: Omit<RecordUploadedNoteObjectInput, 'size'>): {
+    body: PassThrough;
+    done: Promise<StorageObject>;
+  } {
+    const body = new PassThrough();
+
+    // ⚠ AN EXPLICIT `error` LISTENER, AND IT IS NOT DECORATION. The exporter
+    // contract says a failed render DESTROYS `out` — and `EventEmitter` turns
+    // an `error` event with no listener into an uncaught exception that takes
+    // the worker process down, not into a failed job. The real signal is the
+    // rejected `render` promise the handler is already awaiting beside `done`;
+    // this listener's only job is to keep a renderer's own honest failure from
+    // becoming a crash.
+    body.on('error', (error: Error) => {
+      this.logger.warn(`Managed upload to ${input.storageKey} was aborted: ${error.message}`);
+    });
+
+    let size = 0;
+
+    const meter = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        callback(null, chunk);
+      },
+    });
+
+    const metered = body.pipe(meter);
+
+    const done = (async () => {
+      await this.storage.upload(input.storageKey, metered, { mimeType: input.mimeType });
+
+      const existing = await this.findByKey(input.storageKey);
+      const object = existing ?? (await this.createRow({ ...input, size }));
+
+      this.logger.log(
+        `Streamed managed object ${object.id} (${size} bytes) to ${input.storageKey}`,
+      );
+
+      return object;
+    })();
+
+    // Nothing may reject unobserved here: the caller awaits `done`, but if the
+    // upload fails BEFORE the caller has finished writing, its writes would
+    // otherwise pile up against a stream nobody is reading.
+    done.catch((error: unknown) => {
+      body.destroy(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    return { body, done };
+  }
+
+  /**
+   * A short-lived signed GET for one object, or null if it is gone.
+   *
+   * ⚠ `contentDisposition` IS PART OF THE SIGNATURE. A provider signs
+   * `response-content-disposition` into the URL, which is what makes an export
+   * download as a named attachment instead of rendering in the tab — and also
+   * why it cannot be added by the caller afterwards as a header.
+   */
+  async signedUrlFor(
+    objectId: string,
+    expiresInSeconds: number,
+    contentDisposition?: string,
+  ): Promise<{ url: string; expiresAt: Date; object: StorageObject } | null> {
+    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
+
+    if (!object || object.status !== 'ready') return null;
+
+    const url = await this.storage.getSignedDownloadUrl(object.storageKey, {
+      expiresIn: expiresInSeconds,
+      responseContentDisposition: contentDisposition,
+    });
+
+    return { url, expiresAt: new Date(Date.now() + expiresInSeconds * 1000), object };
   }
 
   /**
