@@ -30,6 +30,10 @@ const OPERATIONS_DEFAULTS = {
   nodes: DEFAULT_SYSTEM_SETTINGS.nodes,
   databaseBackup: DEFAULT_SYSTEM_SETTINGS.databaseBackup,
   maintenance: DEFAULT_SYSTEM_SETTINGS.maintenance,
+  // #23, epic #19. Materialised by every write path exactly like the four
+  // above — `readKnownSettings` fills it and the merge writes it back — so an
+  // "exactly this value reached Prisma" assertion has to expect it.
+  transcription: DEFAULT_SYSTEM_SETTINGS.transcription,
 };
 
 describe('SystemSettingsService', () => {

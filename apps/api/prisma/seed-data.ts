@@ -226,6 +226,38 @@ export const DEFAULT_SYSTEM_SETTINGS = {
     // be dumped somewhere other than the API server" are different questions.
     nodeOffloadEnabled: false,
   },
+  // ---------------------------------------------------------------------------
+  // Transcription (#23, epic #19)
+  // ---------------------------------------------------------------------------
+  //
+  // INERT on a fresh deployment: `enabled: false` and `provider: null` mean
+  // nothing is submitted to any third party until an administrator chooses a
+  // vendor and saves a key. The per-provider block is populated anyway, so
+  // choosing AssemblyAI is one field rather than four.
+  //
+  // ⚠ NO API KEY HERE, AND THERE NEVER CAN BE ONE. The provider credential
+  // lives in the encrypted `credentials` table at
+  // `(purpose 'transcription', name '<providerId>')`; this namespace carries a
+  // compile-time proof that it has no secret-bearing field
+  // (`src/transcription/transcription-settings.schema.ts`).
+  transcription: {
+    enabled: false,
+    provider: null as string | null,
+    providers: {
+      assemblyai: {
+        region: 'us',
+        speechModel: 'universal',
+      },
+    },
+    audioDelivery: 'presigned_url',
+    presignedUrlTtlMinutes: 360,
+    deleteRemoteAfterIngest: true,
+    defaultLanguage: null as string | null,
+    transcodeNodeOffloadEnabled: true,
+    playback: {
+      bitrateKbps: 64,
+    },
+  },
   maintenance: {
     enabled: false,
     // Names no product and no repository — this is a template repo, and the
