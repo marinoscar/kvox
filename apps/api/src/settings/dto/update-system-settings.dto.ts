@@ -136,6 +136,37 @@ const transcriptionSettingsSchema = z.object({
   }),
 });
 
+/**
+ * AI policy (#47, epic #45).
+ *
+ * RESTATED HERE rather than imported from `ai/ai-settings.schema.ts`, exactly
+ * like the five blocks above and for the reason at the top of this file: these
+ * are the OpenAPI-visible request schemas that `createZodDto` reads, and the
+ * service validates against the shared schema again on the way in. The two
+ * copies must move together — `common/schemas/settings-parity.spec.ts` is what
+ * fails the build when they do not.
+ *
+ * ⚠ NO `apiKey` FIELD, HERE OR ANYWHERE IN THIS NAMESPACE — and in this epic
+ * not even a write-only one, because there is no deployment AI key at all.
+ * Every AI key belongs to an individual user and is written through
+ * `PUT /api/ai-credentials` into `user_ai_credentials`. A key accepted by THIS
+ * body would be persisted into the settings blob, which is the exact failure
+ * `ai-settings.schema.ts`'s compile-time proof exists to prevent.
+ */
+const aiSettingsSchema = z.object({
+  enabled: z.boolean(),
+  providers: z.object({
+    openai: z.object({
+      baseUrl: z.string().trim().url().max(512),
+      allowedModels: z.array(z.string().trim().min(1).max(128)).max(50),
+      defaultModel: z.string().trim().min(1).max(128),
+    }),
+  }),
+  maxInputTokens: z.number().int().min(256).max(2_000_000),
+  maxOutputTokens: z.number().int().min(64).max(200_000),
+  requestTimeoutMs: z.number().int().min(1_000).max(3_600_000),
+});
+
 // Full replacement (PUT)
 export const updateSystemSettingsSchema = z.object({
   // REQUIRED. A PUT that omits it is a 400 and
@@ -150,6 +181,7 @@ export const updateSystemSettingsSchema = z.object({
   databaseBackup: databaseBackupSettingsSchema.optional(),
   maintenance: maintenanceSettingsSchema.optional(),
   transcription: transcriptionSettingsSchema.optional(),
+  ai: aiSettingsSchema.optional(),
 });
 
 export class UpdateSystemSettingsDto extends createZodDto(
@@ -258,6 +290,35 @@ export const patchSystemSettingsSchema = z.object({
           bitrateKbps: z.number().int().min(16).max(320).optional(),
         })
         .optional(),
+    })
+    .optional(),
+  // AI policy (#47, epic #45). Optional at the namespace level and field by
+  // field inside, so `{ "ai": { "enabled": true } }` is a legal body. If this
+  // branch were missing, that body would parse to `{}` and the PATCH would be
+  // a no-op returning 200 — the exact defect `settings-parity.spec.ts` exists
+  // to catch. `allowedModels` REPLACES wholesale rather than merging, RFC
+  // 7396's rule for arrays and the only one that can express "stop permitting
+  // this model".
+  ai: z
+    .object({
+      enabled: z.boolean().optional(),
+      providers: z
+        .object({
+          openai: z
+            .object({
+              baseUrl: z.string().trim().url().max(512).optional(),
+              allowedModels: z
+                .array(z.string().trim().min(1).max(128))
+                .max(50)
+                .optional(),
+              defaultModel: z.string().trim().min(1).max(128).optional(),
+            })
+            .optional(),
+        })
+        .optional(),
+      maxInputTokens: z.number().int().min(256).max(2_000_000).optional(),
+      maxOutputTokens: z.number().int().min(64).max(200_000).optional(),
+      requestTimeoutMs: z.number().int().min(1_000).max(3_600_000).optional(),
     })
     .optional(),
 });

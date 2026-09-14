@@ -12,6 +12,7 @@ import {
   type SystemDatabaseBackupValue,
   type SystemMaintenanceValue,
   type SystemTranscriptionValue,
+  type SystemAiValue,
 } from '../schemas/settings.schema';
 
 // =============================================================================
@@ -114,6 +115,18 @@ export interface SystemSettingsValue {
    * no secret-bearing field.
    */
   transcription: SystemTranscriptionValue;
+  /**
+   * AI policy (#47, epic #45): whether AI is on, which endpoint is called,
+   * which models are permitted, and the token/time ceilings on one request.
+   *
+   * REQUIRED, like every namespace above, and for the same reason.
+   *
+   * ⚠ NO API KEY IS PART OF THIS TYPE AND NONE CAN BECOME SO — `SystemAiValue`
+   * carries a compile-time proof that it has no secret-bearing field. Unlike
+   * `transcription`, there is no key in the `credentials` table either: every
+   * AI key belongs to an individual user and lives in `user_ai_credentials`.
+   */
+  ai: SystemAiValue;
 }
 
 /**
@@ -252,5 +265,52 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     allowAdmins: true,
     startedAt: null,
     startedById: null,
+  },
+  // ---------------------------------------------------------------------------
+  // AI (#47, epic #45)
+  // ---------------------------------------------------------------------------
+  //
+  // INERT, like every namespace above it: `enabled: false` and an EMPTY
+  // `allowedModels` mean an upgrade changes nothing at all until an
+  // administrator turns AI on and names the models this deployment permits.
+  // Both halves of that are load-bearing — an empty allow-list on its own
+  // already makes `GET /api/ai/config` report `available: false`, so a
+  // deployment that flips `enabled` without choosing models gets a clearly
+  // unavailable feature rather than an unbounded one.
+  //
+  // ⚠ NO API KEY HERE, AND THERE NEVER CAN BE ONE — and unlike
+  // `transcription` above, there is none in the encrypted `credentials` table
+  // either. Every AI key belongs to an individual user
+  // (`user_ai_credentials`, cascading on the user); this namespace carries a
+  // compile-time proof that it has no secret-bearing field
+  // (`src/ai/ai-settings.schema.ts`).
+  ai: {
+    enabled: false,
+    providers: {
+      openai: {
+        // OpenAI's own API root, including the version segment. An
+        // OpenAI-compatible gateway is the reason this is a setting at all.
+        baseUrl: 'https://api.openai.com/v1',
+        // EMPTY on purpose. Naming a model here would be this application
+        // choosing which vendor model a deployment's content may be sent to,
+        // which is precisely the decision the allow-list exists to leave to an
+        // administrator.
+        allowedModels: [],
+        // A sensible first offer once an administrator permits it. Harmless
+        // while `allowedModels` is empty: the config probe only ever returns a
+        // default that survived the intersection with the allow-list.
+        defaultModel: 'gpt-4o',
+      },
+    },
+    // Comfortably inside every model in the OpenAI catalogue, so the model's
+    // own context window is the binding constraint on a fresh deployment
+    // rather than a ceiling nobody chose.
+    maxInputTokens: 100_000,
+    // Roughly 12,000 words — long enough for any note this epic generates, and
+    // short enough that a runaway completion is bounded on somebody's own bill.
+    maxOutputTokens: 16_384,
+    // Ten minutes. A streamed completion legitimately runs for minutes; this is
+    // the backstop for a wedged connection, not an ordinary HTTP timeout.
+    requestTimeoutMs: 600_000,
   },
 };

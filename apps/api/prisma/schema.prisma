@@ -76,6 +76,15 @@ model User {
   noteTemplatesOwned     NoteTemplate[]   @relation("NoteTemplateOwner")
   noteVersionsAuthored   NoteVersion[]    @relation("NoteVersionAuthor")
   noteExportsRequested   NoteExport[]     @relation("NoteExportRequestedBy")
+  // Per-user AI credentials (issue #47, epic #45). ONE relation, and it
+  // CASCADES — unlike `credentialUpdates` above, which is `SetNull` because a
+  // `credentials` row belongs to the deployment rather than to the person who
+  // last typed it in. This one belongs to the user outright: it is their own
+  // provider account's key, their own quota and their own bill, so deleting
+  // the account must take the encrypted key with it. See the block comment
+  // above `UserAiCredential` for why that FK could not be added to
+  // `credentials` instead.
+  aiCredentials          UserAiCredential[] @relation("UserAiCredentials")
 
   @@map("users")
 }
@@ -3204,4 +3213,99 @@ model NoteExport {
   // identifier limit.
   @@index([noteId, version, format, optionsHash], map: "note_exports_lookup_idx")
   @@map("note_exports")
+}
+
+// =============================================================================
+// Per-user AI credentials (issue #47, epic #45)
+// =============================================================================
+//
+// THE FIRST PER-USER SECRET IN THIS SCHEMA. Every other credential this
+// application stores is DEPLOYMENT-SCOPED — the SMTP password, the AssemblyAI
+// key, the VAPID private key — and all of them live in `credentials`, keyed
+// `(purpose, name)`. Epic #45's AI features are strict BYO instead: a user
+// brings their own OpenAI account, their own quota and their own bill, and a
+// user with no key has no AI features (there is deliberately no deployment
+// fallback key — see docs/specs/notes.md §9).
+//
+// -----------------------------------------------------------------------------
+// WHY THIS IS NOT A ROW IN `credentials`
+// -----------------------------------------------------------------------------
+//
+// The obvious alternative — `(purpose 'ai', name 'openai:<userId>')` — was
+// rejected for one structural reason: `credentials` HAS NO FOREIGN KEY TO
+// `users`, and cannot grow one, because its whole point is to hold secrets that
+// belong to the deployment rather than to a person (`Credential.updatedByUserId`
+// is `SetNull` precisely so offboarding an administrator does not delete a
+// working SMTP configuration). Encoding a user id into the `name` column would
+// therefore mean that deleting a user leaves their encrypted PERSONAL API key in
+// the table forever, with nothing to clean it up and no enumeration path short of
+// string-parsing every row's `name`. A cascading foreign key is the entire point
+// of this table: the key is the user's, so its lifetime is the user's.
+//
+// -----------------------------------------------------------------------------
+// ZERO NEW CRYPTOGRAPHY
+// -----------------------------------------------------------------------------
+//
+// `secret` holds `encryptSecret(rawKey, 'ai-key')`'s output —
+// `common/crypto/secret-cipher.ts` UNCHANGED, with a new purpose string as the
+// AES-GCM sub-key domain. `@db.Text` for the same reason `Credential.secret` is:
+// a base64 AES-GCM payload has no meaningful bound and must never be truncated.
+//
+// A NEW PURPOSE, NOT `'transcription'` OR `'smtp'`: `purpose` is the derivation
+// label, so domain separation means a ciphertext lifted out of `credentials` and
+// pasted into this column fails authentication rather than decrypting into a
+// context where it means something else. Changing `'ai-key'` later does not
+// rename anything — it orphans every stored key permanently.
+//
+// -----------------------------------------------------------------------------
+// NEVER RETURNED, BY ANY ROUTE
+// -----------------------------------------------------------------------------
+//
+// `GET /api/ai-credentials` returns `provider`, `hint`, `label` and
+// `lastUsedAt`. The ciphertext is not selected by that query at all, and no
+// response DTO in `src/ai/dto/` has a field able to hold it. `hint` is the same
+// non-secret mask `Credential.hint` carries (`••••` plus at most four trailing
+// characters, nothing at all below eight), derived on write by code that already
+// holds the plaintext.
+// =============================================================================
+model UserAiCredential {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @map("user_id") @db.Uuid
+
+  // Which registered `AiProvider` (`src/ai/ai-provider.registry.ts`) this key
+  // is for. A PLAIN STRING, not an enum — the provider registry is code-owned
+  // and open, exactly like `Transcript.provider` and `Job.type`, so a fork
+  // registering its own OpenAI-compatible vendor costs zero migrations.
+  provider String
+
+  // `encryptSecret(rawKey, 'ai-key')`. See the header: this column is the only
+  // place a user's AI key exists at rest, and nothing reads it but the one
+  // service method that hands the plaintext straight to a provider context.
+  secret String @db.Text
+
+  // The non-secret display mask, e.g. `••••a1b2`. Nullable for the same reason
+  // `Credential.hint` is: a short key has no suffix worth revealing.
+  hint String?
+
+  // A user-supplied label, so somebody with keys on two accounts can tell them
+  // apart ("work", "personal"). Non-secret and shown verbatim.
+  label String?
+
+  // When this key was last USED — updated by the generation path (#49) and by a
+  // successful probe, so the settings page can say "last used 2 hours ago"
+  // without re-probing on every page load. Never a clock this application acts
+  // on; purely informational.
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // ⚠ Cascade, and this is the whole reason the table exists. See the header.
+  user User @relation("UserAiCredentials", fields: [userId], references: [id], onDelete: Cascade)
+
+  // One key per user per provider. The address every read and write uses;
+  // replacing a key is an upsert on this pair, never a second row.
+  @@unique([userId, provider])
+  @@map("user_ai_credentials")
 }

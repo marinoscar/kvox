@@ -127,6 +127,23 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'it empty preserves the stored value.',
       },
       {
+        name: 'AI',
+        description:
+          'The AI provider framework behind notes: which provider and models this deployment ' +
+          'permits, the token and timeout ceilings on one request, and each user\'s OWN ' +
+          'provider API key. The admin half (`/api/ai-settings`) is gated on ' +
+          '`system_settings:read`/`:write`, because this configuration IS a namespace of the ' +
+          'system settings row; `GET /api/ai/config` alongside it is a narrow capability ' +
+          'probe gated on `notes:read`, which is seeded to every role, and its ' +
+          '`keyConfigured` field is what every AI surface in the web app gates on.\n\n' +
+          '⚠ **Keys here are per-user, and there is deliberately no deployment key.** Each ' +
+          'user saves their own through `PUT /api/ai-credentials`; it is encrypted at rest, ' +
+          'is never returned by any endpoint to anyone including an administrator, and a ' +
+          'user with no key simply has no AI features — there is no organisation-wide ' +
+          'credential to fall back on, so no user\'s content ever reaches an account they ' +
+          'did not choose.',
+      },
+      {
         name: 'Push Configuration',
         description:
           'Runtime-configurable Web Push (VAPID) keys: generate, rotate, enable/disable and ' +

@@ -78,6 +78,27 @@ export const systemSettingsResponseSchema = z.object({
       bitrateKbps: z.number(),
     }),
   }),
+  // #47, epic #45. Published from the day the namespace exists, for the reason
+  // every block above is: a block the response omits is a block no client can
+  // echo back in a PUT, which would leave `replaceSettings` carrying it forward
+  // blind forever.
+  //
+  // ⚠ NO API KEY IS PART OF THIS NAMESPACE AND NONE CAN APPEAR HERE. Unlike
+  // `transcription`, there is not even a deployment key elsewhere: every AI key
+  // belongs to an individual user and lives in `user_ai_credentials`.
+  ai: z.object({
+    enabled: z.boolean(),
+    providers: z.object({
+      openai: z.object({
+        baseUrl: z.string(),
+        allowedModels: z.array(z.string()),
+        defaultModel: z.string(),
+      }),
+    }),
+    maxInputTokens: z.number(),
+    maxOutputTokens: z.number(),
+    requestTimeoutMs: z.number(),
+  }),
   updatedAt: z.iso.datetime(),
   updatedBy: z
     .object({
