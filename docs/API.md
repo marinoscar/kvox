@@ -3137,6 +3137,137 @@ means asking to discard edits the caller has never seen. **409** otherwise, and
 
 **Requires:** `transcripts:write`, plus `edit` access
 
+#### GET /transcripts/exporters
+Every registered export format, with the options it accepts. Issue #28.
+
+```json
+{
+  "data": {
+    "exporters": [
+      {
+        "format": "json",
+        "label": "JSON",
+        "mimeType": "application/json",
+        "extension": "json",
+        "options": [
+          {
+            "key": "includeWords",
+            "label": "Include word timings",
+            "description": "Adds per-word start, end and confidence to every segment. Much larger, and only useful to something that lines the text up against the audio.",
+            "type": "boolean",
+            "default": false
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Build the export UI from this response, not from a list of formats compiled
+into a client.** The whole point of the exporter registry (spec §8.1) is that
+adding a format is one new class on the server: a deployment that registers a
+`docx` exporter offers it here, with its own options, and nothing in any client
+changes. An option's `key` is what goes inside `options` on the request below;
+`default` is the value used when the request omits it.
+
+**Requires:** `transcripts:read`
+
+#### POST /transcripts/{id}/exports
+Render one version of this transcript into one format.
+
+**Body:** `{ format, version?, options? }`. `version` defaults to the
+transcript's current version and may be **any version in the history** — the
+export contains *that* version's content, not the current one. `options` is
+validated against the chosen format's own schema from `GET /transcripts/exporters`.
+
+Two success codes, and they mean different things:
+
+| Status | Meaning |
+|---|---|
+| **202** | No matching export existed; a render has been queued. Poll `GET /transcripts/{id}/exports/{exportId}` |
+| **200** | An export of the same version, format and options already exists and has not expired. It is returned as-is; nothing was rendered |
+
+The body carries `reused` for a client that cannot see the status line (a fetch
+wrapper that unwraps `{ data }`, a proxy that rewrote it).
+
+```json
+{
+  "data": {
+    "id": "e7c1…",
+    "transcriptId": "9f3a…",
+    "version": 4,
+    "format": "markdown",
+    "options": { "includeTimestamps": true, "mergeConsecutive": false },
+    "status": "pending",
+    "reused": false,
+    "mimeType": "text/markdown; charset=utf-8",
+    "filename": "Weekly sync (v4).md",
+    "sizeBytes": null,
+    "error": null,
+    "downloadUrl": null,
+    "downloadExpiresAt": null,
+    "expiresAt": "2026-09-21T12:00:00.000Z",
+    "createdAt": "2026-09-14T12:00:00.000Z"
+  }
+}
+```
+
+**There is no synchronous path, at any size.** Every export is a
+`transcript.export` job (`5m / 2 attempts`, priority `−10`). Spec §8.5 rejects a
+size threshold explicitly: it is two code paths for the same operation, and the
+inline one breaks the day a short recording turns out to have a dense correction
+history, at the one moment nobody is watching for it. It also means an export
+survives the phone that asked for it being backgrounded.
+
+**Reuse is content-addressed**, on `sha256({ format, version, options })` with
+the options **as parsed** — so `{}` and an explicit set of every default are the
+same export and share one render. A `failed` row is **never** reused: a retry
+must actually retry.
+
+**400** for an unknown `format` (the message names the ones that exist) and for
+an option the chosen format does not accept — an unknown key is refused rather
+than silently ignored, because a stripped key would render without the option
+and report success. **404** for a version that does not exist, and for no access.
+
+**Requires:** `transcripts:read`, plus **view** access — an `editor` or `viewer`
+share both satisfy it. Taking a conversation you were shown out of this
+application is a read.
+
+#### GET /transcripts/{id}/exports/{exportId}
+The export's status, and — once `status` is `ready` — a short-lived signed
+`downloadUrl` that serves the file as an attachment named
+`<title> (v<n>).<ext>`. The `Content-Disposition` is signed **into** the URL, so
+the filename cannot be added by a client afterwards and the URL should be handed
+to the browser rather than fetched.
+
+Poll while `status` is `pending`. A `failed` export carries the reason in
+`error`; requesting the same export again queues a fresh render.
+
+**Exports expire after 7 days**, and `transcripts.housekeeping` deletes both the
+row and the file. Nothing is lost — an export is a byte-for-byte reproducible
+artifact of a specific version and a specific set of options, so requesting the
+identical export again produces the identical file.
+
+**404** for an export id belonging to a different transcript: the lookup is
+scoped by `transcriptId`, which *is* the authorisation.
+
+**Requires:** `transcripts:read`, plus view access
+
+#### The three export formats
+
+| Format | What it is |
+|---|---|
+| `json` | The **public, versioned export schema** published as [`docs/specs/transcript-export.v1.schema.json`](specs/transcript-export.v1.schema.json). Every document carries a literal `schema` field — that file's `$id` — and a consumer switches on it rather than assuming the shape of an unversioned blob. The contract is permanent: a field is added, never removed or repurposed, and a breaking change ships as a **v2** schema with its own `$id` beside this one |
+| `markdown` | YAML front matter (title, date, duration, speakers, version) then `**Speaker** · 00:01:23` paragraphs. Every interpolated value is escaped for Markdown's own specials, because a speaker name and a line of speech are text, not markup |
+| `pdf` | pdfkit, streamed, with bundled Noto faces: a cover block (title, date, duration, participants with talk time), speaker names in their own colours, a timestamp margin, a running header, and a footer reading `Page x of y · Version n · Exported from <app>` |
+
+**CJK and right-to-left scripts are a documented v1 limitation of the PDF**, not
+a silent gap: the bundled Noto Sans covers Latin, Greek and Cyrillic and has no
+CJK glyphs, and pdfkit performs no bidirectional reordering. Both are fixed by
+bundling the relevant Noto families and adding a bidi pass, and are out of this
+epic's scope.
+
 #### Snapshots, and what they are for
 
 A snapshot is a **compaction of replay work, never a second source of truth**.
@@ -3157,7 +3288,7 @@ ops on top of.
 
 Completing the upload raises an event whose listener **only enqueues** — it
 never calls the provider inline, which would be a multi-minute network call with
-no job row, no timeout, no retry and no visibility in `GET /admin/jobs`. Seven
+no job row, no timeout, no retry and no visibility in `GET /admin/jobs`. Eight
 job types carry the work; all of the ones that talk to the provider are
 **server-only**, because the provider API key is a long-lived, account-level
 secret no per-job broker can narrow.
@@ -3169,6 +3300,7 @@ secret no per-job broker can narrow.
 | `transcription.poll` | `2m / 5 attempts` | Re-enqueues itself with `skipDedup: true`. First delay `clamp(duration × 0.05, 30s, 5m)`, then ×1.5 to a 5-minute cap. Hard deadline `submittedAt + max(6h, 3 × duration)` |
 | `transcription.ingest` | `15m / 3 attempts` | Writes speakers, segments, version 1 (`ai_original`) and `status: ready` in **one transaction**; stores the raw provider JSON gzipped for provenance; deletes the provider's copy |
 | `transcript.snapshot` | `10m / 3 attempts` | A point-in-time copy of a version's materialized state, read under `REPEATABLE READ`. Server-only: the whole job is a multi-table consistent read |
+| `transcript.export` | `5m / 2 attempts` | Renders one version into one format and writes it as a managed object. Priority **−10** — somebody is watching a spinner. Server-only in v1 **not** under one of rule 2's exemptions but because the renderers live in the API: a second copy in the CLI would make the output depend on which executor claimed the job |
 | `transcript.purge` | deployment default | Everything a deleted transcript owned |
 | `transcripts.housekeeping` | deployment default | Restarts a lost poll chain, fails transcripts whose upload was cleaned up, expires exports. Enqueued by a ten-minute cron that only enqueues |
 

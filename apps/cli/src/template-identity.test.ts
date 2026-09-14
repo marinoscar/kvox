@@ -184,6 +184,14 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // publishes `<name>.transcript/v1` as a NEW schema beside this one; it
   // does not renumber this one. See docs/specs/transcription.md §8.2.
   'docs/specs/transcript-export.v1.schema.json',
+  // The exporter that WRITES that `$id` into every document it renders
+  // (issue #28). Exactly the same standing, for exactly the same reason: the
+  // string is the published format identifier a third-party parser matches on,
+  // not a display string, and a rebrand that rewrote it would invalidate every
+  // consumer of every file exported before the rename. Everything else in the
+  // file is product-neutral; the constant carries the argument at its own
+  // declaration so nobody "tidies" it into a template literal.
+  'apps/api/src/transcripts/export/json.exporter.ts',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this

@@ -2,10 +2,11 @@
 // TranscriptsController (issue #25, epic #19)
 // =============================================================================
 //
-// Nineteen routes: the ten reads and lifecycle actions of issue #25, the five
+// Twenty-two routes: the ten reads and lifecycle actions of issue #25, the five
 // corrections routes of issue #27 — apply a batch of ops, search, browse the
-// version history, read one version, restore one — and the four sharing routes
-// of issue #29.
+// version history, read one version, restore one — the four sharing routes of
+// issue #29, and the three export routes of issue #28: list the formats,
+// request an export, poll and download it.
 //
 // -----------------------------------------------------------------------------
 // THE SHARING FOUR, AND THE ONE OF THEM THAT IS NOT OWNER-ONLY
@@ -138,6 +139,14 @@ import {
   type CreateTranscriptShareDto,
   type UpdateTranscriptShareDto,
 } from './dto/transcript-share.dto';
+import {
+  CreateTranscriptExportBodyDto,
+  TranscriptExportDto,
+  TranscriptExportersDto,
+  createTranscriptExportSchema,
+  type CreateTranscriptExportDto,
+} from './dto/transcript-export.dto';
+import { TranscriptExportService } from './export/transcript-export.service';
 import { TranscriptEditingService } from './transcript-editing.service';
 import { TranscriptSharingService } from './transcript-sharing.service';
 import { TranscriptsService } from './transcripts.service';
@@ -183,6 +192,7 @@ export class TranscriptsController {
     private readonly transcripts: TranscriptsService,
     private readonly editing: TranscriptEditingService,
     private readonly sharing: TranscriptSharingService,
+    private readonly exports: TranscriptExportService,
   ) {}
 
   // ===========================================================================
@@ -267,6 +277,30 @@ export class TranscriptsController {
   @ApiDataResponse(TranscriptSummaryDto, { description: 'The caller\'s transcript summary' })
   async summary(@CurrentUser('id') userId: string) {
     return this.transcripts.summary(userId);
+  }
+
+  // ===========================================================================
+  // Exports (issue #28, spec §8)
+  // ===========================================================================
+
+  // ⚠ DECLARED BEFORE `@Get(':id')`. Fastify's router would otherwise match
+  // `/api/transcripts/exporters` against the uuid parameter route, and
+  // `ParseUUIDPipe` would answer 400 for a literal path that exists.
+  @Get('exporters')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'List the available export formats',
+    description:
+      'Every registered exporter, with the options it accepts. The export dialog builds ' +
+      'itself from this response rather than from a list of formats compiled into the ' +
+      'client, so a deployment that registers a new exporter offers it immediately.\n\n' +
+      'Each option carries its `key`, a `label`, a `description` and a `default`. Send the ' +
+      'keys you want to change inside `options` on `POST /api/transcripts/{id}/exports`; ' +
+      'an unknown key is a **400**, never a silently ignored field.',
+  })
+  @ApiDataResponse(TranscriptExportersDto, { description: 'The registered export formats' })
+  exporters() {
+    return this.exports.listExporters();
   }
 
   @Get(':id')
@@ -638,6 +672,76 @@ export class TranscriptsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.editing.restore(id, version, dto, user);
+  }
+
+  @Post(':id/exports')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'Export a transcript',
+    description:
+      'Renders one version of this transcript into one format, as a **queue job** — there ' +
+      'is no size threshold below which an export runs inside the request, because a ' +
+      'threshold is two code paths where the fast one breaks on the first unusually large ' +
+      'document.\n\n' +
+      '**202** with the new export when a render was queued. **200** when an export of the ' +
+      'same version, format and options already exists and has not expired: the identical ' +
+      'request produces the identical file, so it is returned rather than rendered again. ' +
+      'The `reused` field says which happened, for a client that cannot see the status ' +
+      'line.\n\n' +
+      '`version` defaults to the current version; any version in the history may be ' +
+      'exported and the export contains **that** version\'s content. `options` are ' +
+      "validated against the chosen format's own schema from " +
+      '`GET /api/transcripts/exporters` — an unknown key is a 400.\n\n' +
+      'Requires **view** access, which an `editor` or `viewer` share both satisfy: taking ' +
+      'a conversation you were shown out of this application is a read.\n\n' +
+      'Exports expire after **7 days** and their files are deleted by the housekeeping ' +
+      'sweep. Nothing is lost — requesting the identical export again produces the ' +
+      'identical file.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiBody({ type: CreateTranscriptExportBodyDto })
+  @ApiDataResponse(TranscriptExportDto, {
+    status: 202,
+    description: 'A render was queued; poll the export for its status',
+  })
+  @ApiResponse({ status: 200, description: 'An identical, unexpired export already existed' })
+  @ApiResponse({ status: 400, description: 'Unknown format, or an option that format does not accept' })
+  @ApiResponse({ status: 404, description: 'No such transcript or version, or no access to it' })
+  async createExport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(createTranscriptExportSchema)) dto: CreateTranscriptExportDto,
+    @CurrentUser() user: RequestUser,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ) {
+    const result = await this.exports.requestExport(id, dto, user);
+
+    reply.status(result.created ? HttpStatus.ACCEPTED : HttpStatus.OK);
+
+    return result.export;
+  }
+
+  @Get(':id/exports/:exportId')
+  @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })
+  @ApiOperation({
+    summary: 'Get an export',
+    description:
+      'The export\'s status, and — once it is `ready` — a short-lived signed ' +
+      '`downloadUrl` that serves the file as an attachment named ' +
+      '`<title> (v<n>).<ext>`.\n\n' +
+      'Poll this while `status` is `pending`. A `failed` export carries the reason in ' +
+      '`error`; requesting the same export again queues a fresh render rather than ' +
+      'returning the failure, because a failed row is never reused.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiParam({ name: 'exportId', type: String, format: 'uuid' })
+  @ApiDataResponse(TranscriptExportDto, { description: 'The export' })
+  @ApiResponse({ status: 404, description: 'No such transcript or export, or no access to it' })
+  async getExport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('exportId', ParseUUIDPipe) exportId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.exports.getExport(id, exportId, user);
   }
 
   // ===========================================================================
