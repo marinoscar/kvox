@@ -58,10 +58,14 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { useEffect, useMemo, useState } from 'react';
+import visuallyHidden from '@mui/utils/visuallyHidden';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { TranscriptRowActions } from './TranscriptRowActions';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
+import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
+import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTranscripts } from '../../hooks/useTranscripts';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
@@ -86,10 +90,20 @@ function TranscriptRow({
   transcript,
   dense,
   onOpen,
+  previewState,
+  previewError,
+  onTogglePreview,
+  onChanged,
 }: {
   transcript: TranscriptListItem;
   dense: boolean;
   onOpen: () => void;
+  /** What the list's ONE audio element is doing for this row. */
+  previewState: AudioPreviewState;
+  /** The preview's last failure, when it was this row's. */
+  previewError: string | null;
+  onTogglePreview: () => void;
+  onChanged: () => void;
 }) {
   const meta = [
     formatRelativeTime(transcript.createdAt),
@@ -99,40 +113,74 @@ function TranscriptRow({
 
   return (
     <Card variant="outlined" component="li" sx={{ listStyle: 'none' }}>
-      <CardActionArea
-        onClick={onOpen}
-        sx={{
-          p: dense ? 1.25 : 2,
-          display: 'flex',
-          alignItems: dense ? 'center' : 'flex-start',
-          flexDirection: dense ? 'row' : 'column',
-          gap: dense ? 2 : 0.75,
-          // Without this the action area's content can report a wider
-          // min-content width than the column it sits in and push the page
-          // sideways — the same reason the shell sets `minWidth: 0` all the
-          // way down.
-          minWidth: 0,
-        }}
-      >
-        <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
-          {/* `h2`: the page's one `h1` is "Library" and there is no heading
-              between it and this row — the tab strip is a `tablist`, not a
-              heading — so `h3` here would skip a level. Asserted by the axe
-              pass in `LibraryPage.test.tsx`, which is where that gets caught. */}
-          <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 600 }}>
-            {transcript.title}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" component="p">
-            {meta}
+      {/* TWO SIBLINGS, NOT ONE ACTION AREA. The card body opens the transcript
+          and the cluster acts on it, and neither may contain the other: a
+          button inside a button is invalid HTML, fails axe, and leaves a
+          keyboard user tabbing to a control their screen reader has just
+          described as part of something else. See `TranscriptRowActions`. */}
+      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+        <CardActionArea
+          onClick={onOpen}
+          sx={{
+            p: dense ? 1.25 : 2,
+            display: 'flex',
+            alignItems: dense ? 'center' : 'flex-start',
+            flexDirection: dense ? 'row' : 'column',
+            gap: dense ? 2 : 0.75,
+            // Without this the action area's content can report a wider
+            // min-content width than the column it sits in and push the page
+            // sideways — the same reason the shell sets `minWidth: 0` all the
+            // way down. It is now doing that job for a flex ITEM as well as a
+            // flex container, which is what keeps the cluster on the card at
+            // 360px instead of the title shoving it off the edge.
+            minWidth: 0,
+            flexGrow: 1,
+          }}
+        >
+          <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
+            {/* `h2`: the page's one `h1` is "Library" and there is no heading
+                between it and this row — the tab strip is a `tablist`, not a
+                heading — so `h3` here would skip a level. Asserted by the axe
+                pass in `LibraryPage.test.tsx`, which is where that gets caught. */}
+            <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 600 }}>
+              {transcript.title}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" component="p">
+              {meta}
+            </Typography>
+          </Box>
+          <Box sx={{ flexShrink: 0 }}>
+            {/* The stage is only shown while something is moving — see
+                `TranscriptStatusChip`'s own note on why a settled list does not
+                want forty chips carrying a redundant second clause. */}
+            <TranscriptStatusChip transcript={transcript} showStage />
+          </Box>
+        </CardActionArea>
+        <TranscriptRowActions
+          transcript={transcript}
+          dense={dense}
+          previewState={previewState}
+          onTogglePreview={onTogglePreview}
+          onOpen={onOpen}
+          onChanged={onChanged}
+        />
+      </Box>
+      {/* On the row it happened to, not in a banner above the list: a message
+          about a recording the reader would then have to go and find is a
+          message about nothing they can act on.
+
+          NOT a live region of its own. It is announced through the list's one
+          standing region instead — a `role="status"` element that is inserted
+          at the same moment as the text inside it is announced by some screen
+          readers and silently ignored by others, and this row has a persistent
+          region a few lines below it that has neither problem. */}
+      {previewError ? (
+        <Box sx={{ px: dense ? 1.25 : 2, pb: dense ? 1 : 1.5 }}>
+          <Typography variant="caption" color="error" component="p">
+            {previewError}
           </Typography>
         </Box>
-        <Box sx={{ flexShrink: 0 }}>
-          {/* The stage is only shown while something is moving — see
-              `TranscriptStatusChip`'s own note on why a settled list does not
-              want forty chips carrying a redundant second clause. */}
-          <TranscriptStatusChip transcript={transcript} showStage />
-        </Box>
-      </CardActionArea>
+      ) : null}
     </Card>
   );
 }
@@ -153,11 +201,73 @@ export function TranscriptsLibraryView() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore } =
+  const { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
     useTranscripts(tab, {
       q: debouncedSearch,
       status: status === 'all' ? undefined : status,
     });
+
+  /**
+   * ONE audio element for the whole list — see the hook for why that is a
+   * structure rather than a rule, and why nothing is fetched until a press.
+   * It lives here, above the rows, because it is the list that owns the
+   * "exactly one at a time" guarantee.
+   */
+  const preview = useLibraryAudioPreview();
+
+  /**
+   * A row that leaves the list takes its playback with it.
+   *
+   * Filtering, searching, switching scope tabs or deleting the row all remove
+   * it from `transcripts` while the shared element happily keeps playing — with
+   * no pause control anywhere on screen, because the only one was on the row
+   * that just disappeared. Guarded on `isLoading`, since the list is
+   * momentarily empty during every refetch and stopping on THAT would make a
+   * search keystroke cut the audio off.
+   */
+  useEffect(() => {
+    if (isLoading || !preview.activeId) return;
+    if (transcripts.some((item) => item.id === preview.activeId)) return;
+    preview.stop();
+  }, [isLoading, preview, transcripts]);
+
+  /**
+   * What the list's one live region says — playback state AND failures.
+   *
+   * Both go through here rather than each row announcing for itself, because a
+   * region that is inserted at the same moment as its own content is announced
+   * inconsistently across screen readers, while this one is mounted for the
+   * life of the list. It is empty between states, so what a reader hears is the
+   * transition rather than the same sentence read twice.
+   *
+   * The Play button's own name already flips between Play and Pause, but a name
+   * is only announced when the control is touched — this is what tells somebody
+   * who pressed Play and moved on that the recording actually started, or that
+   * it did not.
+   *
+   * Every message names its transcript: one list, one player, forty rows, and
+   * "Playing" on its own answers the wrong question.
+   */
+  const announcement = useMemo(() => {
+    const titleOf = (transcriptId: string): string | null =>
+      transcripts.find((item) => item.id === transcriptId)?.title ?? null;
+
+    if (preview.error) {
+      const title = titleOf(preview.error.transcriptId);
+      return title ? `"${title}": ${preview.error.message}` : preview.error.message;
+    }
+    if (!preview.activeId) return '';
+    const title = titleOf(preview.activeId);
+    if (!title) return '';
+    if (preview.status === 'playing') return `Playing "${title}"`;
+    if (preview.status === 'paused') return `Paused "${title}"`;
+    return '';
+  }, [preview.activeId, preview.error, preview.status, transcripts]);
+
+  const openTranscript = useCallback(
+    (transcriptId: string) => navigate(`/transcripts/${transcriptId}`),
+    [navigate],
+  );
 
   const canCreate = hasPermission('transcripts:write');
 
@@ -265,7 +375,17 @@ export function TranscriptsLibraryView() {
               key={transcript.id}
               transcript={transcript}
               dense={!isPhone}
-              onOpen={() => navigate(`/transcripts/${transcript.id}`)}
+              onOpen={() => openTranscript(transcript.id)}
+              previewState={
+                preview.activeId === transcript.id ? preview.status : 'idle'
+              }
+              previewError={
+                preview.error?.transcriptId === transcript.id
+                  ? preview.error.message
+                  : null
+              }
+              onTogglePreview={() => preview.toggle(transcript.id)}
+              onChanged={() => void refresh()}
             />
           ))}
         </Stack>
@@ -278,6 +398,16 @@ export function TranscriptsLibraryView() {
           </Button>
         </Box>
       )}
+
+      {/* ONE live region for the whole list rather than one per row: the
+          guarantee this list makes is that a single recording plays at a time,
+          so there is only ever one thing to announce, and fifty regions would
+          be fifty things a screen reader has to keep watching. Rendered
+          unconditionally — see `announcement` for why it has to exist before it
+          has anything to say. */}
+      <Box role="status" aria-live="polite" sx={visuallyHidden}>
+        {announcement}
+      </Box>
     </Box>
   );
 }
