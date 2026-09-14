@@ -214,7 +214,7 @@ server sent — as it stood at precache time. In dev the manifest entry for
 `index.html` has no revision (`devOptions.navigateFallback: 'index.html'`),
 so it never refreshes at all; in prod it refreshes only when the *content* of
 `index.html` hashes differently, which is exactly what a header-only nginx
-change does not do. The failure this produced on kvox.dev: after issue #84/PR
+change does not do. The failure this produced in production: after issue #84/PR
 #85 widened `connect-src` to allow the S3 origin, an already-installed
 Android client kept running the CSP from before that fix — nginx's access log
 showed no HTML document request from the phone at all for the affected
