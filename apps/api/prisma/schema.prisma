@@ -2512,10 +2512,11 @@ model TranscriptExport {
   transcriptId String @map("transcript_id") @db.Uuid
   version      Int
 
-  // The exporter's own registry key (`markdown`, `pdf`, `kvox.transcript.v1`,
-  // …). Plain string, not an enum, for the same self-registering-registry
-  // reason `Job.type` is: adding an exporter (spec §8.1 — "one new class
-  // registering itself") must cost zero migrations to this table.
+  // The exporter's own registry key (`markdown`, `pdf`, or the permanent
+  // published JSON format spec §8.2 names). Plain string, not an enum, for
+  // the same self-registering-registry reason `Job.type` is: adding an
+  // exporter (spec §8.1 — "one new class registering itself") must cost
+  // zero migrations to this table.
   format      String
   // The requester's export options, as passed to the exporter's own
   // `optionsSchema` (spec §8.1) — opaque JSONB, since the option shape is
