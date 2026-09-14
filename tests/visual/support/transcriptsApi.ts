@@ -256,6 +256,19 @@ export async function installTranscriptsApi(
       });
     }
 
+    // The viewer lists the notes generated from the transcript (#59), so every
+    // capture in this file now makes this request. It answers an EMPTY page
+    // deliberately: the create-note action is what these baselines are being
+    // regenerated for, and a provenance list under it would put a second,
+    // unrelated fixture into shots about the transcript reader. The notes
+    // surfaces have their own harness (`notesApi.ts`).
+    //
+    // ⚠ Not left to the `{}` fallback below: `useNotes` reads `items` off the
+    // answer, and an undefined list is a crashed page rather than an empty one.
+    if (path === '/notes') {
+      return json(route, { items: [], nextCursor: null });
+    }
+
     if (path === '/transcripts') {
       const scope = url.searchParams.get('scope');
       // The Shared tab is genuinely empty in every fixture — it is the

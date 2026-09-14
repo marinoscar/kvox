@@ -33,6 +33,41 @@
  * `useTranscriptOperations` renders it verbatim rather than swallowing it.
  *
  * =============================================================================
+ * THE CREATE-NOTE ENTRY POINT AND ITS THREE GATES (issue #59, epic #45)
+ * =============================================================================
+ *
+ * The moment somebody wants a note is the moment they have finished reading and
+ * correcting a transcript, so the action lives here and deep-links to
+ * `/notes/new?transcriptId=<id>`, which #57 reads to pre-select the source.
+ *
+ * Each gate is decided by what the user can actually DO about the thing being
+ * gated on, which is why they are three different treatments and not one:
+ *
+ *   no `notes:write`      ABSENT. A control a role can never use is noise, and
+ *                         nothing on the destination would help them.
+ *   `keyConfigured` false PRESENT, and it navigates. ⚠ This page deliberately
+ *                         does NOT read `useAiConfig()`. Hiding the feature
+ *                         from the users who have not set up a key yet hides it
+ *                         from exactly the people who have never heard of it;
+ *                         the destination renders `AiKeyRequired` (#55), which
+ *                         explains the problem and links to the one page that
+ *                         fixes it. Discoverability beats a tidy toolbar.
+ *   not `ready`           DISABLED, with the reason. A note generated from a
+ *                         half-ingested transcript is a confident summary of
+ *                         half a conversation.
+ *
+ * The disabled state is `aria-disabled` + a `aria-describedby` reason, NOT the
+ * `disabled` + `<span>`-wrapped-Tooltip arrangement `JobsPage` uses: a truly
+ * disabled control is not focusable, so its tooltip never opens for a keyboard
+ * user and the reason reaches them as grey text and nothing else. Here the
+ * control stays reachable and the reason is in the accessibility tree whether
+ * or not the tooltip is showing.
+ *
+ * Notes already generated from this transcript are listed below it
+ * (`TranscriptNotesSection`) — the other half of the provenance #58 renders
+ * from the note side, and what stops a transcript looking like a dead end.
+ *
+ * =============================================================================
  * KEYBOARD SHORTCUTS ARE DESKTOP-ONLY, AND GUARDED
  * =============================================================================
  *
@@ -48,6 +83,7 @@
  */
 
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -66,12 +102,15 @@ import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Snackbar from '@mui/material/Snackbar';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
+import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { TranscriptNotesSection } from '../components/notes/TranscriptNotesSection';
 import { ConflictCards } from '../components/transcripts/ConflictCard';
 import { FindReplacePanel } from '../components/transcripts/FindReplacePanel';
 import { SaveIndicator } from '../components/transcripts/SaveIndicator';
@@ -90,6 +129,7 @@ import {
 } from '../components/transcripts/TranscriptPlayer';
 import { TranscriptStatusChip } from '../components/transcripts/TranscriptStatusChip';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { usePlaybackEngine, SKIP_MS } from '../hooks/usePlaybackEngine';
 import { useTranscriptOperations } from '../hooks/useTranscriptOperations';
 import { useTranscriptSearch, EMPTY_FIND_QUERY } from '../hooks/useTranscriptSearch';
@@ -111,6 +151,23 @@ import { hasPlaybackRendition } from '../utils/transcriptDisplay';
  * instead of typing a space) is trivially reproducible by hand and completely
  * invisible in a snapshot.
  */
+/** #57's new-note flow. `?transcriptId=` is what pre-selects the source. */
+const NEW_NOTE_PATH = '/notes/new';
+
+const CREATE_NOTE_LABEL = 'Create note';
+
+/**
+ * Why the action is disabled, as a sentence a screen reader can read out.
+ *
+ * Exported so the test asserting the announcement and the element rendering it
+ * cannot drift into agreeing about the behaviour while disagreeing about the
+ * words.
+ */
+export const CREATE_NOTE_NOT_READY_REASON =
+  'Wait for transcription to finish before creating a note from this transcript.';
+
+const CREATE_NOTE_REASON_ID = 'transcript-create-note-reason';
+
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -123,6 +180,7 @@ export function TranscriptPage() {
   const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { hasPermission } = usePermissions();
   const isWide = useMediaQuery(theme.breakpoints.up('md'));
 
   const { transcript, isLoading, error, setTranscript } = useTranscript(id);
@@ -146,6 +204,21 @@ export function TranscriptPage() {
    */
   const canEdit =
     transcript?.access === 'owner' || transcript?.access === 'editor';
+
+  /**
+   * Permission, not access: `notes:write` is what `POST /api/notes` enforces,
+   * and it is orthogonal to whether this user owns or was shared this
+   * transcript. A `viewer` share on a transcript plus `notes:write` is a real
+   * and allowed combination — taking a note out of something you were shown is
+   * a read of the transcript and a write of a note.
+   */
+  const canCreateNote = hasPermission('notes:write');
+  const canListNotes = hasPermission('notes:read');
+
+  const goToCreateNote = useCallback(() => {
+    if (!id) return;
+    navigate(`${NEW_NOTE_PATH}?transcriptId=${encodeURIComponent(id)}`);
+  }, [id, navigate]);
 
   const ops = useTranscriptOperations({
     transcriptId: id,
@@ -410,12 +483,56 @@ export function TranscriptPage() {
 
   const isOwner = transcript.access === 'owner';
 
+  /**
+   * Mounted only for a caller holding `notes:read` — the hook inside fetches on
+   * mount, so gating any deeper would still have fired the request that 403s.
+   * It renders `null` when there are no notes; see the component.
+   *
+   * AND ONLY ONCE THE TRANSCRIPT'S OWN CONTENT HAS ARRIVED (`serverVersion`, or
+   * a transcript that is not ready and therefore has none to wait for). This is
+   * a secondary, additive relationship on a page whose whole purpose is the
+   * segments: a third request racing the two the reader is actually waiting on
+   * buys nothing, and the list it fills is below the fold in every layout.
+   */
+  const notesSection =
+    canListNotes && id && (!isReady || serverVersion !== null) ? (
+      <TranscriptNotesSection transcriptId={id} />
+    ) : null;
+
   const pageMenu = (
     <Menu
       anchorEl={pageMenuAnchor}
       open={Boolean(pageMenuAnchor)}
       onClose={() => setPageMenuAnchor(null)}
     >
+      {/* Compact only — above `md` this is a visible button in the header, the
+          same "overflow menu on phones, a real control where there is room"
+          split the Find action already uses. Rendering both would put two
+          controls for one action on one page. */}
+      {canCreateNote && !isWide ? (
+        <MenuItem
+          // `aria-disabled`, not `disabled`: a disabled MenuItem is skipped by
+          // the menu's own keyboard navigation, so the reason below it would be
+          // unreachable for the user most likely to need it read out.
+          aria-disabled={!isReady || undefined}
+          onClick={() => {
+            if (!isReady) return;
+            setPageMenuAnchor(null);
+            goToCreateNote();
+          }}
+        >
+          <ListItemText
+            primary={CREATE_NOTE_LABEL}
+            // The reason rides in the item's own accessible name rather than a
+            // tooltip: a tooltip inside an open menu is announced by almost
+            // nothing.
+            secondary={isReady ? undefined : CREATE_NOTE_NOT_READY_REASON}
+            slotProps={
+              isReady ? undefined : { primary: { color: 'text.disabled' } }
+            }
+          />
+        </MenuItem>
+      ) : null}
       <MenuItem
         onClick={() => {
           setPageMenuAnchor(null);
@@ -479,6 +596,46 @@ export function TranscriptPage() {
         <Typography variant="h5" component="h1" sx={{ mb: 0.5, flexGrow: 1, minWidth: 0 }}>
           {transcript.title}
         </Typography>
+        {canCreateNote && isWide ? (
+          <Tooltip
+            title={isReady ? '' : CREATE_NOTE_NOT_READY_REASON}
+            // DESCRIBES, never renames. Without this MUI's default puts the
+            // title in `aria-label`, and the control a screen reader announces
+            // stops being called "Create note" the moment it is disabled —
+            // the reason would have eaten the name.
+            describeChild
+          >
+            {/* No `<span>` wrapper and no `disabled`: the button is
+                `aria-disabled`, so it still receives focus and the tooltip
+                still opens for a keyboard user. See the file header. */}
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<NoteAddOutlinedIcon />}
+              aria-disabled={!isReady || undefined}
+              aria-describedby={isReady ? undefined : CREATE_NOTE_REASON_ID}
+              onClick={() => {
+                if (!isReady) return;
+                goToCreateNote();
+              }}
+              sx={
+                isReady
+                  ? undefined
+                  : { color: 'text.disabled', borderColor: 'action.disabled' }
+              }
+            >
+              {CREATE_NOTE_LABEL}
+            </Button>
+          </Tooltip>
+        ) : null}
+        {/* The sentence `aria-describedby` above points at. It exists only
+            alongside the button that references it — an orphan id is a
+            description nothing is described by. */}
+        {canCreateNote && isWide && !isReady ? (
+          <Box component="span" id={CREATE_NOTE_REASON_ID} sx={visuallyHidden}>
+            {CREATE_NOTE_NOT_READY_REASON}
+          </Box>
+        ) : null}
         {isReady && (
           <IconButton
             aria-label="Find and replace"
@@ -576,6 +733,7 @@ export function TranscriptPage() {
             retryError={retryError}
           />
         </Paper>
+        {notesSection ? <Box sx={{ mt: 2 }}>{notesSection}</Box> : null}
         {confirmDialog}
       </Box>
     );
@@ -826,6 +984,7 @@ export function TranscriptPage() {
                   onMerge={() => setMergeOpen(true)}
                 />
               </Paper>
+              {notesSection}
             </Box>
           </Grid>
         </Grid>
@@ -855,6 +1014,7 @@ export function TranscriptPage() {
       {playerNotice && <Box sx={{ mb: 2 }}>{playerNotice}</Box>}
       {segmentList}
       {findPanel}
+      {notesSection ? <Box sx={{ mt: 2 }}>{notesSection}</Box> : null}
 
       {!playerBlocked && (
         <>
