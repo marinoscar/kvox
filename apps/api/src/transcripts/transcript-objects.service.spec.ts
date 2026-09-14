@@ -125,3 +125,58 @@ describe('TranscriptObjectsService.recordUploaded', () => {
     expect(storage.exists).not.toHaveBeenCalled();
   });
 });
+
+// =============================================================================
+// `deleteIfPresent` — purge is re-entrant, so a delete that fails must not
+// blow up the caller (issue #101's abort-before-delete can surface a fresh
+// kind of failure here: a non-NoSuchUpload abort error rethrown by
+// `ObjectsService.deleteManagedObject`).
+// =============================================================================
+describe('TranscriptObjectsService.deleteIfPresent', () => {
+  let service: TranscriptObjectsService;
+  let objects: { deleteManagedObject: jest.Mock };
+
+  beforeEach(async () => {
+    objects = { deleteManagedObject: jest.fn() };
+
+    const module = await Test.createTestingModule({
+      providers: [
+        TranscriptObjectsService,
+        { provide: PrismaService, useValue: {} },
+        { provide: ObjectsService, useValue: objects },
+        { provide: ConfigService, useValue: { get: jest.fn((_k, d) => d) } },
+        { provide: STORAGE_PROVIDER, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get(TranscriptObjectsService);
+  });
+
+  it('returns false, and does not throw, when the underlying delete rejects with a non-NoSuchUpload error', async () => {
+    const accessDenied = Object.assign(new Error('Access Denied'), {
+      name: 'AccessDenied',
+      $metadata: { httpStatusCode: 403 },
+    });
+    objects.deleteManagedObject.mockRejectedValue(accessDenied);
+
+    await expect(service.deleteIfPresent('object-1')).resolves.toBe(false);
+
+    expect(objects.deleteManagedObject).toHaveBeenCalledWith(
+      'object-1',
+      TRANSCRIPTS_MANAGED_BY,
+    );
+  });
+
+  it('returns true when the delete succeeds', async () => {
+    objects.deleteManagedObject.mockResolvedValue(undefined);
+
+    await expect(service.deleteIfPresent('object-1')).resolves.toBe(true);
+  });
+
+  it('returns false without calling the delete at all for a null/undefined id', async () => {
+    await expect(service.deleteIfPresent(null)).resolves.toBe(false);
+    await expect(service.deleteIfPresent(undefined)).resolves.toBe(false);
+
+    expect(objects.deleteManagedObject).not.toHaveBeenCalled();
+  });
+});
