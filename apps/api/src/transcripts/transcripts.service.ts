@@ -452,6 +452,15 @@ export class TranscriptsService {
    * 1) — so the row has to exist long enough to say "this is going away" while
    * `transcript.purge` does it. There is no path back: a transcript the owner
    * asked to delete does not get a later `PATCH` that changes its mind.
+   *
+   * ⚠ THE NOTES PRE-CHECK RUNS BEFORE THE STATE CHANGE, and that ordering is
+   * the whole point. `notes.source_transcript_id` is `Restrict` (issue #48,
+   * epic #45; `docs/specs/notes.md` §4.1), so the row delete `transcript.purge`
+   * eventually performs is refused by PostgreSQL while any note still names
+   * this transcript. Without the check the refusal surfaces as a raw foreign-key
+   * violation — a 500 from a purge job, minutes after a 204 told the user their
+   * transcript was on its way out. Checking first turns that into a 409 the
+   * caller can act on, and leaves the transcript in exactly the state it was in.
    */
   async remove(id: string, user: RequestUser): Promise<void> {
     const { transcript } = await this.access.require(user.id, id, 'own', user.permissions);
@@ -461,6 +470,8 @@ export class TranscriptsService {
       // to be gone and it is on its way, which is success.
       return;
     }
+
+    await this.assertNoDependentNotes(transcript.id);
 
     await this.prisma.transcript.update({
       where: { id: transcript.id },
@@ -473,6 +484,71 @@ export class TranscriptsService {
     });
 
     await this.pipeline.enqueuePurge(transcript.id);
+  }
+
+  /**
+   * Refuse the delete with a 409 while any `notes` row still names this
+   * transcript as its source (issue #48, epic #45; `docs/specs/notes.md` §4.1).
+   *
+   * ⚠ `deletedAt` IS DELIBERATELY NOT FILTERED OUT, and this is the one thing
+   * about this method worth reading twice. A note's soft delete sets
+   * `deleted_at` and nothing else — the row, and therefore the foreign key,
+   * is still there. Ignoring soft-deleted notes here would let the delete
+   * proceed, flip the transcript to `deleting`, and hand `transcript.purge`
+   * exactly the foreign-key violation this check exists to prevent, with the
+   * transcript now stuck in a state there is no path back from. So every row
+   * counts, and the MESSAGE carries the distinction instead: a live note is
+   * something the user must act on, while a soft-deleted one clears itself
+   * once `note.purge` (issue #53) runs, so the honest answer there is "try
+   * again shortly" rather than "go delete something you already deleted".
+   *
+   * Unbounded on purpose: the result set is bounded by the same thing the
+   * foreign key is — the notes a single transcript actually produced — and
+   * only three small columns are selected. A `take` would make `details` a
+   * silently truncated list the web UI would render as the complete one.
+   */
+  private async assertNoDependentNotes(transcriptId: string): Promise<void> {
+    const blocking = await this.prisma.note.findMany({
+      where: { sourceTranscriptId: transcriptId },
+      select: { id: true, title: true, deletedAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (blocking.length === 0) return;
+
+    const purging = blocking.filter((note) => note.deletedAt !== null);
+    const live = blocking.length - purging.length;
+
+    const message =
+      live === 0
+        ? `This transcript has ${count(purging.length, 'deleted note')} that ` +
+          `${purging.length === 1 ? 'has' : 'have'} not finished purging yet. ` +
+          `Try again shortly.`
+        : `This transcript cannot be deleted while ${count(live, 'note')} ` +
+          `generated from it still ${live === 1 ? 'exists' : 'exist'}. Delete ` +
+          `${live === 1 ? 'it' : 'them'} first.` +
+          (purging.length > 0
+            ? ` A further ${count(purging.length, 'note')} ${
+                purging.length === 1 ? 'is' : 'are'
+              } still being purged.`
+            : '');
+
+    // `details` is the only key besides `message` the shared error envelope
+    // carries through (`common/filters/http-exception.filter.ts`), so the note
+    // list travels there — ids and titles, so the web UI can name the notes
+    // standing in the way rather than only saying no.
+    throw new ConflictException({
+      message,
+      details: {
+        blockingCount: blocking.length,
+        pendingPurgeCount: purging.length,
+        notes: blocking.map((note) => ({
+          id: note.id,
+          title: note.title,
+          pendingPurge: note.deletedAt !== null,
+        })),
+      },
+    });
   }
 
   /**
@@ -869,4 +945,12 @@ export function decodeCursor(
   } catch {
     return null;
   }
+}
+
+/**
+ * `1, 'note'` → `"1 note"`; `2, 'note'` → `"2 notes"`. A file-local pluraliser
+ * for `assertNoDependentNotes`'s message — every noun it counts is regular.
+ */
+function count(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }

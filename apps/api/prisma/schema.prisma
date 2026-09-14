@@ -67,6 +67,15 @@ model User {
   transcriptSharesReceived   TranscriptShare[]       @relation("TranscriptShareUser")
   transcriptSharesGranted    TranscriptShare[]       @relation("TranscriptShareGrantedBy")
   transcriptExportsRequested TranscriptExport[]      @relation("TranscriptExportRequestedBy")
+  // Notes (issue #48, epic #45). Four relations to the note tables, split by
+  // role for the identical reason the six transcript relations above are:
+  // "owns this note", "owns this custom template", "wrote this version" and
+  // "asked for this export" are four different acts. See the block comment
+  // above the `Note` model for the full reasoning behind each `onDelete`.
+  notes                 Note[]           @relation("NoteOwner")
+  noteTemplatesOwned     NoteTemplate[]   @relation("NoteTemplateOwner")
+  noteVersionsAuthored   NoteVersion[]    @relation("NoteVersionAuthor")
+  noteExportsRequested   NoteExport[]     @relation("NoteExportRequestedBy")
 
   @@map("users")
 }
@@ -366,6 +375,12 @@ model StorageObject {
   transcriptsAsRawResult     Transcript[]         @relation("TranscriptRawResultObject")
   transcriptVersionSnapshots TranscriptVersion[]  @relation("TranscriptVersionSnapshotObject")
   transcriptExportFiles      TranscriptExport[]   @relation("TranscriptExportObject")
+  // Two back-relations from notes (issue #48, epic #45), the identical
+  // Restrict-FK reasoning as the five transcript ones above: only
+  // `note.purge`/`notes.housekeeping` deleting the referencing row first may
+  // ever remove one of these objects.
+  notesAsSourceObject       Note[]               @relation("NoteSourceObject")
+  noteExportFiles           NoteExport[]         @relation("NoteExportObject")
 
   @@index([uploadedById])
   @@index([status])
@@ -1295,6 +1310,23 @@ model Job {
   // own 7-day retention (`transcripts.housekeeping`), independent of
   // `job.history.purge`'s schedule for this row.
   transcriptExport TranscriptExport?
+
+  // The `note_exports` row this job rendered, when `type` is `'note.export'`
+  // (issue #48, epic #45). Identical one-to-one shape as `transcriptExport`
+  // immediately above, for the identical reason: `NoteExport.jobId` is
+  // `@unique`/nullable/`SetNull` because export rows have their own 7-day
+  // retention (`notes.housekeeping`), independent of `job.history.purge`'s
+  // schedule for this row.
+  noteExport NoteExport?
+
+  // The `note_generations` row this job is producing (or produced), when
+  // `type` is `'note.generate'` (issue #48, epic #45). Same one-to-one
+  // shape as `noteExport`/`transcriptExport`/`backupRun` above, for the
+  // same reason: `NoteGeneration.jobId` is `@unique`/nullable/`SetNull`
+  // because a generation's own lifetime (read by the SSE stream and the
+  // note detail page) is independent of `job.history.purge`'s schedule for
+  // this row.
+  noteGeneration NoteGeneration?
 
   // See the block comment above ("Prisma-expressible indexes...") for why
   // these eight are declared here and three more exist only in
@@ -2303,6 +2335,11 @@ model Transcript {
   versions TranscriptVersion[]
   shares   TranscriptShare[]
   exports  TranscriptExport[]
+  // Every note that named this transcript as its source (issue #48, epic
+  // #45) — Restrict on `notes.source_transcript_id`, so a transcript with a
+  // dependent note cannot be deleted until `notes.service.ts`'s own delete
+  // guard clears it. See the block comment above the `Note` model.
+  notesAsSource Note[] @relation("NoteSourceTranscript")
 
   // "This owner's transcripts, newest first" — the transcript list view.
   @@index([ownerId, updatedAt(sort: Desc)])
@@ -2571,4 +2608,600 @@ model TranscriptExport {
   // live database to diff against.
   @@index([transcriptId, version, format, optionsHash], map: "transcript_exports_lookup_idx")
   @@map("transcript_exports")
+}
+
+// =============================================================================
+// Notes (issue #48, epic #45) — docs/specs/notes.md §4
+// =============================================================================
+//
+// Five tables — `notes`, `note_templates`, `note_generations`, `note_versions`,
+// `note_exports` — for the AI-generated, user-correctable documents this epic
+// adds on top of a transcript, another note, or an uploaded document. Nothing
+// about generation, the stream, prompt assembly or export lands with this
+// issue — only the schema and RBAC, ahead of the code that reads and writes
+// it, matching the same "schema ships whole, code follows" precedent
+// `jobs`/`worker_nodes` and `transcripts` (issue #24) already set. Every
+// column, enum member and index below is named for and justified by
+// docs/specs/notes.md §1, §4, §6 and §7 — read those sections for the full
+// reasoning; this comment restates only what has to live beside the code to
+// stay correct. `user_ai_credentials` (spec §4.2) is issue #47's table, not
+// this one, and does not appear here.
+//
+// -----------------------------------------------------------------------------
+// owner_id CASCADES; the three source pointers and template_id RESTRICT or
+// SetNull — the exact `Transcript` shape (schema.prisma's own block comment
+// above), with one genuinely new wrinkle: a SELF-relation
+// -----------------------------------------------------------------------------
+// `owner_id` points UP the ownership chain, identically to `transcripts
+// .owner_id`: a note has no meaning and this application's access model has
+// no path to it once its owner is gone — there is deliberately no
+// `notes:read_any` (spec §6.3) — so Cascade is the only outcome consistent
+// with "no read-any, ever."
+//
+// The three source columns point SIDEWAYS and RESTRICT, but spec §4.1 is
+// explicit that the *consequence* of that Restrict is not uniform across the
+// three, and this schema does not paper over the difference:
+//
+//   - `source_object_id` -> `storage_objects` is Restrict for the same
+//     belt-and-suspenders reason every `storage_objects` FK on `transcripts`
+//     is: the uploaded document is `managed_by: 'notes'`, so the generic
+//     storage `DELETE` already 409s on it before this FK is ever tested.
+//   - `source_transcript_id` -> `transcripts` and `source_note_id` -> `notes`
+//     (a SELF-relation — the one structural difference from every Restrict FK
+//     `transcripts` declares) point at rows that ARE independently,
+//     legitimately deletable through their own existing endpoints, which
+//     neither know nor care whether a note was ever derived from them.
+//     Restrict therefore has a real, user-visible consequence here:
+//     `DELETE /api/transcripts/:id` and (once #53 lands) `DELETE
+//     /api/notes/:id` on a note cited as another note's source must both gain
+//     a pre-check that 409s naming the blocking note id(s) BEFORE the row
+//     reaches this constraint, exactly as `transcripts.service.ts` already
+//     does for storage objects. This migration adds only the constraint; the
+//     one-line guard for the transcript side is backend work for the PR that
+//     lands transcripts.service.ts's next change, and the note-on-note guard
+//     is #53's own responsibility once `notes.service.ts` exists to hold it.
+//
+// `template_id` is the one FK in this feature that is `SetNull`, not
+// `Restrict`, and that asymmetry is deliberate (spec §4.1's own closing
+// paragraph): a template is a reusable RECIPE, never EVIDENCE — VISION.md's
+// Trust-and-Provenance thesis is about a note staying connected to the
+// INFORMATION it transformed, never about which instructions did the
+// transforming. Making it Restrict would mean a custom template could never
+// be deleted once it had produced even one note, an ordinary thing a user
+// wants to do (spec §7.3's duplicate-and-edit flow exists precisely so this
+// is safe to allow). Losing the *reference* on delete costs nothing durable:
+// `note_generations.templateNameSnapshot` below keeps "which recipe produced
+// this" as a plain string forever, independent of whether the template row
+// itself survives.
+//
+// -----------------------------------------------------------------------------
+// `note_generations` is deliberately SELF-SUFFICIENT — everything
+// `assemblePrompt` needs is denormalized onto the row, because a template
+// PREVIEW generation has no `note_id` to join back through
+// -----------------------------------------------------------------------------
+// `template_name_snapshot`, `context_text`, `source_type` and the three
+// (deliberately PLAIN, non-FK) `source_*_id` columns, `provider_id` and
+// `model` are all copies taken at the moment a generation is created, not
+// joins. Two things follow from that, both worth stating explicitly rather
+// than leaving implicit:
+//
+//   - The three `source_*_id` columns here carry NO foreign key at all,
+//     unlike their namesakes on `notes` above. They are a denormalized RECORD
+//     of what was resolved when this generation started, not a reference this
+//     schema has to keep valid — a `kind: 'preview'` row has no `note_id` and
+//     is hard-deleted by its own TTL sweep regardless of what its source
+//     later does, so there is nothing for a Restrict to protect here that the
+//     owning `notes` row (for `create`/`regenerate`) is not already
+//     protecting on its own account.
+//   - `job_id` DOES EXIST ON THIS TABLE, `@unique`/nullable/`SetNull`,
+//     mirroring `DatabaseBackupRun.jobId` and `TranscriptExport.jobId` for
+//     the identical stated reason (issue #48): this row's own lifetime —
+//     read by the SSE endpoint and the note detail page for as long as
+//     generation is in flight or its content is still being displayed — is
+//     independent of `job.history.purge`'s retention schedule for the
+//     underlying `jobs` row. Losing the LINK on a history purge must never
+//     mean losing the GENERATION (its buffered `content` is what a
+//     `note_versions.ai_generated` row was stamped from). `SetNull` rather
+//     than `Restrict` for the same reason every other `jobId` in this schema
+//     is `SetNull`: a purged job's row disappearing is routine housekeeping,
+//     not a reason to block it.
+//
+// `error_class` is a proper enum (`NoteGenerationErrorClass`), unlike
+// `Job.type`/`StorageObject.managedBy`'s deliberately open, code-owned plain
+// strings: spec §2.2's taxonomy is a small, CLOSED, product-defined set (not
+// a registry of pluggable handlers), the same reasoning every other
+// small-closed-set field in this schema (`TranscriptExportStatus`,
+// `DatabaseBackupTrigger`) is an enum rather than a string.
+//
+// -----------------------------------------------------------------------------
+// `note_versions` stores a FULL BODY SNAPSHOT per row, not an operation log —
+// the decision issue #46/#48 flag explicitly as a genuinely different answer
+// from `transcript_versions`, restated here because it is the one place a
+// reader of this schema without the spec open would reasonably ask "why does
+// this feature not reuse the op-log machinery next door"
+// -----------------------------------------------------------------------------
+// `docs/specs/transcription.md` §11's own rejected-alternatives entry gives
+// the arithmetic that ruled a full snapshot OUT for transcripts: roughly 7 MB
+// per save for a 10-hour, 90,000-word recording. A note is a page or two of
+// prose — a few kilobytes — so that arithmetic simply does not apply, and the
+// machinery an op log needs to earn its cost (pure reducers, `materialize()`,
+// gap-based ordinals, per-entity `rev`) has no equivalent structure here: a
+// note has no segments, no speakers, and no concurrent-editor reconciliation
+// to do (spec §5's stream is the only writer while generating). Storing the
+// whole markdown string per save is not a shortcut around building that
+// machinery — for a document this small, the op log is what would have been
+// over-engineering.
+//
+// -----------------------------------------------------------------------------
+// `note_exports` mirrors `transcript_exports` FIELD FOR FIELD (spec §4.6),
+// including the one place this migration follows the REAL, already-shipped
+// `TranscriptExport` implementation over spec §4.6's own shorthand prose
+// -----------------------------------------------------------------------------
+// Spec §4.6 describes the reuse-by-content-hash lookup with the English word
+// "unique". The actual `transcript_exports` table it says this mirrors does
+// NOT enforce that with a `@@unique` — see this schema's own block comment
+// above `TranscriptExport`: "an expired or failed row may briefly coexist
+// with a fresh one sharing the same key before housekeeping removes the
+// stale one." A literal `@@unique` here would make that ordinary coexistence
+// a write failure. This migration reuses `transcript_exports_lookup_idx`'s
+// actual shape — a plain, non-unique `@@index` — because "mirrors
+// `transcript_exports` field for field" (issue #48's own proposed solution)
+// is the more specific, more load-bearing instruction, and because matching
+// the table this feature explicitly exists to let #54 "reuse #28's registry
+// unchanged" against means matching what that registry's code actually
+// queries, not a one-word paraphrase of it.
+// =============================================================================
+
+enum NoteStatus {
+  draft
+  generating
+  ready
+  failed
+  deleting
+}
+
+enum NoteSourceType {
+  transcript
+  note
+  document
+}
+
+enum NoteGenerationKind {
+  create
+  regenerate
+  preview
+}
+
+enum NoteGenerationStatus {
+  pending
+  streaming
+  succeeded
+  failed
+}
+
+enum NoteGenerationErrorClass {
+  auth
+  refusal
+  rate_limit
+  other
+}
+
+enum NoteVersionKind {
+  ai_generated
+  edit
+  restore
+}
+
+enum NoteExportStatus {
+  pending
+  ready
+  failed
+}
+
+model Note {
+  id String @id @default(uuid()) @db.Uuid
+
+  ownerId String @map("owner_id") @db.Uuid
+  title   String
+
+  // The LIVE working copy of the note's markdown body (issue #48). @db.Text,
+  // defaulting to an empty string so a freshly created `draft` note (no
+  // version yet — `currentVersion` starts at 0) has something to read rather
+  // than a nullable hole every reader would have to special-case.
+  //
+  // THE INVARIANT THIS COLUMN EXISTS UNDER: `notes.body` always equals the
+  // `note_versions` row at `note_versions.version = notes.current_version`.
+  // `note_versions.body` is the immutable, append-only SNAPSHOT — one row
+  // per save, never rewritten, the full history #53's version list and
+  // restore endpoint read from. `notes.body` is the single denormalized
+  // COPY of whichever snapshot is current, kept in lockstep by the same
+  // write path that bumps `currentVersion` (spec §1.3): every write that
+  // appends a `note_versions` row — AI generation completing, a `PATCH`
+  // editing the body, a restore — updates both columns together, in the
+  // same transaction, or not at all. This is what lets `GET /api/notes/:id`
+  // (#53) answer "what does this note say right now" with a single-row read
+  // and no join, while `GET /api/notes/:id/versions` still has the full,
+  // independently-readable history to page through. A `notes.body` that
+  // ever disagreed with its own `currentVersion`'s snapshot would be a bug
+  // in that write path, not an expected state.
+  body String @default("") @db.Text
+
+  status NoteStatus @default(draft)
+
+  // Bumped only by the write path that commits a new `note_versions` row
+  // (spec §1.3) — the same "current pointer, not a computed MAX()"
+  // convention `transcripts.currentVersion` already uses.
+  currentVersion Int @default(0) @map("current_version")
+
+  // Which registered `AiProvider` (issue #47) and which of its models
+  // produced the CURRENT body — denormalized onto the note itself (issue
+  // #48) so a note detail page can state "generated by GPT-4o" without
+  // joining to `note_generations`, whose rows `notes.housekeeping` is free
+  // to sweep (preview generations expire; nothing guarantees a `create`/
+  // `regenerate` generation outlives the note it produced forever). Plain
+  // strings, not an enum/FK — the provider registry is code-owned and open,
+  // the same `Transcript.provider`/`NoteGeneration.providerId` reasoning
+  // applied here. Both null until the first successful generation; a body
+  // edited by a human afterward does NOT clear either — they answer "what
+  // produced this note originally," not "who wrote the current body."
+  provider String?
+  model    String?
+
+  // The generation to watch (spec §1.3) — set the moment a create/regenerate
+  // request enqueues a job, never cleared afterward, so a `ready` note's
+  // pointer always names the generation that produced its current content.
+  // SetNull rather than Restrict: losing this pointer loses only "which
+  // generation is live right now," never the generation row itself or any
+  // `note_versions` row it already produced.
+  currentGenerationId String? @map("current_generation_id") @db.Uuid
+
+  // Exactly one of the three below is set, matching `sourceType` — enforced
+  // by the service layer (`notes.service.ts`, #53), not by the database:
+  // Postgres has no portable "exactly one of these three columns is
+  // non-null" constraint short of a CHECK this schema does not add, the same
+  // posture `transcripts` takes toward its own multi-column invariants.
+  sourceType         NoteSourceType @map("source_type")
+  sourceTranscriptId String?        @map("source_transcript_id") @db.Uuid
+  sourceNoteId       String?        @map("source_note_id") @db.Uuid
+  sourceObjectId     String?        @map("source_object_id") @db.Uuid
+
+  // SetNull, not Restrict — see the block comment above the enums.
+  templateId String? @map("template_id") @db.Uuid
+
+  // The optional free-text Context (spec §3.1) — short, user-authored,
+  // placed ahead of the source in every assembled prompt.
+  contextText String? @map("context_text")
+
+  failureReason String? @map("failure_reason")
+
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner             User            @relation("NoteOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  sourceTranscript  Transcript?     @relation("NoteSourceTranscript", fields: [sourceTranscriptId], references: [id], onDelete: Restrict)
+  // Self-relation — see the block comment above the enums for why this one
+  // Restrict FK has a real, user-visible delete-blocking consequence.
+  sourceNote        Note?           @relation("NoteSourceNote", fields: [sourceNoteId], references: [id], onDelete: Restrict)
+  sourceObject      StorageObject?  @relation("NoteSourceObject", fields: [sourceObjectId], references: [id], onDelete: Restrict)
+  template          NoteTemplate?   @relation("NoteTemplateSelection", fields: [templateId], references: [id], onDelete: SetNull)
+  currentGeneration NoteGeneration? @relation("NoteCurrentGeneration", fields: [currentGenerationId], references: [id], onDelete: SetNull)
+
+  // The other side of the self-relation above: every note that named THIS
+  // note as its source. What #53's own delete guard queries before allowing
+  // `DELETE /api/notes/:id` to proceed.
+  derivedNotes Note[]           @relation("NoteSourceNote")
+  generations  NoteGeneration[] @relation("NoteGenerations")
+  versions     NoteVersion[]
+  exports      NoteExport[]
+
+  // "This owner's notes, newest first" — the notes library list view.
+  @@index([ownerId, updatedAt(sort: Desc)])
+  // "Every note in state X" — `notes.housekeeping`'s scans (#53) and any
+  // future admin-adjacent health check, matching `transcripts_status_idx`.
+  @@index([status])
+  @@map("notes")
+}
+
+// -----------------------------------------------------------------------------
+// `note_templates.owner_id IS NULL` means BUILT-IN — readable by every user,
+// editable by nobody through the API (spec §7.1-7.2) — the same "null means
+// something specific and permanent" convention `transcript_speakers.label`
+// established for a different column entirely. There is deliberately NO
+// `is_built_in` boolean (spec §4.3): a second, independently-settable flag
+// that could disagree with `owner_id IS NULL` is exactly the failure mode
+// `job-handler.interface.ts`'s "presence is the declaration" rule already
+// forbids for node eligibility.
+//
+// `instructions` PLUS six structured fields, not "one field, not several
+// structured knobs" (issue #48's actual, explicit column list —
+// `outputFormat`, `structure`, `tone`, `length`, `model`, `isArchived` — all
+// six). `instructions` stays the free-text prompt body the system role
+// carries verbatim; the structured fields sit BESIDE it, not composed into
+// it, because #56's template editor round-trips them as real controls (an
+// Output format select, an editable ordered list for Structure, Tone and
+// Length pickers, an optional Model override) — a user who edits a template
+// and reopens it must get their structured choices back, which is impossible
+// if they were only ever flattened into prose on save with nothing left to
+// read them back out of. `assemblePrompt` (#49) reads all of `instructions`
+// AND the structured fields when building a generation's prompt; neither
+// replaces the other.
+//
+// `structure` is `Json @db.JsonB` — an ordered array of section/heading
+// strings (e.g. `["Overview", "Key Points", "Decisions"]`), the shape #56's
+// editable ordered list edits directly. `outputFormat` is required (every
+// template, built-in or custom, names one); `tone`, `length` and `model` are
+// optional — a template author may leave any of them unset and let
+// `assemblePrompt` fall back to a deployment default. `isArchived` defaults
+// to `false`: an archived custom template is hidden from the picker without
+// being deleted (and without orphaning notes/generations that already
+// reference it via `SetNull`, see below).
+//
+// `@@unique([ownerId, name])` (issue #48): a user may not have two templates
+// sharing a name. PostgreSQL's standard NULLS-DISTINCT behaviour means this
+// is silently a no-op among built-ins — every built-in's `ownerId` is
+// permanently `NULL`, and NULL is never equal to NULL for uniqueness
+// purposes, so any number of built-in rows may coexist regardless of name.
+// The constraint only ever fires among a single owner's own rows.
+// -----------------------------------------------------------------------------
+model NoteTemplate {
+  id      String  @id @default(uuid()) @db.Uuid
+  ownerId String? @map("owner_id") @db.Uuid
+
+  name        String
+  description String
+  // The prompt body the system role carries verbatim (spec §3.1), read
+  // together with the structured fields below by `assemblePrompt` (#49).
+  // @db.Text: free-text prompt instructions can run well past what a
+  // VARCHAR would comfortably hold.
+  instructions String @db.Text
+
+  // Structured fields #56's template editor presents as real controls, and
+  // reads back unchanged on reopen — see the block comment above the enums
+  // for why these six are stored beside `instructions` rather than composed
+  // into it.
+  outputFormat String  @map("output_format")
+  // Ordered array of section/heading strings, e.g. `["Overview", "Key
+  // Points", "Decisions"]` — the shape #56's editable ordered list edits.
+  structure    Json    @db.JsonB
+  tone         String?
+  length       String?
+  // Optional per-template model override, populated in the web editor from
+  // `GET /api/ai/config`'s permitted list so a user can never select a
+  // model the deployment forbids. Plain string, not an enum/FK — same
+  // "code-owned, open registry" reasoning as `NoteGeneration.model`.
+  model        String?
+  // Hides a custom template from the picker without deleting it (and
+  // without orphaning anything that already references it — `notes
+  // .templateId`/`note_generations.templateId` are both `SetNull`, so
+  // archiving never breaks a note or generation that used this template).
+  // Never meaningfully set on a built-in row today, but not schema-
+  // prevented from being so in the future.
+  isArchived Boolean @default(false) @map("is_archived")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Cascade: a user's own custom template has no meaning once its owner is
+  // gone, the identical "belongs entirely to this account" shape
+  // `user_settings`/`personal_access_tokens` already use. Never fires for a
+  // built-in row, whose `owner_id` is permanently NULL.
+  owner User? @relation("NoteTemplateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  notes       Note[]           @relation("NoteTemplateSelection")
+  generations NoteGeneration[] @relation("NoteGenerationTemplateSelection")
+
+  // A user may not have two templates sharing a name — see the block
+  // comment above the enums for why PostgreSQL's NULLS-DISTINCT behaviour
+  // leaves built-ins (permanently null `ownerId`) entirely unaffected by
+  // this constraint.
+  @@unique([ownerId, name])
+  @@map("note_templates")
+}
+
+// -----------------------------------------------------------------------------
+// `note_generations` is the durable buffer spec §5.1 streams from — see the
+// block comment above the enums for why it denormalizes its inputs and why
+// it deliberately carries no `job_id`.
+// -----------------------------------------------------------------------------
+model NoteGeneration {
+  id String @id @default(uuid()) @db.Uuid
+
+  // NULL for a template preview (spec §4.4) — a preview has no note to
+  // belong to and is hard-deleted by its own `expiresAt` sweep, never a
+  // `note_versions` row.
+  noteId String?            @map("note_id") @db.Uuid
+  kind   NoteGenerationKind
+
+  status       NoteGenerationStatus      @default(pending)
+  errorClass   NoteGenerationErrorClass? @map("error_class")
+  errorDetail  String?                   @map("error_detail")
+
+  // Denormalized inputs — see the block comment above the enums. templateId
+  // is nullable/SetNull for the same reason `notes.templateId` is (a
+  // deleted template loses only the reference); templateNameSnapshot is
+  // NOT NULL because a generation is never created without a template
+  // having been resolved first, and the snapshot is what survives the
+  // template's own later deletion.
+  templateId           String?        @map("template_id") @db.Uuid
+  templateNameSnapshot String         @map("template_name_snapshot")
+  contextText          String?        @map("context_text")
+  sourceType           NoteSourceType @map("source_type")
+  sourceTranscriptId   String?        @map("source_transcript_id") @db.Uuid
+  sourceNoteId         String?        @map("source_note_id") @db.Uuid
+  sourceObjectId       String?        @map("source_object_id") @db.Uuid
+  // Which registered `AiProvider` (issue #47) this generation was submitted
+  // to, and which of its models. Plain strings, not an enum/FK — the
+  // provider registry is code-owned and open, the same `Transcript.provider`
+  // reasoning applied to a second, independent registry.
+  providerId           String         @map("provider_id")
+  model                String
+
+  // The stream itself (spec §5.1). Append-only, flushed on a short interval
+  // together with `lastEventId` in the SAME UPDATE, so the SSE `id:` sequence
+  // is gapless and stable by construction — there is no separate counter
+  // that could disagree with what actually landed in `content`.
+  content     String @default("") @db.Text
+  lastEventId Int    @default(0) @map("last_event_id")
+
+  promptTokens     Int? @map("prompt_tokens")
+  completionTokens Int? @map("completion_tokens")
+
+  // The `note.generate` job that produced (or is producing) this row, when
+  // one exists. `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun
+  // .jobId` and `TranscriptExport.jobId` (issue #48): this row's own
+  // lifetime — read by the SSE stream and the note detail page for as long
+  // as generation is in flight, and kept afterward as the AI-generated
+  // version's provenance — is independent of `job.history.purge`'s
+  // retention schedule for the underlying `jobs` row. See the block comment
+  // above the enums for the full reasoning.
+  jobId String? @unique @map("job_id") @db.Uuid
+
+  // Only ever set for `kind: 'preview'` — what `notes.housekeeping`'s TTL
+  // sweep hard-deletes past (spec §4.4). A `create`/`regenerate` generation
+  // has no expiry of its own; it lives as long as its `note_versions` row
+  // needs it for provenance.
+  expiresAt   DateTime? @map("expires_at") @db.Timestamptz
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  // NOTE: deliberately no `updatedAt` here, matching docs/specs/notes.md
+  // §4.4's Lifecycle group exactly — this row is already flushed on a
+  // 250ms interval while streaming (spec §5.1); a second auto-maintained
+  // timestamp on the same hot write path would cost index/row-version
+  // churn spec §4.4 does not ask for and nothing downstream reads.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  note     Note?         @relation("NoteGenerations", fields: [noteId], references: [id], onDelete: Cascade)
+  template NoteTemplate? @relation("NoteGenerationTemplateSelection", fields: [templateId], references: [id], onDelete: SetNull)
+  job      Job?          @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  // The inverse of `Note.currentGenerationId` above — structurally a list
+  // because the FK carries no `@unique`, even though at most one note will
+  // ever actually point here in practice (the note this generation belongs
+  // to, if any).
+  currentForNotes Note[]        @relation("NoteCurrentGeneration")
+  versions        NoteVersion[] @relation("NoteVersionGeneration")
+
+  @@map("note_generations")
+}
+
+// -----------------------------------------------------------------------------
+// `note_versions` mirrors `transcript_versions` in spirit only — see the
+// block comment above the enums for why a full body snapshot replaces the op
+// log entirely rather than reusing it.
+// -----------------------------------------------------------------------------
+model NoteVersion {
+  id      String          @id @default(uuid()) @db.Uuid
+  noteId  String          @map("note_id") @db.Uuid
+  version Int
+  kind    NoteVersionKind
+
+  // The full markdown, as stored — see the block comment above the enums.
+  body String @db.Text
+
+  // A short, optional human- or AI-authored description of what changed in
+  // this version (issue #48) — e.g. "fixed the attendee list" for an
+  // `edit`, or left unset for most `ai_generated`/`restore` rows. Purely a
+  // display convenience for the version history list (#53); nothing in this
+  // schema derives it and nothing requires it to be set.
+  summary String?
+
+  // NULL means "the AI" — the identical convention `transcript_versions
+  // .authorId` already establishes, not a missing value. SetNull: a version
+  // is permanent history and must survive its human author's own account
+  // being deleted.
+  authorId String? @map("author_id") @db.Uuid
+
+  // Which generation produced this version, for `kind: 'ai_generated'`; NULL
+  // for `edit`/`restore`. SetNull for the identical reason `authorId` is —
+  // the version's `body` already carries everything durable; losing the
+  // pointer back to the generation that produced it loses only "which
+  // streaming run wrote this," never the content itself.
+  generationId String? @map("generation_id") @db.Uuid
+
+  // The version number this row restored FROM, when `kind: 'restore'` — a
+  // plain version number, not a self-relation FK, matching `transcripts
+  // .restoredFromVersion` exactly and for the identical reason: it names
+  // another row's `(noteId, version)` pair, not a column any FK can target.
+  restoredFromVersion Int?    @map("restored_from_version")
+  // Idempotency key for the save endpoint (#53) — the same purpose as
+  // `transcript_versions.clientBatchId`, and the same free NULLS-DISTINCT
+  // behaviour below rather than a hand-written partial index.
+  clientBatchId       String? @map("client_batch_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  note       Note            @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  author     User?           @relation("NoteVersionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  generation NoteGeneration? @relation("NoteVersionGeneration", fields: [generationId], references: [id], onDelete: SetNull)
+
+  // The version sequence itself.
+  @@unique([noteId, version])
+  // The idempotent-retry key. Plain `@@unique`, not hand-written: Postgres's
+  // standard NULLS DISTINCT behaviour already gives the wanted semantics for
+  // this nullable column (any number of null-`clientBatchId` rows coexist).
+  @@unique([noteId, clientBatchId])
+  @@map("note_versions")
+}
+
+// -----------------------------------------------------------------------------
+// `note_exports` mirrors `transcript_exports` FIELD FOR FIELD — see the block
+// comment above the enums for the one place ("@@index", not "@@unique") this
+// migration follows that table's real, already-shipped shape over spec
+// §4.6's own shorthand prose.
+// -----------------------------------------------------------------------------
+model NoteExport {
+  id      String @id @default(uuid()) @db.Uuid
+  noteId  String @map("note_id") @db.Uuid
+  version Int
+
+  // The exporter's own registry key (`markdown`, `pdf`, `docx` — spec §8.1,
+  // §8.3). Plain string, not an enum, for the same self-registering-registry
+  // reason `TranscriptExport.format` is: adding an exporter must cost zero
+  // migrations to this table.
+  format      String
+  options     Json              @db.JsonB
+  optionsHash String            @map("options_hash")
+  status      NoteExportStatus  @default(pending)
+
+  // Restrict, matching every `storage_objects` FK on `transcripts`: only
+  // `notes.housekeeping`'s expiry sweep (spec §8.4) may remove the rendered
+  // file, and only after deleting this row first.
+  objectId String? @map("object_id") @db.Uuid
+  // The `note.export` job that rendered this row, when one did.
+  // `@unique`/SetNull, mirroring `TranscriptExport.jobId` exactly: a second
+  // render for the SAME job is unrepresentable, and this row's own 7-day
+  // retention is independent of `job.history.purge`'s schedule for the
+  // underlying `jobs` row.
+  jobId String? @unique @map("job_id") @db.Uuid
+
+  // Who asked for this export. NOT NULL and Cascade, matching
+  // `TranscriptExport.requestedById`: an export is a disposable,
+  // byte-for-byte reproducible artifact with its own 7-day expiry already
+  // built in — nothing is lost by deleting a pending/ready row alongside the
+  // account that requested it.
+  requestedById String @map("requested_by_id") @db.Uuid
+
+  error     String?
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  note        Note           @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  object      StorageObject? @relation("NoteExportObject", fields: [objectId], references: [id], onDelete: Restrict)
+  job         Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  requestedBy User           @relation("NoteExportRequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+
+  // The reuse-by-content-hash lookup (spec §8.4) — deliberately a plain,
+  // NON-unique index. See the block comment above the enums for why this
+  // migration follows `transcript_exports_lookup_idx`'s real shape rather
+  // than spec §4.6's shorthand "unique" wording: an expired or failed row
+  // may briefly coexist with a fresh one sharing the same key before
+  // housekeeping removes the stale one.
+  //
+  // `map:` pins an explicit name for the identical reason
+  // `transcript_exports_lookup_idx` needed one: Prisma's own default name
+  // for this four-column index is one byte over PostgreSQL's 63-byte
+  // identifier limit.
+  @@index([noteId, version, format, optionsHash], map: "note_exports_lookup_idx")
+  @@map("note_exports")
 }
