@@ -141,6 +141,32 @@ const renderPage = async () => {
   return result;
 };
 
+// ============================================================================
+// #83 REGRESSION FIXTURE
+// ============================================================================
+//
+// The ACTUAL shipping defaults of the `ai` namespace
+// (`apps/api/src/common/types/settings.types.ts`): `enabled: false`,
+// `provider: 'openai'`, `providers.openai.allowedModels: []`,
+// `defaultModel: 'gpt-4o'`. This is the exact state `baseView` above was built
+// to avoid — its own comment says the default fixture is deliberately valid
+// "so a test about something else does not fail on a disabled Save button."
+// That avoidance is the gap #83 shipped through: nothing in this file ever
+// rendered the page on the state every fresh deployment actually starts in.
+const freshDeploymentView: AiSettingsAdminView = {
+  ...baseView,
+  settings: {
+    ...baseView.settings,
+    enabled: false,
+    providers: {
+      openai: {
+        ...baseView.settings.providers.openai,
+        allowedModels: [],
+      },
+    },
+  },
+};
+
 describe('AiSettingsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -320,6 +346,106 @@ describe('AiSettingsPage', () => {
         await screen.findByText(/some permitted models cannot be used/i),
       ).toBeInTheDocument();
       expect(screen.getByText(/gpt-9-turbo/)).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // #83: the shipping defaults must let an administrator turn AI on
+  // ==========================================================================
+
+  describe('#83: a fresh deployment can turn AI on', () => {
+    it('enables Save changes on the shipping defaults — allowedModels: [], defaultModel: gpt-4o — the exact fixture the rest of this file avoids', async () => {
+      mockGet.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      expect(await screen.findByRole('button', { name: /save changes/i })).toBeEnabled();
+      // Not merely enabled by accident: nothing is named as unresolved either.
+      expect(screen.queryByText(/save is unavailable until you fix/i)).not.toBeInTheDocument();
+    });
+
+    it('lets an administrator actually turn AI on from that state, preserving the default model and the empty allow-list', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(freshDeploymentView);
+      mockUpdate.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      // The point of #83: the enable switch works BEFORE any model is
+      // permitted, not just that the button happens to render enabled.
+      await user.click(screen.getByLabelText(/enable ai features/i));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      const [body] = mockUpdate.mock.calls[0];
+      expect(body.enabled).toBe(true);
+      expect(body.providers?.openai?.allowedModels).toEqual([]);
+      expect(body.providers?.openai?.defaultModel).toBe('gpt-4o');
+    });
+
+    it('shows the no-permitted-models guidance when the allow-list is empty', async () => {
+      mockGet.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      expect(
+        await screen.findByText(/no models are permitted yet, so ai cannot run/i),
+      ).toBeInTheDocument();
+      // "Add a model by hand" also names a control further down the page, so
+      // this checks there are at least two occurrences (the alert's own
+      // cross-reference plus the control) rather than picking one by text
+      // alone, which is ambiguous by construction here.
+      expect(screen.getAllByText(/add a model by hand/i).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('does not show that guidance once at least one model is permitted', async () => {
+      // baseView (the default fixture for every other test) already permits two.
+      await renderPage();
+
+      expect(screen.queryByText(/no models are permitted yet/i)).not.toBeInTheDocument();
+    });
+
+    it('still blocks when a non-empty allow-list does not contain the default model, and names it in the disabled reason', async () => {
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: {
+          ...baseView.settings,
+          providers: {
+            openai: {
+              ...baseView.settings.providers.openai,
+              // Non-empty, but the default ('gpt-4o') is not in it — a real
+              // contradiction, unlike the empty-list case above.
+              allowedModels: [{ id: 'gpt-4o-mini' }],
+              defaultModel: 'gpt-4o',
+            },
+          },
+        },
+      });
+      await renderPage();
+
+      expect(
+        await screen.findByText(/this model is not in the permitted list/i),
+      ).toBeInTheDocument();
+      const button = screen.getByRole('button', { name: /save changes/i });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('aria-describedby', 'save-blocked-reason');
+      expect(
+        screen.getByText(/save is unavailable until you fix the default model/i),
+      ).toBeInTheDocument();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it('still blocks an empty default model — the schema’s own min(1), which no allow-list state can excuse', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(freshDeploymentView);
+      await renderPage();
+
+      // With `allowedModels: []` the field renders as free text, not a select
+      // (see `select={modelIds.length > 0}` in the page), so it can be cleared.
+      const field = screen.getByLabelText(/default model/i);
+      await user.clear(field);
+
+      expect(
+        await screen.findByText(/this cannot be left empty/i),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
     });
   });
 
