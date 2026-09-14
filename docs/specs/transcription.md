@@ -17,7 +17,7 @@
 > .transcode` handler under `apps/api/src/transcripts/handlers/` (#26),
 > `apps/web/src/pages/Transcripts/` and `apps/web/src/pages/Admin
 > /TranscriptionSettingsPage.tsx` (#23, #30–#32), and this document's own
-> schema companion, `docs/specs/kvox.transcript.v1.schema.json`.
+> schema companion, `docs/specs/transcript-export.v1.schema.json`.
 >
 > **Suggested build order** (from the epic): #20 (this document) →
 > (#21 storage hardening, #23 provider framework, #24 data model, all three
@@ -1234,7 +1234,7 @@ only about how they *format* it.
 ### 8.2 `kvox.transcript/v1`: a public, versioned JSON schema
 
 Published as
-[`docs/specs/kvox.transcript.v1.schema.json`](kvox.transcript.v1.schema.json)
+[`docs/specs/transcript-export.v1.schema.json`](transcript-export.v1.schema.json)
 (JSON Schema, draft 2020-12) alongside this document, with an example
 instance embedded in the schema file itself. `schema: "kvox.transcript/v1"`
 is a literal, required field a consumer switches on — never an implicit
@@ -1654,7 +1654,7 @@ check the built code against the same list this spec was designed against.
 | `transcripts:read`/`write` are seeded for Admin, Contributor and Viewer; no `transcripts:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
 | The admin transcription settings endpoints are gated on `system_settings:*`, not a new permission | An RBAC e2e asserting a Viewer gets 403 and an Admin gets 200 on `/api/transcription-settings/*` |
 | The stored API key never appears in a response body, a log line, or an audit `meta` | A dedicated assertion sweeping every response and captured log line in the settings test suite, following the same technique `email-settings.service.spec.ts` already uses for the SMTP password |
-| JSON export validates against the published `kvox.transcript/v1` schema | A schema-validation test loading `docs/specs/kvox.transcript.v1.schema.json` directly and validating rendered fixtures against it |
+| JSON export validates against the published `kvox.transcript/v1` schema | A schema-validation test loading `docs/specs/transcript-export.v1.schema.json` directly and validating rendered fixtures against it |
 | Markdown escaping and PDF smoke tests, including a non-ASCII speaker name | `markdown-exporter.spec.ts` and a PDF parse-back smoke test, per issue #28's own acceptance criteria |
 | An identical export request reuses the existing row by `options_hash`; an expired one is cleaned up by housekeeping | `export.service.spec.ts` plus `transcripts-housekeeping.task.spec.ts` |
 | A 5 GB simulated upload gets presigned URLs past part 10, resumes correctly after a simulated reload, and stale cleanup never removes an upload active within `STORAGE_STALE_UPLOAD_HOURS` | Per issue #21's own acceptance criteria, against a mocked S3 provider |

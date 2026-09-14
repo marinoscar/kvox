@@ -1142,7 +1142,7 @@ split, why there is no `transcripts:read_any` and no access ever answers
 403, and the full list of rejected alternatives — are documented in full in
 [`docs/specs/transcription.md`](docs/specs/transcription.md), with the
 public export contract published alongside it as
-[`docs/specs/kvox.transcript.v1.schema.json`](docs/specs/kvox.transcript.v1.schema.json).
+[`docs/specs/transcript-export.v1.schema.json`](docs/specs/transcript-export.v1.schema.json).
 Don't restate any of that here; extend those two instead.
 
 ## Specialized Subagents (MANDATORY)
