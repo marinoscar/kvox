@@ -27,6 +27,7 @@
 import Box from '@mui/material/Box';
 import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
@@ -175,7 +176,10 @@ export function SpeakerFilter({
 
   return (
     <Box>
-      <Typography variant="subtitle2" component="h3" sx={{ mb: 1 }}>
+      {/* `h2`, not `h3`: the page's only `h1` is the transcript's title, and a
+          jump from 1 to 3 is a real axe failure (`heading-order`) as well as a
+          screen-reader user's outline claiming a level that does not exist. */}
+      <Typography variant="subtitle2" component="h2" sx={{ mb: 1 }}>
         Speakers
       </Typography>
       <List dense disablePadding aria-label="Speakers">
@@ -183,34 +187,43 @@ export function SpeakerFilter({
           const color = speakerColor(stat.speaker.colorIndex, mode);
           const isSelected = selected.has(stat.speaker.id);
           return (
-            <ListItemButton
-              key={stat.speaker.id}
-              selected={isSelected}
-              onClick={() => onToggleSpeaker(stat.speaker.id)}
-              aria-pressed={isSelected}
-              aria-label={actionLabel(stat)}
-              sx={{ borderRadius: 1 }}
-            >
-              <Box
-                aria-hidden
-                sx={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  backgroundColor: color,
-                  mr: 1.5,
-                  flexShrink: 0,
-                }}
-              />
-              <ListItemText
-                primary={stat.speaker.displayName}
-                secondary={`${stat.segmentCount} segments · ${formatDuration(stat.talkTimeMs)}`}
-                slotProps={{
-                  primary: { sx: { color, fontWeight: 600 } },
-                  secondary: { variant: 'caption' },
-                }}
-              />
-            </ListItemButton>
+            /* `ListItem` (an `<li>`) WRAPPING `ListItemButton` (a `<button>`),
+               rather than a `ListItemButton` rendered as the `<li>` itself.
+               The two failures that shape this are both real: a `<ul>` whose
+               direct children are not `<li>` is an axe `list` violation and a
+               list screen readers do not announce a count for, and an `<li>`
+               carrying `role="button"` is an `aria-allowed-role` violation —
+               so making the button the list item fixes one by causing the
+               other. The nesting satisfies both. */
+            <ListItem key={stat.speaker.id} disablePadding>
+              <ListItemButton
+                selected={isSelected}
+                onClick={() => onToggleSpeaker(stat.speaker.id)}
+                aria-pressed={isSelected}
+                aria-label={actionLabel(stat)}
+                sx={{ borderRadius: 1 }}
+              >
+                <Box
+                  aria-hidden
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    backgroundColor: color,
+                    mr: 1.5,
+                    flexShrink: 0,
+                  }}
+                />
+                <ListItemText
+                  primary={stat.speaker.displayName}
+                  secondary={`${stat.segmentCount} segments · ${formatDuration(stat.talkTimeMs)}`}
+                  slotProps={{
+                    primary: { sx: { color, fontWeight: 600 } },
+                    secondary: { variant: 'caption' },
+                  }}
+                />
+              </ListItemButton>
+            </ListItem>
           );
         })}
       </List>
