@@ -67,6 +67,36 @@ import { api, ApiError } from './api';
 // GET /api/ai/config — the capability probe
 // =============================================================================
 
+/**
+ * Where a model's two token numbers came from (#97).
+ *
+ * ⚠ THIS IS THE FIELD THAT REPLACED "THE ADMINISTRATOR TYPES THEM". Until #97 a
+ * model the build catalogue did not carry had `null` for both numbers and could
+ * not be permitted until somebody looked them up in the vendor's documentation
+ * and typed them — per model, for every dated snapshot the vendor ships. The API
+ * now always resolves a pair, and this says how honestly it knows them:
+ *
+ *   `'catalogue'`  an exact hit in the build catalogue. The numbers are the ones
+ *                  this release was written against.
+ *   `'derived'`    a dated snapshot (`gpt-5.4-mini-2026-03-17`) resolved to its
+ *                  family's real limits. `derivedFrom` names the catalogue id
+ *                  the numbers were taken from, so the inference is auditable
+ *                  rather than magic.
+ *   `'default'`    nothing matched, so a deliberately CONSERVATIVE floor was
+ *                  applied. The model is fully usable; the only consequence of
+ *                  the floor being lower than the vendor's real window is that a
+ *                  very large source is refused by docs/specs/notes.md §3.3's
+ *                  budget with a message naming the numbers. An administrator
+ *                  who knows better overrides it.
+ *
+ * ⚠ THERE IS NO `'custom'` MEMBER, AND THERE MUST NOT BE ONE. An administrator's
+ * own override is not something the server infers — it is the entry's own
+ * `contextWindowTokens`/`maxOutputTokens`, which the client can see directly.
+ * Adding a fourth member would create two spellings of "the admin typed it" that
+ * could disagree, and only one of them would be checked.
+ */
+export type AiModelLimitSource = 'catalogue' | 'derived' | 'default';
+
 /** One model this deployment permits, already narrowed by its own token policy. */
 export interface AiConfigModel {
   id: string;
@@ -75,6 +105,10 @@ export interface AiConfigModel {
   contextWindowTokens: number;
   /** The model's own output ceiling, already narrowed by deployment policy. */
   maxOutputTokens: number;
+  /** How the two numbers above were arrived at (#97). See {@link AiModelLimitSource}. */
+  source: AiModelLimitSource;
+  /** The catalogue id the numbers were taken from when `source` is `'derived'`. */
+  derivedFrom: string | null;
 }
 
 /**
@@ -236,14 +270,20 @@ export type AiProviderId = 'openai';
  * objects unconditionally. A `typeof entry === 'string'` branch anywhere in
  * `apps/web` would be dead code that looks load-bearing.
  *
- * ⚠ THE TWO NUMBERS OVERRIDE THE BUILD CATALOGUE, they do not supplement it.
- * `resolveAllowedModel` (`apps/api/src/ai/ai-model-resolution.ts`) takes the
- * entry's own number first, the registered provider's descriptor second, and
- * `null` third — and `null` means the model can be SAVED but never OFFERED,
- * because docs/specs/notes.md §3.3's token budget has no safe reading of an
- * unknown context window. That precedence is why the editor on the settings
- * page asks for both numbers exactly when the id resolves to no descriptor,
- * and why it must ask for BOTH: a half-known model resolves to nothing.
+ * ⚠ THE TWO NUMBERS OVERRIDE WHATEVER THE API RESOLVED, they do not supplement
+ * it — and since #97 they are the ONLY reason to send either. `resolveAllowedModel`
+ * (`apps/api/src/ai/ai-model-resolution.ts`) takes the entry's own number first,
+ * then an exact catalogue descriptor, then a dated-snapshot match against the
+ * catalogue, then a conservative floor. That last step is what removed the
+ * "unresolvable model" state this type used to have to protect against: a bare
+ * `{ id }` now always resolves, so an entry carrying neither number is a normal,
+ * complete, offerable policy entry rather than a half-finished one.
+ *
+ * ⚠ SO BOTH NUMBERS ARE OPTIONAL IN THE SAME BREATH OR NEITHER IS. A half-filled
+ * pair is still not useful — the §3.3 budget subtracts the output allowance from
+ * the window — but the missing half now falls back to the resolved value rather
+ * than to nothing, so a lone override is merely partial, not fatal. What the
+ * editor must NOT do any more is demand either one: that demand was issue #97.
  *
  * ⚠ NO SECRET-BEARING FIELD MAY BE ADDED HERE. A per-model `apiKey` ("this one
  * model is on a different account") is the deployment-wide fallback credential
@@ -259,6 +299,34 @@ export interface AiAllowedModel {
   contextWindowTokens?: number;
   /** Most tokens one completion may produce. 64–1,000,000. */
   maxOutputTokens?: number;
+}
+
+/**
+ * A permitted-model entry **as the API hands it back** (#97).
+ *
+ * ⚠ A SEPARATE TYPE FROM {@link AiAllowedModel} ON PURPOSE, AND THE DIRECTION IS
+ * THE WHOLE POINT: `source` and `derivedFrom` travel one way only. They describe
+ * what the API RESOLVED for this entry — they are not policy, nothing accepts
+ * them on a write, and echoing them back on the next `PUT` would be sending the
+ * server its own inference as though an administrator had chosen it. Keeping the
+ * read shape structurally assignable to the write shape (it merely adds fields)
+ * is what lets the page load into `AiAllowedModel`-shaped drafts without a cast,
+ * while `toAllowedModels` still builds the request from the four fields above
+ * and nothing else.
+ *
+ * ⚠ THE TWO NUMBERS HERE REMAIN THE **STORED OVERRIDE**, not the resolved pair.
+ * Absent means "no override" — which is now the ordinary state, since the API
+ * resolves a pair for every id. A client must therefore never seed an override
+ * field from a resolved number it obtained elsewhere: doing so would freeze
+ * today's inference into the saved policy and quietly outlive the release that
+ * corrects it. `GET /api/ai/config` is where the RESOLVED pair is published
+ * ({@link AiConfigModel}), because that is the surface that has to budget.
+ */
+export interface AiAllowedModelView extends AiAllowedModel {
+  /** How the API resolved this entry's limits (#97). Absent on an older API. */
+  source?: AiModelLimitSource;
+  /** The catalogue id the numbers came from when `source` is `'derived'`. */
+  derivedFrom?: string | null;
 }
 
 /**
@@ -325,8 +393,8 @@ export interface AiSettings {
   providers: {
     openai: {
       baseUrl: string;
-      /** Normalised to objects on read, whatever was stored. See {@link AiAllowedModel}. */
-      allowedModels: AiAllowedModel[];
+      /** Normalised to objects on read, whatever was stored. See {@link AiAllowedModelView}. */
+      allowedModels: AiAllowedModelView[];
       defaultModel: string;
     };
   };
@@ -353,17 +421,21 @@ export interface AiSettingsAdminView {
   /**
    * Model ids the policy permits that this deployment cannot budget for.
    *
-   * ⚠ SINCE #78 THIS MEANS "UNRESOLVABLE", NOT "NOT IN THE BUILD CATALOGUE".
-   * An entry carrying its own `contextWindowTokens` and `maxOutputTokens` is
-   * perfectly usable and is NOT listed here, even though no release of this
-   * application has heard of the model — that is the entire point of the
-   * widened entry type. What remains listed is an entry with neither its own
-   * numbers nor a catalogue descriptor: a typo, or a model somebody permitted
-   * before the numbers were known.
+   * ⚠ SINCE #97 THIS IS ALMOST ALWAYS EMPTY, AND A NON-EMPTY VALUE MEANS
+   * SOMETHING DIFFERENT THAN IT USED TO. #78 made it "unresolvable" rather than
+   * "absent from the build catalogue"; #97 then gave the API a resolution path
+   * that always terminates — exact catalogue hit, dated-snapshot match, or a
+   * conservative floor — so an ordinary entry can no longer land here however
+   * exotic its id is. What remains is the case where there is no provider to
+   * resolve AGAINST at all: no vendor is registered or active, so there is no
+   * catalogue to match and no floor to apply.
    *
-   * Reported rather than silently dropped: such a model can never be offered,
-   * and an administrator who mistyped one would otherwise have nothing to
-   * explain why it disappeared.
+   * ⚠ THE FIELD IS KEPT RATHER THAN REMOVED, and so is the page's block for it:
+   * it is the API's own answer to "why is this permitted model never offered?",
+   * and a client that stopped rendering it would leave that question with no
+   * answer anywhere. What had to change is the SENTENCE — telling an
+   * administrator that "this build does not know these models" is now simply
+   * untrue, and sends them to look up numbers that would not help.
    */
   unknownModels: string[];
   /** Bumped on every write. Pass back as `If-Match` on the next PUT. */
@@ -437,27 +509,39 @@ export interface AiReachabilityTest {
  * ⚠ NOT AN {@link AiModelDescriptor}, AND THE DIFFERENCE IS THE POINT. A
  * descriptor PROMISES both numbers because the §3.3 token budget cannot run
  * without them; a vendor's `GET /models` response carries NEITHER for any
- * provider this build talks to. So the vendor says what EXISTS, the build
- * catalogue says what can be BUDGETED, and `known` is the join between them.
+ * provider this build talks to. So the vendor says what EXISTS and the API says
+ * what can be BUDGETED — but since #97 it always has an answer for the second
+ * question, and {@link source} is how good that answer is.
  *
- * ⚠ `known: false` IMPLIES BOTH NUMBERS ARE `null`. They are not merely
- * "possibly missing" — the API has no third source to fill them from. `null`
- * means "nobody said", NOT "unlimited" and NOT "zero", so a client offering
- * such a model to be permitted must collect both numbers from the
- * administrator first; saving it without them stores a model that is listed
- * back happily and silently never offered to a single user.
+ * ⚠ `known` NO LONGER DECIDES WHETHER A MODEL CAN BE PERMITTED. It narrowed to
+ * exactly what its name says: an EXACT build-catalogue hit. It is not the same
+ * question as "does this have usable numbers" any more — a dated snapshot is
+ * `known: false`, `source: 'derived'` and carries its family's real limits — so
+ * a client branching on `known` to demand input from an administrator is
+ * implementing issue #97's bug. Branch on {@link source} to describe where the
+ * numbers came from; never to gate the permit.
+ *
+ * ⚠ BOTH NUMBERS ARE `number | null` FOR THE SHAPE'S SAKE, NOT BECAUSE THEY GO
+ * MISSING. The API populates them for every model it returns; `null` survives in
+ * the type as the one honest reading of a future provider whose resolution ever
+ * declines to answer, and a client must render such a row without numbers rather
+ * than printing `null` or inventing a zero.
  */
 export interface AiDiscoveredModel {
   /** The provider's own model id, exactly as its API spelled it. */
   id: string;
   /** A display name. Falls back to the id — never a prettified guess. */
   label: string;
-  /** True when this build can budget against it, so permitting it needs no input. */
+  /** An EXACT build-catalogue hit. Descriptive only — see the type's header. */
   known: boolean;
-  /** From the build catalogue when `known`, otherwise `null`. */
+  /** The resolved context window. Essentially always populated since #97. */
   contextWindowTokens: number | null;
-  /** From the build catalogue when `known`, otherwise `null`. */
+  /** The resolved output ceiling. Essentially always populated since #97. */
   maxOutputTokens: number | null;
+  /** How the two numbers above were arrived at. See {@link AiModelLimitSource}. */
+  source: AiModelLimitSource;
+  /** The catalogue id the numbers were taken from when `source` is `'derived'`. */
+  derivedFrom: string | null;
 }
 
 /**
@@ -611,17 +695,34 @@ export async function updateAiSettings(
  * administrator inspect a catalogue BEFORE switching to it — the same "prove
  * what you typed, not what you committed" workflow the `baseUrl` override on
  * `testAiReachability` serves.
+ *
+ * ⚠ `includeAll` SKIPS A HEURISTIC, WHICH IS WHY IT EXISTS (#97). Without it the
+ * API filters the vendor's list to what LOOKS like a chat model, and a heuristic
+ * is exactly the kind of thing that is right for two years and then quietly
+ * wrong about the model somebody needs on a Tuesday. With it, the answer is
+ * every id the provider listed — embeddings, speech, image and moderation
+ * models included, none of which can generate a note. So it is an opt-in escape
+ * hatch presented as one, never the default: a list where most rows cannot
+ * possibly work is a worse first answer than a filtered one.
  */
 export async function discoverAiModels(
   provider?: string | null,
+  includeAll?: boolean,
 ): Promise<AiModelDiscovery> {
   // Built with `URLSearchParams` rather than a template literal so an id
-  // carrying a `&` or a space cannot split the query string. Omitted entirely
-  // when absent: `?provider=` with an empty value is a `min(1)` violation and a
-  // 400, where "use the active provider" is what was meant.
-  const query = provider ? `?${new URLSearchParams({ provider }).toString()}` : '';
+  // carrying a `&` or a space cannot split the query string. Each key is
+  // omitted entirely when it has nothing to say: `?provider=` with an empty
+  // value is a `min(1)` violation and a 400, where "use the active provider" is
+  // what was meant, and `?includeAll=false` is the default spelled out for no
+  // reason.
+  const params = new URLSearchParams();
+  if (provider) params.set('provider', provider);
+  if (includeAll) params.set('includeAll', 'true');
+  const query = params.toString();
 
-  return api.get<AiModelDiscovery>(`${SETTINGS_BASE}/models${query}`);
+  return api.get<AiModelDiscovery>(
+    `${SETTINGS_BASE}/models${query ? `?${query}` : ''}`,
+  );
 }
 
 /**
