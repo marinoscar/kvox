@@ -49,6 +49,7 @@ describe('NoteSourceService', () => {
     storageObject: { findUnique: jest.Mock };
   };
   let materialize: { materialize: jest.Mock };
+  let objects: { downloadBuffer: jest.Mock };
   let service: NoteSourceService;
 
   beforeEach(() => {
@@ -78,10 +79,13 @@ describe('NoteSourceService', () => {
         .mockResolvedValue({ transcriptId: 'transcript-1', version: 7, state: correctedState }),
     };
 
+    objects = { downloadBuffer: jest.fn() };
+
     service = new NoteSourceService(
       prisma as never,
       materialize as never,
       new MarkdownTranscriptExporter(new TranscriptExporterRegistry()),
+      objects as never,
     );
   });
 
@@ -178,7 +182,7 @@ describe('NoteSourceService', () => {
     });
   });
 
-  describe('document — the seam for issue #51', () => {
+  describe('document (issue #51)', () => {
     const selector = {
       sourceType: 'document' as const,
       sourceTranscriptId: null,
@@ -186,15 +190,96 @@ describe('NoteSourceService', () => {
       sourceObjectId: 'object-1',
     };
 
-    it('fails CLEANLY with a domain error until #51 lands', async () => {
+    it('reads the EXTRACTED TEXT object, never the raw uploaded bytes', async () => {
       prisma.storageObject.findUnique.mockResolvedValue({
         id: 'object-1',
-        filename: 'contract.pdf',
+        name: 'contract.pdf',
+        metadata: { extractedObjectId: 'object-2' },
+      });
+      objects.downloadBuffer.mockResolvedValue(Buffer.from('The extracted contract text.'));
+
+      const resolved = await service.resolve(selector);
+
+      expect(resolved.text).toBe('The extracted contract text.');
+      // The id it downloaded is the one recorded in the SOURCE object's
+      // metadata — spec §4.7's whole contract in one assertion.
+      expect(objects.downloadBuffer).toHaveBeenCalledWith('object-2');
+      expect(objects.downloadBuffer).not.toHaveBeenCalledWith('object-1');
+    });
+
+    it('selects `name`, the column `storage_objects` actually has', async () => {
+      // Regression guard: #49's seam selected `filename`, which is not a column
+      // on this model — a runtime Prisma error rather than a type error, and
+      // one no compiler in this repository would have caught.
+      prisma.storageObject.findUnique.mockResolvedValue({
+        id: 'object-1',
+        name: 'brief.md',
+        metadata: { extractedObjectId: 'object-2' },
+      });
+      objects.downloadBuffer.mockResolvedValue(Buffer.from('text'));
+
+      await service.resolve(selector);
+
+      expect(prisma.storageObject.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ select: { id: true, name: true, metadata: true } }),
+      );
+    });
+
+    it('shows the RECORDED failure sentence for a scanned PDF, OCR statement included', async () => {
+      prisma.storageObject.findUnique.mockResolvedValue({
+        id: 'object-1',
+        name: 'scan.pdf',
+        metadata: {
+          noteSourceExtraction: {
+            status: 'unextractable',
+            reason: 'no_text_layer',
+            message:
+              'This PDF contains no extractable text, only images — OCR is not supported.',
+            pageCount: 3,
+          },
+        },
+      });
+
+      await expect(service.resolve(selector)).rejects.toThrow(/only images/);
+      await expect(service.resolve(selector)).rejects.toThrow(/OCR is not supported/);
+      expect(objects.downloadBuffer).not.toHaveBeenCalled();
+    });
+
+    it('says extraction has not finished when nothing has been recorded yet', async () => {
+      prisma.storageObject.findUnique.mockResolvedValue({
+        id: 'object-1',
+        name: 'brief.txt',
         metadata: null,
       });
 
       await expect(service.resolve(selector)).rejects.toBeInstanceOf(AiInputError);
-      await expect(service.resolve(selector)).rejects.toThrow(/contract\.pdf/);
+      await expect(service.resolve(selector)).rejects.toThrow(/still being read/);
+    });
+
+    it('refuses when the extracted text object has gone', async () => {
+      prisma.storageObject.findUnique.mockResolvedValue({
+        id: 'object-1',
+        name: 'contract.pdf',
+        metadata: { extractedObjectId: 'object-2' },
+      });
+      objects.downloadBuffer.mockResolvedValue(null);
+
+      await expect(service.resolve(selector)).rejects.toBeInstanceOf(AiInputError);
+      await expect(service.resolve(selector)).rejects.toThrow(/no longer available/);
+    });
+
+    it('NEVER returns an empty string as "the document had no text"', async () => {
+      prisma.storageObject.findUnique.mockResolvedValue({
+        id: 'object-1',
+        name: 'contract.pdf',
+        metadata: { extractedObjectId: 'object-2' },
+      });
+      objects.downloadBuffer.mockResolvedValue(Buffer.from('   \n  \n '));
+
+      // An empty source generates a fluent note about nothing, with nothing
+      // anywhere reporting a failure. That is the invisible failure this branch
+      // exists to make impossible.
+      await expect(service.resolve(selector)).rejects.toBeInstanceOf(AiInputError);
     });
   });
 });

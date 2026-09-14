@@ -98,6 +98,7 @@ export const systemSettingsResponseSchema = z.object({
     maxInputTokens: z.number(),
     maxOutputTokens: z.number(),
     requestTimeoutMs: z.number(),
+    maxDocumentBytes: z.number(),
   }),
   updatedAt: z.iso.datetime(),
   updatedBy: z

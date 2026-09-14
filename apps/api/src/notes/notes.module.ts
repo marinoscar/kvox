@@ -4,20 +4,27 @@ import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SettingsModule } from '../settings/settings.module';
+import { StorageModule } from '../storage/storage.module';
+import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { NoteGenerationService } from './generation/note-generation.service';
 import { NoteSourceService } from './generation/note-source.service';
 import { NoteGenerateHandler } from './handlers/note-generate.handler';
+import { NoteSourceExtractHandler } from './handlers/note-source-extract.handler';
+import { NoteObjectsService } from './note-objects.service';
+import { NoteSourcesController } from './note-sources.controller';
+import { NoteSourcesService } from './note-sources.service';
 
 // =============================================================================
 // NotesModule (issue #49, epic #45)
 // =============================================================================
 //
-// The generation pipeline, and for now nothing else: #53 adds the controllers,
-// #54 the exporters, #51 the document extraction. This module exists as soon as
-// there is a handler to register, because a handler that no module provides is
-// a class Nest never instantiates — and `onModuleInit` is where every handler in
-// this codebase registers itself.
+// The generation pipeline (#49) and document sources (#51): #53 adds the note
+// controllers, #54 the exporters. This module exists as soon as there is a
+// handler to register, because a handler that no module provides is a class
+// Nest never instantiates — and `onModuleInit` is where every handler in this
+// codebase registers itself.
 //
 // WHAT IT IMPORTS, AND WHY EACH ONE:
 //
@@ -30,6 +37,16 @@ import { NoteGenerateHandler } from './handlers/note-generate.handler';
 //     decrypted key. That module is deliberately NOT `@Global()` precisely so
 //     this import shows up in a diff.
 //   • `NotificationsModule` — the two owner-addressed events.
+//   • `StorageModule` — `ObjectsService`, which `NoteObjectsService` delegates
+//     its deletes to so this module must NAME the owner it believes in before
+//     it may remove anything.
+//   • `StorageProvidersModule` — the `STORAGE_PROVIDER` itself, for writing and
+//     reading the two objects a document source involves (#51): the upload and
+//     the extracted text beside it.
+//   • `SettingsModule` — `SystemSettingsService`, for the one setting the
+//     upload endpoint reads per request (`ai.maxDocumentBytes`). ⚠ Read through
+//     the settings service and never off `system_settings` directly, the same
+//     discipline `AiSettingsService` states for itself.
 //   • `TranscriptsModule` — `TranscriptMaterializeService` and the Markdown
 //     exporter. ⚠ THIS IMPORT IS THE POINT OF THE EPIC: a note is generated
 //     from the transcript AS THE USER CORRECTED IT, which means going through
@@ -48,7 +65,23 @@ import { NoteGenerateHandler } from './handlers/note-generate.handler';
     AiModule,
     NotificationsModule,
     TranscriptsModule,
+    StorageModule,
+    StorageProvidersModule,
+    SettingsModule,
   ],
-  providers: [NoteGenerationService, NoteSourceService, NoteGenerateHandler],
+  // ⚠ #51's ONE ROUTE. `POST /api/notes/sources/documents` is the first thing
+  // this module puts on the wire; the note routes themselves are #53's.
+  controllers: [NoteSourcesController],
+  providers: [
+    NoteGenerationService,
+    NoteSourceService,
+    NoteGenerateHandler,
+    // Document sources (#51). `NoteObjectsService` is the only thing in this
+    // module that writes a `storage_objects` row, and every row it writes is
+    // `managed_by: 'notes'`.
+    NoteObjectsService,
+    NoteSourcesService,
+    NoteSourceExtractHandler,
+  ],
 })
 export class NotesModule {}
