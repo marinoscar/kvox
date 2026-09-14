@@ -4,6 +4,8 @@ import type {
   BackupFailedEmailData,
   BroadcastEmailData,
   NodeOfflineEmailData,
+  NoteFailedEmailData,
+  NoteReadyEmailData,
   RestoreCompletedEmailData,
   RoleChangedEmailData,
   TranscriptFailedEmailData,
@@ -359,6 +361,36 @@ export const EVENT_BROWSER_TEMPLATES: Partial<
       title: 'A recording was shared with you',
       body: `${ownerName} shared "${title}" with you (${shareRoleLabel(role)}).`,
       link: `/transcripts/${transcriptId}`,
+    };
+  },
+
+  // ---------------------------------------------------------------------------
+  // THE NOTE PIPELINE (#49, epic #45)
+  // ---------------------------------------------------------------------------
+  //
+  // Both link to `/notes/:id` — root-relative, as `sanitizeLink` requires — and
+  // for the failure that is specifically where Regenerate lives, so the row
+  // answers the question it raises rather than only raising it.
+  'notes.note_ready': (data: never): BrowserNotificationContent => {
+    const { noteId, title, templateName, wordCount } = data as NoteReadyEmailData;
+
+    return {
+      title: 'Note ready',
+      body: `"${title}" is ready: ${wordCount} words from the ${templateName} template.`,
+      link: `/notes/${noteId}`,
+    };
+  },
+
+  'notes.note_failed': (data: never): BrowserNotificationContent => {
+    const { noteId, title, reason } = data as NoteFailedEmailData;
+
+    return {
+      title: 'Note generation failed',
+      // NO "we will try again" — nothing retries this automatically, by
+      // design (`maxAttempts: 1`), so a body that implied otherwise would
+      // leave the user waiting for something that is never coming.
+      body: `"${title}" could not be generated: ${reason}`,
+      link: `/notes/${noteId}`,
     };
   },
 };

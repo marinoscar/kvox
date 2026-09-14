@@ -470,6 +470,47 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     channels: ['email', 'browser'],
     defaultEnabled: true,
   },
+
+  // ===========================================================================
+  // NOTES (#49, epic #45)
+  // ===========================================================================
+  //
+  // Both are raised by `note.generate` and addressed to the note's OWNER — the
+  // person who asked for the work — never to a permission the way
+  // `jobs.job_failed` is. They are what make "close the tab and walk away"
+  // actually work: a generation runs for ten seconds to several minutes on
+  // somebody else's infrastructure, and the durable buffer (spec §5.1) is only
+  // half of the promise. Without these, a user who closed the tab has no way to
+  // learn their note exists short of going back to look.
+  //
+  // ⚠ A PURE APPEND. Two entries, two templates, two call sites — no table, no
+  // column, no migration, exactly as `operational-events-no-migration.spec.ts`
+  // exists to prove. See CLAUDE.md's "Adding a Notification".
+  //
+  // NEITHER IS `mandatory`. Being told your own requested work finished (or
+  // did not) is a courtesy about your own action, not a security-relevant
+  // change to your account — the line `security.role_changed` and
+  // `db_backup.restore_completed` are on the other side of.
+  //
+  // ⚠ THERE IS DELIBERATELY NO EVENT FOR A RATE-LIMITED GENERATION. A 429 is a
+  // deferral the queue handles invisibly (spec §2.2), not a failure; mailing
+  // somebody about it would report a delay as something to act on.
+  {
+    key: 'notes.note_ready',
+    label: 'Note ready',
+    description:
+      'Sent when a note you asked for finishes generating and can be read and edited.',
+    channels: ['email', 'browser'],
+    defaultEnabled: true,
+  },
+  {
+    key: 'notes.note_failed',
+    label: 'Note generation failed',
+    description:
+      'Sent when a note could not be generated. Carries the reason and a link to the Regenerate action.',
+    channels: ['email', 'browser'],
+    defaultEnabled: true,
+  },
 ];
 
 /**

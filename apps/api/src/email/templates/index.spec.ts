@@ -153,6 +153,28 @@ const SAMPLE_DATA: { [K in EmailTemplateName]: EmailTemplateDataMap[K] } = {
     ownerName: 'Ana Rivera',
     appUrl: 'https://app.example.com',
   },
+  // #49's two note payloads (epic #45). Same placement rule as the transcript
+  // pair above: `title` reaches the SUBJECT of both, so it stays benign, and
+  // the hostile fragments go in fields only the body renders — `templateName`
+  // and `model` for the ready message, `reason` and `category` for the failure.
+  'note-ready': {
+    noteId: 'note-1',
+    // Reaches the subject, so it stays benign on purpose.
+    title: 'Board meeting notes, 3 March',
+    templateName: '<script>alert(document.cookie)</script>',
+    providerLabel: 'OpenAI',
+    model: '"><img src=x onerror=alert(1)>',
+    wordCount: 412,
+    appUrl: 'https://app.example.com',
+  },
+  'note-failed': {
+    noteId: 'note-1',
+    // Reaches the subject, so it stays benign on purpose.
+    title: 'Board meeting notes, 3 March',
+    reason: '<script>alert(document.cookie)</script>',
+    category: '"><img src=x onerror=alert(1)>',
+    appUrl: 'https://app.example.com',
+  },
 };
 
 function render(name: EmailTemplateName): RenderedEmail {
