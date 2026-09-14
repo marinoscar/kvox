@@ -38,7 +38,7 @@ import { registerRoute } from 'workbox-routing';
 vi.mock('workbox-core', () => ({ clientsClaim: vi.fn() }));
 vi.mock('workbox-precaching', () => ({
   cleanupOutdatedCaches: vi.fn(),
-  createHandlerBoundToURL: vi.fn(() => vi.fn()),
+  matchPrecache: vi.fn(),
   precacheAndRoute: vi.fn(),
 }));
 vi.mock('workbox-routing', async (importOriginal) => {
