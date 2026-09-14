@@ -146,9 +146,9 @@ export const createUserDataDeletionSchema = z.object({
   scope: z
     .enum(USER_DATA_SCOPES)
     .describe(
-      'What to delete. `notes` also removes your own custom note templates; `content` is ' +
-        'transcripts + notes; `everything` is that plus your unmanaged files, your AI ' +
-        'provider keys and your personal access tokens.',
+      'What to delete. `notes` also removes your own custom note templates. `content` is ' +
+        'every recording, note, note template and uploaded file; `everything` is that plus ' +
+        'your AI provider keys and your personal access tokens.',
     ),
   confirmation: z
     .string()
