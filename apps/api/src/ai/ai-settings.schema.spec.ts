@@ -93,3 +93,46 @@ describe('aiAllowedModelEntrySchema — the legacy string form', () => {
     expect(resolveAllowedModel(legacy, catalogue)).toBeNull();
   });
 });
+
+describe('the GPT-5.4 family in the real catalogue (#87)', () => {
+  // A wrong number here is not a cosmetic bug: `resolveAllowedModel` feeds
+  // §3.3's token budget directly, so a stale context window makes this
+  // application either refuse a prompt the vendor would have accepted, or
+  // submit one the vendor rejects after the user has already been charged.
+  // Pinned literally, against the numbers this build's own doc comment
+  // claims to have verified — a typo in either place would otherwise agree
+  // with itself and pass.
+  it.each([
+    ['gpt-5.4', 1_050_000, 128_000],
+    ['gpt-5.4-mini', 400_000, 128_000],
+    ['gpt-5.4-nano', 400_000, 128_000],
+  ] as const)(
+    'resolves %s to exactly %d context / %d output tokens',
+    (id, contextWindowTokens, maxOutputTokens) => {
+      const catalogue = realCatalogue();
+      const legacy = aiAllowedModelEntrySchema.parse(id);
+
+      expect(resolveAllowedModel(legacy, catalogue)).toEqual({
+        id,
+        label: expect.any(String) as unknown as string,
+        contextWindowTokens,
+        maxOutputTokens,
+      });
+    },
+  );
+
+  // The catalogue is additive, not a replacement (see the shipping commit's
+  // own message: "the catalogue is not an allow-list, and dropping [a GPT-4
+  // entry] would strand a deployment already permitting it"). A regression
+  // that swapped the array instead of extending it would pass every GPT-5.4
+  // case above and still be wrong.
+  it.each(['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini'])(
+    'still resolves the pre-existing GPT-4 entry %s',
+    (id) => {
+      const catalogue = realCatalogue();
+      const legacy = aiAllowedModelEntrySchema.parse(id);
+
+      expect(resolveAllowedModel(legacy, catalogue)).not.toBeNull();
+    },
+  );
+});

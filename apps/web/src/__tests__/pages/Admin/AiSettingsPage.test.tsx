@@ -97,6 +97,12 @@ const baseView: AiSettingsAdminView = {
     maxInputTokens: 100_000,
     maxOutputTokens: 4_096,
     requestTimeoutMs: 120_000,
+    // #87. `AiSettings.reasoningEffort` is required — a fixture missing it is
+    // exactly the gap the shipping commit's own notes call out: neither
+    // typecheck (this directory is excluded from that config) nor Vitest
+    // (esbuild strips types, it does not check them) would catch its absence,
+    // so the page would render against a shape the real API never sends.
+    reasoningEffort: 'none',
     maxDocumentBytes: 26_214_400,
   },
   providers: [
@@ -346,6 +352,50 @@ describe('AiSettingsPage', () => {
         await screen.findByText(/some permitted models cannot be used/i),
       ).toBeInTheDocument();
       expect(screen.getByText(/gpt-9-turbo/)).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // #87: reasoning effort — a Limits-section control, not a provider knob
+  // ==========================================================================
+
+  describe('reasoning effort', () => {
+    it('renders the select showing the stored value', async () => {
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: { ...baseView.settings, reasoningEffort: 'medium' },
+      });
+      await renderPage();
+
+      const select = await screen.findByRole('combobox', { name: /reasoning effort/i });
+      expect(select).toHaveTextContent('Medium');
+    });
+
+    it('changing the value and saving sends reasoningEffort in the PUT body', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+
+      // baseView's stored value is 'none' — see the fixture comment above.
+      const select = await screen.findByRole('combobox', { name: /reasoning effort/i });
+      expect(select).toHaveTextContent(/none/i);
+
+      await user.click(select);
+      const listbox = await screen.findByRole('listbox');
+      await user.click(within(listbox).getByRole('option', { name: /^high/i }));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      const [body] = mockUpdate.mock.calls[0];
+      expect(body.reasoningEffort).toBe('high');
+    });
+
+    it('is disabled without system_settings:write, like its siblings', async () => {
+      setPermissions(READ_ONLY);
+      await renderPage();
+
+      expect(
+        screen.getByRole('combobox', { name: /reasoning effort/i }),
+      ).toHaveAttribute('aria-disabled', 'true');
     });
   });
 
