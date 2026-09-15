@@ -38,4 +38,4 @@ export { GITHUB_CHECKS, parseGithubRepo } from './github.js';
 export { probe, type ProbeOutcome } from './probe.js';
 export { DATABASE_CHECKS, databaseSettings, probeTcp } from './database.js';
 export { DNS_CHECKS } from './dns.js';
-export { TLS_CHECKS, parseNotAfter } from './tls.js';
+export { TLS_CHECKS, findRenewal, parseNotAfter } from './tls.js';
