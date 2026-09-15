@@ -96,6 +96,15 @@ runs **on the VPS**.
 
 1. **SSH into the VPS.**
 
+   **Shortcut for a fresh box:** `apps/cli/bootstrap-vps.sh` does steps 2
+   and 3 for you from a root shell — it installs the GitHub CLI and Node.js
+   if they are missing, clones the repository to `/opt/infra/cli/<repo>`,
+   builds `kvox` onto `/usr/local/bin`, runs `deploy doctor`, and opens the
+   menu. Docker is the one thing it will not install. See
+   ["Fresh server in three commands" in the CLI README](../../apps/cli/README.md#fresh-server-in-three-commands)
+   for the download command and flags; the rest of this section is the
+   manual equivalent.
+
 2. **Clone the repository you want to deploy** (your fork, if you have one —
    see section 6) and build `kvox` from source:
 

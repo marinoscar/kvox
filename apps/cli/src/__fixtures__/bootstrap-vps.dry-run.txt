@@ -1,0 +1,65 @@
+bootstrap-vps: build kvox from o/r into /opt/infra/cli/r
+dry run: every command is printed, none is run, nothing on this host is probed.
+
+==> Step 1/6: Preconditions
+    would check: id -u prints 0 (root) — refuses otherwise
+    would check: /etc/os-release names Ubuntu or Debian (ID or ID_LIKE) — refuses otherwise
+    would check: curl is installed — refuses otherwise
+    would check: docker is installed and 'docker compose version' succeeds — prints the Docker install commands and stops otherwise
+    (dry run: nothing probed; this step installs nothing on any run)
+
+==> Step 2/6: GitHub CLI
+    would check: gh is installed (dry run: assuming not)
+    installing gh from GitHub's apt repository
+  + mkdir -p -m 755 /etc/apt/keyrings
+  + curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  + chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+  + mkdir -p -m 755 /etc/apt/sources.list.d
+  + echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+  + apt-get update
+  + apt-get install -y gh
+    verify:
+  + gh --version
+    would check: gh is logged in to github.com (dry run: assuming not)
+    logging in (interactive — this is the one step that needs you)
+  + gh auth login --hostname github.com --git-protocol https
+    verify:
+  + gh auth status --hostname github.com
+    pointing git at gh's token for github.com
+  + gh auth setup-git
+
+==> Step 3/6: Node.js
+    would check: node is installed (dry run: assuming not)
+    would ask: Install Node.js 22 (LTS) from NodeSource? [y/N] (dry run: assuming yes)
+  + curl -fsSL https://deb.nodesource.com/setup_22.x -o /tmp/nodesource_setup.sh
+  + bash /tmp/nodesource_setup.sh
+  + apt-get install -y nodejs
+  + rm -f /tmp/nodesource_setup.sh
+    verify:
+  + node --version
+  + npm --version
+
+==> Step 4/6: CLI checkout
+    would check: git is installed (dry run: assuming not)
+  + apt-get install -y git
+  + mkdir -p /opt/infra/cli
+    would check: /opt/infra/cli/r is already a git checkout (dry run: assuming not)
+    cloning with gh (uses gh's token, so a private repository works)
+  + gh repo clone o/r /opt/infra/cli/r
+    building kvox from the checkout with the repository's install.sh
+  + env KVOX_SRC=/opt/infra/cli/r KVOX_BIN_DIR=/usr/local/bin bash /opt/infra/cli/r/install.sh --no-color
+    verify:
+  + /usr/local/bin/kvox --version
+
+==> Step 5/6: Deploy folder
+  + mkdir -p /opt/infra/apps
+    verify:
+  + test -d /opt/infra/apps
+
+==> Step 6/6: Launch
+    running from /opt/infra/cli/r so 'kvox deploy' picks up o/r from its git remote
+  + cd /opt/infra/cli/r
+    a first read-only look (exit 6 means a required check failed — fix those before 'deploy install'; it does not stop this script)
+  + /usr/local/bin/kvox deploy doctor --skip-proxy
+    opening the interactive menu (pass --no-tui to print the next command instead)
+  + /usr/local/bin/kvox

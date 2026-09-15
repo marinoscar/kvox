@@ -358,6 +358,88 @@ troubleshooting — see [`docs/deployment/vps.md`](../../docs/deployment/vps.md)
 For why it's built this way, see
 [`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md).
 
+### Fresh server in three commands
+
+Getting `kvox` onto a fresh VPS by hand means installing the GitHub CLI,
+logging in, cloning the repository, installing Node ≥ 20, building the CLI
+workspace and putting the binary on the PATH before `deploy doctor` can even
+run. [`bootstrap-vps.sh`](bootstrap-vps.sh) does all of that from a root
+shell, idempotently, and ends at the wizard. From a fresh root shell on an
+Ubuntu or Debian server that already has Docker:
+
+```bash
+gh auth login --hostname github.com --git-protocol https
+gh repo view <owner>/<repo> --json name && curl -fsSL "$(gh api repos/<owner>/<repo>/contents/apps/cli/bootstrap-vps.sh --jq .download_url)" -o /tmp/bootstrap-vps.sh
+bash /tmp/bootstrap-vps.sh --repo <owner>/<repo>
+```
+
+The `gh api` form fetches the script through your login, so it works for a
+**private** repository. (If `gh` itself isn't installed yet, the script
+installs it — but then it can't be the thing that fetches the script; install
+`gh` first from the two `apt` lines the script prints, or use the public
+form.) For a **public** repository the plain raw URL works with nothing
+installed at all:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/apps/cli/bootstrap-vps.sh -o /tmp/bootstrap-vps.sh
+bash /tmp/bootstrap-vps.sh --repo <owner>/<repo>
+```
+
+Download-then-run rather than `curl | bash`, deliberately: step 2 may run
+`gh auth login`, which needs your terminal on stdin.
+
+Six steps, each printed before it runs, each verified after:
+
+1. **Preconditions** — `id -u` is 0, `/etc/os-release` is Ubuntu/Debian,
+   `docker` and `docker compose version` work. Not root, or no Docker, and
+   it stops here with the reason; for Docker it prints the `apt` commands
+   from docs.docker.com and **never installs Docker itself**.
+2. **GitHub CLI** — installs `gh` from GitHub's apt repository if missing,
+   runs `gh auth login --hostname github.com --git-protocol https` if not
+   logged in (the one interactive step), then `gh auth setup-git` so plain
+   `git` uses that token too.
+3. **Node.js** — if `node` is missing or older than 20, asks `[y/N]` before
+   installing Node 22 from NodeSource; `--yes` answers for you. An existing
+   Node ≥ 20 is never touched.
+4. **CLI checkout** — `gh repo clone <owner>/<repo> /opt/infra/cli/<repo>`,
+   then that checkout's own `install.sh` with `KVOX_SRC` pointing at it (so
+   nothing is cloned twice and no `GITHUB_TOKEN` is needed) and
+   `KVOX_BIN_DIR=/usr/local/bin`, so `kvox` is on every root shell's PATH.
+   Verified with `kvox --version`.
+5. **Deploy folder** — `mkdir -p /opt/infra/apps`, nothing more.
+6. **Launch** — `kvox deploy doctor --skip-proxy` for a first read-only look
+   (its exit code is reported, not fatal), then `kvox` — the interactive
+   menu — or with `--no-tui` the exact next command:
+   `kvox deploy install --domain <your-domain>`.
+
+Step 6 runs from inside `/opt/infra/cli/<repo>`, and the next-command hint
+starts with `cd` there, because `kvox deploy` reads the repository and
+branch to deploy from the git checkout it is run in (see
+[Deploying a fork](#deploying-a-fork)). That checkout is **not** the
+deployment's own `repo/` under `/opt/infra/apps/<name>/` — `deploy install`
+clones that separately. The two stay separate on purpose: the running CLI
+must never rebuild its own `dist/` in the middle of a deploy pipeline.
+
+| Flag | Meaning |
+| --- | --- |
+| `--repo <owner>/<name>` | Required. The repository to build `kvox` from; there is no default, so a fork never edits the script |
+| `--ref <branch>` | Branch to check out (default: the repository's default branch) |
+| `--yes` | Install Node.js without asking when it is missing or too old |
+| `--no-tui` | Print the next command instead of opening the menu |
+| `--update` | Pull the CLI checkout and rebuild `kvox` — the CLI's own self-update, separate from `kvox deploy update`, which updates the deployed app |
+| `--dry-run` | Print every command; run none, probe nothing |
+
+Exit codes: `0` done, `1` a step failed (the step is named in the output),
+`2` usage error.
+
+Re-running is a no-op: an installed `gh`, a logged-in account, a Node ≥ 20,
+an existing checkout and a working `kvox --version` are each left alone.
+`--update` is the exception — it pulls and rebuilds. `--dry-run` prints
+exactly what a fresh server would see (it probes nothing, assumes nothing is
+installed, and never reads `$HOME` or the hostname), which is also how the
+script is tested: `apps/cli/src/bootstrap-vps.test.ts` compares its output
+to a committed fixture.
+
 ### Where an app lives
 
 Every app deployed from this template gets its own folder under one apps
