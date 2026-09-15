@@ -65,7 +65,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { TranscriptRowActions } from './TranscriptRowActions';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
@@ -78,9 +78,20 @@ import { feedCacheKey } from '../../utils/feedCache';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
 import { formatRelativeTime } from '../../utils/relativeTime';
-import { TRANSCRIPT_STATUS_FILTERS } from '../../pages/transcriptsLibraryFilters';
+import {
+  TRANSCRIPT_STATUS_FILTERS,
+  searchFromQuery,
+  transcriptScopeFromQuery,
+  transcriptStatusFromQuery,
+} from '../../pages/transcriptsLibraryFilters';
+import type { TranscriptScopeFilter } from '../../pages/transcriptsLibraryFilters';
 
-type ScopeTab = 'owned' | 'shared';
+/**
+ * The two scope tabs. Named by `transcriptsLibraryFilters.ts` rather than here,
+ * because `?scope=` seeds it and a second spelling of the pair would be a URL
+ * this view accepts and a tab it cannot select.
+ */
+type ScopeTab = TranscriptScopeFilter;
 
 /**
  * How long the search box waits before asking the API.
@@ -200,10 +211,32 @@ export function TranscriptsLibraryView() {
   const { hasPermission } = usePermissions();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [tab, setTab] = useState<ScopeTab>('owned');
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [status, setStatus] = useState<TranscriptStatus | 'all'>('all');
+  /**
+   * THE URL SEEDS THIS VIEW, ONCE, AND NOTHING WRITES BACK TO IT.
+   *
+   * `/transcripts?scope=shared&status=failed&q=budget` is a deep link — the
+   * home page's counts strip (#170) is the first thing that builds one — and
+   * every parameter below is read in a LAZY INITIALISER, so it applies on mount
+   * and never again. A subsequent tab click, filter change or keystroke updates
+   * component state alone.
+   *
+   * Full two-way sync was considered and rejected; the argument, including why
+   * the 300 ms debounce is the part that makes it wrong rather than merely
+   * unnecessary, is in `transcriptsLibraryFilters.ts` beside the parsers.
+   *
+   * ⚠ `debouncedSearch` IS SEEDED TOO, from the same value. Seeding only the
+   * box would make the view's first request an UNFILTERED one, answered and
+   * rendered, and then replaced 300 ms later by the filtered one the link
+   * actually asked for — a visible flash of the wrong list, and a wasted query
+   * on the column the list is ordering by.
+   */
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<ScopeTab>(() => transcriptScopeFromQuery(searchParams));
+  const [search, setSearch] = useState(() => searchFromQuery(searchParams));
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchFromQuery(searchParams));
+  const [status, setStatus] = useState<TranscriptStatus | 'all'>(() =>
+    transcriptStatusFromQuery(searchParams),
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);

@@ -391,3 +391,115 @@ describe('TranscriptsPage — accessibility', () => {
   });
 });
 
+
+/**
+ * Deep links into this library — issue #170, epic #166.
+ *
+ * The home page's counts strip builds `?scope=shared` and `?status=failed`, so
+ * the assertions below are about the CONTRACT those links rely on rather than
+ * about the parsers themselves, which are pure and covered in
+ * `notesLibraryPure.test.ts` without mounting anything.
+ *
+ * ⚠ THE FIRST REQUEST IS THE ONE THAT MATTERS, hence `requests[0]` throughout.
+ * A view that seeded only its visible controls and let the filters arrive on a
+ * later render would pass a "the list is eventually filtered" assertion while
+ * still firing an unfiltered query first — the exact behaviour `debouncedSearch`
+ * is seeded to prevent.
+ */
+describe('TranscriptsPage — seeded from the URL', () => {
+  it('opens on the Shared with me tab for ?scope=shared', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?scope=shared' },
+    });
+
+    expect(screen.getByRole('tab', { name: 'Shared with me' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].searchParams.get('scope')).toBe('shared');
+  });
+
+  it('opens on Mine for ?scope=owned', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?scope=owned' },
+    });
+
+    expect(screen.getByRole('tab', { name: 'Mine' })).toHaveAttribute('aria-selected', 'true');
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].searchParams.get('scope')).toBe('owned');
+  });
+
+  it('applies ?status=failed to the filter AND to the first query', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=failed' },
+    });
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('Failed');
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].searchParams.get('status')).toBe('failed');
+  });
+
+  it('falls back to Any status for an unknown ?status, and never sends it on', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=bogus' },
+    });
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('Any status');
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].searchParams.get('status')).toBeNull();
+  });
+
+  it('fills the search box from ?q and filters the FIRST request with it', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?q=budget' },
+    });
+
+    expect(screen.getByLabelText('Search titles')).toHaveValue('budget');
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    // ⚠ Not "eventually" — the first one. See this block's header.
+    expect(requests[0].searchParams.get('q')).toBe('budget');
+  });
+
+  it('reads all three at once', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: {
+        user: mockAdminUser,
+        route: '/transcripts?scope=shared&status=failed&q=budget',
+      },
+    });
+
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].searchParams.get('scope')).toBe('shared');
+    expect(requests[0].searchParams.get('status')).toBe('failed');
+    expect(requests[0].searchParams.get('q')).toBe('budget');
+  });
+
+  it('starts unfiltered when the URL carries nothing', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(requests[0].searchParams.get('status')).toBeNull();
+    expect(requests[0].searchParams.get('q')).toBeNull();
+  });
+
+  it('SEEDS the state without binding to it — a later change sticks', async () => {
+    // The decision this records: the URL is an entry point, not a two-way
+    // binding. Switching tabs after arriving on `?scope=shared` must move the
+    // view, and must not be undone by the query string it arrived with.
+    const user = userEvent.setup();
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?scope=shared' },
+    });
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+
+    await user.click(screen.getByRole('tab', { name: 'Mine' }));
+
+    await waitFor(() =>
+      expect(requests[requests.length - 1].searchParams.get('scope')).toBe('owned'),
+    );
+    expect(screen.getByRole('tab', { name: 'Mine' })).toHaveAttribute('aria-selected', 'true');
+  });
+});

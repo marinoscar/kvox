@@ -64,7 +64,7 @@ import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useEffect, useMemo, useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -75,7 +75,11 @@ import { feedCacheKey } from '../../utils/feedCache';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
 import { formatRelativeTime } from '../../utils/relativeTime';
-import { NOTE_STATUS_FILTERS } from '../../pages/notesLibraryFilters';
+import {
+  NOTE_STATUS_FILTERS,
+  noteStatusFromQuery,
+  searchFromQuery,
+} from '../../pages/notesLibraryFilters';
 
 /** The same 300 ms the Transcripts tab waits, and for the same reason. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -201,9 +205,25 @@ export function NotesLibraryView() {
   const { hasPermission } = usePermissions();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [status, setStatus] = useState<NoteStatus | 'all'>('all');
+  /**
+   * THE URL SEEDS THIS VIEW, ONCE, AND NOTHING WRITES BACK TO IT.
+   *
+   * `/notes?status=failed&q=budget` is a deep link, read in LAZY INITIALISERS
+   * so it applies on mount and never again — the twin of what
+   * `TranscriptsLibraryView` does, minus the `?scope` this library has no tab
+   * for. The decision, and the rejected full two-way sync, are recorded once in
+   * `transcriptsLibraryFilters.ts`.
+   *
+   * ⚠ `debouncedSearch` IS SEEDED TOO. Seeding only the box would make the
+   * view's first request an unfiltered one, rendered and then replaced 300 ms
+   * later by the filtered list the link asked for.
+   */
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchFromQuery(searchParams));
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchFromQuery(searchParams));
+  const [status, setStatus] = useState<NoteStatus | 'all'>(() =>
+    noteStatusFromQuery(searchParams),
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);

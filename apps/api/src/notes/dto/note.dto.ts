@@ -113,6 +113,18 @@ const titleSchema = z
   .max(MAX_TITLE_CHARS)
   .describe('The note\'s title. Metadata about the note, never versioned content of it.');
 
+export const noteTitleSourceSchema = z
+  .enum(['ai', 'user', 'template'])
+  .describe(
+    'Where this note\'s title came from. `ai` — a titling pass named it from the generated ' +
+      'content; `user` — a person typed it, either on create or in a later rename; `template` — ' +
+      'nobody named it, so it inherited the template\'s name. ' +
+      '**`user` is never overwritten by an AI titling path**: a title a person chose is sticky, ' +
+      'and the titling path checks this field before it renames anything.',
+  );
+
+export type NoteTitleSource = z.infer<typeof noteTitleSourceSchema>;
+
 const bodySchema = z
   .string()
   .max(MAX_BODY_CHARS)
@@ -380,6 +392,7 @@ const noteStatusSchema = z
 export const noteResponseSchema = z.object({
   id: z.string().describe('The note id.'),
   title: z.string().describe('The note\'s title.'),
+  titleSource: noteTitleSourceSchema,
   body: z.string().describe('The live markdown body — by invariant, the version at `currentVersion`.'),
   status: noteStatusSchema,
   currentVersion: z
