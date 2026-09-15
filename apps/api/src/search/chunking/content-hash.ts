@@ -29,8 +29,24 @@ import type { Chunk } from './chunk.types';
  * are both 64 hex characters and both live in the same database), and the `v1`
  * gives a future change to the fingerprint's construction somewhere to announce
  * itself instead of silently producing a different answer for the same corpus.
+ *
+ * ⚠ DELIBERATELY BRAND-NEUTRAL, AND IT MUST STAY THAT WAY. This string is
+ * mixed into a hash whose value is PERSISTED — `search_index_state
+ * .content_fingerprint` — and compared against on every re-index to decide
+ * whether a document changed. Changing this constant changes every fingerprint
+ * this application will ever compute, so every document in every deployment
+ * reads as edited at once and the whole corpus is re-embedded, on the owners'
+ * own vendor accounts, with nothing anywhere reporting why.
+ *
+ * That is exactly what would happen if this carried the product name: this
+ * repository is a template, `apps/cli`'s rename codemod rewrites brand
+ * literals across the tree, and a fork renaming itself would silently invalidate
+ * every stored fingerprint it had. `apps/cli/src/template-identity.test.ts`
+ * catches a brand literal here for that reason — the fix is a neutral tag, not
+ * an allowlist entry, because a rebrand-proof constant is what is actually
+ * wanted. Do not "helpfully" import `APP_NAME` into it.
  */
-const FINGERPRINT_DOMAIN = 'kvox.search.chunk-fingerprint.v1';
+const FINGERPRINT_DOMAIN = 'search.chunk-fingerprint.v1';
 
 /**
  * sha256 of a chunk's text, hex-encoded. The content-addressing key.
