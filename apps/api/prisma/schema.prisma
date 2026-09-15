@@ -2334,6 +2334,21 @@ model Transcript {
   speakerCount   Int     @default(0) @map("speaker_count")
   wordCount      Int     @default(0) @map("word_count")
 
+  // GENERATED ALWAYS AS (to_tsvector('english'::regconfig, coalesce(title,
+  // ''))) STORED, plus a GIN index — issue #174, epic #164. Hand-written in
+  // `20260915120000_add_search_vectors/migration.sql` (Prisma has no DSL for
+  // a generated column's expression or an index's access method); see that
+  // migration's header for the full argument, including why it is its OWN
+  // column rather than folded into `TranscriptSegment.searchVector` (a
+  // title match must surface a transcript with no matching segment at all)
+  // and why the two-argument `to_tsvector` form is required (IMMUTABLE,
+  // unlike the one-argument form). `Unsupported` and nullable-optional even
+  // though the database column is generation-populated on every row —
+  // Prisma has no syntax for "the database writes this," and an
+  // `Unsupported` field is never selectable or writable through the client
+  // regardless: every read of this column goes through raw SQL, by design.
+  titleSearchVector Unsupported("tsvector")? @map("title_search_vector")
+
   owner           User           @relation("TranscriptOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   sourceObject    StorageObject  @relation("TranscriptSourceObject", fields: [sourceObjectId], references: [id], onDelete: Restrict)
   playbackObject  StorageObject? @relation("TranscriptPlaybackObject", fields: [playbackObjectId], references: [id], onDelete: Restrict)
@@ -2435,6 +2450,21 @@ model TranscriptSegment {
   rev        Int           @default(1)
   editedById String?       @map("edited_by_id") @db.Uuid
   editedAt   DateTime?     @map("edited_at") @db.Timestamptz
+
+  // GENERATED ALWAYS AS (to_tsvector('english'::regconfig, coalesce(text,
+  // ''))) STORED, plus a GIN index — issue #174, epic #164. Unweighted,
+  // unlike `Note.searchVector` below: a segment is one line of speech with
+  // no title of its own to weight against. Hand-written in
+  // `20260915120000_add_search_vectors/migration.sql`; see that migration's
+  // header for the full argument (why the two-argument `to_tsvector` form
+  // is required, why `'english'` is a stated v1 limitation, why a generated
+  // column rather than a trigger — a trigger does not fire under the
+  // `session_replication_role = replica` a database restore runs under).
+  // `Unsupported` and nullable-optional for the same reason
+  // `Transcript.titleSearchVector` is: Prisma cannot express "the database
+  // writes this," and this field is never selectable or writable through
+  // the client — every read goes through raw SQL.
+  searchVector Unsupported("tsvector")? @map("search_vector")
 
   transcript Transcript        @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
   speaker    TranscriptSpeaker @relation(fields: [speakerId], references: [id], onDelete: Restrict)
@@ -2882,6 +2912,23 @@ model Note {
   contextText String? @map("context_text")
 
   failureReason String? @map("failure_reason")
+
+  // GENERATED ALWAYS AS (setweight(to_tsvector('english'::regconfig,
+  // coalesce(title, '')), 'A') || setweight(to_tsvector('english'::regconfig,
+  // coalesce(body, '')), 'B')) STORED, plus a GIN index — issue #174, epic
+  // #164. Weighted A/B, unlike `TranscriptSegment.searchVector`: `title` is
+  // human-authored (the user wrote it) and `body` is AI-generated (or later
+  // user-edited), so a title hit is stronger evidence and `ts_rank`/
+  // `ts_rank_cd` can reflect that. Hand-written in
+  // `20260915120000_add_search_vectors/migration.sql`; see that migration's
+  // header for the full argument, including why the two-argument
+  // `to_tsvector` form is required and why a generated column rather than a
+  // trigger (restore-safety — a trigger does not fire under
+  // `session_replication_role = replica`). `Unsupported` and
+  // nullable-optional for the same reason `Transcript.titleSearchVector`
+  // is: never selectable or writable through the Prisma client — every read
+  // goes through raw SQL.
+  searchVector Unsupported("tsvector")? @map("search_vector")
 
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
