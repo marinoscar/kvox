@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
@@ -12,7 +12,9 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { diffEnv, parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
+import { writeDeployInfo } from './deploy-info.js';
+import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
+import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
 import { runEnvWizard } from './env-wizard.js';
 import { runCommand as defaultRunCommand } from './executor.js';
@@ -30,6 +32,7 @@ import {
   type ProxyTarget,
 } from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
+import { collectServerFacts } from './server-facts.js';
 import { requireState, writeState, type DeployState } from './state.js';
 import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { composeArgv, composeCwd, secretsFrom } from './install.js';
@@ -124,10 +127,6 @@ export async function certificateDueForRenewal(
 ): Promise<boolean> {
   const expiry = await certificateExpiry(target, run, now);
   return expiry.daysLeft !== undefined && expiry.daysLeft <= RENEW_WITHIN_DAYS;
-}
-
-function envFilePath(deployRoot: string): string {
-  return join(composeCwd(deployRoot), '.env');
 }
 
 /**
@@ -244,6 +243,16 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         context.previousSha = checkout.previousSha;
         context.commitSha = checkout.sha;
 
+        // The clone is in place, so the .env link into it can be. This is
+        // also where a deployment installed before #120 - its .env a regular
+        // file inside the clone - is moved to the app root, once.
+        const link = ensureComposeEnvLink(context.options.deployRoot);
+        if (link.migrated) {
+          const message = `Moved .env from the clone to ${envFilePath(context.options.deployRoot)} and linked it back`;
+          context.journal.line(message);
+          context.hooks?.onProgress?.(message);
+        }
+
         const moved = checkout.changed;
         const rebuildAnyway = context.options.force === true || context.options.noCache === true;
 
@@ -260,11 +269,14 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         );
 
         // Recorded BEFORE anything is mutated, so a failed update still leaves
-        // behind what it was replacing.
+        // behind what it was replacing. `lastDeployedAt` is NOT touched here:
+        // nothing has been deployed yet, and a failed update stamping a
+        // deploy time that never happened is the bug #120 fixed. The attempt
+        // itself is what gets a timestamp.
         writeState({
           ...context.state,
           previousSha: checkout.previousSha,
-          lastDeployedAt: new Date().toISOString(),
+          lastAttemptAt: new Date().toISOString(),
         } as DeployState);
       },
     },
@@ -274,12 +286,19 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
       skip: skipWhenUnchanged,
       async run(context) {
         const templatePath = join(composeCwd(context.options.deployRoot), '.env.example');
-        const path = envFilePath(context.options.deployRoot);
+        const onDisk = readEnvFile(context.options.deployRoot);
 
-        if (!existsSync(templatePath) || !existsSync(path)) return;
+        if (!existsSync(templatePath) || onDisk === undefined) return;
 
         const specs = parseEnvExample(readFileSync(templatePath, 'utf8'));
-        const current = parseEnvFile(readFileSync(path, 'utf8'));
+        // DEPLOY_ROOT is the CLI's own carry-through key (#120), like
+        // COMPOSE_PROJECT_NAME: a deployment installed before it existed gets
+        // it on its first update, so the deploy-info mount resolves the same
+        // way a fresh install's does.
+        const current = new Map(onDisk);
+        const pinned = current.get('DEPLOY_ROOT') !== context.options.deployRoot;
+        current.set('DEPLOY_ROOT', context.options.deployRoot);
+
         const { missing, unknown } = diffEnv(specs, current);
 
         if (unknown.length > 0) {
@@ -287,7 +306,13 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           context.journal.line(`Keeping ${unknown.length} variable(s) not in the template`);
         }
 
-        if (missing.length === 0) return;
+        if (missing.length === 0) {
+          if (pinned) {
+            writeEnvFile(context.options.deployRoot, serializeEnvFile(current, specs));
+            context.env = current;
+          }
+          return;
+        }
 
         const needsAnswer = missing.filter((spec) => {
           const metadata = metadataFor(spec.key);
@@ -304,7 +329,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           for (const spec of missing) {
             if (!spec.optional) merged.set(spec.key, spec.defaultValue);
           }
-          writeFileSync(path, serializeEnvFile(merged, specs), { mode: 0o600 });
+          writeEnvFile(context.options.deployRoot, serializeEnvFile(merged, specs));
           context.env = merged;
           return;
         }
@@ -331,7 +356,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
             : { ctx: context.options.promptContext }),
         });
 
-        writeFileSync(path, serializeEnvFile(values, specs), { mode: 0o600 });
+        writeEnvFile(context.options.deployRoot, serializeEnvFile(values, specs));
         context.env = values;
       },
     },
@@ -523,11 +548,13 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
   const state = requireState(options.deployRoot);
   const startedAt = Date.now();
 
-  const path = envFilePath(options.deployRoot);
+  // Read through `readEnvFile` rather than a fixed path: a deployment from
+  // before #120 still has its .env inside the clone until `fetch` moves it.
+  const env = readEnvFile(options.deployRoot);
   const journal = openJournal({
     deployRoot: options.deployRoot,
     command: 'update',
-    secrets: existsSync(path) ? secretsFrom(parseEnvFile(readFileSync(path, 'utf8'))) : [],
+    secrets: secretsFrom(env ?? new Map()),
   });
 
   const context: UpdateContext = {
@@ -538,7 +565,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     completed: new Set<string>(),
     state,
     name: projectNameFor(state, options.deployRoot),
-    ...(existsSync(path) ? { env: parseEnvFile(readFileSync(path, 'utf8')) } : {}),
+    ...(env === undefined ? {} : { env }),
   };
 
   const result = await runPipeline(buildUpdateSteps(), context);
@@ -557,6 +584,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
   }
 
   if (context.unchanged === true) {
+    // Nothing was deployed, so the state stands - but deploy-info is still
+    // refreshed from it: the host facts may have moved (a kernel upgrade), and
+    // a deployment from before #120 gets its first info.json here rather than
+    // only once the remote moves.
+    await refreshDeployInfo(context, state);
     journal.finish('success', 'already up to date');
     return {
       changed: false,
@@ -566,7 +598,10 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     };
   }
 
-  writeState({
+  // Stamped ONLY here, once every step has run: this is the moment something
+  // was actually deployed. `installedAt` rides through untouched.
+  const now = new Date().toISOString();
+  const deployed = {
     ...state,
     ref: context.target?.ref ?? state.ref,
     commitSha: context.commitSha ?? state.commitSha,
@@ -574,10 +609,14 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     ...((context.proxyContainer ?? state.proxyContainer) === undefined
       ? {}
       : { proxyContainer: context.proxyContainer ?? state.proxyContainer }),
-    lastDeployedAt: new Date().toISOString(),
+    envPath: envFilePath(options.deployRoot),
+    lastDeployedAt: now,
+    lastAttemptAt: now,
     lastCommand: 'update',
     appctlVersion: CLI_VERSION,
-  } as DeployState);
+  } as DeployState;
+  writeState(deployed);
+  await refreshDeployInfo(context, deployed);
 
   journal.finish('success');
 
@@ -588,6 +627,16 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     journalPath: journal.path,
     durationMs: Date.now() - startedAt,
   };
+}
+
+/** Writes deploy-info from the state, after `writeState` - never before. */
+async function refreshDeployInfo(context: UpdateContext, state: DeployState): Promise<void> {
+  const path = writeDeployInfo(
+    context.options.deployRoot,
+    state,
+    await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
+  );
+  context.journal.line(`Wrote ${path}`);
 }
 
 export { RENEW_WITHIN_DAYS };

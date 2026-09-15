@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
@@ -13,7 +13,9 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
+import { writeDeployInfo } from './deploy-info.js';
+import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
+import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
 import type { EnvGroup } from './env-metadata.js';
 import { runCommand as defaultRunCommand } from './executor.js';
@@ -36,6 +38,7 @@ import {
   type ProxyTarget,
 } from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
+import { collectServerFacts } from './server-facts.js';
 import { readState, writeState, type DeployState } from './state.js';
 import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
@@ -177,10 +180,6 @@ export function composeArgv(name: string, extra: readonly string[]): string[] {
     ...COMPOSE_FILES.flatMap((file) => ['-f', file]),
     ...extra,
   ];
-}
-
-function envFilePath(deployRoot: string): string {
-  return join(composeCwd(deployRoot), '.env');
 }
 
 /** Secrets for the journal's redactor, from the metadata rather than a guess. */
@@ -334,8 +333,18 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         );
         const specs = parseEnvExample(readFileSync(templatePath, 'utf8'));
 
+        // The clone exists (the checkout step just ran), so the link into it
+        // can be made - and an install from before #120, whose .env is a
+        // regular file inside the clone, is moved to the app root here, once.
+        const link = ensureComposeEnvLink(context.options.deployRoot);
+        if (link.migrated) {
+          const message = `Moved .env from the clone to ${envFilePath(context.options.deployRoot)} and linked it back`;
+          context.journal.line(message);
+          context.hooks?.onProgress?.(message);
+        }
+
         const path = envFilePath(context.options.deployRoot);
-        const onDisk = existsSync(path) ? parseEnvFile(readFileSync(path, 'utf8')) : undefined;
+        const onDisk = readEnvFile(context.options.deployRoot);
 
         // Answers supplied by a caller win over what is on disk: they are the
         // more recent statement of intent.
@@ -371,11 +380,15 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         // It is what makes a hand-run `docker compose ... ps` in this
         // directory see the same project the CLI's `-p <name>` does.
         values.set('COMPOSE_PROJECT_NAME', context.options.name);
+        // Same standing as COMPOSE_PROJECT_NAME: vps.compose.yml mounts
+        // `${DEPLOY_ROOT:-../../..}/deploy-info` into the api container, and
+        // writing the resolved root here keeps an explicit --root honest even
+        // when the compose directory is not three levels below it.
+        values.set('DEPLOY_ROOT', context.options.deployRoot);
 
-        mkdirSync(composeCwd(context.options.deployRoot), { recursive: true });
-        // 0600: it holds the database password, the JWT secret and the OAuth
-        // client secret.
-        writeFileSync(path, serializeEnvFile(values, specs), { mode: 0o600 });
+        // 0600, at the app root: it holds the database password, the JWT
+        // secret and the OAuth client secret, and it must survive `rm -rf repo`.
+        writeEnvFile(context.options.deployRoot, serializeEnvFile(values, specs));
 
         context.env = values;
         context.journal.line(`Wrote ${path} (${values.size} variables)`);
@@ -644,9 +657,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     command: 'install',
     // Seeded from an existing .env so a resumed run redacts from the first
     // line, before the wizard has run again.
-    secrets: existsSync(envFilePath(options.deployRoot))
-      ? secretsFrom(parseEnvFile(readFileSync(envFilePath(options.deployRoot), 'utf8')))
-      : [],
+    secrets: secretsFrom(readEnvFile(options.deployRoot) ?? new Map()),
   });
 
   journal.line(`App ${options.name} at ${options.deployRoot}`);
@@ -675,7 +686,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   }
 
   const now = new Date().toISOString();
-  writeState({
+  const state = {
     version: 1,
     repoUrl: context.target?.url ?? '',
     ref: context.target?.ref ?? '',
@@ -690,12 +701,23 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     ...((context.proxyContainer ?? existingState?.proxyContainer) === undefined
       ? {}
       : { proxyContainer: context.proxyContainer ?? existingState?.proxyContainer }),
+    envPath: envFilePath(options.deployRoot),
     installedAt: existingState?.installedAt ?? now,
     lastDeployedAt: now,
     lastCommand: 'install',
     appctlVersion: CLI_VERSION,
     completedSteps: result.completed,
-  } as DeployState);
+  } as DeployState;
+  writeState(state);
+
+  // AFTER the state: deploy-info is derived from it, and it is the document
+  // the running application reads about itself (deploy-info.ts).
+  const infoPath = writeDeployInfo(
+    options.deployRoot,
+    state,
+    await collectServerFacts({ runCommand, root: options.deployRoot }),
+  );
+  journal.line(`Wrote ${infoPath}`);
 
   journal.finish('success');
 

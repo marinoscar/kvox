@@ -65,6 +65,23 @@ describe('writeState / readState', () => {
     expect(readState(root)?.version).toBe(DEPLOY_STATE_VERSION);
   });
 
+  it('round-trips envPath and lastAttemptAt, also at the same state version', () => {
+    // #120 adds the canonical .env path and the failed-attempt timestamp
+    // the same way: optional, and a file without them still means what it
+    // meant.
+    const root = makeRoot();
+    const state: DeployState = {
+      ...sample(root),
+      envPath: join(root, '.env'),
+      lastAttemptAt: '2026-01-03T00:00:00.000Z',
+    };
+
+    writeState(state);
+
+    expect(readState(root)).toEqual(state);
+    expect(readState(root)?.version).toBe(DEPLOY_STATE_VERSION);
+  });
+
   it('writes the file 0600', () => {
     const root = makeRoot();
     writeState(sample(root));

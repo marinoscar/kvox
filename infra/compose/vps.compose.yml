@@ -13,6 +13,11 @@
 # This file exists for one reason above all others: NOTHING IN THE STACK MAY
 # BE PUBLISHED ON A PUBLIC INTERFACE. Everything reaches the application
 # through the host proxy, which terminates TLS and holds the certificate.
+#
+# The one other thing in here is the read-only `deploy-info` mount on the api
+# service (issue #120): metadata the CLI writes about THIS deployment on THIS
+# server, which is VPS-specific by definition - local dev has no deploy and
+# nothing to mount.
 # =============================================================================
 
 services:
@@ -42,9 +47,27 @@ services:
         max-file: "3"
 
   # ---------------------------------------------------------------------------
-  # API - log rotation
+  # API - log rotation, deploy-info mount
   # ---------------------------------------------------------------------------
   api:
+    # What was deployed here, for `GET /api/admin/about` (issue #120). The CLI
+    # writes `<root>/deploy-info/info.json` on every install and update; the
+    # API reads it at DEPLOY_INFO_PATH.
+    #
+    # A DIRECTORY is mounted, not the file: the CLI rewrites info.json with a
+    # temp-file-and-rename, which replaces the inode, and a single-file bind
+    # mount would keep the container on the old inode forever. Read-only
+    # because the container has no business writing it.
+    #
+    # Relative paths resolve against this file's directory, `repo/infra/
+    # compose`, so `../../..` is exactly the app root. DEPLOY_ROOT is written
+    # into .env by the CLI (beside COMPOSE_PROJECT_NAME) so an explicit --root
+    # still mounts the right directory. No `!override`: base.compose.yml gives
+    # `api` no `volumes`, and its `environment` is a list this merges with.
+    volumes:
+      - ${DEPLOY_ROOT:-../../..}/deploy-info:/app/deploy-info:ro
+    environment:
+      - DEPLOY_INFO_PATH=/app/deploy-info/info.json
     logging:
       driver: "json-file"
       options:

@@ -61,8 +61,23 @@ export interface DeployState {
   proxyRoot?: string | undefined;
   /** The proxy container's name, once a later child of #118 resolves it. */
   proxyContainer?: string | undefined;
+  /**
+   * The canonical `.env`, `<deployRoot>/.env` since #120. Optional for the
+   * same reason the four above are: a state written before it lacks it, and
+   * `envFilePath(deployRoot)` is the answer either way.
+   */
+  envPath?: string | undefined;
   installedAt: string;
+  /**
+   * When the last deploy SUCCEEDED. Never stamped at fetch time: a failed
+   * update must not claim a deploy that never happened (#120).
+   */
   lastDeployedAt: string;
+  /**
+   * When the last update was attempted, successful or not - so `status` can
+   * show a failed attempt's time without `lastDeployedAt` lying about it.
+   */
+  lastAttemptAt?: string | undefined;
   lastCommand: 'install' | 'update';
   /**
    * Which CLI version wrote this, for diagnosing a state file from the future.
