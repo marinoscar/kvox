@@ -22,11 +22,17 @@ import { AXE_OPTIONS, homeUser } from './homeFixtures';
 /**
  * The first-run walkthrough.
  *
- * The assertion that earns its keep here is the "Coming soon" pair: two of the
- * four stages are drawn because the SHAPE of the journey is the product's
- * thesis, and labelled because the shape is not a promise about today. A
- * regression that quietly dropped those labels would ship an empty state
- * advertising two features that do not exist.
+ * The assertion that earns its keep here is the "Coming soon" label: a stage
+ * that does not exist yet is still drawn, because the SHAPE of the journey is
+ * the product's thesis, and labelled, because the shape is not a promise about
+ * today. A regression that quietly dropped the label would ship an empty state
+ * advertising a feature that does not exist.
+ *
+ * ⚠ THE COUNT IS ONE, NOT TWO, SINCE #107. Transform shed its label when the
+ * home page started showing notes: epic #45 shipped the feature, and a stage
+ * cannot advertise as unbuilt something the very same screen now lists. Find
+ * is the only one left, and the day it ships these numbers move again --
+ * which is the point of asserting the exact set rather than a bare count.
  */
 
 function renderJourney(ui: React.ReactElement, user = homeUser) {
@@ -47,9 +53,8 @@ describe('JOURNEY_STAGES', () => {
     ]);
   });
 
-  it('marks exactly the two that do not exist yet', () => {
+  it('marks exactly the one that does not exist yet', () => {
     expect(JOURNEY_STAGES.filter((stage) => stage.comingSoon).map((s) => s.label)).toEqual([
-      'Transform',
       'Find',
     ]);
   });
@@ -94,10 +99,10 @@ describe('JourneyEmptyState', () => {
     expect(screen.getByRole('heading', { name: 'Find' })).toBeInTheDocument();
   });
 
-  it('marks exactly two of them "Coming soon"', () => {
+  it('marks exactly one of them "Coming soon"', () => {
     renderJourney(<JourneyEmptyState transcriptionAvailable />);
 
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
   });
 
   it('does not mark Capture as coming soon', () => {
@@ -107,11 +112,20 @@ describe('JourneyEmptyState', () => {
     expect(within(capture).queryByText('Coming soon')).not.toBeInTheDocument();
   });
 
-  it('marks Transform as coming soon', () => {
+  // Pinned as its own case rather than folded into the count above (#107): the
+  // count would still pass if Transform kept its label and Find lost one.
+  it('no longer marks Transform as coming soon, now that notes ship', () => {
     renderJourney(<JourneyEmptyState transcriptionAvailable />);
 
     const transform = screen.getByRole('heading', { name: 'Transform' }).parentElement!;
-    expect(within(transform).getByText('Coming soon')).toBeInTheDocument();
+    expect(within(transform).queryByText('Coming soon')).not.toBeInTheDocument();
+  });
+
+  it('marks Find as coming soon', () => {
+    renderJourney(<JourneyEmptyState transcriptionAvailable />);
+
+    const find = screen.getByRole('heading', { name: 'Find' }).parentElement!;
+    expect(within(find).getByText('Coming soon')).toBeInTheDocument();
   });
 
   it('renders the stages as an ordered list — the order is the meaning', () => {

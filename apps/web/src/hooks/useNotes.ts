@@ -1,8 +1,8 @@
 /**
- * The notes data layer — issue #57, epic #45.
+ * The notes data layer — issue #57, epic #45; the home summary is #107.
  *
- * Two hooks, one file, for the reason `useTranscripts.ts` gives about its own
- * four: they are two views of one surface and what they share is a contract —
+ * Three hooks, one file, for the reason `useTranscripts.ts` gives about its own
+ * four: they are three views of one surface and what they share is a contract —
  * every function RESOLVES rather than throws, and a failure is a STRING the
  * page renders.
  *
@@ -33,13 +33,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ApiError } from '../services/api';
-import { getNote, getNotes } from '../services/notes';
-import type { Note, NoteListItem, NoteListParams, NoteStatus } from '../services/notes';
+import { getNote, getNoteSummary, getNotes } from '../services/notes';
+import type {
+  Note,
+  NoteListItem,
+  NoteListParams,
+  NoteStatus,
+  NoteSummary,
+} from '../services/notes';
+import { useNotifications } from '../contexts/NotificationContext';
 import { useIsMounted } from './useIsMounted';
 import { useVisiblePolling } from './useVisiblePolling';
 
 /** While a generation is running. Fast enough that a status chip looks alive. */
 export const NOTE_ACTIVE_POLL_MS = 5_000;
+
+/** The registry-key prefix whose events mean "re-read the caller's notes". */
+export const NOTE_EVENT_PREFIX = 'notes.';
 
 /** Notes per page. The API's own default; stated here so the cursor tests can pin it. */
 export const NOTE_PAGE_SIZE = 20;
@@ -67,6 +77,32 @@ function messageFor(err: unknown, fallback: string): string {
     return err.message || fallback;
   }
   return fallback;
+}
+
+/**
+ * The id of the most recent `notes.*` notification, or `null`.
+ *
+ * A STRING, not a counter or a callback — the same shape, and the same
+ * reasoning, as `useLatestTranscriptEventId` in `useTranscripts.ts`. The
+ * notification centre re-renders for reasons of its own (a read receipt, an
+ * unrelated event), and a hook that refetched on every one of those would turn
+ * the bell into a second, unthrottled poll. An id changes exactly when a NEW
+ * note event arrives, which makes it safe to use directly as an effect
+ * dependency.
+ *
+ * Returns `null` when no `NotificationProvider` is mounted — `useNotifications`
+ * is deliberately tolerant, and the `?.` below is load-bearing rather than
+ * defensive — so this works in a test, in the visual harness, and on any
+ * surface that has no bell.
+ */
+function useLatestNoteEventId(): string | null {
+  const notifications = useNotifications();
+  return useMemo(() => {
+    const match = notifications?.notifications.find((notification) =>
+      notification.eventKey.startsWith(NOTE_EVENT_PREFIX),
+    );
+    return match?.id ?? null;
+  }, [notifications?.notifications]);
 }
 
 // =============================================================================
@@ -198,6 +234,132 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   const refresh = useCallback(() => load(false), [load]);
 
   return { notes, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
+}
+
+// =============================================================================
+// The home page's summary
+// =============================================================================
+
+export interface UseNoteSummaryResult {
+  summary: NoteSummary | null;
+  /** Only true for the FIRST read. A poll never raises it — see below. */
+  isLoading: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export interface UseNoteSummaryOptions {
+  /**
+   * `false` issues NO request at all and reports `{ null, false, null }`.
+   *
+   * This is the `notes:read` gate, and it has to live here rather than in the
+   * page's JSX: a hook cannot be mounted conditionally, so a caller that wanted
+   * to skip the read would otherwise have to render a second component tree
+   * just to avoid firing a request the API is going to answer 403 to. `false`
+   * also leaves `isLoading` FALSE rather than stuck true, because there is
+   * nothing to wait for — a spinner that never resolves is worse than no
+   * section.
+   */
+  enabled?: boolean;
+}
+
+/**
+ * The notes half of the home page — issue #107.
+ *
+ * ⚠ A SECOND REQUEST BESIDE `useTranscriptSummary`, DELIBERATELY. `HomePage`'s
+ * header carries the full argument; the short form is that `GET
+ * /api/notes/summary` and `GET /api/transcripts/summary` are gated on two
+ * different permissions (`notes:read`, `transcripts:read`), so an aggregate
+ * endpoint would have to answer partially for a user holding one of them. The
+ * two are fired in parallel and neither waits on the other.
+ *
+ * Shaped after `useTranscriptSummary` line for line, and that twinning is the
+ * point: two summary hooks feeding one page that diverged on when they poll,
+ * whether a poll raises the skeleton, or what a failed refresh does to the rows
+ * already on screen would make one page behave two ways depending on which
+ * section you were looking at.
+ *
+ * =============================================================================
+ * IT POLLS ONLY WHILE SOMETHING IS GENERATING
+ * =============================================================================
+ *
+ * `pollIntervalMs` is derived from the answer, not from a constant: with
+ * `inProgress` non-empty the page is a progress display and the chips must
+ * move, and with it empty there is nothing on this screen that changes without
+ * the user doing something. This is the LANDING PAGE — the tab most likely to
+ * be the one left open on a second monitor overnight — so the arithmetic in
+ * `useVisiblePolling`'s own header applies here with full force.
+ *
+ * The notification stream covers the gap the conditional poll opens: a note
+ * that finishes elsewhere raises a `notes.*` event that refetches immediately,
+ * so an idle home page still notices — it just does not ask every five seconds
+ * when it has no reason to.
+ *
+ * A POLL DOES NOT RAISE `isLoading`, and A FAILED POLL KEEPS THE LAST GOOD
+ * SUMMARY, for the two reasons `useTranscriptSummary` states: the skeleton must
+ * appear once rather than every five seconds over content that is already
+ * correct, and a refresh that 500s mid-visit must not replace a correct list
+ * with an error banner and nothing else. Holding the rows and recording the
+ * error is the honest state ("this may be stale").
+ */
+export function useNoteSummary(options: UseNoteSummaryOptions = {}): UseNoteSummaryResult {
+  const { enabled = true } = options;
+
+  const [summary, setSummary] = useState<NoteSummary | null>(null);
+  // Starts false when disabled, so a page with no `notes:read` never renders a
+  // loading state for a request that is never going to be made.
+  const [isLoading, setIsLoading] = useState(enabled);
+  const [error, setError] = useState<string | null>(null);
+
+  const isMounted = useIsMounted();
+
+  const load = useCallback(
+    async (showLoading: boolean) => {
+      if (!enabled) return;
+      if (showLoading) setIsLoading(true);
+      try {
+        const response = await getNoteSummary();
+        if (!isMounted()) return;
+        setSummary(response);
+        setError(null);
+      } catch (err) {
+        // The HELD SUMMARY IS NOT CLEARED — see the header.
+        if (isMounted()) setError(messageFor(err, 'Failed to load your notes'));
+      } finally {
+        if (isMounted()) setIsLoading(false);
+      }
+    },
+    [enabled, isMounted],
+  );
+
+  useEffect(() => {
+    if (!enabled) {
+      // Reset rather than leave whatever a previously-enabled mount read: a
+      // page that loses the permission mid-session must not keep rendering the
+      // rows it was allowed to see a moment ago.
+      setSummary(null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+    void load(true);
+  }, [enabled, load]);
+
+  const hasInFlight = (summary?.inProgress.length ?? 0) > 0;
+  useVisiblePolling(
+    () => void load(false),
+    enabled && hasInFlight ? NOTE_ACTIVE_POLL_MS : 0,
+  );
+
+  const latestEventId = useLatestNoteEventId();
+  useEffect(() => {
+    if (!latestEventId || !enabled) return;
+    void load(false);
+  }, [enabled, latestEventId, load]);
+
+  const refresh = useCallback(() => load(false), [load]);
+
+  return { summary, isLoading, error, refresh };
 }
 
 // =============================================================================

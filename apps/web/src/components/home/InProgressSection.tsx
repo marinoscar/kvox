@@ -1,8 +1,9 @@
 /**
- * "In progress" — everything the user is currently waiting on. Issue #32, epic #19.
+ * "In progress" — everything the user is currently waiting on. Issue #32, epic
+ * #19; notes joined it in #107.
  *
  * =============================================================================
- * THREE KINDS OF ROW, TWO SOURCES OF TRUTH, ONE SECTION
+ * FOUR KINDS OF ROW, TWO SOURCES OF TRUTH, ONE SECTION
  * =============================================================================
  *
  * A recording on its way to becoming a transcript is in one of three states,
@@ -21,11 +22,23 @@
  *      provider round trip is running. Nothing local is involved; the only
  *      source is `GET /api/transcripts/summary`.
  *
+ * The fourth kind is a **note being generated** — `GET /api/notes/summary`'s
+ * own `inProgress` list, handed in by the page beside the transcript one. It is
+ * not a recording at all, which is exactly why it belongs here rather than in a
+ * section of its own.
+ *
  * Merging them into one section is a deliberate product decision rather than a
- * layout convenience: the user asked ONE question ("is my recording ready
- * yet?"), and splitting the answer across "Uploads" and "Processing" makes them
- * check two places for one recording that will silently move from the first to
- * the second while they watch.
+ * layout convenience. The question this section answers is NOT "is my recording
+ * ready yet?" — that was the #19 framing, and #107 widened it — but **"what am
+ * I waiting on?"**. A user who uploaded a recording and then asked for minutes
+ * from a different one is waiting on two things at once, and splitting the
+ * answer across "Uploads", "Processing" and "Notes" makes them check three
+ * places for one question, while work silently moves between them.
+ *
+ * TRANSCRIPTS FIRST, THEN NOTES, and within the transcripts the local uploads
+ * first. The order is by how much the user can do about the row: a live upload
+ * has controls, a processing transcript has a stage worth reading, and a
+ * generating note has neither — it is the one row that is purely "wait".
  *
  * ⚠ A LIVE UPLOAD AND ITS SERVER ROW ARE THE SAME RECORDING. While bytes are
  * moving, the transcript is in `uploading` and therefore appears in the
@@ -35,8 +48,12 @@
  * can only say "Uploading" with no idea how far along it is.
  *
  * =============================================================================
- * HIDDEN WHEN EMPTY, AND THAT MEANS ALL THREE
+ * HIDDEN WHEN EMPTY, AND THAT MEANS ALL FOUR
  * =============================================================================
+ *
+ * Uploads, interrupted sessions, server-side transcripts AND notes — the
+ * section disappears only when every one of the four is empty, so a page whose
+ * only activity is a generating note still shows it.
  *
  * Returning `null` rather than rendering an empty "In progress (0)" heading:
  * the steady state of this application is that nothing is in flight, so a
@@ -65,6 +82,7 @@ import { useUploadManager } from '../../hooks/useUploadManager';
 import type { ManagedUpload } from '../../hooks/useUploadManager';
 import { UploadSessionMismatchError } from '../../services/uploadSessions';
 import type { UploadSessionRecord } from '../../services/uploadSessions';
+import type { NoteListItem } from '../../services/notes';
 import type { TranscriptListItem } from '../../services/transcripts';
 import {
   formatBytes,
@@ -75,6 +93,14 @@ import {
 export interface InProgressSectionProps {
   /** The summary's `inProgress` list — server-side work, never local uploads. */
   items: TranscriptListItem[];
+  /**
+   * `GET /api/notes/summary`'s `inProgress` list (#107).
+   *
+   * OPTIONAL, so every existing caller and every existing test keeps compiling
+   * and keeps meaning what it meant: a surface with no notes to report omits
+   * it rather than being made to pass `[]`.
+   */
+  notes?: NoteListItem[];
 }
 
 /** Phases that still need the network. A settled upload belongs in Recent. */
@@ -299,7 +325,44 @@ function ProcessingRow({ item }: { item: TranscriptListItem }) {
   );
 }
 
-export function InProgressSection({ items }: InProgressSectionProps) {
+/**
+ * One note being generated: what it is, that it is moving, and a way in.
+ *
+ * `ProcessingRow`'s shape, deliberately, minus the stage chip — a note has no
+ * published stages and no percentage, so "Generating…" is the whole of what is
+ * known and a chip repeating it would be a second element saying one thing.
+ * The bar is `aria-hidden` for the same reason it is on `ProcessingRow`: the
+ * caption already says the row is moving, and an unlabelled progressbar beside
+ * it announces a second, meaningless element. (`NoteSummaryCard` labels its bar
+ * instead, because there the bar REPLACES the excerpt and is the only thing
+ * reporting motion.)
+ */
+function GeneratingNoteRow({ note }: { note: NoteListItem }) {
+  const navigate = useNavigate();
+
+  return (
+    <Card variant="outlined" component="li" sx={{ listStyle: 'none' }}>
+      <CardActionArea
+        onClick={() => navigate(`/notes/${note.id}`)}
+        sx={{ p: 1.75, display: 'block', minWidth: 0 }}
+      >
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="subtitle2" component="h3" noWrap sx={{ fontWeight: 600 }}>
+              {note.title}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" component="p">
+              Generating…
+            </Typography>
+          </Box>
+        </Stack>
+        <LinearProgress aria-hidden sx={{ mt: 1, height: 4, borderRadius: 2 }} />
+      </CardActionArea>
+    </Card>
+  );
+}
+
+export function InProgressSection({ items, notes = [] }: InProgressSectionProps) {
   const { uploads, sessions } = useUploadManager();
 
   const liveUploads = uploads.filter((upload) => LIVE_PHASES.has(upload.progress.phase));
@@ -310,7 +373,10 @@ export function InProgressSection({ items }: InProgressSectionProps) {
   const interrupted = sessions.filter((session) => !liveObjectIds.has(session.objectId));
   const serverItems = dedupeServerItems(items, liveUploads);
 
-  const total = liveUploads.length + interrupted.length + serverItems.length;
+  // ALL FOUR — see the header. A page whose only activity is a generating note
+  // must still show this section.
+  const total =
+    liveUploads.length + interrupted.length + serverItems.length + notes.length;
   if (total === 0) return null;
 
   return (
@@ -333,6 +399,12 @@ export function InProgressSection({ items }: InProgressSectionProps) {
         ))}
         {serverItems.map((item) => (
           <ProcessingRow key={item.id} item={item} />
+        ))}
+        {/* LAST, and in the SAME list — see the header on the ordering. A
+            second `ul` would announce "list of 1" twice to a screen reader for
+            one question the user asked once. */}
+        {notes.map((note) => (
+          <GeneratingNoteRow key={note.id} note={note} />
         ))}
       </Stack>
     </Box>

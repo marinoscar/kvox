@@ -18,14 +18,19 @@ import { server } from '../mocks/server';
 import { render, mockAdminUser, mockUser, type MockUser } from '../utils/test-utils';
 import HomePage from '../../pages/HomePage';
 import { useUploadManager } from '../../hooks/useUploadManager';
+import type { NoteSummary } from '../../services/notes';
 import type { TranscriptSummary } from '../../services/transcripts';
 import type { TranscriptionConfig } from '../../services/transcription';
+import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
 import {
   AXE_OPTIONS,
   TRANSCRIPTION_AVAILABLE,
   TRANSCRIPTION_UNAVAILABLE,
   homeUser,
   manager,
+  noNotesUser,
+  note,
+  noteSummary,
   session,
   summary,
   transcript,
@@ -33,12 +38,13 @@ import {
 } from '../components/home/homeFixtures';
 
 /**
- * The signed-in home page, over the REAL data hook and MSW.
+ * The signed-in home page, over the REAL data hooks and MSW.
  *
- * Not a mocked `useTranscriptSummary`: the thing most likely to be wrong on
- * this page is the wiring between ONE summary request, the capability probe
- * that runs beside it, and which of the five sections that combination is
- * supposed to render — and a mocked hook asserts nothing about any of it.
+ * Not a mocked `useTranscriptSummary`/`useNoteSummary`: the thing most likely
+ * to be wrong on this page is the wiring between ONE SUMMARY REQUEST PER
+ * CONTENT TYPE, the capability probe that runs beside them, and which of the
+ * six sections that combination is supposed to render — and mocked hooks assert
+ * nothing about any of it.
  *
  * `useUploadManager` IS mocked, for the reason its own header gives: it owns
  * `XMLHttpRequest`s, IndexedDB sessions and a wake lock, none of which this
@@ -49,18 +55,50 @@ const API_BASE = 'http://localhost:3000/api';
 
 const mockUseUploadManager = vi.mocked(useUploadManager);
 
-/** Every summary request this render made — so "exactly one" is assertable. */
+/**
+ * Every summary request this render made, per content type.
+ *
+ * TWO COUNTERS, not one: the page's rule is "one request PER CONTENT TYPE",
+ * which a single total cannot distinguish from "two requests for transcripts
+ * and none for notes".
+ */
 let summaryRequests = 0;
+let noteSummaryRequests = 0;
 
-function respondWith(
-  data: TranscriptSummary,
-  config: TranscriptionConfig = TRANSCRIPTION_AVAILABLE,
-) {
+/**
+ * When each summary request STARTED, relative to the first of them.
+ *
+ * Recorded because "fired in parallel" is a claim about ordering that a call
+ * count cannot make: a page that awaited the transcript summary before asking
+ * for notes would produce exactly the same two counts.
+ */
+let requestOrder: string[] = [];
+
+interface RespondOptions {
+  config?: TranscriptionConfig;
+  notes?: NoteSummary;
+  /** Resolve the transcript summary only when this settles — for the race test. */
+  gate?: Promise<void>;
+}
+
+function respondWith(data: TranscriptSummary, options: RespondOptions = {}) {
+  const { config = TRANSCRIPTION_AVAILABLE, notes = noteSummary(), gate } = options;
   summaryRequests = 0;
+  noteSummaryRequests = 0;
+  requestOrder = [];
   server.use(
-    http.get(`${API_BASE}/transcripts/summary`, () => {
+    http.get(`${API_BASE}/transcripts/summary`, async () => {
       summaryRequests += 1;
+      requestOrder.push('transcripts');
+      if (gate) await gate;
       return HttpResponse.json({ data });
+    }),
+    // ⚠ BEFORE any `/notes/:id` route, always: `summary` is a legal note id as
+    // far as a path pattern is concerned.
+    http.get(`${API_BASE}/notes/summary`, () => {
+      noteSummaryRequests += 1;
+      requestOrder.push('notes');
+      return HttpResponse.json({ data: notes });
     }),
     http.get(`${API_BASE}/transcription/config`, () => HttpResponse.json({ data: config })),
   );
@@ -78,6 +116,9 @@ async function waitForLoaded() {
 beforeEach(() => {
   mockNavigate.mockClear();
   mockUseUploadManager.mockReturnValue(manager());
+  // Module-level and shared by every mount, so it would otherwise leak resolved
+  // source names (and resolved negatives) between the suites below.
+  clearNoteSourceNameCache();
   respondWith(summary({ recent: [transcript()] }));
 });
 
@@ -126,17 +167,60 @@ describe('HomePage — while the summary is loading', () => {
 });
 
 // =============================================================================
-// One request
+// One request per content type
 // =============================================================================
 
 describe('HomePage — data', () => {
-  it('drives the whole page from ONE summary request', async () => {
-    // The endpoint exists so a phone makes a single round trip for three lists
-    // and four counts, instead of four requests racing each other.
+  it('makes exactly ONE request per content type', async () => {
+    // Each summary endpoint exists so a phone makes a single round trip for a
+    // whole content type — three lists and four counts each — instead of one
+    // request per section racing the others. An aggregate `/home/summary` was
+    // rejected because the two are gated on different permissions; see the
+    // page's header.
     renderHome();
     await waitForLoaded();
 
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
     expect(summaryRequests).toBe(1);
+  });
+
+  it('fires both in parallel, with neither waiting on the other', async () => {
+    // The transcript summary is held open until `release()`; if the page
+    // awaited it before asking for notes, the notes request would never be
+    // recorded here at all.
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    respondWith(summary({ recent: [transcript()] }), { gate });
+    renderHome();
+
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+    expect(summaryRequests).toBe(1);
+    // Both were in flight before either answered.
+    expect(requestOrder).toHaveLength(2);
+
+    release();
+    await waitForLoaded();
+  });
+
+  it('asks for NO notes at all without notes:read', async () => {
+    // `enabled: false` issues no request rather than spending a guaranteed 403
+    // on every visit by a user the deployment has not given notes to.
+    renderHome(noNotesUser);
+    await waitForLoaded();
+
+    // Awaited through a full poll's worth of settling, so this is not just
+    // "the request had not landed yet".
+    await waitFor(() => expect(summaryRequests).toBe(1));
+    expect(noteSummaryRequests).toBe(0);
+  });
+
+  it('shows no notes section at all without notes:read', async () => {
+    renderHome(noNotesUser);
+    await waitForLoaded();
+
+    expect(screen.queryByRole('heading', { name: 'Recent notes' })).not.toBeInTheDocument();
   });
 
   it('does not poll while nothing is in flight', async () => {
@@ -322,11 +406,21 @@ describe('HomePage — a brand-new account', () => {
     }
   });
 
-  it('marks the two unbuilt stages "Coming soon"', async () => {
+  it('marks the ONE unbuilt stage "Coming soon"', async () => {
+    // Was two. Epic #45 shipped Transform and issue #107 — which put notes on
+    // this very page — took its `comingSoon` flag off, so only Find is left.
     renderHome();
     await screen.findByRole('heading', { name: 'Start here' });
 
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
+  });
+
+  it('no longer calls Transform "Coming soon"', async () => {
+    renderHome();
+    const transform = await screen.findByRole('heading', { name: 'Transform' });
+
+    // The chip is a sibling of the stage heading inside the same card.
+    expect(within(transform.closest('div')!).queryByText('Coming soon')).not.toBeInTheDocument();
   });
 
   it('shows the New transcript button twice — hero and journey', async () => {
@@ -373,6 +467,25 @@ describe('HomePage — a brand-new account', () => {
     await waitForLoaded();
 
     expect(screen.queryByRole('heading', { name: 'Start here' })).not.toBeInTheDocument();
+  });
+
+  it('does NOT show the journey to somebody who has notes but no transcripts', async () => {
+    // A note can be generated from an uploaded document without the account
+    // ever recording anything. Showing that user "You have no transcripts yet.
+    // Here is what happens once you do" over the top of the notes they wrote
+    // last week is the page telling them their work does not count.
+    respondWith(summary(), { notes: noteSummary({ recent: [note()] }) });
+    renderHome();
+
+    await screen.findByRole('heading', { name: 'Recent notes' });
+    expect(screen.queryByRole('heading', { name: 'Start here' })).not.toBeInTheDocument();
+  });
+
+  it('still shows the journey to an account with neither', async () => {
+    respondWith(summary(), { notes: noteSummary() });
+    renderHome();
+
+    expect(await screen.findByRole('heading', { name: 'Start here' })).toBeInTheDocument();
   });
 
   it('has no accessibility violations', async () => {
@@ -461,6 +574,34 @@ describe('HomePage — in progress', () => {
     await screen.findByRole('heading', { name: 'In progress' });
 
     expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+  });
+
+  it('lists a generating note in the same section', async () => {
+    // One question ("what am I waiting on?"), one section — not one per source.
+    respondWith(summary({ recent: [transcript()] }), {
+      notes: noteSummary({
+        inProgress: [note({ id: 'n-gen', title: 'Board minutes', status: 'generating' })],
+      }),
+    });
+    renderHome();
+    await screen.findByRole('heading', { name: 'In progress' });
+
+    expect(await screen.findByText('Generating…')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Board minutes' })).toBeInTheDocument();
+  });
+
+  it('opens a generating note when it is tapped', async () => {
+    respondWith(summary({ recent: [transcript()] }), {
+      notes: noteSummary({
+        inProgress: [note({ id: 'n-gen', title: 'Board minutes', status: 'generating' })],
+      }),
+    });
+    const user = userEvent.setup();
+    renderHome();
+
+    await user.click(await screen.findByRole('heading', { name: 'Board minutes' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/notes/n-gen');
   });
 
   it('has no accessibility violations', async () => {
@@ -556,6 +697,112 @@ describe('HomePage — a populated recent list', () => {
 });
 
 // =============================================================================
+// Recent notes
+// =============================================================================
+
+describe('HomePage — recent notes', () => {
+  beforeEach(() => {
+    respondWith(summary({ recent: [transcript()] }), {
+      notes: noteSummary({
+        recent: [
+          note({ id: 'n1', title: 'Standup minutes' }),
+          note({ id: 'n2', title: 'Discovery brief' }),
+        ],
+      }),
+    });
+  });
+
+  it('shows the section', async () => {
+    renderHome();
+
+    expect(await screen.findByRole('heading', { name: 'Recent notes' })).toBeInTheDocument();
+  });
+
+  it('lists the notes', async () => {
+    renderHome();
+    await screen.findByRole('heading', { name: 'Recent notes' });
+
+    const list = within(screen.getByRole('region', { name: 'Recent notes' })).getByRole('list');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('opens a note when its card is tapped', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await screen.findByRole('heading', { name: 'Recent notes' });
+
+    await user.click(screen.getByRole('heading', { name: 'Discovery brief' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/notes/n2');
+  });
+
+  it('puts it BELOW the transcripts, and above Shared with me', async () => {
+    // Capture → Correct → Transform, in that order, is the page's whole spine.
+    respondWith(summary({ recent: [transcript()], sharedWithMe: [transcript({ id: 's1' })] }), {
+      notes: noteSummary({ recent: [note()] }),
+    });
+    renderHome();
+    await screen.findByRole('heading', { name: 'Recent notes' });
+
+    const sections = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(sections).toEqual(['Recent', 'Recent notes', 'Shared with me']);
+  });
+
+  it('prompts an account with transcripts but no notes', async () => {
+    respondWith(summary({ recent: [transcript()] }), { notes: noteSummary() });
+    renderHome();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Turn a transcript into a note' }),
+    ).toBeInTheDocument();
+  });
+
+  it('reports a failed notes read in its own alert', async () => {
+    server.use(
+      http.get(`${API_BASE}/notes/summary`, () => HttpResponse.error()),
+    );
+    renderHome();
+    await waitForLoaded();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/notes/i);
+  });
+
+  it('does NOT claim the user has no notes when the read simply failed', async () => {
+    // Every list is empty because nothing was ever read — inviting a user with
+    // forty notes to make their first one, directly under the alert saying the
+    // read failed, is the same bug `isNewUser`'s `summary !== null` guards.
+    server.use(
+      http.get(`${API_BASE}/notes/summary`, () => HttpResponse.error()),
+    );
+    renderHome();
+    await screen.findByRole('alert');
+
+    expect(
+      screen.queryByRole('heading', { name: 'Turn a transcript into a note' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('still renders the transcripts when the notes read fails', async () => {
+    server.use(
+      http.get(`${API_BASE}/notes/summary`, () => HttpResponse.error()),
+    );
+    renderHome();
+    await screen.findByRole('alert');
+
+    expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = renderHome();
+    await screen.findByRole('heading', { name: 'Recent notes' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
 // Shared with me
 // =============================================================================
 
@@ -624,7 +871,7 @@ describe('HomePage — shared with me', () => {
 
 describe('HomePage — transcription is not configured', () => {
   beforeEach(() => {
-    respondWith(summary({ recent: [transcript()] }), TRANSCRIPTION_UNAVAILABLE);
+    respondWith(summary({ recent: [transcript()] }), { config: TRANSCRIPTION_UNAVAILABLE });
   });
 
   it('disables New transcript for an ordinary user', async () => {

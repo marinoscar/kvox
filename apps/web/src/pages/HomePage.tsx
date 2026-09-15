@@ -15,7 +15,13 @@
  *   3. What was I working on?               → `RecentTranscripts`
  *   4. What did somebody send me?           → `SharedWithMe`
  *
- * Until this issue the page was the template's placeholder: a "Welcome back"
+ * Since issue #107 the third and fourth questions each have a notes half: what
+ * is generating right now joins the in-progress list, and "Recent notes" sits
+ * under "Recent". That is the Transform stage of the vision arriving on the
+ * page that describes it — until then this screen said "Coming soon" about a
+ * feature the user could already reach from the navigation rail.
+ *
+ * Until issue #32 the page was the template's placeholder: a "Welcome back"
  * banner, a `UserProfileCard` restating the user's own email back at them, and
  * a `QuickActions` grid of links to Settings and the admin Console. Both
  * components are GONE, not merely unmounted — nothing else referenced either,
@@ -28,22 +34,53 @@
  * summarise, which is a later stage of the vision.
  *
  * =============================================================================
- * ONE DATA REQUEST, PLUS ONE CAPABILITY PROBE — AND WHY THAT IS NOT TWO
+ * ONE CONTENT REQUEST PER CONTENT TYPE, ALL FIRED IN PARALLEL
  * =============================================================================
  *
- * All the page's CONTENT comes from a single `GET /api/transcripts/summary`
- * (via `useTranscriptSummary`), so a phone on a cellular link makes one round
- * trip for three lists and four counts rather than four requests racing each
- * other. That is what the endpoint exists for; do not add a second content
- * fetch here.
+ * THE RULE, and it is the one thing to keep straight when adding to this page:
  *
- * `GET /api/transcription/config` is the one other call, and it is a different
- * kind of thing: a deployment CAPABILITY probe, not this user's data. It
- * decides whether the New-transcript button works at all, it is the same probe
- * `NewTranscriptPage` runs, and it cannot be folded into the summary without
- * making a per-user content endpoint also report deployment configuration. It
- * is fired in parallel and never blocks the content — a page that waited for
- * both would be as slow as the slower one for no benefit.
+ *   **One request per CONTENT TYPE, all fired in parallel, none waiting on
+ *   another — and no per-section list fetches.**
+ *
+ * Today that is two: `GET /api/transcripts/summary` (via
+ * `useTranscriptSummary`) and `GET /api/notes/summary` (via `useNoteSummary`).
+ * Each exists so that a phone on a cellular link makes ONE round trip for a
+ * whole content type — three lists and four counts each — rather than one per
+ * section racing the others and rendering in whatever order they land. So
+ * "Recent notes" must never grow its own `GET /api/notes?limit=8`, and
+ * "Shared with me" must never grow its own `?scope=shared`: a question one of
+ * these endpoints could answer is answered by extending that endpoint.
+ *
+ * ⚠ AN AGGREGATE `GET /api/home/summary` WAS CONSIDERED AND REJECTED, and the
+ * reason is authorisation rather than plumbing. The two summaries are gated on
+ * two DIFFERENT permissions — `transcripts:read` and `notes:read` — and while
+ * both are seeded to all three roles, neither implies the other and a
+ * deployment is free to withhold either. One endpoint spanning both would have
+ * to answer PARTIALLY for a user holding one of them: a 200 carrying half the
+ * body, with some new per-section "you may not see this" marker invented for a
+ * single page, or a 403 that hides the half they are entitled to. That is a new
+ * authorisation shape in the API, owned by a page, and this codebase already
+ * has one permission string per controller for a reason.
+ *
+ * The second reason is cadence. Each hook polls only while ITS OWN list has
+ * something in flight (see either hook's header), so a transcript transcoding
+ * polls every five seconds while the settled notes list costs nothing at all. A
+ * merged endpoint has one poll interval and would necessarily run at whichever
+ * cadence is faster, re-reading the quiet half of the page forever — on the
+ * landing screen, which is the tab most likely to be left open overnight.
+ *
+ * NEITHER WAITS ON THE OTHER. The two hooks mount together and settle
+ * independently; the page's full-page skeleton is gated on the TRANSCRIPT
+ * summary alone and `RecentNotes` carries its own. Gating the whole screen on
+ * both would make the page as slow as its slowest part for no benefit, which is
+ * the same argument the capability probe below makes for itself.
+ *
+ * `GET /api/transcription/config` is the one call that is NOT content, and it
+ * is a different kind of thing: a deployment CAPABILITY probe, not this user's
+ * data. It decides whether the New-transcript button works at all, it is the
+ * same probe `NewTranscriptPage` runs, and it cannot be folded into a summary
+ * without making a per-user content endpoint also report deployment
+ * configuration. It too is fired in parallel and never blocks the content.
  *
  * A FAILED PROBE IS TREATED AS "NOT AVAILABLE", copied deliberately from
  * `NewTranscriptPage`: an enabled button whose flow ends in a 409 is worse than
@@ -54,7 +91,9 @@
  * =============================================================================
  *
  * There is not one `useMediaQuery` on this page or in any of the components it
- * mounts. Every responsive decision is a `sx`/`Grid` breakpoint object resolved
+ * mounts — `NoteSummaryCard` and `RecentNotes` (#107) included, which is why
+ * neither may reach for one no matter how convenient a `<Stack>`/`<Grid>`
+ * branch looks. Every responsive decision is a `sx`/`Grid` breakpoint object resolved
  * in CSS, so the five coupled gates listed in `docs/specs/settings-ui.md` §5
  * (and in CLAUDE.md's Settings UI Pattern rule 5) remain exactly five. The
  * page renders inside the shell's `<main>`, which already carries the
@@ -71,17 +110,29 @@ import { HomeHero } from '../components/home/HomeHero';
 import { HomeSkeleton } from '../components/home/HomeSkeleton';
 import { InProgressSection } from '../components/home/InProgressSection';
 import { JourneyEmptyState } from '../components/home/JourneyEmptyState';
+import { RecentNotes } from '../components/home/RecentNotes';
 import { RecentTranscripts } from '../components/home/RecentTranscripts';
 import { SharedWithMe } from '../components/home/SharedWithMe';
 import { useAuth } from '../contexts/AuthContext';
 import { useIsMounted } from '../hooks/useIsMounted';
+import { useNoteSummary } from '../hooks/useNotes';
+import { usePermissions } from '../hooks/usePermissions';
 import { useTranscriptSummary } from '../hooks/useTranscripts';
 import { getTranscriptionConfig } from '../services/transcription';
 
 export default function HomePage() {
   const { user } = useAuth();
   const isMounted = useIsMounted();
+  const { hasPermission } = usePermissions();
   const { summary, isLoading, error } = useTranscriptSummary();
+
+  // THE PERMISSION GATE IS A HOOK ARGUMENT, NOT A CONDITIONAL MOUNT. A hook
+  // cannot be called conditionally, and `enabled: false` issues no request at
+  // all — so a user without `notes:read` costs this page a guaranteed 403
+  // rather than saving one.
+  const canReadNotes = hasPermission('notes:read');
+  const canWriteNotes = hasPermission('notes:write');
+  const notes = useNoteSummary({ enabled: canReadNotes });
 
   const [transcriptionAvailable, setTranscriptionAvailable] = useState(false);
   const [isCheckingTranscription, setIsCheckingTranscription] = useState(true);
@@ -105,8 +156,12 @@ export default function HomePage() {
     };
   }, [isMounted]);
 
-  // THE FIRST READ ONLY. A poll never raises `isLoading` (see the hook), so the
-  // skeleton appears once on arrival and the content is never replaced by it.
+  // THE FIRST READ ONLY, AND ONLY THE TRANSCRIPT ONE. A poll never raises
+  // `isLoading` (see the hook), so the skeleton appears once on arrival and the
+  // content is never replaced by it — and the notes summary deliberately does
+  // NOT gate this, because the two requests are parallel and holding the whole
+  // landing screen blank for the slower of them would be the page waiting on
+  // itself. `RecentNotes` renders its own skeleton meanwhile.
   if (isLoading) {
     return (
       <Container maxWidth="lg" disableGutters>
@@ -143,7 +198,16 @@ export default function HomePage() {
     recent.length === 0 &&
     sharedWithMe.length === 0 &&
     inProgress.length === 0 &&
-    (summary?.counts.owned ?? 0) === 0;
+    (summary?.counts.owned ?? 0) === 0 &&
+    // AND NO NOTES (#107). A user can reach a note without ever recording
+    // anything — generated from a document, or from a note somebody walked them
+    // through creating — and showing that account "You have no transcripts yet.
+    // Here is what happens once you do" over the top of the twelve notes they
+    // wrote last week is the page telling them their work does not count.
+    // `notes.summary` being null (no permission, or a failed read) contributes
+    // `0`, which leaves the transcript clauses in charge — the honest default,
+    // since the journey screen is about transcripts.
+    (notes.summary?.counts.total ?? 0) === 0;
 
   return (
     <Container maxWidth="lg" disableGutters>
@@ -163,7 +227,16 @@ export default function HomePage() {
           </Alert>
         )}
 
-        <InProgressSection items={inProgress} />
+        {/* Its own alert, under the transcript one, rather than a merged
+            sentence: the two requests fail independently and "we could not load
+            your notes" is actionable in a way "something went wrong" is not. */}
+        {notes.error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {notes.error}
+          </Alert>
+        )}
+
+        <InProgressSection items={inProgress} notes={notes.summary?.inProgress ?? []} />
 
         {isNewUser ? (
           <JourneyEmptyState
@@ -173,6 +246,21 @@ export default function HomePage() {
         ) : (
           <>
             <RecentTranscripts items={recent} />
+            {/* ⚠ `notes.summary !== null || notes.isLoading` IS THE LOAD-BEARING
+                CLAUSE, and it is the same one `isNewUser` needs above. A notes
+                read that FAILED leaves every list empty because nothing was
+                ever read, not because nothing exists — and `RecentNotes` would
+                then invite a user with forty notes to make their first one,
+                directly under the alert saying the read failed. A user without
+                `notes:read` never renders the section at all. */}
+            {canReadNotes && (notes.summary !== null || notes.isLoading) && (
+              <RecentNotes
+                items={notes.summary?.recent ?? []}
+                total={notes.summary?.counts.total ?? 0}
+                canCreate={canWriteNotes}
+                isLoading={notes.isLoading}
+              />
+            )}
             <SharedWithMe items={sharedWithMe} />
           </>
         )}
