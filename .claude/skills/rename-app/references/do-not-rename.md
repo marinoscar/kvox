@@ -60,14 +60,17 @@ This file is on the identity guard's allowlist for exactly this reason.
 # Managed by appctl deploy
 ```
 
-This marker is **written into vhost files and then parsed back**. It is the
-safety check that stops the CLI from overwriting a vhost a human wrote by hand.
+The CLI binary itself is `kvox` — this repository has already been through the
+rename this skill performs. This marker is the one place that deliberately did
+not follow: it is **written into vhost files and then parsed back**, so it is
+the safety check that stops the CLI from overwriting a vhost a human wrote by
+hand.
 
 Rename it and the CLI no longer recognises the files it wrote itself under the
 old marker — it will refuse to manage them, and an operator has to edit servers
 by hand to recover.
 
-## 4. The deploy state filename — orphans deployments
+## 4. The deploy state filename and its `appctlVersion` field — orphans deployments
 
 **`apps/cli/src/deploy/state.ts`**
 
@@ -79,8 +82,13 @@ Read from live servers to discover what is currently deployed there. Renaming it
 makes every existing deployment invisible to the CLI: `deploy status` reports
 nothing, and `deploy update` behaves as though it were a first install.
 
-If the binary is genuinely being renamed, this still stays put unless you also
-plan a migration for machines already running it.
+The `appctlVersion` field inside that file — the CLI version at time of write —
+keeps the same historical spelling for the identical reason: it is read back
+from state files already written to disk, under the same `DeployState`
+interface, by every server this CLI (now `kvox`) has already deployed to.
+
+If the binary is genuinely being renamed again, this still stays put unless you
+also plan a migration for machines already running it.
 
 ---
 

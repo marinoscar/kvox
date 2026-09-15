@@ -1200,7 +1200,7 @@ async function pollForToken(deviceCode, interval) {
 - **Security Architecture:** [SECURITY-ARCHITECTURE.md](SECURITY-ARCHITECTURE.md)
 - **API Reference:** [API.md](API.md)
 - **Authoritative schema & security rationale:** [`apps/api/src/device-auth/README.md`](../apps/api/src/device-auth/README.md)
-- **Reference PAT-flow consumer:** [`apps/cli/README.md`](../apps/cli/README.md) — the first-party CLI (`appctl`), which logs in through this exact flow requesting a `pat` credential
+- **Reference PAT-flow consumer:** [`apps/cli/README.md`](../apps/cli/README.md) — the first-party CLI (`kvox`), which logs in through this exact flow requesting a `pat` credential
 
 ---
 

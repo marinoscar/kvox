@@ -821,7 +821,7 @@ Three properties are the fleet's rules rather than the feature's:
 2. **Both container images install it, and so does `install-deps`.**
    `apps/api/Dockerfile` and `apps/cli/Dockerfile` both `apk add ffmpeg` in
    their base stage (the `postgresql17-client` precedent, §20.1), and
-   `appctl node install-deps` gained its first genuine package step for the
+   `kvox node install-deps` gained its first genuine package step for the
    node that runs outside a container. A dependency present in only one of
    those three is a dependency that works until somebody deploys differently.
 3. **The output key is the feature's, through `deriveOutputKey`** (§17.1):
