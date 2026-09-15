@@ -510,7 +510,7 @@ jobs:
           # downloadable by anyone who can read the run.
           ls -la "$DIAG_DIR"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: deploy-e2e-logs
