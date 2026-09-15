@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The same K-AND-WAVEFORM MARK as `icons/source.svg` (issue #146) -- a white K
+  The same K-AND-WAVEFORM MARK as `icons/source.svg` (issue #146) — a white K
   of one stem and two round-capped diagonal arms, followed by five amber bars
-  whose first two nestle into the K's mouth -- on a 32 canvas with the tighter
+  whose first two nestle into the K's mouth — on a 32 canvas with the tighter
   favicon crop (mark width 80% of the canvas instead of 68%): at tab size the
   padding costs whole pixels, and the arms and bars need them to stay legible.
   `favicon.ico`'s frames use the identical crop, so the vector and raster
@@ -12,7 +12,7 @@
   geometry in Pillow and deliberately does NOT rasterise this file, because
   rendering an SVG needs a toolchain (rsvg / cairosvg / a headless browser)
   this template refuses to require of a fork's CI. So the mark is described
-  three times -- here, in `icons/source.svg`, and in that script -- and all
+  three times — here, in `icons/source.svg`, and in that script — and all
   three must be edited together. `src/__tests__/pwa/brandMark.test.ts` compares
   the two SVGs in NORMALISED mark space rather than by a raw scale factor,
   because the two crops differ (0.80 here, 0.68 there) and a 512/32 comparison
@@ -23,8 +23,15 @@
     junction (4.869, 16.000); arm ends x 16.110, y 9.009 and 22.991; bars
     width 2.140, pitch 3.031, first at x 14.536, all centred on y 16.000.
 
-  Kept deliberately terse -- no comments inside the markup, no metadata, no
-  editor cruft -- because this is served on every page load.
+  Kept deliberately terse — no comments inside the markup, no metadata, no
+  editor cruft — because this is served on every page load.
+
+  PARSED AS XML, NOT HTML. `<link rel="icon" type="image/svg+xml">` and
+  `<img src="favicon.svg">` both hand this file to the XML parser, so it must
+  stay well-formed. In particular a doubled ASCII hyphen may never appear
+  inside these comments: XML forbids that pair anywhere in a comment body, and
+  one prose dash typed that way aborts the whole document and renders the mark
+  as a broken image (issue #157). Write an em dash instead.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="7.04" fill="#4f46e5"/>

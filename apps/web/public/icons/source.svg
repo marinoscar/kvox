@@ -6,12 +6,19 @@
   vertical stem and two round-capped diagonal arms; the waveform is five
   rounded bars whose first two nestle into the K's open mouth. The K is white
   and the bars are the brand's amber secondary, so the mark uses both halves of
-  the palette rather than white-on-indigo alone -- "K" for knowledge, the
+  the palette rather than white-on-indigo alone — "K" for knowledge, the
   waveform for the voice it is made from.
 
   Nothing loads this file at runtime. It exists so a fork can open the mark in
   a vector editor, replace it with a real logo, and have something to match the
   raster icons against.
+
+  PARSED AS XML, NOT HTML. Anything that opens this file — a vector editor, an
+  `<img src>`, the `brandMark` test — parses it as XML, so it must stay
+  well-formed. In particular a doubled ASCII hyphen may never appear inside
+  these comments: XML forbids that pair anywhere in a comment body, and one
+  prose dash typed that way aborts the whole document (issue #157). Write an em
+  dash instead.
 
   WHY DIAGONAL STROKES AND NOT STACKED BARS. An earlier attempt drew the arms
   as columns of short axis-aligned rounded bars, because Pillow draws
@@ -19,14 +26,14 @@
   consecutive columns sit a clear horizontal gap apart, so the bars stayed
   separate dots and the shape read as a domino. A round-capped diagonal line is
   the smallest change that actually produces the letter, and BOTH toolchains
-  can draw one -- SVG with `stroke-linecap="round"`, Pillow with a `line` plus
+  can draw one — SVG with `stroke-linecap="round"`, Pillow with a `line` plus
   a circle centred on each endpoint (its `width` gives butt ends).
 
   Rejected alternatives: embedding the supplied bitmap as the icon source (it
   looks right at 512 and muddy at 16, and it breaks the rule that every raster
   derives from one vector description); a microphone or speech bubble (generic
   in this category); rasterising this file in CI (needs rsvg / cairosvg / a
-  headless browser -- precisely the image toolchain this template refuses to
+  headless browser — precisely the image toolchain this template refuses to
   require of a fork).
 
   It is NOT rasterised by the build. `apps/web/scripts/generate-icons.py` draws
@@ -43,10 +50,10 @@
     plate        512 square, corner radius 0.22 x 512 = 112.64
     stroke       0.1304 x 348.16 = 45.40 wide, cap radius 22.70
     stem         x 81.92, y 127.53, height 256.94
-    junction     (104.62, 256.00) -- ON the stem's centre line, not its edge
+    junction     (104.62, 256.00) — ON the stem's centre line, not its edge
     arm ends     x 257.50; y 160.92 (upper) and 351.08 (lower), symmetric
     bars         width 29.11, pitch 41.22, first at x 236.09, all centred on
-                 y 256.00 -- the same line the arms meet at
+                 y 256.00 — the same line the arms meet at
 
   The colour is `themeColor` from `packages/shared/identity.json`, which is the
   source of truth. This file holds a COPY of it, because an SVG attribute
