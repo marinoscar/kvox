@@ -3720,9 +3720,17 @@ honours `If-None-Match` with a **304 carrying no body** — the same
 rather than reimplemented. It is *weak* because two responses at the same
 version are semantically, not byte-for-byte, equivalent.
 
+**A note carries `titleSource` beside its `title`** (issue #180, epic #163) —
+where the name came from, so an AI titling pass can tell a name it may improve
+on from one it must leave alone. Two rules fix it, and nothing else writes it:
+a non-blank `title` sent to `POST /notes` is `user`, and **any** `PATCH
+/notes/{id}` that changes the title is `user` — including one that changes the
+body in the same call. A body-only save never touches it.
+
 | Field | Values |
 |---|---|
 | `notes.status` | `draft` → `generating` → `ready`/`failed`, plus `deleting`. `draft` means "never generated even once"; a note that already produced content goes back to `generating`, never to `draft` |
+| `notes.titleSource` | `user` — a person typed this name, so it is **sticky and never overwritten by an AI titling path**; `template` — nobody named the note and it inherited the template's name; `ai` — a titling pass named it from the generated content |
 | `note_generations.status` | `pending` → `streaming` → `succeeded`/`failed` |
 
 #### POST /notes
@@ -3745,7 +3753,8 @@ behind.
 }
 ```
 
-`title` defaults to the template's name. `source` is a discriminated union —
+`title` defaults to the template's name — sending one records `titleSource:
+"user"`, omitting it records `"template"`. `source` is a discriminated union —
 `{ "type": "transcript", "transcriptId" }`, `{ "type": "note", "noteId" }`, or
 `{ "type": "document", "objectId" }` — exactly the three `NoteSourceType`
 members. There is **no `body` field, and there never may be one**: a note's
@@ -3897,7 +3906,9 @@ Changes the title, the body, or both. A **body** change requires
 `baseVersion` and appends a `note_versions` row with the caller as its
 author — the AI's original is never overwritten. A **title** change is
 deliberately not versioned, for the identical reason
-`PATCH /transcripts/{id}` does not version a rename.
+`PATCH /transcripts/{id}` does not version a rename — but it does set
+`titleSource` to `user`, on either path, because a person typing a name is the
+strongest signal this application gets about what a note should be called.
 
 **Requires:** `notes:write`
 

@@ -341,3 +341,73 @@ describe('NotesPage — result count and date groups', () => {
   });
 });
 });
+
+/**
+ * Deep links into this library — issue #170, epic #166.
+ *
+ * `TranscriptsPage.test.tsx`'s matching block, minus the `?scope` this library
+ * has no tab for. The parsers themselves are pure and covered in
+ * `notesLibraryPure.test.ts`; what is asserted here is the contract a link
+ * relies on — that the seeded values reach the CONTROLS and the FIRST request,
+ * not merely a later one.
+ */
+describe('NotesPage — seeded from the URL', () => {
+  function renderAt(route: string) {
+    return render(<NotesPage />, { wrapperOptions: { user: mockAdminUser, route } });
+  }
+
+  it('applies ?status=failed to the filter AND to the first query', async () => {
+    renderAt('/notes?status=failed');
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('Failed');
+    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    expect(noteRequests[0].searchParams.get('status')).toBe('failed');
+  });
+
+  it('falls back to Any status for an unknown ?status, and never sends it on', async () => {
+    renderAt('/notes?status=bogus');
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('Any status');
+    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    expect(noteRequests[0].searchParams.has('status')).toBe(false);
+  });
+
+  it('refuses ?status=draft, which is a real status this page does not offer', async () => {
+    renderAt('/notes?status=draft');
+
+    expect(screen.getByLabelText('Status')).toHaveTextContent('Any status');
+    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    expect(noteRequests[0].searchParams.has('status')).toBe(false);
+  });
+
+  it('fills the search box from ?q and filters the FIRST request with it', async () => {
+    renderAt('/notes?q=budget');
+
+    expect(screen.getByLabelText('Search notes')).toHaveValue('budget');
+    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    // ⚠ Not "eventually". A view that seeded only the box would fire an
+    // unfiltered query first and replace it 300 ms later.
+    expect(noteRequests[0].searchParams.get('q')).toBe('budget');
+  });
+
+  it('ignores ?scope entirely — this library has no scope to select', async () => {
+    renderAt('/notes?scope=shared');
+
+    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    expect(noteRequests[0].searchParams.has('scope')).toBe(false);
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  it('SEEDS the state without binding to it — a later change sticks', async () => {
+    const user = userEvent.setup();
+    renderAt('/notes?status=failed');
+    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+
+    await user.click(screen.getByLabelText('Status'));
+    await user.click(await screen.findByRole('option', { name: 'Any status' }));
+
+    await waitFor(() =>
+      expect(noteRequests[noteRequests.length - 1].searchParams.has('status')).toBe(false),
+    );
+  });
+});
