@@ -938,7 +938,7 @@ export interface DeployInfoHost {
   nodeVersion?: string | null;
 }
 
-/** What `kvox deploy update --check` last recorded. */
+/** What the deploy CLI's `update --check` last recorded. */
 export interface DeployInfoRemote {
   sha?: string | null;
   commitsBehind?: number | null;

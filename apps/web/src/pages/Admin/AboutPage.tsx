@@ -81,7 +81,7 @@ const PAGE_DESCRIPTION =
   'What is running here: version, revision, when it was installed and last updated, and the server it runs on.';
 
 /**
- * How much of a SHA to show. Twelve, to match what `kvox deploy update --check`
+ * How much of a SHA to show. Twelve, to match what the deploy CLI's `update --check`
  * prints (`current <sha12> → latest <sha12>`), so the terminal and this page
  * name the same revision the same way. The full SHA is one hover or one click
  * away — see `Revision`.
@@ -270,11 +270,11 @@ interface UpdateStatusProps {
  *
  * Three states, not two, and the third is the one that matters most on a
  * fresh install: `updateAvailable` is `null` — UNKNOWN, not "no" — until
- * `kvox deploy update --check` has run at least once, and rendering that as
+ * the deploy CLI's `update --check` has run at least once, and rendering that as
  * "Up to date" would tell an operator a deployment nobody has checked is
  * current. The chip is the warning colour and appears ONLY when the API says
  * an update exists; the API derives that from `remote.commitsBehind` so the
- * web page and `kvox deploy about` cannot disagree about it.
+ * web page and the CLI's `about` command cannot disagree about it.
  */
 function UpdateStatus({ about, now }: UpdateStatusProps) {
   const remote = about.deployInfo?.remote;
@@ -402,7 +402,7 @@ function DeploymentSection({ about, info, now }: DeploymentSectionProps) {
       <Fact label="Update">
         <UpdateStatus about={about} now={now} />
         <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-          Run <code>kvox deploy update --check</code> on the server to refresh.
+          Run <code>deploy update --check</code> with the deploy CLI on the server to refresh.
         </Typography>
       </Fact>
     </Section>
@@ -445,7 +445,7 @@ function DeployInfoUnavailable({ about }: { about: AboutResponse }) {
   if (about.deployInfoStatus === 'absent') {
     return (
       <Alert severity="info">
-        This instance was not deployed with <code>kvox deploy</code>, so deployment details are
+        This instance was not deployed with the deploy CLI, so deployment details are
         unavailable.
       </Alert>
     );
