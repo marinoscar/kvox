@@ -336,6 +336,27 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/specs/vps-deploy.md',
   'docs/specs/worker-nodes.md',
   'packages/shared/README.md',
+
+  // ---------------------------------------------------------------------
+  // Added by issue #130 (epic #168), the VPS bootstrap script.
+  //
+  // `apps/cli/bootstrap-vps.sh` has exactly the standing of `install.sh`
+  // above: it is fetched with curl and run on a fresh server BEFORE the
+  // repository exists on disk, so it can never read the manifest — and it
+  // wraps install.sh, so it names the same `kvox` binary and the same
+  // `KVOX_SRC`/`KVOX_BIN_DIR` variables install.sh already hardcodes. It
+  // carries no repository slug at all (`--repo` is a required argument with
+  // no default, precisely so a fork never edits it); only the binary name
+  // matches, and only because this fork's CLI is named after its repository.
+  //
+  // The two fixtures are that script's literal `--dry-run` output, compared
+  // byte-for-byte by `bootstrap-vps.test.ts`. They inherit the exemption
+  // because they ARE the script's text, not a second place the name is
+  // spelled: regenerating them is the only way they change.
+  // ---------------------------------------------------------------------
+  'apps/cli/bootstrap-vps.sh',
+  'apps/cli/src/__fixtures__/bootstrap-vps.dry-run.txt',
+  'apps/cli/src/__fixtures__/bootstrap-vps.dry-run.update.txt',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this
