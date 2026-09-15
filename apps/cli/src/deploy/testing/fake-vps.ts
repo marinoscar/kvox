@@ -1,7 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { join } from 'node:path';
+import { PassThrough } from 'node:stream';
 
+import type { PromptContext } from '../../prompt.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../executor.js';
 
 // =============================================================================
@@ -181,4 +183,9 @@ export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
 /** A `fetch` that answers 200 to every health probe. */
 export function healthyFetch(): typeof globalThis.fetch {
   return (async () => ({ status: 200 }) as Response) as typeof globalThis.fetch;
+}
+
+/** A prompt context whose output goes nowhere, so the wizard's summary stays out of the test log. */
+export function silentPrompt(): PromptContext {
+  return { output: new PassThrough() as unknown as NodeJS.WriteStream };
 }

@@ -7,7 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
 import { DEPLOY_STATE_VERSION, NotInstalledError, readState, writeState, type DeployState } from './state.js';
-import { FAKE_APP_VERSION, fakeVps, healthyFetch, populateClone, type FakeVps } from './testing/fake-vps.js';
+import {
+  FAKE_APP_VERSION,
+  fakeVps,
+  healthyFetch,
+  populateClone,
+  silentPrompt,
+  type FakeVps,
+} from './testing/fake-vps.js';
 import { buildUpdateSteps, runUpdate } from './update.js';
 
 describe('the update pipeline', () => {
@@ -150,6 +157,7 @@ describe('runUpdate against a fake VPS', () => {
       deployRoot: root,
       runCommand: vps.runCommand,
       nonInteractive: true,
+      promptContext: silentPrompt(),
       skipProxy: true,
       skipSeed: true,
       cwd: root,
