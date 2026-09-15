@@ -12,6 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { OAuthButton } from '../components/auth/OAuthButton';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { BrandMark } from '../components/common/BrandMark';
 
 interface LocationState {
   from?: { pathname: string; search: string };
@@ -59,9 +60,21 @@ export default function LoginPage() {
         }}
       >
         <CardContent sx={{ p: 4 }}>
-          {/* Logo/Header */}
+          {/* Logo/Header. The mark sits ABOVE the heading rather than beside
+              it: this is the one screen in the app with no top bar, so it is
+              also the only place the brand has to identify itself before the
+              user has anything else to go on — the same lockup the AppBar
+              shows, given room to be a logo rather than a favicon. It is
+              decorative (`aria-hidden`), because "Welcome" is already the
+              page's `h1` and a second announcement of the product name would
+              only lengthen the trip to the sign-in buttons. */}
           <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+            <BrandMark size={56} />
+            <Typography
+              variant="h4"
+              component="h1"
+              sx={{ fontWeight: 'bold', mt: 2 }}
+            >
               Welcome
             </Typography>
             <Typography color="text.secondary" sx={{ mt: 1 }}>
