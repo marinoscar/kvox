@@ -29,7 +29,8 @@ export function requiredChecks(checks: readonly Check[] = ALL_CHECKS): Check[] {
 }
 
 export * from './types.js';
-export { DEVNET_CHECK_ID, DEVNET_NETWORK, HOST_CHECKS, evaluateDf } from './host.js';
+export { DEVNET_CHECK_ID, DEVNET_NETWORK, HOST_CHECKS, evaluateDf, parseDf } from './host.js';
+export type { DfReading } from './host.js';
 export { DATABASE_CHECKS, databaseSettings, probeTcp } from './database.js';
 export { DNS_CHECKS } from './dns.js';
 export { TLS_CHECKS, parseNotAfter } from './tls.js';

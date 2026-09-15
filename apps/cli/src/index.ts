@@ -225,6 +225,18 @@ export {
 } from './deploy/env-file.js';
 export type { EnsureEnvLinkResult } from './deploy/env-file.js';
 
+// Host facts read at deploy time (#120), because the API cannot see them from
+// inside its container. Exported for the About surfaces and for #127's
+// server-derived wizard defaults; the parsers are pure and exercised directly.
+export {
+  OS_RELEASE_PATH,
+  collectServerFacts,
+  parseComposeVersion,
+  parseDockerVersion,
+  parseOsRelease,
+} from './deploy/server-facts.js';
+export type { ServerFacts, ServerFactsOptions, ServerProbes } from './deploy/server-facts.js';
+
 export type { DeployHooks, StepOutcome, StepResult } from './deploy/hooks.js';
 
 // The wizard's questions come from infra/compose/.env.example rather than a
@@ -296,6 +308,7 @@ export {
   checksPassed,
   isLoopbackPortFree,
   isPortListening,
+  parseDf,
   requiredChecks,
   runChecks,
   summarise,
@@ -308,6 +321,7 @@ export type {
   CheckStatus,
   CheckSummary,
   CompletedCheck,
+  DfReading,
 } from './deploy/checks/index.js';
 
 // Working out what to deploy without naming a repository (#179) - the other
