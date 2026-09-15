@@ -1287,7 +1287,7 @@ export function buildGuidedRestoreCommands(context: GuidedCommandContext): strin
     '#   export PGPASSWORD=...',
     '',
     '# 1. Mint a five-minute download URL for the archive, then fetch it.',
-    `appctl api GET /api/admin/db-backup/runs/${run.id}/download`,
+    `kvox api GET /api/admin/db-backup/runs/${run.id}/download`,
     `curl -fSL -o ${archiveFile} "<the url printed by the command above>"`,
     '',
     '# 2. Create the scratch database. This is the step the application role',

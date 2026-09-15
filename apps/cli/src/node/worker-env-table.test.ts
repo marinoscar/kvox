@@ -71,7 +71,7 @@ describe('the worker environment variable table in apps/cli/README.md', () => {
     expect(rows.length).toBe(Object.keys(WORKER_ENV).length);
 
     for (const row of rows) {
-      // `| \`APPCTL_X\` | description |` — the description cell must not be empty.
+      // `| \`KVOX_X\` | description |` — the description cell must not be empty.
       const cells = row.split('|').map((cell) => cell.trim());
       expect(cells[2], row).not.toBe('');
     }

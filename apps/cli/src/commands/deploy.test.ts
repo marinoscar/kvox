@@ -74,7 +74,7 @@ const HEALTHY: Check[] = [
   check('b', 'recommended', 'pass', 'fine'),
 ];
 
-describe('appctl deploy doctor', () => {
+describe('kvox deploy doctor', () => {
   it('exits 0 when every required check passes', async () => {
     const result = await runDoctor([], HEALTHY);
 
@@ -88,7 +88,7 @@ describe('appctl deploy doctor', () => {
     ]);
 
     // A distinct code is the point: `doctor || provision-the-box` has to tell
-    // "not ready" apart from "appctl itself broke".
+    // "not ready" apart from "kvox itself broke".
     expect(exitCodeFor(result.error)).toBe(EXIT.PRECONDITION);
     expect((result.error as Error).message).toContain('broken');
   });
@@ -148,7 +148,7 @@ describe('appctl deploy doctor', () => {
   });
 });
 
-describe('appctl deploy doctor --json', () => {
+describe('kvox deploy doctor --json', () => {
   it('writes valid JSON on stdout and nothing on stderr', async () => {
     const result = await runDoctor(['--json'], HEALTHY);
 
@@ -261,7 +261,7 @@ describe('the deploy group', () => {
 
 
 // ---------------------------------------------------------------------------
-// `appctl deploy status`  (issue #183)
+// `kvox deploy status`  (issue #183)
 // ---------------------------------------------------------------------------
 
 function installedRoot(): string {
@@ -335,7 +335,7 @@ async function runStatus(
   return { stdout: stdout.join(''), stderr: stderr.join(''), error };
 }
 
-describe('appctl deploy status', () => {
+describe('kvox deploy status', () => {
   it('exits 0 and reports every section when healthy', async () => {
     const root = installedRoot();
 

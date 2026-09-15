@@ -42,7 +42,7 @@ import { ScrollBox } from '../scroll-box.js';
 //      a deploy is running, with a hint saying so, rather than offered as a
 //      cancel that does not cancel.
 //   2. THE EXIT CODE INVERTS HERE. A normal TUI exit is 0 even after a failed
-//      operation (tui/index.tsx), whereas `appctl deploy install` must exit
+//      operation (tui/index.tsx), whereas `kvox deploy install` must exit
 //      non-zero. That is intended - the user has read the outcome on screen -
 //      but it means the failure has to be UNMISTAKABLE in the frame, because
 //      the exit code will not carry it.

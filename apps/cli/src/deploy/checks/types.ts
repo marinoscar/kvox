@@ -2,6 +2,7 @@ import { accessSync, constants, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { totalmem } from 'node:os';
 
+import { CLI_NAME } from '../../branding.js';
 import type { runCommand } from '../executor.js';
 
 // =============================================================================
@@ -194,7 +195,7 @@ export async function runChecks(
         : await check.run(context).catch((error: unknown) => ({
             status: 'fail' as const,
             detail: error instanceof Error ? error.message : String(error),
-            remedy: 'This check itself failed; the problem may be with appctl.',
+            remedy: `This check itself failed; the problem may be with ${CLI_NAME}.`,
           }));
 
     const completed: CompletedCheck = {

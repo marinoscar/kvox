@@ -20,7 +20,7 @@ import { ErrorNotice, Field, Frame } from '../layout.js';
 // =============================================================================
 //
 // #145's fourth screen: server, signed-in user, token expiry. It is the
-// interactive form of `appctl config` plus the one thing that command does not
+// interactive form of `kvox config` plus the one thing that command does not
 // do — actually asking the server who you are.
 //
 // -----------------------------------------------------------------------------
@@ -246,7 +246,7 @@ function LiveIdentity({ live }: { live: Live }): ReactNode {
  * Which layer won, env or file.
  *
  * Worth a column: the single most confusing state this CLI can be in is a
- * leftover exported `APPCTL_TOKEN` quietly overriding the config file, so that
+ * leftover exported `KVOX_TOKEN` quietly overriding the config file, so that
  * a successful login appears to have had no effect whatsoever. Naming the
  * winning source turns that mystery into a one-word answer.
  */

@@ -147,7 +147,7 @@ export class MediaAudioTranscodeHandler implements JobHandler, OnModuleInit {
    * THE FIRST OF THE TWO MEMBERS THAT MAKE THIS TYPE NODE-ELIGIBLE.
    *
    * In `jobs/contracts/` rather than inline because a second reader needs it:
-   * `GET /api/nodes/job-types` publishes it as JSON Schema so `appctl`
+   * `GET /api/nodes/job-types` publishes it as JSON Schema so `kvox`
    * validates a result against the SERVER's definition rather than a copy.
    */
   readonly nodeResultSchema = mediaAudioTranscodeResultSchema;

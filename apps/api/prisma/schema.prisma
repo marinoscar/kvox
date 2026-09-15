@@ -1460,7 +1460,7 @@ model WorkerNode {
   eligibleTypes String[] @map("eligible_types")
 
   // The node's own claimed concurrency ceiling, read LIVE by #268's claim
-  // endpoint (not cached at claim time) so a runtime `appctl node
+  // endpoint (not cached at claim time) so a runtime `kvox node
   // set-concurrency` takes effect on the very next claim without a
   // re-register.
   concurrency Int

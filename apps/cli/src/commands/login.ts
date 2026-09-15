@@ -13,7 +13,7 @@ import { UsageError } from '../errors.js';
 import { canPrompt, promptForServerUrl } from '../prompt.js';
 
 // =============================================================================
-// `appctl login`  (issues #142/#143, epic #110)
+// `kvox login`  (issues #142/#143, epic #110)
 // =============================================================================
 //
 // DELIBERATELY THIN. Everything with logic in it — the RFC 8628 state machine,
@@ -25,7 +25,7 @@ import { canPrompt, promptForServerUrl } from '../prompt.js';
 // ALL HUMAN OUTPUT GOES TO STDERR, including the success message. program.ts
 // reserves stdout for command *data* so that #144's `--raw` pipes into `jq`
 // unchanged, and `login` produces no data — it has a side effect. Writing the
-// banner to stdout would mean `appctl login > /dev/null` silently hides the
+// banner to stdout would mean `kvox login > /dev/null` silently hides the
 // user code, which is the one thing the flow cannot work without.
 //
 // THE TOKEN IS NEVER PRINTED. Not on success, not in the summary, not in an

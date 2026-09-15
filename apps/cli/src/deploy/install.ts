@@ -20,7 +20,7 @@ import { metadataFor } from './env-metadata.js';
 import type { PromptContext } from '../prompt.js';
 
 // =============================================================================
-// `appctl deploy install`  (issue #180, epic #168)
+// `kvox deploy install`  (issue #180, epic #168)
 // =============================================================================
 //
 // Takes a prepared VPS from nothing to a running, migrated, seeded, healthy,

@@ -17,13 +17,13 @@ import type { DeployState } from './state.js';
 // The shell scripts this epic replaces hardcode the repository they deploy,
 // and that is the single largest reason they cannot be shared: every new
 // application means copying the script and editing the URL, after which the
-// copies drift and a fix made in one never reaches the others. If appctl
+// copies drift and a fix made in one never reaches the others. If kvox
 // hardcoded an owner or a repository name anywhere, it would inherit exactly
 // that, and every downstream repository would have to patch the CLI before it
 // could deploy itself.
 //
 // So NOTHING here names a repository. The target is resolved from the checkout
-// appctl is running in, and repo.test.ts asserts that this module contains no
+// kvox is running in, and repo.test.ts asserts that this module contains no
 // owner, no repository name and no forge URL - a guard that already caught an
 // earlier draft of this very comment, which had spelled one out as an example.
 // =============================================================================

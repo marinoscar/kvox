@@ -7,7 +7,7 @@
 // opposite answers, and folding that into a single function with a default
 // argument is how a variable ends up meaning the opposite of what its name
 // says when it is set to the empty string — which is what a compose file with
-// `APPCTL_MEMORY_WATCHDOG=` produces.
+// `KVOX_MEMORY_WATCHDOG=` produces.
 // =============================================================================
 
 /** True only for an explicit affirmative. The parser for DEFAULT-OFF settings. */

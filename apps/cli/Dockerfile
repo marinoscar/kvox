@@ -49,7 +49,7 @@ WORKDIR /app
 # transcode.
 #
 # A node running OUTSIDE a container gets the same two binaries from
-# `appctl node install-deps`, which has a matching step.
+# `kvox node install-deps`, which has a matching step.
 RUN apk add --no-cache ffmpeg
 
 # -----------------------------------------------------------------------------
