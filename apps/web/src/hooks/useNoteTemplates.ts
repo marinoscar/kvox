@@ -20,6 +20,7 @@ import {
   createNoteTemplate,
   deleteNoteTemplate,
   duplicateNoteTemplate,
+  getNoteTemplate,
   getNoteTemplates,
   updateNoteTemplate,
 } from '../services/noteTemplates';
@@ -159,4 +160,135 @@ export function useNoteTemplates(): UseNoteTemplatesReturn {
     duplicate,
     archive,
   };
+}
+
+// =============================================================================
+// ONE template, read by id — issue #109, epic #45
+// =============================================================================
+
+/**
+ * What a note page knows about the template its note was generated from.
+ *
+ * ⚠ `missing` IS NOT `error`, AND THE DIFFERENCE IS THE WHOLE POINT OF THIS
+ * TYPE. `GET /api/note-templates/{id}` answers **404** for a template that is
+ * not the caller's and not a built-in, and **403** for a write against a
+ * built-in; either way, for a READ, both mean "you cannot see this row" — a
+ * permanent answer for this user, produced by the API working exactly as
+ * designed. A note generated from a template that was later deleted, or from
+ * one shared into a workspace this user has since left, is an ORDINARY note,
+ * and the panel that describes it says so in a sentence.
+ *
+ * Collapsing that into `error` would put a red "could not load" in front of a
+ * user whose note is fine, and — worse — would invite a Retry affordance for a
+ * request whose answer can never change. So the two live in one union and every
+ * consumer branches on it.
+ *
+ * `idle` is the fifth member and the reason the union is not four: a note whose
+ * `templateId` is `null` (the template was deleted and the API nulled the
+ * column) asks NOTHING, and must be distinguishable from one whose request has
+ * not come back yet. A four-member union would have had to spell that as
+ * `loading` forever.
+ */
+export interface UseNoteTemplateDetailResult {
+  template: NoteTemplate | null;
+  state: 'idle' | 'loading' | 'loaded' | 'missing' | 'error';
+  /** Set only in the `error` state; `null` everywhere else, `missing` included. */
+  error: string | null;
+}
+
+/**
+ * Frozen module constants rather than fresh objects.
+ *
+ * Every consumer of this hook puts `result.state` in a dependency array or a
+ * render branch; handing back a new object identity for the same answer on
+ * every render is how a `useEffect` downstream turns into a loop. There is
+ * nothing per-call in either of these two states, so there is nothing to
+ * allocate.
+ */
+const IDLE: UseNoteTemplateDetailResult = { template: null, state: 'idle', error: null };
+const LOADING: UseNoteTemplateDetailResult = {
+  template: null,
+  state: 'loading',
+  error: null,
+};
+const MISSING: UseNoteTemplateDetailResult = {
+  template: null,
+  state: 'missing',
+  error: null,
+};
+
+/**
+ * One template, read by id, for a surface that holds an id and needs the row.
+ *
+ * The note page is the caller this exists for: `GET /api/notes/{id}` carries
+ * `templateId` and a denormalised `templateName`, and NOTHING else about the
+ * recipe — not the instructions, not the output format, not the structure. A
+ * page that wants to show a reader what their note was actually generated FROM
+ * (issue #109) therefore has to read the template itself.
+ *
+ * ⚠ A NULL ID RESOLVES SYNCHRONOUSLY AND ISSUES NO REQUEST. The `idle` state is
+ * the initial state for that case — read in `useState`'s initializer, not
+ * applied by an effect — so a note whose template was deleted never renders a
+ * skeleton for a row that is never going to arrive.
+ */
+export function useNoteTemplateDetail(
+  templateId: string | null | undefined,
+): UseNoteTemplateDetailResult {
+  // The initializer, not an effect: see the note above. An effect here would
+  // render `idle`-as-`loading` for one frame on every mount with a real id,
+  // which is a skeleton flash on the fast path (the template is one indexed
+  // row read) and nothing else.
+  const [result, setResult] = useState<UseNoteTemplateDetailResult>(() =>
+    templateId ? LOADING : IDLE,
+  );
+
+  const isMounted = useIsMounted();
+
+  useEffect(() => {
+    if (!templateId) {
+      setResult(IDLE);
+      return;
+    }
+
+    // `cancelled` as well as `isMounted()`: the id can change while a request
+    // is in flight (`/notes/a` → `/notes/b`), and the component stays mounted
+    // through it. Without this the first note's template would win the race
+    // and be rendered under the second note's heading.
+    let cancelled = false;
+
+    setResult(LOADING);
+
+    void (async () => {
+      try {
+        const template = await getNoteTemplate(templateId);
+        if (cancelled || !isMounted()) return;
+        setResult({ template, state: 'loaded', error: null });
+      } catch (err) {
+        if (cancelled || !isMounted()) return;
+
+        // ⚠ 404 AND 403 ARE BOTH `missing`, NOT `error`. See the type's header:
+        // a template the caller cannot read is a fact about the template, not a
+        // failure of the request, and the note it generated is unaffected.
+        if (err instanceof ApiError && (err.status === 404 || err.status === 403)) {
+          setResult(MISSING);
+          return;
+        }
+
+        setResult({
+          template: null,
+          state: 'error',
+          error:
+            err instanceof ApiError && err.message
+              ? err.message
+              : 'This template could not be loaded',
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isMounted, templateId]);
+
+  return result;
 }

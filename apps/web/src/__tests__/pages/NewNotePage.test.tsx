@@ -48,6 +48,16 @@ function aiConfig(overrides: Record<string, unknown> = {}) {
         source: 'catalogue',
         derivedFrom: null,
       },
+      // #109: a second permitted model, so "the user changed it from the
+      // default" is a state this suite can actually reach.
+      {
+        id: 'gpt-4o',
+        label: 'GPT-4o',
+        contextWindowTokens: 128_000,
+        maxOutputTokens: 16_000,
+        source: 'catalogue',
+        derivedFrom: null,
+      },
     ],
     defaultModel: 'gpt-4o-mini',
     maxInputTokens: 100_000,
@@ -57,7 +67,7 @@ function aiConfig(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function template(id: string, name: string, builtIn = false) {
+function template(id: string, name: string, builtIn = false, model: string | null = null) {
   return {
     id,
     name,
@@ -67,7 +77,7 @@ function template(id: string, name: string, builtIn = false) {
     structure: [],
     tone: null,
     length: null,
-    model: null,
+    model,
     isArchived: false,
     builtIn,
     createdAt: new Date().toISOString(),
@@ -550,5 +560,82 @@ describe('NewNotePage — layout and accessibility', () => {
 
     const group = screen.getByRole('radiogroup', { name: 'What are you writing from?' });
     expect(within(group).getAllByRole('radio')).toHaveLength(3);
+  });
+});
+
+// =============================================================================
+// #109 — the model picker
+// =============================================================================
+
+describe('NewNotePage — choosing a model', () => {
+  it('offers the permitted models by their LABEL, beside the template', async () => {
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    // The label `GET /api/ai/config` published, never the vendor id.
+    expect(screen.getByLabelText('Model')).toHaveTextContent('GPT-4o mini');
+    expect(screen.getByText("Defaults to the template's model.")).toBeInTheDocument();
+  });
+
+  it('OMITS `model` from the request when the user did not touch it', async () => {
+    // ⚠ THE COMPATIBILITY ASSERTION. The API resolves the same default this
+    // form displays, so sending the unchanged value would pin a model into the
+    // request that the user never chose — and freeze it against a template or a
+    // policy that later names a different one. An untouched form must produce
+    // byte-for-byte the body it produced before #109.
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0]).toEqual({
+      templateId: 'tpl-1',
+      source: { type: 'transcript', transcriptId: 't1' },
+    });
+    expect(createdBodies[0]).not.toHaveProperty('model');
+  });
+
+  it('sends `model` once the user has chosen a different one', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.click(screen.getByLabelText('Model'));
+    await user.click(await screen.findByRole('option', { name: 'GPT-4o' }));
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0].model).toBe('gpt-4o');
+  });
+
+  it("follows the chosen template's own pinned model, and still omits it", async () => {
+    // A template that names a model is expressing a requirement of the recipe,
+    // and the API applies it for itself — so the picker SHOWS it without the
+    // form having to assert it.
+    const user = userEvent.setup();
+    server.use(
+      http.get(`${API_BASE}/note-templates`, () =>
+        HttpResponse.json({
+          data: {
+            items: [template('tpl-1', 'Meeting minutes', true), template('tpl-2', 'Brief', false, 'gpt-4o')],
+            total: 2,
+          },
+        }),
+      ),
+    );
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.click(screen.getByLabelText('Template'));
+    await user.click(await screen.findByRole('option', { name: 'Brief' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Model')).toHaveTextContent('GPT-4o'));
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0]).not.toHaveProperty('model');
   });
 });

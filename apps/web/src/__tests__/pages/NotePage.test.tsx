@@ -84,6 +84,37 @@ function note(overrides: Partial<Note> = {}): Note {
 }
 
 /**
+ * One template row, as every `/note-templates` read returns it.
+ *
+ * ⚠ THE PAGE NOW READS TEMPLATES AT ALL, which it did not before #109: the
+ * generation-context panel reads the note's own template by id, and the
+ * regenerate dialog's container reads the list. A suite that did not answer
+ * both would exercise the `error` branch of every template assertion below
+ * while appearing to test the happy path.
+ */
+function templateRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'tpl-1',
+    name: 'Meeting minutes',
+    description: 'Who decided what.',
+    instructions: 'Lead with the decisions.',
+    outputFormat: 'meeting_notes',
+    structure: ['Decisions', 'Owners'],
+    tone: 'Neutral',
+    length: 'Under a page',
+    model: null,
+    isArchived: false,
+    builtIn: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+/** Every body `POST /api/notes/:id/regenerate` was sent. */
+let regenerateBodies: Record<string, unknown>[];
+
+/**
  * What `GET /api/ai/config` answers with.
  *
  * ⚠ IT HAS TO BE MOCKED AT ALL because the note page asks before deciding
@@ -186,6 +217,7 @@ beforeEach(() => {
   };
   exportRequests = [];
   exportRow = null;
+  regenerateBodies = [];
   server.use(
     // ⚠ REGISTERED BEFORE `/notes/:id`. Within one `server.use` call handlers
     // are matched in order, and `/notes/:id` would happily swallow
@@ -202,8 +234,21 @@ beforeEach(() => {
     http.get(`${API_BASE}/notes/:id/exports`, () =>
       HttpResponse.json({ data: { exports: exportRow ? [exportRow] : [] } }),
     ),
+    // ⚠ THE LITERAL ROUTE BEFORE THE PARAMETERISED ONE, for the same reason
+    // `/notes/exporters` is registered before `/notes/:id` above: within one
+    // `server.use` call handlers match in order, and `/note-templates/:id`
+    // would swallow the list.
+    http.get(`${API_BASE}/note-templates`, () =>
+      HttpResponse.json({
+        data: { items: [templateRow(), templateRow({ id: 'tpl-2', name: 'Executive brief' })], total: 2 },
+      }),
+    ),
+    http.get(`${API_BASE}/note-templates/:id`, ({ params }) =>
+      HttpResponse.json({ data: templateRow({ id: params.id as string }) }),
+    ),
     http.get(`${API_BASE}/notes/:id`, () => HttpResponse.json({ data: current })),
-    http.post(`${API_BASE}/notes/:id/regenerate`, () => {
+    http.post(`${API_BASE}/notes/:id/regenerate`, async ({ request }) => {
+      regenerateBodies.push((await request.json()) as Record<string, unknown>);
       regenerateCalls += 1;
       current = note({ status: 'generating', failureReason: null, body: '' });
       return HttpResponse.json({
@@ -1085,6 +1130,200 @@ describe('NotePage — regenerating', () => {
 
     await waitFor(() => expect(regenerateCalls).toBe(1));
     await waitFor(() => expect(streams).toHaveLength(1));
+  });
+
+  // ===========================================================================
+  // #109 — the request body is a DIFF
+  // ===========================================================================
+
+  it('sends `{}` when the user changed nothing — byte-for-byte #58’s request', async () => {
+    // ⚠ THE COMPATIBILITY ASSERTION, end to end. #109 put three controls in
+    // this dialog; an untouched confirmation must still produce the request the
+    // confirm-only dialog produced.
+    const user = userEvent.setup();
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Regenerate' })).toBeEnabled(),
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Regenerate' }));
+
+    await waitFor(() => expect(regenerateBodies).toHaveLength(1));
+    expect(regenerateBodies[0]).toEqual({});
+  });
+
+  it('sends ONLY what the user changed', async () => {
+    const user = userEvent.setup();
+    current = note({
+      status: 'ready',
+      body: 'The first attempt.',
+      currentVersion: 2,
+      contextText: 'Ana and Ben were there.',
+    });
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    const dialog = await screen.findByRole('dialog');
+
+    // The template list has to have landed for a second option to exist.
+    await user.click(await within(dialog).findByLabelText('Template'));
+    await user.click(await screen.findByRole('option', { name: 'Executive brief' }));
+    await user.clear(within(dialog).getByLabelText('Context'));
+    await user.click(within(dialog).getByRole('button', { name: 'Regenerate' }));
+
+    await waitFor(() => expect(regenerateBodies).toHaveLength(1));
+    // The template and the CLEARED context — and no `model`, which nobody
+    // touched. `contextText: null` rather than an omission: see
+    // `regenerateInput.ts`.
+    expect(regenerateBodies[0]).toEqual({ templateId: 'tpl-2', contextText: null });
+  });
+
+  it('keeps the dialog OPEN on a 409 `template_required`, with the question in it', async () => {
+    // ⚠ A QUESTION, NOT A FAILURE. The one control that can answer it is the
+    // select the user is already looking at; closing the dialog to report this
+    // on the page would put the answer and the question on different screens.
+    const user = userEvent.setup();
+    server.use(
+      http.post(`${API_BASE}/notes/:id/regenerate`, () =>
+        HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'This note has no template.',
+            details: { reason: 'template_required' },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Regenerate' }));
+
+    expect(
+      await within(dialog).findByText('Choose a template to regenerate with'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // The user's own controls are still there to answer with.
+    expect(within(dialog).getByLabelText('Template')).toBeInTheDocument();
+  });
+
+  it('reads NO templates at all until the dialog is opened', async () => {
+    // ⚠ THE REASON THE CONTAINER EXISTS. Reading a note is by far the most
+    // common thing that happens on this page; it must not pay for a dialog most
+    // readers never open. (The panel's own read of ONE template by id is a
+    // different request and is expected.)
+    const user = userEvent.setup();
+    let listReads = 0;
+    server.use(
+      http.get(`${API_BASE}/note-templates`, () => {
+        listReads += 1;
+        return HttpResponse.json({ data: { items: [templateRow()], total: 1 } });
+      }),
+    );
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    expect(listReads).toBe(0);
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await screen.findByRole('dialog');
+
+    await waitFor(() => expect(listReads).toBe(1));
+  });
+});
+
+// =============================================================================
+// #109 — "How this note was generated"
+// =============================================================================
+
+describe('NotePage — the generation context panel', () => {
+  beforeEach(() => {
+    current = note({
+      status: 'ready',
+      body: 'Done.',
+      currentVersion: 1,
+      contextText: 'Ana and Ben were there. The budget line is the point.',
+    });
+  });
+
+  it('sits under the provenance line, collapsed', async () => {
+    renderNote();
+
+    const panel = await screen.findByTestId('note-generation-context');
+    const provenance = screen.getByTestId('note-provenance');
+
+    // ⚠ ORDER MATTERS: the always-visible sentence first, its long form
+    // directly beneath. `DOCUMENT_POSITION_FOLLOWING` is 4.
+    expect(
+      provenance.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      within(panel).getByRole('button', { name: /How this note was generated/i }),
+    ).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('shows the CONTEXT TEXT — which is rendered nowhere else in this application', async () => {
+    const user = userEvent.setup();
+    renderNote();
+
+    await user.click(
+      await screen.findByRole('button', { name: /How this note was generated/i }),
+    );
+
+    expect(
+      screen.getByText(/Ana and Ben were there\. The budget line is the point\./),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the template’s own recipe, read from `GET /api/note-templates/:id`', async () => {
+    const user = userEvent.setup();
+    renderNote();
+
+    await user.click(
+      await screen.findByRole('button', { name: /How this note was generated/i }),
+    );
+
+    // None of this is on `GET /api/notes/:id` — which is why the template is
+    // read at all.
+    expect(await screen.findByText('Lead with the decisions.')).toBeInTheDocument();
+    expect(screen.getByText('Meeting notes')).toBeInTheDocument();
+    expect(screen.getByText('Neutral')).toBeInTheDocument();
+  });
+
+  it('says the caller has no access rather than reporting an error, on a 404', async () => {
+    const user = userEvent.setup();
+    server.use(
+      http.get(`${API_BASE}/note-templates/:id`, () => new HttpResponse(null, { status: 404 })),
+    );
+    renderNote();
+
+    await user.click(
+      await screen.findByRole('button', { name: /How this note was generated/i }),
+    );
+
+    expect(
+      await screen.findByText('You no longer have access to this template'),
+    ).toBeInTheDocument();
+  });
+
+  it('has no axe violations with the panel open', async () => {
+    const user = userEvent.setup();
+    const { container } = renderNote();
+
+    await user.click(
+      await screen.findByRole('button', { name: /How this note was generated/i }),
+    );
+    await screen.findByText('Lead with the decisions.');
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
 
