@@ -7,25 +7,36 @@
  *
  * `VISION.md` describes one flow — **Capture → Correct → Transform → Use →
  * Find it again later** — and this page is its front door. Everything on it
- * answers one of five questions a person actually arrives with, in the order a
+ * answers one of six questions a person actually arrives with, in the order a
  * phone screen can afford them:
  *
  *   1. How do I capture something new?      → `HomeHero`
- *   2. What is happening right now?         → `InProgressSection`
- *   3. What went wrong?                     → `NeedsAttention`
- *   4. What was I working on?               → `RecentTranscripts`
- *   5. What did somebody send me?           → `SharedWithMe`
+ *   2. How much of it is there, and where?  → `CountsStrip`
+ *   3. What is happening right now?         → `InProgressSection`
+ *   4. What went wrong?                     → `NeedsAttention`
+ *   5. What was I working on?               → `RecentTranscripts`
+ *   6. What did somebody send me?           → `SharedWithMe`
  *
- * The third is issue #171 of epic #166 and is the newest: `counts.failed` had
- * been on this page's summary since #32 with nothing behind it, which is a
- * number telling a user that three of their recordings did not make it and
- * giving them nowhere to go. See `NeedsAttention`'s own header for why it sits
- * between questions 2 and 4 rather than at the top.
+ * The second and fourth are both epic #166's, and neither existed before it.
+ *
+ * The second is issue #170 ("Home at Scale"), and it is the question this page
+ * could not answer once an account had more than a screenful of anything: the
+ * lists below are the newest few, and a user with four hundred transcripts had
+ * no way to tell that from four. The strip answers it in four numbers built
+ * from the summaries already fetched — no request of its own — each one a link
+ * into the library it counts. See `CountsStrip`'s own header for why that is
+ * not the stats dashboard rejected below.
+ *
+ * The fourth is issue #171: `counts.failed` had been on this page's summary
+ * since #32 with nothing behind it, which is a number telling a user that
+ * three of their recordings did not make it and giving them nowhere to go. See
+ * `NeedsAttention`'s own header for why it sits between questions 3 and 5
+ * rather than at the top.
  *
  * Since issue #107 several of those questions have a notes half: what is
- * generating right now joins the in-progress list, "Recent notes" sits under
- * "Recent", and (since #171) a note whose generation failed joins the
- * needs-attention list. That is the Transform stage of the vision arriving on the
+ * generating right now joins the in-progress list, a note whose generation
+ * failed joins the needs-attention list (#171), and "Recent notes" sits under
+ * "Recent". That is the Transform stage of the vision arriving on the
  * page that describes it — until then this screen said "Coming soon" about a
  * feature the user could already reach from the navigation rail.
  *
@@ -99,7 +110,8 @@
  * =============================================================================
  *
  * There is not one `useMediaQuery` on this page or in any of the components it
- * mounts — `NoteSummaryCard` and `RecentNotes` (#107) included, which is why
+ * mounts — `NoteSummaryCard` and `RecentNotes` (#107) and `CountsStrip` (#170)
+ * included, which is why
  * neither may reach for one no matter how convenient a `<Stack>`/`<Grid>`
  * branch looks. Every responsive decision is a `sx`/`Grid` breakpoint object resolved
  * in CSS, so the five coupled gates listed in `docs/specs/settings-ui.md` §5
@@ -114,6 +126,7 @@ import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
 import { useEffect, useState } from 'react';
 
+import { CountsStrip } from '../components/home/CountsStrip';
 import { HomeHero } from '../components/home/HomeHero';
 import { HomeSkeleton } from '../components/home/HomeSkeleton';
 import { InProgressSection } from '../components/home/InProgressSection';
@@ -256,6 +269,26 @@ export default function HomePage() {
           <Alert severity="error" sx={{ mb: 3 }}>
             {notes.error}
           </Alert>
+        )}
+
+        {/* THE COUNTS STRIP (#170, epic #166) — four numbers and nothing else,
+            built from the two summaries already in hand. It issues NO request
+            of its own; see its header, and see the call-count assertions in
+            `HomePage.test.tsx`, which are what actually holds that.
+
+            ⚠ `!isNewUser` IS THE GATE, deliberately at the call site rather
+            than inside the component, because `isNewUser` is a fact about this
+            whole page. A first-run account's strip would read 0 · 0 · 0 above
+            the walkthrough explaining how to stop it reading zero.
+
+            A failed summary read still renders nothing: the component returns
+            null on a null `counts`, the same load-bearing reasoning
+            `isNewUser` applies a few lines above. */}
+        {!isNewUser && (
+          <CountsStrip
+            transcripts={summary?.counts ?? null}
+            notes={notes.summary?.counts ?? null}
+          />
         )}
 
         <InProgressSection items={inProgress} notes={notes.summary?.inProgress ?? []} />
