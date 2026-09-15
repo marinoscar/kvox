@@ -2,58 +2,74 @@
 <!--
   THE HUMAN-EDITABLE SOURCE FOR THE BRAND MARK.
 
-  A K MONOGRAM: one vertical stem and two diagonal arms meeting on the stem's
-  centre line. Nothing loads this file at runtime -- it is not referenced by
-  index.html, by a manifest, or by any component. It exists so a fork can open
-  the mark in a vector editor, replace it with a real logo, and have something
-  to match the raster icons against.
+  A K MONOGRAM FOLLOWED BY A FIVE-BAR WAVEFORM (issue #146). The K is one
+  vertical stem and two round-capped diagonal arms; the waveform is five
+  rounded bars whose first two nestle into the K's open mouth. The K is white
+  and the bars are the brand's amber secondary, so the mark uses both halves of
+  the palette rather than white-on-indigo alone -- "K" for knowledge, the
+  waveform for the voice it is made from.
 
-  WHY DIAGONAL STROKES AND NOT STACKED BARS. The first attempt at this mark
-  drew the arms as four columns of short axis-aligned rounded bars, because
-  Pillow draws rectangles more readily than anything else. It did not read as a
-  K: consecutive columns sit a clear horizontal gap apart, so the bars stayed
-  six separate dots and the shape read as a domino. A round-capped diagonal
-  line is the smallest change that actually produces the letter, and BOTH
-  toolchains can draw one -- SVG with `stroke-linecap="round"`, Pillow with a
-  `line` plus a circle centred on each endpoint (its `width` gives butt ends).
+  Nothing loads this file at runtime. It exists so a fork can open the mark in
+  a vector editor, replace it with a real logo, and have something to match the
+  raster icons against.
 
-  Rejected alternatives: a K with true tapered strokes (needs a path, which
-  Pillow cannot mirror); a microphone or speech bubble (generic in this
-  category, and every competitor already has one); rasterising this file in CI
-  (needs rsvg / cairosvg / a headless browser -- precisely the image toolchain
-  this template refuses to require of a fork).
+  WHY DIAGONAL STROKES AND NOT STACKED BARS. An earlier attempt drew the arms
+  as columns of short axis-aligned rounded bars, because Pillow draws
+  rectangles more readily than anything else. It did not read as a K:
+  consecutive columns sit a clear horizontal gap apart, so the bars stayed
+  separate dots and the shape read as a domino. A round-capped diagonal line is
+  the smallest change that actually produces the letter, and BOTH toolchains
+  can draw one -- SVG with `stroke-linecap="round"`, Pillow with a `line` plus
+  a circle centred on each endpoint (its `width` gives butt ends).
+
+  Rejected alternatives: embedding the supplied bitmap as the icon source (it
+  looks right at 512 and muddy at 16, and it breaks the rule that every raster
+  derives from one vector description); a microphone or speech bubble (generic
+  in this category); rasterising this file in CI (needs rsvg / cairosvg / a
+  headless browser -- precisely the image toolchain this template refuses to
+  require of a fork).
 
   It is NOT rasterised by the build. `apps/web/scripts/generate-icons.py` draws
   the same geometry in Pillow. The two therefore describe the mark twice and
   MUST be kept in step: edit here, mirror the constants in that script, re-run
   it. `src/__tests__/pwa/brandMark.test.ts` compares this file against
-  `favicon.svg` in normalised mark-box space, which is the only one of the
-  three pairs a test can check without an image toolchain.
+  `favicon.svg` in normalised mark space, which is the only one of the three
+  pairs a test can check without an image toolchain.
 
-  Geometry, on a 512 canvas (all values derive from the script's constants):
+  ⚠ THE MARK IS NOT SQUARE: it is 1.0 wide by 0.7380 tall, and every ratio in
+  the generator is a fraction of its WIDTH.
+
+  Geometry, on a 512 canvas (mark width 0.68 x 512 = 348.16, height 256.94):
     plate        512 square, corner radius 0.22 x 512 = 112.64
-    mark box     0.68 x 512 = 348.16 square, so it starts at 81.92
-    stroke       0.17 x 348.16 = 59.19 wide, cap radius 29.59
-    stem         full height of the box, centre line x = 111.51
-    junction     (111.51, 256.00) -- the box's vertical middle
-    arm ends     x = 400.49; y = 111.51 (upper) and 400.49 (lower)
-  Both endpoints are inset by exactly one cap radius, so every round cap lands
-  flush inside the mark box: 0.915 + 0.085 = 1.0 exactly.
+    stroke       0.1304 x 348.16 = 45.40 wide, cap radius 22.70
+    stem         x 81.92, y 127.53, height 256.94
+    junction     (104.62, 256.00) -- ON the stem's centre line, not its edge
+    arm ends     x 257.50; y 160.92 (upper) and 351.08 (lower), symmetric
+    bars         width 29.11, pitch 41.22, first at x 236.09, all centred on
+                 y 256.00 -- the same line the arms meet at
 
   The colour is `themeColor` from `packages/shared/identity.json`, which is the
   source of truth. This file holds a COPY of it, because an SVG attribute
-  cannot read a manifest -- and unlike the generator script, which loads the
-  manifest, nothing keeps this copy in step automatically. `scripts/rename.mjs`
-  rewrites it, and the template-identity guard fails if it ever drifts. There
-  is exactly ONE such fill in this file, which is what that codemod anchors on.
+  cannot read a manifest. `scripts/rename.mjs` rewrites it, and the
+  template-identity guard fails if it ever drifts. There is exactly ONE such
+  fill here, which is what that codemod anchors on. The amber is NOT in the
+  manifest: a fork rebrands the plate, and the accent is a property of this
+  mark's drawing.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Application mark">
   <rect width="512" height="512" rx="112.64" ry="112.64" fill="#4f46e5"/>
   <g fill="#ffffff">
-    <rect x="81.92" y="81.92" width="59.19" height="348.16" rx="29.59" ry="29.59"/>
+    <rect x="81.92" y="127.53" width="45.40" height="256.94" rx="22.70" ry="22.70"/>
   </g>
-  <g stroke="#ffffff" stroke-width="59.19" stroke-linecap="round" fill="none">
-    <line x1="111.51" y1="256.00" x2="400.49" y2="111.51"/>
-    <line x1="111.51" y1="256.00" x2="400.49" y2="400.49"/>
+  <g stroke="#ffffff" stroke-width="45.40" stroke-linecap="round" fill="none">
+    <line x1="104.62" y1="256.00" x2="257.50" y2="160.92"/>
+    <line x1="104.62" y1="256.00" x2="257.50" y2="351.08"/>
+  </g>
+  <g fill="#fbbf24">
+    <rect x="236.09" y="224.53" width="29.11" height="62.95" rx="14.55" ry="14.55"/>
+    <rect x="277.31" y="197.75" width="29.11" height="116.49" rx="14.55" ry="14.55"/>
+    <rect x="318.53" y="206.11" width="29.11" height="99.78" rx="14.55" ry="14.55"/>
+    <rect x="359.75" y="197.75" width="29.11" height="116.49" rx="14.55" ry="14.55"/>
+    <rect x="400.97" y="224.53" width="29.11" height="62.95" rx="14.55" ry="14.55"/>
   </g>
 </svg>

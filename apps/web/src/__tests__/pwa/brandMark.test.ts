@@ -60,8 +60,15 @@ interface Line {
   y2: number;
 }
 
+/**
+ * ⚠ THE LEADING `\\s` IS LOAD-BEARING. Without it, looking up `x` matches
+ * inside `rx="112.64"` — the plate's own corner radius — and every rect
+ * reports a non-zero origin, which silently reclassifies the plate as part of
+ * the mark and the stem as a sixth bar. The bug is invisible until something
+ * counts the bars.
+ */
 function attr(tag: string, name: string): string | null {
-  const match = new RegExp(`${name}="([^"]*)"`).exec(tag);
+  const match = new RegExp(`\\s${name}="([^"]*)"`).exec(tag);
   return match ? match[1] : null;
 }
 
@@ -99,17 +106,32 @@ function parse(file: string): { rects: Rect[]; lines: Line[]; roundCaps: number 
   return { rects, lines, roundCaps };
 }
 
-/** The plate is the only rect carrying a fill; the stem inherits from its `g`. */
+/**
+ * The plate is the only rect that spans the whole canvas; everything else is
+ * part of the mark. Classifying by SIZE rather than by fill, because since
+ * #146 the bars carry their own `g fill` and a fill-based split would put
+ * them on the plate's side of it.
+ */
 function plateOf(rects: Rect[]): Rect {
-  const plates = rects.filter((r) => r.fill !== null);
+  const plates = rects.filter((r) => r.x === 0 && r.y === 0);
   expect(plates).toHaveLength(1);
   return plates[0];
 }
 
+/** The stem is the tallest of the remaining rects — the bars are all shorter. */
 function stemOf(rects: Rect[]): Rect {
-  const stems = rects.filter((r) => r.fill === null);
-  expect(stems).toHaveLength(1);
-  return stems[0];
+  const marks = rects.filter((r) => !(r.x === 0 && r.y === 0));
+  const tallest = [...marks].sort((a, b) => b.height - a.height)[0];
+  expect(tallest).toBeDefined();
+  return tallest;
+}
+
+/** The five waveform bars: every mark rect that is not the stem. */
+function barsOf(rects: Rect[]): Rect[] {
+  const stem = stemOf(rects);
+  return rects
+    .filter((r) => !(r.x === 0 && r.y === 0) && r !== stem)
+    .sort((a, b) => a.x - b.x);
 }
 
 /**
@@ -123,8 +145,15 @@ function normalise(file: string): number[] {
   const { rects, lines } = parse(file);
   const stem = stemOf(rects);
 
+  // ⚠ THE MARK IS NOT SQUARE since #146, so the normalising unit is its WIDTH
+  // — stem left edge to the last bar's right edge — not the stem's height.
+  // Using the height would still compare the two files consistently, but it
+  // would stop matching the ratios the generator and both SVG headers state,
+  // and a reader checking one against the other would be quietly misled.
+  const bars = barsOf(rects);
+  const lastBar = bars[bars.length - 1];
   const origin = { x: stem.x, y: stem.y };
-  const box = stem.height;
+  const box = lastBar.x + lastBar.width - stem.x;
   const fx = (v: number) => (v - origin.x) / box;
   const fy = (v: number) => (v - origin.y) / box;
 
@@ -136,6 +165,12 @@ function normalise(file: string): number[] {
     stem.width / box,
     stem.height / box,
     ...sorted.flatMap((l) => [fx(l.x1), fy(l.y1), fx(l.x2), fy(l.y2)]),
+    ...barsOf(rects).flatMap((b) => [
+      fx(b.x),
+      fy(b.y),
+      b.width / box,
+      b.height / box,
+    ]),
   ];
 }
 
@@ -160,18 +195,44 @@ describe('the brand mark', () => {
     expect(roundCaps).toBe(1);
   });
 
-  it.each(FILES)('%s reaches exactly to the mark box, never past it', (file) => {
-    const { rects, lines } = parse(file);
+  it.each(FILES)('%s ends the waveform exactly on the mark\'s right edge', (file) => {
+    const { rects } = parse(file);
     const stem = stemOf(rects);
-    const box = stem.height;
-    const capRadius = stem.width / 2;
+    const bars = barsOf(rects);
+    const lastBar = bars[bars.length - 1];
+    const box = lastBar.x + lastBar.width - stem.x;
 
-    for (const line of lines) {
-      const right = (line.x2 - stem.x + capRadius) / box;
-      // 0.915 + 0.085 == 1.0. A cap that overflowed would be clipped by the
-      // maskable safe zone on Android before anyone noticed on desktop.
-      expect(right).toBeCloseTo(1, 3);
+    // The bars, not the arms, are what reach the right edge since #146:
+    // 0.4428 + 4 x 0.1184 + 0.0836 == 1.0000. The regular pitch is what makes
+    // that land exactly, and a bar past the edge would be clipped by the
+    // maskable safe zone on Android before anyone noticed it on desktop.
+    expect(bars).toHaveLength(5);
+    expect((lastBar.x + lastBar.width - stem.x) / box).toBeCloseTo(1, 6);
+  });
+
+  it.each(FILES)('%s draws five bars on one centre line at a regular pitch', (file) => {
+    const { rects } = parse(file);
+    const bars = barsOf(rects);
+
+    const centres = bars.map((b) => b.y + b.height / 2);
+    const first = centres[0];
+    for (const centre of centres) {
+      // The supplied artwork had the middle bar sitting lower while its
+      // HEIGHT pattern was already symmetric, which is what says the offset
+      // was an artifact rather than intent. Pinned so it cannot creep back.
+      expect(Math.abs(centre - first)).toBeLessThan(bars[0].width * 0.02);
     }
+
+    const pitches = bars.slice(1).map((b, i) => b.x - bars[i].x);
+    for (const pitch of pitches) {
+      expect(Math.abs(pitch - pitches[0])).toBeLessThan(bars[0].width * 0.02);
+    }
+
+    // Symmetric envelope: short, tall, medium, tall, short.
+    expect(bars[0].height).toBeCloseTo(bars[4].height, 5);
+    expect(bars[1].height).toBeCloseTo(bars[3].height, 5);
+    expect(bars[2].height).toBeLessThan(bars[1].height);
+    expect(bars[2].height).toBeGreaterThan(bars[0].height);
   });
 
   it('describes the same shape in both files, once each is normalised', () => {
