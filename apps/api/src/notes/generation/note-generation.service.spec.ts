@@ -13,12 +13,10 @@ import { NoteTitleService } from './note-title.service';
 // docs call out explicitly:
 //
 //   • a PREVIEW is never titled — it has no note to name;
-//   • `commit()` does not itself guard against `titleNote` rejecting. The
-//     design's "titling cannot fail the note" claim rests entirely on
-//     `NoteTitleService.titleNote`'s own never-throws contract (its
-//     top-level try/catch); `commit()` adds no defence of its own. The test
-//     below pins the CURRENT behaviour rather than the aspiration, so a
-//     reader sees exactly what protects the note and what does not.
+//   • a titling failure can never fail the note. `titleNote`'s own contract
+//     is that it never throws, and `commit()` catches anyway — two
+//     enforcement points for one invariant. The test below exercises the
+//     second one, because it is the only one a stubbed `titleNote` can reach.
 // =============================================================================
 
 const NOTE_ID = 'note-1';
@@ -227,35 +225,36 @@ describe('commit() — titling runs after the transaction and before notify', ()
 // The property the whole design rests on
 // -----------------------------------------------------------------------------
 
-describe('commit() — the never-throws property, pinned rather than assumed', () => {
-  // ⚠ THIS PINS THE ACTUAL, CURRENT BEHAVIOUR, NOT THE DESIGN'S STATED CLAIM.
+describe('commit() — the never-throws property, enforced at the call site too', () => {
+  // ⚠ THIS PINS THE SECOND ENFORCEMENT POINT, AND ONLY IT CAN BE TESTED HERE.
   //
-  // `commit()`'s own header says "IT CANNOT FAIL THE NOTE... `titleNote`
-  // NEVER THROWS... so this line cannot fail a note that is already
-  // committed" — but that guarantee is enforced ENTIRELY by
-  // `NoteTitleService.titleNote`'s own top-level try/catch. `commit()` awaits
-  // `this.titles.titleNote(...)` with no try/catch of its own, so if that
-  // contract were ever violated — a bug in `NoteTitleService`, or (as here) a
-  // test double / alternate implementation that does not honour it —
-  // `commit()` REJECTS rather than resolving.
+  // `titleNote`'s own contract is that it never throws: every rank is wrapped
+  // and its outermost `try` covers even the database reads. A stub cannot
+  // exercise that contract — it replaces it. What this test reaches is
+  // `commit()`'s own try/catch, which exists for the case where that contract
+  // is broken: a future bug in `NoteTitleService`, or a DI substitution that
+  // does not honour it.
   //
-  // That is a real gap against the documented invariant: `commit()` is called
-  // from inside `NoteGenerateHandler.generate()`'s try block, so a rejection
-  // here is caught by the handler's own catch, classified as `'other'`, and
-  // fed to `markFailed()` — flipping an already-committed, already-`ready`
-  // note to `status: 'failed'` and firing `notes.note_failed` instead of
-  // `notes.note_ready`. That is precisely the "successful generation turned
-  // into a failed job" outcome the design exists to prevent. See this file's
-  // header and the test report for the full write-up; reported rather than
-  // silently patched, per instructions.
-  it('currently REJECTS if a stubbed titleNote rejects — commit() has no try/catch of its own around it', async () => {
-    const { service, titles } = harness();
+  // What it protects: `commit()` is called from inside
+  // `NoteGenerateHandler.generate()`'s try block, so a rejection escaping here
+  // would be caught by the handler, classified `'other'`, and fed to
+  // `markFailed()` — flipping an already-committed, already-`ready` note to
+  // `status: 'failed'` and firing `notes.note_failed` instead of
+  // `notes.note_ready`, in front of a user who had just watched that note being
+  // written. The note is committed and durable before this line runs; nothing
+  // about naming it may undo that.
+  it('resolves, still notifies, and keeps the pre-titling title when titleNote rejects', async () => {
+    const { service, titles, notifications } = harness();
     titles.titleNote.mockRejectedValue(
       new Error('a titleNote implementation that does not honour its own never-throws contract'),
     );
 
-    await expect(service.commit(commitInput(generationRow()))).rejects.toThrow(
-      'a titleNote implementation that does not honour its own never-throws contract',
+    await expect(service.commit(commitInput(generationRow()))).resolves.toBeUndefined();
+
+    expect(notifications.notify).toHaveBeenCalledWith(
+      'notes.note_ready',
+      OWNER_ID,
+      expect.objectContaining({ title: 'Meeting notes' }),
     );
   });
 });

@@ -61,10 +61,13 @@ import { NoteTitleService } from './note-title.service';
 // because the "your note is ready" email carries the note's title — raising it
 // first would name a title the note stopped having a second later.
 //
-// ⚠ IT CANNOT FAIL THE NOTE. `titleNote` never throws (see its header): by the
-// time it runs the body, the version and `status: 'ready'` are durable, and a
-// titling failure that propagated would turn a successful generation into a
-// failed job in front of a user who had just watched their note being written.
+// ⚠ IT CANNOT FAIL THE NOTE, AND THAT IS ENFORCED TWICE. `titleNote` never
+// throws (see its header) — and the call below catches anyway. By the time it
+// runs the body, the version and `status: 'ready'` are durable, and a titling
+// failure that propagated would turn a successful generation into a failed job
+// in front of a user who had just watched their note being written. An
+// invariant that expensive to get wrong is worth a second enforcement point;
+// the catch at the call site is it.
 // =============================================================================
 
 /** A generation row with the note it belongs to (null for a preview). */
@@ -263,17 +266,40 @@ export class NoteGenerationService {
     // NAME THE NOTE FIRST, TELL THE OWNER SECOND (#182). Both are outside the
     // transaction, and the order between them is not arbitrary: the email
     // carries the title, so a notification raised first would name the title
-    // the note had a moment ago. `titleNote` NEVER THROWS — see the header, and
-    // its own — so this line cannot fail a note that is already committed; it
-    // returns the title the note carries now, or `null` when it could not read
-    // the row, in which case the copy this job loaded is the best we have.
-    const title = await this.titles.titleNote({
-      noteId: note.id,
-      ownerId: note.ownerId,
-      body: content,
-      providerId: generation.providerId,
-      model: generation.model,
-    });
+    // the note had a moment ago. `titleNote` returns the title the note carries
+    // now, or `null` when it could not produce one, in which case the copy this
+    // job loaded is the best we have.
+    //
+    // ⚠ THE CATCH IS A SECOND ENFORCEMENT POINT, NOT A DOUBT ABOUT `titleNote`.
+    // Its contract is that it never throws — every rank is wrapped and its
+    // outermost `try` covers even the database reads (see its header) — and
+    // nothing here weakens or moves that. But by this line the body, the
+    // version and `status: 'ready'` are already committed and durable, while
+    // `commit()` itself runs inside `NoteGenerateHandler.generate()`'s try
+    // block: anything escaping here would be classified `'other'`, handed to
+    // `markFailed()`, and would flip an already-`ready` note to `failed` and
+    // mail its owner `notes.note_failed` about a note they had just watched
+    // being written. One belt, one pair of braces — the cost of that contract
+    // being broken once, by a future bug here or a substituted implementation
+    // that does not honour it, is a user losing a finished note over its name.
+    // A throw is logged at `warn` so a broken contract is visible rather than
+    // silent, and falls through to `note.title` exactly as a `null` does.
+    let title: string | null = null;
+
+    try {
+      title = await this.titles.titleNote({
+        noteId: note.id,
+        ownerId: note.ownerId,
+        body: content,
+        providerId: generation.providerId,
+        model: generation.model,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Titling note ${note.id} threw, which \`titleNote\`'s own contract forbids; ` +
+          `the note keeps the title it has: ${String(error)}`,
+      );
+    }
 
     const payload: NoteReadyEmailData = {
       noteId: note.id,
