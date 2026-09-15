@@ -11,6 +11,7 @@ import {
   type CheckStatus,
   type CompletedCheck,
 } from '../deploy/checks/index.js';
+import { updateDeployInfoRemote, type DeployRemote } from '../deploy/deploy-info.js';
 import { readEnvFile } from '../deploy/env-file.js';
 import {
   collectHealth,
@@ -38,7 +39,12 @@ import {
   renewalCronPath,
   type CertificateExpiry,
 } from '../deploy/proxy.js';
-import { runUpdate, type UpdateOptions } from '../deploy/update.js';
+import {
+  checkForUpdate,
+  remoteFromCheck,
+  runUpdate,
+  type UpdateOptions,
+} from '../deploy/update.js';
 import type { EnvGroup } from '../deploy/env-metadata.js';
 import { runCommand } from '../deploy/executor.js';
 import { CliError, EXIT, PreconditionError, UsageError, type ExitCode } from '../errors.js';
@@ -183,6 +189,7 @@ export function registerDeployCommand(
     .option('--skip-doctor', 'Skip the prerequisite checks')
     .option('--skip-proxy', 'Do not touch the reverse proxy or request a certificate')
     .option('--skip-seed', 'Do not run the database seed')
+    .option('--skip-github', 'Never consult the GitHub CLI, even for a GitHub remote')
     .option('--no-cache', 'Rebuild images without the layer cache')
     .option('--force', 'Discard uncommitted changes in the checkout')
     .option('--staging', "Use Let's Encrypt staging while working out the setup")
@@ -204,11 +211,16 @@ export function registerDeployCommand(
         `  ${CLI_NAME} deploy install --non-interactive --domain app.example.com`,
         `  ${CLI_NAME} deploy install --domain app.example.com --no-ipv6`,
         '',
-        'What it does, in order: checks prerequisites, clones the repository,',
-        'collects the environment, validates the database, builds the images,',
-        'migrates, seeds, starts the stack, waits for health, proves the domain',
-        'routes here, issues the certificate, publishes the vhost through the',
-        'shared proxy container, then verifies the result.',
+        'What it does, in order: checks prerequisites, ensures the devnet',
+        'network, authenticates git through the GitHub CLI, clones the',
+        'repository, collects the environment, validates the database, builds',
+        'the images, migrates, seeds, starts the stack, waits for health, proves',
+        'the domain routes here, issues the certificate, publishes the vhost',
+        'through the shared proxy container, then verifies the result.',
+        '',
+        'A GitHub remote is cloned over HTTPS with the token `gh auth login`',
+        'stored (`gh auth setup-git` is run for you); ssh and git@ remotes are',
+        'rewritten to HTTPS. A remote that is not on GitHub uses plain git.',
         '',
         'The certificate is issued with `docker run certbot/certbot`, and the',
         'proxy is validated and reloaded with `docker exec`; there is no host',
@@ -230,20 +242,29 @@ export function registerDeployCommand(
   withLayoutOptions(
     deploy.command('update').description('Bring this server up to the latest revision'),
   )
+    .option('--check', 'Report what an update would apply, then stop; nothing is changed')
     .option('--ref <ref>', 'Branch, tag or commit to move to')
     .option('--force', 'Rebuild even when the revision has not changed')
     .option('--no-cache', 'Rebuild images without the layer cache')
     .option('--non-interactive', 'Never prompt; fail listing anything unresolved')
     .option('--skip-seed', 'Do not re-run the database seed')
     .option('--skip-proxy', 'Do not touch the reverse proxy')
+    .option('--skip-github', 'Never consult the GitHub CLI, even for a GitHub remote')
     .option('--json', 'Print a machine-readable result on stdout')
     .addHelpText(
       'after',
       [
         '',
         'Examples:',
+        `  ${CLI_NAME} deploy update --check`,
         `  ${CLI_NAME} deploy update`,
         `  ${CLI_NAME} deploy update --ref v1.4.0`,
+        '',
+        '--check fetches and prints `current <sha> -> latest <sha>, N commits',
+        'behind` with the commit subjects, records it in deploy-info, and exits',
+        '0 whether or not there is anything to apply - without checking out,',
+        'building or touching the state. Without --check the same block is',
+        'printed before the build, so you see what is about to be applied.',
         '',
         'Exits 0 without doing anything when the revision has not moved, so it',
         'is safe to run from cron.',
@@ -287,6 +308,10 @@ export function registerDeployCommand(
         '',
         'With one app installed no flags are needed; with several, --name says',
         'which.',
+        '',
+        'The Update line fetches the remote (ten seconds at most) and reports',
+        'how many commits behind the deployment is; when the remote cannot be',
+        'reached it says so and the verdict is unaffected.',
         '',
         'Note that /api/health/ready only proves SELECT 1 succeeded, so it',
         'passes against an empty database. Migration state is reported',
@@ -614,8 +639,9 @@ export async function runStatusCommand(
     );
   }
 
+  const exec = ctx?.runCommand ?? runCommand;
   const report = await collectHealth({
-    runCommand: ctx?.runCommand ?? runCommand,
+    runCommand: exec,
     deployRoot: layout.deployRoot,
     name: layout.name,
     bindPort: Number(options.port),
@@ -625,16 +651,24 @@ export async function runStatusCommand(
   });
 
   const healthy = isHealthy(report);
+  const update = await statusUpdateCheck(layout.deployRoot, state, exec);
 
   if (json) {
-    stdout.write(`${JSON.stringify({ healthy, ...report })}\n`);
+    stdout.write(
+      `${JSON.stringify({
+        healthy,
+        ...report,
+        remote: 'remote' in update ? update.remote : null,
+        ...('error' in update ? { updateCheckError: update.error } : {}),
+      })}\n`,
+    );
   } else {
     const colour = shouldUseColour({
       requested: options.color === false ? false : undefined,
       env: process.env,
       isTTY: ctx?.isTty ?? process.stderr.isTTY === true,
     });
-    stderr.write(renderHealth(report, healthy, colour));
+    stderr.write(renderHealth(report, healthy, colour, update));
   }
 
   if (!healthy) {
@@ -642,6 +676,49 @@ export async function runStatusCommand(
       `The deployment at ${layout.deployRoot} is not healthy.`,
     );
   }
+}
+
+/** What `status` learned about the remote, or why it could not. */
+export type StatusUpdate = { remote: DeployRemote } | { error: string };
+
+/**
+ * The same computation `update --check` runs (#123), bounded and forgiving:
+ * ten seconds for the fetch, no clone created, and any failure - no network,
+ * a revoked token, no checkout yet - becomes a line in the report rather
+ * than a verdict. "Is it serving?" and "is it current?" are different
+ * questions, and the second must never fail the first. What it finds is
+ * recorded in deploy-info, which is how the About page learns it.
+ */
+async function statusUpdateCheck(
+  deployRoot: string,
+  state: DeployState,
+  exec: typeof runCommand,
+): Promise<StatusUpdate> {
+  try {
+    const { check } = await checkForUpdate({
+      deployRoot,
+      state,
+      runCommand: exec,
+      fetchTimeoutMs: 10_000,
+      requireExisting: true,
+    });
+    const remote = remoteFromCheck(check);
+    updateDeployInfoRemote(deployRoot, remote);
+    return { remote };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { error: message.split('\n')[0] ?? message };
+  }
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 d ago" - for the Update line. */
+export function describeAge(iso: string, now: number = Date.now()): string {
+  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (Number.isNaN(seconds)) return 'at an unknown time';
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)} h ago`;
+  return `${Math.floor(seconds / 86_400)} d ago`;
 }
 
 function probeLine(label: string, result: ProbeResult): string {
@@ -656,6 +733,7 @@ export function renderHealth(
   report: HealthReport,
   healthy: boolean,
   colour: boolean,
+  update?: StatusUpdate | undefined,
 ): string {
   const lines: string[] = ['\n  Deployment\n\n'];
 
@@ -670,6 +748,21 @@ export function renderHealth(
       report.deployed.lastAttemptAt > report.deployed.lastDeployedAt
     ) {
       lines.push(`  ${'Last attempt'.padEnd(TITLE_WIDTH)}${report.deployed.lastAttemptAt} (did not complete)\n`);
+    }
+  }
+
+  if (update !== undefined) {
+    if ('error' in update) {
+      lines.push(`  ${'Update'.padEnd(TITLE_WIDTH)}update check: unavailable (${update.error})\n`);
+    } else {
+      const { remote } = update;
+      const behind =
+        remote.commitsBehind === 0
+          ? 'up to date'
+          : `${remote.commitsBehind} commit${remote.commitsBehind === 1 ? '' : 's'} behind`;
+      lines.push(
+        `  ${'Update'.padEnd(TITLE_WIDTH)}${behind} (latest ${remote.sha.slice(0, 12)}, checked ${describeAge(remote.checkedAt)})\n`,
+      );
     }
   }
 
@@ -736,6 +829,7 @@ export interface InstallCommandOptions extends LayoutCommandOptions {
   skipDoctor?: boolean | undefined;
   skipProxy?: boolean | undefined;
   skipSeed?: boolean | undefined;
+  skipGithub?: boolean | undefined;
   cache: boolean;
   force?: boolean | undefined;
   staging?: boolean | undefined;
@@ -775,6 +869,7 @@ export async function runInstallCommand(
     ...(options.skipDoctor === undefined ? {} : { skipDoctor: options.skipDoctor }),
     ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
     ...(options.skipSeed === undefined ? {} : { skipSeed: options.skipSeed }),
+    ...(options.skipGithub === undefined ? {} : { skipGithub: options.skipGithub }),
     ...(options.cache === false ? { noCache: true } : {}),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.staging === undefined ? {} : { staging: options.staging }),
@@ -835,12 +930,14 @@ export async function runInstallCommand(
 // ---------------------------------------------------------------------------
 
 export interface UpdateCommandOptions extends LayoutCommandOptions {
+  check?: boolean | undefined;
   ref?: string | undefined;
   force?: boolean | undefined;
   cache: boolean;
   nonInteractive?: boolean | undefined;
   skipSeed?: boolean | undefined;
   skipProxy?: boolean | undefined;
+  skipGithub?: boolean | undefined;
   json?: boolean | undefined;
 }
 
@@ -860,13 +957,16 @@ export async function runUpdateCommand(
 
   const updateOptions: UpdateOptions = {
     deployRoot: layout.deployRoot,
+    ...(options.check === undefined ? {} : { check: options.check }),
     ...(options.ref === undefined ? {} : { ref: options.ref }),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.cache === false ? { noCache: true } : {}),
     ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
     ...(options.skipSeed === undefined ? {} : { skipSeed: options.skipSeed }),
     ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
+    ...(options.skipGithub === undefined ? {} : { skipGithub: options.skipGithub }),
     ...(ctx?.runCommand === undefined ? {} : { runCommand: ctx.runCommand }),
+    ...(ctx?.cwd === undefined ? {} : { cwd: ctx.cwd }),
     ...(json
       ? {}
       : {
@@ -886,6 +986,15 @@ export async function runUpdateCommand(
   };
 
   const result = await runUpdate(updateOptions);
+
+  if (options.check === true) {
+    // The check IS the result: the object alone under --json, and on a
+    // terminal the fetch step has already rendered `current -> latest` and
+    // the subjects through the hooks. Exit 0 either way - "there is an
+    // update" is an answer, not a failure.
+    if (json) stdout.write(`${JSON.stringify(result.check ?? null)}\n`);
+    return;
+  }
 
   if (json) {
     stdout.write(`${JSON.stringify(result)}\n`);

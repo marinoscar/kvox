@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
-import { UsageError } from '../errors.js';
+import { PreconditionError, UsageError } from '../errors.js';
+import { GITHUB_HOST, parseGithubRepo } from './checks/github.js';
 import type { DeployHooks } from './hooks.js';
 import type { runCommand } from './executor.js';
 import type { DeployState } from './state.js';
@@ -46,15 +47,38 @@ export interface ResolveRepoOptions {
 }
 
 /**
- * Strips a trailing `.git` and any credentials, without changing the scheme.
+ * `owner/repo` when the remote is on GitHub, in any scheme git accepts
+ * (`https://`, `git@…:`, `ssh://git@…/`, with or without `.git` or an
+ * embedded token); null for anything else. One parser, shared with the
+ * `gh-repo-access` doctor check, so the two can never disagree about what
+ * counts as a GitHub remote.
+ */
+export function githubSlug(url: string): string | null {
+  const repo = parseGithubRepo(url);
+  return repo === undefined ? null : `${repo.owner}/${repo.name}`;
+}
+
+/**
+ * The URL git is handed, from whatever the operator wrote.
  *
- * THE SCHEME IS PRESERVED DELIBERATELY. Rewriting ssh to https breaks a server
- * whose access is a deploy key; rewriting https to ssh breaks one that has no
- * key at all. Whichever the operator already uses is the one that works.
+ * A GITHUB REMOTE IS ALWAYS REWRITTEN TO HTTPS (issue #123, epic #118
+ * decision 1): on the server the credential is the GitHub CLI, and `gh auth
+ * setup-git` installs a credential helper for `https://<host>` only - an
+ * `ssh://` or `git@` origin copied from a laptop would bypass it and stall on
+ * a key that does not exist. So ssh, scp-style and https all become
+ * `https://<host>/<owner>/<repo>.git`, GitHub's own canonical clone URL.
+ *
+ * EVERY OTHER SCHEME IS PRESERVED. Rewriting ssh to https breaks a server
+ * whose access to another forge is a deploy key; rewriting https to ssh
+ * breaks one that has no key at all. Whichever the operator already uses is
+ * the one that works there, so only `.git` and any embedded credentials are
+ * stripped - a token in the URL must never reach a log line.
  */
 export function normaliseRepoUrl(url: string): string {
+  const slug = githubSlug(url);
+  if (slug !== null) return `https://${GITHUB_HOST}/${slug}.git`;
+
   const trimmed = url.trim().replace(/\.git$/, '');
-  // A token in the URL must never reach a log line or an error message.
   return trimmed.replace(/^(https?:\/\/)[^@/]+@/, '$1');
 }
 
@@ -183,12 +207,97 @@ async function remoteDefaultBranch(scoped: {
   return symbolic?.replace(/^origin\//, '');
 }
 
+export interface GitHubAuthOptions {
+  runCommand: typeof runCommand;
+  /** The remote about to be cloned or fetched. */
+  repoUrl: string;
+  /** Where `gh` runs; any existing directory, it reads nothing from it. */
+  cwd: string;
+  hooks?: DeployHooks | undefined;
+}
+
+/**
+ * Makes plain `git` able to reach a private GitHub repository over HTTPS,
+ * through the GitHub CLI's token (issue #123, epic #118 decision 1).
+ *
+ * `gh auth status` first - a logged-out `gh` has to stop the run BEFORE any
+ * clone, with the login command in hand, rather than as git's own
+ * "Authentication failed" halfway in. Then `gh auth setup-git`, which writes
+ * `credential.https://<host>.helper` into git's config; it is idempotent, so
+ * it runs on every install and update and a server whose config was reset
+ * heals on the next one.
+ *
+ * NOT CALLED FROM `ensureCheckout`, DELIBERATELY. repo.test.ts drives that
+ * function with the real `runCommand` against local repositories, and an
+ * unconditional `gh` call inside it would execute `gh` in every test. It is
+ * its own pipeline step (`auth`) in install and update, which also skip it
+ * outright for a remote that is not on GitHub: another forge, or CI's
+ * `file://` remote, is deployed with plain git and `gh` is never consulted.
+ */
+export async function ensureGitHubAuth(
+  options: GitHubAuthOptions,
+): Promise<{ slug: string } | undefined> {
+  const slug = githubSlug(options.repoUrl);
+  if (slug === null) return undefined;
+
+  const run = (argv: readonly string[]) =>
+    options.runCommand(argv, {
+      cwd: options.cwd,
+      timeoutMs: 60_000,
+      ...(options.hooks?.onLog === undefined
+        ? {}
+        : { onLine: (line: string) => options.hooks?.onLog?.(line) }),
+    });
+
+  try {
+    await run(['gh', 'auth', 'status']);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new PreconditionError(
+      `The GitHub CLI is not logged in, so ${slug} cannot be cloned. ` +
+        `Log in: gh auth login --hostname ${GITHUB_HOST} --git-protocol https ` +
+        `(or, with a token you already have: gh auth login --with-token < token.txt).\n${detail}`,
+    );
+  }
+
+  try {
+    await run(['gh', 'auth', 'setup-git', '--hostname', GITHUB_HOST]);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new PreconditionError(
+      `gh could not configure git to use its token for ${GITHUB_HOST}. ` +
+        `Run it by hand and check the output: gh auth setup-git --hostname ${GITHUB_HOST}\n${detail}`,
+    );
+  }
+
+  options.hooks?.onProgress?.(`git authenticates to ${GITHUB_HOST} through gh`);
+  return { slug };
+}
+
 export interface CheckoutOptions {
   deployRoot: string;
   runCommand: typeof runCommand;
   hooks?: DeployHooks | undefined;
   /** Discard uncommitted local modifications instead of refusing. */
   force?: boolean | undefined;
+  /** How long a clone or fetch may take; `status` bounds it, a deploy does not. */
+  fetchTimeoutMs?: number | undefined;
+  /**
+   * Refuse rather than clone when there is no checkout yet. `status` asks
+   * "how far behind is what is deployed" and must not create a clone to
+   * answer it.
+   */
+  requireExisting?: boolean | undefined;
+}
+
+export interface FetchResult {
+  path: string;
+  /** The commit the target's ref resolves to, after the fetch. */
+  resolved: string;
+  /** The checkout's HEAD before anything moved; undefined on a first clone. */
+  previousSha: string | undefined;
+  /** True when this call created the clone. */
+  cloned: boolean;
 }
 
 export interface CheckoutResult {
@@ -200,20 +309,26 @@ export interface CheckoutResult {
 }
 
 /**
- * Clones or updates the checkout, idempotently.
+ * Clones or fetches, and resolves the ref - WITHOUT moving the checkout.
  *
- * The same call performs a first install and every later update, which is what
- * lets #180 and #182 share it rather than each doing half of it differently.
+ * The first half of `ensureCheckout`, on its own so that `update --check`
+ * (#123) can answer "what would an update bring" while the clone stays at
+ * the deployed commit: a checkout that moved HEAD would change what the next
+ * `docker compose build` builds and what deploy-info reports as the deployed
+ * version, for a command whose whole promise is that it changes nothing.
  */
-export async function ensureCheckout(
+export async function fetchRemote(
   target: RepoTarget,
   options: CheckoutOptions,
-): Promise<CheckoutResult> {
+): Promise<FetchResult> {
   const path = join(options.deployRoot, 'repo');
   const scoped = { cwd: path, runCommand: options.runCommand };
   const exists = existsSync(join(path, '.git'));
 
   if (!exists) {
+    if (options.requireExisting === true) {
+      throw new UsageError(`There is no checkout at ${path} to compare against.`);
+    }
     options.hooks?.onProgress?.(`Cloning ${displayRepoUrl(target.url)}`);
     await runGit(options, options.deployRoot, [
       'clone',
@@ -227,6 +342,74 @@ export async function ensureCheckout(
   }
 
   const previousSha = exists ? await git(scoped, ['rev-parse', 'HEAD']) : undefined;
+
+  const resolved = await resolveRef(scoped, target.ref);
+  if (resolved === undefined) {
+    throw new UsageError(
+      `\`${target.ref}\` is not a branch, tag or commit in ${displayRepoUrl(target.url)}.`,
+    );
+  }
+
+  return { path, resolved, previousSha, cloned: !exists };
+}
+
+export interface RevisionComparison {
+  /** `git rev-list --count <from>..<to>`. */
+  commitsBehind: number;
+  /** The newest 50 non-merge commits in that range, newest first. */
+  commits: { sha: string; subject: string }[];
+}
+
+/** Commits the deployed revision does not have yet. Empty when they are the same. */
+export async function compareRevisions(
+  scoped: { cwd: string; runCommand: typeof runCommand },
+  from: string,
+  to: string,
+): Promise<RevisionComparison> {
+  if (from === to) return { commitsBehind: 0, commits: [] };
+
+  const range = `${from}..${to}`;
+  const run = (args: readonly string[]) =>
+    scoped.runCommand(['git', ...args], { cwd: scoped.cwd, timeoutMs: 60_000 });
+
+  const count = (await run(['rev-list', '--count', range])).stdout.trim();
+  const commitsBehind = Number(count);
+  if (!Number.isInteger(commitsBehind)) {
+    throw new Error(`git rev-list --count ${range} answered \`${count}\`, not a number`);
+  }
+
+  // argv only - no shell, so `--max-count` rather than a pipe into head.
+  const log = await run(['log', '--no-merges', '--format=%h%x09%s', '--max-count=50', range]);
+  const commits = log.stdout
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => {
+      const tab = line.indexOf('\t');
+      return tab === -1
+        ? { sha: line.trim(), subject: '' }
+        : { sha: line.slice(0, tab).trim(), subject: line.slice(tab + 1).trim() };
+    });
+
+  return { commitsBehind, commits };
+}
+
+/**
+ * Clones or updates the checkout, idempotently.
+ *
+ * The same call performs a first install and every later update, which is what
+ * lets #180 and #182 share it rather than each doing half of it differently.
+ * A caller that has already run `fetchRemote` (update's `fetch` step, which
+ * compares revisions before it moves anything) passes the result so the
+ * remote is not fetched twice.
+ */
+export async function ensureCheckout(
+  target: RepoTarget,
+  options: CheckoutOptions & { fetched?: FetchResult | undefined },
+): Promise<CheckoutResult> {
+  const fetched = options.fetched ?? (await fetchRemote(target, options));
+  const { path, resolved, previousSha } = fetched;
+  const scoped = { cwd: path, runCommand: options.runCommand };
+  const exists = !fetched.cloned;
 
   if (exists && options.force !== true) {
     const dirty = await git(scoped, ['status', '--porcelain']);
@@ -242,13 +425,6 @@ export async function ensureCheckout(
           `\nCommit or remove them, or re-run with --force to discard them.`,
       );
     }
-  }
-
-  const resolved = await resolveRef(scoped, target.ref);
-  if (resolved === undefined) {
-    throw new UsageError(
-      `\`${target.ref}\` is not a branch, tag or commit in ${displayRepoUrl(target.url)}.`,
-    );
   }
 
   // A hard reset rather than a merge: a deployed checkout is not a development
@@ -287,7 +463,7 @@ async function runGit(
   try {
     const result = await options.runCommand(['git', ...args], {
       cwd,
-      timeoutMs: 15 * 60_000,
+      timeoutMs: options.fetchTimeoutMs ?? 15 * 60_000,
       ...(options.hooks?.onLog === undefined
         ? {}
         : { onLine: (line: string) => options.hooks?.onLog?.(line) }),
@@ -297,10 +473,12 @@ async function runGit(
     const message = error instanceof Error ? error.message : String(error);
 
     // The most common first-install failure by a wide margin, and the raw git
-    // output does not say what to do about it.
+    // output does not say what to do about it. On this server the credential
+    // is the GitHub CLI (#123): log in, hand git its token, and the next
+    // install or update repeats the second step itself.
     if (/authentication|permission denied|could not read Username|publickey/i.test(message)) {
       throw new UsageError(
-        `git could not authenticate. This server needs read access to the repository — add a deploy key, or use an https URL with a credential helper.\n${message}`,
+        `git could not authenticate to the repository. Run \`gh auth login\`, then \`gh auth setup-git\` — ${CLI_NAME} runs the second one for you on the next install or update. A repository that is not on GitHub needs read access some other way (a deploy key, or an https URL with a credential helper).\n${message}`,
       );
     }
     throw error;

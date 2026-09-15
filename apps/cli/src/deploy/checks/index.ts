@@ -44,7 +44,7 @@ export {
   parseDf,
 } from './host.js';
 export type { DfReading } from './host.js';
-export { GITHUB_CHECKS, parseGithubRepo } from './github.js';
+export { GITHUB_CHECKS, GITHUB_HOST, parseGithubRepo } from './github.js';
 export { probe, type ProbeOutcome } from './probe.js';
 export { DATABASE_CHECKS, databaseSettings, probeTcp } from './database.js';
 export { DNS_CHECKS } from './dns.js';

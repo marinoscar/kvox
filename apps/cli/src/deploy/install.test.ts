@@ -69,6 +69,7 @@ describe('the install pipeline', () => {
     expect(ids).toEqual([
       'preflight',
       'network',
+      'auth',
       'checkout',
       'environment',
       'validate-environment',
@@ -86,6 +87,13 @@ describe('the install pipeline', () => {
     // The whole point of a preflight: abort before the repository is cloned
     // and before .env is written.
     expect(ids.indexOf('preflight')).toBeLessThan(ids.indexOf('checkout'));
+  });
+
+  it('authenticates with gh after the preflight and before the clone', () => {
+    // A logged-out gh has to stop the run with the login command in hand,
+    // not as git's own "Authentication failed" halfway into the clone.
+    expect(ids.indexOf('preflight')).toBeLessThan(ids.indexOf('auth'));
+    expect(ids.indexOf('auth')).toBeLessThan(ids.indexOf('checkout'));
   });
 
   it('ensures the devnet network after preflight and before building', () => {
@@ -109,10 +117,19 @@ describe('the install pipeline', () => {
     return step?.skip?.({ options } as never);
   }
 
-  it('honours --skip-doctor, --skip-proxy and --skip-seed', () => {
+  it('honours --skip-doctor, --skip-proxy, --skip-seed and --skip-github', () => {
     expect(skipReasonFor('preflight', { skipDoctor: true })).toContain('--skip-doctor');
     expect(skipReasonFor('seed', { skipSeed: true })).toContain('--skip-seed');
     expect(skipReasonFor('publish', { skipProxy: true, domain: 'x' })).toContain('--skip-proxy');
+    expect(skipReasonFor('auth', { skipGithub: true, repo: 'https://github.com/acme/widgets' })).toContain('--skip-github');
+  });
+
+  it('stands the auth step down for a remote that is not on GitHub', () => {
+    // Another forge, or CI's file:// remote, is deployed with plain git and
+    // gh is never consulted - a fact about the fork, not a failure.
+    expect(skipReasonFor('auth', { repo: 'https://example.test/o/r.git' })).toBe('not a GitHub remote');
+    expect(skipReasonFor('auth', { repo: 'file:///srv/git/r.git' })).toBe('not a GitHub remote');
+    expect(skipReasonFor('auth', { repo: 'git@github.com:acme/widgets.git' })).toBeUndefined();
   });
 
   it('skips publishing when there is no domain to publish under', () => {
@@ -192,6 +209,67 @@ describe('the preflight step', () => {
 
     expect(error).toBeInstanceOf(PreconditionError);
     expect((error as Error).message).toContain('proxy-root');
+  });
+});
+
+describe('the auth step', () => {
+  function authStep() {
+    const step = buildInstallSteps().find((candidate) => candidate.id === 'auth');
+    if (step === undefined) throw new Error('no auth step');
+    return step;
+  }
+
+  function contextFor(repo: string, respond: (argv: readonly string[]) => { exitCode: number; stderr?: string }) {
+    const seen: string[][] = [];
+    const lines: string[] = [];
+    const runCommand = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      seen.push([...argv]);
+      const canned = respond(argv);
+      const result: CommandResult = {
+        argv: [...argv],
+        cwd: options.cwd,
+        exitCode: canned.exitCode,
+        stdout: '',
+        stderr: canned.stderr ?? '',
+        durationMs: 1,
+        timedOut: false,
+      };
+      if (result.exitCode !== 0) throw new CommandFailedError(result.stderr, result);
+      return result;
+    }) as typeof import('./executor.js').runCommand;
+
+    const context = {
+      options: { deployRoot: mkdtempSync(join(tmpdir(), 'appctl-auth-')), name: 'x', appsRoot: '/tmp', repo, ref: 'main' },
+      runCommand,
+      journal: { line: (line: string) => void lines.push(line) },
+      completed: new Set<string>(),
+    };
+    return { context: context as never, seen, lines };
+  }
+
+  it('checks the login and hands git the token, in that order', async () => {
+    const { context, seen, lines } = contextFor('git@github.com:acme/widgets.git', () => ({ exitCode: 0 }));
+
+    await authStep().run(context);
+
+    expect(seen).toEqual([
+      ['gh', 'auth', 'status'],
+      ['gh', 'auth', 'setup-git', '--hostname', 'github.com'],
+    ]);
+    expect(lines.some((line) => line.includes('acme/widgets'))).toBe(true);
+  });
+
+  it('stops on a precondition, with the login command, when gh is logged out', async () => {
+    const { context, seen } = contextFor('https://github.com/acme/widgets', (argv) =>
+      argv[2] === 'status' ? { exitCode: 1, stderr: 'You are not logged in to any GitHub hosts.' } : { exitCode: 0 },
+    );
+
+    const error = await authStep().run(context).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('gh auth login');
+    // Nothing else ran: no setup-git, and certainly no clone.
+    expect(seen).toEqual([['gh', 'auth', 'status']]);
   });
 });
 
@@ -682,6 +760,44 @@ describe('runInstall against a fake VPS', () => {
     expect(info?.updatedAt).toMatch(/Z$/);
     // And nothing secret made it in.
     expect(readFileSync(path, 'utf8')).not.toContain('not-the-default-password');
+  });
+
+  it('consults gh before cloning a GitHub remote, and never for another forge', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+
+    await install(root, { repo: 'git@github.com:acme/demo.git' });
+
+    const commands = vps.seen.map((argv) => argv.slice(0, 3).join(' '));
+    const status = commands.indexOf('gh auth status');
+    const setup = commands.indexOf('gh auth setup-git');
+    const clone = commands.indexOf('git clone --no-checkout');
+    expect(status).toBeGreaterThanOrEqual(0);
+    expect(setup).toBeGreaterThan(status);
+    expect(clone).toBeGreaterThan(setup);
+    // And the clone went over https, whatever scheme the operator typed.
+    expect(vps.seen[clone]?.[3]).toBe('https://github.com/acme/demo.git');
+    expect(readState(root)?.repoUrl).toBe('https://github.com/acme/demo.git');
+
+    const other = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    vps.seen.length = 0;
+    await install(other);
+    expect(vps.seen.some((argv) => argv[0] === 'gh')).toBe(false);
+  });
+
+  it('exits 6 with nothing cloned when gh is logged out', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    vps.failWhen((argv) => argv[0] === 'gh' && argv[2] === 'status', 'You are not logged in to any GitHub hosts.');
+
+    const error = await install(root, { repo: 'https://github.com/acme/demo' }).catch((caught: unknown) => caught);
+
+    // The acceptance criterion: the auth step, exit code 6, the remedy, and
+    // no clone - not a generic failure after git prompted for a password.
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('Authenticate with GitHub failed');
+    expect((error as Error).message).toContain('gh auth login');
+    expect(vps.seen.some((argv) => argv[0] === 'git' && argv[1] === 'clone')).toBe(false);
+    expect(existsSync(join(root, 'repo'))).toBe(false);
+    expect(readState(root)).toBeUndefined();
   });
 
   it('writes deploy-info only after the state, so a failed install leaves neither', async () => {

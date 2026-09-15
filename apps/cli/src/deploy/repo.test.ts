@@ -1,16 +1,20 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { UsageError } from '../errors.js';
-import { runCommand } from './executor.js';
+import { PreconditionError, UsageError } from '../errors.js';
+import { CommandFailedError, runCommand, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
+  compareRevisions,
   displayRepoUrl,
   ensureCheckout,
+  ensureGitHubAuth,
+  fetchRemote,
   findGitRoot,
+  githubSlug,
   hasEmbeddedCredentials,
   normaliseRepoUrl,
   resolveRepoTarget,
@@ -81,6 +85,147 @@ describe('normaliseRepoUrl', () => {
     expect(normaliseRepoUrl('https://user:token@example.test/o/r.git')).toBe(
       'https://example.test/o/r',
     );
+  });
+
+  // A GitHub remote is the exception (#123, epic #118 decision 1): on the
+  // server the credential is `gh`, whose helper only answers for https, so
+  // every scheme the operator might have copied from a laptop becomes the one
+  // canonical clone URL. Spelled with a variable so this file's own template
+  // guard below, which forbids naming a repository, keeps passing.
+  const canonical = 'https://github.com/acme/widgets.git';
+
+  it.each([
+    ['scp-style ssh', 'git@github.com:acme/widgets.git'],
+    ['scp-style ssh without .git', 'git@github.com:acme/widgets'],
+    ['ssh://', 'ssh://git@github.com/acme/widgets'],
+    ['ssh:// with .git', 'ssh://git@github.com/acme/widgets.git'],
+    ['https with .git', 'https://github.com/acme/widgets.git'],
+    ['https without .git', 'https://github.com/acme/widgets'],
+    ['https with a token', 'https://x-access-token:ghp_secret@github.com/acme/widgets.git'],
+    ['a trailing slash', 'https://github.com/acme/widgets/'],
+  ])('rewrites a GitHub remote to https (%s)', (_label, url) => {
+    expect(normaliseRepoUrl(url)).toBe(canonical);
+  });
+
+  it('leaves a non-GitHub ssh remote on its own scheme', () => {
+    // Another forge reached through a deploy key keeps working; only GitHub
+    // is known to be reachable through gh.
+    expect(normaliseRepoUrl('git@gitlab.example.test:o/r.git')).toBe('git@gitlab.example.test:o/r');
+    expect(normaliseRepoUrl('ssh://git@gitlab.example.test/o/r.git')).toBe(
+      'ssh://git@gitlab.example.test/o/r',
+    );
+  });
+});
+
+describe('githubSlug', () => {
+  it('is owner/repo for any GitHub scheme', () => {
+    for (const url of [
+      'git@github.com:acme/widgets.git',
+      'ssh://git@github.com/acme/widgets',
+      'https://github.com/acme/widgets.git',
+      'https://token@github.com/acme/widgets',
+    ]) {
+      expect(githubSlug(url)).toBe('acme/widgets');
+    }
+  });
+
+  it('is null for another forge, a local remote and nonsense', () => {
+    expect(githubSlug('https://gitlab.example.test/o/r.git')).toBeNull();
+    expect(githubSlug('file:///srv/git/r.git')).toBeNull();
+    expect(githubSlug('/srv/git/r')).toBeNull();
+    expect(githubSlug('')).toBeNull();
+  });
+});
+
+/** A `runCommand` that answers from a table and records every argv. */
+function cannedRunCommand(
+  answer: (argv: readonly string[]) => { exitCode: number; stdout?: string; stderr?: string },
+  seen: string[][] = [],
+) {
+  return (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+    seen.push([...argv]);
+    const canned = answer(argv);
+    const result: CommandResult = {
+      argv: [...argv],
+      cwd: options.cwd,
+      exitCode: canned.exitCode,
+      stdout: canned.stdout ?? '',
+      stderr: canned.stderr ?? '',
+      durationMs: 1,
+      timedOut: false,
+    };
+    if (result.exitCode !== 0) throw new CommandFailedError(result.stderr, result);
+    return result;
+  }) as typeof runCommand;
+}
+
+describe('ensureGitHubAuth', () => {
+  it('checks the login, then hands git the token, for a GitHub remote', async () => {
+    const seen: string[][] = [];
+    const progress: string[] = [];
+
+    const result = await ensureGitHubAuth({
+      runCommand: cannedRunCommand(() => ({ exitCode: 0 }), seen),
+      repoUrl: 'git@github.com:acme/widgets.git',
+      cwd: tmpdir(),
+      hooks: { onProgress: (message) => progress.push(message) },
+    });
+
+    expect(result).toEqual({ slug: 'acme/widgets' });
+    expect(seen).toEqual([
+      ['gh', 'auth', 'status'],
+      ['gh', 'auth', 'setup-git', '--hostname', 'github.com'],
+    ]);
+    expect(progress.some((line) => line.includes('gh'))).toBe(true);
+  });
+
+  it('does nothing at all for a remote that is not on GitHub', async () => {
+    const seen: string[][] = [];
+
+    const result = await ensureGitHubAuth({
+      runCommand: cannedRunCommand(() => ({ exitCode: 0 }), seen),
+      repoUrl: 'https://gitlab.example.test/o/r.git',
+      cwd: tmpdir(),
+    });
+
+    expect(result).toBeUndefined();
+    expect(seen).toEqual([]);
+  });
+
+  it('stops with the login command, before setup-git, when gh is logged out', async () => {
+    const seen: string[][] = [];
+
+    const error = await ensureGitHubAuth({
+      runCommand: cannedRunCommand(
+        (argv) =>
+          argv[2] === 'status'
+            ? { exitCode: 1, stderr: 'You are not logged in to any GitHub hosts.' }
+            : { exitCode: 0 },
+        seen,
+      ),
+      repoUrl: 'https://github.com/acme/widgets',
+      cwd: tmpdir(),
+    }).catch((caught: unknown) => caught);
+
+    // A precondition, so install exits 6 with nothing cloned - not a generic
+    // failure halfway through.
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('gh auth login --hostname github.com --git-protocol https');
+    expect((error as Error).message).toContain('acme/widgets');
+    expect(seen).toEqual([['gh', 'auth', 'status']]);
+  });
+
+  it('names setup-git when that is the step that failed', async () => {
+    const error = await ensureGitHubAuth({
+      runCommand: cannedRunCommand((argv) =>
+        argv[2] === 'setup-git' ? { exitCode: 1, stderr: 'unknown command' } : { exitCode: 0 },
+      ),
+      repoUrl: 'https://github.com/acme/widgets',
+      cwd: tmpdir(),
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('gh auth setup-git --hostname github.com');
   });
 });
 
@@ -361,5 +506,109 @@ describe('ensureCheckout', () => {
 
     // Whatever git said, the operator gets something they can act on.
     expect(error).toBeInstanceOf(Error);
+  });
+
+  it('points an authentication failure at gh, and says the CLI reruns setup-git', async () => {
+    const error = await ensureCheckout(
+      { url: 'https://example.test/private/repo', ref: 'main', source: 'flag' },
+      {
+        deployRoot: deployRoot(),
+        runCommand: cannedRunCommand(() => ({
+          exitCode: 128,
+          stderr: "remote: Invalid username or password.\nfatal: Authentication failed for 'https://example.test/private/repo'",
+        })),
+      },
+    ).catch((caught: unknown) => caught);
+
+    // The credential on the server is the GitHub CLI (#123): the remedy names
+    // the two commands, in order, and which one the next run repeats itself.
+    expect(error).toBeInstanceOf(UsageError);
+    const message = (error as Error).message;
+    expect(message).toContain('gh auth login');
+    expect(message).toContain('gh auth setup-git');
+    expect(message.indexOf('gh auth login')).toBeLessThan(message.indexOf('gh auth setup-git'));
+    expect(message).toMatch(/next install or update/);
+  });
+
+  it('never spawns gh itself', async () => {
+    // ensureGitHubAuth is its own pipeline step precisely so that these tests
+    // can run the real runCommand against local repositories.
+    const origin = makeOrigin();
+    const root = deployRoot();
+    const seen: string[][] = [];
+    const recording = (async (argv: readonly string[], options: RunCommandOptions) => {
+      seen.push([...argv]);
+      return runCommand(argv, options);
+    }) as typeof runCommand;
+
+    await ensureCheckout({ url: origin, ref: 'develop', source: 'flag' }, { deployRoot: root, runCommand: recording });
+    await ensureCheckout({ url: origin, ref: 'develop', source: 'flag' }, { deployRoot: root, runCommand: recording });
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((argv) => argv[0] === 'git')).toBe(true);
+  });
+});
+
+describe('fetchRemote and compareRevisions', () => {
+  it('resolves the ref without moving the checkout', async () => {
+    const origin = makeOrigin();
+    const root = deployRoot();
+    const target = { url: origin, ref: 'develop', source: 'flag' as const };
+
+    const first = await ensureCheckout(target, { deployRoot: root, runCommand });
+    writeFileSync(join(origin, 'README.md'), 'three\n');
+    git(origin, 'commit', '--quiet', '-am', 'third');
+    writeFileSync(join(origin, 'README.md'), 'four\n');
+    git(origin, 'commit', '--quiet', '-am', 'fourth');
+
+    const fetched = await fetchRemote(target, { deployRoot: root, runCommand });
+
+    // The remote moved and the fetch saw it - but HEAD is where it was: an
+    // `update --check` must leave the deployed clone exactly as it found it.
+    expect(fetched.cloned).toBe(false);
+    expect(fetched.previousSha).toBe(first.sha);
+    expect(fetched.resolved).toBe(git(origin, 'rev-parse', 'HEAD'));
+    expect(git(fetched.path, 'rev-parse', 'HEAD')).toBe(first.sha);
+    expect(readFileSync(join(fetched.path, 'README.md'), 'utf8')).toBe('two\n');
+
+    const comparison = await compareRevisions(
+      { cwd: fetched.path, runCommand },
+      first.sha,
+      fetched.resolved,
+    );
+    expect(comparison.commitsBehind).toBe(2);
+    expect(comparison.commits.map((commit) => commit.subject)).toEqual(['fourth', 'third']);
+    expect(comparison.commits.every((commit) => /^[0-9a-f]{7,}$/.test(commit.sha))).toBe(true);
+
+    // And the checkout can then be completed from what was already fetched.
+    const second = await ensureCheckout(target, { deployRoot: root, runCommand, fetched });
+    expect(second.changed).toBe(true);
+    expect(second.sha).toBe(fetched.resolved);
+  });
+
+  it('is zero commits behind, with no log, when nothing moved', async () => {
+    const origin = makeOrigin();
+    const root = deployRoot();
+    const target = { url: origin, ref: 'develop', source: 'flag' as const };
+
+    const first = await ensureCheckout(target, { deployRoot: root, runCommand });
+    const fetched = await fetchRemote(target, { deployRoot: root, runCommand });
+
+    expect(fetched.resolved).toBe(first.sha);
+    await expect(
+      compareRevisions({ cwd: fetched.path, runCommand }, first.sha, fetched.resolved),
+    ).resolves.toEqual({ commitsBehind: 0, commits: [] });
+  });
+
+  it('refuses to clone when asked only to compare', async () => {
+    const root = deployRoot();
+
+    const error = await fetchRemote(
+      { url: makeOrigin(), ref: 'develop', source: 'flag' },
+      { deployRoot: root, runCommand, requireExisting: true },
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect(existsSync(join(root, 'repo'))).toBe(false);
   });
 });

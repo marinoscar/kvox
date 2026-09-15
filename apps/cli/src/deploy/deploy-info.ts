@@ -270,7 +270,30 @@ export function writeDeployInfo(
   facts: ServerFacts,
   extras: DeployInfoExtras = {},
 ): string {
-  const info = validateDeployInfo(buildDeployInfo(deployRoot, state, facts, extras));
+  return writeDeployInfoDocument(deployRoot, buildDeployInfo(deployRoot, state, facts, extras));
+}
+
+/**
+ * Replaces `remote` in an existing info.json and nothing else (#123).
+ *
+ * `update --check` and `status` refresh how far behind the deployment is
+ * without deploying anything, so the rest of the document - the deployed
+ * commit, the timestamps, the host facts captured at deploy time - is kept
+ * exactly as the last deploy wrote it rather than rebuilt from a state that
+ * has not changed. Undefined when there is no file: a deployment from before
+ * #120 has nothing to patch, and a check is not the moment to invent one.
+ */
+export function updateDeployInfoRemote(
+  deployRoot: string,
+  remote: DeployRemote,
+): string | undefined {
+  const existing = readDeployInfo(deployRoot);
+  if (existing === undefined) return undefined;
+  return writeDeployInfoDocument(deployRoot, { ...existing, remote });
+}
+
+function writeDeployInfoDocument(deployRoot: string, document: DeployInfo): string {
+  const info = validateDeployInfo(document);
   const dir = deployInfoDir(deployRoot);
   const path = deployInfoPath(deployRoot);
   const temporary = `${path}.${process.pid}.tmp`;

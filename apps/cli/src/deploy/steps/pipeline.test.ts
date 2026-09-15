@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { PreconditionError } from '../../errors.js';
 import type { Journal } from '../journal.js';
 import { runPipeline, type DeployStep, type StepContext } from './pipeline.js';
 
@@ -70,6 +71,31 @@ describe('runPipeline', () => {
     expect(result.failed?.id).toBe('b');
     expect(result.failed?.detail).toBe('build failed');
     expect(result.completed).toEqual(['a']);
+  });
+
+  it('hands back what the failed step threw, so its exit code survives', async () => {
+    const thrown = new PreconditionError('gh is not logged in');
+    const result = await runPipeline(
+      [
+        step('auth', {
+          run: async () => {
+            throw thrown;
+          },
+        }),
+      ],
+      context(),
+    );
+
+    // The detail is a string for the hooks; the error itself is for the
+    // caller, which turns a precondition into exit code 6 rather than 1.
+    expect(result.error).toBe(thrown);
+    expect(result.failed?.detail).toBe('gh is not logged in');
+  });
+
+  it('carries no error when every step ran', async () => {
+    const result = await runPipeline([step('a')], context());
+
+    expect(result).not.toHaveProperty('error');
   });
 
   it('honours a skip guard, recording why', async () => {

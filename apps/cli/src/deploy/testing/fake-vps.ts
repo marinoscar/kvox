@@ -59,7 +59,15 @@ export interface FakeVpsOptions {
   /** What `rev-parse HEAD` answers before any checkout; for an installed clone. */
   head?: string | undefined;
   appVersion?: string | undefined;
+  /** What `git log <a>..<b>` lists between two DIFFERENT revisions, newest first. */
+  commits?: readonly { sha: string; subject: string }[] | undefined;
 }
+
+/** The commits between any two different revisions, unless a test says otherwise. */
+export const FAKE_COMMITS: readonly { sha: string; subject: string }[] = [
+  { sha: 'b2b2b2b', subject: 'feat(api): the second thing' },
+  { sha: 'b1b1b1b', subject: 'fix(web): the first thing' },
+];
 
 export interface FakeVps {
   runCommand: typeof import('../executor.js').runCommand;
@@ -152,6 +160,17 @@ export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
         }
         if (argv[1] === 'rev-parse' && argv[2] === 'HEAD') {
           return result(`${vps.head ?? ''}\n`);
+        }
+        // `rev-list --count a..b` and `log … a..b`: the range is the last
+        // argument, and two equal ends mean nothing in between.
+        const range = (argv[argv.length - 1] as string).split('..');
+        const same = range.length === 2 && range[0] === range[1];
+        const commits = options.commits ?? FAKE_COMMITS;
+        if (argv[1] === 'rev-list' && argv[2] === '--count') {
+          return result(`${same ? 0 : commits.length}\n`);
+        }
+        if (argv[1] === 'log') {
+          return result(same ? '' : commits.map((commit) => `${commit.sha}\t${commit.subject}\n`).join(''));
         }
         return result();
       }
