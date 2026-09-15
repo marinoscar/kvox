@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { ALL_CHECKS, checksPassed, runChecks } from './checks/index.js';
+import { ALL_CHECKS, DEVNET_CHECK_ID, checksPassed, runChecks } from './checks/index.js';
 import { diffEnv, parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -12,6 +12,7 @@ import { runCommand as defaultRunCommand } from './executor.js';
 import { collectHealth, isHealthy, waitForHealthy } from './health.js';
 import type { DeployHooks } from './hooks.js';
 import { openJournal, type Journal } from './journal.js';
+import { DEFAULT_PROXY_ROOT, projectNameFor } from './layout.js';
 import { certificateStatus, installVhost, issueCertificate, type ProxyTarget } from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
 import { requireState, writeState, type DeployState } from './state.js';
@@ -67,6 +68,8 @@ interface UpdateContext extends StepContext {
   runCommand: typeof defaultRunCommand;
   journal: Journal;
   state: DeployState;
+  /** The compose project name, from the state (or the directory, pre-#119). */
+  name: string;
   target?: RepoTarget | undefined;
   previousSha?: string | undefined;
   commitSha?: string | undefined;
@@ -82,12 +85,22 @@ function envFilePath(deployRoot: string): string {
   return join(composeCwd(deployRoot), '.env');
 }
 
+/**
+ * Read from the state rather than derived from the deploy root (#119): the
+ * proxy is a host-wide fixture whose location has nothing to do with where
+ * this app happens to live. A state written before the field existed gets
+ * the default the install would have used.
+ */
+function proxyRootFor(state: DeployState): string {
+  return state.proxyRoot ?? DEFAULT_PROXY_ROOT;
+}
+
 async function compose(
   context: UpdateContext,
   extra: readonly string[],
   options?: { timeoutMs?: number },
 ): Promise<void> {
-  const result = await context.runCommand(composeArgv(extra), {
+  const result = await context.runCommand(composeArgv(context.name, extra), {
     cwd: composeCwd(context.options.deployRoot),
     timeoutMs: options?.timeoutMs ?? 30 * 60_000,
     redact: context.journal.redact,
@@ -116,6 +129,9 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           'docker-installed',
           'docker-daemon',
           'docker-compose-v2',
+          // Update does not create it (install does); a missing network would
+          // otherwise surface as `up -d` failing halfway through the pipeline.
+          DEVNET_CHECK_ID,
           'git-installed',
           'disk-space',
         ]);
@@ -125,8 +141,9 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           {
             runCommand: context.runCommand,
             deployRoot: context.options.deployRoot,
+            name: context.name,
             bindPort: context.state.bindPort,
-            proxyRoot: join(context.options.deployRoot, '..', '..', 'proxy'),
+            proxyRoot: proxyRootFor(context.state),
           },
         );
 
@@ -328,6 +345,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         const probe = await waitForHealthy({
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
+          name: context.name,
           bindPort: context.state.bindPort,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
@@ -352,7 +370,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         const target: ProxyTarget = {
           domain: context.state.domain as string,
           bindPort: context.state.bindPort,
-          proxyRoot: join(context.options.deployRoot, '..', '..', 'proxy'),
+          proxyRoot: proxyRootFor(context.state),
         };
 
         const status = certificateStatus(target);
@@ -383,6 +401,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         const report = await collectHealth({
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
+          name: context.name,
           bindPort: context.state.bindPort,
           ...(context.state.domain === undefined || context.options.skipProxy === true
             ? {}
@@ -427,6 +446,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     hooks: options.hooks,
     completed: new Set<string>(),
     state,
+    name: projectNameFor(state, options.deployRoot),
     ...(existsSync(path) ? { env: parseEnvFile(readFileSync(path, 'utf8')) } : {}),
   };
 

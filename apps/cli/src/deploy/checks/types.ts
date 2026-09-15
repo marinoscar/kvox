@@ -127,6 +127,13 @@ export interface CheckContext {
   runCommand: typeof runCommand;
   /** Where the deployment lives, or will. */
   deployRoot: string;
+  /**
+   * The compose project name (#119), so a check can tell the app's OWN
+   * containers (`<name>-nginx-1`) from somebody else's. Absent before a first
+   * install when no name has been chosen yet, in which case there is nothing
+   * of the app's to recognise.
+   */
+  name?: string | undefined;
   /** Loopback port the shared proxy forwards to. */
   bindPort: number;
   /** The shared reverse proxy's directory. */

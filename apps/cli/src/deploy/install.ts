@@ -1,10 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { ALL_CHECKS, checksPassed, requiredChecks, runChecks } from './checks/index.js';
+import {
+  ALL_CHECKS,
+  DEVNET_CHECK_ID,
+  DEVNET_NETWORK,
+  checksPassed,
+  requiredChecks,
+  runChecks,
+} from './checks/index.js';
 import { parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
 import type { EnvGroup } from './env-metadata.js';
@@ -12,6 +19,13 @@ import { runCommand as defaultRunCommand } from './executor.js';
 import { waitForHealthy, collectHealth, isHealthy } from './health.js';
 import type { DeployHooks } from './hooks.js';
 import { openJournal, type Journal, type SecretEntry } from './journal.js';
+import {
+  DEFAULT_APPS_ROOT,
+  appNameFor,
+  appRootFor,
+  locateApp,
+  type ResolvedLayout,
+} from './layout.js';
 import { installVhost, issueCertificate, type ProxyTarget } from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
 import { readState, writeState, type DeployState } from './state.js';
@@ -48,7 +62,14 @@ import type { PromptContext } from '../prompt.js';
 const COMPOSE_FILES = ['base.compose.yml', 'prod.compose.yml', 'vps.compose.yml'] as const;
 
 export interface InstallOptions {
-  deployRoot: string;
+  /**
+   * The app-folder layout (#119): the deployment lives at `<appsRoot>/<name>`
+   * and `<name>` is the compose project. `name` defaults to the repository's
+   * own name; `deployRoot` is the explicit full override and wins outright.
+   */
+  appsRoot?: string | undefined;
+  name?: string | undefined;
+  deployRoot?: string | undefined;
   domain?: string | undefined;
   bindPort: number;
   proxyRoot: string;
@@ -80,8 +101,11 @@ export interface InstallOptions {
   answers?: ReadonlyMap<string, string> | undefined;
 }
 
+/** InstallOptions once the layout has been decided; every step reads this. */
+export type ResolvedInstallOptions = InstallOptions & ResolvedLayout;
+
 interface InstallContext extends StepContext {
-  options: InstallOptions;
+  options: ResolvedInstallOptions;
   runCommand: typeof defaultRunCommand;
   journal: Journal;
   target?: RepoTarget | undefined;
@@ -96,8 +120,20 @@ export function composeCwd(deployRoot: string): string {
   return join(deployRoot, 'repo', 'infra', 'compose');
 }
 
-export function composeArgv(extra: readonly string[]): string[] {
-  return ['docker', 'compose', ...COMPOSE_FILES.flatMap((file) => ['-f', file]), ...extra];
+export function composeArgv(name: string, extra: readonly string[]): string[] {
+  // `-p <name>` pins the compose PROJECT (#119). Without it the project is
+  // named after the compose directory, which is `compose` for every app built
+  // from this template, so a second app's `up -d` replaces the first's
+  // containers. The same name is written to .env as COMPOSE_PROJECT_NAME so a
+  // hand-run `docker compose` in that directory agrees with the CLI.
+  return [
+    'docker',
+    'compose',
+    '-p',
+    name,
+    ...COMPOSE_FILES.flatMap((file) => ['-f', file]),
+    ...extra,
+  ];
 }
 
 function envFilePath(deployRoot: string): string {
@@ -116,7 +152,7 @@ async function compose(
   extra: readonly string[],
   options?: { timeoutMs?: number },
 ): Promise<void> {
-  const result = await context.runCommand(composeArgv(extra), {
+  const result = await context.runCommand(composeArgv(context.options.name, extra), {
     cwd: composeCwd(context.options.deployRoot),
     timeoutMs: options?.timeoutMs ?? 30 * 60_000,
     redact: context.journal.redact,
@@ -137,9 +173,14 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ? 'skipped with --skip-doctor'
           : undefined,
       async run(context) {
-        const results = await runChecks(requiredChecks(ALL_CHECKS), {
+        // Every required check except the devnet one: the `network` step
+        // right after this creates that network, so failing on its absence
+        // here would refuse the very install that fixes it.
+        const checks = requiredChecks(ALL_CHECKS).filter((check) => check.id !== DEVNET_CHECK_ID);
+        const results = await runChecks(checks, {
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
+          name: context.options.name,
           bindPort: context.options.bindPort,
           proxyRoot: context.options.proxyRoot,
           ...(context.options.domain === undefined
@@ -172,15 +213,44 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
       },
     },
     {
+      id: 'network',
+      title: `Ensure the ${DEVNET_NETWORK} network`,
+      async run(context) {
+        // base.compose.yml declares devnet `external: true`, so compose never
+        // creates it. Idempotent, and - with the directories - the one thing
+        // install is allowed to create that the doctor only reports.
+        const run = (argv: readonly string[]) =>
+          context.runCommand(argv, {
+            cwd: context.options.deployRoot,
+            timeoutMs: 60_000,
+            redact: context.journal.redact,
+          });
+
+        try {
+          context.journal.command(await run(['docker', 'network', 'inspect', DEVNET_NETWORK]));
+          context.journal.line(`${DEVNET_NETWORK} already exists`);
+          return;
+        } catch {
+          // Absent; created below.
+        }
+
+        context.journal.command(await run(['docker', 'network', 'create', DEVNET_NETWORK]));
+        context.hooks?.onProgress?.(`Created the ${DEVNET_NETWORK} network`);
+      },
+    },
+    {
       id: 'checkout',
       title: 'Fetch the application',
       async run(context) {
-        const target = await resolveRepoTarget({
-          cwd: context.options.cwd ?? process.cwd(),
-          runCommand: context.runCommand,
-          ...(context.options.repo === undefined ? {} : { repoFlag: context.options.repo }),
-          ...(context.options.ref === undefined ? {} : { refFlag: context.options.ref }),
-        });
+        // Already resolved at entry when the app name had to come from it.
+        const target =
+          context.target ??
+          (await resolveRepoTarget({
+            cwd: context.options.cwd ?? process.cwd(),
+            runCommand: context.runCommand,
+            ...(context.options.repo === undefined ? {} : { repoFlag: context.options.repo }),
+            ...(context.options.ref === undefined ? {} : { refFlag: context.options.ref }),
+          }));
 
         context.journal.line(`Deploying ${target.url} @ ${target.ref} (${target.source})`);
 
@@ -242,6 +312,11 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         });
 
         values.set('APP_BIND_PORT', String(context.options.bindPort));
+        // Not in .env.example, and deliberately not in ENV_METADATA either:
+        // serializeEnvFile carries it under its "not in the template" banner.
+        // It is what makes a hand-run `docker compose ... ps` in this
+        // directory see the same project the CLI's `-p <name>` does.
+        values.set('COMPOSE_PROJECT_NAME', context.options.name);
 
         mkdirSync(composeCwd(context.options.deployRoot), { recursive: true });
         // 0600: it holds the database password, the JWT secret and the OAuth
@@ -263,6 +338,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           {
             runCommand: context.runCommand,
             deployRoot: context.options.deployRoot,
+            name: context.options.name,
             bindPort: context.options.bindPort,
             proxyRoot: context.options.proxyRoot,
             env: context.env,
@@ -332,6 +408,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         const probe = await waitForHealthy({
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
+          name: context.options.name,
           bindPort: context.options.bindPort,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
@@ -390,6 +467,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         const report = await collectHealth({
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
+          name: context.options.name,
           bindPort: context.options.bindPort,
           ...(context.options.domain === undefined || context.options.skipProxy === true
             ? {}
@@ -414,6 +492,8 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
 
 export interface InstallResult {
   deployRoot: string;
+  /** The app folder and compose project name. */
+  name: string;
   commitSha: string;
   journalPath: string;
   domain?: string | undefined;
@@ -421,7 +501,46 @@ export interface InstallResult {
   nextStep: string;
 }
 
-export async function runInstall(options: InstallOptions): Promise<InstallResult> {
+/**
+ * Decides where the app lives BEFORE anything is read or written there.
+ *
+ * The state file and the journal both live under the deploy root, so the root
+ * has to be known at entry - which means the name has to be, and by default
+ * the name is the repository's. `resolveRepoTarget` only reads git config, so
+ * running it here rather than in the `checkout` step costs nothing; the target
+ * it returns is kept so that step does not ask twice.
+ */
+async function resolveInstallLayout(
+  options: InstallOptions,
+  runCommand: typeof defaultRunCommand,
+): Promise<{ layout: ResolvedLayout; target?: RepoTarget | undefined }> {
+  const appsRoot = options.appsRoot ?? DEFAULT_APPS_ROOT;
+
+  if (options.deployRoot !== undefined || options.name !== undefined) {
+    const layout = locateApp({ appsRoot, name: options.name, root: options.deployRoot });
+    if (layout === undefined) {
+      // Unreachable: locateApp only answers undefined when neither is given.
+      throw new Error('could not resolve the deployment directory');
+    }
+    return { layout };
+  }
+
+  const target = await resolveRepoTarget({
+    cwd: options.cwd ?? process.cwd(),
+    runCommand,
+    ...(options.repo === undefined ? {} : { repoFlag: options.repo }),
+    ...(options.ref === undefined ? {} : { refFlag: options.ref }),
+  });
+  const name = appNameFor(target.url);
+
+  return { layout: { name, appsRoot, deployRoot: appRootFor(appsRoot, name) }, target };
+}
+
+export async function runInstall(input: InstallOptions): Promise<InstallResult> {
+  const runCommand = input.runCommand ?? defaultRunCommand;
+  const { layout, target } = await resolveInstallLayout(input, runCommand);
+  const options: ResolvedInstallOptions = { ...input, ...layout };
+
   const existingState = readState(options.deployRoot);
 
   if (existingState !== undefined && options.reinstall !== true && options.resume !== true) {
@@ -431,6 +550,9 @@ export async function runInstall(options: InstallOptions): Promise<InstallResult
   }
 
   mkdirSync(options.deployRoot, { recursive: true });
+  // Reserved for bind-mounted persistent data; created empty so the layout is
+  // complete from the first run and a compose file can mount it unconditionally.
+  mkdirSync(join(options.deployRoot, 'data'), { recursive: true });
 
   const journal = openJournal({
     deployRoot: options.deployRoot,
@@ -442,11 +564,14 @@ export async function runInstall(options: InstallOptions): Promise<InstallResult
       : [],
   });
 
+  journal.line(`App ${options.name} at ${options.deployRoot}`);
+
   const context: InstallContext = {
     options,
-    runCommand: options.runCommand ?? defaultRunCommand,
+    runCommand,
     journal,
     hooks: options.hooks,
+    target,
     completed:
       options.resume === true && existingState !== undefined
         ? new Set(existingState.completedSteps ?? [])
@@ -473,6 +598,9 @@ export async function runInstall(options: InstallOptions): Promise<InstallResult
     ...(options.domain === undefined ? {} : { domain: options.domain }),
     bindPort: options.bindPort,
     deployRoot: options.deployRoot,
+    name: options.name,
+    appsRoot: options.appsRoot,
+    proxyRoot: options.proxyRoot,
     installedAt: existingState?.installedAt ?? now,
     lastDeployedAt: now,
     lastCommand: 'install',
@@ -490,6 +618,7 @@ export async function runInstall(options: InstallOptions): Promise<InstallResult
 
   return {
     deployRoot: options.deployRoot,
+    name: options.name,
     commitSha: context.commitSha ?? '',
     journalPath: journal.path,
     ...(options.domain === undefined ? {} : { domain: options.domain }),
@@ -500,8 +629,7 @@ export async function runInstall(options: InstallOptions): Promise<InstallResult
   };
 }
 
-/** Slug used for the default deploy root, from the repository name. */
+/** The default deploy root for a repository: `<base>/<its name, slugged>`. */
 export function defaultRootFor(repoUrl: string, base: string): string {
-  const name = basename(repoUrl).replace(/\.git$/, '') || 'app';
-  return join(base, name.toLowerCase());
+  return appRootFor(base, appNameFor(repoUrl));
 }

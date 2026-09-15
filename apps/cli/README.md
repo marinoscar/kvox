@@ -358,6 +358,28 @@ troubleshooting — see [`docs/deployment/vps.md`](../../docs/deployment/vps.md)
 For why it's built this way, see
 [`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md).
 
+### Where an app lives
+
+Every app deployed from this template gets its own folder under one apps
+root, `/opt/infra/apps/<name>/`, holding `repo/` (the CLI's own clone),
+`logs/`, `data/` and the state file. `<name>` is also the **compose project
+name**, so the containers are `<name>-api-1`, `<name>-web-1`,
+`<name>-nginx-1` and two apps on one server never replace each other's.
+The same three flags select the app on every subcommand:
+
+```
+  --apps-root <dir>  Directory that holds one folder per app (default:
+                     "/opt/infra/apps")
+  --name <app>       App folder and compose project name
+  --root <dir>       Deployment directory, overriding --apps-root/--name
+```
+
+`install` defaults `--name` to the repository's own name (`…/kvox.git`
+installs as `kvox`). `update`, `status` and `doctor` default to the one app
+already installed under `--apps-root`; with several installed they refuse and
+list them until `--name` says which. `--root` is the escape hatch that names
+the full path outright.
+
 ### Checking prerequisites
 
 ```bash
@@ -369,7 +391,8 @@ Nothing is installed, written or started — it's read-only, so it's safe to
 run against a production server at any time, not just before a first
 install. It runs around 32 checks, in five groups:
 
-- **Host** — Docker and its daemon, the Compose v2 plugin, git, node, disk
+- **Host** — Docker and its daemon, the Compose v2 plugin, the `devnet`
+  Docker network, git, node, disk
   and memory headroom, the loopback port; the shared reverse proxy's
   directory and its `conf.d`/webroot being writable; the proxy **container**
   (found by `--proxy-container`, else whatever publishes `:443`, else
@@ -409,7 +432,10 @@ Other flags, from `kvox deploy doctor --help`:
 
 ```
 Options:
-  --root <path>             Deployment directory (default: "/opt/infra/apps")
+  --apps-root <dir>         Directory that holds one folder per app (default:
+                            "/opt/infra/apps")
+  --name <app>              App folder and compose project name
+  --root <dir>              Deployment directory, overriding --apps-root/--name
   --proxy-root <path>       Shared reverse proxy directory (default:
                             "/opt/infra/proxy")
   --port <port>             Loopback port the proxy forwards to (default: "3535")
@@ -434,9 +460,14 @@ an unreachable database before you're mid-pipeline, not partway through one.
 kvox deploy install --domain app.example.com
 ```
 
-Runs preflight → checkout → environment → validate-environment → build →
-migrate → seed → start → health → publish → verify, in that order, printing
-each step's result as it completes. `--domain` is the one required flag.
+Runs preflight → network → checkout → environment → validate-environment →
+build → migrate → seed → start → health → publish → verify, in that order,
+printing each step's result as it completes. `--domain` is the one required
+flag. `network` creates the external `devnet` Docker network the compose
+files declare when the host does not have it yet, and is a no-op when it
+does. Everything is written under `<apps-root>/<name>/`, and the `.env` it
+writes carries `COMPOSE_PROJECT_NAME=<name>` so a hand-run `docker compose`
+in the compose directory sees the same project the CLI does.
 
 The repository and ref come from **this checkout's own git remote**, not a
 value hardcoded in the CLI — a fork deploys itself with no configuration
@@ -467,7 +498,10 @@ Other flags, from `kvox deploy install --help`:
 
 ```
 Options:
-  --root <path>        Deployment directory (default: "/opt/infra/apps")
+  --apps-root <dir>    Directory that holds one folder per app (default:
+                       "/opt/infra/apps")
+  --name <app>         App folder and compose project name
+  --root <dir>         Deployment directory, overriding --apps-root/--name
   --domain <domain>    Public domain to publish under
   --proxy-root <path>  Shared reverse proxy directory (default:
                        "/opt/infra/proxy")
@@ -518,7 +552,7 @@ kvox deploy update
 
 Brings an already-installed server up to the latest revision (or, with
 `--ref`, to a specific one): fetch, build, migrate, seed, restart, verify.
-It refuses to run at all if nothing is installed at `--root` yet.
+It refuses to run at all if nothing is installed under `--apps-root` yet.
 
 ```bash
 kvox deploy update --ref v1.4.0
@@ -547,7 +581,10 @@ Other flags, from `kvox deploy update --help`:
 
 ```
 Options:
-  --root <path>      Deployment directory (default: "/opt/infra/apps")
+  --apps-root <dir>  Directory that holds one folder per app (default:
+                     "/opt/infra/apps")
+  --name <app>       App folder and compose project name
+  --root <dir>       Deployment directory, overriding --apps-root/--name
   --ref <ref>        Branch, tag or commit to move to
   --force            Rebuild even when the revision has not changed
   --no-cache         Rebuild images without the layer cache
@@ -563,7 +600,7 @@ Options:
 kvox deploy status
 ```
 
-Reports whether the deployment at `--root` is healthy: container state, an
+Reports whether the installed app is healthy: container state, an
 immediate `/api/health/ready` poll, migration state, and — with `--domain` —
 an external HTTPS check.
 
@@ -579,13 +616,17 @@ migration state as its own fact rather than inferring it from the health
 probe.
 
 Exits `0` when serving and the schema is current, `1` when installed but
-unhealthy, `2` when nothing is installed at `--root`.
+unhealthy, `2` when nothing is installed under `--apps-root` (or at
+`--root`).
 
 Other flags, from `kvox deploy status --help`:
 
 ```
 Options:
-  --root <path>      Deployment directory (default: "/opt/infra/apps")
+  --apps-root <dir>  Directory that holds one folder per app (default:
+                     "/opt/infra/apps")
+  --name <app>       App folder and compose project name
+  --root <dir>       Deployment directory, overriding --apps-root/--name
   --port <port>      Loopback port the proxy forwards to (default: "3535")
   --domain <domain>  Public domain; adds an external HTTPS check
   --json             Print a machine-readable report on stdout

@@ -23,6 +23,13 @@ import {
 import { readState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
 import { runInstall, type InstallOptions } from '../deploy/install.js';
+import {
+  DEFAULT_APPS_ROOT,
+  DEFAULT_BIND_PORT,
+  DEFAULT_PROXY_ROOT,
+  locateApp,
+  locateInstalledApp,
+} from '../deploy/layout.js';
 import { runUpdate, type UpdateOptions } from '../deploy/update.js';
 import type { EnvGroup } from '../deploy/env-metadata.js';
 import { runCommand } from '../deploy/executor.js';
@@ -45,9 +52,7 @@ import { shouldUseColour } from '../output.js';
 //     `doctor || provision-the-box` silently useless.
 // =============================================================================
 
-export const DEFAULT_DEPLOY_ROOT = '/opt/infra/apps';
-export const DEFAULT_PROXY_ROOT = '/opt/infra/proxy';
-export const DEFAULT_BIND_PORT = 3535;
+export { DEFAULT_APPS_ROOT, DEFAULT_BIND_PORT, DEFAULT_PROXY_ROOT };
 
 /**
  * `--public-ip` from the environment (issue #122). Built through envVar() so
@@ -58,8 +63,26 @@ export const PUBLIC_IP_ENV_VAR = envVar('PUBLIC_IP');
 const ESC = String.fromCharCode(27);
 const RESET = ESC + '[0m';
 
-export interface DoctorCommandOptions {
-  root: string;
+/**
+ * The three flags every subcommand takes to say WHICH app (#119).
+ *
+ * `--root` has no default any more: the deploy root is `<apps-root>/<name>`,
+ * and `--root` is the escape hatch that names the full path outright.
+ */
+export interface LayoutCommandOptions {
+  appsRoot: string;
+  name?: string | undefined;
+  root?: string | undefined;
+}
+
+function withLayoutOptions(command: Command): Command {
+  return command
+    .option('--apps-root <dir>', 'Directory that holds one folder per app', DEFAULT_APPS_ROOT)
+    .option('--name <app>', 'App folder and compose project name')
+    .option('--root <dir>', 'Deployment directory, overriding --apps-root/--name');
+}
+
+export interface DoctorCommandOptions extends LayoutCommandOptions {
   proxyRoot: string;
   port: string;
   domain?: string | undefined;
@@ -92,10 +115,9 @@ export function registerDeployCommand(
     .command('deploy')
     .description('Check, install and update this application on a server');
 
-  deploy
-    .command('doctor')
-    .description('Check that this server meets the prerequisites')
-    .option('--root <path>', 'Deployment directory', DEFAULT_DEPLOY_ROOT)
+  withLayoutOptions(
+    deploy.command('doctor').description('Check that this server meets the prerequisites'),
+  )
     .option('--proxy-root <path>', 'Shared reverse proxy directory', DEFAULT_PROXY_ROOT)
     .option('--port <port>', 'Loopback port the proxy forwards to', String(DEFAULT_BIND_PORT))
     .option('--domain <domain>', 'Public domain; enables the DNS and TLS checks')
@@ -130,10 +152,9 @@ export function registerDeployCommand(
       await runDoctorCommand(options, ctx);
     });
 
-  deploy
-    .command('install')
-    .description('Install this application on this server')
-    .option('--root <path>', 'Deployment directory', DEFAULT_DEPLOY_ROOT)
+  withLayoutOptions(
+    deploy.command('install').description('Install this application on this server'),
+  )
     .option('--domain <domain>', 'Public domain to publish under')
     .option('--proxy-root <path>', 'Shared reverse proxy directory', DEFAULT_PROXY_ROOT)
     .option('--port <port>', 'Loopback port the proxy forwards to', String(DEFAULT_BIND_PORT))
@@ -168,16 +189,19 @@ export function registerDeployCommand(
         '',
         'The repository and branch come from THIS checkout\'s git remote unless',
         'you pass --repo/--ref, so a fork deploys itself with no configuration.',
+        '',
+        'Everything lands under <apps-root>/<name>/, where <name> defaults to the',
+        'repository\'s own name and is also the compose project name, so two',
+        'apps on one server never share containers.',
       ].join('\n'),
     )
     .action(async (options: InstallCommandOptions) => {
       await runInstallCommand(options, ctx);
     });
 
-  deploy
-    .command('update')
-    .description('Bring this server up to the latest revision')
-    .option('--root <path>', 'Deployment directory', DEFAULT_DEPLOY_ROOT)
+  withLayoutOptions(
+    deploy.command('update').description('Bring this server up to the latest revision'),
+  )
     .option('--ref <ref>', 'Branch, tag or commit to move to')
     .option('--force', 'Rebuild even when the revision has not changed')
     .option('--no-cache', 'Rebuild images without the layer cache')
@@ -210,10 +234,11 @@ export function registerDeployCommand(
       await runUpdateCommand(options, ctx);
     });
 
-  deploy
-    .command('status')
-    .description('Report whether the deployment on this server is healthy')
-    .option('--root <path>', 'Deployment directory', DEFAULT_DEPLOY_ROOT)
+  withLayoutOptions(
+    deploy
+      .command('status')
+      .description('Report whether the deployment on this server is healthy'),
+  )
     .option('--port <port>', 'Loopback port the proxy forwards to', String(DEFAULT_BIND_PORT))
     .option('--domain <domain>', 'Public domain; adds an external HTTPS check')
     .option('--json', 'Print a machine-readable report on stdout')
@@ -230,7 +255,10 @@ export function registerDeployCommand(
         'Exit codes:',
         '  0  serving, and the schema is current',
         '  1  installed but unhealthy',
-        '  2  nothing is installed at --root',
+        '  2  nothing is installed under --apps-root (or at --root)',
+        '',
+        'With one app installed no flags are needed; with several, --name says',
+        'which.',
         '',
         'Note that /api/health/ready only proves SELECT 1 succeeded, so it',
         'passes against an empty database. Migration state is reported',
@@ -268,10 +296,18 @@ export async function runDoctorCommand(
   const checks = ctx?.checks ?? ALL_CHECKS;
   const json = options.json === true;
 
+  // Doctor is the one command that must work BEFORE anything is installed,
+  // so "nothing found and nothing named" is not an error here: the checks run
+  // against the apps root itself, and with no name there is no container of
+  // the app's own to recognise yet.
+  const layout = locateApp({ appsRoot: options.appsRoot, name: options.name, root: options.root });
+  const deployRoot = layout?.deployRoot ?? options.appsRoot;
   const exec = ctx?.runCommand ?? runCommand;
+
   const context: CheckContext = {
     runCommand: exec,
-    deployRoot: options.root,
+    deployRoot,
+    ...(layout === undefined ? {} : { name: layout.name }),
     proxyRoot: options.proxyRoot,
     bindPort: Number(options.port),
     ...(options.domain === undefined ? {} : { domain: options.domain }),
@@ -279,8 +315,8 @@ export async function runDoctorCommand(
     ...(options.publicIp === undefined || options.publicIp === '' ? {} : { publicIp: options.publicIp }),
     ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
     ...(options.skipGithub === undefined ? {} : { skipGithub: options.skipGithub }),
-    ...(readEnvironment(options.root) ?? {}),
-    ...(await resolveRepoUrl(options.root, exec, ctx?.cwd)),
+    ...(readEnvironment(deployRoot) ?? {}),
+    ...(await resolveRepoUrl(deployRoot, exec, ctx?.cwd)),
   };
 
   // Under --json nothing is written until the end: a partial checklist on
@@ -463,8 +499,7 @@ function wrap(text: string, width: number): string[] {
 // `kvox deploy status`  (issue #183)
 // ---------------------------------------------------------------------------
 
-export interface StatusCommandOptions {
-  root: string;
+export interface StatusCommandOptions extends LayoutCommandOptions {
   port: string;
   domain?: string | undefined;
   json?: boolean | undefined;
@@ -481,16 +516,22 @@ export async function runStatusCommand(
 
   // "Nothing installed" is a USAGE problem, distinct from "installed and
   // unhealthy" - a monitoring script must be able to tell them apart.
-  const state = readState(options.root);
+  const layout = locateInstalledApp({
+    appsRoot: options.appsRoot,
+    name: options.name,
+    root: options.root,
+  });
+  const state = readState(layout.deployRoot);
   if (state === undefined) {
     throw new UsageError(
-      `No deployment found at ${options.root}. Run \`${CLI_NAME} deploy install\` first, or pass --root.`,
+      `No deployment found at ${layout.deployRoot}. Run \`${CLI_NAME} deploy install\` first, or pass --name or --root.`,
     );
   }
 
   const report = await collectHealth({
     runCommand: ctx?.runCommand ?? runCommand,
-    deployRoot: options.root,
+    deployRoot: layout.deployRoot,
+    name: layout.name,
     bindPort: Number(options.port),
     ...(options.domain === undefined ? {} : { domain: options.domain }),
     state,
@@ -512,7 +553,7 @@ export async function runStatusCommand(
 
   if (!healthy) {
     throw new DeploymentUnhealthyError(
-      `The deployment at ${options.root} is not healthy.`,
+      `The deployment at ${layout.deployRoot} is not healthy.`,
     );
   }
 }
@@ -585,8 +626,7 @@ function collectGroup(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
-export interface InstallCommandOptions {
-  root: string;
+export interface InstallCommandOptions extends LayoutCommandOptions {
   domain?: string | undefined;
   proxyRoot: string;
   port: string;
@@ -616,7 +656,11 @@ export async function runInstallCommand(
   const json = options.json === true;
 
   const installOptions: InstallOptions = {
-    deployRoot: options.root,
+    // Resolved inside runInstall, before the journal opens: the name may
+    // still have to come from the repository.
+    appsRoot: options.appsRoot,
+    ...(options.name === undefined ? {} : { name: options.name }),
+    ...(options.root === undefined ? {} : { deployRoot: options.root }),
     bindPort: Number(options.port),
     proxyRoot: options.proxyRoot,
     groups: options.group as EnvGroup[],
@@ -667,6 +711,7 @@ export async function runInstallCommand(
       '',
       '  Installed.',
       '',
+      `  App        ${result.name} at ${result.deployRoot}`,
       `  Revision   ${result.commitSha.slice(0, 12)}`,
       `  Log        ${result.journalPath}`,
       '',
@@ -681,8 +726,7 @@ export async function runInstallCommand(
 // `kvox deploy update`  (issue #182)
 // ---------------------------------------------------------------------------
 
-export interface UpdateCommandOptions {
-  root: string;
+export interface UpdateCommandOptions extends LayoutCommandOptions {
   ref?: string | undefined;
   force?: boolean | undefined;
   cache: boolean;
@@ -700,8 +744,14 @@ export async function runUpdateCommand(
   const stderr = ctx?.stderr ?? process.stderr;
   const json = options.json === true;
 
+  const layout = locateInstalledApp({
+    appsRoot: options.appsRoot,
+    name: options.name,
+    root: options.root,
+  });
+
   const updateOptions: UpdateOptions = {
-    deployRoot: options.root,
+    deployRoot: layout.deployRoot,
     ...(options.ref === undefined ? {} : { ref: options.ref }),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.cache === false ? { noCache: true } : {}),

@@ -57,6 +57,7 @@ const HEALTHY: Responder = (argv) => {
   if (line.startsWith('docker --version')) return { exitCode: 0, stdout: 'Docker version 27.3.1, build abc' };
   if (line.startsWith('docker info')) return { exitCode: 0, stdout: '27.3.1' };
   if (line.startsWith('docker compose version')) return { exitCode: 0, stdout: 'Docker Compose version v2.29.0' };
+  if (line.startsWith('docker network inspect devnet')) return { exitCode: 0, stdout: '[{"Name":"devnet"}]' };
   if (line.startsWith('git --version')) return { exitCode: 0, stdout: 'git version 2.43.0' };
   if (line.startsWith('df -Pk')) {
     return {
@@ -85,6 +86,7 @@ function context(overrides: Partial<CheckContext> = {}): CheckContext {
   return {
     runCommand: fakeRunCommand(HEALTHY),
     deployRoot: '/opt/infra/apps/demo',
+    name: 'demo',
     bindPort: 3535,
     proxyRoot: '/opt/infra/proxy',
     fs: permissiveFs,
@@ -142,6 +144,9 @@ describe('the registry as a whole', () => {
         portListening: async () => false,
         runCommand: fakeRunCommand((argv) => {
           const line = argv.join(' ');
+          // `docker network inspect devnet` is the devnet check, not a proxy
+          // probe: it must keep answering healthily here.
+          if (line.startsWith('docker network')) return HEALTHY(argv);
           if (line.startsWith('docker ps') || line.includes('inspect') || line.startsWith('docker exec') || line.startsWith('ufw')) {
             return { exitCode: 1, stderr: 'no such container' };
           }
@@ -337,6 +342,36 @@ describe('docker checks', () => {
   });
 });
 
+describe('docker-network-devnet', () => {
+  it('passes when the network exists', async () => {
+    const result = await find('docker-network-devnet').run(context());
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails with the exact create command when it does not', async () => {
+    // base.compose.yml declares it external, so `up -d` on a box without it
+    // fails naming the network but not the command; the remedy is the command.
+    const result = await find('docker-network-devnet').run(
+      context({
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker network inspect')
+            ? { exitCode: 1, stderr: 'Error: No such network: devnet' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.remedy).toContain('docker network create devnet');
+  });
+
+  it('is required and waits for the daemon', () => {
+    const check = find('docker-network-devnet');
+    expect(check.severity).toBe('required');
+    expect(check.requires).toContain('docker-daemon');
+  });
+});
+
 describe('evaluateDf', () => {
   const header = 'Filesystem 1024-blocks Used Available Capacity Mounted on';
 
@@ -378,6 +413,58 @@ describe('bind-port-free', () => {
 
     expect(result.status).toBe('pass');
     expect(result.detail).toContain('this deployment');
+  });
+
+  it('recognises its own containers by the compose project name, not the directory', async () => {
+    // The project is pinned with `-p <name>` (#119); a deployment whose
+    // directory happens to differ from its name still owns `<name>-nginx-1`.
+    const result = await find('bind-port-free').run(
+      context({
+        deployRoot: '/srv/somewhere-else',
+        name: 'demo',
+        portFree: async () => false,
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps')
+            ? { exitCode: 0, stdout: 'demo-nginx-1' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('pass');
+  });
+
+  it('does not claim a container that merely contains the name', async () => {
+    const result = await find('bind-port-free').run(
+      context({
+        name: 'app',
+        portFree: async () => false,
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps')
+            ? { exitCode: 0, stdout: 'other-app-nginx-1' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('other-app-nginx-1');
+  });
+
+  it('cannot recognise anything as its own before a name is chosen', async () => {
+    const result = await find('bind-port-free').run(
+      context({
+        name: undefined,
+        portFree: async () => false,
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps')
+            ? { exitCode: 0, stdout: 'demo-nginx-1' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
   });
 
   it('fails when the port belongs to something else, naming it', async () => {

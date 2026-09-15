@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -354,8 +354,8 @@ describe('the deploy group', () => {
 // `kvox deploy status`  (issue #183)
 // ---------------------------------------------------------------------------
 
-function installedRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'appctl-status-'));
+function installedRoot(root = mkdtempSync(join(tmpdir(), 'appctl-status-')), name?: string): string {
+  mkdirSync(root, { recursive: true });
   const state: DeployState = {
     version: DEPLOY_STATE_VERSION,
     repoUrl: 'https://example.test/o/r',
@@ -367,9 +367,14 @@ function installedRoot(): string {
     lastDeployedAt: '2026-01-02T00:00:00.000Z',
     lastCommand: 'install',
     appctlVersion: '1.0.0',
+    ...(name === undefined ? {} : { name }),
   };
   writeFileSync(deployStatePath(root), JSON.stringify(state));
   return root;
+}
+
+function appsRoot(): string {
+  return mkdtempSync(join(tmpdir(), 'appctl-apps-'));
 }
 
 function composeRunCommand(psJson: string, migrateOutput: string) {
@@ -481,6 +486,100 @@ describe('kvox deploy status', () => {
     // A monitoring script has to be able to tell these apart.
     expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
     expect((result.error as Error).message).toContain('deploy install');
+  });
+
+  // The app-folder layout (#119): which app under --apps-root.
+
+  it('needs no --name when exactly one app is installed under --apps-root', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'only'), 'only');
+
+    const result = await runStatus(['--apps-root', root], {
+      runCommand: composeRunCommand(ALL_RUNNING, 'Database schema is up to date!'),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toContain('healthy');
+  });
+
+  it('runs compose under the installed app\'s project name', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'folder'), 'recorded');
+    const seen: string[][] = [];
+
+    await runStatus(['--apps-root', root], {
+      runCommand: (async (argv: readonly string[], options: RunCommandOptions) => {
+        seen.push([...argv]);
+        return composeRunCommand(ALL_RUNNING, 'Database schema is up to date!')(argv, options);
+      }) as typeof import('../deploy/executor.js').runCommand,
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(seen.length).toBeGreaterThan(0);
+    for (const argv of seen) {
+      expect(argv.slice(0, 4)).toEqual(['docker', 'compose', '-p', 'recorded']);
+    }
+  });
+
+  it('exits 2 naming the apps root when nothing is installed under it', async () => {
+    const root = appsRoot();
+
+    const result = await runStatus(['--apps-root', root], {
+      runCommand: composeRunCommand(ALL_RUNNING, 'Database schema is up to date!'),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain(root);
+    expect((result.error as Error).message).toContain('deploy install');
+  });
+
+  it('refuses to guess between several installed apps, naming them', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+    installedRoot(join(root, 'beta'), 'beta');
+
+    const result = await runStatus(['--apps-root', root], {
+      runCommand: composeRunCommand(ALL_RUNNING, 'Database schema is up to date!'),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('alpha');
+    expect((result.error as Error).message).toContain('beta');
+    expect((result.error as Error).message).toContain('--name');
+  });
+
+  it('lets --name pick one of several', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+    installedRoot(join(root, 'beta'), 'beta');
+    const seen: string[][] = [];
+
+    const result = await runStatus(['--apps-root', root, '--name', 'beta'], {
+      runCommand: (async (argv: readonly string[], options: RunCommandOptions) => {
+        seen.push([...argv]);
+        return composeRunCommand(ALL_RUNNING, 'Database schema is up to date!')(argv, options);
+      }) as typeof import('../deploy/executor.js').runCommand,
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(seen[0]?.slice(2, 4)).toEqual(['-p', 'beta']);
+  });
+
+  it('says so when --name points at a folder with nothing installed', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+
+    const result = await runStatus(['--apps-root', root, '--name', 'ghost'], {
+      runCommand: composeRunCommand(ALL_RUNNING, 'Database schema is up to date!'),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain(join(root, 'ghost'));
   });
 
   it('writes the report as JSON on stdout and nothing on stderr', async () => {
