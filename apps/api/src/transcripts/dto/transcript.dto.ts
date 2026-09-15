@@ -285,6 +285,16 @@ export const transcriptSummarySchema = z.object({
   recent: z.array(transcriptListItemSchema),
   /** Transcripts other people shared with the caller, at most eight. */
   sharedWithMe: z.array(transcriptListItemSchema),
+  /**
+   * The caller's OWN failed transcripts, newest first, at most eight — the
+   * home page's "Needs attention" section (issue #171, epic #166).
+   *
+   * Owner-scoped, unlike `inProgress`: retry is owner-only, so a stranger's
+   * failure is an item the caller could not act on. `counts.failed` remains
+   * the true total, so a list of eight beside a count of thirty is correct
+   * rather than a contradiction.
+   */
+  failed: z.array(transcriptListItemSchema),
   counts: z.object({
     owned: z.number().int(),
     shared: z.number().int(),
