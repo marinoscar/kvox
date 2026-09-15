@@ -1,4 +1,4 @@
-import { Button, SvgIcon } from '@mui/material';
+import { Button, SvgIcon, useTheme } from '@mui/material';
 
 interface OAuthButtonProps {
   provider: string;
@@ -33,11 +33,27 @@ const providerConfig: Record<string, {
 };
 
 export function OAuthButton({ provider, onClick }: OAuthButtonProps) {
+  const theme = useTheme();
+
+  // The three colours in `providerConfig` above are NOT theme values and must
+  // never become any: Google, Microsoft and GitHub each publish brand
+  // guidelines that fix the button's fill, and a "Continue with Google" button
+  // painted in this application's indigo is an off-spec use of somebody else's
+  // mark. They are the one place in `apps/web` where a hex literal is the
+  // correct answer.
+  //
+  // The FALLBACK is the opposite case. It is what an unrecognised provider
+  // gets — a provider this template's fork added and did not register above —
+  // so it has no brand of its own to honour and should look like every other
+  // primary action in the app. It was a literal `#1976d2`, which is to say a
+  // frozen copy of a brand colour that has since changed; reading it from the
+  // theme means a rebrand carries it for free and a fork's dark mode gets the
+  // legible light-on-dark pair rather than indigo ink on indigo.
   const config = providerConfig[provider.toLowerCase()] || {
     label: `Continue with ${provider}`,
     icon: null,
-    color: '#1976d2',
-    textColor: '#ffffff',
+    color: theme.palette.primary.main,
+    textColor: theme.palette.primary.contrastText,
   };
 
   return (

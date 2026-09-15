@@ -13,6 +13,7 @@
  */
 
 import { Paper, Stack, Button, Typography, Box } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import type { DataTableBulkAction } from './types';
 
@@ -58,10 +59,19 @@ export function BulkActionBar({ ids, actions, onClear, total }: BulkActionBarPro
         minWidth: 0,
         maxWidth: '100%',
         borderColor: 'primary.main',
+        // DERIVED from `primary.main`, not a frozen copy of it. These two were
+        // literal `rgba()` strings spelling out the OLD palette's blues
+        // (`rgba(25,118,210,…)` / `rgba(144,202,249,…)`), so the bar's wash and
+        // its own `borderColor: 'primary.main'` were two different colours the
+        // moment the palette moved — and nothing could see it, because the
+        // literal was still a perfectly valid blue.
+        //
+        // The two alphas differ for the reason `theme/dark.ts` gives about
+        // `action.selected`: the same proportional step is a smaller
+        // perceptual step near black than near white, so the dark wash needs
+        // more of the hue to register at all.
         bgcolor: (theme) =>
-          theme.palette.mode === 'dark'
-            ? 'rgba(144, 202, 249, 0.10)'
-            : 'rgba(25, 118, 210, 0.06)',
+          alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06),
       }}
     >
       <Typography variant="body2" sx={{ fontWeight: 600 }} aria-live="polite" role="status">

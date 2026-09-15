@@ -41,28 +41,84 @@ import type {
  * past the "expected speakers" ceiling the New-transcript form offers (1–10)
  * for anything a human will actually read, and a two-colour collision in a
  * twelve-speaker recording is a far better failure than `undefined`.
+ *
+ * -----------------------------------------------------------------------------
+ * THREE RULES, ALL OF THEM EASY TO BREAK FROM OUTSIDE THIS FILE (issue #110)
+ * -----------------------------------------------------------------------------
+ *
+ * 1. **INDEX ORDER IS PART OF THE DATA, NOT A PRESENTATION CHOICE.**
+ *    `transcript_speakers.color_index` is PERSISTED, per speaker, at ingest.
+ *    Re-ordering these arrays — sorting them by hue, moving a colour somebody
+ *    dislikes to the end, inserting a ninth in the middle — silently recolours
+ *    every speaker in every transcript that already exists, including ones a
+ *    user has already read, annotated and shared. Both arrays must therefore be
+ *    edited POSITIONALLY: a colour may be replaced in place (issue #110 did
+ *    exactly that, eight times), and colours may be APPENDED, but nothing may
+ *    move. The two lists must also stay the same length as each other, because
+ *    a speaker keeps one index across both modes.
+ *
+ * 2. **NO INDIGO IN EITHER LIST.** Indigo is the brand colour
+ *    (`theme/tokens.ts`), which in this application means "selected", "active"
+ *    or "link" — a tab indicator, a focus ring, a selected row's wash, every
+ *    `<Link>` in body text. A speaker name drawn in the brand hue reads as a
+ *    control, and in the segment list (where the name sits directly above
+ *    tappable text) it reads as one the user has already activated. The two
+ *    blues that ARE here — `#0e7490` (cyan-leaning teal) and `#0369a1` (a true
+ *    blue) — are far enough around the wheel from `#4f46e5` to be told apart
+ *    beside it. Every hue is otherwise deliberately spread: teal, magenta,
+ *    green, orange, purple, blue, amber-brown, slate.
+ *
+ * 3. **EVERY COLOUR CLEARS WCAG AA (4.5:1) AS TEXT ON BOTH SURFACES OF ITS
+ *    MODE**, and `src/__tests__/theme/tokens.test.ts` recomputes that on every
+ *    run rather than trusting this comment. The measured floors, as the lists
+ *    stand:
+ *
+ *      light  min 4.60:1 on `#f6f7fb` (`background.default`, the page ground)
+ *             — `#a16207`, index 6; min 4.92:1 on `#ffffff` (`paper`)
+ *      dark   min 9.58:1 on `#171a23` (`paper`) — `#f9a8d4`, index 1;
+ *             min 10.41:1 on `#0f1117` (`background.default`)
+ *
+ *    This rule is why the change happened at all. The light list this replaced
+ *    contained `#e65100` (3.48:1) and `#00838f` (4.15:1) on the old `#f5f5f5`
+ *    ground: both had failed AA since the day they were written, and neither
+ *    was noticed, because a palette nothing measures is a palette nobody has
+ *    checked. The dark list had far more headroom than it needed and was
+ *    replaced for hue consistency with the light one, not for contrast.
  */
 const SPEAKER_COLORS_LIGHT = [
-  '#1565c0',
-  '#ad1457',
-  '#2e7d32',
-  '#e65100',
-  '#6a1b9a',
-  '#00838f',
-  '#a1441c',
-  '#37474f',
+  '#0e7490',
+  '#be185d',
+  '#15803d',
+  '#c2410c',
+  '#7e22ce',
+  '#0369a1',
+  '#a16207',
+  '#475569',
 ] as const;
 
 const SPEAKER_COLORS_DARK = [
-  '#64b5f6',
-  '#f48fb1',
-  '#81c784',
-  '#ffb74d',
-  '#ce93d8',
-  '#4dd0e1',
-  '#ffab91',
-  '#b0bec5',
+  '#67e8f9',
+  '#f9a8d4',
+  '#86efac',
+  '#fdba74',
+  '#d8b4fe',
+  '#7dd3fc',
+  '#fde68a',
+  '#cbd5e1',
 ] as const;
+
+/**
+ * The two lists, exported for the contrast test ONLY.
+ *
+ * Not for rendering: a component resolves a speaker's colour through
+ * `speakerColor`, which owns the modulo and the negative-index guard. Exported
+ * because a test that re-declared the eight values would be checking its own
+ * copy, which is precisely the failure mode rule 3 above describes.
+ */
+export const SPEAKER_PALETTES = {
+  light: SPEAKER_COLORS_LIGHT,
+  dark: SPEAKER_COLORS_DARK,
+} as const;
 
 /** How many distinct colours exist before the palette repeats. */
 export const SPEAKER_COLOR_COUNT = SPEAKER_COLORS_LIGHT.length;

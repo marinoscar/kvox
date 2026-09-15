@@ -113,12 +113,21 @@ function ProtectedRoute({ children, requiredRole?: string }) {
 ## MUI Theming
 
 ### Theme Configuration
+The palette is NOT written inline. Both modes are built from one token map,
+`apps/web/src/theme/tokens.ts`, and the brand colour itself comes from
+`THEME_COLOR` in `@app/shared` — `packages/shared/identity.json` is the rebrand
+codemod's contract, and the manifest and icon PNGs cannot import a palette, so a
+hex literal here would restyle the app and leave the installed-app surfaces on
+the old colour.
+
 ```typescript
+import { THEME_COLOR } from '@app/shared';
+
 const theme = createTheme({
   palette: {
     mode: 'light', // or 'dark' or from user settings
-    primary: { main: '#1976d2' },
-    secondary: { main: '#dc004e' },
+    primary: { main: THEME_COLOR },
+    secondary: { main: BRAND_TOKENS.light.secondary.main },
   },
   // Responsive breakpoints
   breakpoints: {

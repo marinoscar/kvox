@@ -27,7 +27,7 @@
   rewrites it, and the template-identity guard fails if it ever drifts.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Application mark">
-  <rect width="512" height="512" rx="112.64" ry="112.64" fill="#1976d2"/>
+  <rect width="512" height="512" rx="112.64" ry="112.64" fill="#4f46e5"/>
   <g fill="#ffffff">
     <rect x="81.92" y="106.29" width="348.16" height="65.87" rx="32.94" ry="32.94"/>
     <rect x="125.44" y="223.06" width="261.12" height="65.87" rx="32.94" ry="32.94"/>
