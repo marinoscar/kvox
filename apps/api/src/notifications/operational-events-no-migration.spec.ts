@@ -73,6 +73,12 @@ const MIGRATIONS_AT_288 = [
   // which is the one thing the shared `credentials` table structurally could
   // not offer. A credential store, and equally not about notifications.
   '20260914150000_add_user_ai_credentials',
+  // #174 (epic #164): the generated `tsvector` columns and GIN indexes that
+  // make full-text search over transcript and note CONTENT possible. Three
+  // `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS (...) STORED`
+  // statements and three indexes — a search index, and equally not about
+  // notifications.
+  '20260915120000_add_search_vectors',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
