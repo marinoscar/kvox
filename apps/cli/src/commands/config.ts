@@ -11,7 +11,7 @@ import {
 } from '../config.js';
 
 // =============================================================================
-// `appctl config`  (issue #143, epic #110)
+// `kvox config`  (issue #143, epic #110)
 // =============================================================================
 //
 // "Where is my token, which server am I pointed at, and is it still valid?" is
@@ -90,7 +90,7 @@ export function formatSummary(summary: ConfigSummary): string {
  * Says which layer won.
  *
  * Worth a column of its own: the single most confusing state this CLI can be
- * in is an exported `APPCTL_TOKEN` left over in a shell, quietly overriding
+ * in is an exported `KVOX_TOKEN` left over in a shell, quietly overriding
  * the config file so that `login` appears to have had no effect. Naming the
  * winning source turns a mystery into a one-word answer.
  */

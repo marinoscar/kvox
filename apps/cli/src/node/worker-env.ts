@@ -15,7 +15,7 @@ import { SERVER_URL_ENV_VAR, TOKEN_ENV_VAR } from '../config.js';
 //
 // So every variable the worker reads is declared HERE, once, built through
 // the existing `envVar()` so it inherits `ENV_PREFIX` from `CLI_NAME`. Call
-// sites read `WORKER_ENV.concurrency`, never `process.env.APPCTL_CONCURRENCY`.
+// sites read `WORKER_ENV.concurrency`, never `process.env.KVOX_CONCURRENCY`.
 // A rename is then still a one-line edit in `branding.ts`.
 //
 // -----------------------------------------------------------------------------
@@ -27,10 +27,10 @@ import { SERVER_URL_ENV_VAR, TOKEN_ENV_VAR } from '../config.js';
 // reasons, and both matter more than the small ugliness of a map whose first
 // two entries come from somewhere else:
 //
-//   1. A worker container authenticates exactly the way `appctl login`
+//   1. A worker container authenticates exactly the way `kvox login`
 //      does — it IS the same CLI, reading the same config file. A second name
-//      for the server URL would mean a machine where `appctl api` works and
-//      `appctl node start` does not, for no reason a user could discover.
+//      for the server URL would mean a machine where `kvox api` works and
+//      `kvox node start` does not, for no reason a user could discover.
 //
 //   2. Two names for one value is precisely the drift `branding.ts` exists to
 //      prevent. It would also have to be written into the Dockerfile and the
@@ -58,9 +58,9 @@ import { SERVER_URL_ENV_VAR, TOKEN_ENV_VAR } from '../config.js';
  * variable that exists in only one of the two places is a failing test.
  */
 export const WORKER_ENV = {
-  /** `APPCTL_SERVER_URL` — reused from `config.ts`, never minted again. */
+  /** `KVOX_SERVER_URL` — reused from `config.ts`, never minted again. */
   serverUrl: SERVER_URL_ENV_VAR,
-  /** `APPCTL_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. */
+  /** `KVOX_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. */
   token: TOKEN_ENV_VAR,
   /** The node row this process re-attaches to, so a restart is not a new node. */
   nodeId: envVar('NODE_ID'),

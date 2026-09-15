@@ -1,6 +1,6 @@
-# Design Spec: `appctl deploy` (VPS deployment)
+# Design Spec: `kvox deploy` (VPS deployment)
 
-This is the durable design for a new `appctl deploy` command family in
+This is the durable design for a new `kvox deploy` command family in
 `apps/cli` that installs and updates this application on a single VPS: git
 clone/pull, `docker compose build`, database migration and seeding, and TLS
 via a shared host-level proxy. An epic and its child issues link here instead
@@ -15,7 +15,7 @@ Source of truth for every claim below:
   and `NetworkError` are separate types.
 - `apps/cli/src/device-login.ts` — the hooks pattern this design copies for
   `DeployHooks`.
-- `apps/cli/src/config.ts` — `~/.appctl/config.json` and the atomic-write
+- `apps/cli/src/config.ts` — `~/.kvox/config.json` and the atomic-write
   trick deploy state must repeat, in a different file, for the same reason.
 - `apps/cli/src/prompt.ts` — the one prompt primitive that exists today
   (`prompt()`), and the TTY-or-fail rule the wizard inherits.
@@ -63,7 +63,7 @@ the exit codes, the state file location, the log redaction guarantee).
 
 ## 1. Scope and the four decisions already made
 
-`appctl deploy` takes this repository (or, far more likely, a fork of it —
+`kvox deploy` takes this repository (or, far more likely, a fork of it —
 see the Architecture Principles in `CLAUDE.md`: this is a template) from "an
 empty VPS with Docker installed" to "running, migrated, seeded, and served
 over HTTPS at a real domain," and back again on every subsequent `update`.
@@ -73,7 +73,7 @@ at once.
 
 | Decision | What it means | What it rules out |
 |---|---|---|
-| **Runs on the VPS** | The operator SSHes in with their own credentials, then runs `appctl deploy install`. The CLI never dials out over SSH itself. | An SSH client or library (`ssh2`) in the CLI; a laptop-driven orchestrator; managing the operator's SSH keys. |
+| **Runs on the VPS** | The operator SSHes in with their own credentials, then runs `kvox deploy install`. The CLI never dials out over SSH itself. | An SSH client or library (`ssh2`) in the CLI; a laptop-driven orchestrator; managing the operator's SSH keys. |
 | **Code delivery is git + build** | `git clone`/`git fetch` + `docker compose build` on the server, every time. No image registry in the loop. | Pulling pre-built images from GHCR (see the rejected-alternatives table — the workflow that pushes them exists, but nothing downstream of it does). |
 | **TLS via a shared host proxy** | A single nginx + certbot stack at `/opt/infra/proxy`, outside this repository, terminates TLS for every app on the box. The app stack binds `127.0.0.1` only. | Each app owning its own port 443, its own certbot timer, its own nginx process. |
 | **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. |
@@ -104,11 +104,11 @@ already fixed.
 ## 3. Command surface and exit codes
 
 ```
-appctl deploy install [--repo <url>] [--ref <ref>] [--path <dir>] [--domain <fqdn>]
+kvox deploy install [--repo <url>] [--ref <ref>] [--path <dir>] [--domain <fqdn>]
                        [--all] [--non-interactive] [--dry-run] [--skip-seed]
-appctl deploy update   [--force] [--skip-seed] [--dry-run]
-appctl deploy status   [--raw]
-appctl deploy doctor   [--all]
+kvox deploy update   [--force] [--skip-seed] [--dry-run]
+kvox deploy status   [--raw]
+kvox deploy doctor   [--all]
 ```
 
 Each is a thin `registerXCommand` delegating to a `runX` function, exactly
@@ -158,7 +158,7 @@ that ran and failed on its own terms).
 apps/cli/src/deploy/
   executor.ts       # spawn wrapper: argv only, no shell, timeout, streamed capture
   journal.ts        # run log to disk (human .log + machine .jsonl), retention, redaction
-  state.ts          # deploy state file, separate from ~/.appctl/config.json
+  state.ts          # deploy state file, separate from ~/.kvox/config.json
   hooks.ts          # DeployHooks — the CLI/TUI seam
   env-spec.ts       # parse .env.example -> EnvSpec[]
   env-metadata.ts   # annotations for the keys needing special handling
@@ -184,9 +184,9 @@ adding a file and one registry entry, not by editing a long `switch`.
 ## 5. `repo.ts`: resolving the repo without hardcoding it
 
 The operator's workflow is: SSH in, `git clone` (or already have cloned)
-**their fork**, `cd` into it, build `appctl` from source
+**their fork**, `cd` into it, build `kvox` from source
 (`npm run build --workspace=cli`, per the CLI's own README), and run
-`appctl deploy install` from inside that checkout. `repo.ts` leans on
+`kvox deploy install` from inside that checkout. `repo.ts` leans on
 exactly that: it walks upward from `process.cwd()` looking for a `.git`
 directory (the same thing `git` itself does to find the repository root),
 and when it finds one, reads:
@@ -210,7 +210,7 @@ The **deploy root** (default `/opt/<repo-name>`, overridable with `--path`)
 is where the CLI manages its own clone and everything else it writes (`.env`,
 the state file, the run journal). It is deliberately not required to be the
 same directory as the checkout `repo.ts` read the defaults from — an
-operator who builds `appctl` in `~/src/myfork` and deploys to `/opt/myapp` is
+operator who builds `kvox` in `~/src/myfork` and deploys to `/opt/myapp` is
 a normal, supported split. On a first `install`, `repo.ts` clones
 `--repo`/detected URL at `--ref`/detected ref into `<deploy-root>/repo`; on
 `update`, it `git fetch`s and compares the resolved ref's SHA against
@@ -393,7 +393,7 @@ left off," not "resume from a saved cursor." Steps, in order:
 
 ```
 require state.json + <deploy-root>/repo + .env + the compose files
-  -> else: "not installed here, run `appctl deploy install`" (PreconditionError)
+  -> else: "not installed here, run `kvox deploy install`" (PreconditionError)
 fetch; compare resolved ref's SHA against state.commitSha
   -> unchanged and no --force: print "already up to date at <sha>", exit 0, do nothing else
 record previous SHA (for the summary; there is no automatic rollback — see below)
@@ -425,7 +425,7 @@ database migration safely is a decision that needs a human, not a heuristic.
 ## 9. Doctor: the preflight check registry
 
 `checks/` holds one module per check, each exporting the same shape,
-consumed by both `appctl deploy doctor` directly and by `install`/`update`'s
+consumed by both `kvox deploy doctor` directly and by `install`/`update`'s
 own preflight step — one registry, two callers, the same pattern this
 codebase already uses for `NOTIFICATION_EVENTS` and the settings-page
 registries: declare the check once, let every consumer read the same list
@@ -457,7 +457,7 @@ port `vps.compose.yml` binds nginx to; database connectivity + credentials
 `doctor` runs it standalone so an operator can diagnose DB access *before*
 attempting a full install).
 
-`appctl deploy doctor` with no flags runs `required` checks only and exits
+`kvox deploy doctor` with no flags runs `required` checks only and exits
 `PRECONDITION` on any failure; `--all` also runs `recommended` checks and
 reports warnings without affecting the exit code.
 
@@ -466,7 +466,7 @@ reports warnings without affecting the exit code.
 `/opt/infra/proxy` is a second, independent Docker Compose project —
 **outside this git repository**, living only on the VPS's filesystem — that
 this design assumes is either already running (a second app on the same box
-deployed it first) or gets bootstrapped by the first `appctl deploy install`
+deployed it first) or gets bootstrapped by the first `kvox deploy install`
 to ever run on a given VPS. It is not part of `infra/compose/` and is not
 versioned alongside the application; it is host infrastructure, shared by
 every app deployed to that box. `proxy.ts`'s job:
@@ -602,10 +602,10 @@ way.
 
 ## 13. Deploy state
 
-`<deploy-root>/state.json`, **not** `~/.appctl/config.json` — this is a hard
+`<deploy-root>/state.json`, **not** `~/.kvox/config.json` — this is a hard
 requirement, not a style preference. `writeConfigFile` "replaces the whole
 file and drops unknown keys" (`config.ts`'s own words); if deploy state
-shared that file, the next `appctl login` on the same VPS (an operator
+shared that file, the next `kvox login` on the same VPS (an operator
 re-authenticating the CLI itself against the API, entirely unrelated to
 deploy) would silently erase every field deploy had written. `state.ts`
 must implement the identical temp-file-then-rename, mode-at-creation
@@ -623,7 +623,10 @@ interface DeployState {
   boundPort: number;          // what vps.compose.yml bound nginx to, locally
   installedAt: string;        // ISO 8601, set once, never overwritten
   updatedAt: string;          // ISO 8601, set on every successful run
-  appctlVersion: string;      // CLI_VERSION at time of write
+  appctlVersion: string;      // CLI_VERSION at time of write. Field name kept
+                               // as `appctl` on purpose — it is read back from
+                               // state files already written by installs that
+                               // predate the `kvox` rename; see docs/RENAMING.md
   lastCommand: 'install' | 'update';
   lastSuccessAt: string;      // ISO 8601
 }
@@ -685,9 +688,9 @@ document.
 
 **The exit-code inversion also matters here.** `tui/index.tsx` today lets a
 failed *interactive* operation still exit the process with 0 — the TUI
-itself completed even though the thing it did failed. `appctl deploy
+itself completed even though the thing it did failed. `kvox deploy
 install` run as an explicit subcommand must not inherit that: a scripted
-`appctl deploy install --non-interactive` in a bootstrap pipeline needs the
+`kvox deploy install --non-interactive` in a bootstrap pipeline needs the
 real exit code (0, or `PRECONDITION`/`FAILURE`/etc.), because that is
 exactly the class of automation `program.ts`'s two binding rules exist to
 serve. The TUI screen's own "operation failed" state can still return 0 to
@@ -727,7 +730,7 @@ things slightly differently.
 | Alternative | Why it lost |
 |---|---|
 | **Drive the VPS over SSH from a laptop** | Requires bundling an SSH client/library (`ssh2` or a shell-out to system `ssh`), a private-key or agent-forwarding story, and turns ordinary network flakiness between the laptop and the VPS into deploy failures. The confirmed model instead reuses the operator's own already-authenticated interactive SSH session and never needs a second credential. |
-| **Pull pre-built images from GHCR** | `.github/workflows/deploy.yml` already builds and pushes `ghcr.io/<repo>-api`/`-web` on every tag — but its `deploy-staging`/`deploy-production` jobs are literal `echo` stubs, no compose file anywhere uses `image:` (both `api` and `web` are `build:`-only), and consuming a GHCR image from a VPS needs registry credentials staged there too. This is the obvious next integration once `appctl deploy` exists — a `--from-registry` mode that skips the build step — but it is a second, separable piece of work, not part of v1. |
+| **Pull pre-built images from GHCR** | `.github/workflows/deploy.yml` already builds and pushes `ghcr.io/<repo>-api`/`-web` on every tag — but its `deploy-staging`/`deploy-production` jobs are literal `echo` stubs, no compose file anywhere uses `image:` (both `api` and `web` are `build:`-only), and consuming a GHCR image from a VPS needs registry credentials staged there too. This is the obvious next integration once `kvox deploy` exists — a `--from-registry` mode that skips the build step — but it is a second, separable piece of work, not part of v1. |
 | **A self-contained per-app nginx + certbot** | A VPS hosting one app today is a VPS hosting a second one within a year. Per-app TLS termination means N certbot renewal timers and N nginx processes contending for port 443, with no coherent answer for "what's already bound there" the moment a second app deploys. The shared proxy owns 443 exactly once. |
 | **PostgreSQL inside the app stack** | `base.compose.yml` deliberately ships no Postgres service — bundling one here would make the CLI additionally responsible for its backups, volumes, and version upgrades, none of which this repository does for any other stateful dependency (S3/storage is always external too). External-and-validated keeps deploy's blast radius to the stateless tier. |
 | **A hardcoded env-var list in the wizard** | The same drift risk `commands/api.ts`'s "one generic command" design exists to avoid — a fork that edits `.env.example` would silently desync from a wizard that doesn't read it. Parsing the file at run time is the only shape that survives a fork's own edits. |

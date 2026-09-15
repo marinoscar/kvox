@@ -40,10 +40,10 @@ import { CLI_NAME } from '../branding.js';
 // `<CLI_NAME>-node.service`, and the Description carries `APP_NAME`. Neither is
 // written out, so a fork's rename reaches the unit file — and a test asserts
 // exactly that, because the failure mode otherwise is a service called
-// `appctl-node` on a product that has not been called that for a year.
+// `kvox-node` on a product that has not been called that for a year.
 // =============================================================================
 
-/** `appctl-node.service`. Derived from `CLI_NAME`, never written out. */
+/** `kvox-node.service`. Derived from `CLI_NAME`, never written out. */
 export const SERVICE_UNIT_NAME = `${CLI_NAME}-node.service`;
 
 export interface ServiceContext {

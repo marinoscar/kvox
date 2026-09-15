@@ -12,8 +12,8 @@ import { AuthRequiredError, ConfigError } from './errors.js';
 //
 // Three places a credential can come from, in this precedence order:
 //
-//   1. `APPCTL_TOKEN` / `APPCTL_SERVER_URL` in the environment
-//   2. `~/.appctl/config.json`
+//   1. `KVOX_TOKEN` / `KVOX_SERVER_URL` in the environment
+//   2. `~/.kvox/config.json`
 //   3. nowhere — which is a first-class outcome, not an error to stumble into
 //
 // WHY THE ENVIRONMENT WINS. It is the only thing that makes the CLI usable in
@@ -46,7 +46,7 @@ import { AuthRequiredError, ConfigError } from './errors.js';
 // =============================================================================
 
 /**
- * The shape persisted to `~/.appctl/config.json`.
+ * The shape persisted to `~/.kvox/config.json`.
  *
  * EVERY FIELD IS OPTIONAL AT READ TIME, deliberately. This file is on a user's
  * disk: it survives CLI upgrades, gets hand-edited, gets partially restored
@@ -137,22 +137,22 @@ export interface ConfigContext {
   home?: string;
 }
 
-/** `APPCTL_SERVER_URL` — resolved once so help text and lookups cannot drift. */
+/** `KVOX_SERVER_URL` — resolved once so help text and lookups cannot drift. */
 export const SERVER_URL_ENV_VAR = envVar('SERVER_URL');
 
-/** `APPCTL_TOKEN`. */
+/** `KVOX_TOKEN`. */
 export const TOKEN_ENV_VAR = envVar('TOKEN');
 
 function contextEnv(ctx: ConfigContext | undefined): NodeJS.ProcessEnv {
   return ctx?.env ?? process.env;
 }
 
-/** The config directory, `~/.appctl`. */
+/** The config directory, `~/.kvox`. */
 export function configDirPath(ctx?: ConfigContext): string {
   return join(ctx?.home ?? homedir(), CONFIG_DIR_NAME);
 }
 
-/** The config file, `~/.appctl/config.json`. */
+/** The config file, `~/.kvox/config.json`. */
 export function configFilePath(ctx?: ConfigContext): string {
   return join(configDirPath(ctx), CONFIG_FILE_NAME);
 }
@@ -301,7 +301,7 @@ export function writeConfigFile(config: StoredConfig, ctx?: ConfigContext): stri
   // mode above is what protects the token. Like the file, the mode applies
   // only on creation, and an existing directory is deliberately left alone —
   // silently chmod-ing a directory a user created themselves is a surprise,
-  // and `~/.appctl` may legitimately hold other things by then.
+  // and `~/.kvox` may legitimately hold other things by then.
   mkdirSync(dir, { recursive: true, mode: 0o700 });
 
   const payload = `${JSON.stringify({ ...config, updatedAt: new Date().toISOString() }, null, 2)}\n`;
@@ -317,7 +317,7 @@ export function writeConfigFile(config: StoredConfig, ctx?: ConfigContext): stri
     writeFileSync(tmp, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     renameSync(tmp, target);
   } catch (cause) {
-    // Best-effort cleanup so a failed login does not litter `~/.appctl` with
+    // Best-effort cleanup so a failed login does not litter `~/.kvox` with
     // temp files that each contain a valid token. `force` because the file may
     // never have been created (that is one of the ways we get here).
     try {
@@ -375,9 +375,9 @@ export function deleteConfigFile(ctx?: ConfigContext): boolean {
 /**
  * Merge environment over file. Never throws for "nothing configured".
  *
- * The merge is PER FIELD rather than all-or-nothing: `APPCTL_TOKEN` alone is a
+ * The merge is PER FIELD rather than all-or-nothing: `KVOX_TOKEN` alone is a
  * legitimate way to run one command as a different principal against the
- * server already in the config file, and `APPCTL_SERVER_URL` alone is how you
+ * server already in the config file, and `KVOX_SERVER_URL` alone is how you
  * point an existing login at a different host. Requiring both to be set to use
  * either would break both of those for no gain — and the case where a partial
  * environment is genuinely a mistake is caught with a specific message in
@@ -397,7 +397,7 @@ export function resolveConfig(ctx?: ConfigContext): ResolvedConfig {
     serverUrl,
     token,
     // Expiry belongs to the token, so it is only meaningful when the token
-    // came from the file. An `APPCTL_TOKEN` from CI has no expiry we know of,
+    // came from the file. A `KVOX_TOKEN` from CI has no expiry we know of,
     // and pairing it with the file's leftover `expiresAt` would let the CLI
     // announce that a perfectly valid pipeline token expired last week.
     expiresAt: envToken === undefined ? file?.expiresAt : undefined,
@@ -591,7 +591,7 @@ export function isExpired(expiresAt: string | undefined, now: Date = new Date())
  * A non-empty string, or `undefined`.
  *
  * Empty and whitespace-only both become `undefined` because that is what they
- * mean in practice: `APPCTL_TOKEN=` in a CI file is an UNSET variable that the
+ * mean in practice: `KVOX_TOKEN=` in a CI file is an UNSET variable that the
  * shell happens to export as empty, and treating it as a credential produces
  * `Authorization: Bearer ` — a malformed header and a 401 whose message tells
  * the user their token was rejected rather than that it was blank.

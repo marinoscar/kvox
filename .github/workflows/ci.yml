@@ -260,7 +260,7 @@ jobs:
       # keyed on a natural unique — role.name, permission.name,
       # rolePermission.roleId_permissionId, systemSettings.key — so a second run
       # must update the same rows rather than fail on a unique constraint or
-      # duplicate a grant. That is not a hypothetical property: `appctl deploy
+      # duplicate a grant. That is not a hypothetical property: `kvox deploy
       # update` re-runs the seed on every upgrade, and it is how new permissions
       # reach an existing database. A seed that is not idempotent therefore
       # breaks on the SECOND deployment, in production, and never here. This

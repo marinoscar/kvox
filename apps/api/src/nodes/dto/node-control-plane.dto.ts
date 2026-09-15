@@ -158,7 +158,7 @@ export const heartbeatNodeSchema = z.object({
   status: z.enum(['online', 'offline']).optional(),
 
   /**
-   * A runtime concurrency change (`appctl node set-concurrency`), which the
+   * A runtime concurrency change (`kvox node set-concurrency`), which the
    * NEXT claim reads live off the row. This is the whole reason the claim
    * endpoint re-reads the node rather than trusting a value captured at
    * registration.

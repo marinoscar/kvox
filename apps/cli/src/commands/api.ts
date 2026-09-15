@@ -8,7 +8,7 @@ import { createSpinner, formatJson, formatStatusLine, shouldUseColour } from '..
 import { resolveRequestBody, type BodyResolutionContext } from '../request-body.js';
 
 // =============================================================================
-// `appctl api <method> <path>`  (issue #144, epic #110)
+// `kvox api <method> <path>`  (issue #144, epic #110)
 // =============================================================================
 //
 // ONE COMMAND FOR THE WHOLE API, and the reason is architectural rather than
@@ -50,7 +50,7 @@ import { resolveRequestBody, type BodyResolutionContext } from '../request-body.
  * Methods this command will send.
  *
  * AN ALLOW-LIST, not a passthrough, because #144 asks for a typo to be a clear
- * local error rather than a confusing remote one. `appctl api GTE /api/users`
+ * local error rather than a confusing remote one. `kvox api GTE /api/users`
  * sent verbatim gets a 404 or a 405 from the server, and a 404 reads as "that
  * endpoint does not exist" — sending the user to check the path, which was
  * correct all along. Rejecting it here names the actual mistake.
@@ -195,7 +195,7 @@ async function runApiCommand(
   // worthless on another and must never be sent to it — and a flag that let
   // them be set independently would make leaking a token to the wrong host a
   // single typo away. Pointing at a different server is `login`, or the
-  // APPCTL_SERVER_URL / APPCTL_TOKEN pair, which #143 resolves together.
+  // KVOX_SERVER_URL / KVOX_TOKEN pair, which #143 resolves together.
   const credentials = requireCredentials(ctx);
 
   const client = new ApiClient({
@@ -360,7 +360,7 @@ export function parseMethod(raw: string): AllowedMethod {
  * Validate the path and split any inline query string off it.
  *
  * The leading-slash requirement is #144's, and it earns its place: without it
- * `appctl api GET api/users` produces `https://host/apiapi/users` or a 404
+ * `kvox api GET api/users` produces `https://host/apiapi/users` or a 404
  * depending on how the join lands, and the user is left staring at a path that
  * looks right.
  *

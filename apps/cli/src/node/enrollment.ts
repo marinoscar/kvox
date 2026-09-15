@@ -25,7 +25,7 @@ import {
 // ends up in shell history, in a paste buffer, in a chat message.
 //
 // `enroll` collapses all six. It runs THE EXISTING device-authorization flow
-// (the same one `appctl login` uses — not a second implementation), then uses
+// (the same one `kvox login` uses — not a second implementation), then uses
 // that short-lived session to mint a `nod_` credential and stores it directly.
 // The operator never sees the secret unless they ask for it with
 // `--show-token`, which stays available for the genuine case of provisioning a

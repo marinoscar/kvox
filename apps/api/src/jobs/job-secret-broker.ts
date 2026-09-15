@@ -13,7 +13,7 @@
 // this interface was written, and each one is worth naming because each one is
 // what somebody will reach for when this seems like too much machinery:
 //
-//   * PUT THE PASSWORD IN THE NODE'S ENVIRONMENT (`APPCTL_*`). The node then
+//   * PUT THE PASSWORD IN THE NODE'S ENVIRONMENT (`KVOX_*`). The node then
 //     PERSISTS a durable credential to this deployment's database, on hardware
 //     the deployment may not own, for as long as that machine exists. It does
 //     not expire when the job ends, it is not scoped to one job, and it cannot

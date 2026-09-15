@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — appctl CLI installer / updater  (issue #166, epic #110)
+# install.sh — kvox CLI installer / updater  (issue #166, epic #110)
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
@@ -9,18 +9,22 @@
 #   bash install.sh --help
 #
 # Configuration (set via environment variables before running):
-#   APPCTL_REPO     Git repo URL (default: https://github.com/marinoscar/kvox.git)
-#   APPCTL_REF      Branch/tag/commit to install (default: main)
-#   APPCTL_HOME     App install root (default: $HOME/.appctl — the same directory
-#                   the CLI itself already stores config.json in, see branding.ts)
-#   APPCTL_BIN_DIR  Directory for the `appctl` shim (default: $HOME/.local/bin)
-#   GITHUB_TOKEN    Optional GitHub PAT for private-repo clones
-#   APPCTL_SRC      Optional: local directory to install from (skips git clone).
-#                   Useful for offline installs and local testing:
-#                     APPCTL_SRC=/path/to/repo bash install.sh
+#   KVOX_REPO     Git repo URL (default: https://github.com/marinoscar/kvox.git)
+#   KVOX_REF      Branch/tag/commit to install (default: main)
+#   KVOX_HOME     App install root (default: $HOME/.kvox — the same directory
+#                 the CLI itself already stores config.json in, see branding.ts)
+#   KVOX_BIN_DIR  Directory for the `kvox` shim (default: $HOME/.local/bin)
+#   GITHUB_TOKEN  Optional GitHub PAT for private-repo clones
+#   KVOX_SRC      Optional: local directory to install from (skips git clone).
+#                 Useful for offline installs and local testing:
+#                   KVOX_SRC=/path/to/repo bash install.sh
+#
+# A pre-1.0 installation made under the old `appctl` name ($HOME/.appctl plus an
+# `appctl` shim) is detected and cleaned up on install, and the stored
+# credentials are carried across to $KVOX_HOME/config.json.
 #
 # NOTE: The public `curl | bash` flow requires the repository to be public (or
-# GITHUB_TOKEN set for private repos). The APPCTL_SRC path lets you verify
+# GITHUB_TOKEN set for private repos). The KVOX_SRC path lets you verify
 # installer logic locally without any network access.
 #
 set -euo pipefail
@@ -113,15 +117,109 @@ detect_shell_rc() {
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
-APPCTL_REPO="${APPCTL_REPO:-https://github.com/marinoscar/kvox.git}"
-APPCTL_REF="${APPCTL_REF:-main}"
-APPCTL_HOME="${APPCTL_HOME:-$HOME/.appctl}"
-APPCTL_BIN_DIR="${APPCTL_BIN_DIR:-$HOME/.local/bin}"
-APPCTL_SRC="${APPCTL_SRC:-}"
+KVOX_REPO="${KVOX_REPO:-https://github.com/marinoscar/kvox.git}"
+KVOX_REF="${KVOX_REF:-main}"
+KVOX_HOME="${KVOX_HOME:-$HOME/.kvox}"
+KVOX_BIN_DIR="${KVOX_BIN_DIR:-$HOME/.local/bin}"
+KVOX_SRC="${KVOX_SRC:-}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
-APP_DIR="$APPCTL_HOME/app"
-BIN_SHIM="$APPCTL_BIN_DIR/appctl"
+APP_DIR="$KVOX_HOME/app"
+BIN_SHIM="$KVOX_BIN_DIR/kvox"
+
+# ---------------------------------------------------------------------------
+# The pre-rebrand layout  (the binary used to be called `appctl`)
+# ---------------------------------------------------------------------------
+# These three paths are the ONLY place this script still writes `appctl`, and
+# they exist purely to clean up after the old name. $KVOX_HOME now defaults to
+# $HOME/.kvox, which is the directory the CLI itself derives from CONFIG_DIR_NAME
+# (see apps/cli/src/branding.ts), so an old install is a genuinely separate tree.
+LEGACY_HOME="$HOME/.appctl"
+LEGACY_APP_DIR="$LEGACY_HOME/app"
+LEGACY_SHIM="$KVOX_BIN_DIR/appctl"
+
+# True only when the shim at $1 is one THIS installer wrote under the old name.
+# Checked before anything is deleted: a binary called `appctl` that points
+# somewhere else belongs to another tool, and removing it would be vandalism.
+legacy_shim_is_ours() {
+  [[ -f "$1" ]] || return 1
+  grep -q '\.appctl/app/dist/cli\.js' "$1" 2>/dev/null
+}
+
+# Is there anything from the `appctl` era to clean up? Answering "no" keeps the
+# whole legacy section silent, which is the normal case for a fresh install.
+#
+# The first test is a safety interlock: somebody who explicitly set
+# KVOX_HOME=$HOME/.appctl has pointed the NEW install at the OLD directory, and
+# "cleaning up the old one" would then delete the install we are about to make.
+has_legacy_install() {
+  [[ "$KVOX_HOME" != "$LEGACY_HOME" ]] || return 1
+  [[ -d "$LEGACY_APP_DIR" ]] && return 0
+  [[ -f "$LEGACY_HOME/config.json" ]] && return 0
+  legacy_shim_is_ours "$LEGACY_SHIM" && return 0
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# Remove the `appctl`-era installation, carrying its credentials across.
+#
+# Deliberately NOT `rm -rf "$LEGACY_HOME"`: that directory holds config.json,
+# i.e. the user's stored token. Only $LEGACY_HOME/app and a shim this installer
+# recognises are removed; the directory itself goes only if it ends up empty.
+# ---------------------------------------------------------------------------
+cleanup_legacy_install() {
+  has_legacy_install || return 0
+
+  step "Cleaning up the previous appctl installation"
+
+  if [[ -d "$LEGACY_APP_DIR" ]]; then
+    rm -rf "$LEGACY_APP_DIR"
+    ok "Removed legacy app directory: $LEGACY_APP_DIR"
+  fi
+
+  if legacy_shim_is_ours "$LEGACY_SHIM"; then
+    rm -f "$LEGACY_SHIM"
+    ok "Removed legacy shim: $LEGACY_SHIM"
+  elif [[ -e "$LEGACY_SHIM" ]]; then
+    warn "Left $LEGACY_SHIM alone: it does not run $LEGACY_APP_DIR/dist/cli.js, so this installer did not write it."
+  fi
+
+  # Move the token across rather than leaving it behind, so an update does not
+  # silently log the user out. An existing destination always wins.
+  if [[ -f "$LEGACY_HOME/config.json" ]]; then
+    if [[ -e "$KVOX_HOME/config.json" ]]; then
+      warn "Kept $LEGACY_HOME/config.json: $KVOX_HOME/config.json already exists."
+    else
+      mkdir -p "$KVOX_HOME"
+      mv "$LEGACY_HOME/config.json" "$KVOX_HOME/config.json"
+      chmod 600 "$KVOX_HOME/config.json"
+      ok "Moved saved credentials: $LEGACY_HOME/config.json -> $KVOX_HOME/config.json"
+    fi
+  fi
+
+  if [[ -d "$LEGACY_HOME" ]]; then
+    if rmdir "$LEGACY_HOME" 2>/dev/null; then
+      ok "Removed empty legacy directory: $LEGACY_HOME"
+    else
+      info "Left $LEGACY_HOME in place: it still contains other files."
+    fi
+  fi
+}
+
+# The uninstall half: the app directory and a shim we wrote, never config.json.
+cleanup_legacy_uninstall() {
+  [[ "$KVOX_HOME" != "$LEGACY_HOME" ]] || return 0
+
+  if [[ -d "$LEGACY_APP_DIR" ]]; then
+    rm -rf "$LEGACY_APP_DIR"
+    ok "Removed legacy app directory: $LEGACY_APP_DIR"
+  fi
+
+  if legacy_shim_is_ours "$LEGACY_SHIM"; then
+    rm -f "$LEGACY_SHIM"
+    ok "Removed legacy shim: $LEGACY_SHIM"
+  fi
+}
 
 # ---------------------------------------------------------------------------
 # Read the "version" field from a package.json using node (a hard dependency).
@@ -157,7 +255,7 @@ done
 show_help() {
   cat <<EOF
 
-$(_c $BOLD "appctl CLI Installer")
+$(_c $BOLD "kvox CLI Installer")
 
 USAGE
   bash install.sh [options]
@@ -169,17 +267,17 @@ OPTIONS
   --no-color    Disable ANSI colors
 
 ENVIRONMENT VARIABLES
-  APPCTL_REPO      Git clone URL  (default: $APPCTL_REPO)
-  APPCTL_REF       Branch/tag     (default: $APPCTL_REF)
-  APPCTL_HOME      Install root   (default: \$HOME/.appctl)
-  APPCTL_BIN_DIR   Shim directory (default: \$HOME/.local/bin)
-  GITHUB_TOKEN     GitHub PAT for private repos (optional)
-  APPCTL_SRC       Local source directory — skip git clone (optional)
-                   Example: APPCTL_SRC=/path/to/repo bash install.sh
+  KVOX_REPO     Git clone URL  (default: $KVOX_REPO)
+  KVOX_REF      Branch/tag     (default: $KVOX_REF)
+  KVOX_HOME     Install root   (default: \$HOME/.kvox)
+  KVOX_BIN_DIR  Shim directory (default: \$HOME/.local/bin)
+  GITHUB_TOKEN  GitHub PAT for private repos (optional)
+  KVOX_SRC      Local source directory — skip git clone (optional)
+                Example: KVOX_SRC=/path/to/repo bash install.sh
 
 NOTE
   The public curl | bash flow requires the repo to be public (or GITHUB_TOKEN
-  set). Use APPCTL_SRC for offline / local testing.
+  set). Use KVOX_SRC for offline / local testing.
 
 EOF
 }
@@ -193,7 +291,7 @@ fi
 # Uninstall
 # ---------------------------------------------------------------------------
 do_uninstall() {
-  step "Uninstalling appctl CLI"
+  step "Uninstalling kvox CLI"
 
   if [[ -d "$APP_DIR" ]]; then
     rm -rf "$APP_DIR"
@@ -209,8 +307,13 @@ do_uninstall() {
     warn "Shim not found: $BIN_SHIM"
   fi
 
-  info "Config and credentials at $APPCTL_HOME/config.json (if any) are left in place."
-  ok "appctl CLI uninstalled."
+  cleanup_legacy_uninstall
+
+  # $KVOX_HOME itself is NEVER removed: it is now the same directory the CLI
+  # keeps config.json in (CONFIG_DIR_NAME = `.kvox`), so `rm -rf "$KVOX_HOME"`
+  # here would destroy the user's stored token. Only $KVOX_HOME/app goes.
+  info "Config and credentials at $KVOX_HOME/config.json (if any) are left in place."
+  ok "kvox CLI uninstalled."
 }
 
 if [[ "$ACTION" == "uninstall" ]]; then
@@ -225,9 +328,9 @@ fi
 # Print header
 printf '\n'
 if _use_color; then
-  printf '\033[36m  appctl CLI Installer\033[0m\n'
+  printf '\033[36m  kvox CLI Installer\033[0m\n'
 else
-  printf '  appctl CLI Installer\n'
+  printf '  kvox CLI Installer\n'
 fi
 printf '\n'
 
@@ -239,8 +342,10 @@ if [[ -d "$APP_DIR" ]]; then
   info "Updating existing installation at $APP_DIR"
   [[ -n "$PREV_VERSION" && "$PREV_VERSION" != "unknown" ]] && dim "Currently installed: v$PREV_VERSION"
 else
-  info "Installing appctl CLI to $APP_DIR"
+  info "Installing kvox CLI to $APP_DIR"
 fi
+
+# Silent unless there is genuinely an `appctl`-era install to tidy away.
 
 # ---------------------------------------------------------------------------
 # Step 1: Dependency checks
@@ -290,11 +395,11 @@ check_tool npm
 check_tool git
 check_tool curl
 
-# Warn (don't fail) if the install target looks low on free space. appctl has
+# Warn (don't fail) if the install target looks low on free space. kvox has
 # no native modules, so the footprint is small — a few tens of MB for
 # commander/ink/react and their transitive deps.
 if command -v df &>/dev/null; then
-  avail_kb="$(df -Pk "$APPCTL_HOME" 2>/dev/null || df -Pk "$HOME" 2>/dev/null)"
+  avail_kb="$(df -Pk "$KVOX_HOME" 2>/dev/null || df -Pk "$HOME" 2>/dev/null)"
   avail_kb="$(printf '%s\n' "$avail_kb" | awk 'NR==2 {print $4}')"
   if [[ -n "${avail_kb:-}" && "$avail_kb" =~ ^[0-9]+$ ]]; then
     if (( avail_kb < 51200 )); then
@@ -319,31 +424,31 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ -n "$APPCTL_SRC" ]]; then
-  if [[ ! -d "$APPCTL_SRC" ]]; then
-    err "APPCTL_SRC directory not found: $APPCTL_SRC"
+if [[ -n "$KVOX_SRC" ]]; then
+  if [[ ! -d "$KVOX_SRC" ]]; then
+    err "KVOX_SRC directory not found: $KVOX_SRC"
     exit 1
   fi
-  info "Using local source: $APPCTL_SRC"
+  info "Using local source: $KVOX_SRC"
   # Copy to a temp dir so we don't pollute the working tree
   TMP_DIR="$(mktemp -d)"
-  cp -r "$APPCTL_SRC/." "$TMP_DIR/"
+  cp -r "$KVOX_SRC/." "$TMP_DIR/"
   ok "Copied source to temp dir"
 else
   TMP_DIR="$(mktemp -d)"
-  local_repo="$APPCTL_REPO"
+  local_repo="$KVOX_REPO"
 
   # Inject GitHub token for private-repo support
   if [[ -n "$GITHUB_TOKEN" ]]; then
     # Replace https://github.com/ with https://<token>@github.com/
-    local_repo="${APPCTL_REPO/https:\/\/github.com\//https:\/\/$GITHUB_TOKEN@github.com\/}"
+    local_repo="${KVOX_REPO/https:\/\/github.com\//https:\/\/$GITHUB_TOKEN@github.com\/}"
     info "Using GITHUB_TOKEN for authentication"
   fi
 
-  info "Cloning $APPCTL_REPO @ $APPCTL_REF …"
-  git clone --depth 1 --branch "$APPCTL_REF" "$local_repo" "$TMP_DIR" 2>&1 \
+  info "Cloning $KVOX_REPO @ $KVOX_REF …"
+  git clone --depth 1 --branch "$KVOX_REF" "$local_repo" "$TMP_DIR" 2>&1 \
     | grep -v "^$" | while IFS= read -r line; do dim "$line"; done || {
-    err "Git clone failed. If the repo is private, set GITHUB_TOKEN or use APPCTL_SRC."
+    err "Git clone failed. If the repo is private, set GITHUB_TOKEN or use KVOX_SRC."
     exit 1
   }
   ok "Cloned repository"
@@ -356,11 +461,11 @@ fi
 SRC_VERSION="$(read_pkg_version "$TMP_DIR/apps/cli/package.json")"
 if [[ -n "$SRC_VERSION" && "$SRC_VERSION" != "unknown" ]]; then
   if [[ -z "$PREV_VERSION" || "$PREV_VERSION" == "unknown" ]]; then
-    ok "Installing appctl CLI $(_c $BOLD "v$SRC_VERSION")"
+    ok "Installing kvox CLI $(_c $BOLD "v$SRC_VERSION")"
   elif [[ "$PREV_VERSION" == "$SRC_VERSION" ]]; then
-    ok "Reinstalling appctl CLI $(_c $BOLD "v$SRC_VERSION") (same version)"
+    ok "Reinstalling kvox CLI $(_c $BOLD "v$SRC_VERSION") (same version)"
   else
-    ok "Updating appctl CLI $(_c $BOLD "v$PREV_VERSION") → $(_c $BOLD "v$SRC_VERSION")"
+    ok "Updating kvox CLI $(_c $BOLD "v$PREV_VERSION") → $(_c $BOLD "v$SRC_VERSION")"
   fi
 else
   warn "Could not determine the version from the source manifest"
@@ -480,7 +585,7 @@ ok "Runtime dependencies installed"
 # ---------------------------------------------------------------------------
 step "Installing CLI shim"
 
-mkdir -p "$APPCTL_BIN_DIR"
+mkdir -p "$KVOX_BIN_DIR"
 
 # apps/cli's package.json points bin at ./dist/cli.js directly (it already
 # carries a shebang and is chmod'd 0755 by the build's postbuild step) — there
@@ -497,7 +602,7 @@ ok "Shim written: $BIN_SHIM"
 # Step 6: PATH check
 # ---------------------------------------------------------------------------
 BIN_ON_PATH=0
-if echo ":$PATH:" | grep -q ":$APPCTL_BIN_DIR:"; then
+if echo ":$PATH:" | grep -q ":$KVOX_BIN_DIR:"; then
   BIN_ON_PATH=1
 fi
 
@@ -505,11 +610,11 @@ fi
 # call-out box printed after the completion summary (see below), so we skip
 # this generic block for them to avoid duplicate messaging.
 if [[ "$BIN_ON_PATH" != "1" ]] && ! is_wsl; then
-  warn "$APPCTL_BIN_DIR is not on your PATH"
+  warn "$KVOX_BIN_DIR is not on your PATH"
   printf '\n'
   info "Add the following line to your shell config (~/.bashrc or ~/.zshrc):"
   printf '\n'
-  printf '    %s\n' "export PATH=\"\$PATH:$APPCTL_BIN_DIR\""
+  printf '    %s\n' "export PATH=\"\$PATH:$KVOX_BIN_DIR\""
   printf '\n'
   info "Then reload: source ~/.bashrc  (or source ~/.zshrc)"
   printf '\n'
@@ -533,6 +638,13 @@ if [[ -n "$SRC_VERSION" && "$SRC_VERSION" != "unknown" && "$INSTALLED_VERSION" !
   warn "Version mismatch: expected v$SRC_VERSION from source but binary reports v$INSTALLED_VERSION"
 fi
 
+# Only now, with a verified-working `kvox` on disk, is it safe to remove the
+# installation the old name left behind. Doing this any earlier — before the
+# dependency checks, the build, or this verification — would mean a run that
+# fails partway through has already destroyed a working `appctl` and moved the
+# user's credentials out from under it.
+cleanup_legacy_install
+
 INSTALL_SIZE="unknown"
 if command -v du &>/dev/null; then
   INSTALL_SIZE="$(du -sh "$APP_DIR" 2>/dev/null | cut -f1)"
@@ -551,15 +663,15 @@ print_box "Installation Complete" \
   "Shim        : $BIN_SHIM" \
   "" \
   "Get started:" \
-  "  appctl login" \
-  "  appctl api GET /api/auth/me" \
-  "  appctl --help"
+  "  kvox login" \
+  "  kvox api GET /api/auth/me" \
+  "  kvox --help"
 
 # ---------------------------------------------------------------------------
 # Step 8: Windows / WSL PATH call-out
 # ---------------------------------------------------------------------------
 # On Windows 11 + WSL the default shell rarely has ~/.local/bin on PATH, so the
-# freshly-installed `appctl` command is "not found" until the user appends it.
+# freshly-installed `kvox` command is "not found" until the user appends it.
 # Print an explicit, copy-pasteable box with the exact two commands.
 if is_wsl && [[ "$BIN_ON_PATH" != "1" ]]; then
   RC_FILE="$(detect_shell_rc)"
@@ -568,17 +680,17 @@ if is_wsl && [[ "$BIN_ON_PATH" != "1" ]]; then
   print_box "Windows 11 · WSL — one more step" \
     "Detected Windows Subsystem for Linux (WSL)." \
     "" \
-    "The 'appctl' command was installed to:" \
-    "$APPCTL_BIN_DIR" \
+    "The 'kvox' command was installed to:" \
+    "$KVOX_BIN_DIR" \
     "but that directory is not on your PATH yet, so" \
     "your shell reports 'command not found'." \
     "" \
     "Run these two commands to finish setup:" \
     "" \
-    "echo 'export PATH=\"\$PATH:$APPCTL_BIN_DIR\"' >> $RC_SHORT" \
+    "echo 'export PATH=\"\$PATH:$KVOX_BIN_DIR\"' >> $RC_SHORT" \
     "source $RC_SHORT" \
     "" \
     "Then verify it works:" \
-    "appctl --version"
+    "kvox --version"
   printf '\n'
 fi

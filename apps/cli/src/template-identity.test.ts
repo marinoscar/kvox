@@ -203,6 +203,139 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // `@app/shared`. It is a `scripts/rename.mjs` codemod target like every
   // other Markdown document here.
   'docs/specs/notes.md',
+
+  // ---------------------------------------------------------------------
+  // Added when the rebrand was finished across the CLI's own source.
+  //
+  // EXACTLY THE SAME SITUATION AS `apps/cli/src/tui/tty.ts` ABOVE, which is
+  // already here for this reason — there is just more of it. Every entry
+  // below is a COMMENT or a DOCSTRING naming the EXECUTABLE (`kvox login`,
+  // `~/.kvox/config.json`, `kvox-node.service`), which is `CLI_NAME`, not a
+  // repository reference. A comment cannot import from `@app/shared`, and
+  // rewording these to dodge the guard would make them worse documentation
+  // rather than safer code: a docstring that will not say which command it is
+  // describing has stopped being a docstring.
+  //
+  // They match only because this fork set `CLI_NAME` equal to its repository
+  // name, which is the collision the block above already describes. The other
+  // three patterns — productName (`KVox`), repoSlug and owner — still apply to
+  // every one of these files unchanged, so a genuine hardcoded repository
+  // reference in any of them still fails this guard. `deploy/repo.ts` is
+  // additionally covered by `repo.test.ts`, which asserts that module names no
+  // owner, no repository and no forge URL.
+  //
+  // NOT on this list, deliberately: `deploy/checks/host.ts` and
+  // `deploy/checks/types.ts`. Their user-facing remedy strings interpolate
+  // `CLI_NAME` instead of spelling the name out, so they need no exemption —
+  // that is the shape to prefer whenever the name appears in CODE rather than
+  // in prose.
+  // ---------------------------------------------------------------------
+  'apps/api/src/db-backup/restore-preflight.service.ts',
+  'apps/api/src/nodes/dto/node-control-plane.dto.ts',
+  'apps/api/src/transcripts/handlers/media-audio-transcode.handler.ts',
+  'apps/cli/src/commands/api.ts',
+  'apps/cli/src/commands/config.ts',
+  'apps/cli/src/commands/deploy.ts',
+  'apps/cli/src/commands/init.ts',
+  'apps/cli/src/commands/login.ts',
+  'apps/cli/src/commands/node.ts',
+  'apps/cli/src/config.ts',
+  'apps/cli/src/deploy/env-spec.ts',
+  'apps/cli/src/deploy/env-wizard.ts',
+  'apps/cli/src/deploy/hooks.ts',
+  'apps/cli/src/deploy/install.ts',
+  'apps/cli/src/deploy/journal.ts',
+  'apps/cli/src/deploy/proxy.ts',
+  'apps/cli/src/deploy/repo.ts',
+  'apps/cli/src/deploy/state.ts',
+  'apps/cli/src/deploy/update.ts',
+  'apps/cli/src/errors.ts',
+  'apps/cli/src/index.ts',
+  'apps/cli/src/init/run-init.ts',
+  'apps/cli/src/node/enrollment.ts',
+  'apps/cli/src/node/paths.ts',
+  'apps/cli/src/node/service.ts',
+  'apps/cli/src/node/worker-env.ts',
+  'apps/cli/src/output.ts',
+  'apps/cli/src/program.ts',
+  'apps/cli/src/request-body.ts',
+  'apps/cli/src/tui/screens/deploy.tsx',
+  'apps/cli/src/tui/screens/invoke.tsx',
+  'apps/cli/src/tui/screens/login.tsx',
+  'apps/cli/src/tui/screens/status.tsx',
+
+  // ---------------------------------------------------------------------
+  // Added when the CLI rename from `appctl` to `kvox` finished across the
+  // DOCUMENTATION (93 hits across 16 files).
+  //
+  // WHY THESE ARE HERE: the same collision the two blocks above already
+  // describe, just in prose instead of code. This fork's CLI binary name
+  // equals its repository name, so the moment these docs stopped saying
+  // `appctl` and started saying `kvox`, every invocation example
+  // (`kvox deploy`, `kvox node start`, `~/.kvox/config.json`) began matching
+  // the `repoName` pattern too — a doc author showing a command and a doc
+  // author hardcoding the product identity now look identical to a literal
+  // scan. Markdown, YAML comments and READMEs cannot import from
+  // `@app/shared`.
+  //
+  // The shapes differ across this group, and the reason tracks the shape:
+  //   - Most of these (`docs/deployment/*`, `docs/runbooks/*`,
+  //     `docs/specs/*`, `docs/ARCHITECTURE.md`, `docs/DEVICE-AUTH.md`,
+  //     `docs/RENAMING.md`, `CLAUDE.md`, `packages/shared/README.md`) are
+  //     Markdown prose or runbooks showing `kvox <subcommand>` invocations —
+  //     the same standing as `VISION.md` and `docs/specs/transcription.md`
+  //     above.
+  //   - `.github/workflows/ci.yml` and
+  //     `apps/api/src/jobs/contracts/README.md` each carry exactly one
+  //     explanatory COMMENT naming the command (`kvox deploy`, `kvox`
+  //     itself) inside an otherwise product-neutral file — the same
+  //     standing as `apps/cli/src/tui/tty.ts` above, just outside
+  //     `apps/cli`.
+  //   - `.claude/skills/rename-app/SKILL.md` and
+  //     `.claude/skills/rename-app/references/do-not-rename.md` are the
+  //     rebranding instructions themselves: they necessarily discuss BOTH
+  //     the current binary name and a hypothetical future one in the same
+  //     breath, which a literal scan cannot tell apart from a hardcoded
+  //     identity literal.
+  //
+  // WHAT THIS COSTS, STATED PLAINLY: `findOffenders` below skips an
+  // allowlisted file ENTIRELY — for all four patterns at once, not just
+  // `repoName`. So these 16 files are not merely exempt from matching
+  // `kvox`; `productName` (`KVox`), `repoSlug` (`marinoscar/kvox`) and
+  // `owner` (`marinoscar`) are unguarded in them too, and nothing here would
+  // catch any of the four going stale. If a future fork renames the product
+  // again, nothing will flag that these docs still say `kvox`.
+  // `scripts/rename.mjs --cli-name` only rewrites `apps/cli/src/branding.ts`
+  // and `apps/cli/package.json` — the two files already allowlisted above
+  // for exactly that reason — it does not touch a single word of
+  // documentation. That is a manual step, and it is easy to forget:
+  // `warnAboutCliRename()` is being updated to say so, listing
+  // documentation as leftover work the operator still owns once the codemod
+  // finishes.
+  //
+  // WHY WE ACCEPTED IT ANYWAY: the alternatives are worse. Renaming the
+  // binary back to something neutral like `appctl` is rejected — the
+  // product deliberately ships a command named after itself. Contorting
+  // every doc to avoid ever naming the command it documents is rejected for
+  // the same reason `apps/cli/src/tui/tty.ts` is allowlisted above: it would
+  // make the documentation worse, not the code safer.
+  // ---------------------------------------------------------------------
+  '.claude/skills/rename-app/SKILL.md',
+  '.claude/skills/rename-app/references/do-not-rename.md',
+  '.github/workflows/ci.yml',
+  'CLAUDE.md',
+  'apps/api/src/jobs/contracts/README.md',
+  'docs/ARCHITECTURE.md',
+  'docs/DEVICE-AUTH.md',
+  'docs/RENAMING.md',
+  'docs/deployment/vps.md',
+  'docs/deployment/worker-nodes.md',
+  'docs/runbooks/database-restore.md',
+  'docs/runbooks/maintenance-mode.md',
+  'docs/specs/database-backup.md',
+  'docs/specs/vps-deploy.md',
+  'docs/specs/worker-nodes.md',
+  'packages/shared/README.md',
 ]);
 
 // Deliberately NOT allowlisted, on purpose, spelled out so nobody "fixes" this
