@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { deployInfoPath, readDeployInfo } from './deploy-info.js';
+import { deployInfoDir, deployInfoPath, readDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath } from './env-file.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
@@ -860,6 +860,30 @@ describe('runInstall against a fake VPS', () => {
     expect(info?.updatedAt).toMatch(/Z$/);
     // And nothing secret made it in.
     expect(readFileSync(path, 'utf8')).not.toContain('not-the-default-password');
+  });
+
+  it('creates deploy-info before the stack starts, not after (#133)', async () => {
+    // The Docker daemon creates a missing bind-mount source as root:root, and
+    // `vps.compose.yml` mounts `<root>/deploy-info` into the api container. If
+    // the `start` step gets there first, the epilogue's writeDeployInfo fails
+    // with EACCES on its temp file for any operator who is not root - every
+    // step green, the install dead on its last line. Existence alone is not
+    // the assertion: the ORDER is.
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    const dir = deployInfoDir(root);
+    let existedAtStart: boolean | undefined;
+    const watching = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      if (argv[0] === 'docker' && argv[1] === 'compose' && argv.includes('up') && argv.includes('-d')) {
+        existedAtStart ??= existsSync(dir);
+      }
+      return await vps.runCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    await install(root, { runCommand: watching });
+
+    // The `start` step really did run - otherwise the flag proves nothing.
+    expect(existedAtStart).toBe(true);
+    expect(statSync(dir).isDirectory()).toBe(true);
   });
 
   it('consults gh before cloning a GitHub remote, and never for another forge', async () => {
