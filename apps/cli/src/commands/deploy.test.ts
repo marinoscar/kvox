@@ -5,11 +5,12 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 
-import type { Check, CompletedCheck } from '../deploy/checks/index.js';
+import type { Check, CheckContext, CompletedCheck } from '../deploy/checks/index.js';
 import { DEPLOY_STATE_VERSION, deployStatePath, type DeployState } from '../deploy/state.js';
 import type { CommandResult, RunCommandOptions } from '../deploy/executor.js';
 import { EXIT, exitCodeFor } from '../errors.js';
 import {
+  PUBLIC_IP_ENV_VAR,
   buildReport,
   registerDeployCommand,
   renderResult,
@@ -56,6 +57,8 @@ async function runDoctor(
     stdout: { write: (chunk: string) => stdout.push(chunk) },
     stderr: { write: (chunk: string) => stderr.push(chunk) },
     isTty: false,
+    // Outside any checkout, so no test spawns git against this repository.
+    cwd: mkdtempSync(join(tmpdir(), 'appctl-doctor-cwd-')),
     ...extra,
   });
 
@@ -73,6 +76,93 @@ const HEALTHY: Check[] = [
   check('a', 'required', 'pass', 'fine'),
   check('b', 'recommended', 'pass', 'fine'),
 ];
+
+/** A check that records the context it was handed, for the flag tests. */
+function contextProbe(): { check: Check; seen: () => CheckContext } {
+  let captured: CheckContext | undefined;
+  return {
+    check: {
+      id: 'probe',
+      title: 'probe',
+      severity: 'required',
+      run: async (context) => {
+        captured = context;
+        return { status: 'pass', detail: 'seen' };
+      },
+    },
+    seen: () => {
+      if (captured === undefined) throw new Error('the probe check never ran');
+      return captured;
+    },
+  };
+}
+
+describe('kvox deploy doctor flags (issue #122)', () => {
+  it('passes --skip-proxy, --skip-github and --proxy-container into the check context', async () => {
+    const probe = contextProbe();
+
+    const result = await runDoctor(
+      ['--skip-proxy', '--skip-github', '--proxy-container', 'edge'],
+      [probe.check],
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(probe.seen().skipProxy).toBe(true);
+    expect(probe.seen().skipGithub).toBe(true);
+    expect(probe.seen().proxyContainer).toBe('edge');
+  });
+
+  it('leaves the flags unset when not given', async () => {
+    const probe = contextProbe();
+    await runDoctor([], [probe.check]);
+
+    expect(probe.seen().skipProxy).toBeUndefined();
+    expect(probe.seen().skipGithub).toBeUndefined();
+    expect(probe.seen().proxyContainer).toBeUndefined();
+    expect(probe.seen().publicIp).toBeUndefined();
+  });
+
+  it('takes --public-ip from the flag, or from the environment', async () => {
+    const fromFlag = contextProbe();
+    await runDoctor(['--public-ip', '203.0.113.10'], [fromFlag.check]);
+    expect(fromFlag.seen().publicIp).toBe('203.0.113.10');
+
+    const previous = process.env[PUBLIC_IP_ENV_VAR];
+    process.env[PUBLIC_IP_ENV_VAR] = '198.51.100.7';
+    try {
+      const fromEnv = contextProbe();
+      await runDoctor([], [fromEnv.check]);
+      expect(fromEnv.seen().publicIp).toBe('198.51.100.7');
+    } finally {
+      if (previous === undefined) delete process.env[PUBLIC_IP_ENV_VAR];
+      else process.env[PUBLIC_IP_ENV_VAR] = previous;
+    }
+  });
+
+  it('names the repository from the recorded state for gh-repo-access', async () => {
+    const probe = contextProbe();
+    const root = installedRoot();
+
+    await runDoctor(['--root', root], [probe.check]);
+
+    // From state, without spawning git: an installed deployment knows what
+    // it deployed.
+    expect(probe.seen().repoUrl).toBe('https://example.test/o/r');
+  });
+
+  it('leaves the repository unknown outside a checkout, and still runs', async () => {
+    const probe = contextProbe();
+
+    const result = await runDoctor([], [probe.check], {
+      runCommand: (async () => {
+        throw new Error('git must not be needed here');
+      }) as unknown as typeof import('../deploy/executor.js').runCommand,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(probe.seen().repoUrl).toBeUndefined();
+  });
+});
 
 describe('kvox deploy doctor', () => {
   it('exits 0 when every required check passes', async () => {

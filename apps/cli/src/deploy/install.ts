@@ -186,6 +186,13 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(context.options.domain === undefined
             ? {}
             : { domain: context.options.domain }),
+          // --skip-proxy is the only way to run this pipeline where there is
+          // no proxy (CI, #133); a preflight that fails on the proxy it was
+          // told to ignore would make the flag useless. The proxy checks
+          // report `skip` and the journal shows it.
+          ...(context.options.skipProxy === undefined
+            ? {}
+            : { skipProxy: context.options.skipProxy }),
         });
 
         for (const result of results) {

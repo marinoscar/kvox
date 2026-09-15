@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { CLI_NAME } from '../../branding.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../executor.js';
 import { DATABASE_CHECKS, databaseSettings } from './database.js';
 import { DNS_CHECKS } from './dns.js';
 import { ALL_CHECKS } from './index.js';
-import { TLS_CHECKS, parseNotAfter } from './tls.js';
+import { TLS_CHECKS, findRenewal, parseNotAfter } from './tls.js';
 import { runChecks, type Check, type CheckContext, type CheckFs } from './types.js';
 
 type Canned = { exitCode: number; stdout?: string; stderr?: string };
@@ -245,6 +246,33 @@ describe('dns checks', () => {
     );
 
     expect(result.status).toBe('warn');
+    expect(result.remedy).toContain('--public-ip');
+  });
+
+  it('treats --public-ip as one of this host addresses', async () => {
+    // Behind NAT the interfaces carry a private address; the operator states
+    // the public one instead of the check asking a third party for it.
+    const result = await find(DNS_CHECKS, 'dns-points-here').run(
+      context({
+        resolveHost: async () => ['198.51.100.7'],
+        ownAddresses: async () => ['10.0.0.5'],
+        publicIp: '198.51.100.7',
+      }),
+    );
+
+    expect(result.status).toBe('pass');
+  });
+
+  it('skips both checks under --skip-dns and under --skip-proxy', async () => {
+    for (const [flag, detail] of [
+      [{ skipDns: true }, '--skip-dns'],
+      [{ skipProxy: true }, '--skip-proxy'],
+    ] as const) {
+      const results = await runChecks(DNS_CHECKS, context({ resolveHost: async () => [], ...flag }));
+
+      expect(results.map((result) => result.status)).toEqual(['skip', 'skip']);
+      expect(results.map((result) => result.detail)).toEqual([detail, detail]);
+    }
   });
 });
 
@@ -264,7 +292,7 @@ describe('tls checks', () => {
     expect(result.detail).toContain('already issued');
   });
 
-  it('warns when no renewal mechanism can be found', async () => {
+  it('warns when no renewal mechanism can be found, naming --install-cron', async () => {
     const result = await find(TLS_CHECKS, 'certificate-renewal').run(
       context({
         fs: { ...presentFs, exists: (path: string) => !path.includes('cron.d') },
@@ -275,6 +303,80 @@ describe('tls checks', () => {
     expect(result.status).toBe('warn');
     // A certificate nobody renews is a 90-day timer on an outage.
     expect(result.remedy).toContain('90 days');
+    expect(result.remedy).toContain(`${CLI_NAME} deploy certs renew --install-cron`);
+  });
+
+  describe('accepts a renewal in any form it might take on the server', () => {
+    const noTimer = fakeRunCommand((argv) =>
+      argv.join(' ').startsWith('crontab -l') ? { exitCode: 1, stderr: 'no crontab for root' } : { exitCode: 1, stderr: 'disabled' },
+    );
+    const cronFs = (dir: Record<string, string>, crontab = ''): CheckFs => ({
+      ...presentFs,
+      readDir: (path) => (path === '/etc/cron.d' ? Object.keys(dir) : undefined),
+      readFile: (path) => (path === '/etc/crontab' ? crontab : dir[path.replace('/etc/cron.d/', '')]),
+    });
+
+    it('certbot.timer', async () => {
+      const result = await findRenewal(context({ fs: cronFs({}) }));
+      expect(result).toContain('certbot.timer');
+    });
+
+    it('a cron.d file calling a shared renewal script, named by path', async () => {
+      // The target server renews with a shared script under cron - nothing
+      // called certbot.timer and no /etc/cron.d/certbot.
+      const result = await findRenewal(
+        context({
+          runCommand: noTimer,
+          fs: cronFs({ 'infra-tls': '# renewals\n17 3 * * * root /opt/infra/bin/renew-certs.sh\n' }),
+        }),
+      );
+      expect(result).toBe('/etc/cron.d/infra-tls');
+    });
+
+    it("this CLI's own cron file, by name, whatever it contains", async () => {
+      const result = await findRenewal(
+        context({ runCommand: noTimer, fs: cronFs({ [`${CLI_NAME}-certs-demo`]: '' }) }),
+      );
+      expect(result).toBe(`/etc/cron.d/${CLI_NAME}-certs-demo`);
+    });
+
+    it('a line in /etc/crontab', async () => {
+      const result = await findRenewal(
+        context({ runCommand: noTimer, fs: cronFs({}, '0 4 * * * root docker run --rm certbot/certbot renew\n') }),
+      );
+      expect(result).toBe('/etc/crontab');
+    });
+
+    it("root's crontab", async () => {
+      const result = await findRenewal(
+        context({
+          fs: cronFs({}),
+          runCommand: fakeRunCommand((argv) =>
+            argv.join(' ').startsWith('crontab -l')
+              ? { exitCode: 0, stdout: '30 2 * * * /usr/local/bin/renew-all\n' }
+              : { exitCode: 1, stderr: 'disabled' },
+          ),
+        }),
+      );
+      expect(result).toBe('crontab -l');
+    });
+
+    it('but not a commented-out line, or a cron.d file about something else', async () => {
+      const result = await findRenewal(
+        context({
+          runCommand: noTimer,
+          fs: cronFs({ backups: '# certbot renew used to live here\n0 1 * * * root /opt/backup.sh\n' }),
+        }),
+      );
+      expect(result).toBeUndefined();
+    });
+  });
+
+  it('skips every certificate check under --skip-proxy', async () => {
+    const results = await runChecks(TLS_CHECKS, context({ skipProxy: true }));
+
+    expect(results.map((result) => result.status)).toEqual(['skip', 'skip', 'skip']);
+    expect(results.every((result) => result.detail === '--skip-proxy')).toBe(true);
   });
 
   it('skips the expiry check when openssl is unavailable', async () => {
@@ -300,10 +402,13 @@ describe('parseNotAfter', () => {
     expect(result.detail).toContain('19 day');
   });
 
-  it('warns on an expired certificate', () => {
+  it('warns on an expired certificate, with the renew command', () => {
     const result = parseNotAfter('notAfter=Dec  1 12:00:00 2025 GMT', now);
     expect(result.status).toBe('warn');
     expect(result.detail).toContain('expired');
+    // Through the CLI, never a host certbot - there is none on the server.
+    expect(result.remedy).toContain(`${CLI_NAME} deploy certs renew`);
+    expect(result.remedy).not.toMatch(/(^|\s)certbot renew/);
   });
 
   it('warns when the output cannot be read', () => {
@@ -312,14 +417,30 @@ describe('parseNotAfter', () => {
 });
 
 describe('the complete registry', () => {
-  it('runs host, database, DNS and TLS in that order', () => {
+  it('runs host, GitHub, database, DNS and TLS in that order', () => {
     const ids = ALL_CHECKS.map((check) => check.id);
 
     // Host first: a server with no docker should say so before it starts
-    // probing databases with a container it cannot run.
-    expect(ids.indexOf('docker-installed')).toBeLessThan(ids.indexOf('database-reachable'));
+    // probing databases with a container it cannot run. GitHub next: the
+    // clone is the first thing install does after preflight.
+    expect(ids.indexOf('docker-installed')).toBeLessThan(ids.indexOf('gh-installed'));
+    expect(ids.indexOf('gh-installed')).toBeLessThan(ids.indexOf('database-reachable'));
     expect(ids.indexOf('database-reachable')).toBeLessThan(ids.indexOf('dns-resolves'));
+    expect(ids.indexOf('dns-resolves')).toBeLessThan(ids.indexOf('certificate-present'));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('carries every v2 check and none of the retired ones', () => {
+    const ids = ALL_CHECKS.map((check) => check.id);
+
+    for (const id of [
+      'gh-installed', 'gh-authenticated', 'gh-repo-access',
+      'proxy-container', 'proxy-network-mode', 'proxy-config-valid',
+      'certbot-image', 'proxy-ipv6', 'ufw-ports',
+    ]) {
+      expect(ids, id).toContain(id);
+    }
+    expect(ids).not.toContain('certbot-installed');
   });
 
   it('gives every non-passing check a remedy, across the whole registry', async () => {
