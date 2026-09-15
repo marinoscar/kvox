@@ -445,14 +445,18 @@ do not restate it here.
 
 ### Deploying to a VPS
 
-VPS deployment (epic #168) lives entirely in this CLI as `kvox deploy
-doctor|install|update|status` — there is no separate deploy script or
-Ansible playbook anywhere in this repo, and there shouldn't be. The design
-(why it runs on the VPS with no SSH client in the CLI, why TLS is terminated
-by a shared host proxy instead of per-app, why there's no `db` service, what
-was rejected) is documented in full in
-[`docs/specs/vps-deploy.md`](docs/specs/vps-deploy.md); the operator-facing
-runbook — prerequisites, first login after install, troubleshooting — is
+VPS deployment (epic #168, corrected against a real server by epic #118)
+lives entirely in this CLI as `kvox deploy
+doctor|install|update|status|about|certs` — there is no separate deploy
+script or Ansible playbook anywhere in this repo, and there shouldn't be.
+The design (why it runs on the VPS with no SSH client in the CLI, why TLS is
+terminated by a shared, containerized proxy instead of per-app, why there's
+no `db` service, what was rejected) is documented in full in
+[`docs/specs/vps-deploy.md`](docs/specs/vps-deploy.md) —
+[§18](docs/specs/vps-deploy.md#18-v2-the-real-vps-epic-118) is what epic #118
+corrected against the shipped code, and [§19](docs/specs/vps-deploy.md#19-the-deploy-infoinfojson-schema)
+is the `deploy-info/info.json` schema; the operator-facing runbook —
+prerequisites, first login after install, troubleshooting — is
 [`docs/deployment/vps.md`](docs/deployment/vps.md). The command reference
 (flags, exit codes) is [`apps/cli/README.md`](apps/cli/README.md#deploying-to-a-server)
 above. Don't restate any of that here; extend those three instead.
