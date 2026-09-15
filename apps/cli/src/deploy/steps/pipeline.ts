@@ -30,6 +30,14 @@ export interface PipelineResult {
   steps: StepResult[];
   completed: string[];
   failed?: StepResult | undefined;
+  /**
+   * What the failed step threw, as thrown. `failed.detail` is its message
+   * for the hooks; this is for the caller, so a step that stops the run on
+   * a precondition (a logged-out `gh` in the `auth` step, #123) keeps the
+   * exit code that distinguishes "this server is not ready" from "the CLI
+   * broke" instead of being flattened into a generic failure.
+   */
+  error?: unknown;
 }
 
 /**
@@ -91,7 +99,7 @@ export async function runPipeline<C extends StepContext>(
       context.hooks?.onStepResult?.(failed);
       // Stop here. Continuing past a failed step is how a deployment ends up
       // half-applied and harder to reason about than one that stopped.
-      return { steps: results, completed, failed };
+      return { steps: results, completed, failed, error };
     }
 
     const result: StepResult = {
