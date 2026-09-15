@@ -802,6 +802,10 @@ Exits `0` when serving and the schema is current, `1` when installed but
 unhealthy, `2` when nothing is installed under `--apps-root` (or at
 `--root`).
 
+It reports the deployed revision as a single `Revision` line and points at
+`kvox deploy about` for the rest — when it was installed and last updated,
+by whom, and what machine it is on.
+
 Other flags, from `kvox deploy status --help`:
 
 ```
@@ -814,6 +818,72 @@ Options:
   --domain <domain>  Public domain; adds an external HTTPS check
   --json             Print a machine-readable report on stdout
   --no-color         Disable colour even on a terminal
+```
+
+### What is deployed here
+
+```bash
+kvox deploy about
+```
+
+The full picture, in three blocks mirroring the web Console's About page:
+
+- **Application** — the app version recorded at deploy time, and (when a
+  login for this deployment is available) the running process's API version,
+  environment, Node, start time, server clock, PostgreSQL version and
+  migration count, read from `GET /api/admin/about`.
+- **Deployment** — revision and ref, repository, domain and bind port, when
+  it was installed, when it was last updated, by which command and which CLI,
+  the previous revision, the deploy root, the environment file and the proxy
+  container — plus `Update: 3 commits behind (latest <sha12>)` and when that
+  was last checked.
+- **Server** — hostname, OS, kernel, architecture, CPU, memory, disk, Docker,
+  Compose and Node as recorded at deploy time. A live value that has changed
+  since is shown beside it: `3.8 GiB  (now 7.6 GiB)`.
+
+Every timestamp is UTC with how long ago it was —
+`2026-09-15 18:02:11 UTC (3 hours ago)` — so the terminal, the web card and
+`deploy-info/info.json` never disagree about the same moment.
+
+```bash
+kvox deploy about --check
+kvox deploy about --json | jq .deployment.updatedAt
+kvox deploy about --server http://127.0.0.1:3535
+```
+
+`--check` fetches the remote first (the same computation `update --check`
+runs, never cloning) and records the result in `deploy-info/info.json`;
+without it the `Update` line reports what was last recorded, or
+`never checked`. `--json` prints the report on stdout and nothing else, so it
+pipes into `jq`; every timestamp there is the ISO-8601 `Z` string the file
+carries, unformatted.
+
+The Application block needs a token for **this** deployment's own domain. A
+login stored for a different server is refused rather than reported as this
+one's — pass `--server <url>` to ask an API explicitly, which is also how you
+reach it over the loopback port while the domain is not yet serving. Without
+either, the block reads `unavailable (not logged in)` and everything else
+still renders.
+
+**It is informational, never a health verdict.** A stopped API container, an
+unreachable remote and a missing deployment record are all reported inline
+and still exit `0`; only "nothing is installed under `--apps-root` (or at
+`--root`)" is an error, and it exits `2` — the same code `status` uses, so a
+script can tell "no deployment" from "a deployment whose API is down". Use
+`kvox deploy status` for the check a monitor should act on.
+
+Other flags, from `kvox deploy about --help`:
+
+```
+Options:
+  --apps-root <dir>  Directory that holds one folder per app (default:
+                     "/opt/infra/apps")
+  --name <app>       App folder and compose project name
+  --root <dir>       Deployment directory, overriding --apps-root/--name
+  --check            Fetch the remote first, so the Update line is current
+  --server <url>     Ask this API about itself instead of the deployment's own
+                     domain
+  --json             Print the report on stdout
 ```
 
 ### Certificates

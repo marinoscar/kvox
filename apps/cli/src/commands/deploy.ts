@@ -13,6 +13,7 @@ import {
   type CheckStatus,
   type CompletedCheck,
 } from '../deploy/checks/index.js';
+import { collectAbout, renderAbout, type AboutReport } from '../deploy/about.js';
 import { updateDeployInfoRemote, type DeployRemote } from '../deploy/deploy-info.js';
 import { readEnvFile } from '../deploy/env-file.js';
 import { metadataFor } from '../deploy/env-metadata.js';
@@ -129,6 +130,12 @@ export interface DeployContext {
   cronDir?: string | undefined;
   /** The command the renewal cron runs; default this binary. */
   cliPath?: string | undefined;
+  /**
+   * Injected so `about` reads a test's config rather than the developer's own
+   * `~/.<cli>/config.json` - which would otherwise decide, machine by machine,
+   * whether the API block is attempted at all.
+   */
+  configContext?: import('../config.js').ConfigContext | undefined;
 }
 
 export function registerDeployCommand(
@@ -342,6 +349,46 @@ export function registerDeployCommand(
     )
     .action(async (options: StatusCommandOptions) => {
       await runStatusCommand(options, ctx);
+    });
+
+  withLayoutOptions(
+    deploy
+      .command('about')
+      .description('Show what is deployed here, on what, and whether it is current'),
+  )
+    .option('--check', 'Fetch the remote first, so the Update line is current')
+    .option('--server <url>', 'Ask this API about itself instead of the deployment\'s own domain')
+    .option('--json', 'Print the report on stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        `  ${CLI_NAME} deploy about`,
+        `  ${CLI_NAME} deploy about --check`,
+        `  ${CLI_NAME} deploy about --json | jq .deployment.updatedAt`,
+        '',
+        'Exit codes:',
+        '  0  a deployment is installed here',
+        '  2  nothing is installed under --apps-root (or at --root)',
+        '',
+        'Informational, never a health verdict: a stopped API, no network and',
+        'a missing deployment record are all reported inline and still exit 0.',
+        `Use \`${CLI_NAME} deploy status\` for the check a monitor should act on.`,
+        '',
+        'Three blocks, the same three the web Console\'s About page shows:',
+        'Application (the running process and its database), Deployment (what',
+        'was deployed, when, by whom, and how far behind it is) and Server (the',
+        'machine as recorded at deploy time, with any live value that has',
+        'changed since shown beside it).',
+        '',
+        'Every timestamp is UTC, with how long ago it was. The API block needs',
+        'a login for this deployment\'s own domain; without one it reads',
+        'unavailable and everything else still renders.',
+      ].join('\n'),
+    )
+    .action(async (options: AboutCommandOptions) => {
+      await runAboutCommand(options, ctx);
     });
 
   const certs = deploy
@@ -760,17 +807,11 @@ export function renderHealth(
   const lines: string[] = ['\n  Deployment\n\n'];
 
   if (report.deployed !== undefined) {
+    // ONE revision line, and no more (#128). `Last deployed`, `Last attempt`
+    // and the host facts used to be repeated here; they are `deploy about`'s
+    // three blocks now, and a health report that also tried to be an
+    // inventory made the verdict - the thing a monitor reads - harder to find.
     lines.push(`  ${'Revision'.padEnd(TITLE_WIDTH)}${report.deployed.commitSha.slice(0, 12)} (${report.deployed.ref})\n`);
-    lines.push(`  ${'Last deployed'.padEnd(TITLE_WIDTH)}${report.deployed.lastDeployedAt} by ${report.deployed.lastCommand}\n`);
-    // Only when it disagrees: an attempt later than the last success is a
-    // failed update, and the operator should see when it happened without
-    // `Last deployed` claiming it.
-    if (
-      report.deployed.lastAttemptAt !== undefined &&
-      report.deployed.lastAttemptAt > report.deployed.lastDeployedAt
-    ) {
-      lines.push(`  ${'Last attempt'.padEnd(TITLE_WIDTH)}${report.deployed.lastAttemptAt} (did not complete)\n`);
-    }
   }
 
   if (update !== undefined) {
@@ -822,9 +863,59 @@ export function renderHealth(
 
   const verdict = healthy ? 'healthy' : 'NOT healthy';
   const painted = colour && !healthy ? `${ESC}[31m${verdict}${RESET}` : verdict;
-  lines.push(`\n  ${painted}\n\n`);
+  lines.push(`\n  ${painted}\n`);
+  lines.push(`\n  Run \`${CLI_NAME} deploy about\` for the full picture.\n\n`);
 
   return lines.join('');
+}
+
+
+// ---------------------------------------------------------------------------
+// `kvox deploy about`  (issue #128, epic #118)
+// ---------------------------------------------------------------------------
+
+export interface AboutCommandOptions extends LayoutCommandOptions {
+  check?: boolean | undefined;
+  server?: string | undefined;
+  json?: boolean | undefined;
+}
+
+/**
+ * The informational counterpart to `status`.
+ *
+ * IT HAS EXACTLY TWO EXIT CODES: 0 when a deployment is installed here, and
+ * EXIT.USAGE (2) - raised by `collectAbout` through the same
+ * `locateInstalledApp` `status` uses - when nothing is. A stopped API, an
+ * unreachable remote and a missing deployment record are all facts this
+ * command REPORTS, so `about` never becomes a second health check with a
+ * second opinion (#128's rejected alternative).
+ */
+export async function runAboutCommand(
+  options: AboutCommandOptions,
+  ctx?: DeployContext,
+): Promise<void> {
+  const stdout = ctx?.stdout ?? process.stdout;
+  const stderr = ctx?.stderr ?? process.stderr;
+
+  const report: AboutReport = await collectAbout({
+    appsRoot: options.appsRoot,
+    ...(options.name === undefined ? {} : { name: options.name }),
+    ...(options.root === undefined ? {} : { root: options.root }),
+    runCommand: ctx?.runCommand ?? runCommand,
+    ...(options.check === true ? { check: true } : {}),
+    ...(options.server === undefined ? {} : { serverUrl: options.server }),
+    ...(ctx?.fetch === undefined ? {} : { fetch: ctx.fetch }),
+    ...(ctx?.cwd === undefined ? {} : { cwd: ctx.cwd }),
+    ...(ctx?.configContext === undefined ? {} : { configContext: ctx.configContext }),
+  });
+
+  // stdout carries the report and nothing else, so `| jq` is clean; the
+  // human rendering is stderr, like every other block in this file.
+  if (options.json === true) {
+    stdout.write(`${JSON.stringify(report)}\n`);
+  } else {
+    stderr.write(renderAbout(report));
+  }
 }
 
 
