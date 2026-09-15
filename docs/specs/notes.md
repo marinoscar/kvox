@@ -787,6 +787,70 @@ now-larger source pushes the prompt back over budget is caught as an
 generating from stale, no-longer-accurate content or silently truncating the
 new state.
 
+### 3.4 Naming the note: three ranks, and a title a person chose is never touched
+
+*(Issue #182, epic #163.)* Until this section existed a note was called
+whatever its **template** was called, so four notes generated from "Meeting
+notes" were four rows called "Meeting notes" and the list gave a user no way to
+tell them apart. Naming happens **once**, in `NoteGenerationService.commit`,
+the moment the body, the version row and `status: 'ready'` are durable — three
+ranks, each a fallback for the one above it:
+
+| Rank | Source | Reached when |
+|---|---|---|
+| 1 | A dedicated titling completion against the committed body | Normally |
+| 2 | The body's first Markdown heading, else its first sentence | Rank 1 produced nothing usable, **or threw anything at all** |
+| 3 | The title the note already has | Rank 2 found nothing usable either |
+
+Rank 1 is a **second, tiny request** rather than a line appended to the
+generation prompt: a note whose first line is its own title is a note the user
+then has to delete a line from. It sends the first ~2,000 characters of the
+body — a document says what it is about at the top, and sending the whole note
+would bill the user a second full pass over it for information the opening
+already carried — caps the answer at 32 tokens, and asks for
+`reasoningEffort: 'none'` regardless of policy, because reasoning tokens are
+drawn from that same 32-token output ceiling (§2.1) and a thinking model would
+spend the whole budget thinking and emit no title. Its timeout is the smaller
+of 30 s and `ai.requestTimeoutMs`: this request is not a note, and it is
+spending runtime that belongs to a `note.generate` job whose real work is
+already finished.
+
+**Rank 2 is pure, and that is the point of it being a separate module**
+(`generation/title-derivation.ts`): no provider, no key, no network, no clock.
+It is reached precisely because one of those has just failed, so a fallback
+that needed any of them would be a second copy of the thing that broke.
+
+**`titleSource: 'user'` is sticky.** The note is re-read inside the titling
+pass — minutes of streaming may have passed since the caller's copy was taken —
+and a `user` title returns immediately, writing nothing. The final write is an
+`updateMany` guarded on `titleSource: { not: 'user' }` as well, so a rename that
+lands between the read and the write still wins: the guard is in the `WHERE`
+clause, where a race cannot get between the two. A title written by rank 1 or
+rank 2 is recorded as `titleSource: 'ai'`.
+
+**The throttle key is the per-user one** (§2.3), never a shared deployment
+bucket — `aiProviderThrottleKey(ownerId)`, the same key the generation it
+follows registered, for the same reason: every user brings their own vendor
+account, so a 429 against one user's key is evidence about that user alone.
+
+**⚠ `titleNote` never throws, and nothing it does can fail the note.** By the
+time it runs the note is committed and durable; a title is a garnish on work
+that has already succeeded. An auth failure, a refusal, a **rate limit**, a
+timeout, a provider this build does not have, a key erased since the
+generation, or `ai.enabled` switched off mid-flight all fall through to rank 2
+and then rank 3, each logged with its reason. A `RateLimitError` is caught here
+and **not** rethrown — the one place in this codebase that swallows one —
+because deferring the job would re-run nothing useful and would leave the user
+looking at a finished note reported as still working. An exception escaping
+this path would turn a successful generation into a failed job, and the user
+would lose the note they had just watched being written, for the sake of
+naming it.
+
+A **preview** is never titled: it has no note to name, is never listed, and is
+hard-deleted at its ten-minute TTL (§4.4). Titling runs **before**
+`notes.note_ready` is raised, because that notification carries the title —
+raising it first would name a title the note stopped having a second later.
+
 ## 4. Data model
 
 Five tables (issue #48), all `snake_case`-mapped Prisma models, following the

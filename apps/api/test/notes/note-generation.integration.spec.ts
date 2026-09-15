@@ -217,6 +217,10 @@ function harness(db: Db) {
     prisma as never,
     notifications as never,
     config as never,
+    // #182's titling pass, stubbed. `null` is its "I changed nothing" answer,
+    // so the note keeps the title these assertions already expect — the real
+    // service's own three ranks are a unit concern, not this spec's.
+    { titleNote: jest.fn().mockResolvedValue(null) } as never,
   );
 
   const providers = new AiProviderRegistry();

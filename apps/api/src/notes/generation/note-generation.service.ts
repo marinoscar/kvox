@@ -5,6 +5,7 @@ import type { Note, NoteGeneration, Prisma } from '@prisma/client';
 import type { NoteFailedEmailData, NoteReadyEmailData } from '../../email';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NoteTitleService } from './note-title.service';
 
 // =============================================================================
 // Persisting one generation (issue #49, epic #45, docs/specs/notes.md §5.1)
@@ -48,6 +49,25 @@ import { PrismaService } from '../../prisma/prisma.service';
 // Notification": a dispatch inside would hold the transaction open across an
 // SMTP round trip, and a rollback after the send would mail somebody about a
 // note that does not exist.
+//
+// -----------------------------------------------------------------------------
+// TITLING SITS BETWEEN THOSE TWO, AND FOR BOTH OF THEIR REASONS (#182)
+// -----------------------------------------------------------------------------
+//
+// `NoteTitleService` names the note from what it says. It is called AFTER the
+// transaction and OUTSIDE it, for exactly the reason `notify` is: its first
+// rank is a provider round trip, and a network call inside that transaction
+// would hold it open across the internet. And it is called BEFORE `notify`,
+// because the "your note is ready" email carries the note's title — raising it
+// first would name a title the note stopped having a second later.
+//
+// ⚠ IT CANNOT FAIL THE NOTE, AND THAT IS ENFORCED TWICE. `titleNote` never
+// throws (see its header) — and the call below catches anyway. By the time it
+// runs the body, the version and `status: 'ready'` are durable, and a titling
+// failure that propagated would turn a successful generation into a failed job
+// in front of a user who had just watched their note being written. An
+// invariant that expensive to get wrong is worth a second enforcement point;
+// the catch at the call site is it.
 // =============================================================================
 
 /** A generation row with the note it belongs to (null for a preview). */
@@ -85,6 +105,7 @@ export class NoteGenerationService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
+    private readonly titles: NoteTitleService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -230,6 +251,10 @@ export class NoteGenerationService {
       });
     });
 
+    // ⚠ A PREVIEW IS NEVER TITLED, and returns before the call below. It has no
+    // note to name, is never listed anywhere, and is hard-deleted at its
+    // ten-minute TTL — spending a request and a user's tokens on a name nobody
+    // will ever read is the one clearly wrong thing to do here.
     if (!generation.noteId) return;
 
     // AFTER the transaction, OUTSIDE it. `notify` is detached and never
@@ -238,9 +263,47 @@ export class NoteGenerationService {
 
     if (!note) return;
 
+    // NAME THE NOTE FIRST, TELL THE OWNER SECOND (#182). Both are outside the
+    // transaction, and the order between them is not arbitrary: the email
+    // carries the title, so a notification raised first would name the title
+    // the note had a moment ago. `titleNote` returns the title the note carries
+    // now, or `null` when it could not produce one, in which case the copy this
+    // job loaded is the best we have.
+    //
+    // ⚠ THE CATCH IS A SECOND ENFORCEMENT POINT, NOT A DOUBT ABOUT `titleNote`.
+    // Its contract is that it never throws — every rank is wrapped and its
+    // outermost `try` covers even the database reads (see its header) — and
+    // nothing here weakens or moves that. But by this line the body, the
+    // version and `status: 'ready'` are already committed and durable, while
+    // `commit()` itself runs inside `NoteGenerateHandler.generate()`'s try
+    // block: anything escaping here would be classified `'other'`, handed to
+    // `markFailed()`, and would flip an already-`ready` note to `failed` and
+    // mail its owner `notes.note_failed` about a note they had just watched
+    // being written. One belt, one pair of braces — the cost of that contract
+    // being broken once, by a future bug here or a substituted implementation
+    // that does not honour it, is a user losing a finished note over its name.
+    // A throw is logged at `warn` so a broken contract is visible rather than
+    // silent, and falls through to `note.title` exactly as a `null` does.
+    let title: string | null = null;
+
+    try {
+      title = await this.titles.titleNote({
+        noteId: note.id,
+        ownerId: note.ownerId,
+        body: content,
+        providerId: generation.providerId,
+        model: generation.model,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Titling note ${note.id} threw, which \`titleNote\`'s own contract forbids; ` +
+          `the note keeps the title it has: ${String(error)}`,
+      );
+    }
+
     const payload: NoteReadyEmailData = {
       noteId: note.id,
-      title: note.title,
+      title: title ?? note.title,
       templateName: generation.templateNameSnapshot,
       providerLabel: input.providerLabel,
       model: generation.model,
