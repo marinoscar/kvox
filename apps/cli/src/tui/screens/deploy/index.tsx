@@ -2,15 +2,23 @@ import { Box, Text, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import { useMemo, useState, type ReactNode } from 'react';
 
-import { CLI_NAME } from '../../../branding.js';
 import { describeConfig } from '../../../config.js';
 import { DEFAULT_APPS_ROOT, listInstalledApps } from '../../../deploy/layout.js';
 import { Frame } from '../../layout.js';
+import { AboutScreen } from './about.js';
+import { CertificatesScreen } from './certificates.js';
+import { DoctorScreen } from './doctor.js';
 import { InstallWizard } from './install.js';
+import { StatusScreen } from './status.js';
+import { UpdateScreen } from './update.js';
 
 // =============================================================================
 // The deploy screen  (issue #131, epic #118; replacing #184's single screen)
 // =============================================================================
+//
+// SIX DESTINATIONS, ONE ROUTE (#132 completes the set: Doctor, Install,
+// Update, Status, Certificates, About are all real screens now — no phase
+// falls through to a frame naming the subcommand instead of doing the work).
 //
 // ONE ROUTE, SEVERAL PHASES. `routes.ts` is closed and has no history stack
 // (see its header), so an action per route would return to the TOP menu rather
@@ -79,15 +87,6 @@ export function deployMenuItems(state: DeployMenuState): DeployMenuItem[] {
   ];
 }
 
-/** What a phase that is not built yet tells the operator to run instead. */
-export const PLACEHOLDER_COMMANDS: Readonly<Record<string, string>> = {
-  update: 'deploy update',
-  doctor: 'deploy doctor',
-  status: 'deploy status',
-  certs: 'deploy certs status',
-  about: 'api GET /api/admin/about',
-};
-
 export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
   const [phase, setPhase] = useState<Phase>('choose');
 
@@ -103,12 +102,64 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
   // screen is where the route ends.
   useInput(
     (_input, key) => {
-      if (!key.escape) return;
-      if (phase === 'choose') onDone();
-      else setPhase('choose');
+      if (key.escape) onDone();
     },
-    { isActive: phase !== 'install' },
+    // THE MENU ONLY. Every phase below is a screen that binds its own Esc and
+    // returns here through `onDone`; a second handler mounted over it would
+    // fire on the same keystroke, which is exactly what `app.tsx`'s
+    // conditional mounting exists to prevent.
+    { isActive: phase === 'choose' },
   );
+
+  if (phase === 'doctor') {
+    return (
+      <DoctorScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'update') {
+    return (
+      <UpdateScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'status') {
+    return (
+      <StatusScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'about') {
+    return (
+      <AboutScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'certs') {
+    return (
+      <CertificatesScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
 
   if (phase === 'install') {
     return (
@@ -117,19 +168,6 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
           setPhase('choose');
         }}
       />
-    );
-  }
-
-  if (phase !== 'choose') {
-    const command = PLACEHOLDER_COMMANDS[phase] ?? '';
-    return (
-      <Frame title={`Deploy — ${phase}`} hints={['esc back']}>
-        <Text>This screen is not part of the wizard yet.</Text>
-        <Box marginTop={1} flexDirection="column">
-          <Text dimColor>The same work runs today as</Text>
-          <Text bold>{`  ${CLI_NAME} ${command}`}</Text>
-        </Box>
-      </Frame>
     );
   }
 

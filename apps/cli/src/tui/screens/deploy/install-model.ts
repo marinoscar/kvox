@@ -879,14 +879,22 @@ const OUTCOME_STATUS = {
   failed: 'fail',
 } as const;
 
-/** The pipeline as a checklist: every step listed, with per-step duration. */
-export function pipelineItems(progress: readonly PipelineProgress[]): ChecklistItem[] {
+/**
+ * The pipeline as a checklist: every step listed, with per-step duration.
+ *
+ * `steps` is a parameter rather than the install list baked in, because the
+ * update screen (#132) shows the SAME running view over a DIFFERENT eleven
+ * steps. A second copy of this function would be a second place for the
+ * running/ok/skipped/failed mapping and the duration suffix to drift.
+ */
+export function pipelineItems(
+  progress: readonly PipelineProgress[],
+  steps: ReadonlyArray<{ id: string; title: string }> = PIPELINE_STEPS,
+): ChecklistItem[] {
   const byId = new Map(progress.map((entry) => [entry.id, entry]));
-  const extra = progress.filter(
-    (entry) => !PIPELINE_STEPS.some((step) => step.id === entry.id),
-  );
+  const extra = progress.filter((entry) => !steps.some((step) => step.id === entry.id));
 
-  return [...PIPELINE_STEPS, ...extra.map((entry) => ({ id: entry.id, title: entry.title }))].map(
+  return [...steps, ...extra.map((entry) => ({ id: entry.id, title: entry.title }))].map(
     (step) => {
       const entry = byId.get(step.id);
       if (entry === undefined) {
