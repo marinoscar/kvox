@@ -131,6 +131,12 @@ export default function HomePage() {
   // all — so a user without `notes:read` costs this page a guaranteed 403
   // rather than saving one.
   const canReadNotes = hasPermission('notes:read');
+  // Read ONCE and handed to both consumers — the hero's New-note action (#173)
+  // and `RecentNotes`' zero-state button. Two `usePermissions()` reads, one per
+  // component, would be two places for the same screen to disagree about the
+  // same user; and `notes:write` is the exact string `notes.controller.ts`
+  // enforces on `POST /api/notes`, which is also what `App.tsx` guards
+  // `/notes/new` with.
   const canWriteNotes = hasPermission('notes:write');
   const notes = useNoteSummary({ enabled: canReadNotes });
 
@@ -216,6 +222,7 @@ export default function HomePage() {
           displayName={user?.displayName ?? null}
           transcriptionAvailable={transcriptionAvailable}
           isCheckingTranscription={isCheckingTranscription}
+          canCreateNote={canWriteNotes}
         />
 
         {/* A stale page, not a blank one: the summary that is already on screen

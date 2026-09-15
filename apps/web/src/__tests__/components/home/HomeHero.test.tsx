@@ -228,3 +228,111 @@ describe('HomeHero — the New transcript button', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+// =============================================================================
+// The New note action — issue #173, epic #166
+// =============================================================================
+
+describe('HomeHero — the New note button', () => {
+  it('offers New note to a caller that may create one', () => {
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote />);
+
+    expect(screen.getByRole('button', { name: 'New note' })).toBeEnabled();
+  });
+
+  it('navigates to the New-note flow when pressed', async () => {
+    // The SAME path `RecentNotes`' zero-state button uses and the same one
+    // `App.tsx` registers — the two affordances must never disagree about
+    // where "new note" is.
+    const user = userEvent.setup();
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote />);
+
+    await user.click(screen.getByRole('button', { name: 'New note' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/notes/new');
+  });
+
+  it('hides it entirely when the caller may not create a note', () => {
+    // No button rather than a disabled one, exactly as `NewTranscriptButton`
+    // treats a missing `transcripts:write`: `/notes/new` is guarded on
+    // `notes:write`, so a disabled control would advertise something the
+    // router would bounce them off.
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote={false} />);
+
+    expect(screen.queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();
+  });
+
+  it('defaults to hiding it when the prop is omitted altogether', () => {
+    // Default-DENY. A forgotten prop must cost an action, never manufacture
+    // one the API would refuse.
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable />);
+
+    expect(screen.queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();
+  });
+
+  it('keeps New transcript as the primary action and New note as the secondary', () => {
+    // The hero must still have ONE obvious first move; two filled buttons side
+    // by side is a hero with none.
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote />);
+
+    expect(screen.getByRole('button', { name: 'New transcript' })).toHaveClass(
+      'MuiButton-contained',
+    );
+    expect(screen.getByRole('button', { name: 'New note' })).toHaveClass('MuiButton-outlined');
+  });
+
+  it('puts New transcript before New note in the document', () => {
+    // Capture is still the front of Capture → Correct → Transform, and on a
+    // phone the two are a single stacked column read top to bottom.
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote />);
+
+    const buttons = screen.getAllByRole('button').map((element) => element.textContent);
+    expect(buttons).toEqual(['New transcript', 'New note']);
+  });
+
+  it('names the two actions distinctly', () => {
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote />);
+
+    expect(screen.getByRole('button', { name: 'New transcript' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New note' })).toBeInTheDocument();
+  });
+
+  it('still offers New note when transcription is not configured', () => {
+    // The two gates are independent: a deployment with no speech-to-text
+    // provider can still generate a note from an uploaded document, which is
+    // most of the point of putting this action here at all.
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable={false} canCreateNote />);
+
+    expect(screen.getByRole('button', { name: 'New note' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'New transcript' })).toBeDisabled();
+  });
+
+  it('still offers New note to a user who cannot create a transcript', () => {
+    // `NewTranscriptButton` renders nothing at all for them, so New note is
+    // the only action left in the hero — and it is a real one.
+    renderHero(<HomeHero displayName="Ana" transcriptionAvailable canCreateNote />, {
+      ...mockUser,
+      permissions: ['user_settings:read'],
+    });
+
+    expect(screen.queryByRole('button', { name: 'New transcript' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New note' })).toBeEnabled();
+  });
+
+  it('has no accessibility violations with both actions present', async () => {
+    const { container } = renderHero(
+      <HomeHero displayName="Ana" transcriptionAvailable canCreateNote />,
+    );
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('has no accessibility violations with both actions and a disabled transcript button', async () => {
+    const { container } = renderHero(
+      <HomeHero displayName="Admin" transcriptionAvailable={false} canCreateNote />,
+      mockAdminUser,
+    );
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
