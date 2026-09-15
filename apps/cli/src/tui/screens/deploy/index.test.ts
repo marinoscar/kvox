@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import type { Route } from '../../routes.js';
-import { PLACEHOLDER_COMMANDS, deployMenuItems, type Phase } from './index.js';
+import { deployMenuItems, type Phase } from './index.js';
 
 // =============================================================================
 // The deploy screen's menu  (issue #131, epic #118)
@@ -61,13 +61,25 @@ describe('deployMenuItems', () => {
     );
   });
 
-  it('gives every destination that is not yet a screen the command that does the same work', () => {
-    const later: Array<Exclude<Phase, 'choose' | 'install'>> = [
+  it('routes every destination to a real screen — no placeholders are left', () => {
+    // #132 built the last five. The proof is structural rather than a list
+    // here: the menu's six values must each be rendered by `index.tsx`, and
+    // the placeholder table it used to fall back to must be gone.
+    const source = readFileSync(join(HERE, 'index.tsx'), 'utf8');
+
+    expect(source).not.toContain('PLACEHOLDER_COMMANDS');
+    expect(source).not.toContain('not part of the wizard yet');
+
+    const phases: Array<Exclude<Phase, 'choose'>> = [
+      'doctor',
+      'install',
+      'update',
+      'status',
+      'certs',
       'about',
     ];
-
-    for (const phase of later) {
-      expect(PLACEHOLDER_COMMANDS[phase], phase).toBeTruthy();
+    for (const phase of phases) {
+      expect(source, phase).toContain(`phase === '${phase}'`);
     }
   });
 });
