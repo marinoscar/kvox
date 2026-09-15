@@ -68,7 +68,16 @@ export interface DeployState {
    */
   envPath?: string | undefined;
   installedAt: string;
+  /**
+   * When the last deploy SUCCEEDED. Never stamped at fetch time: a failed
+   * update must not claim a deploy that never happened (#120).
+   */
   lastDeployedAt: string;
+  /**
+   * When the last update was attempted, successful or not - so `status` can
+   * show a failed attempt's time without `lastDeployedAt` lying about it.
+   */
+  lastAttemptAt?: string | undefined;
   lastCommand: 'install' | 'update';
   /**
    * Which CLI version wrote this, for diagnosing a state file from the future.

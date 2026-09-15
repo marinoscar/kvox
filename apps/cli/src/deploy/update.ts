@@ -208,11 +208,14 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         );
 
         // Recorded BEFORE anything is mutated, so a failed update still leaves
-        // behind what it was replacing.
+        // behind what it was replacing. `lastDeployedAt` is NOT touched here:
+        // nothing has been deployed yet, and a failed update stamping a
+        // deploy time that never happened is the bug #120 fixed. The attempt
+        // itself is what gets a timestamp.
         writeState({
           ...context.state,
           previousSha: checkout.previousSha,
-          lastDeployedAt: new Date().toISOString(),
+          lastAttemptAt: new Date().toISOString(),
         } as DeployState);
       },
     },
@@ -504,13 +507,17 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     };
   }
 
+  // Stamped ONLY here, once every step has run: this is the moment something
+  // was actually deployed. `installedAt` rides through untouched.
+  const now = new Date().toISOString();
   const deployed = {
     ...state,
     ref: context.target?.ref ?? state.ref,
     commitSha: context.commitSha ?? state.commitSha,
     previousSha: context.previousSha,
     envPath: envFilePath(options.deployRoot),
-    lastDeployedAt: new Date().toISOString(),
+    lastDeployedAt: now,
+    lastAttemptAt: now,
     lastCommand: 'update',
     appctlVersion: CLI_VERSION,
   } as DeployState;

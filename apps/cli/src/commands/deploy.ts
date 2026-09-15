@@ -518,6 +518,15 @@ export function renderHealth(
   if (report.deployed !== undefined) {
     lines.push(`  ${'Revision'.padEnd(TITLE_WIDTH)}${report.deployed.commitSha.slice(0, 12)} (${report.deployed.ref})\n`);
     lines.push(`  ${'Last deployed'.padEnd(TITLE_WIDTH)}${report.deployed.lastDeployedAt} by ${report.deployed.lastCommand}\n`);
+    // Only when it disagrees: an attempt later than the last success is a
+    // failed update, and the operator should see when it happened without
+    // `Last deployed` claiming it.
+    if (
+      report.deployed.lastAttemptAt !== undefined &&
+      report.deployed.lastAttemptAt > report.deployed.lastDeployedAt
+    ) {
+      lines.push(`  ${'Last attempt'.padEnd(TITLE_WIDTH)}${report.deployed.lastAttemptAt} (did not complete)\n`);
+    }
   }
 
   lines.push('\n  Containers\n\n');
