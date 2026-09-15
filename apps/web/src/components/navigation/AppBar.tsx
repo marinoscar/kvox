@@ -71,7 +71,7 @@ const SETTINGS_SURFACES: {
  * A TABLE OF PATTERNS, for the same reason `SETTINGS_SURFACES` is a table
  * rather than a `??` chain: the bar needs to know WHICH level matched, because
  * the up destination differs per level (`/transcripts/:id/history` goes up to
- * the transcript, `/transcripts/:id` goes up to the library). Order is
+ * the transcript, `/transcripts/:id` goes up to the transcripts list). Order is
  * MOST SPECIFIC FIRST and is load-bearing here in a way it is not above —
  * `/transcripts/:id` would otherwise claim `/transcripts/abc/history`, since a
  * looser pattern matching a deeper path is exactly what a route hierarchy
@@ -86,12 +86,15 @@ const SETTINGS_SURFACES: {
  * issue wants the live title here, the place to add it is a provider around
  * both children in `Layout`, not a second resolver here.
  *
- * `/transcripts` itself is deliberately absent: it is a DESTINATION (the
- * bottom bar lights its tab), not a drill-down, so it keeps the wordmark
- * exactly as `/` and `/settings`'s own hub do not. `/notes` is absent for
- * exactly the same reason since #57 — it is the OTHER tab of the same
- * destination, not a page below it — while `/notes/new`, `/notes/:id` and
- * `/notes/:id/history` are drill-downs and are listed below.
+ * `/transcripts` and `/notes` are both deliberately absent: each is a
+ * DESTINATION with a bottom-bar tab of its own (#106), not a drill-down, so
+ * both keep the wordmark exactly as `/` and `/settings`'s own hub do. A back
+ * arrow on a destination is a second, contradictory answer to "where am I" when
+ * the bar is already answering it. `/notes` was absent for a WEAKER reason
+ * between #57 and #106 — it was the other TAB of one `library` destination —
+ * and the conclusion survives the model changing under it. Their children
+ * (`/transcripts/new`, `/notes/:id`, the history pages …) are drill-downs and
+ * are listed below.
  */
 const DRILL_DOWN_ROUTES: {
   pattern: RegExp;
@@ -120,11 +123,12 @@ const DRILL_DOWN_ROUTES: {
   // above and load-bearing for the same reason: `/notes/:id` would otherwise
   // claim `/notes/abc/history`.
   //
-  // ⚠ EVERY `upPath` HERE IS `/notes`, NOT `/transcripts`. They are the same
-  // destination, but a user who drilled into a note belongs back on the tab
-  // they came from — the tab IS the URL (`pages/libraryTabs.ts`), so going up
-  // to `/transcripts` would silently switch which half of the library they are
-  // looking at.
+  // ⚠ EVERY `upPath` HERE IS `/notes`, NOT `/transcripts`. Since #106 these are
+  // two separate destinations, so this is simply "up one level within your own
+  // subtree" — but it was already required when they were one `library`
+  // destination with two tabs, because going up to `/transcripts` would
+  // silently switch which half of the library the reader was looking at. The
+  // value did not change when the model did; only the reason it is obvious.
   {
     pattern: /^\/notes\/new\/?$/,
     title: 'New note',

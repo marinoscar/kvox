@@ -35,13 +35,14 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 // User settings — the hub (#96) plus one route per card in
 // `config/userSettingsSections.tsx` (#91, epic #90). These replace the single
 // stacked `UserSettingsPage`, which is deleted rather than left unrouted.
-// The library (#30 epic #19, #57 epic #45) — ONE page at two routes,
-// `/transcripts` and `/notes`, rendering the tab the path names. Plus the
-// New-transcript flow, the viewer, and #31's history page. Lazy like every
-// other page here, and with more reason than most: the viewer alone pulls in
-// the virtualizer and the playback engine, neither of which a user who never
-// opens a transcript needs.
-const LibraryPage = lazy(() => import('./pages/LibraryPage'));
+// The two content destinations (#106, over #30 epic #19 and #57 epic #45) —
+// TWO pages at two routes since the Transcripts | Notes tab strip was deleted,
+// where `LibraryPage` was one page at both. Plus the New-transcript flow, the
+// viewer, and #31's history page. Lazy like every other page here, and with
+// more reason than most: the viewer alone pulls in the virtualizer and the
+// playback engine, neither of which a user who never opens a transcript needs.
+const TranscriptsPage = lazy(() => import('./pages/TranscriptsPage'));
+const NotesPage = lazy(() => import('./pages/NotesPage'));
 const NewTranscriptPage = lazy(() => import('./pages/NewTranscriptPage'));
 const TranscriptPage = lazy(() => import('./pages/TranscriptPage'));
 const TranscriptHistoryPage = lazy(() => import('./pages/TranscriptHistoryPage'));
@@ -225,33 +226,38 @@ function AppRoutes() {
                       `/transcripts/new` carries `:write` while its siblings
                       carry `:read`, and the split is the reachability-vs-content
                       distinction the settings pages make: a user who may read
-                      transcripts but not create one reaches the library and the
+                      transcripts but not create one reaches the list and the
                       viewer, and is redirected away from the only route that
                       would 403 on submit.
 
                       ORDER IS NOT SIGNIFICANT — React Router v6 ranks by
                       specificity, so `/transcripts/new` beats `/transcripts/:id`
                       wherever each is written. They are grouped for reading. */}
-                  {/* ⚠ THE FALLBACK IS `/notes`, NOT `/`, SINCE #57. The
-                      `library` destination is reachable on EITHER
-                      `transcripts:read` or `notes:read` (see its
-                      `anyPermission`) but its `path` is this one, so a user
-                      holding only `notes:read` who clicks Library — or follows
-                      an old bookmark — lands here without the permission to
-                      stay. Sending them to `/` would be the #92 bug in a new
-                      place: a nav row that says "you can go here" and a route
-                      that says "no you can't". Sending them one tab sideways
-                      lands them on the half of the library they CAN read. A
-                      user holding neither falls through `/notes`' own gate to
-                      `/`, so the chain still terminates. */}
+                  {/* ⚠ THE FALLBACK IS `/` AGAIN SINCE #106, NOT `/notes`.
+                      Between #57 and #106 it pointed sideways at the other
+                      subtree, and it had to: ONE `library` destination fronted
+                      both, reachable on EITHER permission (`anyPermission`) but
+                      with `/transcripts` as its `path` — so a user holding only
+                      `notes:read` clicked a row they were legitimately shown
+                      and landed on a route they could not read. Sending them to
+                      `/` would have been the #92 bug in a new place, a nav row
+                      promising a surface the router refuses.
+
+                      That row no longer exists. `transcripts` and `notes` are
+                      two destinations gated on one permission each
+                      (`config/destinations.ts`), so a notes-only user is never
+                      shown a Transcripts row at all and can only arrive here by
+                      an old bookmark or a hand-typed URL. For that user `/` is
+                      the right answer and `/notes` would be a guess about what
+                      they meant. */}
                   <Route
                     path="/transcripts"
                     element={
                       <RequirePermission
                         permission="transcripts:read"
-                        fallback={<Navigate to="/notes" replace />}
+                        fallback={<Navigate to="/" replace />}
                       >
-                        <LibraryPage />
+                        <TranscriptsPage />
                       </RequirePermission>
                     }
                   />
@@ -291,11 +297,12 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* Notes (#57, epic #45) — the OTHER half of the `library`
-                      destination, not a destination of its own. See
-                      `config/destinations.ts`: four is the bottom bar's
-                      ceiling, and `/notes` is a second prefix on the existing
-                      row rather than a fifth tab.
+                  {/* Notes (#57, epic #45) — a DESTINATION OF ITS OWN since
+                      #106, where it used to be the other half of the `library`
+                      destination. See `config/destinations.ts`: four NON-PINNED
+                      destinations is the bottom bar's ceiling, and #106 freed
+                      the fourth slot by pinning Console rather than by merging
+                      these two nouns onto one row.
 
                       GATED ON THE SAME STRINGS `notes.controller.ts` ENFORCES,
                       verified against it rather than assumed: `notes:read` on
@@ -307,10 +314,10 @@ function AppRoutes() {
                       nobody is refused, and the gate is here anyway for the
                       deployment that revokes it.
 
-                      `/notes` renders the SAME `LibraryPage` `/transcripts`
-                      does: the tab is the route (`pages/libraryTabs.ts`), which
-                      is what makes a tab linkable, bookmarkable and able to
-                      survive a reload. */}
+                      `/notes` renders its OWN page since #106 — `NotesPage`,
+                      the sibling of `TranscriptsPage` above — rather than the
+                      shared `LibraryPage` selecting a tab from the pathname.
+                      Its fallback is `/` and always was. */}
                   <Route
                     path="/notes"
                     element={
@@ -318,14 +325,16 @@ function AppRoutes() {
                         permission="notes:read"
                         fallback={<Navigate to="/" replace />}
                       >
-                        <LibraryPage />
+                        <NotesPage />
                       </RequirePermission>
                     }
                   />
                   {/* `:write`, and its fallback is `/notes` rather than `/` —
                       the same asymmetry `/transcripts/new` has, for the same
                       reason: a user who may read notes but not create one
-                      belongs on the library they can reach. */}
+                      belongs on the list they can reach. Unlike `/transcripts`'
+                      own fallback above, this one never pointed at the other
+                      subtree and is unchanged by #106. */}
                   <Route
                     path="/notes/new"
                     element={
