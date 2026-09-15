@@ -6,11 +6,12 @@ import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
 import {
   ALL_CHECKS,
+  DEFAULT_PROXY_CONTAINER,
   DEVNET_CHECK_ID,
   DEVNET_NETWORK,
   checksPassed,
-  requiredChecks,
   runChecks,
+  type CheckContext,
 } from './checks/index.js';
 import { parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -26,7 +27,14 @@ import {
   locateApp,
   type ResolvedLayout,
 } from './layout.js';
-import { installVhost, issueCertificate, type ProxyTarget } from './proxy.js';
+import {
+  defaultCliPath,
+  installRenewalCron,
+  installVhost,
+  issueCertificate,
+  type FetchLike,
+  type ProxyTarget,
+} from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
 import { readState, writeState, type DeployState } from './state.js';
 import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
@@ -87,10 +95,31 @@ export interface InstallOptions {
   force?: boolean | undefined;
   email?: string | undefined;
   staging?: boolean | undefined;
+  /**
+   * The shared proxy's container (`--proxy-container`). Otherwise the
+   * `proxy-container` preflight check finds it, and with `--skip-doctor` the
+   * conventional name is assumed - the same order doctor resolves it in.
+   */
+  proxyContainer?: string | undefined;
+  /** `--no-ipv6`: render the vhost without `[::]` listeners. */
+  ipv6?: boolean | undefined;
+  /**
+   * `--install-cron` / `--no-install-cron`. Undefined means "when a
+   * certificate was issued by this run": a fresh certificate with nobody to
+   * renew it is a 90-day timer on an outage, while an existing one is
+   * presumably already somebody's job.
+   */
+  installCron?: boolean | undefined;
+  /** The command the renewal cron runs; defaults to this binary. */
+  cliPath?: string | undefined;
+  /** Where the cron file goes; default /etc/cron.d, tests point it elsewhere. */
+  cronDir?: string | undefined;
   runCommand?: typeof defaultRunCommand | undefined;
   hooks?: DeployHooks | undefined;
   promptContext?: PromptContext | undefined;
   cwd?: string | undefined;
+  /** Injected so the routing self-probe is testable without public DNS. */
+  fetch?: FetchLike | undefined;
   /**
    * Values collected elsewhere, merged in ahead of the wizard.
    *
@@ -112,7 +141,21 @@ interface InstallContext extends StepContext {
   checkoutPath?: string | undefined;
   commitSha?: string | undefined;
   env?: Map<string, string> | undefined;
+  /** Written by the preflight from the `proxy-container` check (#122). */
+  proxyContainer?: string | undefined;
+  /** Written by the preflight from the `proxy-ipv6` check (#122). */
+  ipv6?: boolean | undefined;
+  /** Whether the publish step issued a certificate (rather than found one). */
+  certificateIssued?: boolean | undefined;
 }
+
+/**
+ * The checks the preflight runs: every required one except devnet (the
+ * `network` step right after creates it, so failing on its absence here would
+ * refuse the very install that fixes it), plus `proxy-ipv6`, which is only
+ * recommended but whose answer decides whether the vhost may bind `[::]`.
+ */
+export const PREFLIGHT_EXTRA_CHECK_IDS: readonly string[] = ['proxy-ipv6'];
 
 export function composeCwd(deployRoot: string): string {
   // The relative build contexts in base.compose.yml (`../..`, `../nginx`)
@@ -173,11 +216,15 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ? 'skipped with --skip-doctor'
           : undefined,
       async run(context) {
-        // Every required check except the devnet one: the `network` step
-        // right after this creates that network, so failing on its absence
-        // here would refuse the very install that fixes it.
-        const checks = requiredChecks(ALL_CHECKS).filter((check) => check.id !== DEVNET_CHECK_ID);
-        const results = await runChecks(checks, {
+        const checks = ALL_CHECKS.filter(
+          (check) =>
+            (check.severity === 'required' || PREFLIGHT_EXTRA_CHECK_IDS.includes(check.id)) &&
+            check.id !== DEVNET_CHECK_ID,
+        );
+        // Held in a variable because the checks WRITE to it: `proxy-container`
+        // records the container it found and `proxy-ipv6` whether [::] may be
+        // bound, and the publish step reads both back.
+        const checkContext: CheckContext = {
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
           name: context.options.name,
@@ -186,6 +233,9 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(context.options.domain === undefined
             ? {}
             : { domain: context.options.domain }),
+          ...(context.options.proxyContainer === undefined
+            ? {}
+            : { proxyContainer: context.options.proxyContainer }),
           // --skip-proxy is the only way to run this pipeline where there is
           // no proxy (CI, #133); a preflight that fails on the proxy it was
           // told to ignore would make the flag useless. The proxy checks
@@ -193,11 +243,15 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(context.options.skipProxy === undefined
             ? {}
             : { skipProxy: context.options.skipProxy }),
-        });
+        };
+        const results = await runChecks(checks, checkContext);
 
         for (const result of results) {
           context.journal.line(`${result.status} ${result.id}: ${result.detail}`);
         }
+
+        context.proxyContainer = checkContext.proxyContainer;
+        context.ipv6 = checkContext.ipv6;
 
         if (!checksPassed(results)) {
           const failed = results.filter((result) => result.status === 'fail');
@@ -443,21 +497,52 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           );
         }
 
-        // Certificate FIRST. See rule 4 in the header.
-        await issueCertificate(target, {
+        // The flag, else what the preflight found, else the conventional
+        // name - the order doctor itself resolves it in (#122). Recorded in
+        // the state so update talks to the same container.
+        const proxyContainer =
+          context.options.proxyContainer ?? context.proxyContainer ?? DEFAULT_PROXY_CONTAINER;
+        context.proxyContainer = proxyContainer;
+        // `--no-ipv6` outranks the probe; without either, [::] is rendered.
+        const ipv6 = context.options.ipv6 ?? context.ipv6;
+        context.journal.line(
+          `Publishing through ${proxyContainer}${ipv6 === false ? ' without IPv6 listeners' : ''}`,
+        );
+
+        // Certificate FIRST. See rule 4 in the header. The routing self-probe
+        // inside it fails before certbot when the domain does not reach here.
+        const certificate = await issueCertificate(target, {
           runCommand: context.runCommand,
+          proxyContainer,
           email,
           ...(context.options.staging === undefined ? {} : { staging: context.options.staging }),
+          ...(context.options.fetch === undefined ? {} : { fetch: context.options.fetch }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
+        context.certificateIssued = certificate.issued;
 
         await installVhost(target, {
           runCommand: context.runCommand,
+          proxyContainer,
+          ...(ipv6 === undefined ? {} : { ipv6 }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           ...(context.env?.get('MAX_FILE_SIZE') === undefined
             ? {}
             : { maxBodyBytes: Number(context.env.get('MAX_FILE_SIZE')) }),
         });
+
+        if (context.options.installCron ?? certificate.issued) {
+          const cron = installRenewalCron({
+            name: context.options.name,
+            appsRoot: context.options.appsRoot,
+            kvoxPath: context.options.cliPath ?? defaultCliPath(),
+            ...(context.options.cronDir === undefined ? {} : { cronDir: context.options.cronDir }),
+          });
+          context.journal.line(`${cron.changed ? 'Wrote' : 'Kept'} ${cron.path}`);
+          context.hooks?.onProgress?.(
+            cron.changed ? `Installed the renewal cron at ${cron.path}` : `Renewal cron at ${cron.path} is current`,
+          );
+        }
       },
     },
     {
@@ -601,6 +686,10 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     name: options.name,
     appsRoot: options.appsRoot,
     proxyRoot: options.proxyRoot,
+    // Resolved once, here; update reads it back rather than detecting again.
+    ...((context.proxyContainer ?? existingState?.proxyContainer) === undefined
+      ? {}
+      : { proxyContainer: context.proxyContainer ?? existingState?.proxyContainer }),
     installedAt: existingState?.installedAt ?? now,
     lastDeployedAt: now,
     lastCommand: 'install',

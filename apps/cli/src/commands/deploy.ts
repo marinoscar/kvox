@@ -6,6 +6,7 @@ import { Option, type Command } from 'commander';
 import { CLI_NAME, envVar } from '../branding.js';
 import {
   ALL_CHECKS,
+  DEFAULT_PROXY_CONTAINER,
   checksPassed,
   runChecks,
   summarise,
@@ -20,7 +21,7 @@ import {
   type HealthReport,
   type ProbeResult,
 } from '../deploy/health.js';
-import { readState } from '../deploy/state.js';
+import { readState, type DeployState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
 import { runInstall, type InstallOptions } from '../deploy/install.js';
 import {
@@ -29,7 +30,17 @@ import {
   DEFAULT_PROXY_ROOT,
   locateApp,
   locateInstalledApp,
+  type ResolvedLayout,
 } from '../deploy/layout.js';
+import {
+  certificateExpiry,
+  defaultCliPath,
+  installRenewalCron,
+  listCertificates,
+  renewCertificates,
+  renewalCronPath,
+  type CertificateExpiry,
+} from '../deploy/proxy.js';
 import { runUpdate, type UpdateOptions } from '../deploy/update.js';
 import type { EnvGroup } from '../deploy/env-metadata.js';
 import { runCommand } from '../deploy/executor.js';
@@ -105,6 +116,12 @@ export interface DeployContext {
   fetch?: typeof globalThis.fetch | undefined;
   /** Where doctor looks for a checkout to name the repository; tests point it away. */
   cwd?: string | undefined;
+  /** Injected so the install flags can be tested without running a pipeline. */
+  install?: typeof runInstall | undefined;
+  /** Where `--install-cron` writes; default /etc/cron.d, tests point it away. */
+  cronDir?: string | undefined;
+  /** The command the renewal cron runs; default this binary. */
+  cliPath?: string | undefined;
 }
 
 export function registerDeployCommand(
@@ -172,6 +189,13 @@ export function registerDeployCommand(
     .option('--no-cache', 'Rebuild images without the layer cache')
     .option('--force', 'Discard uncommitted changes in the checkout')
     .option('--staging', "Use Let's Encrypt staging while working out the setup")
+    .option('--proxy-container <name>', 'Publish through this proxy container instead of finding one')
+    .option('--no-ipv6', 'Render the vhost without [::] listeners (a host with IPv6 disabled)')
+    // `--install-cron` is declared BEFORE `--no-install-cron` on purpose:
+    // commander then leaves the default undefined, which is the third state
+    // ("when a certificate was issued") rather than a plain boolean.
+    .option('--install-cron', 'Write the certificate renewal cron even if no certificate was issued')
+    .option('--no-install-cron', 'Never write the renewal cron')
     .option('--json', 'Print a machine-readable result on stdout')
     .addHelpText(
       'after',
@@ -181,11 +205,18 @@ export function registerDeployCommand(
         `  ${CLI_NAME} deploy install --domain app.example.com`,
         `  ${CLI_NAME} deploy install --domain app.example.com --staging`,
         `  ${CLI_NAME} deploy install --non-interactive --domain app.example.com`,
+        `  ${CLI_NAME} deploy install --domain app.example.com --no-ipv6`,
         '',
         'What it does, in order: checks prerequisites, clones the repository,',
         'collects the environment, validates the database, builds the images,',
-        'migrates, seeds, starts the stack, waits for health, issues the',
-        'certificate and publishes the vhost, then verifies the result.',
+        'migrates, seeds, starts the stack, waits for health, proves the domain',
+        'routes here, issues the certificate, publishes the vhost through the',
+        'shared proxy container, then verifies the result.',
+        '',
+        'The certificate is issued with `docker run certbot/certbot`, and the',
+        'proxy is validated and reloaded with `docker exec`; there is no host',
+        'nginx or certbot. When a certificate is issued, a renewal cron is',
+        `written to ${renewalCronPath('<name>')} unless --no-install-cron.`,
         '',
         'The repository and branch come from THIS checkout\'s git remote unless',
         'you pass --repo/--ref, so a fork deploys itself with no configuration.',
@@ -267,6 +298,65 @@ export function registerDeployCommand(
     )
     .action(async (options: StatusCommandOptions) => {
       await runStatusCommand(options, ctx);
+    });
+
+  const certs = deploy
+    .command('certs')
+    .description("Renew and inspect the Let's Encrypt certificates behind the shared proxy");
+
+  withLayoutOptions(
+    certs
+      .command('renew')
+      .description('Renew what is due, reloading the proxy only when something was renewed'),
+  )
+    .option('--proxy-root <path>', `Shared reverse proxy directory (default: the app's, else ${DEFAULT_PROXY_ROOT})`)
+    .option('--proxy-container <name>', `Proxy container to reload (default: the app's, else ${DEFAULT_PROXY_CONTAINER})`)
+    .option('--all', "Every certificate under the proxy, not only this app's")
+    .option('--dry-run', "Rehearse with certbot's own --dry-run; nothing is written or reloaded")
+    .option('--install-cron', `Also write ${renewalCronPath('<name>')} so this runs twice a day`)
+    .option('--json', 'Print a machine-readable result on stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        `  ${CLI_NAME} deploy certs renew`,
+        `  ${CLI_NAME} deploy certs renew --dry-run`,
+        `  ${CLI_NAME} deploy certs renew --install-cron`,
+        `  ${CLI_NAME} deploy certs renew --all --apps-root /opt/infra/apps --name myapp`,
+        '',
+        'Runs `docker run --rm certbot/certbot renew` against the proxy\'s own',
+        'letsencrypt/ and webroot/ mounts. certbot decides what is due (within',
+        '30 days of expiry); the proxy is reloaded with `docker exec` only when',
+        'it reports a renewal. The cron entry uses --all so one entry serves',
+        'every app behind the shared proxy, and is rewritten only on change.',
+      ].join('\n'),
+    )
+    .action(async (options: CertsRenewCommandOptions) => {
+      await runCertsRenewCommand(options, ctx);
+    });
+
+  withLayoutOptions(
+    certs.command('status').description('Show when each certificate behind the proxy expires'),
+  )
+    .option('--proxy-root <path>', `Shared reverse proxy directory (default: the app's, else ${DEFAULT_PROXY_ROOT})`)
+    .option('--json', 'Print a machine-readable report on stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        `  ${CLI_NAME} deploy certs status`,
+        `  ${CLI_NAME} deploy certs status --json`,
+        '',
+        'Exit codes:',
+        '  0  every certificate is valid',
+        '  1  at least one has expired',
+        '  2  there are no certificates under the proxy',
+      ].join('\n'),
+    )
+    .action(async (options: CertsStatusCommandOptions) => {
+      await runCertsStatusCommand(options, ctx);
     });
 
   return deploy;
@@ -644,6 +734,11 @@ export interface InstallCommandOptions extends LayoutCommandOptions {
   cache: boolean;
   force?: boolean | undefined;
   staging?: boolean | undefined;
+  proxyContainer?: string | undefined;
+  /** `--no-ipv6` arrives as false; commander defaults it to true. */
+  ipv6: boolean;
+  /** `--install-cron` true, `--no-install-cron` false, neither undefined. */
+  installCron?: boolean | undefined;
   json?: boolean | undefined;
 }
 
@@ -678,7 +773,15 @@ export async function runInstallCommand(
     ...(options.cache === false ? { noCache: true } : {}),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.staging === undefined ? {} : { staging: options.staging }),
+    ...(options.proxyContainer === undefined ? {} : { proxyContainer: options.proxyContainer }),
+    // Only the NEGATIVE is passed: without --no-ipv6 the proxy-ipv6 check
+    // decides, and a `true` here would override what it found.
+    ...(options.ipv6 === false ? { ipv6: false } : {}),
+    ...(options.installCron === undefined ? {} : { installCron: options.installCron }),
+    ...(ctx?.cronDir === undefined ? {} : { cronDir: ctx.cronDir }),
+    ...(ctx?.cliPath === undefined ? {} : { cliPath: ctx.cliPath }),
     ...(ctx?.runCommand === undefined ? {} : { runCommand: ctx.runCommand }),
+    ...(ctx?.fetch === undefined ? {} : { fetch: ctx.fetch }),
     // Rendered as lines on stderr here; #184's screen renders the identical
     // callbacks as React state. One implementation, two renderers.
     ...(json
@@ -699,7 +802,7 @@ export async function runInstallCommand(
         }),
   };
 
-  const result = await runInstall(installOptions);
+  const result = await (ctx?.install ?? runInstall)(installOptions);
 
   if (json) {
     stdout.write(`${JSON.stringify(result)}\n`);
@@ -800,4 +903,206 @@ export async function runUpdateCommand(
       '',
     ].join('\n'),
   );
+}
+
+
+// ---------------------------------------------------------------------------
+// `kvox deploy certs renew|status`  (issue #125, epic #118)
+// ---------------------------------------------------------------------------
+//
+// The proxy is shared, so its certificates are a host-level concern that
+// happens to be reachable through any one app's state: the app knows the proxy
+// root and container, and its domain names the one lineage that is "its own".
+// `--all` drops that last part - it is what the cron uses, so one cron entry
+// serves every app this CLI put behind the proxy.
+
+export interface CertsRenewCommandOptions extends LayoutCommandOptions {
+  proxyRoot?: string | undefined;
+  proxyContainer?: string | undefined;
+  all?: boolean | undefined;
+  dryRun?: boolean | undefined;
+  installCron?: boolean | undefined;
+  json?: boolean | undefined;
+}
+
+export interface CertsStatusCommandOptions extends LayoutCommandOptions {
+  proxyRoot?: string | undefined;
+  json?: boolean | undefined;
+}
+
+interface CertsScope {
+  layout?: ResolvedLayout | undefined;
+  state?: DeployState | undefined;
+  proxyRoot: string;
+  proxyContainer: string;
+}
+
+/**
+ * Which proxy, and on whose behalf. The flag wins, then the app's recorded
+ * state, then the defaults - the same order everything else in this group
+ * resolves the proxy in. With `--all` an app is optional: several installed
+ * and none named is not an error, because none of them is being singled out.
+ */
+function resolveCertsScope(
+  options: { appsRoot: string; name?: string | undefined; root?: string | undefined; proxyRoot?: string | undefined; proxyContainer?: string | undefined },
+  all: boolean,
+): CertsScope {
+  let layout: ResolvedLayout | undefined;
+  try {
+    layout = locateApp({ appsRoot: options.appsRoot, name: options.name, root: options.root });
+  } catch (error) {
+    if (!all) throw error;
+  }
+  const state = layout === undefined ? undefined : readState(layout.deployRoot);
+
+  return {
+    layout,
+    state,
+    proxyRoot: options.proxyRoot ?? state?.proxyRoot ?? DEFAULT_PROXY_ROOT,
+    proxyContainer: options.proxyContainer ?? state?.proxyContainer ?? DEFAULT_PROXY_CONTAINER,
+  };
+}
+
+export async function runCertsRenewCommand(
+  options: CertsRenewCommandOptions,
+  ctx?: DeployContext,
+): Promise<void> {
+  const stdout = ctx?.stdout ?? process.stdout;
+  const stderr = ctx?.stderr ?? process.stderr;
+  const json = options.json === true;
+  const all = options.all === true;
+
+  const scope = resolveCertsScope(options, all);
+
+  const certName = all ? undefined : scope.state?.domain;
+  if (!all && certName === undefined) {
+    throw new UsageError(
+      scope.layout === undefined
+        ? `No deployment found under ${options.appsRoot}. Pass --name or --root, or --all to renew every certificate under the proxy.`
+        : `The deployment at ${scope.layout.deployRoot} is not published under a domain, so there is nothing of its own to renew. Pass --all to renew every certificate under the proxy.`,
+    );
+  }
+
+  const result = await renewCertificates({
+    proxyRoot: scope.proxyRoot,
+    proxyContainer: scope.proxyContainer,
+    runCommand: ctx?.runCommand ?? runCommand,
+    ...(certName === undefined ? {} : { certName }),
+    ...(options.dryRun === undefined ? {} : { dryRun: options.dryRun }),
+    ...(json
+      ? {}
+      : {
+          hooks: {
+            onProgress: (message) => void stderr.write(`  ${message}\n`),
+            onLog: (line) => void stderr.write(`    ${line}\n`),
+          },
+        }),
+  });
+
+  let cron: { path: string; changed: boolean } | undefined;
+  if (options.installCron === true) {
+    if (scope.layout === undefined) {
+      throw new UsageError(
+        'The renewal cron is written on behalf of one app (it names --apps-root and --name). Pass --name or --root.',
+      );
+    }
+    // The state's own layout first: under `--root` the layout's apps root is
+    // merely the flag's default, and the cron line must resolve back to THIS
+    // app's folder from a shell that has neither flag.
+    cron = installRenewalCron({
+      name: scope.state?.name ?? scope.layout.name,
+      appsRoot: scope.state?.appsRoot ?? scope.layout.appsRoot,
+      kvoxPath: ctx?.cliPath ?? defaultCliPath(),
+      ...(ctx?.cronDir === undefined ? {} : { cronDir: ctx.cronDir }),
+    });
+  }
+
+  if (json) {
+    stdout.write(
+      `${JSON.stringify({
+        dryRun: options.dryRun === true,
+        argv: result.argv,
+        renewed: result.renewed,
+        reloaded: result.reloaded,
+        ...(cron === undefined ? {} : { cron }),
+      })}\n`,
+    );
+    return;
+  }
+
+  const lines = ['', options.dryRun === true ? '  Dry run complete.' : result.reloaded ? `  Renewed ${result.renewed.join(', ') || 'certificate(s)'} and reloaded ${scope.proxyContainer}.` : '  Nothing was due for renewal.'];
+  if (cron !== undefined) {
+    lines.push(`  ${cron.changed ? 'Wrote' : 'Kept'} ${cron.path}`);
+  }
+  lines.push('');
+  stderr.write(lines.join('\n'));
+}
+
+/** No certificates under the proxy: nothing to report on, a usage-level fact. */
+export class NoCertificatesError extends CliError {
+  readonly exitCode: ExitCode = EXIT.USAGE;
+}
+
+export async function runCertsStatusCommand(
+  options: CertsStatusCommandOptions,
+  ctx?: DeployContext,
+): Promise<void> {
+  const stdout = ctx?.stdout ?? process.stdout;
+  const stderr = ctx?.stderr ?? process.stderr;
+  const json = options.json === true;
+
+  // Reading expiries never singles an app out, so "which app" is optional
+  // here exactly as it is for `renew --all`.
+  const scope = resolveCertsScope(options, true);
+  const domains = listCertificates(scope.proxyRoot);
+  if (domains.length === 0) {
+    throw new NoCertificatesError(
+      `No certificates under ${scope.proxyRoot}/letsencrypt/live. Run \`${CLI_NAME} deploy install --domain <domain>\` to issue one, or pass --proxy-root.`,
+    );
+  }
+
+  const exec = ctx?.runCommand ?? runCommand;
+  const expiries: CertificateExpiry[] = [];
+  for (const domain of domains) {
+    expiries.push(await certificateExpiry({ domain, bindPort: 0, proxyRoot: scope.proxyRoot }, exec));
+  }
+
+  const expired = expiries.filter((entry) => entry.daysLeft !== undefined && entry.daysLeft < 0);
+
+  if (json) {
+    stdout.write(
+      `${JSON.stringify({
+        proxyRoot: scope.proxyRoot,
+        certificates: expiries.map((entry) => ({
+          domain: entry.domain,
+          notAfter: entry.notAfter?.toISOString() ?? null,
+          daysLeft: entry.daysLeft ?? null,
+        })),
+      })}\n`,
+    );
+  } else {
+    stderr.write(renderCertificates(expiries, scope.proxyRoot));
+  }
+
+  if (expired.length > 0) {
+    throw new DeploymentUnhealthyError(
+      `${expired.length} certificate(s) expired: ${expired.map((entry) => entry.domain).join(', ')}. Renew with \`${CLI_NAME} deploy certs renew --all\`.`,
+    );
+  }
+}
+
+/** The human report. Exported for its test. */
+export function renderCertificates(expiries: readonly CertificateExpiry[], proxyRoot: string): string {
+  const lines = ['', `  Certificates under ${proxyRoot}`, ''];
+  for (const entry of expiries) {
+    const detail =
+      entry.daysLeft === undefined || entry.notAfter === undefined
+        ? 'expiry could not be read'
+        : entry.daysLeft < 0
+          ? `EXPIRED ${-entry.daysLeft} day(s) ago (${entry.notAfter.toISOString().slice(0, 10)})`
+          : `expires in ${entry.daysLeft} day(s) (${entry.notAfter.toISOString().slice(0, 10)})`;
+    lines.push(`  ${entry.domain.padEnd(TITLE_WIDTH)}${detail}`);
+  }
+  lines.push('');
+  return `${lines.join('\n')}\n`;
 }

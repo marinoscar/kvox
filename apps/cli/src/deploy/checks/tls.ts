@@ -25,6 +25,18 @@ function livePath(context: CheckContext, file: string): string {
   return `${context.proxyRoot}/letsencrypt/live/${context.domain ?? ''}/${file}`;
 }
 
+/**
+ * The expiry in `openssl x509 -enddate` output, or undefined when it cannot
+ * be read. Shared with the publisher (`proxy.ts`, #125), which decides on the
+ * same number whether `update` renews.
+ */
+export function readNotAfter(output: string): Date | undefined {
+  const raw = /notAfter=(.+)/.exec(output)?.[1]?.trim();
+  if (raw === undefined) return undefined;
+  const expiry = new Date(raw);
+  return Number.isNaN(expiry.getTime()) ? undefined : expiry;
+}
+
 /** Reads `notAfter=...` from `openssl x509 -enddate`. Exported for its test. */
 export function parseNotAfter(output: string, now: Date): CheckResult {
   const match = /notAfter=(.+)/.exec(output);
@@ -38,8 +50,8 @@ export function parseNotAfter(output: string, now: Date): CheckResult {
     };
   }
 
-  const expiry = new Date(raw);
-  if (Number.isNaN(expiry.getTime())) {
+  const expiry = readNotAfter(output);
+  if (expiry === undefined) {
     return {
       status: 'warn',
       detail: `unrecognised expiry: ${raw}`,
