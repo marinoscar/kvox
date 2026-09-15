@@ -1,9 +1,10 @@
 /**
  * The top of the signed-in home page — issue #32, epic #19; a second action
- * since issue #173, epic #166.
+ * since issue #173 and a search entry point since issue #172, both epic #166.
  *
- * Three things, in the order a phone screen can afford them: who this is, what
- * the product is for, and the actions that start the flow.
+ * Four things, in the order a phone screen can afford them: who this is, what
+ * the product is for, the actions that start the flow, and the way back to
+ * something already in here.
  *
  * =============================================================================
  * WHY THE GREETING CARRIES NO TIME OF DAY
@@ -78,6 +79,33 @@
  * precisely the user who needs the explanation attached to it.
  *
  * =============================================================================
+ * AND A WAY TO FIND SOMETHING ALREADY IN HERE (#172)
+ * =============================================================================
+ *
+ * `HomeSearchField` sits BELOW the action pair, not above it, and that is a
+ * decision about a 390px phone rather than a default. The hero already stacks a
+ * greeting, a tagline and two full-width buttons; from `sm` up the greeting and
+ * the actions are a single ROW, so "under the greeting, above the actions"
+ * is not even expressible there without collapsing that row back into a column
+ * and undoing #173's layout. Below the pair the field is one honest full-bleed
+ * row on a phone and a capped control under the greeting column on a desktop,
+ * in both cases read in the order `VISION.md` states the flow: capture
+ * (New transcript), transform (New note), **find it again later** (search).
+ *
+ * Putting it first was considered and rejected for the same reason #173 made
+ * New note `outlined`: this hero must have ONE obvious first move, and pushing
+ * the primary action down a phone screen behind a control for content the user
+ * may not have yet is the surest way to lose it. A brand-new account has
+ * nothing to search FOR, and it is that account the hero's ordering is for.
+ *
+ * WHY THE FIELD IS ITS OWN COMPONENT rather than twenty lines inline here: it
+ * owns a controlled input, so every keystroke re-renders its owner — and its
+ * owner, inline, would be this hero, re-rendering `NewTranscriptButton` and its
+ * permission reads on every character typed. It also carries the whole
+ * navigate-versus-dropdown, `/transcripts?q=`-versus-`/search` argument in its
+ * own header, which is where the next person to touch search will look for it.
+ *
+ * =============================================================================
  * NO BREAKPOINT GATE LIVES HERE EITHER
  * =============================================================================
  *
@@ -97,6 +125,7 @@ import NoteAddIcon from '@mui/icons-material/NoteAdd';
 import { useNavigate } from 'react-router-dom';
 import { TAGLINE } from '@app/shared';
 
+import { HomeSearchField } from './HomeSearchField';
 import { NewTranscriptButton } from './NewTranscriptButton';
 
 export interface HomeHeroProps {
@@ -206,6 +235,10 @@ export function HomeHero({
           )}
         </Stack>
       </Stack>
+
+      {/* The fourth thing, under the other three — see the header. It gates
+          itself on `transcripts:read` and costs this page no request. */}
+      <HomeSearchField />
     </Box>
   );
 }
