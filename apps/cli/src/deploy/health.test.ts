@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
   collectHealth,
+  composeArgs,
   describeFetchFailure,
   isHealthy,
   probe,
@@ -94,11 +95,39 @@ describe('describeFetchFailure', () => {
   });
 });
 
+describe('composeArgs', () => {
+  it('pins the project name and layers base, prod and vps in that order', () => {
+    // `-p demo` is what keeps `status` on this app rather than on whichever
+    // app last ran `up` as the project `compose` (#119).
+    expect(composeArgs('/opt/infra/apps/demo', 'demo').join(' ')).toBe(
+      '-p demo -f base.compose.yml -f prod.compose.yml -f vps.compose.yml --project-directory /opt/infra/apps/demo/repo/infra/compose',
+    );
+  });
+});
+
 describe('collectHealth', () => {
   const base = {
     deployRoot: '/opt/infra/apps/demo',
+    name: 'demo',
     bindPort: 3535,
   };
+
+  it('runs every compose command under the pinned project name', async () => {
+    const seen: string[][] = [];
+    await collectHealth({
+      ...base,
+      runCommand: fakeRunCommand((argv) => {
+        seen.push([...argv]);
+        return { exitCode: 0, stdout: RUNNING_PS };
+      }),
+      fetch: okFetch(),
+    });
+
+    expect(seen.length).toBeGreaterThan(0);
+    for (const argv of seen) {
+      expect(argv.slice(0, 4)).toEqual(['docker', 'compose', '-p', 'demo']);
+    }
+  });
 
   it('reports containers, probes and migration state', async () => {
     const report = await collectHealth({
@@ -267,6 +296,7 @@ describe('waitForHealthy', () => {
     let calls = 0;
     const result = await waitForHealthy({
       deployRoot: '/x',
+      name: 'x',
       bindPort: 3535,
       runCommand: healthyRunCommand(),
       fetch: (async () => {
@@ -287,6 +317,7 @@ describe('waitForHealthy', () => {
 
     await waitForHealthy({
       deployRoot: '/x',
+      name: 'x',
       bindPort: 3535,
       runCommand: healthyRunCommand(),
       fetch: (async () => {
@@ -305,6 +336,7 @@ describe('waitForHealthy', () => {
   it('surfaces the last failure on timeout, not a generic message', async () => {
     const result = await waitForHealthy({
       deployRoot: '/x',
+      name: 'x',
       bindPort: 3535,
       runCommand: healthyRunCommand(),
       fetch: (async () => {
