@@ -453,7 +453,36 @@ export type {
 } from './deploy/health.js';
 
 export { describeAge, registerDeployCommand, renderHealth, renderResult, renderSummary } from './commands/deploy.js';
-export type { DeployContext, DoctorReport, StatusUpdate } from './commands/deploy.js';
+export type {
+  AboutCommandOptions,
+  DeployContext,
+  DoctorReport,
+  StatusUpdate,
+} from './commands/deploy.js';
+
+// `deploy about` (#128), exported the same way #123 exported
+// `checkForUpdate`/`renderUpdateCheck`: the collection and the rendering are
+// pure given their injected inputs, so the ink About screen consumes them
+// without going through commander.
+export {
+  ABOUT_API_TIMEOUT_MS,
+  collectAbout,
+  describeRelative,
+  formatBytes,
+  formatInstant,
+  formatUtc,
+  renderAbout,
+} from './deploy/about.js';
+export type {
+  AboutApi,
+  AboutApiDatabase,
+  AboutApiRuntime,
+  AboutDeployment,
+  AboutHost,
+  AboutReport,
+  CollectAboutOptions,
+  RenderAboutOptions,
+} from './deploy/about.js';
 
 // The install pipeline (#180). Steps are DATA so the --skip flags, --resume,
 // and the TUI's progress view all read one sequence.

@@ -6,7 +6,7 @@ import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 
 import type { Check, CheckContext, CompletedCheck } from '../deploy/checks/index.js';
-import { readDeployInfo } from '../deploy/deploy-info.js';
+import { readDeployInfo, writeDeployInfo } from '../deploy/deploy-info.js';
 import { DEPLOY_STATE_VERSION, deployStatePath, writeState, type DeployState } from '../deploy/state.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../deploy/executor.js';
 import { CLI_NAME } from '../branding.js';
@@ -740,6 +740,170 @@ describe('describeAge', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// `kvox deploy about`  (issue #128)
+// ---------------------------------------------------------------------------
+
+async function runAbout(
+  argv: readonly string[],
+  extra: Partial<DeployContext> = {},
+): Promise<RunResult> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  const program = new Command();
+  program.exitOverride();
+  registerDeployCommand(program, {
+    stdout: { write: (chunk: string) => stdout.push(chunk) },
+    stderr: { write: (chunk: string) => stderr.push(chunk) },
+    isTty: false,
+    // No subprocess answers anything: `df`, `docker --version` and
+    // `docker compose version` all come back empty, so every live host fact
+    // they feed is null and the report leans on what the file recorded.
+    runCommand: (async (argv2: readonly string[], options: RunCommandOptions) => ({
+      argv: [...argv2],
+      cwd: options.cwd,
+      exitCode: 0,
+      stdout: '',
+      stderr: '',
+      durationMs: 1,
+      timedOut: false,
+    })) as typeof import('../deploy/executor.js').runCommand,
+    // Never the developer's own login: it would decide, machine by machine,
+    // whether the API block is attempted at all.
+    configContext: { env: {}, home: mkdtempSync(join(tmpdir(), 'appctl-about-home-')) },
+    ...extra,
+  });
+
+  let error: unknown;
+  try {
+    await program.parseAsync(['deploy', 'about', ...argv], { from: 'user' });
+  } catch (caught) {
+    error = caught;
+  }
+
+  return { stdout: stdout.join(''), stderr: stderr.join(''), error };
+}
+
+/** An installed app WITH the deploy-info document `about` reads. */
+function aboutRoot(): string {
+  const root = installedRoot();
+  const state = JSON.parse(readFileSync(deployStatePath(root), 'utf8')) as DeployState;
+  writeDeployInfo(
+    root,
+    { ...state, domain: 'app.example.test' },
+    {
+      hostname: 'vps-1',
+      os: 'Ubuntu 24.04.1 LTS',
+      kernel: '6.8.0-45-generic',
+      arch: 'x64',
+      cpuModel: 'AMD EPYC 7B13',
+      cpus: 2,
+      memoryBytes: 4_096_000_000,
+      diskBytes: 80_000_000_000,
+      dockerVersion: '27.3.1',
+      composeVersion: '2.29.7',
+      nodeVersion: '22.11.0',
+    },
+    {
+      appVersion: '1.4.0',
+      remote: { sha: 'b'.repeat(40), commitsBehind: 3, checkedAt: '2026-09-15T06:00:00.000Z' },
+    },
+  );
+  return root;
+}
+
+describe('kvox deploy about', () => {
+  it('prints Application, Deployment and Server on stderr, and exits 0', async () => {
+    const result = await runAbout(['--root', aboutRoot()]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('Application');
+    expect(result.stderr).toContain('Deployment');
+    expect(result.stderr).toContain('Server');
+    expect(result.stderr).toMatch(/Installed\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC \(/);
+    expect(result.stderr).toMatch(/Last updated\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC \(/);
+    expect(result.stderr).toMatch(/Checked\s+\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC \(/);
+    expect(result.stderr).toContain('3 commits behind');
+  });
+
+  it('renders every timestamp in UTC, never a local-time format', async () => {
+    const result = await runAbout(['--root', aboutRoot()]);
+
+    // Every rendered instant is `<date> <time> UTC (<relative>)`. A local
+    // rendering would make the terminal, the web card and info.json disagree
+    // about the same moment depending on where the operator is sitting.
+    const stamps = result.stderr.match(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[^(\n]*/g) ?? [];
+    expect(stamps.length).toBeGreaterThan(0);
+    for (const stamp of stamps) expect(stamp.trimEnd()).toMatch(/ UTC$/);
+  });
+
+  it('--json writes the report to stdout and nothing to stderr', async () => {
+    const result = await runAbout(['--root', aboutRoot(), '--json']);
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toBe('');
+
+    const report = JSON.parse(result.stdout) as {
+      deployment: { updatedAt: string; version: string } | null;
+      remote: { commitsBehind: number } | null;
+      updateAvailable: boolean | null;
+      api: unknown;
+      apiReason: string | null;
+    };
+
+    // The acceptance criterion: `jq .deployment.updatedAt` is an ISO-8601 Z
+    // string, equal to the one the file carries.
+    expect(report.deployment?.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/);
+    const info = readDeployInfo(JSON.parse(result.stdout).deployRoot as string);
+    expect(report.deployment?.updatedAt).toBe(info?.updatedAt);
+    expect(report.deployment?.version).toBe('1.4.0');
+    expect(report.remote?.commitsBehind).toBe(3);
+    expect(report.updateAvailable).toBe(true);
+  });
+
+  it('exits 0 with the API unavailable, because it is informational', async () => {
+    const result = await runAbout(['--root', aboutRoot()]);
+
+    // No thrown CliError at all is exit 0: commander's action resolved.
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toMatch(/API\s+unavailable \(not logged in\)/);
+  });
+
+  it('exits 2 when nothing is installed', async () => {
+    // The same code `status` uses, so a script can tell "no deployment" from
+    // "a deployment whose API is down" - which exits 0 above.
+    const result = await runAbout(['--root', mkdtempSync(join(tmpdir(), 'appctl-none-'))]);
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+  });
+
+  it('reports a missing deployment record rather than refusing', async () => {
+    const result = await runAbout(['--root', installedRoot()]);
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toMatch(/Record\s+unavailable \(/);
+  });
+});
+
+describe('kvox deploy status: the About footer (issue #128)', () => {
+  it('points at `deploy about` and keeps one Revision line', async () => {
+    const root = installedRoot();
+
+    const result = await runStatus(['--root', root], {
+      runCommand: composeRunCommand(ALL_RUNNING, 'Database schema is up to date!'),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(result.stderr).toContain(`${CLI_NAME} deploy about`);
+    expect(result.stderr).toContain('Revision');
+    // The inventory lines moved to About; status is a verdict, not a record.
+    expect(result.stderr).not.toContain('Last deployed');
+    expect(result.stderr).not.toContain('Last attempt');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // `kvox deploy update --check`  (issue #123)
