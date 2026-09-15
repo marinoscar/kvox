@@ -35,7 +35,7 @@ const WIDTHS = [
   ['desktop-1440', DESKTOP],
 ] as const;
 
-test.describe('Library — Notes tab', () => {
+test.describe('Notes list', () => {
   for (const [name, viewport] of WIDTHS) {
     test(`notes library @ ${name}`, async ({ page }) => {
       await installNotesApi(page);
@@ -73,28 +73,6 @@ test.describe('Library — Notes tab', () => {
 
     await expect(page).toHaveScreenshot('notes-library-empty-phone-390.png');
   });
-});
-
-test.describe('Library — Transcripts tab, with the new tab strip', () => {
-  // The transcripts half is `transcripts.spec.ts`'s baseline, but the TAB STRIP
-  // above it is new and is what #57's one reflow actually moves. Captured here
-  // at the two widths where the strip's wrapping behaviour differs.
-  for (const [name, viewport] of [WIDTHS[0], WIDTHS[2]] as const) {
-    test(`library tab strip @ ${name}`, async ({ page }) => {
-      await installNotesApi(page);
-      await page.setViewportSize(viewport);
-      await page.goto(harnessUrl({ route: '/transcripts' }));
-      await waitForInter(page);
-
-      await expect(page.getByRole('tab', { name: 'Transcripts' })).toHaveAttribute(
-        'aria-selected',
-        'true',
-      );
-      await expect(page.getByRole('tab', { name: 'Notes' })).toBeVisible();
-
-      await expect(page).toHaveScreenshot(`library-tabs-${name}.png`);
-    });
-  }
 });
 
 test.describe('New note', () => {

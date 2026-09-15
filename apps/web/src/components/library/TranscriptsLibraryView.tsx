@@ -1,33 +1,38 @@
 /**
- * The library's Transcripts tab. Issue #30, epic #19; moved here by #57.
+ * The body of `/transcripts`. Issue #30, epic #19; moved here by #57 and given
+ * back its own page by #106.
  *
  * =============================================================================
  * THIS FILE IS #30's PAGE BODY, UNCHANGED, MINUS ITS CHROME
  * =============================================================================
  *
- * Issue #57 renamed the destination and gave the library a second tab, which
- * means the `<h1>`, the primary action and the tab strip now belong to
- * `pages/LibraryPage.tsx` — a page has one heading, and "Transcripts" is no
- * longer the page. Everything else about this view is what #30 shipped: the
- * scope tabs, the debounced search, the status filter, the three empty states,
- * the two densities and the cursor paging.
+ * The `<h1>` and the primary action live in
+ * `components/library/LibraryPageFrame.tsx`, which `pages/TranscriptsPage.tsx`
+ * wraps this in — the frame is shared with `NotesPage` because the header
+ * genuinely is the same header. Everything else about this view is what #30
+ * shipped: the scope tabs, the debounced search, the status filter, the three
+ * empty states, the two densities and the cursor paging.
+ *
+ * ⚠ THE HEADING ABOVE THIS VIEW NOW NAMES IT. Between #57 and #106 the page's
+ * one `h1` read "Library" and this was its Transcripts tab; since #106 it reads
+ * "Transcripts", because the tab strip is gone and the page IS this view. That
+ * changes nothing here — the rows are still `h2`, and the reason is the same
+ * one stated at the row itself — but it is why the old "the page is the library
+ * and Transcripts is only half of it" reasoning no longer appears anywhere.
  *
  * =============================================================================
- * ITS OWN TABS ARE STILL CORRECT, AND THEY ARE NOW NESTED INSIDE ANOTHER PAIR
+ * ITS OWN TABS ARE STILL CORRECT, AND THEY ARE NOW THE ONLY PAIR
  * =============================================================================
  *
  * CLAUDE.md's Settings UI Pattern rule 2 permits tabs for genuinely PARALLEL
  * content — two views of the same question. "Mine" and "Shared with me" are
  * exactly that: one question ("which transcripts can I open?"), one endpoint,
  * one row shape, and the only difference between them is a `scope` query
- * parameter the API already models as a filter.
- *
- * The Transcripts | Notes pair above them is the same judgement one level up
- * ("what do I have?"), which is why the nesting is a hierarchy of QUESTIONS and
- * not the hierarchy-wearing-a-tab-strip the rule was written about. The two
- * pairs do not compete: only one of them is ever the answer to "which library
- * am I in", and it is the outer one — which is why it, and not this one, is in
- * the URL.
+ * parameter the API already models as a filter. #106 deleted the Transcripts |
+ * Notes strip that used to sit above them and left this pair untouched, which
+ * is the distinction working rather than a half-finished removal: that strip
+ * was a hierarchy wearing a tab strip (one row in the bottom bar fronting two
+ * whole subtrees), and this one is two views of one question.
  *
  * =============================================================================
  * TWO DENSITIES, ONE LIST
@@ -138,10 +143,12 @@ function TranscriptRow({
           }}
         >
           <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
-            {/* `h2`: the page's one `h1` is "Library" and there is no heading
-                between it and this row — the tab strip is a `tablist`, not a
-                heading — so `h3` here would skip a level. Asserted by the axe
-                pass in `LibraryPage.test.tsx`, which is where that gets caught. */}
+            {/* `h2`: the page's one `h1` is "Transcripts" (#106 — it read
+                "Library" while this view was a tab) and there is still no
+                heading between it and this row — the scope strip is a
+                `tablist`, not a heading — so `h3` here would skip a level.
+                Asserted by the axe pass in `TranscriptsPage.test.tsx`, which is
+                where that gets caught. */}
             <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 600 }}>
               {transcript.title}
             </Typography>

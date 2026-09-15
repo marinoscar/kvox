@@ -11,13 +11,18 @@
  *
  * TWO TREATMENTS, ONE COMPONENT
  * -----------------------------
- *   medium  (sm–lg)  →  collapsed, 56px, icon over a short caption
+ *   medium  (sm–lg)  →  collapsed, 72px, icon over a short caption
  *   expanded (≥ lg)  →  expanded, 220px, labelled rows + a collapse toggle
  *
  * Both treatments share one FOOT: the destinations the model marks `pinned`
  * (Console today) sit below a divider at the bottom of the rail, above the
- * collapse toggle, rather than inline with the library destinations — see the
+ * collapse toggle, rather than inline with the content destinations — see the
  * render and `config/destinations.ts` (#105).
+ *
+ * That foot is also the reason Console can leave the phone bottom bar (#106):
+ * the rail has somewhere to put a mode and the bar does not, so removing the
+ * Console tab below `sm` costs no reachability at `sm` and up. The avatar
+ * UserMenu covers the phone.
  *
  * A desktop user may collapse the rail to the tablet treatment; the choice
  * persists in `user_settings.navigation.railCollapsed`.
@@ -36,10 +41,10 @@
  * not the ones the user needed.
  *
  * It swaps ONLY WHEN EXPANDED, and that asymmetry is deliberate — do not
- * "fix" it. A 56px column cannot host labelled group headers, and a stack of
+ * "fix" it. A 72px column cannot host labelled group headers, and a stack of
  * near-identical unlabelled admin icons is worse than no swap at all. So at the
  * medium tier, and whenever a desktop user has collapsed the rail, the rail
- * keeps LIBRARY navigation with `Console` marked active and `SettingsHubPage`
+ * keeps DESTINATION navigation with `Console` marked active and `SettingsHubPage`
  * IS the admin navigation. That is exactly the reasoning epic #90 applies to
  * the phone (no rail at all, so the hub is a drill-down), applied to the other
  * size class that has no room for group headers either — and it preserves the
@@ -83,16 +88,29 @@ import {
 import { ADMIN_SECTIONS, visibleSettingsSections } from '../../config/adminSections';
 
 /**
- * 56px — Material 3's collapsed-rail width, and a 24px icon centred in it still
- * leaves room for a caption below.
+ * 72px — the collapsed rail's width, WIDENED FROM 56 BY #106.
  *
- * DELIBERATELY UNCHANGED BY #105. The truncated captions that issue reports are
- * a padding problem, not a width one: 56px minus the row's old 16px of margin
- * and padding left a 40px text box, and the fix reclaims 8px of that chrome
- * (see the collapsed branch of `RailRow`'s `sx`) rather than spending shell
- * width on every screen from `sm` up to fit two words.
+ * #105 deliberately kept it at 56 and reclaimed 8px of row chrome instead,
+ * because the captions it had to fit ("Settings", "Console") measured ~41px and
+ * a 48px box cleared them. #106 changes the input to that calculation rather
+ * than overturning its reasoning: splitting `library` into two destinations
+ * introduces an ELEVEN-CHARACTER caption, "Transcripts", which measures ~54px
+ * in Inter at the caption's 0.625rem (~57px in the widest sans fallback,
+ * letter-spacing included). No amount of padding reclaimed from a 56px rail
+ * produces a box that holds it — 48px is already the whole interior.
+ *
+ * The two alternatives were worse. Abbreviating the caption to "Audio" or
+ * "Recs" would make the rail name something other than the destination it
+ * fronts, which is the one thing a caption exists to do; and dropping the
+ * caption entirely leaves a column of near-identical unlabelled icons, the
+ * exact failure this file's Console-mode comment already argues against.
+ *
+ * 72px is still cheaper than the shell would otherwise pay: Material 3's own
+ * navigation rail is 80dp, so this sits 8px under the spec's width while
+ * holding the app's longest destination name. See `RailRow`'s collapsed branch
+ * for the 64px caption box that results.
  */
-export const RAIL_WIDTH_COLLAPSED = 56;
+export const RAIL_WIDTH_COLLAPSED = 72;
 export const RAIL_WIDTH_EXPANDED = 220;
 
 /**
@@ -107,7 +125,7 @@ interface RailRowProps {
   /** Shown when expanded. */
   label: string;
   /**
-   * Shown when collapsed, where 56px will not hold "System Settings". The
+   * Shown when collapsed, where 72px will not hold "System Settings". The
    * visible text is `aria-hidden` and the FULL name travels in
    * `accessibleName`, so the label reaches assistive technology in both
    * treatments. Optional because Console-mode rows are expanded-only and so
@@ -167,23 +185,31 @@ function RailRow({
               flexDirection: 'column',
               alignItems: 'center',
               gap: 0.25,
-              // HORIZONTAL SPACE IS THE SCARCE RESOURCE AT 56px (#105), so the
-              // collapsed row reclaims it from its own chrome rather than from
-              // the caption. `mx: 0.5` + `px: 0.5` above left a 40px text box,
-              // and the captions this app actually ships do not fit in it: at
-              // the 0.625rem below, "Settings" measures 41.2px and "Console"
-              // 41.1px in Inter (39.2 / 38.7 in Roboto, 43.7 / 42.0 in the
-              // widest sans fallback), all including `caption`'s 0.03333em
-              // letter-spacing. So both ellipsised — `Setti…`, `Cons…`.
+              // HORIZONTAL SPACE IS THE SCARCE RESOURCE IN THE COLLAPSED RAIL
+              // (#105), so the row takes as little of it as it can for its own
+              // chrome. `mx: 0.5` + `px: 0.5` (16px total) was the original
+              // spacing and it left a 40px text box; halving both to 0.25 (8px
+              // total) is what #105 reclaimed.
               //
-              // Halving both to 0.25 (2px each) reclaims 8px for a 48px box,
-              // which clears the widest of those by 4px. The alternatives were
-              // both worse: widening `RAIL_WIDTH_COLLAPSED` past 56 spends
-              // shell width on every screen to fix a caption, and shortening
-              // the `compactLabel`s throws away the words that make the row
-              // legible at a glance. Nothing is lost here — the row's visual
-              // inset is set by its CENTRED contents, not by this padding,
-              // which only ever acted as a clip boundary.
+              // ⚠ THE VALUES ARE UNCHANGED BY #106; THE RAIL AROUND THEM IS
+              // NOT. #105 could fix its captions by reclaiming padding alone
+              // because the longest one, "Settings", measured 41.2px in Inter
+              // at the 0.625rem below (39.2 in Roboto, 43.7 in the widest sans
+              // fallback, letter-spacing included) and a 48px box cleared it.
+              // Splitting `library` into Transcripts and Notes introduces an
+              // ELEVEN-CHARACTER caption: "Transcripts" measures ~54px in Inter
+              // and ~57px in that widest fallback. There is no padding left to
+              // reclaim — 48px was already the whole interior of a 56px rail —
+              // so `RAIL_WIDTH_COLLAPSED` went to 72 instead, and these same
+              // 8px of chrome now leave a 64px box that clears the widest
+              // measurement by 7px.
+              //
+              // Abbreviating the caption was the cheap alternative and was
+              // rejected: "Audio" names something other than what the row
+              // fronts, and a rail that misnames its destinations has given up
+              // the only job a caption has. Nothing is lost to this padding —
+              // the row's visual inset is set by its CENTRED contents, not by
+              // it, and it only ever acted as a clip boundary.
               //
               // `mx` is not zeroed: those 2px keep the selected row's rounded
               // highlight off the rail's right border.
@@ -279,9 +305,9 @@ export function NavigationRail() {
     isDestinationVisible(destination, hasPermission),
   );
 
-  // TWO GROUPS, ONE MODEL (#105). Console is a MODE, not a peer of the library
+  // TWO GROUPS, ONE MODEL (#105). Console is a MODE, not a peer of the content
   // destinations, and its POSITION at the rail's foot is what says so — inline
-  // as the last row it read as a third library destination. The split is driven
+  // as the last row it read as a fourth content destination. The split is driven
   // by `destination.pinned`, never by `key === 'console'`: see the flag's
   // comment in `config/destinations.ts` for why the render must not hold its
   // own opinion about which destination is the admin one.
@@ -396,8 +422,8 @@ export function NavigationRail() {
             <RailRow
               to="/"
               Icon={ArrowBackIcon}
-              label="Back to library"
-              accessibleName="Back to library"
+              label="Back to Home"
+              accessibleName="Back to Home"
               active={false}
               expanded
             />
@@ -468,14 +494,21 @@ export function NavigationRail() {
           is the whole point: a mode you switch into, not a third library
           destination you page between.
 
-          It renders in BOTH library treatments — the collapsed medium tier and
-          the expanded rail on a non-admin route — which is why it lives out
+          ⚠ AND IT IS THE ONLY PLACE CONSOLE APPEARS IN THE CHROME AT `sm` AND
+          UP SINCE #106 — the bottom bar dropped it, because a bar has no foot
+          to pin a mode to. Below `sm` the avatar UserMenu carries it. Do not
+          "simplify" this section away on the grounds that the menu already has
+          the row: on a laptop the menu is two clicks and this is one, which is
+          the entire reason #105 put it here.
+
+          It renders in BOTH destination treatments — the collapsed medium tier
+          and the expanded rail on a non-admin route — which is why it lives out
           here beside the branch rather than inside either arm of it. Only
           `expanded` differs between the two, and `RailRow` already takes that
           as a prop.
 
           `!consoleMode` is load-bearing and must not be relaxed to "always"
-          (#94): inside Console mode the `Back to library` row at the top IS the
+          (#94): inside Console mode the `Back to Home` row at the top IS the
           affordance, and a row pointing at the surface you are already inside
           would be dead chrome competing with the real active card for
           `aria-current`. `pinnedDestinations` is already permission-filtered,
@@ -510,7 +543,7 @@ export function NavigationRail() {
           not an icon-shaped div, and not a link.
 
           It stays in Console mode on purpose: collapsing from there is how a
-          desktop user gets the library rail back without leaving the admin
+          desktop user gets the destination rail back without leaving the admin
           surface, and it is the same control in the same place either way. */}
       {isDesktop && (
         <>

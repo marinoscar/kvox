@@ -1,12 +1,17 @@
 /**
- * The library's Notes tab — issue #57, epic #45.
+ * The body of `/notes` — issue #57, epic #45; its own page since #106.
  *
- * The Transcripts tab's sibling, and deliberately its twin in shape: the same
- * debounced search, the same "Any status" sentinel, the same two densities, the
- * same two empty states, the same cursor paging and the same Load more. A user
- * moving between the two tabs is answering one question ("what do I have?") in
- * two places, and two different list idioms would make that one question feel
- * like two products.
+ * `TranscriptsLibraryView`'s sibling, and deliberately its twin in shape: the
+ * same debounced search, the same "Any status" sentinel, the same two
+ * densities, the same two empty states, the same cursor paging and the same
+ * Load more. These were two tabs of one page until #106 made them two
+ * destinations; the twinning survives the split and matters more after it,
+ * because a user now moves between two PAGES and two different list idioms
+ * would make one product feel like two.
+ *
+ * The `<h1>` ("Notes") and the primary action are
+ * `components/library/LibraryPageFrame.tsx`'s, rendered by
+ * `pages/NotesPage.tsx`.
  *
  * =============================================================================
  * EVERY ROW SAYS WHAT IT CAME FROM
@@ -127,9 +132,10 @@ function NoteRow({
         }}
       >
         <Box sx={{ flexGrow: 1, minWidth: 0, width: '100%' }}>
-          {/* `h2`, for the reason the transcript rows state: nothing sits
-              between the page's one `h1` and this row, so `h3` would skip a
-              level and axe is right to say so. */}
+          {/* `h2`, for the reason the transcript rows state: the page's one
+              `h1` is "Notes" (#106 — it read "Library" while this view was a
+              tab) and nothing sits between it and this row, so `h3` would skip
+              a level and axe is right to say so. */}
           <Typography variant="subtitle1" component="h2" noWrap sx={{ fontWeight: 600 }}>
             {note.title}
           </Typography>

@@ -148,7 +148,7 @@ function createdNote() {
 }
 
 beforeEach(() => {
-  // See `LibraryPage.test.tsx`: `localStorage` survives between tests and the
+  // See `NotesPage.test.tsx`: `localStorage` survives between tests and the
   // theme provider seeds itself from this key.
   localStorage.setItem('theme_mode', 'light');
   createdBodies = [];

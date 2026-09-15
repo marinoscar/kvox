@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
+  BOTTOM_BAR_DESTINATIONS,
   DESTINATIONS,
   DESTINATION_ROUTES,
   UNOWNED_ROUTES,
@@ -53,8 +54,8 @@ describe('destinations — route ownership', () => {
         '/transcripts/new',
         '/transcripts/:id',
         '/transcripts/:id/history',
-        // #57, epic #45 — the four note routes, the library destination's
-        // second subtree.
+        // #57, epic #45 — the four note routes, their own destination's
+        // subtree since #106.
         '/notes',
         '/notes/new',
         '/notes/:id',
@@ -195,28 +196,32 @@ describe('destinations — reachability regression', () => {
     }
   });
 
-  it('offers four destinations: Home, Library, Settings and the merged Console', () => {
-    // Three after #92 merged the two admin rows; FOUR since #30 added the
-    // library. `/admin/users` is still not a destination PATH
-    // while staying a resolvable route — it redirects to
+  it('offers five destinations: Home, Transcripts, Notes, Settings and the merged Console', () => {
+    // Three after #92 merged the two admin rows; four once #30 added a library
+    // row; FIVE since #106 split that row into Transcripts and Notes. The
+    // count grew and the BAR did not — Console is `pinned`, so it is the fifth
+    // destination and never a fifth tab. `/admin/users` is still not a
+    // destination PATH while staying a resolvable route — it redirects to
     // `/admin/settings/users`, and the assertion above is what proves the
     // merge cost no reachability.
     expect(DESTINATIONS.map((destination) => destination.path).sort()).toEqual([
       '/',
       '/admin/settings',
+      '/notes',
       '/settings',
       '/transcripts',
     ]);
   });
 
-  it('keeps Home, Library, Settings, Console as the declared ORDER', () => {
+  it('keeps Home, Transcripts, Notes, Settings, Console as the declared ORDER', () => {
     // Declaration order IS navigation order on the bottom bar and in the user
     // menu (the rail only lifts `pinned` rows to its foot). Sorting the array
     // above proves membership and says nothing about sequence, so the two
     // assertions are deliberately separate.
     expect(DESTINATIONS.map((destination) => destination.key)).toEqual([
       'home',
-      'library',
+      'transcripts',
+      'notes',
       'settings',
       'console',
     ]);
@@ -272,87 +277,114 @@ describe('destinations — the table itself', () => {
     expect(byKey.settings.permission).toBeUndefined();
   });
 
-  it('gates Library on EITHER controller permission, never on one alone (#30, #57)', () => {
-    // Verified against the controllers, not assumed:
+  it('gates Transcripts on the ONE permission its controller enforces (#106)', () => {
+    // Verified against the controller, not assumed:
     //   transcripts.controller.ts → PERMISSIONS.TRANSCRIPTS_READ
-    //   notes.controller.ts       → PERMISSIONS.NOTES_READ
     //
-    // Both, because this one row fronts both subtrees since #57. The obvious
-    // way to get it wrong while renaming the destination is to keep whichever
-    // permission was already typed here and silently leave Notes gated on
-    // transcripts — which locks a notes-only user out of the only row that
-    // reaches either. Both are seeded to all three roles, so in practice the
-    // row is visible to everybody; the GATE still has to be the permissions,
-    // because a deployment that revokes both must lose the row.
+    // ⚠ A SINGLE `permission`, NOT AN `anyPermission` PAIR. The pair was
+    // correct for the merged `library` row, which fronted two controllers and
+    // had to be reachable on either. This row fronts one, so "or" has no
+    // meaning here — and leaving the old pair behind would show a Transcripts
+    // row to a user holding only `notes:read`, who would then be bounced by
+    // `/transcripts`' own route gate. That is the #92 bug, in the exact place
+    // #106 was most likely to reintroduce it.
     const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
-    expect(byKey.library.permission).toBeUndefined();
-    expect([...(byKey.library.anyPermission ?? [])].sort()).toEqual([
-      'notes:read',
-      'transcripts:read',
-    ]);
+    expect(byKey.transcripts.permission).toBe('transcripts:read');
+    expect(byKey.transcripts.anyPermission).toBeUndefined();
 
     const holding = (granted: string[]) => (permission: string) =>
       granted.includes(permission);
-    expect(isDestinationVisible(byKey.library, holding(['transcripts:read']))).toBe(true);
-    expect(isDestinationVisible(byKey.library, holding(['notes:read']))).toBe(true);
-    expect(isDestinationVisible(byKey.library, holding([]))).toBe(false);
+    expect(isDestinationVisible(byKey.transcripts, holding(['transcripts:read']))).toBe(true);
+    expect(isDestinationVisible(byKey.transcripts, holding(['notes:read']))).toBe(false);
+    expect(isDestinationVisible(byKey.transcripts, holding([]))).toBe(false);
     // The admin ROLE grants nothing here, exactly as for Console.
-    expect(isDestinationVisible(byKey.library, holding(['rbac:manage']))).toBe(false);
+    expect(isDestinationVisible(byKey.transcripts, holding(['rbac:manage']))).toBe(false);
   });
 
-  it('labels the Library row "Library" on every surface (#57)', () => {
-    // The rail caption, the user-menu row and the bottom-bar tab all read one
-    // of these two fields, and #57's whole premise is that the destination is
-    // the LIBRARY rather than the transcripts half of it. A row still reading
-    // "Transcripts" would be a bar that names one of the two tabs behind it.
+  it('gates Notes on the ONE permission its controller enforces (#106)', () => {
+    // notes.controller.ts → PERMISSIONS.NOTES_READ. The mirror of the
+    // assertion above, and asserted separately rather than as a loop: the way
+    // this gets broken is one of the two keeping a stale gate, which a shared
+    // loop over "both rows look sane" would not localise.
     const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
-    expect(byKey.library.label).toBe('Library');
-    expect(byKey.library.compactLabel).toBe('Library');
+    expect(byKey.notes.permission).toBe('notes:read');
+    expect(byKey.notes.anyPermission).toBeUndefined();
+
+    const holding = (granted: string[]) => (permission: string) =>
+      granted.includes(permission);
+    expect(isDestinationVisible(byKey.notes, holding(['notes:read']))).toBe(true);
+    expect(isDestinationVisible(byKey.notes, holding(['transcripts:read']))).toBe(false);
+    expect(isDestinationVisible(byKey.notes, holding([]))).toBe(false);
+    expect(isDestinationVisible(byKey.notes, holding(['rbac:manage']))).toBe(false);
+  });
+
+  it('labels the two content rows by what they front (#106)', () => {
+    // The rail caption, the user-menu row and the bottom-bar tab all read one
+    // of these two fields. #57's premise was that one row fronted a "library";
+    // #106's is that each row fronts exactly one noun and says which. A row
+    // still reading "Library" would be a bar naming a surface that no longer
+    // exists.
+    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
+    expect(byKey.transcripts.label).toBe('Transcripts');
+    expect(byKey.transcripts.compactLabel).toBe('Transcripts');
+    expect(byKey.notes.label).toBe('Notes');
+    expect(byKey.notes.compactLabel).toBe('Notes');
+    expect(DESTINATIONS.map((d) => d.label)).not.toContain('Library');
   });
 
   it('owns the whole /transcripts subtree, children included (#30)', () => {
-    // One prefix covers the library, the New-transcript flow, the viewer and
+    // One prefix covers the list, the New-transcript flow, the viewer and
     // #31's history page: a reader drilled into one transcript has not left
-    // the library, so the tab stays lit.
-    expect(resolveActiveDestination('/transcripts')).toBe('library');
-    expect(resolveActiveDestination('/transcripts/new')).toBe('library');
-    expect(resolveActiveDestination('/transcripts/abc-123')).toBe('library');
-    expect(resolveActiveDestination('/transcripts/abc-123/history')).toBe('library');
+    // the destination, so the tab stays lit.
+    expect(resolveActiveDestination('/transcripts')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts/new')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts/abc-123')).toBe('transcripts');
+    expect(resolveActiveDestination('/transcripts/abc-123/history')).toBe('transcripts');
     // …and stops at the segment boundary, like every other prefix here.
     expect(resolveActiveDestination('/transcriptsfoo')).toBeNull();
     expect(resolveActiveDestination('/transcripts-archive')).toBeNull();
   });
 
-  it('owns the whole /notes subtree too, on the SAME destination (#57)', () => {
-    // The claim the rename rests on: switching between the library's two tabs
-    // never changes which navigation row is lit, because both prefixes belong
-    // to one destination. If `/notes` ever resolved to anything else, the
-    // bottom bar would drop its highlight halfway through one page.
-    expect(resolveActiveDestination('/notes')).toBe('library');
-    expect(resolveActiveDestination('/notes/new')).toBe('library');
-    expect(resolveActiveDestination('/notes/abc-123')).toBe('library');
-    expect(resolveActiveDestination('/notes/abc-123/history')).toBe('library');
+  it('owns the whole /notes subtree on its OWN destination (#106)', () => {
+    // The claim the split rests on, and the exact inverse of what #57's
+    // version of this test asserted: `/notes` resolves to `notes`, never to
+    // the transcripts row. If it still resolved to a shared key, the two rows
+    // would light up together and the bar would be lying about where the user
+    // is on every note route.
+    expect(resolveActiveDestination('/notes')).toBe('notes');
+    expect(resolveActiveDestination('/notes/new')).toBe('notes');
+    expect(resolveActiveDestination('/notes/abc-123')).toBe('notes');
+    expect(resolveActiveDestination('/notes/abc-123/history')).toBe('notes');
     // …and stops at the segment boundary, like every other prefix here.
     expect(resolveActiveDestination('/notesfoo')).toBeNull();
     expect(resolveActiveDestination('/notes-archive')).toBeNull();
   });
 
-  it('keeps the destination set at four despite owning a second subtree (#57)', () => {
-    // The whole argument for renaming rather than adding. Asserted beside the
-    // ceiling check below so the two cannot be read apart: `notes` must not
-    // reappear as a fifth key, under any label.
-    expect(DESTINATIONS.map((d) => d.key)).not.toContain('notes');
-    expect(DESTINATIONS).toHaveLength(4);
+  it('keeps no trace of the merged library destination (#106)', () => {
+    // The inverse of #57's "notes must not reappear as a fifth key". That
+    // constraint is gone — `notes` IS a key now — and what replaces it is that
+    // `library` must not come back as a third content row alongside the two
+    // that replaced it.
+    expect(DESTINATIONS.map((d) => d.key)).toContain('notes');
+    expect(DESTINATIONS.map((d) => d.key)).toContain('transcripts');
+    expect(DESTINATIONS.map((d) => d.key)).not.toContain('library');
+    expect(Object.keys(DESTINATION_ROUTES)).not.toContain('library');
+    expect(DESTINATIONS).toHaveLength(5);
   });
 
-  it('marks Console pinned and leaves Home and Settings as ordinary list rows (#105)', () => {
+  it('marks Console pinned and leaves the four content rows ordinary (#105, #106)', () => {
     // The rail's foot section is driven entirely by this flag — see
-    // `NavigationRail`'s `listDestinations`/`pinnedDestinations` split — so a
-    // console row that stops being flagged `pinned` silently falls back to
-    // rendering inline as a third library destination, with no other signal.
+    // `NavigationRail`'s `listDestinations`/`pinnedDestinations` split — and
+    // since #106 so is the bottom bar's whole membership
+    // (`BOTTOM_BAR_DESTINATIONS`). A console row that stops being flagged
+    // `pinned` silently falls back to rendering inline as a fourth content
+    // destination AND reappears as a fifth bottom-bar tab, which is the state
+    // #106 exists to leave behind.
     const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
     expect(byKey.console.pinned).toBe(true);
     expect(byKey.home.pinned).toBeFalsy();
+    expect(byKey.transcripts.pinned).toBeFalsy();
+    expect(byKey.notes.pinned).toBeFalsy();
     expect(byKey.settings.pinned).toBeFalsy();
   });
 
@@ -369,16 +401,47 @@ describe('destinations — the table itself', () => {
     }
   });
 
-  it('gives every destination a compactLabel short enough for a 56px rail', () => {
+  it('gives every destination a compactLabel short enough for the 72px rail', () => {
+    // ELEVEN, not eight. The old bound was sized for `RAIL_WIDTH_COLLAPSED =
+    // 56`, whose 48px caption box held about eight characters at the caption's
+    // 0.625rem. #106 introduces "Transcripts" — 11 characters, ~54px in Inter
+    // and ~57px in the widest sans fallback — and widens the rail to 72px,
+    // which leaves a 64px box. So the bound moves with the rail rather than the
+    // label being abbreviated into something that names a different thing.
+    //
+    // It is still a BOUND and not a formality: at the same measurements a
+    // 13-character caption would overflow 64px, and this is what catches it
+    // before anyone sees an ellipsis at 800px.
     for (const destination of DESTINATIONS) {
       expect(destination.compactLabel.length, `${destination.key} compactLabel`).toBeLessThanOrEqual(
-        8,
+        11,
       );
     }
   });
 
-  it('caps the destination set at four — the bottom bar ceiling', () => {
-    expect(DESTINATIONS.length).toBeLessThanOrEqual(4);
+  it('caps the BOTTOM BAR at four destinations, not the table (#106)', () => {
+    // The ceiling was always the bar's, and until #106 the two counts were the
+    // same number so the distinction never had to be made. Console is `pinned`
+    // — a mode — so the table may grow past four while the bar cannot.
+    expect(BOTTOM_BAR_DESTINATIONS).toHaveLength(4);
+    expect(BOTTOM_BAR_DESTINATIONS.length).toBeLessThanOrEqual(4);
+  });
+
+  it('excludes every pinned destination from the bottom bar (#106)', () => {
+    // The derivation itself, asserted rather than assumed: a hand-written
+    // second array would satisfy the length check above while silently
+    // including Console.
+    expect(BOTTOM_BAR_DESTINATIONS.some((d) => d.pinned)).toBe(false);
+    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.key)).toEqual([
+      'home',
+      'transcripts',
+      'notes',
+      'settings',
+    ]);
+    // …and it is a SUBSET of the table, in the table's own order — the bar
+    // never invents a destination or reorders one.
+    expect(BOTTOM_BAR_DESTINATIONS.every((d) => DESTINATIONS.includes(d))).toBe(true);
+    expect(DESTINATIONS.filter((d) => !d.pinned)).toEqual([...BOTTOM_BAR_DESTINATIONS]);
   });
 });
 
@@ -500,29 +563,34 @@ describe('destinations — route gate matches the console anyPermission (#92)', 
     return [];
   }
 
-  it('gates the library\u2019s two routes on exactly the permissions the destination allows (#57)', () => {
-    // The same invariant as the Console one below, applied to the destination
-    // #57 created — and it needs the UNION of two routes rather than one
-    // route's array, because the library's two halves are two separate routes
-    // with one gate each.
+  it('gates /transcripts and /notes on exactly their own destination permissions (#106)', () => {
+    // The same invariant as the Console one below, applied to the two
+    // destinations #106 created — and it is now a PER-ROUTE comparison rather
+    // than #57's union of two routes against one `anyPermission` array,
+    // because each row fronts exactly one controller and one route.
     //
-    // What this catches: `/notes` gated on `transcripts:read` (a notes-only
-    // user bounced off the tab the row promised them), or the destination
-    // widened to a permission no route under it enforces (a row that appears
-    // and then redirects).
-    const gates = [
-      declaredRoutePermissions('/transcripts'),
-      declaredRoutePermissions('/notes'),
-    ].flat();
+    // ⚠ WHAT THIS CATCHES, AND IT IS THE LIKELIEST WAY TO BREAK THE SPLIT:
+    // `/notes` still gated on `transcripts:read`, or either row keeping the
+    // merged `anyPermission` pair. Both produce a navigation row that promises
+    // a surface its own route then refuses — the #92 bug, reintroduced by a
+    // rename.
     const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
-    const destinationPermissions = [...(byKey.library.anyPermission ?? [])];
 
-    // Guards the parser: two empty arrays would compare equal and prove
-    // nothing.
-    expect(gates.length, 'the library routes have no parsed permission gates').toBe(2);
-    expect(destinationPermissions.length).toBe(2);
-
-    expect([...new Set(gates)].sort()).toEqual([...destinationPermissions].sort());
+    for (const [path, destination] of [
+      ['/transcripts', byKey.transcripts],
+      ['/notes', byKey.notes],
+    ] as const) {
+      const gates = declaredRoutePermissions(path);
+      // Guards the parser: an empty array would compare equal to an undefined
+      // permission and prove nothing.
+      expect(gates.length, `${path} has no parsed permission gate`).toBe(1);
+      expect(destination.permission, `${destination.key} declares no permission`).toBeTruthy();
+      expect(gates[0], `${path} route gate vs ${destination.key} destination`).toBe(
+        destination.permission,
+      );
+      // …and neither carries the "or" the merged row needed.
+      expect(destination.anyPermission).toBeUndefined();
+    }
   });
 
   it('gates /admin/settings on exactly the permissions the console destination allows', () => {
