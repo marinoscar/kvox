@@ -1,19 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  The same mark as `icons/source.svg`, drawn on a 32 canvas with the tighter
-  favicon crop (mark at 80% of the canvas instead of 68%): at tab size the
-  padding costs whole pixels, and the three bars need those pixels to stay
-  three bars. `favicon.ico`'s frames use the identical crop, so the vector and
-  raster favicons agree.
+  The same K MONOGRAM as `icons/source.svg` -- one vertical stem and two
+  round-capped diagonal arms meeting on the stem's centre line -- on a 32
+  canvas with the tighter favicon crop (mark box at 80% of the canvas instead
+  of 68%): at tab size the padding costs whole pixels, and the arms need those
+  pixels to stay legible as arms. `favicon.ico`'s frames use the identical
+  crop, so the vector and raster favicons agree.
 
-  Kept deliberately terse — no comments inside the markup, no metadata, no
-  editor cruft — because this is served on every page load.
+  TWO DESCRIPTIONS, ONE MARK. `apps/web/scripts/generate-icons.py` draws this
+  geometry in Pillow and deliberately does NOT rasterise this file, because
+  rendering an SVG needs a toolchain (rsvg / cairosvg / a headless browser)
+  this template refuses to require of a fork's CI. So the mark is described
+  three times -- here, in `icons/source.svg`, and in that script -- and all
+  three must be edited together. `src/__tests__/pwa/brandMark.test.ts` compares
+  the two SVGs in NORMALISED mark-box space rather than by a raw scale factor,
+  because the two crops differ (0.80 here, 0.68 there) and a 512/32 comparison
+  would therefore fail on two files that agree perfectly about the shape.
+
+  Geometry, on a 32 canvas: mark box 0.80 x 32 = 25.6, so it starts at 3.2;
+  stroke 0.17 x 25.6 = 4.35 wide, cap radius 2.18; stem full height, centre
+  line x = 5.38; junction (5.38, 16.00); arm ends x = 26.62, y = 5.38 (upper)
+  and 26.62 (lower).
+
+  Kept deliberately terse -- no comments inside the markup, no metadata, no
+  editor cruft -- because this is served on every page load.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="7.04" fill="#4f46e5"/>
   <g fill="#fff">
-    <rect x="3.2" y="4.99" width="25.6" height="4.84" rx="2.42"/>
-    <rect x="6.4" y="13.58" width="19.2" height="4.84" rx="2.42"/>
-    <rect x="9.6" y="22.16" width="12.8" height="4.84" rx="2.42"/>
+    <rect x="3.20" y="3.20" width="4.35" height="25.60" rx="2.18"/>
+  </g>
+  <g stroke="#fff" stroke-width="4.35" stroke-linecap="round" fill="none">
+    <line x1="5.38" y1="16.00" x2="26.62" y2="5.38"/>
+    <line x1="5.38" y1="16.00" x2="26.62" y2="26.62"/>
   </g>
 </svg>

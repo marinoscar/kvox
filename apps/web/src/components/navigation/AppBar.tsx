@@ -15,6 +15,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { APP_NAME } from '@app/shared';
 import { useThemeContext } from '../../contexts/ThemeContext';
+import { BrandMark } from '../common/BrandMark';
 import { UserMenu } from './UserMenu';
 import { NotificationBell } from './NotificationBell';
 import {
@@ -308,20 +309,42 @@ export function AppBar() {
             </Typography>
           </>
         ) : (
-          /* Brand. `edge="start"` alignment now belongs to the title: the
-             hamburger that used to hold this slot was deleted with the drawer. */
-          <Typography
-            variant="h6"
-            component="div"
-            sx={{
-              cursor: 'pointer',
-              fontWeight: 600,
-              flexShrink: 0,
-            }}
+          /* Brand. `edge="start"` alignment now belongs to the lockup: the
+             hamburger that used to hold this slot was deleted with the drawer.
+
+             MARK AND WORDMARK ARE ONE CLICKABLE ELEMENT, not two. The target
+             was already "tap the name to go home"; splitting it would give the
+             bar two adjacent hit areas doing the identical thing, with a dead
+             `gap: 1` strip between them that looks tappable and is not.
+             `cursor: 'pointer'` is set on BOTH this row and the Typography
+             inside it — on the row because that is the element the pointer is
+             actually over across the whole lockup, and still on the Typography
+             because `AppBar.test.tsx` asserts the affordance on the text node
+             itself and jsdom does not reliably resolve inherited values. */
+          <Box
             onClick={() => navigate('/')}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              cursor: 'pointer',
+              flexShrink: 0,
+              minWidth: 0,
+            }}
           >
-            {APP_NAME}
-          </Typography>
+            <BrandMark />
+            <Typography
+              variant="h6"
+              component="div"
+              sx={{
+                cursor: 'pointer',
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+            >
+              {APP_NAME}
+            </Typography>
+          </Box>
         )}
 
         {/* The flexible spacer. Removing it without a replacement packs the

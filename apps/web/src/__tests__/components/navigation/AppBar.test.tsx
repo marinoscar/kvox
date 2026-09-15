@@ -154,8 +154,29 @@ describe('AppBar', () => {
       const title = screen.getByText(APP_NAME);
       await user.click(title);
 
-      // Navigation should be triggered
-      expect(title).toBeInTheDocument();
+      // The structural target, asserted rather than assumed. `useNavigate` is
+      // mocked at the top of this file, so this pins `navigate('/')` and not
+      // merely "something happened" — the previous version of this test
+      // clicked and then re-asserted that the element it had just clicked was
+      // still in the document, which passes whether or not the handler exists.
+      expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
+    // The mark was added to this branch by issue #111. It is mounted INSIDE the
+    // clickable lockup, so a click that lands on the logo rather than on the
+    // letters must go to the same place — the failure mode otherwise is a
+    // logo-shaped dead zone at the very left of the bar, which is exactly where
+    // people aim.
+    it('navigates home when the brand mark, not the text, is clicked', async () => {
+      const user = userEvent.setup();
+
+      const { container } = render(<AppBar />);
+
+      const mark = container.querySelector('img');
+      expect(mark).not.toBeNull();
+      await user.click(mark as HTMLImageElement);
+
+      expect(mockNavigate).toHaveBeenCalledWith('/');
     });
 
     it('should have clickable title', () => {
@@ -163,6 +184,48 @@ describe('AppBar', () => {
 
       const title = screen.getByText(APP_NAME);
       expect(title).toHaveStyle({ cursor: 'pointer' });
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // The brand mark (issue #111)
+  // ---------------------------------------------------------------------------
+  //
+  // Two assertions, and the pair is the point. The mark is DECORATIVE: the
+  // product's name is rendered as real text right beside it, so alternative
+  // text would make a screen reader say the name twice. `alt=""` is therefore
+  // the correct value and an empty string is also what a forgotten `alt`
+  // attribute looks like to a casual reader — so it is asserted explicitly,
+  // here, rather than left to be "fixed" later by somebody adding a helpful
+  // description.
+  //
+  // The negative half matters just as much. The compact drill-down replaces the
+  // whole lockup with a back arrow and the destination's title; if the mark
+  // leaked into that branch it would sit between the arrow and the title,
+  // stealing the horizontal room the title needs to ellipsize into and
+  // implying the bar is still the home surface when it is a page below one.
+  describe('Brand mark', () => {
+    it('renders a decorative image in the wordmark branch', () => {
+      const { container } = render(<AppBar />);
+
+      const images = container.querySelectorAll('img');
+      expect(images).toHaveLength(1);
+      expect(images[0]).toHaveAttribute('alt', '');
+      expect(images[0]).toHaveAttribute('aria-hidden');
+    });
+
+    it('renders no image in the compact drill-down branch', () => {
+      setViewportWidth(375);
+      const { container } = render(<AppBar />, {
+        wrapperOptions: { route: '/admin/settings' },
+      });
+
+      // Sanity: we really are in the drill-down treatment, not just on a
+      // viewport where the wordmark happened to render anyway.
+      expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+      expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+
+      expect(container.querySelectorAll('img')).toHaveLength(0);
     });
   });
 
