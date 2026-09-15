@@ -63,15 +63,18 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
+import { FeedCountLine } from './FeedCountLine';
+import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useNoteSourceNames, noteSourceKey } from '../../hooks/useNoteSourceNames';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
 import { feedCacheKey } from '../../utils/feedCache';
+import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -239,7 +242,7 @@ export function NotesLibraryView() {
   // restores the new one's — which is exactly the behaviour you want.
   useScrollRestoration(cacheKey);
 
-  const { notes, isLoading, error, nextCursor, isLoadingMore, loadMore } = useNotes({
+  const { notes, total, isLoading, error, nextCursor, isLoadingMore, loadMore } = useNotes({
     q: debouncedSearch,
     status: status === 'all' ? undefined : status,
     cacheKey,
@@ -247,6 +250,13 @@ export function NotesLibraryView() {
 
   const sourceNames = useNoteSourceNames(notes);
   const canCreate = hasPermission('notes:write');
+
+  /**
+   * `new Date()` is read HERE and passed down, rather than inside the grouper —
+   * one clock reading per render, so every row in one paint is bucketed against
+   * the same instant. `TranscriptsLibraryView` carries the long form.
+   */
+  const dateGroups = useMemo(() => groupFeedByDate(notes, new Date()), [notes]);
 
   const isFiltered = useMemo(
     () => debouncedSearch.trim().length > 0 || status !== 'all',
@@ -285,6 +295,18 @@ export function NotesLibraryView() {
           {error}
         </Alert>
       )}
+
+      {/* Rendered unconditionally — see `FeedCountLine` for why a live region
+          must exist before it has anything to say. Empty while the first page
+          is in flight, so it never announces "No notes yet" at a reader who is
+          simply waiting. */}
+      <FeedCountLine
+        label={
+          isLoading
+            ? ''
+            : feedCountLabel(total, { one: 'note', many: 'notes' }, debouncedSearch)
+        }
+      />
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -329,18 +351,26 @@ export function NotesLibraryView() {
         </Paper>
       ) : (
         <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
-          {notes.map((note) => {
-            const ref = noteSourceRef(note);
-            return (
-              <NoteRow
-                key={note.id}
-                note={note}
-                sourceName={ref ? sourceNames[noteSourceKey(ref)] : undefined}
-                dense={!isPhone}
-                onOpen={() => navigate(`/notes/${note.id}`)}
-              />
-            );
-          })}
+          {/* ONE flat list with separators among the rows — not a list per
+              group. See `FeedDateSeparator` for why nesting would change what a
+              screen reader announces for every row in the feed. */}
+          {dateGroups.map((group) => (
+            <Fragment key={group.key}>
+              <FeedDateSeparator label={group.label} />
+              {group.items.map((note) => {
+                const ref = noteSourceRef(note);
+                return (
+                  <NoteRow
+                    key={note.id}
+                    note={note}
+                    sourceName={ref ? sourceNames[noteSourceKey(ref)] : undefined}
+                    dense={!isPhone}
+                    onOpen={() => navigate(`/notes/${note.id}`)}
+                  />
+                );
+              })}
+            </Fragment>
+          ))}
         </Stack>
       )}
 

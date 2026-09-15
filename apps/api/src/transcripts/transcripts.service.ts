@@ -232,37 +232,63 @@ export class TranscriptsService {
 
   /** `GET /api/transcripts` — cursor-paginated, `updatedAt` descending. */
   async list(query: TranscriptListQueryDto, userId: string) {
-    const where = await this.scopeWhere(query, userId);
+    // TWO PREDICATES, NOT ONE MUTATED IN PLACE. `filterWhere` is the question
+    // the caller asked; `pageWhere` is that question plus the keyset clause
+    // bounding this one page. `total` counts the first, which is what makes it
+    // identical on page one and on every `loadMore` — a count over `pageWhere`
+    // would shrink as the user paged, and a client showing "42 transcripts"
+    // would watch the number fall to 22 for pressing a button.
+    const filterWhere = await this.scopeWhere(query, userId);
     const cursor = decodeCursor(query.cursor);
 
-    if (cursor) {
-      // KEYSET, NOT OFFSET. `(updatedAt, id)` as a compound tie-break, because
-      // `updatedAt` alone is not unique and two rows sharing a millisecond
-      // would make one of them unreachable.
-      where.AND = [
-        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-        {
-          OR: [
-            { updatedAt: { lt: cursor.updatedAt } },
-            { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
+    const pageWhere: Prisma.TranscriptWhereInput = cursor
+      ? {
+          ...filterWhere,
+          // KEYSET, NOT OFFSET. `(updatedAt, id)` as a compound tie-break,
+          // because `updatedAt` alone is not unique and two rows sharing a
+          // millisecond would make one of them unreachable.
+          AND: [
+            ...(Array.isArray(filterWhere.AND)
+              ? filterWhere.AND
+              : filterWhere.AND
+                ? [filterWhere.AND]
+                : []),
+            {
+              OR: [
+                { updatedAt: { lt: cursor.updatedAt } },
+                { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
+              ],
+            },
           ],
-        },
-      ];
-    }
+        }
+      : filterWhere;
 
-    const rows = await this.prisma.transcript.findMany({
-      where,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      // One more than asked for: the extra row is how "is there a next page?"
-      // is answered without a second `count` query over the same predicate.
-      take: query.limit + 1,
-    });
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.transcript.findMany({
+        where: pageWhere,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        // One more than asked for: the extra row is how "is there a next page?"
+        // is answered without a second `count` query over the same predicate.
+        // That is still true — `total` below answers a DIFFERENT question ("how
+        // many match at all"), and the two are deliberately not derived from
+        // each other.
+        take: query.limit + 1,
+      }),
+      // COUNTED, NOT ESTIMATED. The predicate is already narrowed to what this
+      // caller may see (`scopeWhere` resolves the share list first), so the
+      // count is an index scan over one user's rows rather than over the table;
+      // an approximation would be a worse answer for no gain. Read in the SAME
+      // transaction as the page so the count and the rows cannot describe two
+      // different states of the table.
+      this.prisma.transcript.count({ where: filterWhere }),
+    ]);
 
     const page = rows.slice(0, query.limit);
     const items = await this.withAccess(page, userId);
 
     return {
       items,
+      total,
       nextCursor:
         rows.length > query.limit && page.length > 0
           ? encodeCursor(page[page.length - 1])

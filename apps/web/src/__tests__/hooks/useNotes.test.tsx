@@ -135,10 +135,27 @@ function withNotifications(events: { id: string; eventKey: string }[]) {
   } as unknown as ReturnType<typeof useNotifications>);
 }
 
+
+/**
+ * One page as the API returns it, `total` included (#190).
+ *
+ * `total` defaults to the page's own length, which is right for every test that
+ * is not about paging. The three-page fixtures below pass the real figure,
+ * because the whole point of `total` is that it does NOT shrink as a client
+ * pages — a count derived from the page would make that untestable here.
+ */
+function listResponse(
+  items: NoteListItem[],
+  nextCursor: string | null,
+  total: number = items.length,
+) {
+  return { items, total, nextCursor };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockUseNotifications.mockReturnValue(null);
-  mockGetNotes.mockResolvedValue({ items: [], nextCursor: null });
+  mockGetNotes.mockResolvedValue(listResponse([], null));
   mockGetNote.mockResolvedValue(listItem('n1') as never);
   mockGetNoteSummary.mockResolvedValue({
     inProgress: [],
@@ -155,7 +172,7 @@ afterEach(() => {
 
 describe('useNotes — the list', () => {
   it('reports the page and its cursor', async () => {
-    mockGetNotes.mockResolvedValue({ items: [listItem('a')], nextCursor: 'cursor-2' });
+    mockGetNotes.mockResolvedValue(listResponse([listItem('a')], 'cursor-2'));
 
     const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
 
@@ -176,8 +193,8 @@ describe('useNotes — the list', () => {
 
   it('APPENDS on loadMore rather than replacing', async () => {
     mockGetNotes
-      .mockResolvedValueOnce({ items: [listItem('a')], nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: [listItem('b')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('a')], 'c2'))
+      .mockResolvedValueOnce(listResponse([listItem('b')], null));
 
     const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
     await waitFor(() => expect(result.current.notes).toHaveLength(1));
@@ -195,8 +212,8 @@ describe('useNotes — the list', () => {
     // whose `updatedAt` moves between requests legitimately appears twice, and
     // React would warn about the duplicate key while rendering it twice.
     mockGetNotes
-      .mockResolvedValueOnce({ items: [listItem('a'), listItem('b')], nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: [listItem('b'), listItem('c')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('a'), listItem('b')], 'c2'))
+      .mockResolvedValueOnce(listResponse([listItem('b'), listItem('c')], null));
 
     const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
     await waitFor(() => expect(result.current.notes).toHaveLength(2));
@@ -217,7 +234,7 @@ describe('useNotes — the list', () => {
             resolveSlow = resolve;
           }),
       )
-      .mockResolvedValueOnce({ items: [listItem('fast')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('fast')], null));
 
     const { result, rerender } = renderHook(
       ({ q }: { q: string }) => useNotes({ q, pollIntervalMs: 0 }),
@@ -228,7 +245,7 @@ describe('useNotes — the list', () => {
     await waitFor(() => expect(result.current.notes.map((n) => n.id)).toEqual(['fast']));
 
     await act(async () => {
-      resolveSlow({ items: [listItem('slow')], nextCursor: null });
+      resolveSlow(listResponse([listItem('slow')], null));
     });
 
     expect(result.current.notes.map((n) => n.id)).toEqual(['fast']);
@@ -307,12 +324,81 @@ describe('useNotes — the list', () => {
  * derived-interval poll, the tab-refocus catch-up fetch, the notification
  * effect (#169) and `refresh()` after a row action.
  */
+/**
+ * =============================================================================
+ * `total` — HOW MANY MATCH, NOT HOW MANY ARE LOADED (issue #190)
+ * =============================================================================
+ *
+ * The number this exposes is the one the result-count line renders, and its
+ * whole value is that it does NOT move as the user pages. So the tests that
+ * matter are the ones where it would be tempting to derive it from the rows:
+ * a 20-row page out of 60, and a `loadMore` that leaves it alone.
+ */
+describe('useNotes — total', () => {
+  it('reports how many MATCH, not how many are loaded', async () => {
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 300));
+
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.notes).toHaveLength(20));
+
+    expect(result.current.total).toBe(300);
+  });
+
+  it('does not change as the user pages', async () => {
+    mockGetNotes
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60));
+
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.total).toBe(60));
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(result.current.notes).toHaveLength(40);
+    expect(result.current.total).toBe(60);
+  });
+
+  it('takes the PAGE\'s count on a revalidation, even while keeping its own cursor', async () => {
+    // The count answers a question about the FILTERS, so the freshest answer
+    // wins — unlike `nextCursor`, which describes where the client's own list
+    // stops and is deliberately kept. The two are not symmetric and a
+    // "simplification" that made them so would freeze the count.
+    mockGetNotes
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 61));
+
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.notes).toHaveLength(20));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.total).toBe(61);
+    expect(result.current.nextCursor).toBe('c3');
+    expect(result.current.notes).toHaveLength(40);
+  });
+
+  it('starts at 0 before the first page lands', async () => {
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
+
+    expect(result.current.total).toBe(0);
+    expect(result.current.isLoading).toBe(true);
+  });
+});
+
 describe('useNotes — a background read REVALIDATES, it does not truncate', () => {
   function threePages() {
     mockGetNotes
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60));
   }
 
   async function loadThreePages(pollIntervalMs = 0) {
@@ -330,7 +416,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
 
   it('leaves 60 rows after the POLL fires', async () => {
     threePages();
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages(NOTE_ACTIVE_POLL_MS);
 
@@ -349,7 +435,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     // visible. That fetch is page one, and before #167 it was the fastest way
     // to lose a loaded feed: switch tabs and come straight back.
     threePages();
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages(NOTE_ACTIVE_POLL_MS);
     const before = mockGetNotes.mock.calls.length;
@@ -368,7 +454,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
 
   it('leaves 60 rows after a notes.* NOTIFICATION', async () => {
     threePages();
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result, rerender } = await loadThreePages();
 
@@ -383,7 +469,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
 
   it('leaves 60 rows after refresh() following a row action', async () => {
     threePages();
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages();
 
@@ -396,7 +482,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
 
   it('keeps the CURSOR where loadMore left it, so paging does not rewind', async () => {
     threePages();
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages();
     expect(result.current.nextCursor).toBe('c4');
@@ -466,9 +552,9 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     // `load`'s identity changes exactly when the query does, and reconciling
     // there splices rows matching the OLD filter into the answer to a new one.
     mockGetNotes
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2'))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3'))
+      .mockResolvedValue(listResponse([listItem('match')], null));
 
     const { result, rerender } = renderHook(
       ({ q }: { q: string }) => useNotes({ q, pollIntervalMs: 0 }),
@@ -488,8 +574,8 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
 
   it('RESETS on a source-filter change too', async () => {
     mockGetNotes
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValue({ items: [listItem('from-tr-9')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2'))
+      .mockResolvedValue(listResponse([listItem('from-tr-9')], null));
 
     const { result, rerender } = renderHook(
       ({ source }: { source: string | undefined }) =>
@@ -507,7 +593,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     // A spinner every five seconds over data that is already correct is the
     // fastest way to make a live list unusable — and it would also throw away
     // the scroll position the rows are holding.
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
     expect(result.current.isLoading).toBe(true);
@@ -530,7 +616,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     // an out-of-date page one into the current list.
     let resolveSlow: (value: { items: NoteListItem[]; nextCursor: string | null }) => void =
       () => {};
-    mockGetNotes.mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValueOnce(listResponse(page(0), 'c2'));
 
     const { result } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
     await waitFor(() => expect(result.current.notes).toHaveLength(20));
@@ -542,7 +628,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
             resolveSlow = resolve;
           }),
       )
-      .mockResolvedValueOnce({ items: [listItem('newest')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('newest')], null));
 
     let slow: Promise<void> = Promise.resolve();
     await act(async () => {
@@ -552,7 +638,7 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     expect(result.current.notes.map((n) => n.id)).toEqual(['newest']);
 
     await act(async () => {
-      resolveSlow({ items: page(20), nextCursor: 'c3' });
+      resolveSlow(listResponse(page(20), 'c3'));
       await slow;
     });
 
@@ -583,10 +669,10 @@ describe('useNotes — a cached feed survives the drill-down', () => {
 
   async function loadSixtyRows(cacheKey: string) {
     mockGetNotes
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const rendered = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey }));
     await waitFor(() => expect(rendered.result.current.notes).toHaveLength(20));
@@ -638,7 +724,7 @@ describe('useNotes — a cached feed survives the drill-down', () => {
     const { unmount } = await loadSixtyRows('notes||');
     unmount();
 
-    mockGetNotes.mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+    mockGetNotes.mockResolvedValue(listResponse([listItem('match')], null));
 
     const { result } = renderHook(() =>
       useNotes({ q: 'budget', pollIntervalMs: 0, cacheKey: 'notes|budget|' }),
@@ -652,14 +738,14 @@ describe('useNotes — a cached feed survives the drill-down', () => {
   it('keeps each filter\'s own feed, so switching back restores it', async () => {
     await loadSixtyRows('notes||').then((r) => r.unmount());
 
-    mockGetNotes.mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+    mockGetNotes.mockResolvedValue(listResponse([listItem('match')], null));
     const searched = renderHook(() =>
       useNotes({ q: 'budget', pollIntervalMs: 0, cacheKey: 'notes|budget|' }),
     );
     await waitFor(() => expect(searched.result.current.notes).toHaveLength(1));
     searched.unmount();
 
-    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetNotes.mockResolvedValue(listResponse(page(0), 'c2', 60));
     const { result } = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey: 'notes||' }));
 
     expect(result.current.notes).toHaveLength(60);
@@ -667,9 +753,9 @@ describe('useNotes — a cached feed survives the drill-down', () => {
 
   it('caches NOTHING without a cacheKey — what the transcript detail page gets', async () => {
     mockGetNotes
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2'))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3'))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const first = renderHook(() =>
       useNotes({ sourceTranscriptId: 'tr-1', pollIntervalMs: 0 }),

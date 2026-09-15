@@ -9,6 +9,7 @@ import {
   NOTE_PURGE_JOB_TYPE,
   NOTE_SUBJECT_TYPE,
 } from '../../src/notes/job-types';
+import { encodeCursor } from '../../src/notes/notes.service';
 import { authHeader, createMockTestUser } from '../helpers/auth-mock.helper';
 import { TestContext, closeTestApp, createTestApp } from '../helpers/test-app.helper';
 import { setupBaseMocks } from '../fixtures/mock-setup.helper';
@@ -371,6 +372,92 @@ describe('Notes API (#53)', () => {
 
       expect(where.ownerId).toBe(user.id);
       expect(where.deletedAt).toBeNull();
+    });
+
+    // ========================================================================
+    // `total` — issue #190, epic #162
+    // ========================================================================
+    //
+    // The count exists so a 300-row card feed can say how big it is. Its whole
+    // value is that it answers a question about the FILTERS rather than about
+    // the page, so the tests that matter are the two where deriving it from the
+    // page would look right: a full page with more behind it, and a cursored
+    // request.
+
+    it('answers `total` alongside the page', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([noteRow({ ownerId: user.id })]);
+      prismaMock.note.count.mockResolvedValue(42);
+
+      const response = await request(context.app.getHttpServer())
+        .get(NOTES)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.total).toBe(42);
+      expect(response.body.data.items).toHaveLength(1);
+    });
+
+    it('counts over the FILTERS, never over the keyset-bounded page', async () => {
+      // ⚠ THE ASSERTION THIS FILE EXISTS TO MAKE about `total`. A count over
+      // the page predicate would shrink as the client pages, so a feed showing
+      // "42 notes" would watch the number fall to 22 for pressing Load more.
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([noteRow({ ownerId: user.id })]);
+      prismaMock.note.count.mockResolvedValue(42);
+
+      // Built with the service's own encoder rather than by hand: a cursor
+      // this endpoint cannot decode restarts the list from the top, which is
+      // correct behaviour and would make this test silently assert nothing.
+      const cursor = encodeCursor({ updatedAt: new Date(2026, 0, 1), id: 'note-9' });
+
+      await request(context.app.getHttpServer())
+        .get(`${NOTES}?cursor=${cursor}`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      const countWhere = prismaMock.note.count.mock.calls[0][0].where;
+      const pageWhere = prismaMock.note.findMany.mock.calls[0][0].where;
+
+      // The page carries the keyset clause; the count does not.
+      expect(pageWhere.AND).toBeDefined();
+      expect(countWhere.AND).toBeUndefined();
+      // Both are still scoped to the same caller and the same filters.
+      expect(countWhere.ownerId).toBe(user.id);
+      expect(countWhere.deletedAt).toBeNull();
+    });
+
+    it('counts under the SAME filters the page is read with', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([]);
+      prismaMock.note.count.mockResolvedValue(0);
+
+      await request(context.app.getHttpServer())
+        .get(`${NOTES}?status=failed`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(prismaMock.note.count.mock.calls[0][0].where.status).toBe('failed');
+    });
+
+    it('reads the count and the page in ONE transaction', async () => {
+      // Two separate round trips could describe two different states of the
+      // table — "20 of 19", which is nonsense on screen and unreproducible in a
+      // bug report.
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([]);
+      prismaMock.note.count.mockResolvedValue(0);
+
+      await request(context.app.getHttpServer())
+        .get(NOTES)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(prismaMock.$transaction).toHaveBeenCalled();
     });
 
     it('orders by (updatedAt, id) and pages by KEYSET, never offset', async () => {

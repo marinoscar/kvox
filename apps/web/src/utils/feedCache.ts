@@ -97,7 +97,7 @@ export function feedCacheKey(
 
 /** A fresh empty feed. Never shared, so a caller cannot mutate the blank. */
 function emptyFeed<T>(): FeedState<T> {
-  return { items: [], nextCursor: null };
+  return { items: [], nextCursor: null, total: 0 };
 }
 
 /**

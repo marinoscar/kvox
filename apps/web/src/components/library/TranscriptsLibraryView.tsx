@@ -64,9 +64,11 @@ import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import visuallyHidden from '@mui/utils/visuallyHidden';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { FeedCountLine } from './FeedCountLine';
+import { FeedDateSeparator } from './FeedDateSeparator';
 import { TranscriptRowActions } from './TranscriptRowActions';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
 import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
@@ -75,6 +77,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useTranscripts } from '../../hooks/useTranscripts';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
 import { feedCacheKey } from '../../utils/feedCache';
+import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -240,7 +243,7 @@ export function TranscriptsLibraryView() {
   // key and restores the new tab's — which is exactly the behaviour you want.
   useScrollRestoration(cacheKey);
 
-  const { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
+  const { transcripts, total, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
     useTranscripts(tab, {
       q: debouncedSearch,
       status: status === 'all' ? undefined : status,
@@ -311,6 +314,16 @@ export function TranscriptsLibraryView() {
 
   const canCreate = hasPermission('transcripts:write');
 
+  /**
+   * `new Date()` is read HERE and passed down, rather than inside the grouper.
+   *
+   * One clock reading per render means every row in one paint is bucketed
+   * against the same instant — a grouper calling `Date.now()` per row could put
+   * two rows a microsecond apart in different groups across a midnight, which
+   * is a heading that appears for one row and a bug nobody would reproduce.
+   */
+  const dateGroups = useMemo(() => groupFeedByDate(transcripts, new Date()), [transcripts]);
+
   const isFiltered = useMemo(
     () => debouncedSearch.trim().length > 0 || status !== 'all',
     [debouncedSearch, status],
@@ -358,6 +371,18 @@ export function TranscriptsLibraryView() {
           {error}
         </Alert>
       )}
+
+      {/* Rendered unconditionally — see `FeedCountLine` for why a live region
+          must exist before it has anything to say. Empty while the first page
+          is in flight, so it never announces "No transcripts yet" at a reader
+          who is simply waiting. */}
+      <FeedCountLine
+        label={
+          isLoading
+            ? ''
+            : feedCountLabel(total, { one: 'transcript', many: 'transcripts' }, debouncedSearch)
+        }
+      />
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -410,23 +435,31 @@ export function TranscriptsLibraryView() {
         </Paper>
       ) : (
         <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
-          {transcripts.map((transcript) => (
-            <TranscriptRow
-              key={transcript.id}
-              transcript={transcript}
-              dense={!isPhone}
-              onOpen={() => openTranscript(transcript.id)}
-              previewState={
-                preview.activeId === transcript.id ? preview.status : 'idle'
-              }
-              previewError={
-                preview.error?.transcriptId === transcript.id
-                  ? preview.error.message
-                  : null
-              }
-              onTogglePreview={() => preview.toggle(transcript.id)}
-              onChanged={() => void refresh()}
-            />
+          {/* ONE flat list with separators among the rows — not a list per
+              group. See `FeedDateSeparator` for why nesting would change what a
+              screen reader announces for all 300 rows. */}
+          {dateGroups.map((group) => (
+            <Fragment key={group.key}>
+              <FeedDateSeparator label={group.label} />
+              {group.items.map((transcript) => (
+                <TranscriptRow
+                  key={transcript.id}
+                  transcript={transcript}
+                  dense={!isPhone}
+                  onOpen={() => openTranscript(transcript.id)}
+                  previewState={
+                    preview.activeId === transcript.id ? preview.status : 'idle'
+                  }
+                  previewError={
+                    preview.error?.transcriptId === transcript.id
+                      ? preview.error.message
+                      : null
+                  }
+                  onTogglePreview={() => preview.toggle(transcript.id)}
+                  onChanged={() => void refresh()}
+                />
+              ))}
+            </Fragment>
           ))}
         </Stack>
       )}

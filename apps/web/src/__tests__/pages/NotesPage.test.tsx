@@ -59,11 +59,18 @@ function noteItem(overrides: Partial<NoteListItem> = {}): NoteListItem {
 /** Record every `GET /api/notes`, so the filter wiring can be asserted. */
 let noteRequests: URL[] = [];
 
-function respondWithNotes(items: NoteListItem[], nextCursor: string | null = null) {
+function respondWithNotes(
+  items: NoteListItem[],
+  nextCursor: string | null = null,
+  // `total` defaults to the page's own length, which is right for every test
+  // that is not about paging. A test that IS — one asserting the count line
+  // over a feed with more pages behind it — passes the real figure.
+  total: number = items.length,
+) {
   server.use(
     http.get(`${API_BASE}/notes`, ({ request }) => {
       noteRequests.push(new URL(request.url));
-      return HttpResponse.json({ data: { items, nextCursor } });
+      return HttpResponse.json({ data: { items, total, nextCursor } });
     }),
     // The source-name resolver reads the transcript by id. Answered here so
     // the rows can assert the NAME rather than the fallback noun — which is
@@ -280,4 +287,57 @@ describe('NotesPage', () => {
 
     expect(screen.queryByRole('tablist', { name: 'Library' })).toBeNull();
   });
+
+/**
+ * =============================================================================
+ * THE RESULT COUNT LINE AND THE DATE SEPARATORS — issue #190
+ * =============================================================================
+ *
+ * `TranscriptsPage.test.tsx`'s twin block; that file carries the reasoning.
+ * These two surfaces are twins by design and the suites stay test-for-test
+ * alike so a divergence shows up here.
+ */
+describe('NotesPage — result count and date groups', () => {
+  it('says how many MATCH, not how many are on screen', async () => {
+    respondWithNotes([noteItem()], 'cursor-2', 300);
+    renderNotes();
+
+    expect(await screen.findByText('300 notes')).toBeInTheDocument();
+  });
+
+  it('uses the singular for one', async () => {
+    respondWithNotes([noteItem()], null, 1);
+    renderNotes();
+
+    expect(await screen.findByText('1 note')).toBeInTheDocument();
+  });
+
+  it('announces the count politely, so a search result is not silent', async () => {
+    respondWithNotes([noteItem()], null, 7);
+    renderNotes();
+    const line = await screen.findByText('7 notes');
+
+    expect(line.closest('[role="status"]')).not.toBeNull();
+    expect(line.closest('[aria-live="polite"]')).not.toBeNull();
+  });
+
+  it('renders a date separator above the rows', async () => {
+    respondWithNotes([noteItem({ updatedAt: new Date().toISOString() })], null, 1);
+    renderNotes();
+    await screen.findByText('Q3 planning — decisions');
+
+    expect(screen.getByText('Today')).toBeInTheDocument();
+  });
+
+  it('keeps the separators OUT of the list semantics', async () => {
+    respondWithNotes([noteItem({ updatedAt: new Date().toISOString() })], null, 1);
+    renderNotes();
+    const separator = await screen.findByText('Today');
+
+    const li = separator.closest('li');
+    expect(li).not.toBeNull();
+    expect(li).toHaveAttribute('role', 'presentation');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+});
 });

@@ -434,6 +434,28 @@ export type NoteListItem = z.infer<typeof noteListItemSchema>;
 
 export const noteListResponseSchema = z.object({
   items: z.array(noteListItemSchema).describe('One page of notes, `updatedAt` descending.'),
+  /**
+   * How many rows match the current filters, ignoring paging.
+   *
+   * THE FILTERS, NOT THE TABLE, and not "how many are left". It is counted over
+   * the same predicate the page is read with, minus the keyset cursor clause,
+   * so it is IDENTICAL on page one and on every `loadMore` for an unchanged
+   * filter set — a client can render "42 notes" once and not watch the
+   * number fall as the user pages.
+   *
+   * Counted rather than estimated: the predicate is already scoped to one
+   * caller and covered by `(owner_id, updated_at desc)`, so this is an index
+   * scan over that user's rows, and an approximation would be a worse answer
+   * for no gain.
+   */
+  total: z
+    .number()
+    .int()
+    .describe(
+      'How many notes match the current filters, ignoring paging. Identical on every page of one ' +
+        'filter set, so a client can render a result count that does not change as it pages.',
+    ),
+
   nextCursor: z
     .string()
     .nullable()

@@ -3008,7 +3008,14 @@ itself while a user scrolls skips rows and repeats others.
 | `cursor` | `nextCursor` from the previous page |
 | `limit` | 1–100, default 20 |
 
-**Response:** `{ "data": { "items": [...], "nextCursor": "…" | null } }`
+**Response:** `{ "data": { "items": [...], "total": 42, "nextCursor": "…" | null } }`
+
+`total` (issue #190) is how many transcripts **match the current filters**, ignoring
+paging. It is counted over the same predicate the page is read with, minus the
+keyset cursor clause, and both reads happen in one transaction — so it is
+identical on page one and on every subsequent page of an unchanged filter set,
+and a client can render "42 transcripts" once without watching the number fall as the
+user pages. It is **not** "how many are left", and it is **not** `items.length`.
 
 Each item carries an `access` field — `owner`, `editor` or `viewer` — describing
 how **this caller** reaches that row, not the owner's relationship to it.
@@ -3787,7 +3794,14 @@ and repeat rows.
 | `cursor` | `nextCursor` from the previous page |
 | `limit` | 1–100, default 20 |
 
-**Response:** `{ "data": { "items": [...], "nextCursor": "…" | null } }`
+**Response:** `{ "data": { "items": [...], "total": 42, "nextCursor": "…" | null } }`
+
+`total` (issue #190) is how many notes **match the current filters**, ignoring
+paging. It is counted over the same predicate the page is read with, minus the
+keyset cursor clause, and both reads happen in one transaction — so it is
+identical on page one and on every subsequent page of an unchanged filter set,
+and a client can render "42 notes" once without watching the number fall as the
+user pages. It is **not** "how many are left", and it is **not** `items.length`.
 
 **Template previews never appear here** — a preview has no note (`noteId:
 null`) and creates none; this route reads `notes`. Each row carries an
