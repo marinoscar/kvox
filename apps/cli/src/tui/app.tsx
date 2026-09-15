@@ -7,7 +7,7 @@ import { InvokeScreen } from './screens/invoke.js';
 import { LoginScreen } from './screens/login.js';
 import { LogoutScreen } from './screens/logout.js';
 import { MenuScreen } from './screens/menu.js';
-import { DeployScreen } from './screens/deploy.js';
+import { DeployScreen } from './screens/deploy/index.js';
 import { NodeScreen } from './screens/node.js';
 import { StatusScreen } from './screens/status.js';
 

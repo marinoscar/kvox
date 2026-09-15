@@ -34,7 +34,7 @@ export type { TextFieldProps } from './text-field.js';
 export { SelectField, choiceIndex } from './select-field.js';
 export type { SelectChoice, SelectFieldProps } from './select-field.js';
 
-export { Form, firstInvalidField, formLabelWidth, formValue } from './form.js';
+export { Form, firstInvalidField, focusIndexFor, formLabelWidth, formValue } from './form.js';
 export type { FormFieldSpec, FormProps } from './form.js';
 
 export { Checklist, checklistRows, CHECKLIST_GLYPHS, CHECKLIST_COLORS } from './checklist.js';
