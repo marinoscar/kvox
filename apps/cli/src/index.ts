@@ -210,6 +210,53 @@ export {
 } from './deploy/layout.js';
 export type { InstalledApp, LocateOptions, ResolvedLayout } from './deploy/layout.js';
 
+// The deployment's .env at the app root, linked into the clone (#120).
+// Exported because the link discipline and the pre-#120 migration are the
+// behaviour worth exercising directly, and because `readEnvFile` is what
+// every command that needs the environment reads through.
+export {
+  ENV_FILENAME,
+  composeEnvLinkTarget,
+  composeEnvPath,
+  ensureComposeEnvLink,
+  envFilePath,
+  readEnvFile,
+  writeEnvFile,
+} from './deploy/env-file.js';
+export type { EnsureEnvLinkResult } from './deploy/env-file.js';
+
+// Host facts read at deploy time (#120), because the API cannot see them from
+// inside its container. Exported for the About surfaces and for #127's
+// server-derived wizard defaults; the parsers are pure and exercised directly.
+export {
+  OS_RELEASE_PATH,
+  collectServerFacts,
+  parseComposeVersion,
+  parseDockerVersion,
+  parseOsRelease,
+} from './deploy/server-facts.js';
+export type { ServerFacts, ServerFactsOptions, ServerProbes } from './deploy/server-facts.js';
+
+// deploy-info/info.json (#120): the one artifact the application reads about
+// its own deployment. The schema is a TypeScript type plus a validator, and
+// both readers (the API's About endpoint, the CLI's `about`) and the writer
+// go through the same validator.
+export {
+  DEPLOY_INFO_DIRNAME,
+  DEPLOY_INFO_FILENAME,
+  DEPLOY_INFO_SCHEMA,
+  DeployInfoError,
+  buildDeployInfo,
+  deployInfoDir,
+  deployInfoPath,
+  isUtcTimestamp,
+  readDeployInfo,
+  readDeployedAppVersion,
+  validateDeployInfo,
+  writeDeployInfo,
+} from './deploy/deploy-info.js';
+export type { DeployInfo, DeployInfoExtras, DeployRemote } from './deploy/deploy-info.js';
+
 export type { DeployHooks, StepOutcome, StepResult } from './deploy/hooks.js';
 
 // The wizard's questions come from infra/compose/.env.example rather than a
@@ -281,6 +328,7 @@ export {
   checksPassed,
   isLoopbackPortFree,
   isPortListening,
+  parseDf,
   requiredChecks,
   runChecks,
   summarise,
@@ -293,6 +341,7 @@ export type {
   CheckStatus,
   CheckSummary,
   CompletedCheck,
+  DfReading,
 } from './deploy/checks/index.js';
 
 // Working out what to deploy without naming a repository (#179) - the other

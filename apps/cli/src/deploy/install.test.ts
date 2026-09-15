@@ -1,11 +1,24 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
+import { CLI_VERSION } from '../package-info.js';
+import { deployInfoPath, readDeployInfo } from './deploy-info.js';
+import { composeEnvPath, envFilePath } from './env-file.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
   buildInstallSteps,
@@ -14,8 +27,17 @@ import {
   defaultRootFor,
   runInstall,
   secretsFrom,
+  type InstallOptions,
 } from './install.js';
-import { DEPLOY_STATE_VERSION, writeState, type DeployState } from './state.js';
+import { DEPLOY_STATE_VERSION, readState, writeState, type DeployState } from './state.js';
+import {
+  FAKE_APP_VERSION,
+  fakeVps,
+  healthyFetch,
+  populateClone,
+  silentPrompt,
+  type FakeVps,
+} from './testing/fake-vps.js';
 
 function installedRoot(root = mkdtempSync(join(tmpdir(), 'appctl-install-'))): string {
   const state: DeployState = {
@@ -535,5 +557,141 @@ describe('defaultRootFor', () => {
     expect(defaultRootFor('https://example.test/o/MyApp.git', '/opt/infra/apps')).toBe(
       '/opt/infra/apps/myapp',
     );
+  });
+});
+
+// =============================================================================
+// The pipeline end to end, against a fake VPS  (issue #120)
+// =============================================================================
+
+describe('runInstall against a fake VPS', () => {
+  let vps: FakeVps;
+
+  beforeEach(async () => {
+    vps = await fakeVps({ remoteSha: 'c'.repeat(40) });
+    vi.stubGlobal('fetch', healthyFetch());
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await vps.close();
+  });
+
+  function install(root: string, extra: Partial<InstallOptions> = {}) {
+    return runInstall({
+      deployRoot: root,
+      name: 'demo',
+      bindPort: 3535,
+      proxyRoot: join(root, 'proxy'),
+      domain: 'app.example.test',
+      repo: 'https://example.test/o/demo.git',
+      ref: 'main',
+      runCommand: vps.runCommand,
+      cwd: root,
+      nonInteractive: true,
+      answers: vps.answers(),
+      promptContext: silentPrompt(),
+      skipDoctor: true,
+      skipProxy: true,
+      skipSeed: true,
+      ...extra,
+    });
+  }
+
+  it('writes .env at the app root, 0600, and links it into the clone', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+
+    const result = await install(root);
+
+    expect(result.commitSha).toBe('c'.repeat(40));
+    const env = envFilePath(root);
+    expect(env).toBe(join(root, '.env'));
+    expect(statSync(env).mode & 0o777).toBe(0o600);
+
+    const link = composeEnvPath(root);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(link)).toBe('../../../.env');
+    // Compose reads through the link and sees the same file.
+    expect(readFileSync(link, 'utf8')).toBe(readFileSync(env, 'utf8'));
+
+    const contents = readFileSync(env, 'utf8');
+    expect(contents).toContain('COMPOSE_PROJECT_NAME=demo');
+    expect(contents).toContain(`DEPLOY_ROOT=${root}`);
+    expect(contents).toContain(`POSTGRES_PORT=${vps.dbPort}`);
+    expect(readState(root)?.envPath).toBe(env);
+  });
+
+  it('migrates a pre-#120 .env found inside the clone on --reinstall', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    // An earlier install: a clone at some SHA, its .env a regular file inside
+    // it, and a state file - which is what makes this a reinstall.
+    populateClone(join(root, 'repo'));
+    vps.head = 'a'.repeat(40);
+    writeFileSync(composeEnvPath(root), 'POSTGRES_PASSWORD=from-before\n', { mode: 0o600 });
+    installedRoot(root);
+    const progress: string[] = [];
+
+    await install(root, { reinstall: true, hooks: { onProgress: (message) => void progress.push(message) } });
+
+    expect(lstatSync(composeEnvPath(root)).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(composeEnvPath(root))).toBe('../../../.env');
+    expect(statSync(envFilePath(root)).mode & 0o777).toBe(0o600);
+    // The wizard ran over the migrated file: an answer wins over what was on
+    // disk, and the result landed at the root.
+    expect(readFileSync(envFilePath(root), 'utf8')).toContain('POSTGRES_PASSWORD=not-the-default-password');
+    expect(progress.some((message) => message.includes('Moved .env'))).toBe(true);
+  });
+
+  it('writes deploy-info/info.json with schema 1 and installedAt equal to updatedAt', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+
+    await install(root);
+
+    const path = deployInfoPath(root);
+    expect(path).toBe(join(root, 'deploy-info', 'info.json'));
+    expect(statSync(path).mode & 0o777).toBe(0o644);
+
+    const state = readState(root) as DeployState;
+    const info = readDeployInfo(root);
+    expect(info).toMatchObject({
+      schema: 1,
+      app: {
+        name: 'demo',
+        version: FAKE_APP_VERSION,
+        commitSha: 'c'.repeat(40),
+        ref: 'main',
+        repoUrl: 'https://example.test/o/demo',
+      },
+      installedAt: state.installedAt,
+      updatedAt: state.lastDeployedAt,
+      lastCommand: 'install',
+      deployedBy: { cli: CLI_NAME, version: CLI_VERSION },
+      domain: 'app.example.test',
+      bindPort: 3535,
+      host: {
+        dockerVersion: '27.3.1',
+        composeVersion: '2.29.7',
+        diskBytes: 78125000 * 1024,
+        nodeVersion: process.version.replace(/^v/, ''),
+      },
+      remote: null,
+    });
+    // A first install: one moment, recorded twice.
+    expect(info?.installedAt).toBe(info?.updatedAt);
+    expect(info?.installedAt).toMatch(/Z$/);
+    expect(info?.updatedAt).toMatch(/Z$/);
+    // And nothing secret made it in.
+    expect(readFileSync(path, 'utf8')).not.toContain('not-the-default-password');
+  });
+
+  it('writes deploy-info only after the state, so a failed install leaves neither', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    vps.failWhen((argv) => argv[1] === 'compose' && argv.includes('build'), 'build exploded');
+
+    const error = await install(root).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toContain('build exploded');
+    expect(readState(root)).toBeUndefined();
+    expect(readDeployInfo(root)).toBeUndefined();
   });
 });

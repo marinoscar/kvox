@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../executor.js';
-import { HOST_CHECKS, evaluateDf, evaluateUfw } from './host.js';
+import { HOST_CHECKS, evaluateDf, evaluateUfw, parseDf } from './host.js';
 import { ALL_CHECKS, requiredChecks } from './index.js';
 import {
   checksPassed,
@@ -388,6 +388,24 @@ describe('evaluateDf', () => {
 
   it('fails clearly when the output cannot be parsed', () => {
     expect(evaluateDf('nonsense').status).toBe('fail');
+  });
+});
+
+describe('parseDf', () => {
+  const header = 'Filesystem 1024-blocks Used Available Capacity Mounted on';
+
+  it('reads the size and the free space in bytes', () => {
+    // Shared with server-facts.ts (#120): the size it reports and the free
+    // space evaluateDf judges come from one reading of the same line.
+    expect(parseDf(`${header}\n/dev/sda1 100000000 10000000 80000000 12% /`)).toEqual({
+      totalBytes: 100000000 * 1024,
+      availableBytes: 80000000 * 1024,
+    });
+  });
+
+  it('answers undefined for anything that is not df output', () => {
+    expect(parseDf('nonsense')).toBeUndefined();
+    expect(parseDf('')).toBeUndefined();
   });
 });
 

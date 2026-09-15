@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { Option, type Command } from 'commander';
 
 import { CLI_NAME, envVar } from '../branding.js';
@@ -14,7 +11,7 @@ import {
   type CheckStatus,
   type CompletedCheck,
 } from '../deploy/checks/index.js';
-import { parseEnvFile } from '../deploy/env-spec.js';
+import { readEnvFile } from '../deploy/env-file.js';
 import {
   collectHealth,
   isHealthy,
@@ -477,11 +474,10 @@ async function resolveRepoUrl(
 /** Reads the deployment's .env, when there is one, for the database checks. */
 function readEnvironment(deployRoot: string): { env: Map<string, string> } | undefined {
   try {
-    const contents = readFileSync(
-      join(deployRoot, 'repo', 'infra', 'compose', '.env'),
-      'utf8',
-    );
-    return { env: parseEnvFile(contents) };
+    // `<root>/.env` since #120, falling back to the pre-#120 location inside
+    // the clone without moving anything - doctor never writes.
+    const env = readEnvFile(deployRoot);
+    return env === undefined ? undefined : { env };
   } catch {
     // Absent before a first install; the database checks then report `skip`.
     return undefined;
@@ -666,6 +662,15 @@ export function renderHealth(
   if (report.deployed !== undefined) {
     lines.push(`  ${'Revision'.padEnd(TITLE_WIDTH)}${report.deployed.commitSha.slice(0, 12)} (${report.deployed.ref})\n`);
     lines.push(`  ${'Last deployed'.padEnd(TITLE_WIDTH)}${report.deployed.lastDeployedAt} by ${report.deployed.lastCommand}\n`);
+    // Only when it disagrees: an attempt later than the last success is a
+    // failed update, and the operator should see when it happened without
+    // `Last deployed` claiming it.
+    if (
+      report.deployed.lastAttemptAt !== undefined &&
+      report.deployed.lastAttemptAt > report.deployed.lastDeployedAt
+    ) {
+      lines.push(`  ${'Last attempt'.padEnd(TITLE_WIDTH)}${report.deployed.lastAttemptAt} (did not complete)\n`);
+    }
   }
 
   lines.push('\n  Containers\n\n');

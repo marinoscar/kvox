@@ -217,12 +217,34 @@ const diskSpace: Check = {
   },
 };
 
+export interface DfReading {
+  /** The filesystem's size. */
+  totalBytes: number;
+  availableBytes: number;
+}
+
+/**
+ * Reads `df -Pk` output: one header line, then `<fs> <1024-blocks> <used>
+ * <available> <capacity> <mount>`. Shared with server-facts.ts (#120), which
+ * reports the size while this check judges the free space, so the two never
+ * parse the same line differently.
+ */
+export function parseDf(output: string): DfReading | undefined {
+  const line = output.trim().split('\n')[1];
+  const columns = line?.trim().split(/\s+/) ?? [];
+  const total = Number(columns[1]);
+  const available = Number(columns[3]);
+
+  if (!Number.isFinite(total) || !Number.isFinite(available)) return undefined;
+
+  return { totalBytes: total * 1024, availableBytes: available * 1024 };
+}
+
 /** Reads `df -Pk` output. Exported for its test. */
 export function evaluateDf(output: string): CheckResult {
-  const line = output.trim().split('\n')[1];
-  const available = Number(line?.trim().split(/\s+/)[3]);
+  const reading = parseDf(output);
 
-  if (!Number.isFinite(available)) {
+  if (reading === undefined) {
     return {
       status: 'fail',
       detail: 'could not parse df output',
@@ -230,7 +252,7 @@ export function evaluateDf(output: string): CheckResult {
     };
   }
 
-  const bytes = available * 1024;
+  const bytes = reading.availableBytes;
   return bytes >= MIN_FREE_DISK_BYTES
     ? { status: 'pass', detail: `${formatBytes(bytes)} free` }
     : {

@@ -54,7 +54,9 @@ export interface HealthReport {
   local: { live: ProbeResult; ready: ProbeResult; frontend: ProbeResult };
   external?: { url: string; probe: ProbeResult } | undefined;
   migrations: MigrationState;
-  deployed?: Pick<DeployState, 'commitSha' | 'ref' | 'lastDeployedAt' | 'lastCommand'> | undefined;
+  deployed?:
+    | Pick<DeployState, 'commitSha' | 'ref' | 'lastDeployedAt' | 'lastAttemptAt' | 'lastCommand'>
+    | undefined;
 }
 
 export type FetchLike = typeof globalThis.fetch;
@@ -263,6 +265,9 @@ export async function collectHealth(options: HealthOptions): Promise<HealthRepor
             commitSha: options.state.commitSha,
             ref: options.state.ref,
             lastDeployedAt: options.state.lastDeployedAt,
+            ...(options.state.lastAttemptAt === undefined
+              ? {}
+              : { lastAttemptAt: options.state.lastAttemptAt }),
             lastCommand: options.state.lastCommand,
           },
         }),
