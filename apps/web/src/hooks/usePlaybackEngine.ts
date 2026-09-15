@@ -52,6 +52,45 @@
  *     changes, which is a few times a minute.
  *   • Everything the loop reads (intervals, the selection, the element) lives in
  *     refs, so the loop is built once and never torn down by a re-render.
+ *
+ * =============================================================================
+ * PLAYING ONE LINE — `playSegment` (issue #108)
+ * =============================================================================
+ *
+ * Every transcript row carries a play/pause button that plays THAT LINE and
+ * stops at its end. That is a second, temporary mode layered over the single
+ * stream above, and the rules it follows are all consequences of one idea: the
+ * user pointed at a specific line, so nothing may quietly move them off it.
+ *
+ *   • The speaker filter is BYPASSED while segment mode is active. `seekToMs`
+ *     snaps out of any window the filter excludes, so routing this through it
+ *     would make "play this line" do nothing at all on a line whose speaker is
+ *     filtered out — the one case where a user most obviously wants to hear it.
+ *     `playSegment` therefore writes `currentTime` directly.
+ *   • At `endMs` the engine pauses ON the boundary — the same parking rule the
+ *     interval branch uses for the last window's end — so the scrubber, the
+ *     highlighted line and the audio all agree about where it stopped. The
+ *     NEXT ordinary Play goes through `seekToMs` and so snaps per the filter
+ *     again, exactly as before.
+ *
+ *     ⚠ With one documented exception, which falls out of the loop rather than
+ *     out of segment mode: when a speaker filter is active AND that boundary
+ *     lies outside every one of its windows (playing a filtered-out speaker's
+ *     LAST line), the interval branch resumes on the very next tick — segment
+ *     mode has just been cleared — and pulls the playhead back to the nearest
+ *     position the selection allows. That is the filter reasserting itself, and
+ *     it is the better of the two available answers: the alternative is leaving
+ *     the playhead parked somewhere the next Press of Play would jump away from
+ *     anyway, with nothing on screen explaining the jump.
+ *   • Scrubbing, skipping, tapping a timestamp, previous/next segment, Space
+ *     and the transport's own buttons ALL end segment mode. They each reach
+ *     `seekToMs` or `pause`, which is where the clearing lives, rather than
+ *     each carrying their own copy of it.
+ *   • A Media Session `play` from the lock screen resumes ORDINARY playback,
+ *     because it goes through `play` → `seekToMs`. That is documented rather
+ *     than special-cased: a hardware key has no way to express "and stay inside
+ *     the one line", and resuming the recording is the less surprising of the
+ *     two possible answers.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -72,8 +111,17 @@ import {
 /** How often the position is published to React. See the file header. */
 export const POSITION_PUBLISH_MS = 250;
 
-/** The ±skip the in-app buttons and the Media Session handlers both use. */
-export const SKIP_MS = 15_000;
+/**
+ * The ±skip the in-app buttons and the Media Session handlers both use.
+ *
+ * TEN, not fifteen (issue #108). MUI ships only `Replay`/`Forward` 5, 10 and 30
+ * — there is no 15 — so the bar has always DRAWN a "10" while its accessible
+ * names said "15 seconds". A sighted user and a screen-reader user were being
+ * told different things about the same button, and the labels were the half
+ * that was wrong: the icon is the one of the two that cannot be corrected
+ * without inventing an asset.
+ */
+export const SKIP_MS = 10_000;
 
 /** The speeds the player offers. 2× is the ceiling browsers keep intelligible. */
 export const PLAYBACK_RATES = [1, 1.25, 1.5, 2] as const;
@@ -141,6 +189,15 @@ export interface PlaybackEngine {
   intervals: PlaybackInterval[];
   /** Which file is playing — `original` means the rendition was not ready. */
   audioKind: TranscriptAudio['kind'] | null;
+  /**
+   * The segment currently being played in ISOLATION (issue #108), or null.
+   *
+   * Distinct from `currentSegmentIndex`, which is "whatever the playhead is
+   * over" and keeps updating during ordinary playback. This one is non-null
+   * only while a row's own play button is driving the element, which is what
+   * lets exactly one row render a Pause icon.
+   */
+  activeSegmentId: string | null;
 
   play: () => void;
   pause: () => void;
@@ -154,6 +211,14 @@ export interface PlaybackEngine {
   /** Jump to the previous/next segment. Also the hardware media keys (§7.3). */
   previousSegment: () => void;
   nextSegment: () => void;
+  /**
+   * Play THIS line and stop at its end (issue #108).
+   *
+   * Takes the three fields it needs rather than a whole `TranscriptSegment`, so
+   * a caller holding a projection (a search result, a preview row) can drive it
+   * without manufacturing text and revisions it does not have.
+   */
+  playSegment: (segment: Pick<TranscriptSegment, 'id' | 'startMs' | 'endMs'>) => void;
 }
 
 /** `navigator.mediaSession`, or null where the browser has none. */
@@ -182,6 +247,7 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
   const [rate, setRateState] = useState<PlaybackRate>(1);
   const [currentSegmentIndex, setCurrentSegmentIndex] = useState(-1);
   const [audioKind, setAudioKind] = useState<TranscriptAudio['kind'] | null>(null);
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
 
   /**
    * The three injectables, held in refs and read at CALL time.
@@ -222,6 +288,29 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
    * honest error.
    */
   const recoveringRef = useRef(false);
+  /**
+   * The line being played in isolation, and where to stop (issue #108).
+   *
+   * A REF as well as state because `handleTick` reads it sixty times a second
+   * and must not be rebuilt when it changes — the same reason the intervals and
+   * the segments live in refs. The state is the render-visible copy.
+   */
+  const segmentPlayRef = useRef<{ id: string; stopAtMs: number } | null>(null);
+
+  /**
+   * Leave segment mode.
+   *
+   * ⚠ The state is only touched when the ref was actually set. Every ordinary
+   * seek calls this, and an unconditional `setActiveSegmentId(null)` would
+   * therefore queue a state update on every scrub, skip and timestamp tap — a
+   * re-render of a 6,000-row virtualized list for a value that was already
+   * null. Empty dependency list, so `seekToMs`'s own list does not churn.
+   */
+  const clearSegmentPlay = useCallback(() => {
+    if (segmentPlayRef.current === null) return;
+    segmentPlayRef.current = null;
+    setActiveSegmentId(null);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // The intervals
@@ -260,7 +349,24 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
     const nowMs = toMs(audio.currentTime);
     const windows = intervalsRef.current;
 
-    if (windows.length > 0) {
+    /**
+     * Segment mode (issue #108) and the speaker filter are MUTUALLY EXCLUSIVE,
+     * written as an if/else rather than as two independent checks: a line the
+     * filter excludes is still a line the user explicitly pointed at, and
+     * letting the interval branch run underneath would seek straight back out
+     * of it on the very first tick.
+     */
+    const seg = segmentPlayRef.current;
+    if (seg) {
+      if (nowMs >= seg.stopAtMs) {
+        audio.pause();
+        // Parked ON the boundary, the same reason the interval branch parks on
+        // the last window's end: the scrubber, the highlighted line and the
+        // audio must all agree about where playback stopped.
+        audio.currentTime = toSeconds(seg.stopAtMs);
+        clearSegmentPlay();
+      }
+    } else if (windows.length > 0) {
       const index = intervalIndexAt(windows, nowMs);
       if (index === -1) {
         // Outside every window. Jump to the next one, or stop: there is nothing
@@ -278,6 +384,11 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       }
     }
 
+    // ⚠ EVERYTHING BELOW RUNS ON EVERY TICK, SEGMENT MODE INCLUDED. An early
+    // `return` out of the branch above would be the obvious way to write it and
+    // would freeze the scrubber and the active-line highlight for the whole
+    // length of the line being played — the two pieces of feedback that tell
+    // the user the button did anything at all.
     const position = toMs(audio.currentTime);
 
     // Published at ~4 Hz — see the file header. `Math.abs` so a backwards seek
@@ -296,7 +407,9 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       segmentIndexRef.current = index;
       setCurrentSegmentIndex(index);
     }
-  }, []);
+    // `clearSegmentPlay` has an empty dependency list of its own, so this stays
+    // the stable identity the two clocks were built against.
+  }, [clearSegmentPlay]);
 
   const handleTickRef = useRef(handleTick);
   handleTickRef.current = handleTick;
@@ -392,8 +505,19 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       setDurationMs(Number.isFinite(value) ? toMs(value) : 0);
     };
     const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onEnded = () => setIsPlaying(false);
+    // Segment mode ends whenever the ELEMENT stops, not only when this hook's
+    // own `pause` is called: the browser's native controls, a media key the
+    // Media Session never registered, and a stream that simply runs out all
+    // stop playback without going through any of our callbacks, and a row left
+    // showing Pause in any of those cases is a lie about what is happening.
+    const onPause = () => {
+      setIsPlaying(false);
+      clearSegmentPlay();
+    };
+    const onEnded = () => {
+      setIsPlaying(false);
+      clearSegmentPlay();
+    };
     // Fires in EVERY state, foreground included. Harmless there — `handleTick`
     // is idempotent — and it is the only clock a hidden tab has.
     const onTimeUpdate = () => handleTickRef.current();
@@ -444,8 +568,10 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       audioRef.current = null;
     };
     // ONE dependency that can rebuild the element: the transcript. See the ref
-    // block above for why the injectables are deliberately absent.
-  }, [loadSource, transcriptId]);
+    // block above for why the injectables are deliberately absent —
+    // `loadSource` and `clearSegmentPlay` are both `useCallback`s with empty
+    // dependency lists, so neither can change for the life of the hook.
+  }, [clearSegmentPlay, loadSource, transcriptId]);
 
   /**
    * The rendition finished while the page was open.
@@ -507,21 +633,28 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
   // Controls
   // ---------------------------------------------------------------------------
 
-  const seekToMs = useCallback((ms: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const windows = intervalsRef.current;
-    const target = resolveSeekTarget(windows, Math.max(0, ms));
-    // `null` is "past the last window of this selection". Wrapping to the first
-    // one rather than refusing matches what pressing play at the end of any
-    // media does, and refusing would leave a dead Play button with no
-    // explanation on screen.
-    const resolved = target ?? (windows.length > 0 ? windows[0].startMs : 0);
-    audio.currentTime = toSeconds(resolved);
-    publishedPositionRef.current = resolved;
-    setPositionMs(resolved);
-    handleTickRef.current();
-  }, []);
+  const seekToMs = useCallback(
+    (ms: number) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      // ONE place ends segment mode for the scrubber, `play`, `playFromMs`,
+      // `skip` and previous/next segment — they all come through here, so none
+      // of them carries its own copy of the rule (issue #108).
+      clearSegmentPlay();
+      const windows = intervalsRef.current;
+      const target = resolveSeekTarget(windows, Math.max(0, ms));
+      // `null` is "past the last window of this selection". Wrapping to the
+      // first one rather than refusing matches what pressing play at the end of
+      // any media does, and refusing would leave a dead Play button with no
+      // explanation on screen.
+      const resolved = target ?? (windows.length > 0 ? windows[0].startMs : 0);
+      audio.currentTime = toSeconds(resolved);
+      publishedPositionRef.current = resolved;
+      setPositionMs(resolved);
+      handleTickRef.current();
+    },
+    [clearSegmentPlay],
+  );
 
   const play = useCallback(() => {
     const audio = audioRef.current;
@@ -534,8 +667,12 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
   }, [seekToMs]);
 
   const pause = useCallback(() => {
+    // Explicit, even though the element's own `pause` listener also clears:
+    // `pause()` on an element with no source fires no event, and leaving the
+    // ref set there would strand a Pause icon on a row that is not playing.
+    clearSegmentPlay();
     audioRef.current?.pause?.();
-  }, []);
+  }, [clearSegmentPlay]);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
@@ -550,6 +687,32 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
       void audioRef.current?.play?.().catch(() => {});
     },
     [seekToMs],
+  );
+
+  /**
+   * Play one line and stop at its end (issue #108).
+   *
+   * ⚠ `currentTime` IS WRITTEN DIRECTLY, NOT THROUGH `seekToMs`. `seekToMs`
+   * snaps to the speaker filter's intervals, so routing this through it would
+   * pull playback out of the exact line the user pointed at whenever that
+   * line's speaker happens to be filtered out — which is precisely when a
+   * "hear this one" button is most useful.
+   */
+  const playSegment = useCallback(
+    (segment: Pick<TranscriptSegment, 'id' | 'startMs' | 'endMs'>) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+
+      audio.currentTime = toSeconds(segment.startMs);
+      publishedPositionRef.current = segment.startMs;
+      setPositionMs(segment.startMs);
+      // Set LAST of the position work, so nothing this call triggers on its way
+      // here can clear the mode it is about to enter.
+      segmentPlayRef.current = { id: segment.id, stopAtMs: segment.endMs };
+      setActiveSegmentId(segment.id);
+      void audio.play?.().catch(() => {});
+    },
+    [],
   );
 
   const skip = useCallback(
@@ -697,6 +860,7 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
     currentSegmentIndex,
     intervals,
     audioKind,
+    activeSegmentId,
     play,
     pause,
     togglePlay,
@@ -706,5 +870,6 @@ export function usePlaybackEngine(options: PlaybackEngineOptions): PlaybackEngin
     setRate,
     previousSegment,
     nextSegment,
+    playSegment,
   };
 }

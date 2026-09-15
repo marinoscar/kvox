@@ -398,13 +398,17 @@ describe('usePlaybackEngine — the current segment', () => {
 });
 
 describe('usePlaybackEngine — transport', () => {
-  it('skips by ±15 seconds', async () => {
+  it('skips by ±10 seconds — the interval the icons have always drawn', async () => {
+    // MUI ships no Replay15/Forward15, so the bar drew "10" while its labels
+    // said "15 seconds" (#108). `SKIP_MS` is the ten the glyphs meant.
     const { result, audio } = renderEngine();
     await waitFor(() => expect(result.current.status).toBe('ready'));
 
+    expect(SKIP_MS).toBe(10_000);
+
     act(() => result.current.seekToMs(60_000));
     act(() => result.current.skip(SKIP_MS));
-    expect(audio.currentTime).toBe(75);
+    expect(audio.currentTime).toBe(70);
 
     act(() => result.current.skip(-SKIP_MS));
     expect(audio.currentTime).toBe(60);
@@ -449,6 +453,108 @@ describe('usePlaybackEngine — transport', () => {
     act(() => audio.advanceTo(0.5));
     act(() => result.current.nextSegment());
     expect(audio.currentTime).toBe(2.0); // s3, skipping Ben's s2
+  });
+});
+
+describe('usePlaybackEngine — segment play (#108)', () => {
+  it('seeks to the line’s start and plays it', async () => {
+    const { result, audio } = renderEngine();
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.playSegment(SEGMENTS[1]));
+
+    expect(audio.currentTime).toBe(1.0); // s2 starts at 1000ms
+    expect(audio.play).toHaveBeenCalled();
+    expect(result.current.activeSegmentId).toBe('s2');
+  });
+
+  it('pauses ON the line’s end and leaves segment mode', async () => {
+    const { result, audio } = renderEngine();
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.playSegment(SEGMENTS[1]));
+    act(() => audio.advanceTo(2.0)); // s2 ends at 2000ms
+
+    expect(audio.paused).toBe(true);
+    // Parked on the boundary, so the scrubber, the highlighted line and the
+    // audio all agree about where it stopped.
+    expect(audio.currentTime).toBe(2.0);
+    expect(result.current.activeSegmentId).toBeNull();
+  });
+
+  it('plays a line whose speaker the filter EXCLUDES, without snapping away', async () => {
+    // The regression guard for `handleTick`'s ordering. With "only Ana", s2 is
+    // Ben's and sits in a gap the interval branch seeks straight out of — so if
+    // segment mode did not take precedence, pressing play on Ben's line would
+    // silently jump to Ana's next one, which is the one thing the button must
+    // never do.
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.playSegment(SEGMENTS[1]));
+    expect(audio.currentTime).toBe(1.0);
+
+    act(() => audio.advanceTo(1.4));
+    act(() => flushFrame());
+
+    expect(audio.currentTime).toBe(1.4);
+    expect(audio.paused).toBe(false);
+    expect(result.current.activeSegmentId).toBe('s2');
+  });
+
+  it('keeps publishing the position and the current segment while a line plays', async () => {
+    // The early-return guard: an `if (seg) { … return; }` in `handleTick` would
+    // freeze the scrubber and the active-line highlight for the whole length of
+    // the line — the only two pieces of feedback the button produces.
+    const { result, audio } = renderEngine();
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.playSegment(SEGMENTS[2])); // s3, 2000–3000ms
+    act(() => audio.advanceTo(2.6));
+
+    expect(result.current.positionMs).toBe(2600);
+    expect(result.current.currentSegmentIndex).toBe(2);
+  });
+
+  it('lets the speaker filter reclaim the playhead once the line has ended', async () => {
+    // The documented edge in the file header. s4 is Ben's LAST line
+    // (3000–4000ms) and Ana's last window ends at 3000, so the boundary this
+    // parks on is outside every window the filter allows. Segment mode has just
+    // been cleared, so the interval branch resumes and pulls the playhead back
+    // — the filter reasserting itself, not the boundary parking failing.
+    const { result, audio } = renderEngine({ selectedSpeakerIds: ['ana'] });
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.playSegment(SEGMENTS[3]));
+    expect(audio.currentTime).toBe(3.0); // bypassed the filter to get there
+
+    act(() => audio.advanceTo(4.0));
+    // Parked on the boundary first, exactly as the unfiltered case does.
+    expect(audio.currentTime).toBe(4.0);
+    expect(audio.paused).toBe(true);
+
+    act(() => flushFrame());
+    expect(audio.currentTime).toBe(3.0); // Ana's last window's end
+    expect(audio.paused).toBe(true);
+  });
+
+  it.each([
+    ['seekToMs', (engine: ReturnType<typeof usePlaybackEngine>) => engine.seekToMs(500)],
+    ['skip', (engine: ReturnType<typeof usePlaybackEngine>) => engine.skip(SKIP_MS)],
+    ['pause', (engine: ReturnType<typeof usePlaybackEngine>) => engine.pause()],
+    ['playFromMs', (engine: ReturnType<typeof usePlaybackEngine>) => engine.playFromMs(500)],
+  ])('leaves segment mode on %s', async (_name, invoke) => {
+    // Every transport gesture ends segment mode, because each of them is the
+    // user saying "carry on with the recording".
+    const { result } = renderEngine();
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    act(() => result.current.playSegment(SEGMENTS[1]));
+    expect(result.current.activeSegmentId).toBe('s2');
+
+    act(() => invoke(result.current));
+
+    expect(result.current.activeSegmentId).toBeNull();
   });
 });
 
@@ -553,6 +659,6 @@ describe('usePlaybackEngine — Media Session (spec §7.3)', () => {
     expect(audio.currentTime).toBe(1.0);
 
     act(() => handlers.get('seekforward')?.({ action: 'seekforward' }));
-    expect(audio.currentTime).toBe(16.0);
+    expect(audio.currentTime).toBe(11.0);
   });
 });

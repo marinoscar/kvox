@@ -40,6 +40,17 @@
  * list that scrolls itself while somebody is typing into one of its rows takes
  * the caret off screen mid-sentence.
  *
+ * THE PER-LINE PLAY BUTTON (#108) DOES NOT DISENGAGE FOLLOWING, and that falls
+ * out of the signal above rather than being a special case: a click is not a
+ * `wheel`, a `touchstart` or a `keydown`, so pressing it leaves following on
+ * and the list keeps tracking the line that is now playing — which is what a
+ * reader who just asked to hear that line wants. Reaching the same button with
+ * the KEYBOARD does disengage, because Enter on it is a `keydown` on the scroll
+ * region. That is accepted rather than fixed: the alternative is teaching the
+ * disengage handler to recognise which descendants' key events do not count,
+ * which is a list that goes stale silently, and a keyboard user who has just
+ * been given a "Jump to current" button is not stranded.
+ *
  * =============================================================================
  * EVERY EDITING PROP IS OPTIONAL, AND THE READ PATH IS UNCHANGED WITHOUT THEM
  * =============================================================================
@@ -53,6 +64,8 @@
  */
 
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonBase from '@mui/material/ButtonBase';
@@ -148,6 +161,18 @@ interface SegmentListProps {
   /** Speaker ids playback is restricted to. Empty means "everybody". */
   selectedSpeakerIds: readonly string[];
 
+  // --- Per-line playback (#108). All optional, the same posture as editing
+  // below: absent means the read-only preview renders no button at all, rather
+  // than a disabled one a screen reader still has to announce. -------------
+  /** The line being played in ISOLATION, or null. Not the current segment. */
+  activeSegmentId?: string | null;
+  /** Whether the element is actually playing, so only one row shows Pause. */
+  isPlaying?: boolean;
+  /** Play this line and stop at its end. Its presence mounts the button. */
+  onPlaySegment?: (segment: TranscriptSegment) => void;
+  /** Pause, when the row's own button is already showing Pause. */
+  onPause?: () => void;
+
   // --- Editing (#31). All optional; absent means the read-only reader. -------
   /** Mount the editing affordances at all. False for a viewer. */
   editable?: boolean;
@@ -179,6 +204,10 @@ export function SegmentList({
   wordsBySegment,
   onPlayFrom,
   selectedSpeakerIds,
+  activeSegmentId = null,
+  isPlaying = false,
+  onPlaySegment,
+  onPause,
   editable = false,
   editingSegmentId = null,
   onStartEdit,
@@ -356,7 +385,14 @@ export function SegmentList({
             const segment = segments[virtualRow.index];
             if (!segment) return null;
             const speaker = speakerById.get(segment.speakerId);
+            const speakerName = speaker?.displayName ?? 'Speaker';
             const color = speakerColor(speaker?.colorIndex ?? 0, mode);
+            // The row's own play button shows Pause only when THIS line is the
+            // one in isolated playback AND the element is actually running —
+            // `activeSegmentId` alone survives a browser-level pause for a
+            // moment, and a Pause icon over silent audio is worse than a
+            // slightly late one.
+            const playingThis = activeSegmentId === segment.id && isPlaying === true;
             const isCurrent = virtualRow.index === currentSegmentIndex;
             const dimmed = selected.size > 0 && !selected.has(segment.speakerId);
             const isEditing = editable && editingSegmentId === segment.id;
@@ -388,48 +424,98 @@ export function SegmentList({
                   opacity: dimmed ? 0.45 : 1,
                 }}
               >
+                {/* `center` on the OUTER row so the 40px button sits on the
+                    line's optical middle, with the three text pieces keeping
+                    their own baseline alignment in the group below — a button
+                    on a shared baseline would hang below the speaker's name. */}
                 <Box
-                  sx={{ display: 'flex', alignItems: 'baseline', gap: 1, flexWrap: 'wrap' }}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
                 >
-                  <Typography
-                    component="span"
-                    variant="subtitle2"
-                    sx={{ color, fontWeight: 700 }}
-                  >
-                    {speaker?.displayName ?? 'Speaker'}
-                  </Typography>
-                  <ButtonBase
-                    onClick={() => onPlayFrom(segment.startMs)}
-                    aria-label={`Play from ${formatTimestamp(segment.startMs)}`}
+                  {/* The coarse "hear this line" target the row never had
+                      (#108). It is deliberately the FIRST thing in the row, and
+                      deliberately 40px against the 24px timestamp beside it:
+                      the timestamp is the precise "play from here and keep
+                      going" control and stays small, while this one is a thumb
+                      target. The negative margins let it claim that hit area
+                      out of the row's own padding, so the row height does not
+                      change and the transcript stays selectable text rather
+                      than becoming a list of buttons.
+
+                      Mounted only when a handler exists, the same rule
+                      `editable` follows: the read-only preview gets no control
+                      to announce. */}
+                  {onPlaySegment && (
+                    <IconButton
+                      size="small"
+                      aria-label={
+                        playingThis
+                          ? 'Pause this line'
+                          : `Play this line, ${speakerName} at ${formatTimestamp(segment.startMs)}`
+                      }
+                      aria-pressed={playingThis}
+                      onClick={() => (playingThis ? onPause?.() : onPlaySegment(segment))}
+                      sx={{ width: 40, height: 40, my: -1, ml: -1 }}
+                    >
+                      {playingThis ? (
+                        <PauseIcon fontSize="small" />
+                      ) : (
+                        <PlayArrowIcon fontSize="small" />
+                      )}
+                    </IconButton>
+                  )}
+
+                  <Box
                     sx={{
-                      fontVariantNumeric: 'tabular-nums',
-                      fontSize: '0.75rem',
-                      color: 'text.secondary',
-                      borderRadius: 0.5,
-                      px: 0.5,
-                      // 24px is below the 44px touch-target guidance on
-                      // purpose: the whole ROW is not a button (it must stay
-                      // selectable text for copying and, in #31, editing), so
-                      // this control is deliberately small and precise, with
-                      // the player's own transport as the coarse alternative.
-                      minHeight: 24,
+                      display: 'flex',
+                      alignItems: 'baseline',
+                      gap: 1,
+                      flexWrap: 'wrap',
                     }}
                   >
-                    {formatTimestamp(segment.startMs)}
-                  </ButtonBase>
-
-                  {/* Provenance, and deliberately quiet: "edited" is useful
-                      context and must never compete with the words themselves. */}
-                  {segment.origin === 'user' && (
                     <Typography
                       component="span"
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontStyle: 'italic' }}
+                      variant="subtitle2"
+                      sx={{ color, fontWeight: 700 }}
                     >
-                      edited
+                      {speakerName}
                     </Typography>
-                  )}
+                    <ButtonBase
+                      onClick={() => onPlayFrom(segment.startMs)}
+                      aria-label={`Play from ${formatTimestamp(segment.startMs)}`}
+                      sx={{
+                        fontVariantNumeric: 'tabular-nums',
+                        fontSize: '0.75rem',
+                        color: 'text.secondary',
+                        borderRadius: 0.5,
+                        px: 0.5,
+                        // 24px is below the 44px touch-target guidance on
+                        // purpose, and stays that way now that #108 has added a
+                        // 40px button beside it: the whole ROW is not a button
+                        // (it must stay selectable text for copying and, in
+                        // #31, editing), so this control is deliberately small
+                        // and precise — "play from here and keep going" — with
+                        // the play button and the player's own transport as the
+                        // coarse alternatives.
+                        minHeight: 24,
+                      }}
+                    >
+                      {formatTimestamp(segment.startMs)}
+                    </ButtonBase>
+
+                    {/* Provenance, and deliberately quiet: "edited" is useful
+                        context and must never compete with the words
+                        themselves. */}
+                    {segment.origin === 'user' && (
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontStyle: 'italic' }}
+                      >
+                        edited
+                      </Typography>
+                    )}
+                  </Box>
 
                   <Box sx={{ flexGrow: 1 }} />
 

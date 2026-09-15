@@ -341,14 +341,17 @@ describe('TranscriptPage — read mode', () => {
     }
   });
 
-  it('offers ±15s, named by what they do', async () => {
+  it('offers ±10s, named by what they do — and by what the icons draw', async () => {
+    // MUI ships no Replay15/Forward15, so these buttons always DREW "10" while
+    // their accessible names said "15 seconds" (#108): a sighted user and a
+    // screen-reader user were told different things about the same control.
     renderPage();
 
     expect(
-      await screen.findByRole('button', { name: 'Skip back 15 seconds' }),
+      await screen.findByRole('button', { name: 'Skip back 10 seconds' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Skip forward 15 seconds' }),
+      screen.getByRole('button', { name: 'Skip forward 10 seconds' }),
     ).toBeInTheDocument();
   });
 
@@ -436,7 +439,7 @@ describe('TranscriptPage — keyboard shortcuts', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
-  it('binds J and L to the ±15s skip', async () => {
+  it('binds J and L to the ±10s skip', async () => {
     renderPage();
     await screen.findByRole('button', { name: 'Play' });
 
@@ -575,6 +578,47 @@ describe('TranscriptPage — word timings', () => {
 });
 
 describe('TranscriptPage — the segment list', () => {
+  it('plays one line when its own play button is activated', async () => {
+    // The #108 wiring, end to end: the row's button reaches the engine, which
+    // reaches the element. Asserted through the element rather than through a
+    // mocked engine, because the engine is the part the page does not own.
+    renderPage();
+    await screen.findByText('Weekly standup');
+
+    const play = await screen.findByRole('button', {
+      name: 'Play this line, Ben at 0:05',
+    });
+
+    // The element is created by `new Audio()` and never attached to the
+    // document, so there is nothing to query for it — the seek is observed on
+    // the prototype's own setter instead. jsdom's `currentTime` is a plain
+    // accessor pair, which is what makes this substitutable.
+    const seeks: number[] = [];
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLMediaElement.prototype,
+      'currentTime',
+    );
+    Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+      configurable: true,
+      get: () => 0,
+      set: (value: number) => {
+        seeks.push(value);
+      },
+    });
+    try {
+      fireEvent.click(play);
+      await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+    } finally {
+      if (original) {
+        Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', original);
+      }
+    }
+
+    // Seeking happens BEFORE `play()`, so by the time playback was requested
+    // the element was already parked on that segment's start (5000ms).
+    expect(seeks).toContain(5);
+  });
+
   it('plays from a segment when its timestamp is activated', async () => {
     renderPage();
     await screen.findByText('Weekly standup');
