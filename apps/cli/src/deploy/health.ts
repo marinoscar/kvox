@@ -62,6 +62,8 @@ export type FetchLike = typeof globalThis.fetch;
 export interface HealthOptions {
   runCommand: typeof runCommand;
   deployRoot: string;
+  /** The compose project name; `ps` and `run` are pinned to it (#119). */
+  name: string;
   bindPort: number;
   domain?: string | undefined;
   state?: DeployState | undefined;
@@ -70,11 +72,18 @@ export interface HealthOptions {
   timeoutMs?: number | undefined;
 }
 
-function composeArgs(deployRoot: string): string[] {
-  return COMPOSE_FILES.flatMap((file) => ['-f', file]).concat([
+/** Exported for its test: the shape is what keeps `status` on the right app. */
+export function composeArgs(deployRoot: string, name: string): string[] {
+  // `-p <name>` is what makes this the app's own project rather than whatever
+  // the compose directory's name implies (#119). Without it every app on the
+  // box is the project `compose`, and `ps` here lists a neighbour's stack.
+  return [
+    '-p',
+    name,
+    ...COMPOSE_FILES.flatMap((file) => ['-f', file]),
     '--project-directory',
     join(deployRoot, 'repo', 'infra', 'compose'),
-  ]);
+  ];
 }
 
 function composeCwd(deployRoot: string): string {
@@ -134,7 +143,7 @@ export async function containerStates(
 ): Promise<ContainerState[]> {
   try {
     const result = await options.runCommand(
-      ['docker', 'compose', ...composeArgs(options.deployRoot), 'ps', '--format', 'json'],
+      ['docker', 'compose', ...composeArgs(options.deployRoot, options.name), 'ps', '--format', 'json'],
       { cwd: composeCwd(options.deployRoot), timeoutMs: 60_000 },
     );
 
@@ -174,7 +183,7 @@ export async function migrationState(options: HealthOptions): Promise<MigrationS
   try {
     const result = await options.runCommand(
       [
-        'docker', 'compose', ...composeArgs(options.deployRoot),
+        'docker', 'compose', ...composeArgs(options.deployRoot, options.name),
         'run', '--rm', '--no-deps', 'api',
         'npx', 'prisma', 'migrate', 'status',
       ],
