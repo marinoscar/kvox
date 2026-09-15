@@ -423,21 +423,47 @@ export function sanitizeModelTitle(answer: string): string | null {
 
   if (!firstLine) return null;
 
-  const cleaned = firstLine
-    .trim()
-    // A leading `#` is the model formatting its answer as a heading.
-    .replace(/^#{1,6}\s*/, '')
-    // Surrounding quotes, straight or curly, single or double.
-    .replace(/^["'“”‘’«»]+/, '')
-    .replace(/["'“”‘’«»]+$/, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // A leading `#` is the model formatting its answer as a heading.
+  const unheaded = firstLine.trim().replace(/^#{1,6}\s*/, '');
 
+  // TWICE, BECAUSE THE TWO HABITS COMBINE. A model that labelled its answer may
+  // also have quoted it — either just the title (`Title: "x"`) or the whole
+  // thing including the label (`"Title: x"`) — and one pass can only reach
+  // whichever of the two is on the outside.
+  const cleaned = stripWrappers(stripWrappers(unheaded)).replace(/\s+/g, ' ').trim();
+
+  // Nothing left once the wrapping came off — an answer that was ONLY a label
+  // or only quotes. Rank 2 takes it from here.
   if (cleaned.length === 0) return null;
 
   // Over the column's ceiling is not a refusal — it is a title that ran long,
   // and `truncateTitle` is the same cut rank 2 makes, for the same reason.
   return truncateTitle(cleaned, MAX_TITLE_CHARS);
+}
+
+/**
+ * One layer of the decoration a model puts around a title it was asked for
+ * bare: a `Title:` label, then whatever quotes surround what is left.
+ *
+ * The label goes FIRST so that `Title: "x"` loses it before the quotes are
+ * considered; {@link sanitizeModelTitle} runs the pair twice so `"Title: x"`,
+ * where the quotes are on the outside, comes out just as clean.
+ */
+function stripWrappers(text: string): string {
+  return (
+    text
+      // The model announced its answer instead of just giving it. ⚠ THE
+      // PUNCTUATION IS MANDATORY, and that is the whole guard: an optional
+      // separator would match the bare word, so `Title Deeds Explained` would
+      // be filed under `Deeds Explained`. A model that labels without
+      // punctuation keeps the word — a rare quirk, against a title a user may
+      // really have. (`\b` is belt and braces for `Titled`/`Titles`.)
+      .replace(/^title\b\s*[:\-\u2014\u2013]\s*/i, '')
+      // Surrounding quotes, straight or curly, single or double.
+      .replace(/^["'“”‘’«»]+/, '')
+      .replace(/["'“”‘’«»]+$/, '')
+      .trim()
+  );
 }
 
 /**
