@@ -309,7 +309,10 @@ match:
   arrow-key list via the existing `ink-select-input` dependency. Used by the
   `--all` review loop's keep/edit/skip choice per key.
 
-The finished `.env` is written to `<deploy-root>/repo/infra/compose/.env` —
+The finished `.env` is written to `<deploy-root>/repo/infra/compose/.env`
+(since issue #120: to `<deploy-root>/.env`, with that compose path a relative
+symlink `../../../.env` to it, so `rm -rf repo` never takes the secrets — see
+epic #118's architecture decision 1; the full addendum is #134) —
 the exact path local development already uses (`cp
 infra/compose/.env.example infra/compose/.env`), which is also where docker
 compose looks for a `.env` file by default when invoked from that directory
@@ -717,13 +720,18 @@ services:
       - "127.0.0.1:3535:80"
 ```
 
-Nothing else belongs in this file. The `env_file` fix, the `nginx.prod.conf`
-mount, and the memory limits all belong in `base.compose.yml`/
-`prod.compose.yml` because they are correct for *any* production-like run,
-VPS or otherwise — keeping `vps.compose.yml` to the one line that is
-specifically "there is a shared proxy in front of me" is what keeps the
-compose layering legible instead of every overlay re-deciding the same
-things slightly differently.
+Nothing else belongs in this file, with one exception added by epic #118
+(issue #120): the `api` service's read-only bind mount of
+`${DEPLOY_ROOT:-../../..}/deploy-info` at `/app/deploy-info`, plus the
+`DEPLOY_INFO_PATH` that points the API at `info.json` inside it — metadata the
+CLI writes about *this* deployment on *this* server, which is VPS-specific by
+definition (the full design is §18, #134). The `env_file` fix, the
+`nginx.prod.conf` mount, and the memory limits all belong in
+`base.compose.yml`/`prod.compose.yml` because they are correct for *any*
+production-like run, VPS or otherwise — keeping `vps.compose.yml` to what is
+specifically "there is a shared proxy in front of me, and a CLI that deployed
+me" is what keeps the compose layering legible instead of every overlay
+re-deciding the same things slightly differently.
 
 ## 16. Rejected alternatives
 
