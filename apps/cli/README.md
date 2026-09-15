@@ -344,7 +344,7 @@ in `/api`.
 kvox deploy doctor
 ```
 
-Four subcommands (`doctor`, `install`, `update`, `status`) take this
+Five subcommands (`doctor`, `install`, `update`, `status`, `certs`) take this
 repository — or, far more likely, your fork of it — from an empty VPS to
 running, migrated, seeded, and served over HTTPS at a real domain, and back
 to the latest revision on every subsequent deploy. They run **on the VPS
@@ -494,6 +494,25 @@ the step that failed rather than re-running everything before it.
 discards uncommitted changes in the checkout it manages; `--skip-doctor`,
 `--skip-proxy` and `--skip-seed` each skip exactly the one stage they name.
 
+The `publish` step talks to the shared proxy **container** only — there is
+no host `nginx` or `certbot` on the server. Before spending any Let's
+Encrypt rate-limit budget it writes a nonce under the proxy's ACME webroot
+and fetches it over `http://<domain>/.well-known/acme-challenge/…` — the
+exact path the HTTP-01 challenge takes — and fails, naming the domain and
+what answered instead, when the nonce does not come back (a wrong DNS
+record, or a proxy not serving the webroot). The certificate is then issued
+with `docker run --rm … certbot/certbot certonly --webroot`, the vhost is
+written with the paths the container sees (`/var/www/certbot`,
+`/etc/letsencrypt/live/<domain>/…`), and it is validated and reloaded with
+`docker exec <container> nginx -t` / `nginx -s reload`, rolled back if `-t`
+fails. The container is `--proxy-container`, else whatever `doctor` found
+publishing `:443`, else `proxy-nginx`, and is recorded in the state so
+`update` reuses it. `--no-ipv6` renders the vhost without `[::]` listeners
+for a host with IPv6 disabled (the reload, not `nginx -t`, is what fails
+there). When a certificate was issued, a renewal cron is written to
+`/etc/cron.d/kvox-certs-<name>` (see [Certificates](#certificates) below);
+`--install-cron` writes it regardless, `--no-install-cron` never does.
+
 Other flags, from `kvox deploy install --help`:
 
 ```
@@ -522,6 +541,13 @@ Options:
   --no-cache           Rebuild images without the layer cache
   --force              Discard uncommitted changes in the checkout
   --staging            Use Let's Encrypt staging while working out the setup
+  --proxy-container <name>  Publish through this proxy container instead of
+                       finding one
+  --no-ipv6            Render the vhost without [::] listeners (a host with
+                       IPv6 disabled)
+  --install-cron       Write the certificate renewal cron even if no
+                       certificate was issued
+  --no-install-cron    Never write the renewal cron
   --json               Print a machine-readable result on stdout
 ```
 
@@ -577,6 +603,12 @@ undone by checking out the old code, so on failure `update` prints the
 previous revision and the exact command to redeploy it —
 `kvox deploy update --ref <sha> --force` — and leaves that decision to you.
 
+The `publish` step rewrites the vhost (keeping the upload limit from
+`MAX_FILE_SIZE`, so an update never resets it), reloads the proxy container
+only when the file actually changed, and — when the certificate expires
+within 30 days — renews it through `docker run certbot/certbot renew`
+rather than trusting that a cron exists.
+
 Other flags, from `kvox deploy update --help`:
 
 ```
@@ -631,6 +663,53 @@ Options:
   --domain <domain>  Public domain; adds an external HTTPS check
   --json             Print a machine-readable report on stdout
   --no-color         Disable colour even on a terminal
+```
+
+### Certificates
+
+```bash
+kvox deploy certs renew
+kvox deploy certs renew --dry-run
+kvox deploy certs renew --install-cron
+kvox deploy certs status
+```
+
+Certificates live behind the shared proxy, and are issued and renewed with
+`docker run --rm certbot/certbot` against the proxy's own `letsencrypt/`
+and `webroot/` directories — never a host `certbot`. `renew` runs certbot's
+`renew` for this app's domain (or every certificate under the proxy with
+`--all`); certbot decides what is due, and the proxy container is reloaded
+with `docker exec` **only** when something was actually renewed, so a
+scheduled run on a quiet day touches nothing. `--dry-run` passes certbot's
+own `--dry-run` (a rehearsal against staging) and prints the argv.
+
+`--install-cron` writes `/etc/cron.d/kvox-certs-<name>` — `root`, twice
+daily at 03:xx and 15:xx with a minute derived from the app's name so
+several apps on one box don't all fire together — calling
+`kvox deploy certs renew --all --apps-root <…> --name <…>` and logging to
+`/var/log/kvox-certs-<name>.log`. It is idempotent: a second run rewrites
+nothing. `install` writes the same file when it issues a certificate.
+`doctor`'s `certificate-renewal` check recognises it.
+
+`status` lists every certificate under the proxy with its expiry; exits `0`
+while all are valid, `1` when one has expired, `2` when there are none.
+
+```
+Options (renew):
+  --apps-root <dir>         Directory that holds one folder per app
+  --name <app>              App folder and compose project name
+  --root <dir>              Deployment directory, overriding --apps-root/--name
+  --proxy-root <path>       Shared reverse proxy directory (default: the app's,
+                            else /opt/infra/proxy)
+  --proxy-container <name>  Proxy container to reload (default: the app's, else
+                            proxy-nginx)
+  --all                     Every certificate under the proxy, not only this
+                            app's
+  --dry-run                 Rehearse with certbot's own --dry-run; nothing is
+                            written or reloaded
+  --install-cron            Also write /etc/cron.d/kvox-certs-<name> so this
+                            runs twice a day
+  --json                    Print a machine-readable result on stdout
 ```
 
 ### Logs
