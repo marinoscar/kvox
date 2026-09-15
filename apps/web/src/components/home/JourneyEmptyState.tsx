@@ -11,13 +11,14 @@
  * steps below ARE the product's thesis, rendered at the one moment the user has
  * nothing else to look at.
  *
- * ⚠ TWO OF THE FOUR ARE MARKED "Coming soon", AND THAT IS DELIBERATE HONESTY.
- * Epic #19 ships Capture and Correct. Transform and Find are the vision's next
- * two stages and do not exist yet. Drawing all four as though they worked would
- * buy one pleasant first impression and spend it on a user hunting for a
- * feature that is not there — so they are drawn, because the shape of the
- * journey is the point, and they are labelled, because the shape is not a
- * promise about today. When either ships, delete its `comingSoon` flag; there
+ * ⚠ ONE OF THE FOUR IS MARKED "Coming soon", AND THAT IS DELIBERATE HONESTY.
+ * Epic #19 shipped Capture and Correct; epic #45 shipped Transform, and issue
+ * #107 — which put notes on this very page — is what took its `comingSoon`
+ * flag off. Find is the vision's next stage and does not exist yet. Drawing it
+ * as though it worked would buy one pleasant first impression and spend it on a
+ * user hunting for a feature that is not there — so it is drawn, because the
+ * shape of the journey is the point, and it is labelled, because the shape is
+ * not a promise about today. When it ships, delete its `comingSoon` flag; there
  * is nothing else to change.
  *
  * The "Use" stage of the vision is deliberately not one of the four cards: at
@@ -78,7 +79,6 @@ export const JOURNEY_STAGES: readonly JourneyStage[] = [
     label: 'Transform',
     description: 'Turn a conversation into notes, decisions and summaries.',
     icon: <AutoAwesomeIcon />,
-    comingSoon: true,
   },
   {
     key: 'find',

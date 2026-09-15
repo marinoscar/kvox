@@ -264,6 +264,29 @@ export const handlers = [
     return HttpResponse.json({ data: { items: [], nextCursor: null } });
   }),
 
+  // `GET /api/notes/summary` — the home page's notes half (#107), and a default
+  // for exactly the reason the transcript summary above is one: every suite
+  // that mounts `<App />` renders `/` and therefore `HomePage`, which now fires
+  // this beside the transcript summary. Without a handler those suites logged an
+  // unhandled-request warning and rendered the notes error alert into whatever
+  // they were actually asserting about.
+  //
+  // ⚠ MUST BE REGISTERED BEFORE ANY `/notes/:id` HANDLER. `summary` is a legal
+  // note id as far as a path pattern is concerned, so a `:id` route ordered
+  // first would answer this call with a note DETAIL payload. Nothing declares a
+  // `/notes/:id` default today; this note is here so that adding one does not
+  // silently break the home page.
+  http.get(`${API_BASE}/notes/summary`, () => {
+    return HttpResponse.json({
+      data: {
+        inProgress: [],
+        recent: [],
+        failed: [],
+        counts: { total: 0, ready: 0, inProgress: 0, failed: 0 },
+      },
+    });
+  }),
+
   http.get(`${API_BASE}/transcription/config`, () => {
     return HttpResponse.json({
       data: {

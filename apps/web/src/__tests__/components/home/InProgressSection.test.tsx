@@ -19,13 +19,18 @@ import {
   dedupeServerItems,
 } from '../../../components/home/InProgressSection';
 import { UploadSessionMismatchError } from '../../../services/uploadSessions';
-import { AXE_OPTIONS, manager, session, transcript, upload } from './homeFixtures';
+import { AXE_OPTIONS, manager, note, session, transcript, upload } from './homeFixtures';
 
 /**
  * The one section on the home page that reads two sources of truth at once —
  * the app-wide upload manager (this tab only) and the server's `inProgress`
- * list — so most of what is asserted here is the SEAM between them rather than
+ * lists — so most of what is asserted here is the SEAM between them rather than
  * either half on its own.
+ *
+ * Since issue #107 there are FOUR kinds of row, not three: generating notes
+ * join the uploads, the interrupted sessions and the processing transcripts,
+ * because the question the section answers is "what am I waiting on?" and not
+ * "is my recording ready yet?".
  */
 
 const mockUseUploadManager = vi.mocked(useUploadManager);
@@ -69,6 +74,26 @@ describe('InProgressSection — when there is nothing in flight', () => {
     const { container } = render(<InProgressSection items={[]} />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders nothing when all FOUR inputs are empty', () => {
+    // The explicit four-way statement of the same rule: uploads, sessions,
+    // server transcripts and notes. The section disappears only when every one
+    // of them is empty, which is what stops it being a permanent empty heading
+    // at the top of the page on almost every visit.
+    mockUseUploadManager.mockReturnValue(manager({ uploads: [], sessions: [] }));
+
+    const { container } = render(<InProgressSection items={[]} notes={[]} />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('is NOT hidden when the only thing in flight is a note', () => {
+    const { container } = render(
+      <InProgressSection items={[]} notes={[note({ status: 'generating' })]} />,
+    );
+
+    expect(container).not.toBeEmptyDOMElement();
   });
 
   it('renders nothing when only SETTLED uploads remain', () => {
@@ -382,6 +407,92 @@ describe('InProgressSection — server-side processing', () => {
     await user.click(screen.getByRole('heading', { name: 'Customer discovery' }));
 
     expect(mockNavigate).toHaveBeenCalledWith('/transcripts/t-proc');
+  });
+});
+
+describe('InProgressSection — a generating note', () => {
+  const GENERATING = note({
+    id: 'n-gen',
+    title: 'Board minutes',
+    status: 'generating',
+  });
+
+  it('shows the section for a note alone', () => {
+    render(<InProgressSection items={[]} notes={[GENERATING]} />);
+
+    expect(screen.getByRole('heading', { name: 'In progress' })).toBeInTheDocument();
+  });
+
+  it('names the note', () => {
+    render(<InProgressSection items={[]} notes={[GENERATING]} />);
+
+    expect(screen.getByRole('heading', { name: 'Board minutes' })).toBeInTheDocument();
+  });
+
+  it('says it is generating', () => {
+    render(<InProgressSection items={[]} notes={[GENERATING]} />);
+
+    expect(screen.getByText('Generating…')).toBeInTheDocument();
+  });
+
+  it('shows a progress bar', () => {
+    // Indeterminate: the API publishes no percentage, and inventing one would
+    // be a bar that lies.
+    const { container } = render(<InProgressSection items={[]} notes={[GENERATING]} />);
+
+    expect(container.querySelector('.MuiLinearProgress-root')).not.toBeNull();
+  });
+
+  it('opens the note when the row is tapped', async () => {
+    const user = userEvent.setup();
+    render(<InProgressSection items={[]} notes={[GENERATING]} />);
+
+    await user.click(screen.getByRole('heading', { name: 'Board minutes' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/notes/n-gen');
+  });
+
+  it('lists a note alongside a processing transcript in ONE list', () => {
+    // A second `ul` would announce "list of 1" twice to a screen reader for one
+    // question the user asked once.
+    render(
+      <InProgressSection
+        items={[transcript({ id: 't-proc', title: 'Customer discovery', status: 'processing' })]}
+        notes={[GENERATING]}
+      />,
+    );
+
+    const lists = screen.getAllByRole('list');
+    expect(lists).toHaveLength(1);
+    expect(within(lists[0]).getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('puts the note AFTER the transcript', () => {
+    // Ordered by how much the user can do about the row; a generating note is
+    // the one row that is purely "wait".
+    render(
+      <InProgressSection
+        items={[transcript({ id: 't-proc', title: 'Customer discovery', status: 'processing' })]}
+        notes={[GENERATING]}
+      />,
+    );
+
+    const headings = screen.getAllByRole('heading', { level: 3 });
+    expect(headings.map((h) => h.textContent)).toEqual([
+      'Customer discovery',
+      'Board minutes',
+    ]);
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = render(
+      <InProgressSection
+        items={[transcript({ id: 't-proc', title: 'Customer discovery', status: 'processing' })]}
+        notes={[GENERATING]}
+      />,
+    );
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
 
