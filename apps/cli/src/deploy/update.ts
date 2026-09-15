@@ -324,7 +324,31 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
       async run(context) {
         // A LIGHT preflight, not the full doctor. DNS and certificate checks
         // are install-time concerns; a site that is already serving does not
-        // need them re-litigated on every update.
+        // need them re-litigated on every update. That reasoning still holds,
+        // which is why this stays a named set and does not become
+        // `requiredChecks(ALL_CHECKS)`.
+        //
+        // THE DATABASE CHAIN IS A DIFFERENT CATEGORY, and belongs here (#179).
+        // It is not an install-time concern being re-litigated - it is a
+        // PRECONDITION OF A STEP THIS VERY PIPELINE RUNS three steps later.
+        // `update` migrates: `migrate` stops the api container and runs
+        // `prisma:migrate` against this database. A preflight that omits the
+        // database is checking everything except the thing the pipeline is
+        // about to change. `database-vector-extension` (#179) is the reason
+        // this was noticed - an existing deployment is exactly the population
+        // that RECEIVES the pgvector migration, so shipping that check to
+        // install only would ship it to the one path that does not need it.
+        //
+        // It also fixes a bug that predates #179: until now an update against
+        // an unreachable database, a rotated password or a dropped database
+        // failed INSIDE `migrate` too, as a Prisma stack trace, with the api
+        // container already stopped. All four are cheap - one TCP connect and
+        // three single-statement psql calls - and they run against the same
+        // database the migration is about to write to.
+        //
+        // All four, in dependency order: `runChecks` honours `requires` by
+        // POSITION, so `database-vector-extension` without the three ahead of
+        // it reports `skip` and checks nothing at all.
         const wanted = new Set([
           'docker-installed',
           'docker-daemon',
@@ -334,12 +358,22 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           DEVNET_CHECK_ID,
           'git-installed',
           'disk-space',
+          'database-reachable',
+          'database-credentials',
+          'database-exists',
+          'database-vector-extension',
           // The publish step talks to the proxy container and decides on
           // IPv6 (#125); both answers come from these two checks, which
           // stand down (`skip`) for a deployment that is not published.
           'proxy-container',
           'proxy-ipv6',
         ]);
+
+        // The deployment's own .env, read (never written - checks are read-only,
+        // checks/types.ts rule 4) so the database checks above have something
+        // to connect to. Absent or unreadable, they report `skip` rather than
+        // inventing a failure, exactly as they do before a first install.
+        const env = readEnvFile(context.options.deployRoot);
 
         // Held in a variable because the proxy checks WRITE to it.
         const checkContext: CheckContext = {
@@ -348,6 +382,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           name: context.name,
           bindPort: context.state.bindPort,
           proxyRoot: proxyRootFor(context.state),
+          ...(env === undefined ? {} : { env }),
           ...(context.options.proxyContainer ?? context.state.proxyContainer) === undefined
             ? {}
             : { proxyContainer: context.options.proxyContainer ?? context.state.proxyContainer },
