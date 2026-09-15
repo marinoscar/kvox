@@ -90,6 +90,18 @@ import { TranscriptionRuntimeService } from './transcription-runtime.service';
  */
 const TRANSCRIPT_SOURCE_MIME_TYPES = ['audio/*', 'video/*'];
 
+/**
+ * How many rows each list inside `GET /api/transcripts/summary` carries.
+ *
+ * Named rather than spelled at each call site so the three — soon four — lists
+ * this endpoint returns cannot drift apart by one of them being edited alone.
+ * `GET /api/notes/summary` names the same number the same way, deliberately:
+ * the home page renders both beside each other, and a transcripts list eight
+ * rows deep next to a notes list of ten would be an asymmetry nothing in the
+ * design intended.
+ */
+const SUMMARY_LIST_SIZE = 8;
+
 /** The list-row projection, as every read surface returns it. */
 export interface TranscriptListItem {
   id: string;
@@ -294,12 +306,12 @@ export class TranscriptsService {
       this.prisma.transcript.findMany({
         where: { deletedAt: null, ownerId: userId },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        take: 8,
+        take: SUMMARY_LIST_SIZE,
       }),
       this.prisma.transcript.findMany({
         where: { deletedAt: null, id: { in: shareIds } },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        take: 8,
+        take: SUMMARY_LIST_SIZE,
       }),
       this.prisma.transcript.count({ where: { deletedAt: null, ownerId: userId } }),
       this.prisma.transcript.count({
