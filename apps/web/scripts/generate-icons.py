@@ -19,12 +19,36 @@ hand, on a machine with Python 3 and Pillow:
 
     pip install --user 'Pillow>=10'
 
+THE MARK
+=============================================================================
+A K-WAVE MONOGRAM: the letter K whose stem is a single bar and whose arms are
+the diverging envelope of an audio waveform. Four vertical rounded bars on a
+square mark box of side M:
+
+    column 0   the stem          one bar, full height M
+    column 1   the junction      two bars of 0.22 M, centred +/- 0.11 M
+    column 2   the spread        two bars of 0.22 M, centred +/- 0.24 M
+    column 3   the mouth         two bars of 0.22 M, centred +/- 0.37 M
+
+    bar width  0.17 M            corner radius = half the bar width
+    pitch      (M - 0.17 M) / 3  so the outer columns touch the box edges
+    extent     0.37 M + 0.11 M = 0.48 M from centre, inside the half-box
+
+Column 1's pair meet exactly on the centre line, which is the junction that
+makes the shape read as a K; columns 2 and 3 open outwards, which is what
+makes it read as a waveform. Rounded rectangles are the ONLY primitive used,
+on purpose — see the geometry block below for why a K with true diagonal
+strokes is not drawable here, and why a microphone or a speech bubble was not
+the answer either.
+
 The mark itself also exists as hand-editable vector art in
-`apps/web/public/icons/source.svg`. That SVG and the geometry constants in this
-file describe the same mark and must be kept in step — this script deliberately
-does NOT rasterise the SVG, because doing so would reintroduce exactly the
-rendering dependency (rsvg / cairosvg / a headless browser) the committed-PNG
-approach exists to avoid.
+`apps/web/public/icons/source.svg`, and a second time, at the tighter favicon
+crop, in `apps/web/public/favicon.svg`. Those SVGs and the geometry constants
+in this file describe the same mark and must be kept in step — this script
+deliberately does NOT rasterise the SVG, because doing so would reintroduce
+exactly the rendering dependency (rsvg / cairosvg / a headless browser) the
+committed-PNG approach exists to avoid. `src/__tests__/pwa/brandMark.test.ts`
+is the guard that the two vectors have not drifted apart from each other.
 
 WHAT IT WRITES
 =============================================================================
@@ -158,25 +182,64 @@ FOREGROUND_COLOR = "#ffffff"
 # =============================================================================
 # Mark geometry — all fractions, so the mark is resolution independent
 # =============================================================================
-# The mark: three horizontal rounded bars, centred, of decreasing width. It is
-# deliberately generic (this is a template) and it silhouettes correctly — the
-# widths still read as three distinct bars at 16px, which a glyph or a wordmark
-# would not.
+# The mark: a K-WAVE MONOGRAM. Four vertical rounded bars on a square mark box
+# of side M. Column 0 is the K's stem, full height. Columns 1-3 are its arms:
+# each is a PAIR of short bars sitting symmetrically above and below the box's
+# vertical centre, the pair spreading further apart with every column, so the
+# three pairs trace the diverging envelope of a waveform — the K's two arms and
+# an audio waveform being, conveniently, the same drawing.
+#
+# WHY BARS AND NOT A REAL K
+# A K drawn honestly has two DIAGONAL strokes, and Pillow's only primitives
+# here are `rounded_rectangle` (axis-aligned) and `polygon` (hard-edged, no
+# corner radius) — a rotated rounded stroke is not expressible without either a
+# rasteriser or hand-composited circles, and this file exists precisely so that
+# no image toolchain beyond Pillow is ever required (see the module docstring).
+# Sampling the diagonal at three columns keeps the letter readable while
+# staying inside the one primitive both this script and a plain SVG `<rect>`
+# can draw identically. Rejected alternatives: a microphone and a speech
+# bubble, both of which are the two most generic marks in this product
+# category and say nothing about whose transcript it is; and rasterising
+# `icons/source.svg`, which is the CI dependency this template refuses.
 CORNER_RADIUS_RATIO = 0.22   # rounded-square plate radius, as a fraction of size
-BAR_WIDTH_RATIOS = (1.00, 0.75, 0.50)  # top to bottom, as fractions of mark width
-STACK_HEIGHT_RATIO = 0.86    # stack height as a fraction of mark width
-BAR_HEIGHT_RATIO = 0.22      # one bar's height, as a fraction of stack height
-BAR_GAP_RATIO = 0.17         # gap between bars, as a fraction of stack height
-# 3 bars + 2 gaps must fill the stack exactly: 3(0.22) + 2(0.17) == 1.00. The
-# gaps are wider than they need to look good at 512px on purpose: at 16px a bar
-# is about two pixels tall, and a gap thinner than that merges the three bars
-# into one smear.
 
-# How much of the canvas the mark occupies, per icon family.
+# THE MARK: a K monogram -- one vertical stem, and two diagonal arms meeting on
+# the stem's centre line. Every value is a fraction of the MARK BOX's side, so
+# the mark is resolution independent.
+#
+# WHY DIAGONALS AND NOT STACKED BARS. The first attempt drew the arms as four
+# columns of short axis-aligned rounded bars, because Pillow draws rectangles
+# more readily than anything else. It did not read as a K: consecutive columns
+# sit a clear horizontal gap apart, so the bars stayed six separate dots and
+# the shape read as a domino. A round-capped diagonal line is the smallest
+# change that actually produces the letter, and it is still drawable in both
+# toolchains -- SVG has `stroke-linecap="round"`, and Pillow needs a `line`
+# plus a circle centred on each endpoint, because its `width` gives butt ends
+# and `joint="curve"` only affects joints between segments.
+STROKE_WIDTH_RATIO = 0.17    # stem width and arm stroke, as a fraction of the box
+JUNCTION_Y_RATIO = 0.50      # where the arms meet the stem, down the box
+ARM_END_RATIO = 0.915        # how far the arm endpoints reach across and down
+# 0.915 is not arbitrary: it is 1 - STROKE_WIDTH_RATIO / 2, so an endpoint sits
+# exactly one cap radius inside the box and every round cap lands flush against
+# the edge rather than overflowing it (0.915 + 0.085 == 1.0).
+
+# How much of the canvas the mark occupies, per icon family. `mark_ratio` is now
+# the SIDE OF THE SQUARE MARK BOX (it used to be the width of the widest bar of
+# the old three-bar stack) — the numbers are unchanged because the old stack was
+# 0.86 of its width tall and this box is 1.00, so the mark reads at very nearly
+# the same optical size and every family's padding is still right.
 MARK_RATIO_STANDARD = 0.68   # rounded plate, corners are ours to shape
 MARK_RATIO_MASKABLE = 0.50   # inside the 80%-diameter safe zone with room to spare
 MARK_RATIO_BADGE = 0.70      # no plate, so the mark can breathe wider
 MARK_RATIO_FAVICON = 0.80    # tab-sized: padding costs whole pixels, so spend fewer
+# MASKABLE SAFE ZONE, RE-CHECKED FOR A SQUARE MARK (rule 1 above). The safe
+# zone is a centred circle of 80% DIAMETER, i.e. radius 0.40 x size. A square
+# box is at its furthest from the centre at its CORNERS, not its edges, so the
+# check is the half-diagonal, not the half-side:
+#     0.50 x 0.50 x sqrt(2) = 0.354 x size  <  0.40 x size
+# 0.354 < 0.40, so even the corners of the mark box clear the safe circle, and
+# the drawn bars — whose own extremes are 0.48 of the box, not 0.50 — clear it
+# by more. Raising MARK_RATIO_MASKABLE above 0.5657 would push the corners out.
 
 # Anti-aliasing. Pillow's drawing primitives are hard-edged, so everything is
 # drawn at this multiple and downsampled with LANCZOS; that resample IS the
@@ -186,30 +249,48 @@ SUPERSAMPLE = 8
 
 
 def draw_mark(draw: ImageDraw.ImageDraw, size: int, mark_ratio: float, fill: str) -> None:
-    """Draw the three-bar mark centred on a `size`x`size` canvas.
+    """Draw the K monogram centred on a `size`x`size` canvas.
 
-    `mark_ratio` is the width of the widest (top) bar as a fraction of the
-    canvas; the stack is centred on both axes.
+    ⚠ `mark_ratio` IS THE SIDE OF THE SQUARE MARK BOX as a fraction of the
+    canvas. It used to mean the width of the widest bar of the old three-bar
+    mark, which is a different quantity -- a reader carrying the old meaning
+    across will size every icon wrongly.
     """
-    mark_width = size * mark_ratio
-    stack_height = mark_width * STACK_HEIGHT_RATIO
-    bar_height = stack_height * BAR_HEIGHT_RATIO
-    bar_gap = stack_height * BAR_GAP_RATIO
+    mark = size * mark_ratio
+    left = (size - mark) / 2
+    top = (size - mark) / 2
 
-    center_x = size / 2
-    top = (size - stack_height) / 2
-    # Pill ends: a radius of half the bar height is the largest that is still a
+    stroke = mark * STROKE_WIDTH_RATIO
+    radius = stroke / 2
+
+    # The stem. A radius of half the width is the largest that is still a
     # rounded rectangle rather than a lozenge with a flat middle.
-    radius = bar_height / 2
+    draw.rounded_rectangle(
+        (left, top, left + stroke, top + mark),
+        radius=radius,
+        fill=fill,
+    )
 
-    for index, width_ratio in enumerate(BAR_WIDTH_RATIOS):
-        bar_width = mark_width * width_ratio
-        y0 = top + index * (bar_height + bar_gap)
-        draw.rounded_rectangle(
-            (center_x - bar_width / 2, y0, center_x + bar_width / 2, y0 + bar_height),
-            radius=radius,
-            fill=fill,
-        )
+    # The arms start on the stem's CENTRE LINE, not on its right edge, so they
+    # merge into it instead of butting against it and leaving a seam.
+    junction = (left + radius, top + mark * JUNCTION_Y_RATIO)
+    end_x = left + mark * ARM_END_RATIO
+    ends = (
+        (end_x, top + mark * (1.0 - ARM_END_RATIO)),  # upper arm
+        (end_x, top + mark * ARM_END_RATIO),          # lower arm
+    )
+
+    for end in ends:
+        draw.line([junction, end], fill=fill, width=max(1, int(round(stroke))))
+        # Pillow's line `width` gives BUTT ends, so the round caps SVG gets
+        # from `stroke-linecap` have to be drawn here as circles. Without
+        # these the arms end in flat diagonal chops and the mark stops
+        # matching the two SVGs.
+        for (cx, cy) in (junction, end):
+            draw.ellipse(
+                (cx - radius, cy - radius, cx + radius, cy + radius),
+                fill=fill,
+            )
 
 
 def render_standard(size: int, mark_ratio: float = MARK_RATIO_STANDARD) -> Image.Image:
