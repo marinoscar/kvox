@@ -300,6 +300,7 @@ import type {
   MaintenanceStatus,
   UpdateMaintenanceInput,
   ProfileImageMutationResponse,
+  AboutResponse,
 } from '../types';
 
 // Profile picture API — issue #367.
@@ -729,4 +730,24 @@ export async function updateMaintenance(
   input: UpdateMaintenanceInput,
 ): Promise<MaintenanceStatus> {
   return api.put<MaintenanceStatus>('/admin/maintenance', input);
+}
+
+// About API — issue #126, epic #118.
+//
+// One call, one controller (`about.controller.ts`, `system_settings:read` —
+// deliberately no permission of its own, per epic #118 decision 8), and the
+// only place in the web app that names this endpoint.
+
+/**
+ * What is deployed here: the CLI's deploy-info record, live runtime facts and
+ * database facts.
+ *
+ * ALWAYS A 200 on the API side — the dev stack has no deploy-info file and
+ * answers `deployInfoStatus: 'absent'`, and an unreachable database answers
+ * `database: null` with `databaseError` set. The API performs no network I/O
+ * to answer this, so a manual refresh is cheap and a poll is pointless: the
+ * answer changes only when somebody deploys.
+ */
+export async function getAbout(): Promise<AboutResponse> {
+  return api.get<AboutResponse>('/admin/about');
 }

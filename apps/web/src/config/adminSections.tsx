@@ -49,6 +49,9 @@ import BackupOutlinedIcon from '@mui/icons-material/BackupOutlined';
 // Broadcasts (#325, epic #319) — the one Operations card that is not a view
 // onto machinery, but an action taken through it.
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
+// About (#126, epic #118) — what is deployed here: version, revision, when it
+// was installed and updated, and the server it runs on.
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 /**
  * One settings page, fully described for every surface that draws it.
@@ -243,6 +246,35 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
           'Take the application out of service for planned work, with a message for anyone who tries to use it.',
         Icon: BuildCircleOutlinedIcon,
         path: '/admin/settings/maintenance',
+        permission: 'system_settings:read',
+      },
+      {
+        // Issue #126, epic #118 (decision 8). `system_settings:read` is the
+        // string `about/about.controller.ts` enforces on its one GET — the
+        // registry never invents a permission, it mirrors one. There is
+        // deliberately NO `about:read`: "what is deployed here" is an
+        // administrator's configuration read, and a permission no role is
+        // seeded with would be a card nobody can open.
+        //
+        // GENERAL, NOT OPERATIONS, and it is worth being precise about why,
+        // because About is strictly neither: `General` is configuration an
+        // administrator SETS and `Operations` is the running system, and this
+        // page sets nothing and shows no work in flight. It sits here because
+        // its permission IS the General permission — an Operations card must
+        // carry one of the strings the Operations controllers enforce
+        // (`jobs:read`, `nodes:read`, …), none of which the About controller
+        // checks, and a card gated on evidence unrelated to whether its request
+        // will be authorized is the split-brain this registry exists to
+        // prevent. And it is the card an administrator opens first on a new
+        // server, which is a General question ("what is this?") before it is
+        // an operational one. Read-only by nature: there is no `:write` gate
+        // to mention, and triggering an update from the browser is out of
+        // scope for the epic permanently.
+        title: 'About',
+        description:
+          'What is running here: version, revision, when it was installed and last updated, and the server it runs on.',
+        Icon: InfoOutlinedIcon,
+        path: '/admin/settings/about',
         permission: 'system_settings:read',
       },
     ],
