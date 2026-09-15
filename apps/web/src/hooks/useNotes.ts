@@ -198,32 +198,58 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   }, [notes]);
 
   /**
-   * Bumped whenever an APPEND changes the accumulated list.
+   * Bumped whenever the accumulated list stops being the one a revalidation in
+   * flight planned against: an APPEND commits, or the query changes.
    *
    * ⚠ SEPARATE FROM `requestToken`, which `loadMore` deliberately does not
-   * touch. A revalidation planned against twenty rows that settles after
-   * `loadMore` has made it forty computed its `cursorIsAuthoritative` against a
-   * list that no longer exists; adopting that plan's `nextCursor` would rewind
-   * the cursor to just past row twenty and make every subsequent `loadMore`
-   * re-fetch page two forever. So such a revalidation DROPS ITS ANSWER.
+   * touch. A revalidation that was planned against twenty rows and settles
+   * after `loadMore` has made it forty computed its plan — and, critically, its
+   * `cursorIsAuthoritative` — against a list that no longer exists. Adopting
+   * that plan's `nextCursor` would rewind the cursor to just past row twenty
+   * and make every subsequent `loadMore` re-fetch page two forever, stranding
+   * page three. So a revalidation whose generation moved under it DROPS ITS
+   * ANSWER; another poll is at most one interval away, and `loadMore` has just
+   * delivered fresh rows anyway.
    *
-   * The other direction needs no guard: a revalidation landing DURING a
-   * `loadMore` merges through a functional setter, and `loadMore`'s append then
-   * dedupes against whatever it finds.
+   * The other direction needs no guard: a revalidation that lands DURING a
+   * `loadMore` merges through a functional setter, and `loadMore`'s own append
+   * then dedupes against whatever it finds. Neither clobbers the other.
    *
-   * `useTranscripts` carries the same ref with the same rejected alternative
-   * (folding it into `requestToken`, which would drop an in-flight `load(true)`
-   * whenever "Load more" was pressed just after a filter change).
+   * Folding this into `requestToken` was rejected: `loadMore` bumping that
+   * counter would also drop an in-flight `load(true)`, so changing the filter
+   * and then pressing "Load more" (the button still renders the old filter's
+   * cursor for a frame) would leave the old filter's rows on screen.
    */
   const listGeneration = useRef(0);
+
+  /**
+   * Whether the rows on screen belong to the CURRENT query.
+   *
+   * ⚠ WITHOUT THIS, MERGING INTRODUCES A BUG THAT REPLACING COULD NOT HAVE.
+   * The query-change effect below clears it, and only a reset's answer sets it
+   * again. In the window between — a filter change whose first page has not
+   * landed, or one whose request failed and left the previous rows up under an
+   * error banner — a revalidation holds rows for the NEW query while the screen
+   * holds rows for the OLD one, and merging the two would render both filters
+   * at once. There is nothing to reconcile against, so a revalidation in that
+   * window REPLACES, exactly as a reset does, and asks for one page rather than
+   * re-reading a span that belongs to a query it is not for.
+   *
+   * A boolean rather than a second counter: query provenance is the only thing
+   * it answers, and `listGeneration` already answers everything else.
+   */
+  const listMatchesQuery = useRef(false);
 
   const load = useCallback(
     async (showLoading: boolean) => {
       const token = (requestToken.current += 1);
       const generation = listGeneration.current;
-      // ⚠ A RESET READS ONE PAGE; A REVALIDATION RE-READS THE LOADED SPAN.
-      // See `mergeFeedPage.ts` for why, and for why the span is capped at 100.
-      const plan = showLoading
+      // ⚠ A RESET READS ONE PAGE AND REPLACES; A REVALIDATION RE-READS THE
+      // LOADED SPAN AND MERGES. See `mergeFeedPage.ts` for why, and for why
+      // the span is capped at 100. A revalidation fired while no rows of this
+      // query are on screen is a reset — see `listMatchesQuery` above.
+      const isReset = showLoading || !listMatchesQuery.current;
+      const plan = isReset
         ? { limit: NOTE_PAGE_SIZE, cursorIsAuthoritative: true }
         : planFeedRevalidate(loadedCount.current, NOTE_PAGE_SIZE);
       if (showLoading) setIsLoading(true);
@@ -236,11 +262,16 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
         };
         const response = await getNotes(params);
         if (!isMounted() || token !== requestToken.current) return;
-        if (showLoading) {
-          // The reset path, unchanged: a first load or a filter change has
-          // nothing worth reconciling with.
+        if (isReset) {
+          // The reset path, byte-for-byte what it always did: a first load or a
+          // filter change has nothing worth reconciling with — and neither has
+          // a revalidation that arrives before this query's first page has
+          // landed. ⚠ `isLoading` is still governed by `showLoading` alone, so
+          // a revalidation taking this branch replaces the rows without ever
+          // raising the skeleton over them.
           setNotes(response.items);
           setNextCursor(response.nextCursor);
+          listMatchesQuery.current = true;
         } else if (generation === listGeneration.current) {
           // ⚠ MERGE, NEVER REPLACE (issue #167). `setNotes(response.items)`
           // here was the bug, identical to the one in `useTranscripts`: load
@@ -262,7 +293,14 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
     [isMounted, q, sourceTranscriptId, status],
   );
 
+  // ⚠ A NEW QUERY INVALIDATES BOTH GUARDS ABOVE, and it must do so BEFORE the
+  // reset is issued: a revalidation still in flight for the previous filter
+  // has to drop its answer rather than replace this query's first page with
+  // the last one's, and a revalidation issued while this reset is in flight
+  // has to replace rather than merge into rows that are not its own.
   useEffect(() => {
+    listGeneration.current += 1;
+    listMatchesQuery.current = false;
     void load(true);
   }, [load]);
 
