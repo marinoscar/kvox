@@ -187,7 +187,18 @@ export async function migrationState(options: HealthOptions): Promise<MigrationS
       [
         'docker', 'compose', ...composeArgs(options.deployRoot, options.name),
         'run', '--rm', '--no-deps', 'api',
-        'npx', 'prisma', 'migrate', 'status',
+        // NOT `npx prisma migrate status`. Prisma reads its connection from
+        // DATABASE_URL (apps/api/prisma.config.ts), and DATABASE_URL is set
+        // NOWHERE in this deployment - infra/compose/base.compose.yml passes
+        // the individual POSTGRES_* variables and says the URL is derived.
+        // scripts/prisma-env.js is what derives it, and it is exactly what
+        // `npm run prisma:migrate` expands to, so install/update and this
+        // check reach the database the same way. Bare `npx prisma` skips the
+        // wrapper, fails config validation, prints an error instead of a
+        // report, and this function then reports `known: false` - which
+        // isHealthy() deliberately treats as non-fatal, so the blindness
+        // surfaces nowhere. Resolved from the image's WORKDIR, /app/apps/api.
+        'node', 'scripts/prisma-env.js', 'migrate', 'status',
       ],
       { cwd: composeCwd(options.deployRoot), timeoutMs: 120_000, allowExitCodes: [1] },
     );
