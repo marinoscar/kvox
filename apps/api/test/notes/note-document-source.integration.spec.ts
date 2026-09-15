@@ -345,6 +345,9 @@ function harness(world: World) {
       prisma as never,
       { notify: jest.fn().mockResolvedValue(undefined) } as never,
       { get: jest.fn().mockReturnValue('https://app.example.com') } as never,
+      // #182's titling pass, stubbed. `null` is its "I changed nothing"
+      // answer, so the note keeps the title these assertions already expect.
+      { titleNote: jest.fn().mockResolvedValue(null) } as never,
     ),
     sources,
     new ProviderThrottleService({ get: () => undefined } as never),
