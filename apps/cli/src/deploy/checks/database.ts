@@ -22,6 +22,30 @@ import type { Check, CheckContext, CheckResult } from './types.js';
 //      credentials) and 3D000 (no such database) have three different causes
 //      and three different fixes. Collapsing them into "cannot connect" throws
 //      away the only useful information the attempt produced.
+//
+// WHY pgvector IS A PREFLIGHT AND NOT A MIGRATION CONCERN  (issue #179, epic #165)
+//
+// Semantic search needs the `vector` extension, and `vector` is NOT a trusted
+// extension in PG16: `CREATE EXTENSION vector` needs a superuser, or at least a
+// role the extension's control file permits. `docs/specs/vps-deploy.md` locks in
+// operator-supplied external PostgreSQL - "deploy validates it, never creates or
+// manages it" - so this server may well be handed a database on a role that
+// cannot install anything.
+//
+// Without this check that operator loses the deploy of the WHOLE application
+// over one feature, and loses it in the worst possible place: mid-`prisma
+// migrate deploy`, as a Prisma stack trace with no remedy in it, after the
+// repository has been cloned and .env written. `database-vector-extension` moves
+// that to the one moment it is cheap - before anything has been changed - and
+// answers it with a command to paste.
+//
+// REJECTED: wrapping `CREATE EXTENSION` in a `DO` block that skips when the
+// extension is absent. It is the tempting fix and it is the wrong one. It turns
+// a loud, fixable, pre-deploy refusal into permanent PER-DEPLOYMENT SCHEMA
+// DRIFT, which every search query then has to probe for at runtime, forever.
+// "Layer 1 (full-text search) applied, layer 2 (pgvector) refused" is a state
+// you can diagnose and fix; "some deployments have these three tables and some
+// don't" is not.
 // =============================================================================
 
 /**
@@ -277,6 +301,139 @@ const databasePrivileges: Check = {
   },
 };
 
+/**
+ * The remedy, which is a command and not a category (types.ts rule 2).
+ *
+ * Three things in this order, because that is the order the operator has to do
+ * them in: the statement, the server-side package the statement needs to exist
+ * first, and how much of the application is actually blocked - so nobody tears
+ * down a working deployment over a feature they may not be using yet.
+ */
+function vectorRemedy(settings: DatabaseSettings, privilegeOnly: boolean): string {
+  const install =
+    `As a superuser, against ${settings.database}: CREATE EXTENSION vector;` +
+    ` (psql -h ${settings.host} -p ${settings.port} -d ${settings.database}` +
+    ` -c 'CREATE EXTENSION vector;')`;
+
+  const packaged = privilegeOnly
+    ? ''
+    : ' That statement needs the server-side package installed first, on the' +
+      ' machine PostgreSQL runs on: Debian/Ubuntu `apt install' +
+      ' postgresql-16-pgvector` (no server restart needed). RDS, Cloud SQL and' +
+      ' Azure Database for PostgreSQL all ship it already - there it only needs' +
+      ' enabling, not installing.';
+
+  return (
+    `${install}.${packaged}` +
+    ' This blocks semantic search only; nothing else in the application uses it.'
+  );
+}
+
+/**
+ * Can this database provide `vector`?  (issue #179, epic #165)
+ *
+ * `required`, and deliberately not `recommended` - see types.ts rule 3. This is
+ * not advice. If the extension cannot be provided the migration WILL abort, so
+ * reporting it as a warning would have doctor say "you're fine" and then have
+ * install fail anyway, which is the exact failure this check exists to move
+ * earlier. The file header above says why the migration is not softened instead.
+ *
+ * TWO PROBES, IN THIS ORDER, AND THE ORDER MATTERS:
+ *
+ *   1. ALREADY INSTALLED wins outright, whatever the connecting role may or may
+ *      not be allowed to do. That is the ordinary managed-PostgreSQL case - an
+ *      administrator ran CREATE EXTENSION once, out of band, and the application
+ *      role has never been able to and never needs to. A check that only asked
+ *      "can you install it?" would fail a perfectly working deployment.
+ *   2. AVAILABLE TO INSTALL is the next-best answer; the migration itself runs
+ *      `CREATE EXTENSION IF NOT EXISTS vector` and will do it.
+ */
+const databaseVectorExtension: Check = {
+  id: 'database-vector-extension',
+  title: 'pgvector available',
+  severity: 'required',
+  requires: ['database-exists'],
+  async run(context) {
+    const settings = databaseSettings(context.env);
+    if (settings === undefined) return NO_ENVIRONMENT;
+
+    // Probe 1. One statement answers both "installed?" and "which version",
+    // so the pass can name it rather than just asserting it.
+    const installed = await psql(
+      context,
+      settings,
+      settings.database,
+      "select extversion from pg_extension where extname = 'vector'",
+    );
+    if (!installed.ok) return catalogueUnreadable(installed.stderr);
+    if (installed.stdout !== '') {
+      return {
+        status: 'pass',
+        detail: `vector ${installed.stdout} installed in ${settings.database}`,
+      };
+    }
+
+    // Probe 2.
+    const available = await psql(
+      context,
+      settings,
+      settings.database,
+      "select default_version from pg_available_extensions where name = 'vector'",
+    );
+    if (!available.ok) return catalogueUnreadable(available.stderr);
+    if (available.stdout === '') {
+      return {
+        status: 'fail',
+        detail: `the server offers no vector extension to ${settings.database}`,
+        remedy: vectorRemedy(settings, false),
+      };
+    }
+
+    // Available, not installed - so somebody still has to run the statement,
+    // and the connecting role may not be allowed to. ASYMMETRY ON PURPOSE:
+    // "not a superuser" is a WARN, not a FAIL, because superuser is not the
+    // only way a role may create an extension (a role the control file permits,
+    // or a managed provider's own grant, both work and neither shows up in
+    // pg_roles.rolsuper). Refusing outright would be wrong; saying nothing
+    // would be worse, because this is the one remaining way the migration can
+    // still abort after this check has passed.
+    const privileged = await psql(
+      context,
+      settings,
+      settings.database,
+      'select rolsuper from pg_roles where rolname = current_user',
+    );
+    if (privileged.ok && privileged.stdout.startsWith('t')) {
+      return {
+        status: 'pass',
+        detail: `vector ${available.stdout} available, not yet installed`,
+      };
+    }
+    return {
+      status: 'warn',
+      detail: privileged.ok
+        ? `vector ${available.stdout} available, but ${settings.user} is not a superuser`
+        : `vector ${available.stdout} available; could not tell whether ${settings.user} may create it`,
+      remedy: vectorRemedy(settings, true),
+    };
+  },
+};
+
+/**
+ * An unreadable catalogue is a `warn`, never a `fail` - the same call
+ * `databasePrivileges` makes. Not being able to ASK the question is not an
+ * answer to it, and the migration will settle it for certain either way.
+ */
+function catalogueUnreadable(stderr: string): CheckResult {
+  return {
+    status: 'warn',
+    detail: 'could not read the extension catalogue',
+    remedy:
+      `Migrations will tell you for certain; this is only a preflight. ` +
+      `If they fail, install pgvector: CREATE EXTENSION vector; (${firstLine(stderr)})`,
+  };
+}
+
 const databaseSsl: Check = {
   id: 'database-ssl',
   title: 'Database TLS',
@@ -326,5 +483,6 @@ export const DATABASE_CHECKS: readonly Check[] = [
   databaseCredentials,
   databaseExists,
   databasePrivileges,
+  databaseVectorExtension,
   databaseSsl,
 ];

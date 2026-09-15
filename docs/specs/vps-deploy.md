@@ -399,6 +399,9 @@ left off," not "resume from a saved cursor." Steps, in order:
 ## 8. Update pipeline
 
 ```
+preflight (a NAMED subset, not the whole registry): docker + compose + devnet,
+  git, disk space, THE DATABASE CHAIN (reachable, credentials, exists,
+  vector extension - this pipeline migrates, see below), proxy container + IPv6
 require state.json + <deploy-root>/repo + .env + the compose files
   -> else: "not installed here, run `kvox deploy install`" (PreconditionError)
 fetch; compare resolved ref's SHA against state.commitSha
@@ -423,6 +426,16 @@ refresh vhost / renew certificate if within certbot's renewal window
 external verification
 summary, including the previous SHA so a stuck update is easy to read as a diff
 ```
+
+The preflight is deliberately a named subset rather than
+`requiredChecks(ALL_CHECKS)`: DNS and certificate checks are install-time
+concerns, and a site that is already serving does not need them re-litigated
+on every update. The **database chain is not an exception to that reasoning,
+it is a different category** — it is a precondition of `migrate`, a step this
+same pipeline runs four lines later. Before it was included (#179), an update
+against an unreachable database, a rotated password, a dropped database or a
+missing `vector` extension failed *inside* `migrate`, as a Prisma stack trace,
+with the api container already stopped.
 
 There is deliberately no automatic rollback on a failed `update`. Recording
 the previous SHA is for the operator's own `git checkout <previous-sha>` +
@@ -467,6 +480,53 @@ attempting a full install).
 `kvox deploy doctor` with no flags runs `required` checks only and exits
 `PRECONDITION` on any failure; `--all` also runs `recommended` checks and
 reports warnings without affecting the exit code.
+
+### 9.1 `database-vector-extension`: the pgvector preflight (issue #179, epic #165)
+
+Semantic search needs the `vector` extension, and `vector` is **not** a
+trusted extension in PostgreSQL 16 — `CREATE EXTENSION vector` needs a
+superuser, or at least a role the extension's control file permits. Decision
+4 of section 1 (*external PostgreSQL: deploy validates it, never creates or
+manages it*) means the operator may well hand this deployment a database on a
+role that can do no such thing.
+
+The check is `required`, not `recommended`. If the extension cannot be
+provided, `prisma migrate deploy` **will** abort — so reporting it as advice
+would have `doctor` say "you're fine" and then have `install` fail anyway,
+mid-migration, as a Prisma stack trace with no remedy in it, after the
+repository has been cloned and `.env` written. That is the exact failure this
+check exists to move earlier.
+
+Two probes, in this order, against the application database:
+
+1. `pg_extension` — **already installed wins outright**, whatever the
+   connecting role is allowed to do. That is the ordinary managed-PostgreSQL
+   case: an administrator installed it once, out of band, and the application
+   role never could and never needs to. A check that only asked "can you
+   install it?" would fail a perfectly working deployment.
+2. `pg_available_extensions` — available to install is the next-best answer;
+   the migration runs `CREATE EXTENSION IF NOT EXISTS vector` itself.
+
+Available-but-not-installed on a role that is not a superuser is a **warn**,
+not a fail: superuser is not the only way a role may be permitted to create an
+extension, so refusing outright would be wrong — but saying nothing would be
+worse, because that is the one remaining way the migration can still abort
+after this check has passed. An unreadable catalogue is likewise a warn, the
+same call `database-privileges` makes: not being able to *ask* the question is
+not an answer to it.
+
+`doctor` shows it as its own row; `install` runs it both in its preflight and
+again in `validate-environment`; and `update` runs it too (section 8) — that
+last one matters most, because an existing deployment is precisely the
+population that *receives* the pgvector migration.
+
+**Rejected: wrapping `CREATE EXTENSION` in a `DO` block that skips when the
+extension is absent.** It is the tempting fix and it is the wrong one — it
+converts a loud, fixable, pre-deploy refusal into permanent *per-deployment
+schema drift*, which every search query would then have to probe for at
+runtime, forever. "Layer 1 (full-text search) applied, layer 2 (pgvector)
+refused" is a state you can diagnose and fix; "some deployments have these
+three tables and some don't" is not.
 
 ## 10. `proxy.ts`: the shared host proxy and the app's own vhost
 

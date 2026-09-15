@@ -122,6 +122,35 @@ describe('pgvector Postgres image pin (issue #178, epic #165)', () => {
     expect(ciImage).toBe(testComposeImage);
   });
 
+  it('requires .github/workflows/deploy-e2e.yml\'s postgres to carry pgvector, at its own major', () => {
+    // A FOURTH PIN, DELIBERATELY NOT PART OF THE THREE-WAY SYNC ABOVE
+    // (issue #179, epic #165).
+    //
+    // The e2e job runs the real `kvox deploy install` pipeline, and
+    // `database-vector-extension` is a REQUIRED preflight check — so on a
+    // server with no `vector` this job fails at preflight, correctly, before
+    // install writes anything. Moving it to pgvector's image (rather than
+    // exempting the check for CI) is what makes the job PROVE the check passes
+    // against a real server instead of proving it can be bypassed.
+    //
+    // It is pg17, not the pg16 the three above share, and that is not drift:
+    // the three track the PostgreSQL version this application's own migrations
+    // and tests run against, while this one tracks the client version baked
+    // into the API image (`postgresql17-client`, apps/api/Dockerfile). Pinning
+    // it to pg16 would make `prisma migrate` and `pg_dump` in the rehearsed
+    // deployment talk to a server of a different major than they were built
+    // for — which is the thing that comment was protecting in the first place.
+    //
+    // So the assertion is deliberately WEAKER than the three-way equality
+    // above: it says "pgvector, at the API image's own major", not "this exact
+    // string". Asserting the literal would couple this job's major to the
+    // other three and re-create the coupling the previous paragraph rules out.
+    const yaml = readRepoFile('.github/workflows/deploy-e2e.yml');
+    const image = extractServiceImage(yaml, 'postgres', 6);
+
+    expect(image).toMatch(/^pgvector\/pgvector:pg\d+$/);
+  });
+
   it('leaves apps/cli/src/deploy/checks/database.ts\'s PSQL_IMAGE on plain postgres:16-alpine', () => {
     // Deliberately NOT moved: PSQL_IMAGE only runs the `psql` CLIENT binary
     // against a remote server during `kvox deploy doctor` — it never hosts a

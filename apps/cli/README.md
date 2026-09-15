@@ -509,7 +509,10 @@ install. It runs around 32 checks, in five groups:
   github.com is skipped, not failed, and deployed with plain git;
   `--skip-github` skips the group (and the pipelines' `auth` step).
 - **Database** — the external PostgreSQL database: reachable, credentials
-  valid, database exists, can create tables, TLS.
+  valid, database exists, can create tables, the `vector` extension
+  (`pgvector`) installed or available to install — *required*, because the
+  semantic-search migration cannot run without it, and a `warn` when it is
+  available but the connecting role is not a superuser — and TLS.
 - **DNS** and **TLS** — once `--domain` turns them on: the name resolves and
   points here (`--public-ip`, or `KVOX_PUBLIC_IP`, states this server's
   address when it sits behind NAT — no external echo service is ever asked),
@@ -551,10 +554,15 @@ Options:
   --no-color                Disable colour even on a terminal
 ```
 
-`install` and `update` both run the same required checks as their own
-preflight step, so nothing they do is skipped by running `doctor` first —
-but running it on its own first means you find out about a bad DNS record or
-an unreachable database before you're mid-pipeline, not partway through one.
+`install` runs the required checks above as its own preflight step, and
+`update` runs a named subset of them — the host, git, disk, the `devnet`
+network, the proxy pair, and the **whole database chain** including
+`pgvector`, because `update` migrates and those are preconditions of a step
+it is about to run. (DNS and certificates are not re-litigated on a site that
+is already serving.) So nothing either does is skipped by running `doctor`
+first — but running it on its own first means you find out about a bad DNS
+record or an unreachable database before you're mid-pipeline, not partway
+through one.
 
 ### Installing
 

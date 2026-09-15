@@ -194,6 +194,123 @@ describe('database checks', () => {
   });
 });
 
+// The pgvector preflight (issue #179, epic #165). The reason it is `required`
+// and not advice is in database.ts's header: if the extension cannot be
+// provided, `prisma migrate deploy` aborts, so a warning here would mean doctor
+// says "you're fine" and install fails anyway.
+describe('database-vector-extension', () => {
+  // Answers each of the check's three statements independently, so a test only
+  // has to state the facts it cares about.
+  function vectorRunCommand(catalogue: {
+    installed?: string;
+    available?: string;
+    rolsuper?: string;
+  }): typeof import('../executor.js').runCommand {
+    return fakeRunCommand((argv) => {
+      const statement = argv[argv.length - 1] ?? '';
+      if (statement.includes('pg_extension')) {
+        return { exitCode: 0, stdout: catalogue.installed ?? '' };
+      }
+      if (statement.includes('pg_available_extensions')) {
+        return { exitCode: 0, stdout: catalogue.available ?? '' };
+      }
+      if (statement.includes('rolsuper')) {
+        return { exitCode: 0, stdout: catalogue.rolsuper ?? 'f' };
+      }
+      return { exitCode: 0, stdout: '' };
+    });
+  }
+
+  function vectorCheck(): Check {
+    return find(DATABASE_CHECKS, 'database-vector-extension');
+  }
+
+  it('is required, and runs only once the database is known to exist', () => {
+    expect(vectorCheck().severity).toBe('required');
+    expect(vectorCheck().requires).toContain('database-exists');
+  });
+
+  it('passes on an already-installed extension, whatever the role may do', async () => {
+    // The ordinary managed-PostgreSQL case: an administrator installed it once,
+    // out of band, and the application role never could and never needs to. A
+    // check that only asked "can you install it?" would fail this deployment.
+    const result = await vectorCheck().run(
+      context({ runCommand: vectorRunCommand({ installed: '0.7.4', rolsuper: 'f' }) }),
+    );
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('0.7.4');
+  });
+
+  it('passes when it is available to install and the role is a superuser', async () => {
+    const result = await vectorCheck().run(
+      context({ runCommand: vectorRunCommand({ available: '0.8.0', rolsuper: 't' }) }),
+    );
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('0.8.0');
+    expect(result.detail).toContain('not yet installed');
+  });
+
+  it('warns - never fails - when it is available but the role is not a superuser', async () => {
+    // Superuser is not the only way a role may create an extension, so refusing
+    // outright would be wrong; saying nothing would be worse.
+    const result = await vectorCheck().run(
+      context({ runCommand: vectorRunCommand({ available: '0.8.0', rolsuper: 'f' }) }),
+    );
+
+    expect(result.status).toBe('warn');
+    expect(result.detail).toContain('appuser');
+    expect(result.remedy).toContain('CREATE EXTENSION vector');
+  });
+
+  it('fails with a pasteable remedy when the server has no vector at all', async () => {
+    const result = await vectorCheck().run(
+      context({ runCommand: vectorRunCommand({}) }),
+    );
+
+    expect(result.status).toBe('fail');
+    // A command and a package name, not a category (types.ts rule 2).
+    expect(result.remedy).toContain('CREATE EXTENSION vector');
+    expect(result.remedy).toContain('appdb');
+    expect(result.remedy).toContain('postgresql-16-pgvector');
+    // And how much is actually blocked, so nobody tears down a working
+    // deployment over a feature they may not be using yet.
+    expect(result.remedy).toContain('semantic search');
+  });
+
+  it('warns rather than throwing when psql itself cannot be run', async () => {
+    // Rule 1: a check never throws. Not being able to ASK the question is not
+    // an answer to it, so an unreadable catalogue must not become a hard fail.
+    const result = await vectorCheck().run(
+      context({ runCommand: fakeRunCommand(() => undefined) }),
+    );
+
+    expect(result.status).toBe('warn');
+    expect(result.detail).toContain('could not read');
+    expect(result.remedy ?? '').not.toBe('');
+  });
+
+  it('skips when there is no environment resolved yet', async () => {
+    const result = await vectorCheck().run(context({ env: undefined }));
+    expect(result.status).toBe('skip');
+  });
+
+  it('never puts the password in the argv of its probes', async () => {
+    const seen: string[][] = [];
+    await vectorCheck().run(
+      context({
+        runCommand: fakeRunCommand((argv) => {
+          seen.push([...argv]);
+          return { exitCode: 0, stdout: '' };
+        }),
+      }),
+    );
+
+    expect(seen.flat().join(' ')).not.toContain('p@ss/word#1');
+  });
+});
+
 describe('dns checks', () => {
   it('skips when no domain was given', async () => {
     const result = await find(DNS_CHECKS, 'dns-resolves').run(context({ domain: undefined }));

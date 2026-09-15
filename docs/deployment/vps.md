@@ -97,6 +97,10 @@ yourself; let doctor do it, and fix whatever it reports.
   already exists. This application ships no `db` service — `base.compose.yml`
   deliberately has none — so you are responsible for standing one up
   (managed or self-hosted) before you install.
+- The **`vector` extension (pgvector)** available on that server — see
+  section 3.1. Doctor reports it as `pgvector available`, and it is a
+  *required* check, because the migration that creates the semantic-search
+  tables cannot run without it.
 - Google OAuth credentials whose **redirect URI matches
   `https://<domain>/api/auth/google/callback`** — the exact domain you're
   about to deploy under. The wizard prints this exact URI when it asks for
@@ -175,7 +179,7 @@ SSH session), and everything below runs **on the VPS**.
    | Step | Asks for | Verified before moving on |
    |---|---|---|
    | Domain | The public hostname (`APP_URL` and the OAuth callback are derived from it) | `dns-resolves`, `dns-points-here` |
-   | Database | `POSTGRES_HOST`/`PORT`/`USER`/`PASSWORD`/`DB`/`SSL` — nothing is pre-filled for the host | `database-reachable`, `database-credentials`, `database-exists`, `database-privileges` |
+   | Database | `POSTGRES_HOST`/`PORT`/`USER`/`PASSWORD`/`DB`/`SSL` — nothing is pre-filled for the host | `database-reachable`, `database-credentials`, `database-exists`, `database-privileges`, `database-vector-extension` |
    | Secrets | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY` — generated with a CSPRNG unless you paste your own | — |
    | Google OAuth | `GOOGLE_CLIENT_ID`/`SECRET`/`CALLBACK_URL` — the exact redirect URI is printed first | — |
    | Administrator | `INITIAL_ADMIN_EMAIL` — also the certificate registration address unless `--email` overrides it | — |
@@ -213,6 +217,44 @@ file as `APP_DOMAIN`).
 
 Full flag reference and exit codes: [`apps/cli/README.md`, "Deploying to a
 server"](../../apps/cli/README.md#deploying-to-a-server).
+
+### 3.1 pgvector, before you install
+
+Semantic search stores embeddings in a `vector` column, so the migration that
+creates its tables runs `CREATE EXTENSION IF NOT EXISTS vector`. `vector` is
+not a trusted extension in PostgreSQL 16: creating it needs a superuser (or a
+role your provider has explicitly permitted). Doctor asks about it up front —
+as `pgvector available` — so you find out now rather than mid-migration, with
+the repository already cloned and `.env` already written.
+
+What doctor reports, and what to do:
+
+| Result | What it found | What to do |
+|---|---|---|
+| `pass` | The extension is already installed, or it is available and your role may install it | Nothing. |
+| `warn` | It is available, but the connecting role is not a superuser | Probably fine — some providers permit it anyway. If the migration then fails, run the command below once. |
+| `fail` | The server offers no `vector` extension at all | Install the package, then the extension, before you install the app. |
+
+The remedy, in the order you have to do it in:
+
+```bash
+# 1. The server-side package, on the machine PostgreSQL runs on.
+#    Debian/Ubuntu (match your server's major version):
+apt install postgresql-16-pgvector
+#    RDS, Cloud SQL and Azure Database for PostgreSQL ship it already —
+#    there it only needs enabling, not installing.
+
+# 2. The extension, in your application database, as a superuser:
+psql -h <POSTGRES_HOST> -p <POSTGRES_PORT> -d <POSTGRES_DB> -c 'CREATE EXTENSION vector;'
+```
+
+This blocks semantic search only — nothing else in the application uses the
+extension. `kvox deploy update` checks it too, not just `install`: an
+already-running deployment is exactly the one that *receives* the migration. The migration is deliberately **not** softened to skip it when it
+is missing: a per-deployment "some databases have these tables and some
+don't" is not a state anyone can diagnose later, whereas this refusal is one
+command to fix. See
+[`docs/specs/vps-deploy.md` §9.1](../specs/vps-deploy.md#91-database-vector-extension-the-pgvector-preflight-issue-179-epic-165).
 
 ## 4. After install: the first login (do this before anything else)
 
@@ -308,7 +350,10 @@ kvox deploy update
 
 Fetches, and if the resolved ref's commit has moved, prints the same block
 `--check` would, then rebuilds, migrates, re-seeds, restarts, and
-re-verifies. It refuses outright if nothing is installed at `--apps-root`/
+re-verifies. Its preflight checks the database first — reachable,
+credentials, the database exists, and `pgvector` (section 3.1) — because the
+pipeline migrates a few steps later; an update that can't use the database
+now stops before it stops the API container, not inside `migrate`. It refuses outright if nothing is installed at `--apps-root`/
 `--root` — run `install` first. **If the revision hasn't moved, `update`
 exits `0` and does nothing else** — no rebuild, no restart, no seed — which
 is what makes it safe to run unattended:

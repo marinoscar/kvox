@@ -125,11 +125,32 @@ jobs:
 
     services:
       postgres:
-        # `postgres:17` matches the major the API image's `postgresql17-client`
-        # is pinned to (apps/api/Dockerfile), so `prisma migrate` and any
-        # pg_dump in this deployment talk to a server of the version they were
-        # built for.
-        image: postgres:17
+        # `pg17` matches the major the API image's `postgresql17-client` is
+        # pinned to (apps/api/Dockerfile), so `prisma migrate` and any pg_dump
+        # in this deployment talk to a server of the version they were built
+        # for.
+        #
+        # ⚠ pgvector's image, not plain `postgres:17` (issue #179, epic #165).
+        # `database-vector-extension` is a REQUIRED preflight check, so a server
+        # with no `vector` available is refused before install writes anything —
+        # which is the whole point of the check, and which made this job's own
+        # fixture invalid the moment the check landed. On plain `postgres:17`
+        # this job now fails at preflight, correctly.
+        #
+        # Moving it is the right fix rather than skipping the check here,
+        # because it makes this job PROVE the check passes against a real server
+        # instead of merely proving it can be bypassed. A production deployment
+        # must satisfy this prerequisite; the end-to-end rehearsal of that
+        # deployment should have to satisfy it too.
+        #
+        # ⚠ pg17, so this is deliberately NOT the same string as the
+        # `pgvector/pgvector:pg16` that ci.yml and the two compose overlays
+        # share (issue #178). The two pins answer different questions: those
+        # three track the version the application's own migrations and tests run
+        # against, this one tracks the client version baked into the API image.
+        # `pgvector-image-pin.spec.ts` keeps the pg16 three locked to each other
+        # and asserts only that this one carries pgvector at all.
+        image: pgvector/pgvector:pg17
         env:
           POSTGRES_USER: postgres
           # ⚠ MUST EQUAL POSTGRES_PASSWORD in .github/e2e/answers.env. There is

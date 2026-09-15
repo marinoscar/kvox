@@ -180,7 +180,13 @@ export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
       if (argv[0] === 'df') return result(FAKE_DF);
 
       if (argv[0] === 'docker' && argv[1] === 'run') {
-        // The one-off psql container behind the database checks.
+        // The one-off psql container behind the database checks. `t` answers
+        // the boolean probes (has_schema_privilege, pg_stat_ssl.ssl); the
+        // extension catalogue (#179) is asked for a VERSION, not a boolean, so
+        // it answers like a server that has pgvector installed.
+        const statement = argv[argv.length - 1] ?? '';
+        if (statement.includes('pg_extension')) return result('0.8.0\n');
+        if (statement.includes('pg_available_extensions')) return result('0.8.0\n');
         return result('t\n');
       }
 
