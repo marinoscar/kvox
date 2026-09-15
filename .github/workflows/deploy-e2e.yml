@@ -1,0 +1,536 @@
+name: Deploy E2E
+
+# =============================================================================
+# Deploy end-to-end (issue #118)  —  issue #133
+# =============================================================================
+# WHAT THIS PROVES, AND WHY NOTHING ELSE DOES
+# -----------------------------------------------------------------------------
+# `docs/deployment/vps.md` recorded that the install had never been run end to
+# end, because the environment it was built in had no Docker daemon. Every
+# pipeline test under `apps/cli/src/deploy/*.test.ts` injects a fake
+# `runCommand`, and `executor.test.ts` spawns real processes but never
+# `docker`. So a change that broke `docker compose build`, the migrate step's
+# `run --rm --no-deps api npm run prisma:migrate`, the `.env` symlink
+# resolution or the `-p <name>` project naming would pass CI green.
+#
+# `ubuntu-latest` has a Docker daemon and Compose v2. The two reasons not to
+# use them are both gone: `install --skip-proxy` could not pass preflight
+# (#122) and secrets could not be generated unattended (#127).
+#
+# WHY THIS IS ITS OWN WORKFLOW FILE, NOT A JOB IN ci.yml
+# -----------------------------------------------------------------------------
+# GitHub's `paths:` filter lives on the WORKFLOW's `on:` block, not on a job.
+# `ci.yml` has no path filter and must not grow one — that would gate every
+# job in it, silently skipping typecheck and the test suites for a change to,
+# say, a Markdown file. The alternatives were a `dorny/paths-filter`-style
+# `changes` gate job (a second job, a second checkout and a `git diff` whose
+# base ref differs between `push` and `pull_request`, to reimplement something
+# `on:` already does correctly) or living without the filter (~10 minutes a
+# run for changes that cannot affect it). A separate file expresses the filter
+# in one place, and lets the nightly `schedule` and `workflow_dispatch` below
+# exist without dragging the whole of CI along with them.
+#
+# The cost of that choice is that `needs: [build]` cannot reach across
+# workflows. The intent behind it — "a broken unit test fails before ten
+# minutes of image builds" — is kept as the `gate` steps below, which run this
+# workspace's own typecheck and test suite in-job before anything touches
+# Docker. It duplicates about a minute of `ci.yml`'s work; the image builds it
+# guards cost ten.
+#
+# THE ONE RUNNER-SPECIFIC FACT
+# -----------------------------------------------------------------------------
+# The database is a `services:` container published on the runner's
+# `0.0.0.0:5432`. `base.compose.yml` declares no `extra_hosts` and this job
+# does not add any, so the application containers reach it at the docker0
+# gateway address, `POSTGRES_HOST=172.17.0.1` (in `.github/e2e/answers.env`).
+# The host itself reaches the same address, which is what lets the CLI's own
+# `database-reachable` TCP probe and its `docker run --network host … psql`
+# credential probe use the identical value the containers will.
+#
+# NOT DONE HERE, DELIBERATELY: the proxy and certificate half. A runner has no
+# public DNS, so `--skip-proxy` is passed throughout; the vhost rendering has a
+# snapshot test of its own. And this is not folded into ci.yml's `smoke` job,
+# which boots the compiled API directly on purpose — this job is about the
+# compose/CLI path instead.
+# =============================================================================
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/cli/src/deploy/**'
+      - 'apps/cli/src/commands/deploy.ts'
+      - 'infra/compose/**'
+      - 'infra/nginx/**'
+      - 'apps/api/Dockerfile'
+      - 'apps/web/Dockerfile'
+      - 'apps/api/prisma/**'
+      - '.github/workflows/deploy-e2e.yml'
+      - '.github/e2e/**'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/cli/src/deploy/**'
+      - 'apps/cli/src/commands/deploy.ts'
+      - 'infra/compose/**'
+      - 'infra/nginx/**'
+      - 'apps/api/Dockerfile'
+      - 'apps/web/Dockerfile'
+      - 'apps/api/prisma/**'
+      - '.github/workflows/deploy-e2e.yml'
+      - '.github/e2e/**'
+  workflow_dispatch:
+  schedule:
+    # Nightly, so the pipeline is exercised when nothing in the filter above
+    # changed. Base-image drift — a new `node:24-alpine`, a new
+    # `nginx:1.30-alpine`, a new `postgres:17` — is exactly what this catches,
+    # and it changes no file in this repository.
+    - cron: '17 4 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # One deployment, one compose project, one app folder. `e2e` is the
+  # `--name`, so the containers are `e2e-api-1`, `e2e-web-1`, `e2e-nginx-1`.
+  APP_NAME: e2e
+  APPS_ROOT: /tmp/apps
+  APP_DIR: /tmp/apps/e2e
+  BIND_PORT: '3535'
+  # RFC 2606 reserved. Never resolves, and `--skip-proxy` means nothing ever
+  # tries: it exists so the state file, APP_URL and the derived OAuth callback
+  # are populated the way a real install populates them.
+  APP_DOMAIN: e2e.invalid
+  # The built entry point, invoked by PATH-free path on purpose: nothing in
+  # this file needs the binary's name, and not spelling it keeps the file out
+  # of `apps/cli/src/template-identity.test.ts`'s allowlist.
+  CLI: node apps/cli/dist/cli.js
+  # Where the compose logs and `docker ps` dumps land. Deliberately NOT the
+  # deploy journal's directory: the redaction assertion below is a claim about
+  # the journal the CLI writes, and mixing container stdout into the same tree
+  # would turn it into a claim about the application's logging as well.
+  DIAG_DIR: /tmp/e2e-artifacts
+
+jobs:
+  deploy-e2e:
+    # Quoted: an unquoted `#` after a space starts a YAML comment, which would
+    # silently truncate this to "Deploy end-to-end (issue".
+    name: "Deploy end-to-end (issue #118)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        # `postgres:17` matches the major the API image's `postgresql17-client`
+        # is pinned to (apps/api/Dockerfile), so `prisma migrate` and any
+        # pg_dump in this deployment talk to a server of the version they were
+        # built for.
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          # ⚠ MUST EQUAL POSTGRES_PASSWORD in .github/e2e/answers.env. There is
+          # no way to share one literal between a service definition and a file
+          # the CLI reads, so it is written twice and asserted below by the
+          # install succeeding at all — the wizard's `database-credentials`
+          # check authenticates before anything is built.
+          POSTGRES_PASSWORD: e2e-placeholder-postgres-password
+          POSTGRES_DB: appdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # NOT the default shallow clone. Step 9 adds a commit and asks the
+          # CLI for `git rev-list --count <deployed>..<latest>`; a depth-1
+          # clone has no ancestry for that range, and cloning a shallow
+          # repository over `file://` is its own source of surprise.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # --- the `needs: [build]` stand-in ------------------------------------
+      # Cheap, and it fails before any image is built. See the header for why
+      # this is here rather than a cross-workflow `needs:`.
+      - name: Gate — CLI typecheck
+        run: npm run typecheck --workspace=cli
+
+      - name: Gate — CLI unit tests
+        run: npm run test:run --workspace=cli
+
+      - name: Build the CLI
+        run: npm run build --workspace=cli
+
+      - name: The built CLI runs
+        run: $CLI --version
+
+      # `actions/checkout` leaves a detached HEAD (the PR's merge ref), and
+      # `resolveRepoTarget` refuses to guess a branch from one — deploying the
+      # wrong branch is a mistake that looks like a successful deployment. A
+      # real branch is also what `--ref e2e` resolves against in the clone.
+      - name: Put HEAD on a real branch
+        run: |
+          git config user.email "e2e@e2e.invalid"
+          git config user.name "Deploy E2E"
+          git checkout -B "$APP_NAME"
+          git rev-parse --abbrev-ref HEAD
+
+      # -----------------------------------------------------------------------
+      # 1. doctor, twice, around the one thing it is allowed to report but not
+      #    fix. `devnet` is `external: true` in base.compose.yml, so compose
+      #    never creates it and a host without it fails `up -d` halfway
+      #    through. Asserting that doctor NAMES it — and that it is the only
+      #    required failure — is what makes the check genuinely exercised
+      #    rather than merely present.
+      # -----------------------------------------------------------------------
+      - name: doctor reports the missing devnet network, and nothing else
+        run: |
+          mkdir -p "$DIAG_DIR"
+          set +e
+          $CLI deploy doctor \
+            --apps-root "$APPS_ROOT" \
+            --skip-proxy \
+            --skip-github \
+            --json > "$DIAG_DIR/doctor-before.json"
+          status=$?
+          set -e
+          jq . "$DIAG_DIR/doctor-before.json"
+          # Required checks fail the run: exit 6, not 0.
+          test "$status" -ne 0
+          jq -e '[.checks[] | select(.severity == "required" and .status == "fail") | .id]
+                   == ["docker-network-devnet"]' "$DIAG_DIR/doctor-before.json"
+          jq -e '.ok == false' "$DIAG_DIR/doctor-before.json"
+
+      - name: Create the devnet network
+        run: docker network create devnet
+
+      - name: doctor passes
+        run: |
+          $CLI deploy doctor \
+            --apps-root "$APPS_ROOT" \
+            --skip-proxy \
+            --skip-github \
+            --json > "$DIAG_DIR/doctor-after.json"
+          jq -e '.ok == true' "$DIAG_DIR/doctor-after.json"
+          # The checks this job exists to exercise really ran, rather than
+          # being skipped into a vacuous pass.
+          jq -e '[.checks[] | select(.status == "pass") | .id]
+                   | index("docker-daemon") and index("docker-compose-v2")
+                     and index("docker-network-devnet")' "$DIAG_DIR/doctor-after.json"
+
+      # -----------------------------------------------------------------------
+      # 2. The install itself: clone, wizard, build, migrate, seed, up, health.
+      #    `file://` keeps its scheme through `normaliseRepoUrl` (only GitHub
+      #    remotes are rewritten), so `gh` is never consulted — `--skip-github`
+      #    is belt and braces, and it is also what keeps the preflight's three
+      #    required `gh-*` checks from failing on a runner where `gh` is
+      #    installed and nobody is logged in.
+      #
+      #    No `--json`: the human hooks stream every step and every command's
+      #    output to stderr, which is the difference between a debuggable
+      #    failure and a red square.
+      # -----------------------------------------------------------------------
+      - name: install
+        run: |
+          $CLI deploy install \
+            --apps-root "$APPS_ROOT" \
+            --name "$APP_NAME" \
+            --repo "file://$GITHUB_WORKSPACE" \
+            --ref "$APP_NAME" \
+            --domain "$APP_DOMAIN" \
+            --port "$BIND_PORT" \
+            --skip-proxy \
+            --skip-github \
+            --non-interactive \
+            --answers-file .github/e2e/answers.env
+
+      # -----------------------------------------------------------------------
+      # 3. The layout on disk. Every one of these is something the unit tests
+      #    assert against a fake filesystem and nothing has ever checked for
+      #    real.
+      # -----------------------------------------------------------------------
+      - name: Assert the installed layout
+        run: |
+          ls -la "$APP_DIR"
+
+          # 0600: it holds the database password, the JWT secret and the OAuth
+          # client secret.
+          mode=$(stat -c '%A' "$APP_DIR/.env")
+          echo "$APP_DIR/.env is $mode"
+          test "$mode" = "-rw-------"
+
+          # The link, not a copy: the .env survives `rm -rf repo`, and compose
+          # still finds it at its own `env_file: .env`.
+          link="$APP_DIR/repo/infra/compose/.env"
+          test -L "$link"
+          target=$(readlink "$link")
+          echo "$link -> $target"
+          test "$target" = "../../../.env"
+          test -r "$link"
+
+          # 0644 and readable by the api container's user: the deploy-info
+          # directory is bind-mounted read-only into it.
+          jq -e '.schema == 1' "$APP_DIR/deploy-info/info.json"
+          jq -e --arg name "$APP_NAME" '.app.name == $name' "$APP_DIR/deploy-info/info.json"
+          jq -e '.installedAt == .updatedAt' "$APP_DIR/deploy-info/info.json"
+          jq -e '.lastCommand == "install"' "$APP_DIR/deploy-info/info.json"
+
+          # `-p <name>` reached compose: without it every app on a host is the
+          # project `compose`, and a second app's `up -d` replaces the first's
+          # containers.
+          docker ps --format '{{.Names}}' | tee "$DIAG_DIR/docker-ps.txt"
+          for container in api web nginx; do
+            grep -qx "$APP_NAME-$container-1" "$DIAG_DIR/docker-ps.txt"
+          done
+
+      - name: Assert nothing is published on a public interface
+        run: |
+          ss -ltn | tee "$DIAG_DIR/ss-ltn.txt"
+          # vps.compose.yml's `ports: !override` is the single line in this
+          # deployment that fails SILENTLY when written wrong: compose merges
+          # sequences across overlays, so a plain `ports:` would keep
+          # base.compose.yml's "3535:80" and leave the app on 0.0.0.0 while the
+          # file looks like it fixed it. This is the assertion that catches it.
+          grep -qE "127\.0\.0\.1:$BIND_PORT\b" "$DIAG_DIR/ss-ltn.txt"
+          ! grep -qE "(^|[^0-9.])0\.0\.0\.0:$BIND_PORT\b" "$DIAG_DIR/ss-ltn.txt"
+          ! grep -qE "\*:$BIND_PORT\b" "$DIAG_DIR/ss-ltn.txt"
+          ! grep -qE "\[::\]:$BIND_PORT\b" "$DIAG_DIR/ss-ltn.txt"
+
+      - name: The deployment serves
+        run: |
+          curl -fsS "http://127.0.0.1:$BIND_PORT/api/health/ready" | tee -a "$DIAG_DIR/probes.txt"
+          echo >> "$DIAG_DIR/probes.txt"
+          curl -fsS -o /dev/null -w '%{http_code}\n' "http://127.0.0.1:$BIND_PORT/" \
+            | tee -a "$DIAG_DIR/probes.txt"
+
+      # -----------------------------------------------------------------------
+      # 4. status. `migrations.pending` is a LIST of migration names, not a
+      #    count (`MigrationState` in apps/cli/src/deploy/health.ts), so it is
+      #    asserted by length. `known` is asserted too: `migrationState`
+      #    answers `{ known: false, pending: [] }` when it could not run at
+      #    all, which an emptiness test alone would read as healthy.
+      # -----------------------------------------------------------------------
+      - name: status is healthy and the schema is current
+        run: |
+          $CLI deploy status \
+            --apps-root "$APPS_ROOT" \
+            --port "$BIND_PORT" \
+            --json > "$DIAG_DIR/status.json"
+          jq . "$DIAG_DIR/status.json"
+          jq -e '.healthy == true' "$DIAG_DIR/status.json"
+          jq -e '.migrations.known == true' "$DIAG_DIR/status.json"
+          jq -e '(.migrations.pending | length) == 0' "$DIAG_DIR/status.json"
+          jq -e '.local.ready.ok and .local.live.ok and .local.frontend.ok' "$DIAG_DIR/status.json"
+
+      # -----------------------------------------------------------------------
+      # 5. An update with nothing to apply must change nothing. `--check`
+      #    prints the answer under --json as the UpdateCheck object itself
+      #    (`result.check ?? null`), so `commitsBehind` is at the top level.
+      # -----------------------------------------------------------------------
+      - name: update --check reports nothing behind
+        run: |
+          $CLI deploy update \
+            --apps-root "$APPS_ROOT" \
+            --skip-proxy \
+            --skip-github \
+            --check --json > "$DIAG_DIR/update-check-1.json"
+          jq . "$DIAG_DIR/update-check-1.json"
+          jq -e '.commitsBehind == 0' "$DIAG_DIR/update-check-1.json"
+          jq -e '.current == .latest' "$DIAG_DIR/update-check-1.json"
+
+      - name: update with nothing to apply rebuilds nothing
+        run: |
+          docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+            | sort > "$DIAG_DIR/images-before.txt"
+
+          $CLI deploy update \
+            --apps-root "$APPS_ROOT" \
+            --skip-proxy \
+            --skip-github \
+            --non-interactive 2>&1 | tee "$DIAG_DIR/update-noop.txt"
+
+          # The pipeline's own words for it: every step after `fetch` reports
+          # `skipped: already up to date` and the summary repeats it.
+          grep -q 'already up to date' "$DIAG_DIR/update-noop.txt"
+
+          docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
+            | sort > "$DIAG_DIR/images-after.txt"
+          diff -u "$DIAG_DIR/images-before.txt" "$DIAG_DIR/images-after.txt"
+
+      # -----------------------------------------------------------------------
+      # 6. A real update. An empty commit is enough: the SHA moves, which is
+      #    the only thing the pipeline compares. The build context is unchanged
+      #    (`.dockerignore` excludes `.git`, `.github`, `docs` and `*.md`), so
+      #    every layer is a cache hit and this costs seconds rather than
+      #    minutes — while still exercising build, migrate, seed, restart,
+      #    health and verify.
+      # -----------------------------------------------------------------------
+      - name: Move the branch forward
+        run: |
+          git commit --allow-empty -m "chore(e2e): move HEAD for the update leg"
+          git rev-parse HEAD | tee "$DIAG_DIR/new-sha.txt"
+
+      - name: update --check reports one commit behind
+        run: |
+          $CLI deploy update \
+            --apps-root "$APPS_ROOT" \
+            --skip-proxy \
+            --skip-github \
+            --check --json > "$DIAG_DIR/update-check-2.json"
+          jq . "$DIAG_DIR/update-check-2.json"
+          jq -e '.commitsBehind == 1' "$DIAG_DIR/update-check-2.json"
+          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.latest == $sha' \
+            "$DIAG_DIR/update-check-2.json"
+
+          # --check changed nothing: the deployment is still on the old commit.
+          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.app.commitSha != $sha' \
+            "$APP_DIR/deploy-info/info.json"
+
+      - name: update applies it
+        run: |
+          $CLI deploy update \
+            --apps-root "$APPS_ROOT" \
+            --skip-proxy \
+            --skip-github \
+            --non-interactive 2>&1 | tee "$DIAG_DIR/update-applied.txt"
+
+          info="$APP_DIR/deploy-info/info.json"
+          jq . "$info"
+          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.app.commitSha == $sha' "$info"
+          # ISO-8601 UTC with a Z suffix throughout (deploy-info.ts), so a
+          # string comparison is a chronological one.
+          jq -e '.updatedAt > .installedAt' "$info"
+          jq -e '.lastCommand == "update"' "$info"
+
+          curl -fsS "http://127.0.0.1:$BIND_PORT/api/health/ready" > /dev/null
+
+      - name: about agrees with the deployment record
+        run: |
+          $CLI deploy about --apps-root "$APPS_ROOT" --json > "$DIAG_DIR/about.json"
+          jq . "$DIAG_DIR/about.json"
+          expected=$(jq -r '.updatedAt' "$APP_DIR/deploy-info/info.json")
+          jq -e --arg at "$expected" '.deployment.updatedAt == $at' "$DIAG_DIR/about.json"
+          jq -e --arg sha "$(cat "$DIAG_DIR/new-sha.txt")" '.deployment.commitSha == $sha' \
+            "$DIAG_DIR/about.json"
+          # Informational, never a health verdict: no login exists on this
+          # runner, so the API block reads unavailable and the exit code is
+          # still 0.
+          jq -e '.api == null and (.apiReason | type) == "string"' "$DIAG_DIR/about.json"
+
+      # -----------------------------------------------------------------------
+      # 7. The journal is safe to attach to an issue. Two claims:
+      #
+      #      - the `e2e-placeholder` values from the answers file never appear
+      #        (the acceptance criterion of #133), and
+      #      - neither does the value of ANY key the CLI marks `secret: true`,
+      #        read back out of the .env the wizard actually wrote — which
+      #        covers JWT_SECRET, COOKIE_SECRET and SECRETS_ENCRYPTION_KEY,
+      #        none of which exists until the run generates them.
+      #
+      #    `if: always()`, because an error path is where a value is most
+      #    likely to be echoed, and an aborted install still has a journal:
+      #    `openJournal` runs before the first pipeline step.
+      # -----------------------------------------------------------------------
+      - name: The journal redacts every secret
+        if: always()
+        run: |
+          logs="$APP_DIR/logs"
+          if [ ! -d "$logs" ]; then
+            echo "No deploy journal was written (the run did not get that far)."
+            exit 0
+          fi
+          ls -la "$logs"
+
+          leaked=0
+
+          # The acceptance criterion, literally. Only keys the CLI marks
+          # `secret: true` carry this sentinel — GOOGLE_CLIENT_ID deliberately
+          # does not, because a client ID is not a secret and would make this
+          # grep fail for a reason that is not a leak.
+          for file in "$logs"/*.log "$logs"/*.jsonl; do
+            [ -e "$file" ] || continue
+            hits=$(grep -c 'e2e-placeholder' "$file" || true)
+            echo "$file: ${hits:-0} occurrence(s) of the placeholder sentinel"
+            if [ "${hits:-0}" -ne 0 ]; then
+              echo "::error::a placeholder secret appears verbatim in $file"
+              leaked=1
+            fi
+          done
+
+          # And the generated ones, which no fixture could have predicted.
+          for key in POSTGRES_PASSWORD GOOGLE_CLIENT_SECRET JWT_SECRET COOKIE_SECRET SECRETS_ENCRYPTION_KEY; do
+            value=$(sed -n "s/^$key=//p" "$APP_DIR/.env" | head -n 1)
+            [ -n "$value" ] || continue
+            if grep -rqF -- "$value" "$logs"; then
+              echo "::error::$key's value appears verbatim in the deploy journal"
+              leaked=1
+            else
+              echo "$key: not present in the journal"
+            fi
+          done
+
+          exit "$leaked"
+
+      # -----------------------------------------------------------------------
+      # 8. Everything a failure needs, uploaded unconditionally.
+      # -----------------------------------------------------------------------
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          mkdir -p "$DIAG_DIR"
+          docker ps -a > "$DIAG_DIR/docker-ps-all.txt" 2>&1 || true
+          docker network ls > "$DIAG_DIR/docker-networks.txt" 2>&1 || true
+          df -h > "$DIAG_DIR/df.txt" 2>&1 || true
+          compose_dir="$APP_DIR/repo/infra/compose"
+          if [ -d "$compose_dir" ]; then
+            docker compose \
+              -p "$APP_NAME" \
+              -f "$compose_dir/base.compose.yml" \
+              -f "$compose_dir/prod.compose.yml" \
+              -f "$compose_dir/vps.compose.yml" \
+              --project-directory "$compose_dir" \
+              logs --no-color --timestamps > "$DIAG_DIR/compose-logs.txt" 2>&1 || true
+          fi
+          # The .env itself is NEVER collected: it is the one file in the
+          # deployment that holds unredacted secrets, and this artifact is
+          # downloadable by anyone who can read the run.
+          ls -la "$DIAG_DIR"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: deploy-e2e-logs
+          path: |
+            /tmp/apps/e2e/logs/**
+            /tmp/e2e-artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Tear the stack down
+        if: always()
+        run: |
+          compose_dir="$APP_DIR/repo/infra/compose"
+          if [ -d "$compose_dir" ]; then
+            docker compose \
+              -p "$APP_NAME" \
+              -f "$compose_dir/base.compose.yml" \
+              -f "$compose_dir/prod.compose.yml" \
+              -f "$compose_dir/vps.compose.yml" \
+              --project-directory "$compose_dir" \
+              down -v --remove-orphans || true
+          fi
+          docker network rm devnet || true
