@@ -21,25 +21,35 @@ hand, on a machine with Python 3 and Pillow:
 
 THE MARK
 =============================================================================
-A K-WAVE MONOGRAM: the letter K whose stem is a single bar and whose arms are
-the diverging envelope of an audio waveform. Four vertical rounded bars on a
-square mark box of side M:
+A K MONOGRAM: one vertical stem and two round-capped diagonal arms, on a
+square mark box of side M whose origin is its own top-left corner.
 
-    column 0   the stem          one bar, full height M
-    column 1   the junction      two bars of 0.22 M, centred +/- 0.11 M
-    column 2   the spread        two bars of 0.22 M, centred +/- 0.24 M
-    column 3   the mouth         two bars of 0.22 M, centred +/- 0.37 M
+    stroke     W = 0.17 M         stem width and arm stroke alike
+    cap radius W / 2 = 0.085 M
+    stem       (0, 0) to (0.17 M, M), corner radius 0.085 M
+    junction   (0.085 M, 0.5 M)   ON the stem's centre line, not its edge
+    upper arm  junction to (0.915 M, 0.085 M)
+    lower arm  junction to (0.915 M, 0.915 M)
 
-    bar width  0.17 M            corner radius = half the bar width
-    pitch      (M - 0.17 M) / 3  so the outer columns touch the box edges
-    extent     0.37 M + 0.11 M = 0.48 M from centre, inside the half-box
+Two properties of those numbers are load-bearing. The arms begin on the stem's
+CENTRE LINE rather than its right edge, so stroke and stem merge into one
+shape instead of meeting at a visible seam. And 0.915 is 1 - 0.085, i.e. every
+endpoint is inset by exactly one cap radius, so each round cap lands flush
+against the mark box and nothing overflows: 0.915 + 0.085 = 1.0 exactly.
 
-Column 1's pair meet exactly on the centre line, which is the junction that
-makes the shape read as a K; columns 2 and 3 open outwards, which is what
-makes it read as a waveform. Rounded rectangles are the ONLY primitive used,
-on purpose — see the geometry block below for why a K with true diagonal
-strokes is not drawable here, and why a microphone or a speech bubble was not
-the answer either.
+⚠ THE FIRST ATTEMPT AT THIS MARK DID NOT WORK, and the reason is worth keeping.
+It drew the arms as four columns of short axis-aligned rounded bars, on the
+theory that Pillow draws rectangles more readily than anything else. It did not
+read as a K. Consecutive columns sit a clear horizontal gap (about 0.107 M)
+apart, so the bars never joined into a diagonal — they stayed six separate
+dots and the icon read as a domino. Both toolchains turn out to draw a
+round-capped line perfectly well (`stroke-linecap="round"` in SVG; in Pillow a
+`line` plus a circle centred on each endpoint, because its `width` gives butt
+ends and `joint="curve"` only affects joints between segments), so the letter
+is drawn honestly. Rejected alternatives: tapered strokes, which need a path
+Pillow cannot mirror; a microphone or a speech bubble, the two most generic
+marks in this product category; and rasterising the SVG, which is the CI
+dependency this template exists to avoid.
 
 The mark itself also exists as hand-editable vector art in
 `apps/web/public/icons/source.svg`, and a second time, at the tighter favicon
@@ -179,49 +189,56 @@ BACKGROUND_COLOR = identity_color(_IDENTITY, "backgroundColor")
 # alpha mask (rule 2) and the mark must contrast with the plate at 16px.
 FOREGROUND_COLOR = "#ffffff"
 
+# The waveform's colour: the brand's amber secondary (`theme/tokens.ts`).
+# Held here rather than read from the manifest because `identity.json`
+# carries the PRIMARY only -- a fork rebrands the plate, and the accent is a
+# property of this mark's drawing, like FOREGROUND_COLOR above it.
+ACCENT_COLOR = "#fbbf24"
+
 # =============================================================================
 # Mark geometry — all fractions, so the mark is resolution independent
 # =============================================================================
-# The mark: a K-WAVE MONOGRAM. Four vertical rounded bars on a square mark box
-# of side M. Column 0 is the K's stem, full height. Columns 1-3 are its arms:
-# each is a PAIR of short bars sitting symmetrically above and below the box's
-# vertical centre, the pair spreading further apart with every column, so the
-# three pairs trace the diverging envelope of a waveform — the K's two arms and
-# an audio waveform being, conveniently, the same drawing.
-#
-# WHY BARS AND NOT A REAL K
-# A K drawn honestly has two DIAGONAL strokes, and Pillow's only primitives
-# here are `rounded_rectangle` (axis-aligned) and `polygon` (hard-edged, no
-# corner radius) — a rotated rounded stroke is not expressible without either a
-# rasteriser or hand-composited circles, and this file exists precisely so that
-# no image toolchain beyond Pillow is ever required (see the module docstring).
-# Sampling the diagonal at three columns keeps the letter readable while
-# staying inside the one primitive both this script and a plain SVG `<rect>`
-# can draw identically. Rejected alternatives: a microphone and a speech
-# bubble, both of which are the two most generic marks in this product
-# category and say nothing about whose transcript it is; and rasterising
-# `icons/source.svg`, which is the CI dependency this template refuses.
 CORNER_RADIUS_RATIO = 0.22   # rounded-square plate radius, as a fraction of size
 
-# THE MARK: a K monogram -- one vertical stem, and two diagonal arms meeting on
-# the stem's centre line. Every value is a fraction of the MARK BOX's side, so
-# the mark is resolution independent.
+# THE MARK: a K monogram followed by a five-bar waveform (issue #146).
 #
-# WHY DIAGONALS AND NOT STACKED BARS. The first attempt drew the arms as four
-# columns of short axis-aligned rounded bars, because Pillow draws rectangles
-# more readily than anything else. It did not read as a K: consecutive columns
-# sit a clear horizontal gap apart, so the bars stayed six separate dots and
-# the shape read as a domino. A round-capped diagonal line is the smallest
-# change that actually produces the letter, and it is still drawable in both
-# toolchains -- SVG has `stroke-linecap="round"`, and Pillow needs a `line`
-# plus a circle centred on each endpoint, because its `width` gives butt ends
-# and `joint="curve"` only affects joints between segments.
-STROKE_WIDTH_RATIO = 0.17    # stem width and arm stroke, as a fraction of the box
-JUNCTION_Y_RATIO = 0.50      # where the arms meet the stem, down the box
-ARM_END_RATIO = 0.915        # how far the arm endpoints reach across and down
-# 0.915 is not arbitrary: it is 1 - STROKE_WIDTH_RATIO / 2, so an endpoint sits
-# exactly one cap radius inside the box and every round cap lands flush against
-# the edge rather than overflowing it (0.915 + 0.085 == 1.0).
+# The K is one vertical stem and two round-capped diagonal arms; the waveform
+# is five rounded bars whose first two nestle into the K's open mouth. The K is
+# white, the bars are the brand's amber secondary, so the mark uses both halves
+# of the palette rather than white-on-indigo alone.
+#
+# ⚠ THE MARK IS NOT SQUARE. Every ratio below is a fraction of its WIDTH, and
+# its height is `MARK_ASPECT` times that width. `mark_ratio` in `draw_mark`
+# therefore means the mark's WIDTH as a fraction of the canvas -- it used to
+# mean the side of a square box, and a reader carrying the old meaning across
+# will size every icon wrongly.
+#
+# WHY ROUND-CAPPED DIAGONALS AND NOT STACKED BARS. An earlier attempt drew the
+# K's arms as columns of short axis-aligned bars, because Pillow draws
+# rectangles more readily than anything else. It did not read as a K:
+# consecutive columns sit a clear horizontal gap apart, so the bars stayed
+# separate dots and the shape read as a domino. A round-capped diagonal is the
+# smallest change that produces the letter, and both toolchains can draw one --
+# SVG with `stroke-linecap="round"`, Pillow with a `line` plus a circle centred
+# on each endpoint, because its `width` gives butt ends.
+MARK_ASPECT = 0.7380         # mark height as a fraction of its width
+
+STROKE_WIDTH_RATIO = 0.1304  # stem width and arm stroke alike
+JUNCTION_Y_RATIO = 0.3690    # where the arms meet the stem, down from the top
+ARM_END_X_RATIO = 0.5043     # how far the arms reach across
+ARM_SPREAD_RATIO = 0.2731    # arm endpoints sit this far above and below the junction
+
+# The waveform. Heights are symmetric about the middle bar, and every bar is
+# centred on the SAME line the arms meet at -- the supplied artwork had the
+# middle bar sitting lower, but its height pattern was already symmetric, which
+# says the offset was an artifact of how that image was produced rather than
+# design intent. An off-centre bar reads as a mistake at 16px.
+BAR_X0_RATIO = 0.4428
+BAR_PITCH_RATIO = 0.1184
+BAR_WIDTH_RATIO = 0.0836
+BAR_HEIGHT_RATIOS = (0.1808, 0.3346, 0.2866, 0.3346, 0.1808)
+# The pitch is regular rather than measured bar by bar, which lands the last
+# bar's right edge on exactly 1.0: 0.4428 + 4 x 0.1184 + 0.0836 == 1.0000.
 
 # How much of the canvas the mark occupies, per icon family. `mark_ratio` is now
 # the SIDE OF THE SQUARE MARK BOX (it used to be the width of the widest bar of
@@ -232,14 +249,25 @@ MARK_RATIO_STANDARD = 0.68   # rounded plate, corners are ours to shape
 MARK_RATIO_MASKABLE = 0.50   # inside the 80%-diameter safe zone with room to spare
 MARK_RATIO_BADGE = 0.70      # no plate, so the mark can breathe wider
 MARK_RATIO_FAVICON = 0.80    # tab-sized: padding costs whole pixels, so spend fewer
-# MASKABLE SAFE ZONE, RE-CHECKED FOR A SQUARE MARK (rule 1 above). The safe
-# zone is a centred circle of 80% DIAMETER, i.e. radius 0.40 x size. A square
-# box is at its furthest from the centre at its CORNERS, not its edges, so the
-# check is the half-diagonal, not the half-side:
-#     0.50 x 0.50 x sqrt(2) = 0.354 x size  <  0.40 x size
-# 0.354 < 0.40, so even the corners of the mark box clear the safe circle, and
-# the drawn bars — whose own extremes are 0.48 of the box, not 0.50 — clear it
-# by more. Raising MARK_RATIO_MASKABLE above 0.5657 would push the corners out.
+# MASKABLE SAFE ZONE, RE-CHECKED FOR THE DIAGONAL MARK (rule 1 above). The safe
+# zone is a centred circle of 80% DIAMETER, i.e. radius 0.40 x size, and what
+# has to clear it is the mark's furthest DRAWN pixel from the box centre — not
+# the box's own corner, which nothing is drawn in.
+#
+# Two candidates tie for furthest, by symmetry. The stem's rounded top-left
+# corner is an arc of radius 0.085 about (0.085, 0.085); the point on it at 45
+# degrees is (0.085 - 0.085/sqrt(2)) on both axes = 0.0249, which is
+#     sqrt(2) x (0.5 - 0.0249) = 0.672 of the box from its centre.
+# The upper arm's end cap is a circle of radius 0.085 about (0.915, 0.085),
+# whose centre is sqrt(2) x 0.415 = 0.587 from the box centre; add the radius
+# and it is 0.672 too. So the mark's reach is 0.672 M, not the box's 0.707.
+#
+# At MARK_RATIO_MASKABLE:
+#     0.672 x 0.50 = 0.336 x size  <  0.40 x size
+# 0.336 < 0.40, so the mark clears the safe circle with about 16% of the radius
+# to spare. The ceiling is 0.40 / 0.672 = 0.595 — raising MARK_RATIO_MASKABLE
+# past that would push the stem's top corner out of the safe zone, where a
+# circular launcher mask would shave it off.
 
 # Anti-aliasing. Pillow's drawing primitives are hard-edged, so everything is
 # drawn at this multiple and downsampled with LANCZOS; that resample IS the
@@ -248,49 +276,78 @@ MARK_RATIO_FAVICON = 0.80    # tab-sized: padding costs whole pixels, so spend f
 SUPERSAMPLE = 8
 
 
-def draw_mark(draw: ImageDraw.ImageDraw, size: int, mark_ratio: float, fill: str) -> None:
-    """Draw the K monogram centred on a `size`x`size` canvas.
+def draw_mark(
+    draw: ImageDraw.ImageDraw,
+    size: int,
+    mark_ratio: float,
+    fill: str,
+    accent: str | None = None,
+) -> None:
+    """Draw the K-and-waveform mark centred on a `size`x`size` canvas.
 
-    ⚠ `mark_ratio` IS THE SIDE OF THE SQUARE MARK BOX as a fraction of the
-    canvas. It used to mean the width of the widest bar of the old three-bar
-    mark, which is a different quantity -- a reader carrying the old meaning
-    across will size every icon wrongly.
+    ⚠ `mark_ratio` IS THE MARK'S WIDTH as a fraction of the canvas, and the
+    height follows from `MARK_ASPECT`. It used to mean the side of a square
+    mark box, which is a different quantity.
+
+    `accent` colours the waveform bars. It defaults to `fill`, which is what
+    the BADGE needs: Android reads only that file's alpha channel, so a
+    two-colour mark there would silhouette as one shape anyway, and drawing it
+    monochrome says so honestly rather than relying on the reader to know.
     """
-    mark = size * mark_ratio
-    left = (size - mark) / 2
-    top = (size - mark) / 2
+    width = size * mark_ratio
+    height = width * MARK_ASPECT
+    left = (size - width) / 2
+    top = (size - height) / 2
 
-    stroke = mark * STROKE_WIDTH_RATIO
+    def fx(value: float) -> float:
+        return left + width * value
+
+    def fy(value: float) -> float:
+        return top + width * value
+
+    stroke = width * STROKE_WIDTH_RATIO
     radius = stroke / 2
 
     # The stem. A radius of half the width is the largest that is still a
     # rounded rectangle rather than a lozenge with a flat middle.
     draw.rounded_rectangle(
-        (left, top, left + stroke, top + mark),
+        (fx(0), fy(0), fx(STROKE_WIDTH_RATIO), fy(MARK_ASPECT)),
         radius=radius,
         fill=fill,
     )
 
-    # The arms start on the stem's CENTRE LINE, not on its right edge, so they
-    # merge into it instead of butting against it and leaving a seam.
-    junction = (left + radius, top + mark * JUNCTION_Y_RATIO)
-    end_x = left + mark * ARM_END_RATIO
+    # The arms start on the stem's CENTRE LINE, not its right edge, so they
+    # merge into it instead of meeting at a visible seam.
+    junction = (fx(STROKE_WIDTH_RATIO / 2), fy(JUNCTION_Y_RATIO))
     ends = (
-        (end_x, top + mark * (1.0 - ARM_END_RATIO)),  # upper arm
-        (end_x, top + mark * ARM_END_RATIO),          # lower arm
+        (fx(ARM_END_X_RATIO), fy(JUNCTION_Y_RATIO - ARM_SPREAD_RATIO)),
+        (fx(ARM_END_X_RATIO), fy(JUNCTION_Y_RATIO + ARM_SPREAD_RATIO)),
     )
-
     for end in ends:
         draw.line([junction, end], fill=fill, width=max(1, int(round(stroke))))
         # Pillow's line `width` gives BUTT ends, so the round caps SVG gets
-        # from `stroke-linecap` have to be drawn here as circles. Without
-        # these the arms end in flat diagonal chops and the mark stops
-        # matching the two SVGs.
+        # from `stroke-linecap` have to be drawn here as circles. Without them
+        # the arms end in flat diagonal chops and stop matching the two SVGs.
         for (cx, cy) in (junction, end):
             draw.ellipse(
                 (cx - radius, cy - radius, cx + radius, cy + radius),
                 fill=fill,
             )
+
+    bar_fill = accent or fill
+    bar_radius = width * BAR_WIDTH_RATIO / 2
+    for index, bar_height in enumerate(BAR_HEIGHT_RATIOS):
+        x0 = BAR_X0_RATIO + index * BAR_PITCH_RATIO
+        draw.rounded_rectangle(
+            (
+                fx(x0),
+                fy(JUNCTION_Y_RATIO - bar_height / 2),
+                fx(x0 + BAR_WIDTH_RATIO),
+                fy(JUNCTION_Y_RATIO + bar_height / 2),
+            ),
+            radius=bar_radius,
+            fill=bar_fill,
+        )
 
 
 def render_standard(size: int, mark_ratio: float = MARK_RATIO_STANDARD) -> Image.Image:
@@ -303,7 +360,7 @@ def render_standard(size: int, mark_ratio: float = MARK_RATIO_STANDARD) -> Image
         radius=scale * CORNER_RADIUS_RATIO,
         fill=BRAND_COLOR,
     )
-    draw_mark(draw, scale, mark_ratio, FOREGROUND_COLOR)
+    draw_mark(draw, scale, mark_ratio, FOREGROUND_COLOR, ACCENT_COLOR)
     return image.resize((size, size), Image.LANCZOS)
 
 
@@ -316,7 +373,7 @@ def render_maskable(size: int) -> Image.Image:
     scale = size * SUPERSAMPLE
     image = Image.new("RGB", (scale, scale), BRAND_COLOR)
     draw = ImageDraw.Draw(image)
-    draw_mark(draw, scale, MARK_RATIO_MASKABLE, FOREGROUND_COLOR)
+    draw_mark(draw, scale, MARK_RATIO_MASKABLE, FOREGROUND_COLOR, ACCENT_COLOR)
     return image.resize((size, size), Image.LANCZOS)
 
 
@@ -325,6 +382,8 @@ def render_badge(size: int) -> Image.Image:
     scale = size * SUPERSAMPLE
     image = Image.new("RGBA", (scale, scale), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
+    # No accent: Android reads ONLY this file's alpha channel, so the
+    # waveform would silhouette identically whatever colour it carried.
     draw_mark(draw, scale, MARK_RATIO_BADGE, FOREGROUND_COLOR)
     return image.resize((size, size), Image.LANCZOS)
 

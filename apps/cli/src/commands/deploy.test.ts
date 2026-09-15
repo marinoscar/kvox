@@ -6,14 +6,18 @@ import { Command } from 'commander';
 import { describe, expect, it } from 'vitest';
 
 import type { Check, CheckContext, CompletedCheck } from '../deploy/checks/index.js';
-import { DEPLOY_STATE_VERSION, deployStatePath, type DeployState } from '../deploy/state.js';
-import type { CommandResult, RunCommandOptions } from '../deploy/executor.js';
+import { readDeployInfo } from '../deploy/deploy-info.js';
+import { DEPLOY_STATE_VERSION, deployStatePath, writeState, type DeployState } from '../deploy/state.js';
+import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../deploy/executor.js';
 import { CLI_NAME } from '../branding.js';
 import type { InstallOptions } from '../deploy/install.js';
+import { FAKE_COMMITS, fakeVps, populateClone } from '../deploy/testing/fake-vps.js';
+import type { UpdateCheck } from '../deploy/update.js';
 import { EXIT, exitCodeFor } from '../errors.js';
 import {
   PUBLIC_IP_ENV_VAR,
   buildReport,
+  describeAge,
   registerDeployCommand,
   renderResult,
   renderSummary,
@@ -615,6 +619,216 @@ describe('kvox deploy status', () => {
   });
 });
 
+// The update line (issue #123): the same computation `update --check` runs,
+// bounded, and never a reason to call a serving deployment unhealthy.
+
+const LATEST = 'b'.repeat(40);
+
+/** Compose answers as above; git answers as a clone three commits behind, or refuses to fetch. */
+function gitAwareRunCommand(options: { fetchFails?: boolean } = {}) {
+  const compose = composeRunCommand(ALL_RUNNING, 'Database schema is up to date!');
+  return (async (argv: readonly string[], runOptions: RunCommandOptions): Promise<CommandResult> => {
+    if (argv[0] !== 'git') return compose(argv, runOptions);
+    const result = (stdout = ''): CommandResult => ({
+      argv: [...argv], cwd: runOptions.cwd, exitCode: 0, stdout, stderr: '', durationMs: 1, timedOut: false,
+    });
+    if (argv[1] === 'fetch' && options.fetchFails === true) {
+      throw new CommandFailedError('`git fetch` exited 128\n    fatal: could not read Username', { ...result(), exitCode: 128 });
+    }
+    if (argv[1] === 'rev-parse' && argv[2] === '--verify') return result(`${LATEST}\n`);
+    if (argv[1] === 'rev-list') return result('3\n');
+    if (argv[1] === 'log') return result(FAKE_COMMITS.map((commit) => `${commit.sha}\t${commit.subject}\n`).join(''));
+    return result();
+  }) as typeof import('../deploy/executor.js').runCommand;
+}
+
+describe('kvox deploy status: the Update line (issue #123)', () => {
+  it('renders how far behind the deployment is, and includes remote under --json', async () => {
+    const root = installedRoot();
+    populateClone(join(root, 'repo'));
+
+    const human = await runStatus(['--root', root], {
+      runCommand: gitAwareRunCommand(),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+    expect(human.error).toBeUndefined();
+    expect(human.stderr).toMatch(new RegExp(`Update\\s+3 commits behind \\(latest ${'b'.repeat(12)}, checked just now\\)`));
+
+    const machine = await runStatus(['--root', root, '--json'], {
+      runCommand: gitAwareRunCommand(),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+    expect(machine.stderr).toBe('');
+    const report = JSON.parse(machine.stdout) as { healthy: boolean; remote: { sha: string; commitsBehind: number; checkedAt: string } | null };
+    expect(report.healthy).toBe(true);
+    expect(report.remote).toMatchObject({ sha: LATEST, commitsBehind: 3 });
+    expect(report.remote?.checkedAt).toMatch(/Z$/);
+  });
+
+  it('bounds the fetch to ten seconds and never clones', async () => {
+    const root = installedRoot();
+    populateClone(join(root, 'repo'));
+    const seen: { argv: string[]; timeoutMs: number | undefined }[] = [];
+    const inner = gitAwareRunCommand();
+
+    await runStatus(['--root', root], {
+      runCommand: (async (argv: readonly string[], options: RunCommandOptions) => {
+        seen.push({ argv: [...argv], timeoutMs: options.timeoutMs });
+        return inner(argv, options);
+      }) as typeof import('../deploy/executor.js').runCommand,
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    const fetch = seen.find((entry) => entry.argv[0] === 'git' && entry.argv[1] === 'fetch');
+    expect(fetch?.timeoutMs).toBe(10_000);
+    expect(seen.some((entry) => entry.argv[1] === 'clone')).toBe(false);
+    // And gh is never consulted by a read-only report.
+    expect(seen.some((entry) => entry.argv[0] === 'gh')).toBe(false);
+  });
+
+  it('survives a failing fetch: says so, stays healthy, and reports null under --json', async () => {
+    const root = installedRoot();
+    populateClone(join(root, 'repo'));
+
+    const human = await runStatus(['--root', root], {
+      runCommand: gitAwareRunCommand({ fetchFails: true }),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+    expect(human.error).toBeUndefined();
+    // git's "could not read Username" is the auth failure, so the reason is
+    // the gh remedy in one line - not the raw git output.
+    expect(human.stderr).toMatch(/Update\s+update check: unavailable \(git could not authenticate to the repository\. Run `gh auth login`/);
+    expect(human.stderr).not.toContain('fatal:');
+    expect(human.stderr).toContain('healthy');
+
+    const machine = await runStatus(['--root', root, '--json'], {
+      runCommand: gitAwareRunCommand({ fetchFails: true }),
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+    const report = JSON.parse(machine.stdout) as { healthy: boolean; remote: unknown; updateCheckError?: string };
+    expect(report.healthy).toBe(true);
+    expect(report.remote).toBeNull();
+    expect(report.updateCheckError).toContain('gh auth login');
+  });
+
+  it('is unavailable, without spawning git, when there is no checkout to compare', async () => {
+    const root = installedRoot();
+    const seen: string[][] = [];
+
+    const result = await runStatus(['--root', root], {
+      runCommand: (async (argv: readonly string[], options: RunCommandOptions) => {
+        seen.push([...argv]);
+        return composeRunCommand(ALL_RUNNING, 'Database schema is up to date!')(argv, options);
+      }) as typeof import('../deploy/executor.js').runCommand,
+      fetch: (async () => new Response('', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toContain('update check: unavailable (There is no checkout at');
+    expect(seen.some((argv) => argv[0] === 'git')).toBe(false);
+  });
+});
+
+describe('describeAge', () => {
+  const now = Date.parse('2026-09-16T12:00:00.000Z');
+
+  it('rounds to the unit an operator reads at a glance', () => {
+    expect(describeAge('2026-09-16T11:59:40.000Z', now)).toBe('just now');
+    expect(describeAge('2026-09-16T11:58:00.000Z', now)).toBe('2 min ago');
+    expect(describeAge('2026-09-16T09:00:00.000Z', now)).toBe('3 h ago');
+    expect(describeAge('2026-09-14T12:00:00.000Z', now)).toBe('2 d ago');
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// `kvox deploy update --check`  (issue #123)
+// ---------------------------------------------------------------------------
+
+/** An installed app whose clone sits at the installed commit, for a check. */
+function checkableRoot(): string {
+  const root = mkdtempSync(join(tmpdir(), 'appctl-check-'));
+  populateClone(join(root, 'repo'));
+  writeState({
+    version: DEPLOY_STATE_VERSION,
+    repoUrl: 'https://example.test/o/demo',
+    ref: 'main',
+    commitSha: 'a'.repeat(40),
+    bindPort: 3535,
+    deployRoot: root,
+    name: 'demo',
+    installedAt: '2026-01-01T00:00:00.000Z',
+    lastDeployedAt: '2026-01-02T00:00:00.000Z',
+    lastCommand: 'install',
+    appctlVersion: '1.0.0',
+  });
+  return root;
+}
+
+describe('kvox deploy update --check', () => {
+  it('prints the check object on stdout, and nothing else, under --json', async () => {
+    const vps = await fakeVps({ head: 'a'.repeat(40), remoteSha: LATEST });
+    const root = checkableRoot();
+    const stateBefore = readFileSync(deployStatePath(root), 'utf8');
+
+    const result = await runDeploy(['update', '--check', '--json', '--root', root], { runCommand: vps.runCommand });
+    await vps.close();
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toBe('');
+    const check = JSON.parse(result.stdout) as UpdateCheck;
+    expect(check).toMatchObject({
+      current: 'a'.repeat(40),
+      latest: LATEST,
+      commitsBehind: 2,
+      commits: [...FAKE_COMMITS],
+    });
+    expect(check.checkedAt).toMatch(/Z$/);
+    // Exit 0 with an update available, nothing built, the state untouched.
+    expect(vps.seen.some((argv) => argv[1] === 'compose' && argv.includes('build'))).toBe(false);
+    expect(vps.seen.some((argv) => argv[0] === 'git' && argv[1] === 'checkout')).toBe(false);
+    expect(readFileSync(deployStatePath(root), 'utf8')).toBe(stateBefore);
+    expect(readDeployInfo(root)?.remote).toMatchObject({ sha: LATEST, commitsBehind: 2 });
+  });
+
+  it('renders current -> latest with the subjects on stderr, and exits 0', async () => {
+    const vps = await fakeVps({ head: 'a'.repeat(40), remoteSha: LATEST });
+    const root = checkableRoot();
+
+    const result = await runDeploy(['update', '--check', '--root', root], { runCommand: vps.runCommand });
+    await vps.close();
+
+    expect(result.error).toBeUndefined();
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain(`current ${'a'.repeat(12)} → latest ${'b'.repeat(12)}, 2 commits behind`);
+    expect(result.stderr).toContain('b2b2b2b  feat(api): the second thing');
+    expect(result.stderr).not.toContain('Build images');
+  });
+
+  it('says already up to date when nothing moved', async () => {
+    const vps = await fakeVps({ head: 'a'.repeat(40), remoteSha: 'a'.repeat(40) });
+    const root = checkableRoot();
+
+    const result = await runDeploy(['update', '--check', '--json', '--root', root], { runCommand: vps.runCommand });
+    await vps.close();
+
+    expect(result.error).toBeUndefined();
+    expect(JSON.parse(result.stdout) as UpdateCheck).toMatchObject({ commitsBehind: 0, commits: [] });
+  });
+
+  it('passes --skip-github through', async () => {
+    const vps = await fakeVps({ head: 'a'.repeat(40), remoteSha: LATEST });
+    const root = checkableRoot();
+    writeState({ ...(JSON.parse(readFileSync(deployStatePath(root), 'utf8')) as DeployState), repoUrl: 'https://github.com/acme/demo.git' });
+
+    const result = await runDeploy(['update', '--check', '--json', '--skip-github', '--root', root], { runCommand: vps.runCommand });
+    await vps.close();
+
+    expect(result.error).toBeUndefined();
+    expect(vps.seen.some((argv) => argv[0] === 'gh')).toBe(false);
+  });
+});
+
 
 // ---------------------------------------------------------------------------
 // `kvox deploy install` flags and `kvox deploy certs`  (issue #125)
@@ -676,6 +890,16 @@ describe('kvox deploy install flags (issue #125)', () => {
     const unset = installProbe();
     await runDeploy(['install', '--domain', 'app.example.test'], { install: unset.install });
     expect(unset.seen()).not.toHaveProperty('ipv6');
+  });
+
+  it('passes --skip-github through, and leaves it unset otherwise', async () => {
+    const on = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--skip-github'], { install: on.install });
+    expect(on.seen().skipGithub).toBe(true);
+
+    const off = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test'], { install: off.install });
+    expect(off.seen()).not.toHaveProperty('skipGithub');
   });
 
   it('leaves installCron undefined by default, true for --install-cron, false for --no-install-cron', async () => {

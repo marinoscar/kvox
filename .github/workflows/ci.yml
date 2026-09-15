@@ -63,7 +63,19 @@ jobs:
       # (`+faststart` is a flag ffmpeg accepts and silently ignores on a
       # non-seekable output), and proof that skips is not proof. Both container
       # images install the same package; this is the runner's copy of that.
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      #
+      # `shellcheck` lints apps/cli/bootstrap-vps.sh two steps below (issue
+      # #130). ubuntu-latest (24.04 "noble") ships ShellCheck 0.9.0 from apt;
+      # the script is written to pass `-S warning` on that version.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg shellcheck
+
+      # bootstrap-vps.sh is fetched with curl and run on a fresh VPS before
+      # anything in this repository is built, so nothing else in CI would ever
+      # execute it. `bash -n` is the syntax check; shellcheck at warning level
+      # is the lint. Its `--dry-run` output is asserted against a committed
+      # fixture by `apps/cli/src/bootstrap-vps.test.ts` in the CLI test run.
+      - run: bash -n apps/cli/bootstrap-vps.sh
+      - run: shellcheck -S warning apps/cli/bootstrap-vps.sh
 
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web

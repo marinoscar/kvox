@@ -12,19 +12,28 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readDeployInfo } from './deploy-info.js';
+import { PreconditionError } from '../errors.js';
+import { readDeployInfo, writeDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
-import { DEPLOY_STATE_VERSION, NotInstalledError, readState, writeState, type DeployState } from './state.js';
+import { DEPLOY_STATE_VERSION, NotInstalledError, deployStatePath, readState, writeState, type DeployState } from './state.js';
 import {
   FAKE_APP_VERSION,
+  FAKE_COMMITS,
   fakeVps,
   healthyFetch,
   populateClone,
   silentPrompt,
   type FakeVps,
 } from './testing/fake-vps.js';
-import { RENEW_WITHIN_DAYS, buildUpdateSteps, certificateDueForRenewal, runUpdate } from './update.js';
+import {
+  RENEW_WITHIN_DAYS,
+  buildUpdateSteps,
+  certificateDueForRenewal,
+  renderUpdateCheck,
+  runUpdate,
+  type UpdateCheck,
+} from './update.js';
 
 describe('the update pipeline', () => {
   const steps = buildUpdateSteps();
@@ -33,6 +42,7 @@ describe('the update pipeline', () => {
   it('looks for a new revision before it changes anything', () => {
     expect(ids).toEqual([
       'preflight',
+      'auth',
       'fetch',
       'environment-drift',
       'build',
@@ -63,6 +73,14 @@ describe('the update pipeline', () => {
     expect(skipReason('fetch', { unchanged: true, options: {}, state: {} })).toBeUndefined();
   });
 
+  it('authenticates with gh before the fetch, only for a GitHub remote', () => {
+    expect(ids.indexOf('auth')).toBeLessThan(ids.indexOf('fetch'));
+    expect(skipReason('auth', { options: {}, state: { repoUrl: 'https://github.com/acme/demo.git' } })).toBeUndefined();
+    // Another forge is deployed with plain git; gh is never consulted.
+    expect(skipReason('auth', { options: {}, state: { repoUrl: 'https://example.test/o/demo' } })).toBe('not a GitHub remote');
+    expect(skipReason('auth', { options: { skipGithub: true }, state: { repoUrl: 'https://github.com/acme/demo.git' } })).toContain('--skip-github');
+  });
+
   it('re-seeds by default', () => {
     // The only way permissions added by a new release reach an existing
     // deployment; without it the feature ships and the permission does not.
@@ -83,6 +101,34 @@ describe('the update pipeline', () => {
     expect(
       skipReason('publish', { options: { skipProxy: true }, state: { domain: 'x' } }),
     ).toContain('--skip-proxy');
+  });
+});
+
+describe('renderUpdateCheck', () => {
+  const check: UpdateCheck = {
+    current: 'a'.repeat(40),
+    latest: 'b'.repeat(40),
+    commitsBehind: 2,
+    commits: [...FAKE_COMMITS],
+    checkedAt: '2026-09-16T00:00:00.000Z',
+  };
+
+  it('is a headline with twelve-character shas, then one line per commit', () => {
+    expect(renderUpdateCheck(check)).toEqual([
+      `current ${'a'.repeat(12)} → latest ${'b'.repeat(12)}, 2 commits behind`,
+      'b2b2b2b  feat(api): the second thing',
+      'b1b1b1b  fix(web): the first thing',
+    ]);
+  });
+
+  it('says so, in one line, when there is nothing to update', () => {
+    expect(renderUpdateCheck({ ...check, latest: check.current, commitsBehind: 0, commits: [] })).toEqual([
+      `already up to date at ${'a'.repeat(12)}`,
+    ]);
+  });
+
+  it('counts one commit in the singular', () => {
+    expect(renderUpdateCheck({ ...check, commitsBehind: 1, commits: [check.commits[0] as { sha: string; subject: string }] })[0]).toContain('1 commit behind');
   });
 });
 
@@ -290,7 +336,11 @@ describe('runUpdate against a fake VPS', () => {
     await vps.close();
   });
 
-  function update(root: string, hooks?: { onProgress?: (message: string) => void }) {
+  function update(
+    root: string,
+    hooks?: { onProgress?: (message: string) => void; onLog?: (line: string) => void; onStepStart?: (step: { id: string }) => void },
+    extra: { check?: boolean } = {},
+  ) {
     return runUpdate({
       deployRoot: root,
       runCommand: vps.runCommand,
@@ -300,8 +350,11 @@ describe('runUpdate against a fake VPS', () => {
       skipSeed: true,
       cwd: root,
       ...(hooks === undefined ? {} : { hooks }),
+      ...extra,
     });
   }
+
+  const built = () => vps.seen.some((argv) => argv[1] === 'compose' && argv.includes('build'));
 
   it('leaves lastDeployedAt alone when the pipeline fails, and records the attempt', async () => {
     const root = installedApp(vps);
@@ -359,9 +412,32 @@ describe('runUpdate against a fake VPS', () => {
       domain: null,
       bindPort: 3535,
       host: { dockerVersion: '27.3.1', composeVersion: '2.29.7', diskBytes: 78125000 * 1024 },
-      remote: null,
+      // This run fetched and deployed the latest, so it is zero behind - not
+      // "never checked", which would be wrong at the one moment it is current.
+      remote: { sha: NEW_SHA, commitsBehind: 0 },
     });
     expect(info?.updatedAt.endsWith('Z')).toBe(true);
+    expect(info?.remote?.checkedAt.endsWith('Z')).toBe(true);
+  });
+
+  it('shows what it is about to apply before it builds', async () => {
+    const root = installedApp(vps);
+    const events: string[] = [];
+
+    const result = await update(root, {
+      onStepStart: ({ id }) => void events.push(`step:${id}`),
+      onProgress: (message) => void events.push(`progress:${message}`),
+      onLog: (line) => void events.push(`log:${line}`),
+    });
+
+    const headline = events.findIndex((event) =>
+      event.startsWith(`progress:current ${'a'.repeat(12)} → latest ${'b'.repeat(12)}, 2 commits behind`),
+    );
+    expect(headline).toBeGreaterThan(events.indexOf('step:fetch'));
+    expect(headline).toBeLessThan(events.indexOf('step:build'));
+    expect(events[headline + 1]).toBe('log:b2b2b2b  feat(api): the second thing');
+    expect(events[headline + 2]).toBe('log:b1b1b1b  fix(web): the first thing');
+    expect(result.check).toMatchObject({ current: INSTALLED_SHA, latest: NEW_SHA, commitsBehind: 2 });
   });
 
   it('refreshes deploy-info from the unchanged state when there is nothing to deploy', async () => {
@@ -381,7 +457,97 @@ describe('runUpdate against a fake VPS', () => {
       installedAt: INSTALLED_AT,
       updatedAt: DEPLOYED_AT,
       lastCommand: 'install',
+      remote: { sha: INSTALLED_SHA, commitsBehind: 0 },
     });
+  });
+
+  // ---- `update --check`  (issue #123) ---------------------------------------
+
+  it('--check answers current, latest and the commits between, and deploys nothing', async () => {
+    const root = installedApp(vps);
+    const statePath = deployStatePath(root);
+    writeDeployInfo(root, readState(root) as DeployState, {
+      hostname: 'vps-1', os: null, kernel: null, arch: null, cpuModel: null, cpus: null,
+      memoryBytes: null, diskBytes: null, dockerVersion: null, composeVersion: null, nodeVersion: null,
+    });
+    const before = statSync(statePath).mtimeMs;
+
+    const result = await update(root, undefined, { check: true });
+
+    expect(result.changed).toBe(false);
+    expect(result.commitSha).toBe(INSTALLED_SHA);
+    expect(result.check).toEqual({
+      current: INSTALLED_SHA,
+      latest: NEW_SHA,
+      commitsBehind: 2,
+      commits: [...FAKE_COMMITS],
+      checkedAt: expect.stringMatching(/Z$/) as string,
+    });
+
+    // The remote was fetched and compared, and the clone was NOT moved.
+    expect(vps.seen.some((argv) => argv[0] === 'git' && argv[1] === 'fetch')).toBe(true);
+    expect(vps.seen.some((argv) => argv[0] === 'git' && argv[1] === 'checkout')).toBe(false);
+    expect(vps.head).toBe(INSTALLED_SHA);
+    expect(built()).toBe(false);
+
+    // The state file is untouched - the acceptance criterion is its mtime.
+    expect(statSync(statePath).mtimeMs).toBe(before);
+    expect(readState(root)).toMatchObject({ commitSha: INSTALLED_SHA, lastCommand: 'install' });
+    expect(readState(root)?.previousSha).toBeUndefined();
+    expect(readState(root)?.lastAttemptAt).toBeUndefined();
+
+    // deploy-info's remote is refreshed, and nothing else in it is rebuilt.
+    expect(readDeployInfo(root)).toMatchObject({
+      app: { commitSha: INSTALLED_SHA },
+      updatedAt: DEPLOYED_AT,
+      lastCommand: 'install',
+      host: { hostname: 'vps-1' },
+      remote: { sha: NEW_SHA, commitsBehind: 2, checkedAt: result.check?.checkedAt },
+    });
+  });
+
+  it('--check reports zero commits behind when the remote has not moved', async () => {
+    vps.remoteSha = INSTALLED_SHA;
+    const root = installedApp(vps);
+    const progress: string[] = [];
+
+    const result = await update(root, { onProgress: (message) => void progress.push(message) }, { check: true });
+
+    expect(result.check).toMatchObject({ current: INSTALLED_SHA, latest: INSTALLED_SHA, commitsBehind: 0, commits: [] });
+    expect(progress).toContain(`already up to date at ${'a'.repeat(12)}`);
+    expect(built()).toBe(false);
+  });
+
+  it('--check writes a first deploy-info for a deployment that has none', async () => {
+    const root = installedApp(vps);
+    expect(readDeployInfo(root)).toBeUndefined();
+
+    await update(root, undefined, { check: true });
+
+    expect(readDeployInfo(root)).toMatchObject({
+      app: { commitSha: INSTALLED_SHA },
+      lastCommand: 'install',
+      remote: { sha: NEW_SHA, commitsBehind: 2 },
+    });
+  });
+
+  it('consults gh before the fetch for a GitHub remote, and stops with exit 6 when logged out', async () => {
+    const root = installedApp(vps);
+    writeState({ ...(readState(root) as DeployState), repoUrl: 'https://github.com/acme/demo.git' });
+
+    await update(root, undefined, { check: true });
+    const commands = vps.seen.map((argv) => argv.slice(0, 3).join(' '));
+    const setup = commands.indexOf('gh auth setup-git');
+    expect(commands.indexOf('gh auth status')).toBeGreaterThanOrEqual(0);
+    expect(setup).toBeGreaterThan(commands.indexOf('gh auth status'));
+    expect(commands.indexOf('git fetch --tags')).toBeGreaterThan(setup);
+
+    vps.failWhen((argv) => argv[0] === 'gh' && argv[2] === 'status', 'You are not logged in to any GitHub hosts.');
+    const error = await update(root).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('gh auth login');
+    // Refused before the fetch, so the state still says what it said.
+    expect(readState(root)?.lastAttemptAt).toBeUndefined();
   });
 
   it('migrates a pre-#120 .env to the app root and pins DEPLOY_ROOT', async () => {

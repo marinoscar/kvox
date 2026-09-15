@@ -22,7 +22,8 @@ import type { Check, CheckContext, CheckResult } from './types.js';
 // skips all three.
 // =============================================================================
 
-const GITHUB_HOST = 'github.com';
+/** The one forge `gh` talks to; `repo.ts` normalises its remotes against it (#123). */
+export const GITHUB_HOST = 'github.com';
 
 /** The remedy for a missing binary: GitHub's own two apt lines, condensed. */
 const INSTALL_REMEDY =

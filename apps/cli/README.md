@@ -358,6 +358,88 @@ troubleshooting — see [`docs/deployment/vps.md`](../../docs/deployment/vps.md)
 For why it's built this way, see
 [`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md).
 
+### Fresh server in three commands
+
+Getting `kvox` onto a fresh VPS by hand means installing the GitHub CLI,
+logging in, cloning the repository, installing Node ≥ 20, building the CLI
+workspace and putting the binary on the PATH before `deploy doctor` can even
+run. [`bootstrap-vps.sh`](bootstrap-vps.sh) does all of that from a root
+shell, idempotently, and ends at the wizard. From a fresh root shell on an
+Ubuntu or Debian server that already has Docker:
+
+```bash
+gh auth login --hostname github.com --git-protocol https
+gh repo view <owner>/<repo> --json name && curl -fsSL "$(gh api repos/<owner>/<repo>/contents/apps/cli/bootstrap-vps.sh --jq .download_url)" -o /tmp/bootstrap-vps.sh
+bash /tmp/bootstrap-vps.sh --repo <owner>/<repo>
+```
+
+The `gh api` form fetches the script through your login, so it works for a
+**private** repository. (If `gh` itself isn't installed yet, the script
+installs it — but then it can't be the thing that fetches the script; install
+`gh` first from the two `apt` lines the script prints, or use the public
+form.) For a **public** repository the plain raw URL works with nothing
+installed at all:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/apps/cli/bootstrap-vps.sh -o /tmp/bootstrap-vps.sh
+bash /tmp/bootstrap-vps.sh --repo <owner>/<repo>
+```
+
+Download-then-run rather than `curl | bash`, deliberately: step 2 may run
+`gh auth login`, which needs your terminal on stdin.
+
+Six steps, each printed before it runs, each verified after:
+
+1. **Preconditions** — `id -u` is 0, `/etc/os-release` is Ubuntu/Debian,
+   `docker` and `docker compose version` work. Not root, or no Docker, and
+   it stops here with the reason; for Docker it prints the `apt` commands
+   from docs.docker.com and **never installs Docker itself**.
+2. **GitHub CLI** — installs `gh` from GitHub's apt repository if missing,
+   runs `gh auth login --hostname github.com --git-protocol https` if not
+   logged in (the one interactive step), then `gh auth setup-git` so plain
+   `git` uses that token too.
+3. **Node.js** — if `node` is missing or older than 20, asks `[y/N]` before
+   installing Node 22 from NodeSource; `--yes` answers for you. An existing
+   Node ≥ 20 is never touched.
+4. **CLI checkout** — `gh repo clone <owner>/<repo> /opt/infra/cli/<repo>`,
+   then that checkout's own `install.sh` with `KVOX_SRC` pointing at it (so
+   nothing is cloned twice and no `GITHUB_TOKEN` is needed) and
+   `KVOX_BIN_DIR=/usr/local/bin`, so `kvox` is on every root shell's PATH.
+   Verified with `kvox --version`.
+5. **Deploy folder** — `mkdir -p /opt/infra/apps`, nothing more.
+6. **Launch** — `kvox deploy doctor --skip-proxy` for a first read-only look
+   (its exit code is reported, not fatal), then `kvox` — the interactive
+   menu — or with `--no-tui` the exact next command:
+   `kvox deploy install --domain <your-domain>`.
+
+Step 6 runs from inside `/opt/infra/cli/<repo>`, and the next-command hint
+starts with `cd` there, because `kvox deploy` reads the repository and
+branch to deploy from the git checkout it is run in (see
+[Deploying a fork](#deploying-a-fork)). That checkout is **not** the
+deployment's own `repo/` under `/opt/infra/apps/<name>/` — `deploy install`
+clones that separately. The two stay separate on purpose: the running CLI
+must never rebuild its own `dist/` in the middle of a deploy pipeline.
+
+| Flag | Meaning |
+| --- | --- |
+| `--repo <owner>/<name>` | Required. The repository to build `kvox` from; there is no default, so a fork never edits the script |
+| `--ref <branch>` | Branch to check out (default: the repository's default branch) |
+| `--yes` | Install Node.js without asking when it is missing or too old |
+| `--no-tui` | Print the next command instead of opening the menu |
+| `--update` | Pull the CLI checkout and rebuild `kvox` — the CLI's own self-update, separate from `kvox deploy update`, which updates the deployed app |
+| `--dry-run` | Print every command; run none, probe nothing |
+
+Exit codes: `0` done, `1` a step failed (the step is named in the output),
+`2` usage error.
+
+Re-running is a no-op: an installed `gh`, a logged-in account, a Node ≥ 20,
+an existing checkout and a working `kvox --version` are each left alone.
+`--update` is the exception — it pulls and rebuilds. `--dry-run` prints
+exactly what a fresh server would see (it probes nothing, assumes nothing is
+installed, and never reads `$HOME` or the hostname), which is also how the
+script is tested: `apps/cli/src/bootstrap-vps.test.ts` compares its output
+to a committed fixture.
+
 ### Where an app lives
 
 Every app deployed from this template gets its own folder under one apps
@@ -404,8 +486,11 @@ install. It runs around 32 checks, in five groups:
 - **GitHub CLI** — `gh` installed, `gh auth status` passing, and the
   repository being deployed visible to that account (`gh repo view`). All
   three are required: the server clones a private repository over HTTPS with
-  gh's token. A remote that isn't on github.com is skipped, not failed;
-  `--skip-github` skips the group.
+  gh's token — `install` and `update` run `gh auth setup-git` for you, and
+  an `ssh://` or `git@github.com:` origin copied from a laptop is rewritten
+  to HTTPS so that helper is the credential git uses. A remote that isn't on
+  github.com is skipped, not failed, and deployed with plain git;
+  `--skip-github` skips the group (and the pipelines' `auth` step).
 - **Database** — the external PostgreSQL database: reachable, credentials
   valid, database exists, can create tables, TLS.
 - **DNS** and **TLS** — once `--domain` turns them on: the name resolves and
@@ -460,14 +545,18 @@ an unreachable database before you're mid-pipeline, not partway through one.
 kvox deploy install --domain app.example.com
 ```
 
-Runs preflight → network → checkout → environment → validate-environment →
-build → migrate → seed → start → health → publish → verify, in that order,
-printing each step's result as it completes. `--domain` is the one required
-flag. `network` creates the external `devnet` Docker network the compose
-files declare when the host does not have it yet, and is a no-op when it
-does. Everything is written under `<apps-root>/<name>/`, and the `.env` it
-writes carries `COMPOSE_PROJECT_NAME=<name>` so a hand-run `docker compose`
-in the compose directory sees the same project the CLI does.
+Runs preflight → network → auth → checkout → environment →
+validate-environment → build → migrate → seed → start → health → publish →
+verify, in that order, printing each step's result as it completes.
+`--domain` is the one required flag. `network` creates the external `devnet`
+Docker network the compose files declare when the host does not have it yet,
+and is a no-op when it does. `auth` is where a logged-out GitHub CLI stops
+the run — exit `6`, with the `gh auth login` command to fix it — *before*
+anything is cloned; for a GitHub remote it runs `gh auth setup-git` so plain
+`git` fetches with gh's token, and for any other remote it stands down.
+Everything is written under `<apps-root>/<name>/`, and the `.env` it writes
+carries `COMPOSE_PROJECT_NAME=<name>` so a hand-run `docker compose` in the
+compose directory sees the same project the CLI does.
 
 The repository and ref come from **this checkout's own git remote**, not a
 value hardcoded in the CLI — a fork deploys itself with no configuration
@@ -569,6 +658,7 @@ Options:
   --skip-doctor        Skip the prerequisite checks
   --skip-proxy         Do not touch the reverse proxy or request a certificate
   --skip-seed          Do not run the database seed
+  --skip-github        Never consult the GitHub CLI, even for a GitHub remote
   --no-cache           Rebuild images without the layer cache
   --force              Discard uncommitted changes in the checkout
   --staging            Use Let's Encrypt staging while working out the setup
@@ -608,17 +698,35 @@ kvox deploy update
 ```
 
 Brings an already-installed server up to the latest revision (or, with
-`--ref`, to a specific one): fetch, build, migrate, seed, restart, verify.
-It refuses to run at all if nothing is installed under `--apps-root` yet.
+`--ref`, to a specific one): auth, fetch, build, migrate, seed, restart,
+verify. It refuses to run at all if nothing is installed under `--apps-root`
+yet.
 
 ```bash
+kvox deploy update --check
 kvox deploy update --ref v1.4.0
 ```
+
+`--check` answers "is there anything to update, and what?" without doing
+it: it fetches, then prints `current <sha12> → latest <sha12>, N commits
+behind` followed by the commit subjects (or `already up to date at
+<sha12>`), records the result as `remote` in `deploy-info/info.json` —
+which is what the About page reads — and exits `0` either way, with nothing
+checked out, built or written to the state file. `--json` prints that
+object (`current`, `latest`, `commitsBehind`, `commits`, `checkedAt`) on
+stdout. A plain `update` prints the same block before it builds, so you see
+what is about to be applied; there is deliberately no auto-update when
+behind and no update cron.
 
 If the resolved ref's commit hasn't moved since the last successful run,
 `update` exits `0` **without doing anything** — no rebuild, no restart —
 which is what makes it safe to run unattended, e.g. from cron. `--force`
 rebuilds anyway even when the revision is unchanged.
+
+The `auth` step runs `gh auth status` and `gh auth setup-git` on every
+update for a GitHub remote — idempotently, so a server whose git config was
+reset heals here rather than stalling on git's own password prompt. A
+logged-out `gh` stops the update with exit `6` before the fetch.
 
 The database seed **re-runs by default** on every `update`. The seed is
 entirely upserts, and re-running it is the only way a permission or role a
@@ -648,6 +756,8 @@ Options:
                      "/opt/infra/apps")
   --name <app>       App folder and compose project name
   --root <dir>       Deployment directory, overriding --apps-root/--name
+  --check            Report what an update would apply, then stop; nothing is
+                     changed
   --ref <ref>        Branch, tag or commit to move to
   --force            Rebuild even when the revision has not changed
   --no-cache         Rebuild images without the layer cache
@@ -657,6 +767,7 @@ Options:
   --answers-file <path>  Supply such values from a .env-format file
   --skip-seed        Do not re-run the database seed
   --skip-proxy       Do not touch the reverse proxy
+  --skip-github      Never consult the GitHub CLI, even for a GitHub remote
   --json             Print a machine-readable result on stdout
 ```
 
@@ -668,7 +779,13 @@ kvox deploy status
 
 Reports whether the installed app is healthy: container state, an
 immediate `/api/health/ready` poll, migration state, and — with `--domain` —
-an external HTTPS check.
+an external HTTPS check. It also runs the same fetch-and-compare
+`update --check` does (bounded to ten seconds, never cloning) and renders it
+as an `Update` line — `3 commits behind (latest <sha12>, checked just now)`
+— refreshing `remote` in `deploy-info/info.json` on the way; `--json`
+includes it as `remote`. When the remote can't be reached the line reads
+`update check: unavailable (<reason>)` and the verdict is unaffected:
+"is it serving?" and "is it current?" are different questions.
 
 ```bash
 kvox deploy status --domain app.example.com
