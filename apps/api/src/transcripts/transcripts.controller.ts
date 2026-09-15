@@ -269,10 +269,11 @@ export class TranscriptsController {
   @ApiOperation({
     summary: 'Home-page summary',
     description:
-      'Three lists and four counts in one request: what is still in flight, the eight most ' +
+      'Four lists and four counts in one request: what is still in flight, the eight most ' +
       'recently touched transcripts this caller owns, the eight most recent shared with ' +
-      'them, and the totals. Exists so the home page renders in one round trip rather than ' +
-      'four.',
+      'them, the eight most recent of their own that failed, and the totals. Exists so the ' +
+      'home page renders in one round trip rather than five. `failed` is capped at eight ' +
+      'and owner-scoped; `counts.failed` is the true total.',
   })
   @ApiDataResponse(TranscriptSummaryDto, { description: 'The caller\'s transcript summary' })
   async summary(@CurrentUser('id') userId: string) {

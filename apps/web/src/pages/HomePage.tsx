@@ -7,26 +7,36 @@
  *
  * `VISION.md` describes one flow — **Capture → Correct → Transform → Use →
  * Find it again later** — and this page is its front door. Everything on it
- * answers one of five questions a person actually arrives with, in the order a
+ * answers one of six questions a person actually arrives with, in the order a
  * phone screen can afford them:
  *
  *   1. How do I capture something new?      → `HomeHero`
  *   2. How much of it is there, and where?  → `CountsStrip`
  *   3. What is happening right now?         → `InProgressSection`
- *   4. What was I working on?               → `RecentTranscripts`
- *   5. What did somebody send me?           → `SharedWithMe`
+ *   4. What went wrong?                     → `NeedsAttention`
+ *   5. What was I working on?               → `RecentTranscripts`
+ *   6. What did somebody send me?           → `SharedWithMe`
  *
- * The second question is issue #170's (epic #166, "Home at Scale"), and it is
- * the one this page could not answer once an account had more than a screenful
- * of anything: the lists below are the newest few, and a user with four hundred
- * transcripts had no way to tell that from four. The strip answers it in four
- * numbers built from the summaries already fetched — no request of its own —
- * each one a link into the library it counts. See `CountsStrip`'s own header
- * for why that is not the stats dashboard rejected below.
+ * The second and fourth are both epic #166's, and neither existed before it.
  *
- * Since issue #107 the fourth and fifth questions each have a notes half: what
- * is generating right now joins the in-progress list, and "Recent notes" sits
- * under "Recent". That is the Transform stage of the vision arriving on the
+ * The second is issue #170 ("Home at Scale"), and it is the question this page
+ * could not answer once an account had more than a screenful of anything: the
+ * lists below are the newest few, and a user with four hundred transcripts had
+ * no way to tell that from four. The strip answers it in four numbers built
+ * from the summaries already fetched — no request of its own — each one a link
+ * into the library it counts. See `CountsStrip`'s own header for why that is
+ * not the stats dashboard rejected below.
+ *
+ * The fourth is issue #171: `counts.failed` had been on this page's summary
+ * since #32 with nothing behind it, which is a number telling a user that
+ * three of their recordings did not make it and giving them nowhere to go. See
+ * `NeedsAttention`'s own header for why it sits between questions 3 and 5
+ * rather than at the top.
+ *
+ * Since issue #107 several of those questions have a notes half: what is
+ * generating right now joins the in-progress list, a note whose generation
+ * failed joins the needs-attention list (#171), and "Recent notes" sits under
+ * "Recent". That is the Transform stage of the vision arriving on the
  * page that describes it — until then this screen said "Coming soon" about a
  * feature the user could already reach from the navigation rail.
  *
@@ -121,6 +131,7 @@ import { HomeHero } from '../components/home/HomeHero';
 import { HomeSkeleton } from '../components/home/HomeSkeleton';
 import { InProgressSection } from '../components/home/InProgressSection';
 import { JourneyEmptyState } from '../components/home/JourneyEmptyState';
+import { NeedsAttention } from '../components/home/NeedsAttention';
 import { RecentNotes } from '../components/home/RecentNotes';
 import { RecentTranscripts } from '../components/home/RecentTranscripts';
 import { SharedWithMe } from '../components/home/SharedWithMe';
@@ -135,7 +146,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const isMounted = useIsMounted();
   const { hasPermission } = usePermissions();
-  const { summary, isLoading, error } = useTranscriptSummary();
+  const { summary, isLoading, error, refresh } = useTranscriptSummary();
 
   // THE PERMISSION GATE IS A HOOK ARGUMENT, NOT A CONDITIONAL MOUNT. A hook
   // cannot be called conditionally, and `enabled: false` issues no request at
@@ -149,6 +160,11 @@ export default function HomePage() {
   // enforces on `POST /api/notes`, which is also what `App.tsx` guards
   // `/notes/new` with.
   const canWriteNotes = hasPermission('notes:write');
+  // The exact string `transcripts.controller.ts` enforces on `POST
+  // /api/transcripts/:id/retry`, read here beside the notes pair rather than
+  // inside `NeedsAttention` for the reason stated just above: one read, one
+  // place for this screen to be right or wrong about this user.
+  const canWriteTranscripts = hasPermission('transcripts:write');
   const notes = useNoteSummary({ enabled: canReadNotes });
 
   const [transcriptionAvailable, setTranscriptionAvailable] = useState(false);
@@ -192,6 +208,7 @@ export default function HomePage() {
   const inProgress = summary?.inProgress ?? [];
   const recent = summary?.recent ?? [];
   const sharedWithMe = summary?.sharedWithMe ?? [];
+  const failed = summary?.failed ?? [];
 
   /**
    * Nothing of their own AND nothing shared AND nothing in flight.
@@ -283,6 +300,46 @@ export default function HomePage() {
           />
         ) : (
           <>
+            {/* ⚠ UNDER `InProgressSection`, ABOVE `RecentTranscripts`, and the
+                position between those two is the decision (#171).
+
+                "What is happening right now?" and "what went wrong two hours
+                ago?" are different questions, and the first one wins the top
+                of the page because its rows are the ones that STOP BEING
+                ACTIONABLE. A live upload's pause and cancel controls exist
+                only in this tab and only while the bytes are moving; a
+                transcript that failed at lunchtime will still be failed, and
+                still retryable, tomorrow. Putting a list of settled failures
+                above a running upload would also mean the section a user sees
+                immediately after pressing "New transcript" is the one about
+                older work that did not happen.
+
+                It sits ABOVE "Recent" for the mirror-image reason: a failed
+                recording is not "recent work you might like to revisit", it is
+                work that never happened, and burying it under the grid of
+                everything that went fine is how a count nobody acts on became
+                a count nobody acts on in the first place.
+
+                INSIDE the non-`isNewUser` branch, so the first-run walkthrough
+                is never accompanied by a list of failures. That is belt and
+                braces rather than a reachable state — `isNewUser` requires
+                `recent` to be empty, and a failed transcript is in `recent`
+                too — but structure is a better guarantee than arithmetic. */}
+            <NeedsAttention
+              transcripts={failed}
+              transcriptTotal={summary?.counts.failed ?? 0}
+              // `[]` without `notes:read`: there is no notes summary for that
+              // user to have failures in, and the hook is disabled entirely.
+              notes={notes.summary?.failed ?? []}
+              noteTotal={notes.summary?.counts.failed ?? 0}
+              canRetryTranscripts={canWriteTranscripts}
+              canRetryNotes={canWriteNotes}
+              // Two refreshes, never one — see the component's header. A
+              // retried transcript leaves the transcript summary's `failed`
+              // list; nothing about the notes summary changed.
+              onTranscriptRetried={() => void refresh()}
+              onNoteRetried={() => void notes.refresh()}
+            />
             <RecentTranscripts items={recent} />
             {/* ⚠ `notes.summary !== null || notes.isLoading` IS THE LOAD-BEARING
                 CLAUSE, and it is the same one `isNewUser` needs above. A notes

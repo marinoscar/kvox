@@ -249,6 +249,11 @@ export const handlers = [
         inProgress: [],
         recent: [],
         sharedWithMe: [],
+        // `failed` since #171 — the same shape the API answers with, so the
+        // quietest possible answer stays a COMPLETE one. A default missing a
+        // list the page reads is a default that makes every suite mounting
+        // `<App />` exercise a `?? []` fallback instead of the real payload.
+        failed: [],
         counts: { owned: 0, shared: 0, inProgress: 0, failed: 0 },
       },
     });

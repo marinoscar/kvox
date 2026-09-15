@@ -736,6 +736,41 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       expect(summary.counts.shared).toBeGreaterThan(0);
     });
 
+    // Issue #171 (epic #166): the summary's `failed` list is OWNER-SCOPED,
+    // unlike `inProgress`, which unions the caller's shares. Retry is
+    // owner-only, so a failure on somebody else's recording is an item this
+    // caller could not act on — and a "Needs attention" section is a promise
+    // that every row in it is theirs to fix. Proved here rather than against a
+    // mock because it is a claim about which ROWS two real queries return for
+    // two real users over one real `transcript_shares` row.
+    it('keeps a SHARED failed transcript out of the viewer\'s `failed` list (#171)', async () => {
+      const seeded = await seed();
+
+      await prisma.transcript.update({
+        where: { id: seeded.transcriptId },
+        data: {
+          status: 'failed',
+          transcriptionStatus: 'failed',
+          failureReason: 'The provider gave up.',
+        },
+      });
+
+      const [forViewer, forOwner] = await Promise.all([
+        transcripts.summary(viewer.id),
+        transcripts.summary(owner.id),
+      ]);
+
+      // The share is real — it is in `sharedWithMe` — so its absence from
+      // `failed` is the scope rule, not an empty fixture.
+      expect(forViewer.sharedWithMe.map((item) => item.id)).toContain(seeded.transcriptId);
+      expect(forViewer.failed.map((item) => item.id)).not.toContain(seeded.transcriptId);
+      expect(forViewer.counts.failed).toBe(0);
+
+      // And it IS in the owner's own list, newest first.
+      expect(forOwner.failed.map((item) => item.id)).toContain(seeded.transcriptId);
+      expect(forOwner.counts.failed).toBeGreaterThan(0);
+    });
+
     it('drops a shared row from the list the moment the share is revoked', async () => {
       const seeded = await seed();
 

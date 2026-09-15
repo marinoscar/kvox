@@ -168,6 +168,44 @@ run at whichever content type's cadence is faster — re-reading the quiet
 half of the page forever, on the one screen most likely to be left open
 overnight.
 
+**Epic #166 ("Home at Scale") is where that rule was tested against real
+growth**, rather than just stated. It adds four things to this page — a
+counts strip, a "Needs attention" section, a search entry point in the
+hero, and a second hero action — and the fact worth recording is that
+**none of the four added a request**.
+
+The counts strip (issue #170, `CountsStrip.tsx`) and "Needs attention"
+(issue #171, `NeedsAttention.tsx`) are both rendered entirely from data the
+two summary hooks already hold; neither reads a list of its own.
+`GET /api/transcripts/summary` grew a `failed` list alongside the `failed`
+count it already had, rather than the page growing a
+`GET /api/transcripts?status=failed` of its own — the first real exercise
+of this section's standing principle that a question one of these
+endpoints could answer is answered by extending that endpoint, not by a
+third request. The search field (issue #172, `HomeSearchField.tsx`) fires
+nothing at all: it navigates to `/transcripts?q=<term>` on submit, and it is
+the destination library that queries, never the hero. The second hero
+action (issue #173, "New note") costs no request either — it is a button
+gated on `notes:write`, a permission `HomePage` already reads for
+`RecentNotes`.
+
+**This is evidence for the rejected aggregate endpoint above, not against
+it.** Extending two independently-owned, independently-gated summary
+endpoints — one per permission — is exactly what that rejection predicted
+would keep working as the page grew, and across four additions it did:
+neither summary's shape, cadence or authorisation had to change for the
+other's sake.
+
+The counts strip's tiles are deep links (`/transcripts`,
+`/transcripts?scope=shared`, `/notes`, `/transcripts?status=failed`), which
+is why the transcript and notes library views (`transcriptsLibraryFilters.ts`,
+`notesLibraryFilters.ts`) now seed their `?scope=`, `?status=` and `?q=`
+filters from the URL once, on mount, rather than only from a person's own
+clicks inside the page. `?status=` remaining a filter the API itself
+applies — rather than the status control moving entirely into client-only
+state — is also what keeps a failed item reachable by a plain URL for epic
+#162, which removes the status filter control from the library UI.
+
 ## 3. Segment playback
 
 Issue #108 adds a play/pause control to every transcript row (`SegmentList`)

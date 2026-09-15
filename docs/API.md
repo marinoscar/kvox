@@ -3014,10 +3014,20 @@ Each item carries an `access` field — `owner`, `editor` or `viewer` — descri
 how **this caller** reaches that row, not the owner's relationship to it.
 
 #### GET /transcripts/summary
-Three lists and four counts in one request, for the home page: `inProgress`,
-`recent` (eight), `sharedWithMe` (eight) and
+Four lists and four counts in one request, for the home page: `inProgress`,
+`recent` (eight), `sharedWithMe` (eight), `failed` (eight) and
 `counts: { owned, shared, inProgress, failed }`. Exists so the home page
-renders in one round trip rather than four.
+renders in one round trip rather than five.
+
+`failed` is the home page's "Needs attention" section (issue #171, epic #166):
+the caller's **own** failed transcripts, newest first. It is **owner-scoped**,
+unlike `inProgress`, which unions the caller's shares — retry is owner-only, so
+a transcript somebody else owns is a failure this caller cannot act on.
+
+⚠ `counts.failed` is the **true total**, never the length of `failed`. A caller
+with thirty failed recordings reads `30` in the count and eight rows in the
+list; the cap is a property of the summary, not of how much is wrong. The full
+set is `GET /transcripts?status=failed&scope=owned`.
 
 **Requires:** `transcripts:read`
 
