@@ -356,6 +356,120 @@ describe('HomePage — the hero', () => {
 });
 
 // =============================================================================
+// The New note hero action — issue #173, epic #166
+// =============================================================================
+
+describe('HomePage — the New note hero action', () => {
+  /**
+   * Scoped to the hero's own region, ALWAYS.
+   *
+   * `RecentNotes`' `total === 0` zero-state renders its own "New note" button
+   * for the same user, deliberately and unchanged by #173 — so a bare
+   * `getByRole('button', { name: 'New note' })` would either find two nodes and
+   * throw, or (worse, once the fixtures change) silently assert the wrong one.
+   */
+  function hero() {
+    return within(screen.getByRole('region', { name: 'Hi, Test' }));
+  }
+
+  it('offers New note to a user holding notes:write', async () => {
+    renderHome();
+    await waitForLoaded();
+
+    expect(hero().getByRole('button', { name: 'New note' })).toBeEnabled();
+  });
+
+  it('sends that user to the New-note flow', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+
+    await user.click(hero().getByRole('button', { name: 'New note' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/notes/new');
+  });
+
+  it('withholds it from a user who may READ notes but not write them', async () => {
+    // The exact string, isolated: `notes.controller.ts` enforces `notes:write`
+    // on `POST /api/notes` and `App.tsx` guards `/notes/new` with it, so
+    // `notes:read` alone must not reach this action.
+    renderHome({
+      ...homeUser,
+      permissions: homeUser.permissions.filter((permission) => permission !== 'notes:write'),
+    });
+    await waitForLoaded();
+
+    expect(hero().queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();
+  });
+
+  it('withholds it from a user with no notes permissions at all', async () => {
+    renderHome(noNotesUser);
+    await waitForLoaded();
+
+    expect(hero().queryByRole('button', { name: 'New note' })).not.toBeInTheDocument();
+  });
+
+  it('keeps New transcript as the hero primary beside it', async () => {
+    renderHome();
+    await waitForLoaded();
+
+    expect(hero().getByRole('button', { name: 'New transcript' })).toHaveClass(
+      'MuiButton-contained',
+    );
+    expect(hero().getByRole('button', { name: 'New note' })).toHaveClass('MuiButton-outlined');
+  });
+
+  it('leaves RecentNotes\' own zero-state button in place', async () => {
+    // NOT a duplicate to be tidied away: the zero-state button sits in a card
+    // that explains what a note IS to the one account that has never generated
+    // one. Removing it would take the action away from exactly the user who
+    // needs the explanation attached to it.
+    respondWith(summary({ recent: [transcript()] }), { notes: noteSummary() });
+    renderHome();
+    await screen.findByRole('heading', { name: 'Turn a transcript into a note' });
+
+    expect(
+      within(screen.getByRole('region', { name: 'Recent notes' })).getByRole('button', {
+        name: 'New note',
+      }),
+    ).toBeInTheDocument();
+    expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
+  });
+
+  it('fires NO additional network request of its own', async () => {
+    // The action costs nothing: there is no `GET /api/ai/config` probe behind
+    // it and no fourth call on the landing screen. The page's rule stays "one
+    // summary request per content type, plus the one capability probe".
+    const paths: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      paths.push(new URL(request.url).pathname);
+    });
+    try {
+      renderHome();
+      await waitForLoaded();
+      await waitFor(() => expect(noteSummaryRequests).toBe(1));
+      expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
+
+      expect([...paths].sort()).toEqual([
+        '/api/notes/summary',
+        '/api/transcription/config',
+        '/api/transcripts/summary',
+      ]);
+    } finally {
+      server.events.removeAllListeners();
+    }
+  });
+
+  it('has no accessibility violations with both hero actions present', async () => {
+    const { container } = renderHome();
+    await waitForLoaded();
+    await screen.findByRole('button', { name: 'New transcript' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
 // The template placeholder is gone
 // =============================================================================
 
