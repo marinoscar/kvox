@@ -72,6 +72,8 @@ import type {
   TranscriptSummary,
 } from '../services/transcripts';
 import { isTranscriptInFlight } from '../utils/transcriptDisplay';
+import { reconcileFeed } from '../utils/feedReconcile';
+import type { FeedState } from '../utils/feedReconcile';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useIsMounted } from './useIsMounted';
 import { useVisiblePolling } from './useVisiblePolling';
@@ -145,7 +147,15 @@ export interface UseTranscriptsResult {
   isLoadingMore: boolean;
   /** Append the next page. A no-op when there is none, or while one is loading. */
   loadMore: () => Promise<void>;
-  /** Re-run the current query from the top. */
+  /**
+   * Re-read page one INTO the accumulated list — a revalidation, not a reset.
+   *
+   * It used to reset to the first page, and that was issue #167: a `refresh()`
+   * after a row action threw away every page the user had pressed "Load more"
+   * for. New rows appear at the top, changed rows update in place, rows removed
+   * from page one's window disappear, and everything the user had already
+   * loaded below that window stays loaded. See `utils/feedReconcile.ts`.
+   */
   refresh: () => Promise<void>;
 }
 
@@ -162,10 +172,38 @@ export interface UseTranscriptsOptions {
  *
  * CURSOR-PAGINATED, never offset: the list is ordered by `updatedAt` and every
  * pipeline transition rewrites that column, so offset paging over it skips rows
- * and repeats others while a user scrolls. `loadMore` APPENDS rather than
- * replacing, and `refresh` resets to the first page — the two are different
- * operations and sharing one state setter between them is how a "load more"
- * quietly starts truncating the list.
+ * and repeats others while a user scrolls.
+ *
+ * =============================================================================
+ * A BACKGROUND READ REVALIDATES; ONLY A NEW QUESTION RESETS
+ * =============================================================================
+ *
+ * Issue #167. This list is live — a 20-second poll, a fetch when the tab
+ * regains focus, a `transcripts.*` notification effect, and a `refresh()` after
+ * every row action — and all four re-read PAGE ONE. Replacing the held rows
+ * with that page, which is what this hook used to do, silently collapsed two
+ * `loadMore` presses' worth of rows back to twenty, several times a minute,
+ * with no interaction from the user.
+ *
+ * So `load` takes an explicit MODE rather than a `showLoading` boolean:
+ *
+ *   • `'reset'` — the question changed. Adopt the page wholesale and raise
+ *     `isLoading`.
+ *   • `'revalidate'` — the same question, asked again in the background. Merge
+ *     the page into what is already held, through `reconcileFeed`, and never
+ *     raise `isLoading` (a spinner every twenty seconds over data that is
+ *     already correct is the fastest way to make a live list unusable).
+ *
+ * THE MODE IS THE RIGHT DISCRIMINATOR because `load`'s identity changes exactly
+ * when the query does — `scope`, `q` and `status` are its only deps — so the
+ * single call site that passes `'reset'` (the effect keyed on `load`) is
+ * precisely the "start over" case. Reconciling there would splice rows matching
+ * the OLD filter into the answer to a new one.
+ *
+ * `loadMore` APPENDS, and it is still a different operation from both: it reads
+ * a LATER page and dedupes on id. The state it shares with them is one object
+ * (`{ items, nextCursor }`) so the rows and the cursor that describes where
+ * they stop can never be updated in two places and disagree.
  */
 export function useTranscripts(
   scope: TranscriptScope,
@@ -173,8 +211,19 @@ export function useTranscripts(
 ): UseTranscriptsResult {
   const { q, status, pollIntervalMs = TRANSCRIPT_IDLE_POLL_MS } = options;
 
-  const [transcripts, setTranscripts] = useState<TranscriptListItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  /**
+   * The rows and their cursor, in ONE state value.
+   *
+   * Not two `useState`s. Every write below is a FUNCTIONAL update, because
+   * `load` is a `useCallback` whose deps deliberately exclude the list — a
+   * closure over `transcripts`/`nextCursor` here would be stale on exactly the
+   * poll that matters and would reintroduce the truncation this fixes.
+   */
+  const [feed, setFeed] = useState<FeedState<TranscriptListItem>>({
+    items: [],
+    nextCursor: null,
+  });
+  const { items: transcripts, nextCursor } = feed;
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,15 +241,22 @@ export function useTranscripts(
   const requestToken = useRef(0);
 
   const load = useCallback(
-    async (showLoading: boolean) => {
+    async (mode: 'reset' | 'revalidate') => {
       const token = (requestToken.current += 1);
-      if (showLoading) setIsLoading(true);
+      if (mode === 'reset') setIsLoading(true);
       try {
         const params: TranscriptListParams = { scope, q, status, limit: 20 };
         const response = await getTranscripts(params);
         if (!isMounted() || token !== requestToken.current) return;
-        setTranscripts(response.items);
-        setNextCursor(response.nextCursor);
+        if (mode === 'reset') {
+          // A new question. Whatever was accumulated answered a different one.
+          setFeed({ items: response.items, nextCursor: response.nextCursor });
+        } else {
+          // The same question. Merge page one back into the accumulated list —
+          // items and cursor together, inside one updater, so they cannot
+          // disagree. See `utils/feedReconcile.ts` for what the merge buys.
+          setFeed((current) => reconcileFeed(current, response));
+        }
         setError(null);
       } catch (err) {
         if (!isMounted() || token !== requestToken.current) return;
@@ -212,20 +268,23 @@ export function useTranscripts(
     [isMounted, q, scope, status],
   );
 
+  // THE ONLY `'reset'` CALL SITE. This effect fires on mount and again whenever
+  // `load`'s identity changes, which is exactly when `scope`/`q`/`status` do —
+  // so "this effect ran" and "the question changed" are the same event.
   useEffect(() => {
-    void load(true);
+    void load('reset');
   }, [load]);
 
-  // A POLL DOES NOT RAISE THE LOADING FLAG — the rows stay on screen and keep
-  // their scroll offset. A spinner every twenty seconds over data that is
-  // already correct is the fastest way to make a live list unusable.
-  useVisiblePolling(() => void load(false), pollIntervalMs);
+  // A POLL REVALIDATES — it does not raise the loading flag, and it does not
+  // throw away pages the user loaded. The rows stay on screen and keep their
+  // scroll offset.
+  useVisiblePolling(() => void load('revalidate'), pollIntervalMs);
 
-  // The stream's fast path. Same refetch, no loading flag, for the same reason.
+  // The stream's fast path. Same revalidation, for the same reasons.
   const latestEventId = useLatestTranscriptEventId();
   useEffect(() => {
     if (!latestEventId) return;
-    void load(false);
+    void load('revalidate');
   }, [latestEventId, load]);
 
   const loadMore = useCallback(async () => {
@@ -244,11 +303,15 @@ export function useTranscripts(
       // requests can legitimately appear on both pages — cursor paging bounds
       // the window, it does not freeze the ordering — and React would then
       // warn about a duplicate key while rendering the row twice.
-      setTranscripts((current) => {
-        const seen = new Set(current.map((item) => item.id));
-        return [...current, ...response.items.filter((item) => !seen.has(item.id))];
+      setFeed((current) => {
+        const seen = new Set(current.items.map((item) => item.id));
+        return {
+          items: [...current.items, ...response.items.filter((item) => !seen.has(item.id))],
+          // This page's own cursor, unlike a revalidation's: `loadMore` is the
+          // operation that actually advances the window.
+          nextCursor: response.nextCursor,
+        };
       });
-      setNextCursor(response.nextCursor);
       setError(null);
     } catch (err) {
       if (isMounted()) setError(messageFor(err, 'Failed to load more transcripts'));
@@ -257,7 +320,7 @@ export function useTranscripts(
     }
   }, [isLoadingMore, isMounted, nextCursor, q, scope, status]);
 
-  const refresh = useCallback(() => load(false), [load]);
+  const refresh = useCallback(() => load('revalidate'), [load]);
 
   return { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
 }
