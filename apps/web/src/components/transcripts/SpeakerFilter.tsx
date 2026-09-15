@@ -37,7 +37,7 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
 import { useTheme } from '@mui/material/styles';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { TranscriptSegment, TranscriptSpeaker } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
@@ -62,6 +62,23 @@ export interface SpeakerStat {
  * an edit still appears, at zero, rather than silently vanishing from a filter
  * the user may have applied.
  */
+/**
+ * The right-edge fade the `chips` row wears while it can still scroll right.
+ *
+ * A MASK, not an overlaid gradient `<Box>`. The row sits on whatever ground the
+ * page gives it (a `Paper`, the page background, either theme), so a painted
+ * gradient would have to name a colour and would be wrong on one of them; a
+ * mask fades the row's own pixels to transparent and is correct on every
+ * ground by construction.
+ *
+ * It is also invisible to assistive technology, which is the point: the chip
+ * under the fade is still in the DOM, still focusable, still has its accessible
+ * name, and a screen reader never learns the fade exists. An `aria-hidden`
+ * overlay would be equally silent but would additionally have to be kept out of
+ * the way of pointer events; a mask cannot intercept a tap at all.
+ */
+const FADE_MASK = 'linear-gradient(to right, black calc(100% - 32px), transparent)';
+
 export function computeSpeakerStats(
   speakers: readonly TranscriptSpeaker[],
   segments: readonly TranscriptSegment[],
@@ -132,6 +149,53 @@ export function SpeakerFilter({
   const selected = useMemo(() => new Set(selectedSpeakerIds), [selectedSpeakerIds]);
   const ticked = useMemo(() => new Set(mergeSelection ?? []), [mergeSelection]);
 
+  /**
+   * Whether the `chips` row has content still to the right of what is shown —
+   * the one condition the fade is allowed to appear under, because a fade on a
+   * row that cannot scroll is a lie about there being more.
+   *
+   * ⚠ MEASURED, NOT a `useMediaQuery`. This is deliberately NOT a sixth
+   * coupled breakpoint gate (`common/Layout.tsx` documents five, and they move
+   * together or not at all): "does this row overflow" is a question about
+   * CONTENT width — two speakers named "Ana" and "Ben" do not overflow a 360px
+   * phone while six with long names overflow a tablet — and no viewport
+   * threshold answers it. Reading the element is the only honest source.
+   *
+   * The rejected alternative is a pair of scroll-arrow buttons. They add two
+   * tap targets and roughly 80px of width to a row whose entire problem is that
+   * it is too narrow, to duplicate a gesture (swipe) the row already supports
+   * natively on every phone.
+   */
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    const node = scrollerRef.current;
+    if (!node) return undefined;
+
+    // The `- 1` absorbs sub-pixel rounding: a row scrolled fully to the end
+    // routinely reports a scrollLeft a fraction short of the difference, and
+    // without the epsilon the fade would never quite switch off.
+    const measure = () =>
+      setCanScrollRight(node.scrollLeft + node.clientWidth < node.scrollWidth - 1);
+
+    measure();
+    node.addEventListener('scroll', measure, { passive: true });
+    // `ResizeObserver` is absent in some jsdom configurations, so this is a
+    // capability check rather than an assumption; without it the row simply
+    // keeps whatever its mount-time measurement said.
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(node);
+
+    return () => {
+      node.removeEventListener('scroll', measure);
+      observer?.disconnect();
+    };
+    // Re-measured when the number of chips changes, which is the only way the
+    // row's content width moves without the element itself resizing.
+  }, [stats.length, variant]);
+
   if (speakers.length === 0) return null;
 
   /**
@@ -149,12 +213,28 @@ export function SpeakerFilter({
   if (variant === 'chips') {
     return (
       <Box
+        ref={scrollerRef}
         role="group"
         aria-label="Speakers"
+        // The measured state, mirrored onto the element. The fade itself lives
+        // in an emotion-generated class carrying `mask-image`, a property jsdom
+        // neither parses nor reports through `getComputedStyle` — so a test can
+        // only assert on the fade through something it CAN see. This attribute
+        // is that something; it is inert at runtime and costs one string.
+        data-can-scroll-right={canScrollRight ? 'true' : undefined}
         sx={{
           display: 'flex',
           gap: 1,
           overflowX: 'auto',
+          // `proximity`, not `mandatory`: a chip row is scanned as much as it
+          // is navigated, and `mandatory` would yank a half-scrolled row back
+          // to a chip edge on every release, which reads as the row fighting
+          // the finger.
+          scrollSnapType: 'x proximity',
+          // So a snapped chip lands clear of the container's own edge rather
+          // than flush against it, matching the page gutter.
+          scrollPaddingInline: 16,
+          ...(canScrollRight ? { maskImage: FADE_MASK, WebkitMaskImage: FADE_MASK } : {}),
           // The row is a scroll container, so it needs its own bottom padding
           // for the scrollbar on platforms that reserve space for one, and
           // `pb` on the parent would be inside the clipped area.
@@ -196,6 +276,7 @@ export function SpeakerFilter({
               }
               sx={{
                 flexShrink: 0,
+                scrollSnapAlign: 'start',
                 borderColor: color,
                 // The colour is the speaker's identity, so it has to survive
                 // both states: a filled chip carries it as the ground, an

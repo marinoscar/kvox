@@ -172,7 +172,7 @@ describe('Admin AboutPage — the three sections', () => {
     expect(factValue('Last command')).toHaveTextContent('update');
     expect(factValue('Deployed by')).toHaveTextContent('kvox 1.4.0');
     expect(factValue('Update')).toHaveTextContent(
-      'Run kvox deploy update --check on the server to refresh.',
+      'Run deploy update --check with the deploy CLI on the server to refresh.',
     );
   });
 
