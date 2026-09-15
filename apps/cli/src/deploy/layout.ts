@@ -16,6 +16,8 @@ import { NotInstalledError, readState, type DeployState } from './state.js';
 //     repo/                 the CLI's own clone
 //     logs/                 the journal
 //     data/                 bind-mounted persistent data
+//     deploy-info/          info.json, bind-mounted read-only into the API (#120)
+//     .env                  the environment, 0600; linked from repo/infra/compose (#120)
 //     .appctl-deploy.json   the state file
 //
 // and `<name>` doubles as the docker compose PROJECT name, so the containers

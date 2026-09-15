@@ -5,6 +5,7 @@ import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
 import { ALL_CHECKS, DEVNET_CHECK_ID, checksPassed, runChecks } from './checks/index.js';
+import { writeDeployInfo } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
@@ -16,6 +17,7 @@ import { openJournal, type Journal } from './journal.js';
 import { DEFAULT_PROXY_ROOT, projectNameFor } from './layout.js';
 import { certificateStatus, installVhost, issueCertificate, type ProxyTarget } from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
+import { collectServerFacts } from './server-facts.js';
 import { requireState, writeState, type DeployState } from './state.js';
 import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { composeArgv, composeCwd, secretsFrom } from './install.js';
@@ -488,6 +490,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
   }
 
   if (context.unchanged === true) {
+    // Nothing was deployed, so the state stands - but deploy-info is still
+    // refreshed from it: the host facts may have moved (a kernel upgrade), and
+    // a deployment from before #120 gets its first info.json here rather than
+    // only once the remote moves.
+    await refreshDeployInfo(context, state);
     journal.finish('success', 'already up to date');
     return {
       changed: false,
@@ -497,15 +504,18 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     };
   }
 
-  writeState({
+  const deployed = {
     ...state,
     ref: context.target?.ref ?? state.ref,
     commitSha: context.commitSha ?? state.commitSha,
     previousSha: context.previousSha,
+    envPath: envFilePath(options.deployRoot),
     lastDeployedAt: new Date().toISOString(),
     lastCommand: 'update',
     appctlVersion: CLI_VERSION,
-  } as DeployState);
+  } as DeployState;
+  writeState(deployed);
+  await refreshDeployInfo(context, deployed);
 
   journal.finish('success');
 
@@ -516,6 +526,16 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     journalPath: journal.path,
     durationMs: Date.now() - startedAt,
   };
+}
+
+/** Writes deploy-info from the state, after `writeState` - never before. */
+async function refreshDeployInfo(context: UpdateContext, state: DeployState): Promise<void> {
+  const path = writeDeployInfo(
+    context.options.deployRoot,
+    state,
+    await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
+  );
+  context.journal.line(`Wrote ${path}`);
 }
 
 export { RENEW_WITHIN_DAYS };

@@ -12,6 +12,7 @@ import {
   requiredChecks,
   runChecks,
 } from './checks/index.js';
+import { writeDeployInfo } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -29,6 +30,7 @@ import {
 } from './layout.js';
 import { installVhost, issueCertificate, type ProxyTarget } from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
+import { collectServerFacts } from './server-facts.js';
 import { readState, writeState, type DeployState } from './state.js';
 import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
@@ -592,7 +594,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   }
 
   const now = new Date().toISOString();
-  writeState({
+  const state = {
     version: 1,
     repoUrl: context.target?.url ?? '',
     ref: context.target?.ref ?? '',
@@ -609,7 +611,17 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     lastCommand: 'install',
     appctlVersion: CLI_VERSION,
     completedSteps: result.completed,
-  } as DeployState);
+  } as DeployState;
+  writeState(state);
+
+  // AFTER the state: deploy-info is derived from it, and it is the document
+  // the running application reads about itself (deploy-info.ts).
+  const infoPath = writeDeployInfo(
+    options.deployRoot,
+    state,
+    await collectServerFacts({ runCommand, root: options.deployRoot }),
+  );
+  journal.line(`Wrote ${infoPath}`);
 
   journal.finish('success');
 
