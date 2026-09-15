@@ -1,5 +1,3 @@
-import { basename } from 'node:path';
-
 import { CLI_NAME } from '../../branding.js';
 import type { Check, CheckContext, CheckResult } from './types.js';
 import {
@@ -272,10 +270,13 @@ const bindPortFree: Check = {
       '--format',
       '{{.Names}}',
     ]);
-    const project = basename(context.deployRoot);
+    // Compose names containers `<project>-<service>-<n>`, and the project is
+    // pinned to the app name (#119). A prefix match, not a substring one: an
+    // app called `app` must not claim `other-app-nginx-1`.
     const names = owner.stdout.split('\n').filter((name) => name !== '');
+    const own = context.name === undefined ? undefined : `${context.name}-`;
 
-    if (names.some((name) => name.includes(project))) {
+    if (own !== undefined && names.some((name) => name.startsWith(own))) {
       return {
         status: 'pass',
         detail: `held by this deployment (${names.join(', ')})`,

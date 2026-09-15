@@ -74,6 +74,7 @@ function context(overrides: Partial<CheckContext> = {}): CheckContext {
   return {
     runCommand: fakeRunCommand(HEALTHY),
     deployRoot: '/opt/infra/apps/demo',
+    name: 'demo',
     bindPort: 3535,
     proxyRoot: '/opt/infra/proxy',
     fs: permissiveFs,
@@ -294,6 +295,58 @@ describe('bind-port-free', () => {
 
     expect(result.status).toBe('pass');
     expect(result.detail).toContain('this deployment');
+  });
+
+  it('recognises its own containers by the compose project name, not the directory', async () => {
+    // The project is pinned with `-p <name>` (#119); a deployment whose
+    // directory happens to differ from its name still owns `<name>-nginx-1`.
+    const result = await find('bind-port-free').run(
+      context({
+        deployRoot: '/srv/somewhere-else',
+        name: 'demo',
+        portFree: async () => false,
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps')
+            ? { exitCode: 0, stdout: 'demo-nginx-1' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('pass');
+  });
+
+  it('does not claim a container that merely contains the name', async () => {
+    const result = await find('bind-port-free').run(
+      context({
+        name: 'app',
+        portFree: async () => false,
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps')
+            ? { exitCode: 0, stdout: 'other-app-nginx-1' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('other-app-nginx-1');
+  });
+
+  it('cannot recognise anything as its own before a name is chosen', async () => {
+    const result = await find('bind-port-free').run(
+      context({
+        name: undefined,
+        portFree: async () => false,
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps')
+            ? { exitCode: 0, stdout: 'demo-nginx-1' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
   });
 
   it('fails when the port belongs to something else, naming it', async () => {
