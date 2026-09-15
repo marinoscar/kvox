@@ -50,22 +50,19 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CircularProgress from '@mui/material/CircularProgress';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
 import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
@@ -221,7 +218,7 @@ export function NotesLibraryView() {
    * view's first request an unfiltered one, rendered and then replaced 300 ms
    * later by the filtered list the link asked for.
    */
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchFromQuery(searchParams));
   const [debouncedSearch, setDebouncedSearch] = useState(() => searchFromQuery(searchParams));
   const [status, setStatus] = useState<NoteStatus | 'all'>(() =>
@@ -272,6 +269,31 @@ export function NotesLibraryView() {
   const canCreate = hasPermission('notes:write');
 
   /**
+   * The offered filter's own LABEL for an active `?status=`, or `null`.
+   *
+   * Read from `NOTE_STATUS_FILTERS` rather than title-casing the raw API value,
+   * so the wording stays in the one place that already owns it — the same list
+   * `noteStatusFromQuery` validates against.
+   */
+  const activeStatusLabel = useMemo(() => {
+    if (status === 'all') return null;
+    return NOTE_STATUS_FILTERS.find((option) => option.value === status)?.label ?? null;
+  }, [status]);
+
+  /**
+   * Clearing has to clear the URL too, not only the state — `?status=` SEEDS
+   * this view, and #168 makes remounts routine. `replace: true` so Back does
+   * not reapply the filter the user just dismissed.
+   * `TranscriptsLibraryView` carries the long form.
+   */
+  const clearStatusFilter = useCallback(() => {
+    setStatus('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  /**
    * `new Date()` is read HERE and passed down, rather than inside the grouper —
    * one clock reading per render, so every row in one paint is bucketed against
    * the same instant. `TranscriptsLibraryView` carries the long form.
@@ -285,6 +307,9 @@ export function NotesLibraryView() {
 
   return (
     <Box>
+      {/* ONE SEARCH BOX — see `TranscriptsLibraryView`, which carries the
+          argument (#193). The twinning is the point: two library surfaces with
+          two different filter bars would make one product feel like two. */}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
         <TextField
           size="small"
@@ -293,22 +318,11 @@ export function NotesLibraryView() {
           onChange={(event) => setSearch(event.target.value)}
           sx={{ flexGrow: 1 }}
         />
-        <FormControl size="small" sx={{ minWidth: 180 }}>
-          <InputLabel id="note-status-filter">Status</InputLabel>
-          <Select
-            labelId="note-status-filter"
-            label="Status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as NoteStatus | 'all')}
-          >
-            {NOTE_STATUS_FILTERS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
       </Stack>
+
+      {activeStatusLabel && (
+        <ActiveStatusFilterChip label={activeStatusLabel} onClear={clearStatusFilter} />
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -344,7 +358,11 @@ export function NotesLibraryView() {
                 No notes match those filters
               </Typography>
               <Typography color="text.secondary">
-                Try a different search term, or set the status filter back to Any.
+                {/* The wording tracks the controls that actually exist
+                    (#193). "Set the status filter back to Any" named a
+                    <Select> that is gone; the status filter now arrives in the
+                    URL and is cleared from the chip above the feed. */}
+                Try a different search term{activeStatusLabel ? ', or clear the status filter above' : ''}.
               </Typography>
             </>
           ) : (

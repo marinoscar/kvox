@@ -1,11 +1,23 @@
 /**
- * The library's status filter options — issue #30, epic #19.
+ * The library's status filter options — issue #30, epic #19; the URL seeds are
+ * #170, epic #166.
  *
  * A SEPARATE MODULE from the page, so a test can assert the list without
  * mounting the page, and so the "Any" sentinel is defined once. `'all'` is a
  * UI value the API knows nothing about: `GET /api/transcripts` filters by
  * OMITTING `status`, never by a magic value, so the page translates rather than
  * forwarding it.
+ *
+ * ⚠ THIS LIST NO LONGER FEEDS A `<Select>` — issue #193 removed it. The filter
+ * bar is one search box, and a status now reaches the library only through
+ * `?status=`, which something elsewhere hands the user (the home counts strip
+ * is the first caller). The list has two remaining jobs, and both are why it
+ * did NOT go with the dropdown:
+ *
+ *   1. It is the ALLOWLIST `transcriptStatusFromQuery` validates against, so a
+ *      status the API knows and this page does not offer cannot seed a filter.
+ *   2. It is where the chip above the feed gets its LABEL — "Failed", not the
+ *      raw API value — so the user-facing wording stays in one place.
  *
  * `deleting` is deliberately offered. It is a real, visible state a transcript
  * can sit in for minutes while its purge job removes multi-gigabyte objects,
@@ -86,10 +98,12 @@ export function transcriptScopeFromQuery(params: URLSearchParams): TranscriptSco
  * `?status=<value>` → the status filter, VALIDATED AGAINST THE OFFERED LIST.
  *
  * Membership of `TRANSCRIPT_STATUS_FILTERS` is the check, not membership of
- * `TranscriptStatus`: the list is what the `<Select>` can actually display, so
- * a status the API knows and this page does not offer would otherwise seed a
- * filter whose value matches no `<MenuItem>` — a control rendered blank, with
- * the list silently filtered by something the reader cannot see or undo.
+ * `TranscriptStatus`: the list is what this page can actually NAME, so a status
+ * the API knows and this page does not offer would otherwise filter the feed by
+ * something the reader cannot see or undo. Since #193 that is the chip rather
+ * than a `<Select>`, and the failure it prevents got worse rather than better —
+ * an unnamed filter used to render a blank dropdown, and would now render no
+ * chip at all, leaving a silently filtered feed with no way out of it.
  *
  * Absent, unknown, empty and `all` all answer `'all'`, which the view already
  * translates into omitting `status` from the request.

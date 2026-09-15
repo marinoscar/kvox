@@ -50,11 +50,7 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CircularProgress from '@mui/material/CircularProgress';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
@@ -67,6 +63,7 @@ import visuallyHidden from '@mui/utils/visuallyHidden';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
 import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { TranscriptRowActions } from './TranscriptRowActions';
@@ -233,7 +230,7 @@ export function TranscriptsLibraryView() {
    * actually asked for — a visible flash of the wrong list, and a wasted query
    * on the column the list is ordering by.
    */
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<ScopeTab>(() => transcriptScopeFromQuery(searchParams));
   const [search, setSearch] = useState(() => searchFromQuery(searchParams));
   const [debouncedSearch, setDebouncedSearch] = useState(() => searchFromQuery(searchParams));
@@ -348,6 +345,37 @@ export function TranscriptsLibraryView() {
   const canCreate = hasPermission('transcripts:write');
 
   /**
+   * The offered filter's own LABEL for an active `?status=`, or `null`.
+   *
+   * Read from `TRANSCRIPT_STATUS_FILTERS` rather than title-casing the raw API
+   * value, so the chip says "Failed" and the wording stays in the one place
+   * that already owns it — the same list `transcriptStatusFromQuery` validates
+   * against, so a status this page does not offer can never reach the chip.
+   */
+  const activeStatusLabel = useMemo(() => {
+    if (status === 'all') return null;
+    return TRANSCRIPT_STATUS_FILTERS.find((option) => option.value === status)?.label ?? null;
+  }, [status]);
+
+  /**
+   * Clearing has to clear the URL too, not only the state.
+   *
+   * `?status=` SEEDS this view's initial state (see
+   * `pages/transcriptsLibraryFilters.ts`), so a handler that only reset the
+   * state would be undone by the next remount — and #168 makes remounts
+   * routine, since the feed now survives a drill-down and comes back here.
+   *
+   * `replace: true`: removing an entry point is not a step in the user's
+   * history, and a push would make Back reapply the filter they just dismissed.
+   */
+  const clearStatusFilter = useCallback(() => {
+    setStatus('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  /**
    * `new Date()` is read HERE and passed down, rather than inside the grouper.
    *
    * One clock reading per render means every row in one paint is bucketed
@@ -374,6 +402,11 @@ export function TranscriptsLibraryView() {
         <Tab value="shared" label="Shared with me" />
       </Tabs>
 
+      {/* ONE SEARCH BOX. The `Status` <Select> that used to sit beside it is
+          gone (#193) — it read "Any status" essentially always, and a status is
+          a property of a row that the row's own chip already states. The
+          capability moved to the URL rather than being deleted; see
+          `ActiveStatusFilterChip`. */}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
         <TextField
           size="small"
@@ -382,22 +415,11 @@ export function TranscriptsLibraryView() {
           onChange={(event) => setSearch(event.target.value)}
           sx={{ flexGrow: 1 }}
         />
-        <FormControl size="small" sx={{ minWidth: 180 }}>
-          <InputLabel id="transcript-status-filter">Status</InputLabel>
-          <Select
-            labelId="transcript-status-filter"
-            label="Status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as TranscriptStatus | 'all')}
-          >
-            {TRANSCRIPT_STATUS_FILTERS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
       </Stack>
+
+      {activeStatusLabel && (
+        <ActiveStatusFilterChip label={activeStatusLabel} onClear={clearStatusFilter} />
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -433,7 +455,11 @@ export function TranscriptsLibraryView() {
                 No transcripts match those filters
               </Typography>
               <Typography color="text.secondary">
-                Try a different search term, or set the status filter back to Any.
+                {/* The wording tracks the controls that actually exist
+                    (#193). "Set the status filter back to Any" named a
+                    <Select> that is gone; the status filter now arrives in the
+                    URL and is cleared from the chip above the feed. */}
+                Try a different search term{activeStatusLabel ? ', or clear the status filter above' : ''}.
               </Typography>
             </>
           ) : tab === 'shared' ? (
