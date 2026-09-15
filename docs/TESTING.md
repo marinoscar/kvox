@@ -1130,8 +1130,9 @@ run.
 ### Where They Run in CI
 
 The `smoke` job in `.github/workflows/ci.yml` is the only place in this
-repository's CI where a real PostgreSQL is running (`postgres:16-alpine`, as
-a service container). That job runs the compiled API artifact end to end —
+repository's CI where a real PostgreSQL is running (`pgvector/pgvector:pg16`,
+as a service container — see issue #178 for why that image and not plain
+`postgres:16-alpine`). That job runs the compiled API artifact end to end —
 build, migrate, seed, boot — and `npm run test:db --workspace=api` is one
 step in that sequence, positioned deliberately: **after** `npm run
 prisma:migrate --workspace=api` and **before** `npm run prisma:seed

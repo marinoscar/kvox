@@ -40,7 +40,13 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    # `pgvector/pgvector:pg16`, not `postgres:16-alpine` (issue #178, epic #165)
+    # — the `vector` extension is a server-side control file, so the semantic
+    # search migration cannot run on an image that does not carry one. Same
+    # PostgreSQL major, so an existing `dev-db-data` volume is unaffected; the
+    # base OS moves Alpine → Debian, which the data directory does not see.
+    # test.compose.yml carries the full argument.
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       # These deliberately mirror base.compose.yml's own POSTGRES_* defaults, so

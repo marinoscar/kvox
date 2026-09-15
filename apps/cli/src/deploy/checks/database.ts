@@ -24,7 +24,18 @@ import type { Check, CheckContext, CheckResult } from './types.js';
 //      away the only useful information the attempt produced.
 // =============================================================================
 
-/** Pinned to the version CI runs its Postgres service container on. */
+/**
+ * The image this check borrows a `psql` CLIENT from — pinned to PostgreSQL 16,
+ * the major this repository targets.
+ *
+ * ⚠ DELIBERATELY NOT `pgvector/pgvector:pg16`, which is what CI and the two
+ * local compose overlays now run (issue #178, epic #165). Nothing here needs
+ * the `vector` extension: `vector` is a SERVER-side control file, so whether it
+ * is available is a fact about the operator's database, never about the client
+ * that connects to it. Pulling ~180 MB more onto a VPS to run `psql -c 'select
+ * 1'` would buy nothing. The sibling extension preflight asks the server, using
+ * this same small client.
+ */
 const PSQL_IMAGE = 'postgres:16-alpine';
 
 const CONNECT_TIMEOUT_MS = 5_000;
