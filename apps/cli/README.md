@@ -367,12 +367,35 @@ kvox deploy doctor --domain app.example.com
 
 Nothing is installed, written or started — it's read-only, so it's safe to
 run against a production server at any time, not just before a first
-install. It runs around 27 checks: Docker and its daemon, the Compose v2
-plugin, git, node, disk and memory headroom, the loopback port, the shared
-reverse proxy's directory and its `conf.d`/webroot being writable, certbot,
-ports 80 and 443, the proxy's current config, the external PostgreSQL
-database (reachable, credentials valid, database exists, can create tables,
-TLS), and — once `--domain` turns them on — DNS and the certificate.
+install. It runs around 32 checks, in five groups:
+
+- **Host** — Docker and its daemon, the Compose v2 plugin, git, node, disk
+  and memory headroom, the loopback port; the shared reverse proxy's
+  directory and its `conf.d`/webroot being writable; the proxy **container**
+  (found by `--proxy-container`, else whatever publishes `:443`, else
+  `proxy-nginx`), that it runs on the host network, that its config passes
+  `nginx -t` *inside* the container, and that it has IPv6 (the vhost binds
+  `[::]`); the `certbot/certbot` image being pulled (certificates are issued
+  with `docker run`, never a host `certbot`); ports 80 and 443; and, when
+  `ufw` is installed, that it allows both.
+- **GitHub CLI** — `gh` installed, `gh auth status` passing, and the
+  repository being deployed visible to that account (`gh repo view`). All
+  three are required: the server clones a private repository over HTTPS with
+  gh's token. A remote that isn't on github.com is skipped, not failed;
+  `--skip-github` skips the group.
+- **Database** — the external PostgreSQL database: reachable, credentials
+  valid, database exists, can create tables, TLS.
+- **DNS** and **TLS** — once `--domain` turns them on: the name resolves and
+  points here (`--public-ip`, or `KVOX_PUBLIC_IP`, states this server's
+  address when it sits behind NAT — no external echo service is ever asked),
+  the certificate's presence and expiry, and that something renews it
+  (`certbot.timer`, a cron line mentioning `certbot` or `renew` anywhere in
+  `/etc/cron.d`, `/etc/crontab` or `crontab -l`, or the CLI's own
+  `/etc/cron.d/kvox-certs-*`).
+
+`--skip-proxy` makes every proxy, certificate, port and DNS check report
+`skip` — it's how the pipeline runs on a box with no proxy at all, such as
+CI.
 
 ```bash
 kvox deploy doctor --json | jq '.checks[] | select(.status=="fail")'
@@ -386,13 +409,18 @@ Other flags, from `kvox deploy doctor --help`:
 
 ```
 Options:
-  --root <path>        Deployment directory (default: "/opt/infra/apps")
-  --proxy-root <path>  Shared reverse proxy directory (default:
-                       "/opt/infra/proxy")
-  --port <port>        Loopback port the proxy forwards to (default: "3535")
-  --domain <domain>    Public domain; enables the DNS and TLS checks
-  --json               Print a machine-readable report on stdout
-  --no-color           Disable colour even on a terminal
+  --root <path>             Deployment directory (default: "/opt/infra/apps")
+  --proxy-root <path>       Shared reverse proxy directory (default:
+                            "/opt/infra/proxy")
+  --port <port>             Loopback port the proxy forwards to (default: "3535")
+  --domain <domain>         Public domain; enables the DNS and TLS checks
+  --proxy-container <name>  Verify this proxy container instead of finding one
+  --public-ip <ip>          This server's public address, for the DNS check
+                            behind NAT (env: KVOX_PUBLIC_IP)
+  --skip-proxy              Skip the proxy, certificate, port and DNS checks
+  --skip-github             Skip the GitHub CLI checks (a non-GitHub remote)
+  --json                    Print a machine-readable report on stdout
+  --no-color                Disable colour even on a terminal
 ```
 
 `install` and `update` both run the same required checks as their own
