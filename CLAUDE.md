@@ -249,6 +249,13 @@ This section states the rules; that file explains why.
    - A **destination** gate (which registry card, which route) is about
      **reachability**.
    - A **tab** gate (inside one page) is about **content**.
+   Tabs are **permitted** for parallel content, never **required**: epic #45
+   made Transcripts and Notes two tabs of one `library` destination because
+   the bottom bar had no fifth slot, and epic #105 turned them into sibling
+   destinations once #106 freed one by moving `Console` off that bar. Same
+   rule, different amount of room — see
+   [`docs/specs/ux-refresh.md`](docs/specs/ux-refresh.md) §1.
+
    Conflating the two is the exact mistake epic #90 fixed:
    `SystemSettingsPage`'s three tabs (UI Settings, Feature Flags, Advanced
    JSON) were hierarchical content wearing a tab strip, not parallel content.
@@ -288,6 +295,14 @@ This section states the rules; that file explains why.
    the phone treatment to 600–899px tablets, foldables, and landscape
    phones. There is deliberately no shared constant binding these five: see
    `docs/specs/settings-ui.md` §5 for why.
+
+   ⚠ **Still exactly five.** `components/library/LibraryPageFrame.tsx` reads
+   `down('sm')` too, and it is **not** a sixth gate: it is the page-level read
+   `LibraryPage` always had, relocated when #106 split that page in two. It
+   decides where one page puts its create action (a header button or a FAB),
+   never whether a piece of app chrome mounts. The rail's collapsed *width*
+   also moved 56 → 72px in #106 while its breakpoint did not — a width is not
+   a gate.
 
 See [`docs/specs/settings-ui.md`](docs/specs/settings-ui.md) for the full
 rationale, the rejected alternatives, and the accessibility requirements.
@@ -998,6 +1013,32 @@ and [`docs/API.md`](docs/API.md#user-data).
   `docs/specs/notes.md` §8). `jobId` is `@unique`/nullable/`SetNull`; the row's own 7-day
   expiry is independent of `job.history.purge`'s retention schedule for the underlying `jobs`
   row.
+
+## Navigation Destination Model
+
+`apps/web/src/config/destinations.ts` is the single source of truth for the
+app's navigation targets — the bottom bar, the navigation rail and the avatar
+menu all read it, so none of the three can disagree about what exists or who
+may see it. Full design, with rejected alternatives, in
+[`docs/specs/ux-refresh.md`](docs/specs/ux-refresh.md) §1.
+
+**Five destinations** since epic #105: `home`, `transcripts`, `notes`,
+`settings`, `console`. Each gates on the exact permission its controller
+enforces (`transcripts:read`, `notes:read`, …), the same Settings UI Pattern
+rule 3 discipline the admin cards follow.
+
+**Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
+is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
+reached *by design* rather than by a coincidence of which permissions a user
+happens to hold. A fifth non-pinned destination is not an addition, it is a
+redesign of that bar.
+
+⚠ **`pinned` means a MODE, not a peer.** A pinned destination renders at the
+navigation rail's foot below a divider, appears in the avatar menu, and is
+**omitted from the bottom bar entirely** — the bar has no foot to pin to.
+`console` is the only one today. That is what makes the administrator's own
+phone show Home · Transcripts · Notes · Settings rather than spending a
+primary tab on an operational surface.
 
 ## Operations Admin Settings Group
 
