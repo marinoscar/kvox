@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { AiProviderRegistry } from './ai-provider.registry';
 import type {
   AiDelta,
+  AiEmbeddingCapability,
   AiProvider,
   AiProviderContext,
 } from './providers/ai-provider.interface';
@@ -144,6 +145,98 @@ describe('AiProviderRegistry', () => {
     // The default `stubProvider()` shape — registers fine, matching every test
     // above it in this file.
     expect(() => registry.register(stubProvider())).not.toThrow();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Embeddings (#183, epic #165)
+  // ---------------------------------------------------------------------------
+  //
+  // The same "both or neither" rule `modelDiscovery`/`listModels` follows, plus
+  // the one check that is genuinely load-bearing: a declared width that is not
+  // the one the vector column holds cannot be stored AT ALL, and without a boot
+  // check the first evidence of it is a Postgres type error inside a queue job.
+
+  const EMBEDDING: AiEmbeddingCapability = {
+    model: 'stub-embed-1',
+    dimensions: 1536,
+    maxInputTokens: 8191,
+    maxBatchSize: 64,
+  };
+
+  const embed = async () => ({ vectors: [], promptTokens: null, model: 'stub-embed-1' });
+
+  it('refuses a provider that declares `embedding` but implements no embed() (#183)', () => {
+    expect(() =>
+      registry.register(stubProvider({ embedding: EMBEDDING })),
+    ).toThrow(/declares an `embedding` capability but implements no embed\(\)/);
+  });
+
+  it('refuses a provider that implements embed() but declares no `embedding` (#183)', () => {
+    // The mirror case, and not a pedantic one: a method nothing advertises is
+    // one no caller can discover, so the capability would be dead code that
+    // looks alive.
+    expect(() => registry.register(stubProvider({ embed }))).toThrow(
+      /declares an embed\(\) method but no `embedding` capability/,
+    );
+  });
+
+  it('refuses an embedding width the vector column cannot hold, NAMING the provider and the width (#183)', () => {
+    // ⚠ THE LOAD-BEARING CHECK. `vector(1536)` is a contract, not a default:
+    // 768 numbers cannot be stored badly, they cannot be stored. The message
+    // has to carry both facts because the alternative failure — a type error
+    // inside `search.index` at 3am — carries neither.
+    const thrown = (() => {
+      try {
+        registry.register(
+          stubProvider({
+            id: 'narrow-vendor',
+            embedding: { ...EMBEDDING, dimensions: 768 },
+            embed,
+          }),
+        );
+        return null;
+      } catch (err) {
+        return err as Error;
+      }
+    })();
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown?.message).toContain('narrow-vendor');
+    expect(thrown?.message).toContain('768');
+    expect(thrown?.message).toContain('1536');
+  });
+
+  it('refuses a maxBatchSize of zero (#183)', () => {
+    // A zero batch size makes an indexer either loop forever taking no inputs
+    // per pass or refuse every input — both silent, both look like "search
+    // never finishes".
+    expect(() =>
+      registry.register(
+        stubProvider({ embedding: { ...EMBEDDING, maxBatchSize: 0 }, embed }),
+      ),
+    ).toThrow(/at least 1/);
+  });
+
+  it('refuses a maxInputTokens of zero (#183)', () => {
+    expect(() =>
+      registry.register(
+        stubProvider({ embedding: { ...EMBEDDING, maxInputTokens: 0 }, embed }),
+      ),
+    ).toThrow(/at least 1/);
+  });
+
+  it('accepts a coherent embedding declaration (#183)', () => {
+    expect(() =>
+      registry.register(stubProvider({ embedding: EMBEDDING, embed })),
+    ).not.toThrow();
+  });
+
+  it('accepts a provider that declares neither half — embeddings are optional (#183)', () => {
+    // The default `stubProvider()` shape. A vendor with no embeddings endpoint
+    // is a perfectly registrable chat provider; forcing it to write a throwing
+    // stub is exactly what the interface argues against.
+    expect(() => registry.register(stubProvider())).not.toThrow();
+    expect(registry.get('stub')?.embedding).toBeUndefined();
   });
 
   it('lets a later registration shadow an earlier one, with a warning', () => {
