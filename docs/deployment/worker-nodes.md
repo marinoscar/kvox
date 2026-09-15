@@ -9,7 +9,7 @@
 
 ## What a worker node is
 
-A machine running `appctl node start` that claims jobs from the application's
+A machine running `kvox node start` that claims jobs from the application's
 queue, runs them locally, and submits results. The **same handler code** runs
 on the API server or on a node — a node is an option, never a requirement, and
 a deployment with no nodes at all still executes every job type it enqueues.
@@ -40,16 +40,16 @@ node" further down.
 
 ```bash
 # 1. Enroll — device login, then mint a node credential for this machine.
-appctl node enroll
+kvox node enroll
 
 # 2. Register — create (or re-attach to) this machine's row in the fleet.
-appctl node register --concurrency 4
+kvox node register --concurrency 4
 
 # 3. Check everything before committing to it.
-appctl node doctor
+kvox node doctor
 
 # 4. Run it.
-appctl node start --daemon
+kvox node start --daemon
 ```
 
 Step 3 is worth not skipping. `doctor` reports three independent things an
@@ -79,7 +79,7 @@ needs to. Every variable either file may set —
 never hand-copied — is in `apps/cli/README.md`'s own reference; this guide
 does not restate it.
 
-> **Leave `APPCTL_NODE_NAME` and `APPCTL_NODE_ID` empty when scaling.** Setting
+> **Leave `KVOX_NODE_NAME` and `KVOX_NODE_ID` empty when scaling.** Setting
 > either makes every replica reattach to the same node row, and the server's
 > per-node claim cap is then shared between processes that each believe they
 > own it.
@@ -106,7 +106,7 @@ every tag, using the same tag conventions.
 ## Surviving a reboot
 
 ```bash
-appctl node service install
+kvox node service install
 loginctl enable-linger $USER      # ← do not skip this
 ```
 
@@ -166,7 +166,7 @@ the executor does. Nothing about a rendition is best-effort — without ffmpeg
 there is no rendition, and the rendition is the whole job.
 
 A node also needs a **network route** to the database, which nothing on this
-machine can check for you at startup. `appctl node doctor --db-host
+machine can check for you at startup. `kvox node doctor --db-host
 db.internal:5432` probes it, as a warning rather than a failure — see
 "Health checks" in [`apps/cli/README.md`](../../apps/cli/README.md#running-a-worker-node).
 
@@ -225,7 +225,7 @@ Two things to know:
    long-lived vendor key. Turning it off leaves transcoding on the API server,
    where it was before you had a fleet.
 2. **Install ffmpeg.** The container image (`apps/cli/Dockerfile`) already has
-   it. A node running outside a container gets it from `appctl node
+   it. A node running outside a container gets it from `kvox node
    install-deps`, or from your distribution's own `ffmpeg` package. Without it
    the node refuses to declare the type at startup and the transcodes stay on
    the server — a visible, correct outcome rather than a silent one.
@@ -258,8 +258,8 @@ the install. `capabilities.test.ts` asserts that in both directions.
 ## Installing dependencies
 
 ```bash
-appctl node install-deps --dry-run   # print the plan, change nothing
-appctl node install-deps
+kvox node install-deps --dry-run   # print the plan, change nothing
+kvox node install-deps
 ```
 
 Three steps ship: the worker's state directory, a Node.js version check, and
@@ -290,7 +290,7 @@ a supervisor is watching.
 `--max-old-space-size`, because Node's default old-space limit is low for a
 machine dedicated to being a worker. The original process becomes a
 signal-forwarding shim, so a container `SIGTERM` still reaches the worker and
-still drains. Set `APPCTL_HEAP_LIMIT_MB=0` when a cgroup or a PaaS already
+still drains. Set `KVOX_HEAP_LIMIT_MB=0` when a cgroup or a PaaS already
 manages memory — a second opinion there is worse than none.
 
 **The watchdog** samples memory and, once the samples span a real window,
@@ -303,12 +303,12 @@ threshold (default `0.9`): snapshot → log → drain → exit `71`.
 > ⚠️ **The valve requires a supervisor.** It exits deliberately after a clean
 > drain. Without `Restart=on-failure` or `restart: unless-stopped`, a
 > *successful* drain leaves the worker down — a self-healing mechanism turned
-> into an outage. `appctl node service install` sets this for you.
+> into an outage. `kvox node service install` sets this for you.
 
 ### Diagnosing a leak
 
 ```bash
-appctl node heap-snapshot     # asks the LIVE daemon
+kvox node heap-snapshot     # asks the LIVE daemon
 ```
 
 Ask the running worker, not a fresh one. Restarting to attach a diagnostic flag
@@ -329,10 +329,10 @@ DevTools → Memory → Load.
 ## Day-to-day operation
 
 ```bash
-appctl node status              # live snapshot from the running worker
-appctl node logs --follow       # attach to the daemon's event stream
-appctl node set-concurrency 8   # applies live; persists either way
-appctl node stop
+kvox node status              # live snapshot from the running worker
+kvox node logs --follow       # attach to the daemon's event stream
+kvox node set-concurrency 8   # applies live; persists either way
+kvox node stop
 ```
 
 Attaching is **read-only** and passive: inspecting a worker never perturbs it,
@@ -342,12 +342,12 @@ and detaching leaves it running untouched.
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
-| `A worker is already running here (pid N)` | A live daemon holds this state directory | `appctl node stop`, or use a different `APPCTL_STATE_DIR` |
+| `A worker is already running here (pid N)` | A live daemon holds this state directory | `kvox node stop`, or use a different `KVOX_STATE_DIR` |
 | Starts, then exits with code `70` | An advertised job type is missing a required capability | The message names both — install it, or drop the type from `--types` |
-| `doctor` says reachable but refused (401) | The credential was revoked or belongs to another server | `appctl node enroll` again |
+| `doctor` says reachable but refused (401) | The credential was revoked or belongs to another server | `kvox node enroll` again |
 | `doctor` says refused (403) | The account lacks `nodes:read`/`nodes:write` | Ask an administrator to grant them |
 | `doctor` says 404 on `/api/nodes` | The server predates worker nodes | Upgrade the server |
-| The node shows online in the admin UI but does nothing | It has no executor for any advertised type | `appctl node status` lists what it can actually run |
+| The node shows online in the admin UI but does nothing | It has no executor for any advertised type | `kvox node status` lists what it can actually run |
 | Jobs fail immediately with a rate-limit message | A provider is throttling | Nothing to do — the server defers those without charging an attempt |
 | The worker vanishes when you log out | No systemd lingering | `loginctl enable-linger $USER` |
 

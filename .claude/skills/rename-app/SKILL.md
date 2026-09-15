@@ -48,7 +48,7 @@ Ask for these. Do not infer a product name from a directory name or a git remote
 
 **Always ask, separately and explicitly, whether the CLI binary should be
 renamed too**, defaulting to *no*. It is a deliberately independent identity: a
-product called "Acme" may perfectly well still ship a binary called `appctl`.
+product called "Acme" may perfectly well still ship a binary called `kvox`.
 State the cost before they choose:
 
 - ~6 CLI test files assert literal environment-variable names and **are meant to

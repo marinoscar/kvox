@@ -85,7 +85,7 @@ Once #286 lands, the pre-flight is an endpoint on the admin API and the CLI
 reaches it with:
 
 ```bash
-appctl api POST /api/admin/db-backup/runs/<run id>/restore/preflight
+kvox api POST /api/admin/db-backup/runs/<run id>/restore/preflight
 ```
 
 **If the API is not serving**, you cannot run it — and you do not need it. The
@@ -161,7 +161,7 @@ a support ticket.
 With the API serving:
 
 ```bash
-appctl api GET /api/admin/db-backup/runs/<run id>/download
+kvox api GET /api/admin/db-backup/runs/<run id>/download
 curl -fSL -o /tmp/<archive>.dump "<the URL that command printed>"
 ```
 

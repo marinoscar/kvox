@@ -134,23 +134,23 @@ becomes the Admin account.
 
 ## Command-line client
 
-`appctl` is the first-party CLI. Install it with:
+`kvox` is the first-party CLI. Install it with:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
 ```
 
-This builds `appctl` from the repo into `~/.appctl/app` and writes a shim to
-`~/.local/bin/appctl`; re-running it is also how you update. Once installed,
-`appctl` logs in through the device authorization flow, then exposes a
-generic `appctl api <method> <path>` command so it never goes stale as
+This builds `kvox` from the repo into `~/.kvox/app` and writes a shim to
+`~/.local/bin/kvox`; re-running it is also how you update. Once installed,
+`kvox` logs in through the device authorization flow, then exposes a
+generic `kvox api <method> <path>` command so it never goes stale as
 endpoints are added or renamed, plus subcommands for running a worker node
 and deploying to a server (below). Full usage, install options and CI setup:
 [`apps/cli/README.md`](apps/cli/README.md#install).
 
 ## Deploying
 
-Deploying to a VPS is `appctl deploy doctor|install|update|status` — there
+Deploying to a VPS is `kvox deploy doctor|install|update|status` — there
 is no separate deploy script or Ansible playbook. Operator runbook:
 [`docs/deployment/vps.md`](docs/deployment/vps.md); design rationale:
 [`docs/specs/vps-deploy.md`](docs/specs/vps-deploy.md).

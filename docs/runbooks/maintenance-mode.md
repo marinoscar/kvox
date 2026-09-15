@@ -64,7 +64,7 @@ already agreed on is just `{"enabled": true}`.
 With the CLI, if you are already logged in:
 
 ```bash
-appctl api PUT /api/admin/maintenance \
+kvox api PUT /api/admin/maintenance \
   --data '{"enabled": true, "message": "Upgrading. Back at 03:00 UTC."}'
 ```
 
@@ -209,7 +209,7 @@ You need an access token to do that. Sign-in and refresh are exempt, so you can
 get one through the browser. What you **cannot** do is complete a *new* CLI
 login: the polling half of the device flow (`/api/auth/device/code`,
 `/api/auth/device/token`) is blocked during a window, deliberately, because it
-belongs to unattended clients. An `appctl` installation that already holds a
+belongs to unattended clients. A `kvox` installation that already holds a
 valid token still works against the maintenance endpoints.
 
 **If you have no usable token at all**, use the break-glass:

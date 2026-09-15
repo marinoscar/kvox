@@ -53,10 +53,10 @@ Three caveats, all real:
 
 3. **The name is not the only identity string.** These are deliberately
    separate and are *not* derived from `APP_NAME`:
-   - `CLI_NAME` (`appctl`) in `apps/cli/src/branding.ts` — the executable name,
+   - `CLI_NAME` (`kvox`) in `apps/cli/src/branding.ts` — the executable name,
      which also seeds the config directory and the env-var prefix. It has its
      own rationale documented in that file; a product called "Acme" may well
-     still ship a binary called `appctl`.
+     still ship a binary called `kvox`.
    - The GitHub repository URLs in `apps/api/src/openapi/document.ts` and
      `description.ts` — those point at the actual repository, not the product.
    - Prose in `README.md`, `docs/`, and `scripts/dev.ps1`, which describes this

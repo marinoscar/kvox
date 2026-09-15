@@ -1,10 +1,10 @@
 # Runbook: Deploy to a VPS
 
 This runbook covers taking a single Ubuntu VPS from nothing to a running,
-migrated, seeded, HTTPS-served deployment of this application using `appctl
+migrated, seeded, HTTPS-served deployment of this application using `kvox
 deploy`, and keeping it current afterward. It is the operator-facing
 companion to [`docs/specs/vps-deploy.md`](../specs/vps-deploy.md): that
-document explains why `appctl deploy` is built the way it is (why the CLI
+document explains why `kvox deploy` is built the way it is (why the CLI
 never dials out over SSH, why TLS is terminated by a shared proxy instead of
 per-app, why there is no `db` service, what was rejected and why); this one
 tells you what to actually run, in order, on a real box. Read the spec first
@@ -40,12 +40,12 @@ Source of truth for every claim below:
 
 **The full install has not been run end to end against a real VPS.** The
 environment this was built in has no Docker daemon, so there has been no
-opportunity to run `appctl deploy install` against an actual server with real
+opportunity to run `kvox deploy install` against an actual server with real
 DNS and a real Let's Encrypt certificate. What backs the claims in this
 document is: the unit test suite for every module listed above (including the
 doctor checks, the pipelines, and the proxy/certificate logic), `docker
 compose -f base.compose.yml -f prod.compose.yml -f vps.compose.yml config`
-validating cleanly, and a real `appctl deploy doctor` run. Treat the first
+validating cleanly, and a real `kvox deploy doctor` run. Treat the first
 real install on a new box as the first true end-to-end exercise of this path,
 and lean on `doctor` and `--staging` (section 8) accordingly.
 
@@ -53,7 +53,7 @@ and lean on `doctor` and `--staging` (section 8) accordingly.
 
 ## 1. Prerequisites
 
-`appctl deploy doctor` checks all of the following, and running it is the
+`kvox deploy doctor` checks all of the following, and running it is the
 intended first step — before you've written a line of configuration, before
 you've touched the shared proxy, before anything. Don't hand-verify this list
 yourself; let doctor do it, and fix whatever it reports.
@@ -61,7 +61,7 @@ yourself; let doctor do it, and fix whatever it reports.
 - An Ubuntu VPS you have root SSH access to.
 - Docker Engine, with the **Compose v2 plugin** (`docker compose`, not the
   standalone `docker-compose` v1 binary — see the troubleshooting table).
-- git and Node.js on the server, to clone the repository and build `appctl`.
+- git and Node.js on the server, to clone the repository and build `kvox`.
 - A shared reverse proxy at `/opt/infra/proxy`, with `nginx/conf.d` and its
   ACME webroot both writable. If this is the first app ever deployed to this
   box, `install` bootstraps this for you; if a different app got there first,
@@ -79,8 +79,8 @@ yourself; let doctor do it, and fix whatever it reports.
   about to deploy under, not a placeholder.
 
 ```bash
-appctl deploy doctor
-appctl deploy doctor --domain app.example.com
+kvox deploy doctor
+kvox deploy doctor --domain app.example.com
 ```
 
 Nothing is installed, written, or started by `doctor` — it's read-only, so
@@ -90,14 +90,14 @@ you're deploying to, which turns on the DNS and certificate checks.
 
 ## 2. Installing for the first time
 
-`appctl deploy` has no SSH client and never dials out to a server on your
+`kvox deploy` has no SSH client and never dials out to a server on your
 behalf — you SSH in yourself, with your own credentials, and everything below
 runs **on the VPS**.
 
 1. **SSH into the VPS.**
 
 2. **Clone the repository you want to deploy** (your fork, if you have one —
-   see section 6) and build `appctl` from source:
+   see section 6) and build `kvox` from source:
 
    ```bash
    git clone <your-repo-url>
@@ -107,13 +107,13 @@ runs **on the VPS**.
    node apps/cli/dist/cli.js deploy doctor
    ```
 
-   You need a real git checkout here, not the standalone `appctl` the
+   You need a real git checkout here, not the standalone `kvox` the
    `curl | bash` installer in the main [CLI README](../../apps/cli/README.md)
    produces — `deploy install` reads its default repository URL and ref from
    *this checkout's own git remote* (section 6), and a standalone install has
    no remote to read. If `~/.local/bin` is already on your `PATH` from an
-   earlier `appctl` install, the plain `appctl` command works the same as
-   `node apps/cli/dist/cli.js` from here on; this runbook uses `appctl` for
+   earlier `kvox` install, the plain `kvox` command works the same as
+   `node apps/cli/dist/cli.js` from here on; this runbook uses `kvox` for
    brevity.
 
 3. **Run `doctor`** (as above) and fix everything it reports before going
@@ -122,7 +122,7 @@ runs **on the VPS**.
 4. **Run `install`:**
 
    ```bash
-   appctl deploy install --domain app.example.com
+   kvox deploy install --domain app.example.com
    ```
 
    This is interactive by default: it walks you through the essential
@@ -179,8 +179,8 @@ correctly-installed application with no users. So:
 ## 4. Checking status and health
 
 ```bash
-appctl deploy status
-appctl deploy status --domain app.example.com
+kvox deploy status
+kvox deploy status --domain app.example.com
 ```
 
 `status` reports container state, an immediate `/api/health/ready` poll, a
@@ -206,7 +206,7 @@ which port to talk on (see the troubleshooting table's last row). A single
 failure completely.
 
 ```bash
-appctl deploy status --json || alert 'deployment unhealthy'
+kvox deploy status --json || alert 'deployment unhealthy'
 ```
 
 Exit codes: `0` serving and schema current, `1` installed but unhealthy, `2`
@@ -217,7 +217,7 @@ different alerts.
 ## 5. Updating
 
 ```bash
-appctl deploy update
+kvox deploy update
 ```
 
 Fetches, and if the resolved ref's commit has moved, rebuilds, migrates,
@@ -230,7 +230,7 @@ unattended, for example from cron:
 
 ```cron
 # Check for a new release every night at 03:00, do nothing if there isn't one
-0 3 * * * cd /opt/infra/apps/repo && appctl deploy update --non-interactive >> /var/log/appctl-update.log 2>&1
+0 3 * * * cd /opt/infra/apps/repo && kvox deploy update --non-interactive >> /var/log/kvox-update.log 2>&1
 ```
 
 Two behaviors are worth knowing before your first `update`, because both are
@@ -255,7 +255,7 @@ heuristic guessing at it. On failure, `update` prints the previous revision
 and the exact command to redeploy it:
 
 ```bash
-appctl deploy update --ref <previous-sha> --force
+kvox deploy update --ref <previous-sha> --force
 ```
 
 `--force` is what makes that command work even though the "ref" you're
@@ -271,7 +271,7 @@ server"](../../apps/cli/README.md#deploying-to-a-server).
 You do not need to change anything in this CLI to deploy a fork, and that
 property is worth understanding rather than just trusting.
 
-`appctl deploy install`/`update` read the repository URL and ref from **the
+`kvox deploy install`/`update` read the repository URL and ref from **the
 checkout you ran them from** (`repo.ts` walks upward from the current
 directory looking for `.git`, then reads `git remote get-url origin` and the
 current branch) — not from a value hardcoded anywhere in `apps/cli`.
@@ -282,11 +282,11 @@ wizard's questions are parsed structurally from **your checkout's own**
 the CLI — rename the application, add a new secret, remove the Microsoft
 OAuth block, switch your default branch to `develop`, and the wizard follows
 all of it with no CLI change. The only two places a fork edits by hand are
-outside `appctl deploy` entirely: the `bin` field in `apps/cli/package.json`
+outside `kvox deploy` entirely: the `bin` field in `apps/cli/package.json`
 and `install.sh`'s default clone URL, both documented in the CLI README's
 "Renaming this for a fork" section — neither is part of the deploy path.
 
-In practice: clone your fork on the VPS (step 2 of section 2), build `appctl`
+In practice: clone your fork on the VPS (step 2 of section 2), build `kvox`
 from *that* checkout, and run `deploy install` from inside it. It deploys
 your fork, at your fork's default branch, asking about your fork's own
 environment variables, automatically.
@@ -315,7 +315,7 @@ and log redaction pick it up.
 ## 8. Using Let's Encrypt staging while you work out the setup
 
 ```bash
-appctl deploy install --domain app.example.com --staging
+kvox deploy install --domain app.example.com --staging
 ```
 
 `--staging` requests a certificate from Let's Encrypt's **staging**
@@ -351,14 +351,14 @@ already got you a (test) one.
 
 ## Summary checklist
 
-- [ ] `appctl deploy doctor` run clean (or only recommended warnings) before starting
+- [ ] `kvox deploy doctor` run clean (or only recommended warnings) before starting
 - [ ] DNS A record for the domain points at this server, confirmed by `doctor --domain <domain>`
 - [ ] Google OAuth redirect URI matches `https://<domain>/api/auth/google/callback` exactly
 - [ ] External PostgreSQL reachable, with credentials `doctor`/`install`'s environment validation accepts
 - [ ] First install run with `--staging` if this is a new domain or a first attempt on this server
-- [ ] `appctl deploy install --domain <domain>` completed, including the external HTTPS verification step
+- [ ] `kvox deploy install --domain <domain>` completed, including the external HTTPS verification step
 - [ ] Logged in at `https://<domain>` as `INITIAL_ADMIN_EMAIL` — this, not the seed, is what creates the admin account
 - [ ] Additional users added to the allowlist from the admin panel
-- [ ] `appctl deploy status` reports healthy, with migrations "up to date," not just the readiness probe green
-- [ ] `appctl deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
+- [ ] `kvox deploy status` reports healthy, with migrations "up to date," not just the readiness probe green
+- [ ] `kvox deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
 - [ ] `<deployRoot>/logs/` reviewed for anything unexpected if any step above didn't go as described
