@@ -25,6 +25,7 @@ import {
   useTranscripts,
 } from '../../hooks/useTranscripts';
 import type { TranscriptDetail, TranscriptListItem } from '../../services/transcripts';
+import { clearFeedCache } from '../../utils/feedCache';
 
 const mockGetTranscripts = vi.mocked(getTranscripts);
 const mockGetTranscript = vi.mocked(getTranscript);
@@ -589,6 +590,147 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
     });
 
     expect(result.current.transcripts.map((t) => t.id)).toEqual(['newest']);
+  });
+});
+
+/**
+ * =============================================================================
+ * THE FEED SURVIVES A DRILL-DOWN — issue #168
+ * =============================================================================
+ *
+ * A separate defect from the revalidation block above, and one that survives
+ * its fix: the rows live in `useState` inside this hook, so tapping a row and
+ * pressing back unmounts them regardless of how well a poll behaves.
+ *
+ * `unmount()` then `renderHook(...)` with the same options IS the drill-down —
+ * it is exactly what the router does — so these tests assert the real thing
+ * rather than a stand-in for it.
+ *
+ * ⚠ The `cacheKey` option is OPT-IN. Every test in the blocks above passes no
+ * key and must be completely unaffected; if they ever start depending on the
+ * cache, the opt-in has stopped being one.
+ */
+describe('useTranscripts — a cached feed survives the drill-down', () => {
+  beforeEach(() => {
+    clearFeedCache();
+  });
+
+  async function loadSixtyRows(cacheKey: string) {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const rendered = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: 0, cacheKey }),
+    );
+    await waitFor(() => expect(rendered.result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await rendered.result.current.loadMore();
+    });
+    await act(async () => {
+      await rendered.result.current.loadMore();
+    });
+    expect(rendered.result.current.transcripts).toHaveLength(60);
+    return rendered;
+  }
+
+  it('brings back all 60 rows and the cursor after unmount and remount', async () => {
+    const { unmount } = await loadSixtyRows('transcripts|owned||');
+    unmount();
+
+    const { result } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: 0, cacheKey: 'transcripts|owned||' }),
+    );
+
+    expect(result.current.transcripts).toHaveLength(60);
+    expect(result.current.nextCursor).toBe('c4');
+  });
+
+  it('paints those rows on the FIRST frame, with no spinner over them', async () => {
+    // A spinner here would blank the list for a frame and take the scroll
+    // position with it — which is the whole of what the user notices.
+    const { unmount } = await loadSixtyRows('transcripts|owned||');
+    unmount();
+
+    const { result } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: 0, cacheKey: 'transcripts|owned||' }),
+    );
+
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('REVALIDATES rather than resetting on that remount', async () => {
+    // The trap: a remount that reset would adopt page one and truncate the
+    // restored feed back to twenty — #167's bug arriving through #168's door.
+    const { unmount } = await loadSixtyRows('transcripts|owned||');
+    unmount();
+
+    const { result } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: 0, cacheKey: 'transcripts|owned||' }),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mockGetTranscripts).toHaveBeenCalled();
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('starts over for a DIFFERENT filter, never replaying rows that no longer match', async () => {
+    const { unmount } = await loadSixtyRows('transcripts|owned||');
+    unmount();
+
+    mockGetTranscripts.mockResolvedValue({ items: [listItem('shared-1')], nextCursor: null });
+
+    const { result } = renderHook(() =>
+      useTranscripts('shared', { pollIntervalMs: 0, cacheKey: 'transcripts|shared||' }),
+    );
+
+    expect(result.current.transcripts).toHaveLength(0);
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() =>
+      expect(result.current.transcripts.map((t) => t.id)).toEqual(['shared-1']),
+    );
+  });
+
+  it('keeps each filter\'s own feed, so switching back restores it', async () => {
+    await loadSixtyRows('transcripts|owned||').then((r) => r.unmount());
+
+    mockGetTranscripts.mockResolvedValue({ items: [listItem('shared-1')], nextCursor: null });
+    const shared = renderHook(() =>
+      useTranscripts('shared', { pollIntervalMs: 0, cacheKey: 'transcripts|shared||' }),
+    );
+    await waitFor(() => expect(shared.result.current.transcripts).toHaveLength(1));
+    shared.unmount();
+
+    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    const { result } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: 0, cacheKey: 'transcripts|owned||' }),
+    );
+
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('caches NOTHING without a cacheKey — the option is opt-in', async () => {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const first = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(first.result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await first.result.current.loadMore();
+    });
+    expect(first.result.current.transcripts).toHaveLength(40);
+    first.unmount();
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+
+    expect(result.current.transcripts).toHaveLength(0);
+    expect(result.current.isLoading).toBe(true);
   });
 });
 

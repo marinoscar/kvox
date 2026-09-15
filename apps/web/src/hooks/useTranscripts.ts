@@ -73,7 +73,7 @@ import type {
 } from '../services/transcripts';
 import { isTranscriptInFlight } from '../utils/transcriptDisplay';
 import { reconcileFeed } from '../utils/feedReconcile';
-import type { FeedState } from '../utils/feedReconcile';
+import { useCachedFeedState } from '../utils/feedCache';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useIsMounted } from './useIsMounted';
 import { useVisiblePolling } from './useVisiblePolling';
@@ -165,6 +165,16 @@ export interface UseTranscriptsOptions {
   status?: TranscriptStatus;
   /** `0` disables polling — what a test passes. */
   pollIntervalMs?: number;
+  /**
+   * Where this feed's loaded pages survive a drill-down (issue #168).
+   *
+   * OPT-IN. `undefined` — the default, and what every consumer except the
+   * library view passes — means no caching at all, so a surface that lists
+   * transcripts incidentally never participates in, or evicts entries from, the
+   * library's cache. Build it with `feedCacheKey` and include EVERY active
+   * filter; see `utils/feedCache.ts` for why that is not optional.
+   */
+  cacheKey?: string;
 }
 
 /**
@@ -187,8 +197,8 @@ export interface UseTranscriptsOptions {
  *
  * So `load` takes an explicit MODE rather than a `showLoading` boolean:
  *
- *   • `'reset'` — the question changed. Adopt the page wholesale and raise
- *     `isLoading`.
+ *   • `'reset'` — the question changed AND nothing is held for the new one.
+ *     Adopt the page wholesale and raise `isLoading`.
  *   • `'revalidate'` — the same question, asked again in the background. Merge
  *     the page into what is already held, through `reconcileFeed`, and never
  *     raise `isLoading` (a spinner every twenty seconds over data that is
@@ -196,9 +206,18 @@ export interface UseTranscriptsOptions {
  *
  * THE MODE IS THE RIGHT DISCRIMINATOR because `load`'s identity changes exactly
  * when the query does — `scope`, `q` and `status` are its only deps — so the
- * single call site that passes `'reset'` (the effect keyed on `load`) is
- * precisely the "start over" case. Reconciling there would splice rows matching
- * the OLD filter into the answer to a new one.
+ * one effect that chooses a mode runs precisely when the question changed.
+ * Reconciling a genuinely new question would splice rows matching the OLD
+ * filter into the answer to a new one.
+ *
+ * ⚠ THAT EFFECT DOES NOT ALWAYS RESET, since #168. When `cacheKey` is set and
+ * the cache HOLDS this question's own previous answer, the seeded rows are not
+ * stale results from a different filter — they are the feed the user paged
+ * through a moment ago, and resetting would truncate it back to twenty, which
+ * is #167's bug through a different door. So the effect revalidates whenever
+ * there is something to revalidate and resets only when there is not; see
+ * `utils/feedCache.ts`. `reconcileFeed`'s first clause makes the two identical
+ * on an empty list, so this is one rule rather than two code paths.
  *
  * `loadMore` APPENDS, and it is still a different operation from both: it reads
  * a LATER page and dedupes on id. The state it shares with them is one object
@@ -209,22 +228,34 @@ export function useTranscripts(
   scope: TranscriptScope,
   options: UseTranscriptsOptions = {},
 ): UseTranscriptsResult {
-  const { q, status, pollIntervalMs = TRANSCRIPT_IDLE_POLL_MS } = options;
+  const { q, status, pollIntervalMs = TRANSCRIPT_IDLE_POLL_MS, cacheKey } = options;
 
   /**
-   * The rows and their cursor, in ONE state value.
+   * The rows and their cursor, in ONE state value, seeded from the feed cache.
    *
    * Not two `useState`s. Every write below is a FUNCTIONAL update, because
    * `load` is a `useCallback` whose deps deliberately exclude the list — a
    * closure over `transcripts`/`nextCursor` here would be stale on exactly the
    * poll that matters and would reintroduce the truncation this fixes.
+   *
+   * With a `cacheKey` this is `useCachedFeedState` rather than a bare
+   * `useState`, so a feed the user already paged through comes back on the
+   * first frame after a drill-down (#168). Without one it behaves exactly like
+   * the `useState` it replaced.
    */
-  const [feed, setFeed] = useState<FeedState<TranscriptListItem>>({
-    items: [],
-    nextCursor: null,
-  });
+  const [feed, setFeed] = useCachedFeedState<TranscriptListItem>(cacheKey);
   const { items: transcripts, nextCursor } = feed;
-  const [isLoading, setIsLoading] = useState(true);
+
+  /**
+   * A cache HIT must never flash a spinner over rows that are already painted,
+   * and must never RESET — see the banner above. Both decisions come from this
+   * one ref so they cannot disagree; it is a ref rather than state because it
+   * is read inside `load` and changing it must not itself trigger a render.
+   */
+  const seededFromCache = useRef(transcripts.length > 0);
+  seededFromCache.current = transcripts.length > 0;
+
+  const [isLoading, setIsLoading] = useState(() => transcripts.length === 0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -265,15 +296,27 @@ export function useTranscripts(
         if (isMounted() && token === requestToken.current) setIsLoading(false);
       }
     },
-    [isMounted, q, scope, status],
+    [isMounted, setFeed, q, scope, status],
   );
 
-  // THE ONLY `'reset'` CALL SITE. This effect fires on mount and again whenever
-  // `load`'s identity changes, which is exactly when `scope`/`q`/`status` do —
-  // so "this effect ran" and "the question changed" are the same event.
+  // THE QUESTION-CHANGED EFFECT. It fires on mount and again whenever `load`'s
+  // identity changes, which is exactly when `scope`/`q`/`status` do — so "this
+  // effect ran" and "the question changed" are the same event.
+  //
+  // It RESETS only when there is nothing to keep. With a cache hit (#168) the
+  // seeded rows are this exact question's own previous answer, and resetting
+  // would throw them away and truncate the feed — #167's bug through a
+  // different door. `reconcileFeed`'s first clause already makes a revalidation
+  // behave identically to a reset when the held list is empty, so the rule is
+  // simply: revalidate when there is something to revalidate.
+  //
+  // `cacheKey` is in the deps as well as `load`. In practice it is derived from
+  // the same filters `load` is, so it never changes alone — but if it ever did,
+  // omitting it would leave the newly-swapped rows sitting there with nothing
+  // scheduled to revalidate them.
   useEffect(() => {
-    void load('reset');
-  }, [load]);
+    void load(seededFromCache.current ? 'revalidate' : 'reset');
+  }, [cacheKey, load]);
 
   // A POLL REVALIDATES — it does not raise the loading flag, and it does not
   // throw away pages the user loaded. The rows stay on screen and keep their
@@ -318,7 +361,7 @@ export function useTranscripts(
     } finally {
       if (isMounted()) setIsLoadingMore(false);
     }
-  }, [isLoadingMore, isMounted, nextCursor, q, scope, status]);
+  }, [isLoadingMore, setFeed, isMounted, nextCursor, q, scope, status]);
 
   const refresh = useCallback(() => load('revalidate'), [load]);
 
