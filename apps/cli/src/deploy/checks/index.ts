@@ -33,7 +33,7 @@ export function requiredChecks(checks: readonly Check[] = ALL_CHECKS): Check[] {
 }
 
 export * from './types.js';
-export { HOST_CHECKS, evaluateDf } from './host.js';
+export { HOST_CHECKS, DEFAULT_PROXY_CONTAINER, CERTBOT_IMAGE, evaluateDf, evaluateUfw } from './host.js';
 export { GITHUB_CHECKS, parseGithubRepo } from './github.js';
 export { probe, type ProbeOutcome } from './probe.js';
 export { DATABASE_CHECKS, databaseSettings, probeTcp } from './database.js';

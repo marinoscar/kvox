@@ -236,6 +236,12 @@ export async function runChecks(
     const unmet = (check.requires ?? []).filter(
       (id) => byId.get(id)?.status !== 'pass',
     );
+    // A prerequisite that was itself SKIPPED (--skip-proxy, no domain given)
+    // hands its reason down, so a flag reads the same on every check it
+    // silences. A prerequisite that FAILED is named instead.
+    const inherited = unmet.every((id) => byId.get(id)?.status === 'skip')
+      ? byId.get(unmet[0] ?? '')?.detail
+      : undefined;
 
     const result: CheckResult =
       unmet.length > 0
@@ -243,7 +249,7 @@ export async function runChecks(
             status: 'skip',
             // Named, so a wall of skips explains itself rather than looking
             // like the checks silently did nothing.
-            detail: `skipped: ${unmet.join(', ')} did not pass`,
+            detail: inherited ?? `skipped: ${unmet.join(', ')} did not pass`,
           }
         : await check.run(context).catch((error: unknown) => ({
             status: 'fail' as const,
