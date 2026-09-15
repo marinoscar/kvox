@@ -376,6 +376,174 @@ export interface AiConnectionTest {
   detail: string;
 }
 
+// =============================================================================
+// EMBEDDINGS (issue #183, epic #165)
+// =============================================================================
+//
+// Semantic search needs one thing from a vendor that note generation never
+// asked for: a fixed-width numeric vector per piece of text. The three types
+// below, and the two OPTIONAL members they hang off {@link AiProvider}, are
+// that entire surface. Nothing in this build calls them yet — the `search.index`
+// job of a later issue is the first caller — which is deliberate: the vendor
+// contract is worth settling before anything depends on it, because the one
+// number in it becomes permanent the moment a single vector is stored.
+//
+// -----------------------------------------------------------------------------
+// OPTIONAL, AND THE OPTIONALITY IS THE DESIGN
+// -----------------------------------------------------------------------------
+//
+// A vendor with no embeddings endpoint — or an OpenAI-compatible gateway that
+// proxies only `/chat/completions`, which several do — is a perfectly
+// registrable chat provider. Its notes generate exactly as before; its
+// deployment simply has no semantic search. The alternative is the one the file
+// header already rejects for `reasoningEffort`: "a capability every
+// implementation must declare an opinion about is a capability the next
+// provider has to write a line of code to say no to". Here that line would be a
+// THROWING STUB, which is the worst of the three options on offer — it
+// satisfies the interface, compiles, registers, and then fails at the one
+// moment nobody is watching, halfway through building somebody's search index.
+// An absent member cannot do that: a caller must ask whether the provider
+// embeds before it can try, and the answer is a property rather than an
+// exception.
+//
+// -----------------------------------------------------------------------------
+// BOTH OR NEITHER, ENFORCED AT BOOT
+// -----------------------------------------------------------------------------
+//
+// `embedding` (the description) and `embed` (the method) are declared together
+// or not at all — "presence is the declaration", the same rule
+// `JobHandler.nodeResultSchema`/`persistNodeResult` follows and the same rule
+// `capabilities.modelDiscovery` + `listModels` follows one screen above. It is
+// `AiProviderRegistry.register` that enforces it, in one line, for the argument
+// that check already makes: an advertised capability with no method is a
+// `TypeError` in the path LEAST LIKELY TO HAVE BEEN EXERCISED. A declaration
+// with no method would survive every test that does not index anything, and
+// would surface as a crash inside a queue job at whatever hour that job runs.
+// =============================================================================
+
+/**
+ * The output width every vector this application stores must have.
+ *
+ * ⚠ A CONTRACT, NOT A DEFAULT, AND IT HAS TWO HALVES. The other half is the
+ * database column — `vector(1536)` — and the two are the same decision written
+ * in two places, which is the entire reason this is an exported named constant
+ * rather than a literal in each. A model whose output is 768 or 3072 wide
+ * cannot be stored AT ALL; it is not a degraded experience, it is an `INSERT`
+ * that fails.
+ *
+ * ⚠ CHANGING IT IS A MIGRATION, NOT AN EDIT. Every stored vector was produced
+ * by a model of this width, and a corpus of mixed widths is not searchable by
+ * any distance function — so a future width change means a new column and a
+ * full re-index of every indexed row, not a new number here.
+ *
+ * `AiProviderRegistry.register` refuses a provider that declares anything else,
+ * so the mismatch is a startup failure naming the provider rather than a
+ * Postgres type error raised inside a queue job with a stack frame pointing at
+ * an `INSERT` and nothing pointing at the declaration that caused it.
+ */
+export const EMBEDDING_DIMENSIONS = 1536;
+
+/**
+ * What a provider's embedding endpoint can do, as a static, publishable
+ * description — the same "capabilities are declared, not probed" posture
+ * `capabilities.models` takes, and for the same reason: an indexer must be able
+ * to size its batches and refuse an over-long chunk BEFORE spending a request
+ * against the user's own account.
+ *
+ * EVERY FIELD IS REQUIRED. See {@link AiModelDescriptor}'s own note: an
+ * optional field reads as "unknown" at every call site, and every call site
+ * then has to decide what unknown means. There is no safe meaning for "unknown
+ * batch size" — it is either a request that is refused for being too large or
+ * an indexer that sends one input at a time forever.
+ */
+export interface AiEmbeddingCapability {
+  /**
+   * The provider's own embedding model id, e.g. `text-embedding-3-small`.
+   *
+   * ⚠ PERMANENT ONCE VECTORS ARE STORED UNDER IT, in the strongest sense any
+   * id in this file carries. Two models' vectors are not comparable even at
+   * identical widths — the distance between a vector from one model and a
+   * vector from another is a number with no meaning — so changing this id
+   * silently degrades every search over already-indexed content until the
+   * whole corpus is re-embedded.
+   */
+  model: string;
+  /**
+   * The output width. MUST be {@link EMBEDDING_DIMENSIONS} — the registry
+   * refuses anything else at boot, naming the provider and the width it
+   * declared.
+   */
+  dimensions: number;
+  /**
+   * The most tokens ONE input may carry before the vendor refuses it.
+   *
+   * What the chunker sizes against. It is a per-input ceiling, not a per-batch
+   * one: a batch of 128 inputs at this length is a legal request.
+   */
+  maxInputTokens: number;
+  /**
+   * The most inputs ONE {@link AiProvider.embed} call may carry.
+   *
+   * A provider MAY declare a number below its vendor's own limit; see
+   * `OpenAiProvider.embedding` for why bounding a retry's blast radius is a
+   * better reason to pick this number than the vendor's maximum is.
+   */
+  maxBatchSize: number;
+}
+
+/**
+ * One batch of texts to embed.
+ *
+ * A BATCH RATHER THAN ONE TEXT, because the round trip dominates: embedding a
+ * thousand chunks one call at a time is a thousand TLS handshakes and a
+ * thousand rate-limit tokens for work the vendor is happy to do in eight
+ * requests. The batch is also the retry unit, which is what
+ * {@link AiEmbeddingCapability.maxBatchSize} is really bounding.
+ */
+export interface AiEmbedRequest {
+  /**
+   * The texts to embed, at most `capability.maxBatchSize` of them.
+   *
+   * ⚠ AN OVER-LARGE OR EMPTY BATCH IS THE IMPLEMENTATION'S TO REFUSE, LOCALLY,
+   * as an `AiInputError` — not a request to spend so the vendor can say no.
+   * The provider already knows its own ceiling; asking is paying for an answer
+   * it is holding.
+   */
+  inputs: string[];
+  /** Abandon the request after this many milliseconds. */
+  timeoutMs?: number;
+}
+
+/**
+ * What one {@link AiProvider.embed} call produced.
+ */
+export interface AiEmbedResult {
+  /**
+   * One vector per input, IN INPUT ORDER, each `capability.dimensions` long.
+   *
+   * ⚠ THE IMPLEMENTATION MUST *MAKE* THIS TRUE, NEVER ASSUME IT. See
+   * {@link AiProvider.embed} — this is the single most dangerous line in the
+   * embedding contract, because breaking it produces no error anywhere.
+   */
+  vectors: number[][];
+  /**
+   * What the call cost, as the provider counted it. `null` when it did not say
+   * — never `0`, which would read as "this batch was free", the one wrong
+   * answer about somebody's own bill (the same rule `generate`'s usage
+   * fallback follows).
+   */
+  promptTokens: number | null;
+  /**
+   * The model that actually produced them, as the provider reported it.
+   *
+   * REPORTED, NOT ECHOED, where the provider says: a gateway that silently
+   * substitutes a different model is exactly the event a stored vector's
+   * provenance needs to record, and it is invisible if this field is just a
+   * copy of what was asked for.
+   */
+  model: string;
+}
+
 /**
  * A concrete AI vendor.
  *
@@ -515,6 +683,55 @@ export interface AiProvider<TSettings = unknown> {
     ctx: AiProviderContext<TSettings>,
     request: AiGenerateRequest,
   ): AsyncIterable<AiDelta>;
+
+  /**
+   * What this provider's embedding endpoint can do (#183), or nothing.
+   *
+   * OPTIONAL, AND PRESENT EXACTLY WHEN {@link AiProvider.embed} IS — see the
+   * EMBEDDINGS section above for why a vendor without one is a perfectly
+   * registrable provider rather than one owing this interface a throwing stub,
+   * and `AiProviderRegistry.register` for the one-line check that refuses half
+   * a declaration at boot.
+   */
+  readonly embedding?: AiEmbeddingCapability;
+
+  /**
+   * Turn a batch of texts into vectors (#183).
+   *
+   * ⚠ THE VECTORS COME BACK IN INPUT ORDER, AND THE IMPLEMENTATION MUST *MAKE*
+   * THAT TRUE RATHER THAN ASSUME IT. This is the one rule in the embedding
+   * contract whose violation produces NO ERROR ANYWHERE. OpenAI (and every
+   * API modelled on it) returns an `index` per item precisely because the
+   * response array is not promised to be ordered; an implementation that
+   * mapped the response array positionally would work in every test, work
+   * against the vendor on a good day, and one day attach each chunk's vector to
+   * a DIFFERENT chunk. Nothing downstream can detect that: the widths are
+   * right, the counts are right, the job succeeds, and search simply returns
+   * confidently wrong passages forever. So: place each vector at the index the
+   * provider stated, and THROW if any index is missing, duplicated, or outside
+   * the batch — a refused batch is recoverable, a silently transposed one is
+   * not.
+   *
+   * THROWS TO FAIL, like `generate` and `listModels` and unlike
+   * `testConnection`: this runs inside a queue job, where a thrown error is the
+   * documented failure channel and a swallowed one is a job that reports
+   * success having indexed nothing. Throw the narrowest type in
+   * `../ai-errors.ts` that is true — `AiAuthError` when the provider refused
+   * the key, `AiInputError` when it blamed the request (INCLUDING the local
+   * refusal of an empty or over-large batch, which must never be sent),
+   * `RateLimitError` when it throttled — and a plain `Error` for everything
+   * else, which the queue treats as retryable.
+   *
+   * ⚠ `ctx.apiKey` IS THE CALLING USER'S OWN KEY. Everything the file header
+   * says about never logging it, never storing it on an instance field and
+   * never putting it in an error message applies here identically; indexing
+   * runs unattended and at volume, which makes a log line written "just for
+   * now" in this method the most expensive one in the module.
+   */
+  embed?(
+    ctx: AiProviderContext<TSettings>,
+    request: AiEmbedRequest,
+  ): Promise<AiEmbedResult>;
 }
 
 /** The publishable description of one provider. See `registry.describeAll()`. */

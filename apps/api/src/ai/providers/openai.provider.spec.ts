@@ -9,7 +9,10 @@ import {
   RateLimitError,
 } from '../ai-errors';
 import { AiProviderRegistry } from '../ai-provider.registry';
-import { createProviderContext } from './ai-provider.interface';
+import {
+  createProviderContext,
+  EMBEDDING_DIMENSIONS,
+} from './ai-provider.interface';
 import {
   deriveOpenAiModelDescriptor,
   OpenAiProvider,
@@ -55,6 +58,18 @@ function fixture(name: string): string {
  * duplicate `gpt-4o` row and every non-chat model family the filter must drop.
  */
 const MODEL_LIST_JSON = readFileSync(join(FIXTURES, 'model-list.json'), 'utf8');
+
+/**
+ * The recorded `POST /embeddings` envelope (#183).
+ *
+ * ⚠ IT LISTS INDEX 1 BEFORE INDEX 0, on purpose and as the vendor is entitled
+ * to. See `../__fixtures__/openai/README.md`: the array's order is not the
+ * contract, the `index` field is.
+ */
+const EMBEDDINGS_JSON = readFileSync(
+  join(FIXTURES, 'embeddings-response.json'),
+  'utf8',
+);
 
 /** A body that hands the whole fixture over in one chunk. */
 async function* oneChunk(text: string): AsyncGenerator<Uint8Array> {
@@ -103,8 +118,14 @@ function errorResponse(
   };
 }
 
-/** A successful `GET /models` response carrying the given JSON body text. */
-function modelListResponse(bodyJson: string): FetchLikeResponse {
+/**
+ * A successful JSON response carrying the given body text.
+ *
+ * Serves both JSON routes this provider calls — `GET /models` (#78) and
+ * `POST /embeddings` (#183) — because the two differ in what they return, not
+ * in how a 200 with a JSON body is shaped.
+ */
+function jsonResponse(bodyJson: string): FetchLikeResponse {
   return {
     ok: true,
     status: 200,
@@ -577,7 +598,7 @@ describe('OpenAiProvider.testConnection', () => {
 
 describe('OpenAiProvider.listModels', () => {
   it('joins the vendor list against the build catalogue via `known`', async () => {
-    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+    const provider = providerWith(async () => jsonResponse(MODEL_LIST_JSON));
 
     const models = await provider.listModels(ctx());
     const byId = new Map(models.map((m) => [m.id, m]));
@@ -605,7 +626,7 @@ describe('OpenAiProvider.listModels', () => {
     // type it before they could permit the model at all. `source: 'default'` is
     // what keeps that honest — the number is published as a floor, not as
     // knowledge.
-    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+    const provider = providerWith(async () => jsonResponse(MODEL_LIST_JSON));
 
     const models = await provider.listModels(ctx());
     const unplaceable = models.find((m) => m.id === 'chatgpt-4o-latest');
@@ -624,7 +645,7 @@ describe('OpenAiProvider.listModels', () => {
     // snapshots of models this build already knows, and before #97 each one
     // needed two hand-typed numbers.
     const provider = providerWith(async () =>
-      modelListResponse(
+      jsonResponse(
         JSON.stringify({
           data: [
             { id: 'gpt-5.4-mini-2026-03-17' },
@@ -668,7 +689,7 @@ describe('OpenAiProvider.listModels', () => {
     // The filter is a convenience over a flat vendor list and will eventually
     // be wrong about an id; this is what stops it ever being the reason a
     // working model cannot be found.
-    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+    const provider = providerWith(async () => jsonResponse(MODEL_LIST_JSON));
 
     const ids = (await provider.listModels(ctx(), { includeAll: true })).map(
       (m) => m.id,
@@ -683,7 +704,7 @@ describe('OpenAiProvider.listModels', () => {
   });
 
   it('filters out non-chat models — embeddings, audio, image, moderation, realtime', async () => {
-    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+    const provider = providerWith(async () => jsonResponse(MODEL_LIST_JSON));
 
     const ids = (await provider.listModels(ctx())).map((m) => m.id);
 
@@ -702,7 +723,7 @@ describe('OpenAiProvider.listModels', () => {
   });
 
   it('deduplicates a model id the vendor listed twice', async () => {
-    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+    const provider = providerWith(async () => jsonResponse(MODEL_LIST_JSON));
 
     const ids = (await provider.listModels(ctx())).map((m) => m.id);
 
@@ -712,7 +733,7 @@ describe('OpenAiProvider.listModels', () => {
   });
 
   it('sorts known models first, then by source, then alphabetically (#97)', async () => {
-    const provider = providerWith(async () => modelListResponse(MODEL_LIST_JSON));
+    const provider = providerWith(async () => jsonResponse(MODEL_LIST_JSON));
 
     const ids = (await provider.listModels(ctx())).map((m) => m.id);
 
@@ -751,7 +772,7 @@ describe('OpenAiProvider.listModels', () => {
     const provider = providerWith(async (_url, init) => {
       seenAuth = (init as { headers?: Record<string, string> } | undefined)?.headers
         ?.authorization;
-      return modelListResponse(MODEL_LIST_JSON);
+      return jsonResponse(MODEL_LIST_JSON);
     });
 
     await provider.listModels(ctx());
@@ -787,6 +808,262 @@ describe('OpenAiProvider.countTokens', () => {
     expect(provider.countTokens('word '.repeat(200), 'gpt-4o')).toBeGreaterThan(
       provider.countTokens('word '.repeat(20), 'gpt-4o'),
     );
+  });
+});
+
+describe('OpenAiProvider.embed (#183)', () => {
+  // ⚠ THE ONE TEST IN THIS FILE WHOSE ABSENCE WOULD BE INVISIBLE is "places
+  // vectors by the provider's own index". Every other failure here is loud; a
+  // transposed batch is not. It has the right widths, the right count and a
+  // succeeding job, and it makes semantic search return confidently wrong
+  // passages for as long as the index lives. The recorded fixture lists index 1
+  // FIRST so that a positional implementation passes nothing below.
+
+  /** A vector of the one width this application can store, filled with `fill`. */
+  function vectorOf(fill: number): number[] {
+    return new Array<number>(EMBEDDING_DIMENSIONS).fill(fill);
+  }
+
+  function embeddingsBody(
+    data: Array<{ index: unknown; embedding: unknown }>,
+    extra: Record<string, unknown> = {},
+  ): string {
+    return JSON.stringify({
+      object: 'list',
+      data,
+      model: 'text-embedding-3-small',
+      ...extra,
+    });
+  }
+
+  const TWO_INPUTS = { inputs: ['the first chunk', 'the second chunk'] };
+
+  it('declares the width the vector column holds, and a usable batch', () => {
+    // The declaration the registry refuses this provider over at boot. Asserted
+    // here too because the constant and the column are two halves of one
+    // contract, and this is the half a vendor-model swap would change.
+    const provider = providerWith(async () => {
+      throw new Error('not used');
+    });
+
+    expect(provider.embedding.dimensions).toBe(EMBEDDING_DIMENSIONS);
+    expect(provider.embedding.model).toBe('text-embedding-3-small');
+    expect(provider.embedding.maxBatchSize).toBeGreaterThanOrEqual(1);
+    expect(provider.embedding.maxInputTokens).toBeGreaterThanOrEqual(1);
+  });
+
+  it('posts the batch to /embeddings with the declared model and float encoding', async () => {
+    const calls: Array<{ url: string; init?: { headers?: Record<string, string>; body?: string } }> = [];
+    const provider = providerWith(async (url, init) => {
+      calls.push({ url, init });
+      return jsonResponse(EMBEDDINGS_JSON);
+    });
+
+    await provider.embed(ctx(), TWO_INPUTS);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://api.openai.com/v1/embeddings');
+    // The same `authHeaders` every other route uses — one HTTP path, not a
+    // second one.
+    expect(calls[0].init?.headers?.authorization).toBe('Bearer sk-test-DO-NOT-LOG');
+
+    const body = JSON.parse(calls[0].init?.body ?? '{}') as Record<string, unknown>;
+    expect(body).toMatchObject({
+      model: 'text-embedding-3-small',
+      input: ['the first chunk', 'the second chunk'],
+      // Explicit, never defaulted: some gateways default to base64, which would
+      // deliver a string where the parser expects an array of numbers.
+      encoding_format: 'float',
+    });
+  });
+
+  it('returns one vector per input, with the usage and the model the provider reported', async () => {
+    const provider = providerWith(async () => jsonResponse(EMBEDDINGS_JSON));
+
+    const result = await provider.embed(ctx(), TWO_INPUTS);
+
+    expect(result.vectors).toHaveLength(2);
+    expect(result.vectors[0]).toHaveLength(EMBEDDING_DIMENSIONS);
+    expect(result.vectors[1]).toHaveLength(EMBEDDING_DIMENSIONS);
+    expect(result.promptTokens).toBe(42);
+    expect(result.model).toBe('text-embedding-3-small');
+  });
+
+  it('PLACES EACH VECTOR AT THE PROVIDER\'S OWN index, not at its response position', async () => {
+    // The fixture lists index 1 first. The vector belonging to input 0 begins
+    // `0.01`; the one belonging to input 1 begins `0.02`. A positional read
+    // swaps them and raises nothing.
+    const provider = providerWith(async () => jsonResponse(EMBEDDINGS_JSON));
+
+    const { vectors } = await provider.embed(ctx(), TWO_INPUTS);
+
+    expect(vectors[0][0]).toBeCloseTo(0.01, 6);
+    expect(vectors[1][0]).toBeCloseTo(0.02, 6);
+  });
+
+  it('throws when an index is missing from the batch', async () => {
+    const provider = providerWith(async () =>
+      jsonResponse(embeddingsBody([{ index: 0, embedding: vectorOf(0.1) }])),
+    );
+
+    // One vector for a two-input batch. A partial answer is refused rather than
+    // stored, because a gap is indistinguishable from a vector downstream.
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toThrow(
+      /no embedding for input 1/,
+    );
+  });
+
+  it('throws when an index arrives twice', async () => {
+    const provider = providerWith(async () =>
+      jsonResponse(
+        embeddingsBody([
+          { index: 0, embedding: vectorOf(0.1) },
+          { index: 0, embedding: vectorOf(0.2) },
+        ]),
+      ),
+    );
+
+    // Two answers for input 0 means input 1 has none — and taking the response
+    // positionally would have hidden exactly that.
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toThrow(
+      /two embeddings for index 0/,
+    );
+  });
+
+  it('throws when an index is outside the batch that was sent', async () => {
+    const provider = providerWith(async () =>
+      jsonResponse(
+        embeddingsBody([
+          { index: 0, embedding: vectorOf(0.1) },
+          { index: 7, embedding: vectorOf(0.2) },
+        ]),
+      ),
+    );
+
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toThrow(
+      /not a position in the 2-input batch/,
+    );
+  });
+
+  it('throws when a vector is not the width this application can store', async () => {
+    const provider = providerWith(async () =>
+      jsonResponse(
+        embeddingsBody([
+          { index: 0, embedding: new Array<number>(768).fill(0.1) },
+          { index: 1, embedding: vectorOf(0.2) },
+        ]),
+      ),
+    );
+
+    // `vector(1536)` is a contract, not a default: 768 numbers cannot be stored
+    // badly, they cannot be stored.
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toThrow(
+      /width 768 .*index 0/,
+    );
+  });
+
+  it('throws when a component is not a finite number', async () => {
+    const poisoned = vectorOf(0.1);
+    poisoned[5] = Number.NaN;
+    const provider = providerWith(async () =>
+      jsonResponse(
+        // `JSON.stringify` writes NaN as `null`, which is exactly the shape a
+        // vendor bug would put on the wire and exactly what must not be stored:
+        // one non-finite component silently stops every distance against this
+        // vector from ranking meaningfully.
+        embeddingsBody([
+          { index: 0, embedding: poisoned },
+          { index: 1, embedding: vectorOf(0.2) },
+        ]),
+      ),
+    );
+
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toThrow(
+      /not a finite number/,
+    );
+  });
+
+  it('reports promptTokens as null — never 0 — when the provider omits usage', async () => {
+    const provider = providerWith(async () =>
+      jsonResponse(
+        embeddingsBody([
+          { index: 0, embedding: vectorOf(0.1) },
+          { index: 1, embedding: vectorOf(0.2) },
+        ]),
+      ),
+    );
+
+    // Zero would read as "this batch was free", the one wrong answer about
+    // somebody's own bill.
+    expect((await provider.embed(ctx(), TWO_INPUTS)).promptTokens).toBeNull();
+  });
+
+  it('refuses an EMPTY batch as AiInputError without spending a request', async () => {
+    const fetchImpl = jest.fn();
+    const provider = providerWith(fetchImpl as unknown as FetchLike);
+
+    await expect(provider.embed(ctx(), { inputs: [] })).rejects.toBeInstanceOf(
+      AiInputError,
+    );
+    // ⚠ THE ASSERTION THAT MATTERS. This provider already knows its own
+    // ceilings; asking the vendor is paying for an answer we are holding.
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('refuses an OVER-LARGE batch as AiInputError without spending a request', async () => {
+    const fetchImpl = jest.fn();
+    const provider = providerWith(fetchImpl as unknown as FetchLike);
+    const tooMany = new Array<string>(provider.embedding.maxBatchSize + 1).fill('x');
+
+    await expect(provider.embed(ctx(), { inputs: tooMany })).rejects.toBeInstanceOf(
+      AiInputError,
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('maps 401 to AiAuthError through the SAME assertOk the other routes use', async () => {
+    const provider = providerWith(async () =>
+      errorResponse(401, '{"error":{"message":"Incorrect API key"}}'),
+    );
+
+    // A revoked key must produce one sentence whichever route noticed it first.
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toBeInstanceOf(
+      AiAuthError,
+    );
+  });
+
+  it('maps 429 to RateLimitError, honouring Retry-After', async () => {
+    const provider = providerWith(async () =>
+      errorResponse(429, '{"error":{"message":"Rate limit reached"}}', {
+        'retry-after': '30',
+      }),
+    );
+
+    await expect(provider.embed(ctx(), TWO_INPUTS)).rejects.toMatchObject({
+      name: 'RateLimitError',
+      retryAfterMs: 30_000,
+    });
+  });
+
+  it('leaves a 2xx body that is not JSON retryable, and echoes nothing from it', async () => {
+    const provider = providerWith(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => '<html>proxy error</html>',
+      json: async () => {
+        throw new Error('not json');
+      },
+    }));
+
+    const thrown = await provider
+      .embed(ctx(), TWO_INPUTS)
+      .then(() => null, (err: unknown) => err as Error);
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(AiInputError);
+    // An intercepting proxy's HTML page must not be echoed back on.
+    expect(thrown?.message).not.toContain('<html>');
   });
 });
 
