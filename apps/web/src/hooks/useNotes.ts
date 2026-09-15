@@ -43,6 +43,7 @@ import type {
 } from '../services/notes';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useIsMounted } from './useIsMounted';
+import { mergeFeedPage, planFeedRevalidate } from './mergeFeedPage';
 import { useVisiblePolling } from './useVisiblePolling';
 
 /** While a generation is running. Fast enough that a status chip looks alive. */
@@ -116,6 +117,10 @@ export interface UseNotesResult {
   nextCursor: string | null;
   isLoadingMore: boolean;
   loadMore: () => Promise<void>;
+  /**
+   * Revalidate the loaded span in place — ⚠ NOT a reset to page one (#167).
+   * Every accumulated row stays; changed rows update, deleted rows go.
+   */
   refresh: () => Promise<void>;
 }
 
@@ -134,10 +139,26 @@ export interface UseNotesOptions {
  *
  * CURSOR-PAGINATED, never offset: the list is ordered by `updatedAt` and every
  * generation and every save rewrite that column, so offset paging over it skips
- * rows and repeats others while a user scrolls. `loadMore` APPENDS and
- * `refresh` resets to the first page — two different operations, deliberately
- * not sharing one state setter, because that is how a "load more" quietly
- * starts truncating the list.
+ * rows and repeats others while a user scrolls. `loadMore` APPENDS rather than
+ * replacing — two different operations, deliberately not sharing one state
+ * setter, because that is how a "load more" quietly starts truncating the list.
+ *
+ * ⚠ THREE OPERATIONS, NOT TWO (issue #167), and this hook is the TWIN of
+ * `useTranscripts`' list hook down to the ref names on purpose — see that
+ * file's copy of this paragraph. A RESET (`load(true)` — first mount, a filter
+ * change) reads one page and replaces everything. An APPEND (`loadMore`) adds a
+ * page. A REVALIDATION (`load(false)` — the poll, the tab-refocus fetch,
+ * `refresh()` after a row action) RECONCILES against what is on screen and must
+ * never truncate it.
+ *
+ * This feed's exposure to the bug was milder than the transcripts feed's only
+ * because its interval is DERIVED (`anyInFlight ? NOTE_ACTIVE_POLL_MS : 0`), so
+ * a settled library does not poll at all. That is a property of this hook's
+ * cadence, not of its correctness: `refresh()` and the tab-refocus fetch
+ * truncated an eighty-row list here exactly as they did there, and a future
+ * change to the interval would have re-exposed the rest. Fixing one hook and
+ * not the other is the real regression risk in this area — `mergeFeedPage.ts`
+ * exists so there is one merge rule rather than two copies of one.
  */
 export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   const { q, status, sourceTranscriptId, pollIntervalMs } = options;
@@ -159,21 +180,77 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
    */
   const requestToken = useRef(0);
 
+  /**
+   * How many rows are on screen, as a REF.
+   *
+   * ⚠ A REF AND NOT THE STATE ITSELF, and that is load-bearing rather than
+   * stylistic: `load` needs this number to size its re-read, and putting
+   * `notes` in `load`'s dependency array would give `load` a new identity on
+   * every list change — which the mount effect below (`useEffect(() =>
+   * load(true), [load])`) would answer by resetting to page one, forever, in a
+   * loop. The one consumer is an async request that begins after a commit, so
+   * the effect's one-tick lag is immaterial. Same ref, same reasoning, same
+   * name as `useTranscripts`'.
+   */
+  const loadedCount = useRef(0);
+  useEffect(() => {
+    loadedCount.current = notes.length;
+  }, [notes]);
+
+  /**
+   * Bumped whenever an APPEND changes the accumulated list.
+   *
+   * ⚠ SEPARATE FROM `requestToken`, which `loadMore` deliberately does not
+   * touch. A revalidation planned against twenty rows that settles after
+   * `loadMore` has made it forty computed its `cursorIsAuthoritative` against a
+   * list that no longer exists; adopting that plan's `nextCursor` would rewind
+   * the cursor to just past row twenty and make every subsequent `loadMore`
+   * re-fetch page two forever. So such a revalidation DROPS ITS ANSWER.
+   *
+   * The other direction needs no guard: a revalidation landing DURING a
+   * `loadMore` merges through a functional setter, and `loadMore`'s append then
+   * dedupes against whatever it finds.
+   *
+   * `useTranscripts` carries the same ref with the same rejected alternative
+   * (folding it into `requestToken`, which would drop an in-flight `load(true)`
+   * whenever "Load more" was pressed just after a filter change).
+   */
+  const listGeneration = useRef(0);
+
   const load = useCallback(
     async (showLoading: boolean) => {
       const token = (requestToken.current += 1);
+      const generation = listGeneration.current;
+      // ⚠ A RESET READS ONE PAGE; A REVALIDATION RE-READS THE LOADED SPAN.
+      // See `mergeFeedPage.ts` for why, and for why the span is capped at 100.
+      const plan = showLoading
+        ? { limit: NOTE_PAGE_SIZE, cursorIsAuthoritative: true }
+        : planFeedRevalidate(loadedCount.current, NOTE_PAGE_SIZE);
       if (showLoading) setIsLoading(true);
       try {
         const params: NoteListParams = {
           q,
           status,
           sourceTranscriptId,
-          limit: NOTE_PAGE_SIZE,
+          limit: plan.limit,
         };
         const response = await getNotes(params);
         if (!isMounted() || token !== requestToken.current) return;
-        setNotes(response.items);
-        setNextCursor(response.nextCursor);
+        if (showLoading) {
+          // The reset path, unchanged: a first load or a filter change has
+          // nothing worth reconciling with.
+          setNotes(response.items);
+          setNextCursor(response.nextCursor);
+        } else if (generation === listGeneration.current) {
+          // ⚠ MERGE, NEVER REPLACE (issue #167). `setNotes(response.items)`
+          // here was the bug, identical to the one in `useTranscripts`: load
+          // two hundred rows, look away for twenty seconds and have twenty
+          // again, under a scroll position pointing at nothing. Functional, so
+          // a `loadMore` that committed a frame ago is merged with rather than
+          // overwritten.
+          setNotes((current) => mergeFeedPage(current, response.items, plan.limit));
+          if (plan.cursorIsAuthoritative) setNextCursor(response.nextCursor);
+        }
         setError(null);
       } catch (err) {
         if (!isMounted() || token !== requestToken.current) return;
@@ -214,6 +291,9 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
         cursor: nextCursor,
       });
       if (!isMounted()) return;
+      // ⚠ The generation bump tells an in-flight revalidation that the plan it
+      // was built on is gone — see `listGeneration` above.
+      listGeneration.current += 1;
       // Deduped on append. A row whose `updatedAt` moved between the two
       // requests can legitimately appear on both pages — cursor paging bounds
       // the window, it does not freeze the ordering — and React would then warn
