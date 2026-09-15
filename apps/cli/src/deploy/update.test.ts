@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   readlinkSync,
   statSync,
   writeFileSync,
@@ -323,6 +324,17 @@ function installedApp(vps: FakeVps, layout: 'current' | 'pre-120' = 'current'): 
   return root;
 }
 
+/** The human-readable journal an update just wrote under the deploy root. */
+function updateJournal(root: string): string {
+  const dir = join(root, 'logs');
+  const names = readdirSync(dir)
+    .filter((name) => name.startsWith('appctl-update-') && name.endsWith('.log'))
+    .sort();
+  const newest = names[names.length - 1];
+  if (newest === undefined) throw new Error(`no update journal under ${dir}`);
+  return readFileSync(join(dir, newest), 'utf8');
+}
+
 describe('runUpdate against a fake VPS', () => {
   let vps: FakeVps;
 
@@ -438,6 +450,55 @@ describe('runUpdate against a fake VPS', () => {
     expect(events[headline + 1]).toBe('log:b2b2b2b  feat(api): the second thing');
     expect(events[headline + 2]).toBe('log:b1b1b1b  fix(web): the first thing');
     expect(result.check).toMatchObject({ current: INSTALLED_SHA, latest: NEW_SHA, commitsBehind: 2 });
+  });
+
+  // The preflight covers the database because the pipeline MIGRATES (#179).
+  // `migrate` stops the api container and runs `prisma:migrate` three steps
+  // later; a preflight that omitted the database would be checking everything
+  // except the thing this run is about to change.
+  it('preflights the database it is about to migrate against, in dependency order', async () => {
+    const root = installedApp(vps);
+
+    await update(root);
+
+    // The preflight journals one `<status> <id>: <detail>` line per check.
+    const log = updateJournal(root);
+    const ids = [...log.matchAll(/^(?:pass|warn|fail|skip) (database-[a-z-]+):/gm)].map(
+      (match) => match[1],
+    );
+
+    // In dependency order, because `runChecks` honours `requires` BY POSITION:
+    // the vector check without the three ahead of it reports `skip` and checks
+    // nothing at all.
+    expect(ids).toEqual([
+      'database-reachable',
+      'database-credentials',
+      'database-exists',
+      'database-vector-extension',
+    ]);
+    expect(log).toContain('pass database-vector-extension: vector 0.8.0 installed');
+
+    // And all of it before a single migration is applied.
+    expect(log.indexOf('database-vector-extension')).toBeLessThan(log.indexOf('[migrate]'));
+  });
+
+  it('fails at preflight, not inside migrate, when the database is unusable', async () => {
+    // The bug this closes predates #179: an update against an unreachable
+    // database, a rotated password or a dropped database used to fail INSIDE
+    // `migrate`, as a Prisma stack trace, with the api container already
+    // stopped.
+    const root = installedApp(vps);
+    vps.failWhen(
+      (argv) => argv[0] === 'docker' && argv[1] === 'run',
+      'psql: error: FATAL:  password authentication failed for user "app"',
+    );
+
+    const error = await update(root).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('database-credentials');
+    expect(vps.seen.some((argv) => argv.join(' ').includes('prisma:migrate'))).toBe(false);
+    expect(built()).toBe(false);
   });
 
   it('refreshes deploy-info from the unchanged state when there is nothing to deploy', async () => {

@@ -18,6 +18,7 @@ import {
 import { NoteGenerationRequestService } from './generation/note-generation-request.service';
 import { NoteGenerationService } from './generation/note-generation.service';
 import { NoteSourceService } from './generation/note-source.service';
+import { NoteTitleService } from './generation/note-title.service';
 import { MarkdownNoteExporter } from './export/markdown.exporter';
 import { NoteExportService } from './export/note-export.service';
 import { NoteExporterRegistry } from './export/note-exporter.registry';
@@ -113,6 +114,13 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     NoteGenerationService,
     NoteSourceService,
     NoteGenerateHandler,
+    // Naming a generated note (#182). It hangs off `NoteGenerationService.commit`
+    // rather than off the handler, because a note is titled once its BODY is
+    // durable — the one moment at which there is something to name and nothing
+    // left that a failure could spoil. It needs `AiModule`'s three exports for
+    // its first rank and nothing new: the resolution it performs is the one
+    // `NoteGenerateHandler` already performs, reached through the same services.
+    NoteTitleService,
     // The notes themselves (#53). `NoteAccessService` is the ONE place that
     // decides 404-never-403 for a note, and the shape note sharing will extend
     // rather than replace — see its header.
