@@ -1,6 +1,27 @@
+# =============================================================================
+# The test database
+# =============================================================================
+#
+# `pgvector/pgvector:pg16` rather than `postgres:16-alpine` (issue #178, epic
+# #165). The `vector` extension ships as a control file that has to be present
+# on the SERVER; `CREATE EXTENSION vector` cannot install it from the client
+# side. Plain `postgres:16-alpine` carries no such file, so the semantic-search
+# migration aborts there — and it aborts inside `prisma migrate deploy`, which
+# means CI would go red ON THE MIGRATION rather than on a test, with a Prisma
+# stack trace instead of a failing assertion.
+#
+# Same PostgreSQL major (16), so the on-disk format is unchanged and an
+# existing `test-db-data` volume keeps working. The base OS moves Alpine →
+# Debian, which is a property of the image and not of the data directory.
+#
+# `otel.compose.yml`'s `uptrace-pg` is deliberately NOT moved: it is Uptrace's
+# own metadata store, it never sees this application's schema, and giving it an
+# extension it will never load would be a larger pull for nothing.
+# =============================================================================
+
 services:
   db-test:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: kvox-db-test
     environment:
       POSTGRES_USER: postgres

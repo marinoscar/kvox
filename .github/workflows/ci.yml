@@ -186,9 +186,15 @@ jobs:
     services:
       postgres:
         # Matches infra/compose/test.compose.yml, which is the only Postgres
-        # version this repo pins (base.compose.yml expects an external database
+        # image this repo pins (base.compose.yml expects an external database
         # and declares no `db` service).
-        image: postgres:16-alpine
+        #
+        # pgvector, not plain postgres (issue #178, epic #165): `vector` is a
+        # server-side control file, and `CREATE EXTENSION vector` in the
+        # semantic-search migration fails without one. That failure lands inside
+        # `prisma migrate deploy` in the `smoke` job, so on a plain image this
+        # workflow would go red ON THE MIGRATION rather than on a test.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
