@@ -100,7 +100,7 @@ jobs:
       # Uploaded unconditionally, including when the commit step runs: it is
       # how you inspect what changed without checking out the branch, and the
       # only output at all when `commit` is false.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: visual-baselines

@@ -365,7 +365,7 @@ jobs:
       # diagnosable from the Actions UI: the HTML report embeds the
       # expected/actual/diff PNG for every failed assertion, which is far
       # faster to read than reproducing the failure locally from scratch.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: visual-playwright-report
