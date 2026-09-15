@@ -2837,11 +2837,34 @@ enum NoteExportStatus {
   failed
 }
 
+enum NoteTitleSource {
+  ai
+  user
+  template
+}
+
 model Note {
   id String @id @default(uuid()) @db.Uuid
 
   ownerId String @map("owner_id") @db.Uuid
   title   String
+
+  // WHO chose the current `title`, not just what it says (issue #180, epic
+  // #163). A title had no provenance before this column: nothing could tell
+  // a name the user typed apart from one the product guessed, so a
+  // `regenerate` or a future bulk-retitle pass had no way to know a note's
+  // owner had already renamed it — the exact failure mode this column exists
+  // to rule out is silently overwriting a human-chosen title with an AI
+  // guess. `template` is the default because that is literally what every
+  // row in this table has been until now: `notes.service.ts` has always
+  // fallen back to the source template's `name` when nothing more specific
+  // was available, so `template` is the truthful value for the entire
+  // existing dataset, not a placeholder invented for this migration.
+  // `user` is STICKY — once a person edits the title directly it becomes
+  // `user` and the AI titling path (present or future) must never overwrite
+  // it or flip it back to `ai`/`template`; that check belongs to the service
+  // layer, this column only makes the state it must check representable.
+  titleSource NoteTitleSource @default(template) @map("title_source")
 
   // The LIVE working copy of the note's markdown body (issue #48). @db.Text,
   // defaulting to an empty string so a freshly created `draft` note (no
