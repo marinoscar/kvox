@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, posix } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
@@ -544,6 +544,24 @@ export interface RenewalCronResult {
   path: string;
   changed: boolean;
   contents: string;
+}
+
+/**
+ * The command the cron line runs.
+ *
+ * The global link (`/usr/local/bin/<cli>`, which the bootstrap script
+ * creates) when it exists, because it outlives a moved checkout; otherwise
+ * this very process's script, prefixed with its node when it is a script
+ * rather than a launcher - cron's PATH does not reliably reach `node`.
+ */
+export function defaultCliPath(): string {
+  const linked = `/usr/local/bin/${CLI_NAME}`;
+  if (existsSync(linked)) return linked;
+
+  const script = process.argv[1];
+  if (script === undefined) return CLI_NAME;
+  const resolved = resolve(script);
+  return /\.[cm]?js$/.test(resolved) ? `${process.execPath} ${resolved}` : resolved;
 }
 
 export function renewalCronPath(name: string, cronDir = '/etc/cron.d'): string {
