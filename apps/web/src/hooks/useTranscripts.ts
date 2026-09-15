@@ -229,7 +229,8 @@ export function useTranscripts(
   }, [transcripts]);
 
   /**
-   * Bumped whenever an APPEND changes the accumulated list.
+   * Bumped whenever the accumulated list stops being the one a revalidation in
+   * flight planned against: an APPEND commits, or the query changes.
    *
    * ⚠ SEPARATE FROM `requestToken`, which `loadMore` deliberately does not
    * touch. A revalidation that was planned against twenty rows and settles
@@ -238,8 +239,8 @@ export function useTranscripts(
    * that plan's `nextCursor` would rewind the cursor to just past row twenty
    * and make every subsequent `loadMore` re-fetch page two forever, stranding
    * page three. So a revalidation whose generation moved under it DROPS ITS
-   * ANSWER; another poll is at most twenty seconds away, and `loadMore` has
-   * just delivered fresh rows anyway.
+   * ANSWER; another poll is at most one interval away, and `loadMore` has just
+   * delivered fresh rows anyway.
    *
    * The other direction needs no guard: a revalidation that lands DURING a
    * `loadMore` merges through a functional setter, and `loadMore`'s own append
@@ -252,13 +253,34 @@ export function useTranscripts(
    */
   const listGeneration = useRef(0);
 
+  /**
+   * Whether the rows on screen belong to the CURRENT query.
+   *
+   * ⚠ WITHOUT THIS, MERGING INTRODUCES A BUG THAT REPLACING COULD NOT HAVE.
+   * The query-change effect below clears it, and only a reset's answer sets it
+   * again. In the window between — a filter change whose first page has not
+   * landed, or one whose request failed and left the previous rows up under an
+   * error banner — a revalidation holds rows for the NEW query while the screen
+   * holds rows for the OLD one, and merging the two would render both filters
+   * at once. There is nothing to reconcile against, so a revalidation in that
+   * window REPLACES, exactly as a reset does, and asks for one page rather than
+   * re-reading a span that belongs to a query it is not for.
+   *
+   * A boolean rather than a second counter: query provenance is the only thing
+   * it answers, and `listGeneration` already answers everything else.
+   */
+  const listMatchesQuery = useRef(false);
+
   const load = useCallback(
     async (showLoading: boolean) => {
       const token = (requestToken.current += 1);
       const generation = listGeneration.current;
-      // ⚠ A RESET READS ONE PAGE; A REVALIDATION RE-READS THE LOADED SPAN.
-      // See `mergeFeedPage.ts` for why, and for why the span is capped at 100.
-      const plan = showLoading
+      // ⚠ A RESET READS ONE PAGE AND REPLACES; A REVALIDATION RE-READS THE
+      // LOADED SPAN AND MERGES. See `mergeFeedPage.ts` for why, and for why
+      // the span is capped at 100. A revalidation fired while no rows of this
+      // query are on screen is a reset — see `listMatchesQuery` above.
+      const isReset = showLoading || !listMatchesQuery.current;
+      const plan = isReset
         ? { limit: TRANSCRIPT_PAGE_SIZE, cursorIsAuthoritative: true }
         : planFeedRevalidate(loadedCount.current, TRANSCRIPT_PAGE_SIZE);
       if (showLoading) setIsLoading(true);
@@ -266,11 +288,16 @@ export function useTranscripts(
         const params: TranscriptListParams = { scope, q, status, limit: plan.limit };
         const response = await getTranscripts(params);
         if (!isMounted() || token !== requestToken.current) return;
-        if (showLoading) {
-          // The reset path, unchanged: a first load, a filter change or a scope
-          // change has nothing worth reconciling with.
+        if (isReset) {
+          // The reset path, byte-for-byte what it always did: a first load, a
+          // filter change or a scope change has nothing worth reconciling
+          // with — and neither has a revalidation that arrives before this
+          // query's first page has landed. ⚠ `isLoading` is still governed by
+          // `showLoading` alone, so a revalidation taking this branch replaces
+          // the rows without ever raising the skeleton over them.
           setTranscripts(response.items);
           setNextCursor(response.nextCursor);
+          listMatchesQuery.current = true;
         } else if (generation === listGeneration.current) {
           // ⚠ MERGE, NEVER REPLACE (issue #167). `setTranscripts(response.items)`
           // here was the bug: load two hundred rows, look away for twenty
@@ -292,7 +319,14 @@ export function useTranscripts(
     [isMounted, q, scope, status],
   );
 
+  // ⚠ A NEW QUERY INVALIDATES BOTH GUARDS ABOVE, and it must do so BEFORE the
+  // reset is issued: a revalidation still in flight for the previous filter
+  // has to drop its answer rather than replace this query's first page with
+  // the last one's, and a revalidation issued while this reset is in flight
+  // has to replace rather than merge into rows that are not its own.
   useEffect(() => {
+    listGeneration.current += 1;
+    listMatchesQuery.current = false;
     void load(true);
   }, [load]);
 
