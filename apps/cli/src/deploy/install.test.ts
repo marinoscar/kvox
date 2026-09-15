@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { deployInfoPath, readDeployInfo } from './deploy-info.js';
+import { deployInfoDir, deployInfoPath, readDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath } from './env-file.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
@@ -209,6 +209,68 @@ describe('the preflight step', () => {
 
     expect(error).toBeInstanceOf(PreconditionError);
     expect((error as Error).message).toContain('proxy-root');
+  });
+
+  // --- --skip-github reaches the checks, not only the `auth` step (#133) ----
+  //
+  // Every CI runner has `gh` installed and nobody logged into it, so
+  // `gh-authenticated` - a REQUIRED check - fails there. The flag that is
+  // supposed to make this pipeline runnable against a `file://` remote has to
+  // cover the preflight too, or it covers only half of what it claims: the
+  // `auth` step stands down, the preflight refuses, and the install never
+  // starts. These two tests pin both halves.
+  describe('--skip-github', () => {
+    /** The same box, with `gh` present and nobody logged into it. */
+    const loggedOutRunCommand = (async (
+      argv: readonly string[],
+      options: RunCommandOptions,
+    ): Promise<CommandResult> => {
+      if (argv.join(' ').startsWith('gh auth status')) {
+        const result: CommandResult = {
+          argv: [...argv],
+          cwd: options.cwd,
+          exitCode: 1,
+          stdout: '',
+          stderr: 'You are not logged into any GitHub hosts.',
+          durationMs: 1,
+          timedOut: false,
+        };
+        throw new CommandFailedError(result.stderr, result);
+      }
+      return await noProxyRunCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    function loggedOutContext(options: Record<string, unknown>, lines: string[]) {
+      const context = preflightContext(options, lines) as {
+        runCommand: typeof import('./executor.js').runCommand;
+      };
+      context.runCommand = loggedOutRunCommand;
+      return context as never;
+    }
+
+    it('reports the gh checks as skipped rather than failing them', async () => {
+      const lines: string[] = [];
+
+      await expect(
+        preflight.run(loggedOutContext({ skipProxy: true, skipGithub: true }, lines)),
+      ).resolves.toBeUndefined();
+
+      expect(lines).toContain('skip gh-installed: --skip-github');
+      expect(lines).toContain('skip gh-authenticated: --skip-github');
+      expect(lines).toContain('skip gh-repo-access: --skip-github');
+      expect(lines.some((line) => line.startsWith('fail '))).toBe(false);
+    });
+
+    it('fails on a logged-out gh without the flag', async () => {
+      const lines: string[] = [];
+
+      const error = await preflight
+        .run(loggedOutContext({ skipProxy: true }, lines))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(PreconditionError);
+      expect((error as Error).message).toContain('gh-authenticated');
+    });
   });
 });
 
@@ -798,6 +860,30 @@ describe('runInstall against a fake VPS', () => {
     expect(info?.updatedAt).toMatch(/Z$/);
     // And nothing secret made it in.
     expect(readFileSync(path, 'utf8')).not.toContain('not-the-default-password');
+  });
+
+  it('creates deploy-info before the stack starts, not after (#133)', async () => {
+    // The Docker daemon creates a missing bind-mount source as root:root, and
+    // `vps.compose.yml` mounts `<root>/deploy-info` into the api container. If
+    // the `start` step gets there first, the epilogue's writeDeployInfo fails
+    // with EACCES on its temp file for any operator who is not root - every
+    // step green, the install dead on its last line. Existence alone is not
+    // the assertion: the ORDER is.
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    const dir = deployInfoDir(root);
+    let existedAtStart: boolean | undefined;
+    const watching = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      if (argv[0] === 'docker' && argv[1] === 'compose' && argv.includes('up') && argv.includes('-d')) {
+        existedAtStart ??= existsSync(dir);
+      }
+      return await vps.runCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    await install(root, { runCommand: watching });
+
+    // The `start` step really did run - otherwise the flag proves nothing.
+    expect(existedAtStart).toBe(true);
+    expect(statSync(dir).isDirectory()).toBe(true);
   });
 
   it('consults gh before cloning a GitHub remote, and never for another forge', async () => {

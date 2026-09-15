@@ -186,7 +186,7 @@ export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
 
       if (argv[0] === 'docker' && argv[1] === 'compose') {
         if (joined.includes(' ps ')) return result('[]\n');
-        if (joined.includes('prisma migrate status')) {
+        if (joined.includes('prisma-env.js migrate status')) {
           return result('3 migrations found in prisma/migrations\n\nDatabase schema is up to date!\n');
         }
         return result();

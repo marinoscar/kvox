@@ -142,6 +142,34 @@ describe('collectHealth', () => {
     expect(isHealthy(report)).toBe(true);
   });
 
+  it('reads migration status through the env wrapper, not bare npx prisma', async () => {
+    // DATABASE_URL is derived from the POSTGRES_* variables by
+    // scripts/prisma-env.js and is set nowhere in the deployment, so bare
+    // `npx prisma` fails config validation and this check silently degrades
+    // to `known: false` - which isHealthy() treats as non-fatal. The spelling
+    // is pinned here because a matcher on 'migrate status' alone passes
+    // either way.
+    const seen: string[][] = [];
+    await collectHealth({
+      ...base,
+      runCommand: fakeRunCommand((argv) => {
+        seen.push([...argv]);
+        const line = argv.join(' ');
+        if (line.includes(' ps ')) return { exitCode: 0, stdout: RUNNING_PS };
+        if (line.includes('migrate status')) {
+          return { exitCode: 0, stdout: '3 migrations found\nDatabase schema is up to date!' };
+        }
+        return { exitCode: 0 };
+      }),
+      fetch: okFetch(),
+    });
+
+    const migrate = seen.find((argv) => argv.includes('migrate') && argv.includes('status'));
+    expect(migrate).toBeDefined();
+    expect(migrate?.slice(-4)).toEqual(['node', 'scripts/prisma-env.js', 'migrate', 'status']);
+    expect(migrate).not.toContain('npx');
+  });
+
   it('probes the frontend separately from the API', async () => {
     const urls: string[] = [];
     await collectHealth({

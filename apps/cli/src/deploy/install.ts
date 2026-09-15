@@ -13,7 +13,7 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { writeDeployInfo } from './deploy-info.js';
+import { deployInfoDir, writeDeployInfo } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -272,6 +272,18 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(context.options.skipProxy === undefined
             ? {}
             : { skipProxy: context.options.skipProxy }),
+          // --skip-github has to reach the CHECKS, not only the `auth` step
+          // below (#133). The three `gh-*` checks are `required`, and
+          // `gh-authenticated` fails outright on a box where `gh` is
+          // installed but nobody has logged in - which is every CI runner.
+          // Without this line the flag silently covered half of what it
+          // says it covers: the step stood down and the preflight failed
+          // anyway, so an install could never complete unattended against a
+          // remote that is not on GitHub. Doctor already passes it through
+          // (`runDoctorCommand`); this makes install agree with doctor.
+          ...(context.options.skipGithub === undefined
+            ? {}
+            : { skipGithub: context.options.skipGithub }),
         };
         const results = await runChecks(checks, checkContext);
 
@@ -743,6 +755,17 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   // Reserved for bind-mounted persistent data; created empty so the layout is
   // complete from the first run and a compose file can mount it unconditionally.
   mkdirSync(join(options.deployRoot, 'data'), { recursive: true });
+  // BEFORE the stack starts, and that ordering is the whole point (#133).
+  // `vps.compose.yml` bind-mounts `${DEPLOY_ROOT}/deploy-info` into the api
+  // container, and the Docker daemon creates a missing bind source as
+  // root:root - after which this run's own `writeDeployInfo` below cannot
+  // write its temp file there unless the operator is root. On a VPS `install`
+  // runs as root and it never shows; in CI it failed the epilogue with EACCES
+  // on `deploy-info/info.json.<pid>.tmp` with all thirteen steps green. The
+  // directory is the CLI's to write, so the CLI creates it first. Mode
+  // mirrors deploy-info.ts: the api container's unprivileged user has to
+  // traverse it, and nothing in it is secret.
+  mkdirSync(deployInfoDir(options.deployRoot), { recursive: true, mode: 0o755 });
 
   const journal = openJournal({
     deployRoot: options.deployRoot,

@@ -126,11 +126,23 @@ describe('runInstallDeps', () => {
   });
 
   it('creates the state directory with the shipped default steps', () => {
+    // Hermetic by construction: `run` is a recording spy standing in for the
+    // context's real `execFileSync` fallback, so the shipped default steps
+    // (including the ffmpeg step's `install`) run for real but nothing is
+    // ever actually executed on the host. Without this, a machine where the
+    // ffmpeg probe finds it missing shells out to a real `apt-get install`.
     const stateDir = join(dir, 'created');
-    const report = runInstallDeps({ stateDir, distro: detectDistro({ platform: 'linux', osRelease: 'ID=ubuntu\n' }) });
+    const run = vi.fn();
+    const report = runInstallDeps({
+      stateDir,
+      run,
+      distro: detectDistro({ platform: 'linux', osRelease: 'ID=ubuntu\n' }),
+    });
 
     expect(existsSync(stateDir)).toBe(true);
     expect(report.ok).toBe(true);
+    // Earn the title: prove the *shipped* defaults ran, not just "some steps".
+    expect(report.results.map((result) => result.id)).toEqual(DEFAULT_INSTALL_STEPS.map((step) => step.id));
   });
 });
 
