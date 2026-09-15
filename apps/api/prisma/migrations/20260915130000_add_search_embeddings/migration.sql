@@ -21,8 +21,8 @@
 -- This statement requires the `vector` extension's shared library to be
 -- present on the PostgreSQL SERVER — not something any migration tool can
 -- install by itself, and not something every managed-Postgres offering ships
--- by default. Issue #179 puts the check where a failure is actionable: `kvox
--- deploy`'s `database-vector-extension` preflight probes the target server
+-- by default. Issue #179 puts the check where a failure is actionable: the
+-- deploy CLI's `database-vector-extension` preflight probes the target server
 -- BEFORE any deploy proceeds, and refuses the deploy outright with a clear
 -- operator-facing message if `vector` cannot be provided. By the time this
 -- migration runs, that question has already been answered — this
