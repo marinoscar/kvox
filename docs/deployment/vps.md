@@ -1,63 +1,64 @@
 # Runbook: Deploy to a VPS
 
-This runbook covers taking a single Ubuntu VPS from nothing to a running,
-migrated, seeded, HTTPS-served deployment of this application using `kvox
-deploy`, and keeping it current afterward. It is the operator-facing
+This runbook covers taking a single Ubuntu or Debian VPS from nothing to a
+running, migrated, seeded, HTTPS-served deployment of this application using
+`kvox deploy`, and keeping it current afterward. It is the operator-facing
 companion to [`docs/specs/vps-deploy.md`](../specs/vps-deploy.md): that
-document explains why `kvox deploy` is built the way it is (why the CLI
-never dials out over SSH, why TLS is terminated by a shared proxy instead of
-per-app, why there is no `db` service, what was rejected and why); this one
-tells you what to actually run, in order, on a real box. Read the spec first
-if something here doesn't make sense — it almost certainly has the "why."
+document explains why `kvox deploy` is built the way it is (why the CLI never
+dials out over SSH, why TLS is terminated by a shared container proxy instead
+of per-app, why there is no `db` service, what was rejected and why — §18 in
+particular is what corrected the original design against a real server); this
+one tells you what to actually run, in order, on a real box. Read the spec
+first if something here doesn't make sense — it almost certainly has the
+"why."
+
+The server is operated as `root`; every command below is written for a root
+shell and none of them use `sudo`. Nothing in this runbook is ever edited by
+hand in a text editor — every file `kvox deploy` writes (the `.env`, the
+vhost, the cron entry) is written by the CLI, and the one place you type
+values is the wizard's own prompts.
 
 Source of truth for every claim below:
 
-- `apps/cli/src/deploy/checks/` — the ~27 doctor checks (`host.ts`,
-  `database.ts`, `dns.ts`, `tls.ts`), run standalone by `doctor` and as the
-  required-only preflight of `install`/`update`.
-- `apps/cli/src/deploy/install.ts` — the install pipeline.
-- `apps/cli/src/deploy/update.ts` — the update pipeline, its re-seed default,
-  and why there is no automatic rollback.
-- `apps/cli/src/deploy/health.ts` — what `status` reports, and the frontend
-  probe kept separate from `/api/health/ready`.
-- `apps/cli/src/deploy/proxy.ts` — the shared reverse proxy, vhost rendering,
-  and certbot issuance (rate-limit handling included).
-- `apps/cli/src/deploy/repo.ts` — resolving the repository and ref from the
-  checkout's own git remote, with no fork-specific configuration anywhere.
-- `apps/cli/src/deploy/journal.ts` — the run log and its redaction guarantee.
-- `apps/cli/src/deploy/env-metadata.ts` — which environment variables are
-  derived (`GOOGLE_CALLBACK_URL`, `APP_URL`), which are secrets, and which are
-  essential.
-- `infra/compose/vps.compose.yml` — the loopback-only overlay a VPS deploy
-  adds on top of `base.compose.yml` + `prod.compose.yml`.
-- `apps/api/prisma/seed.ts` — the idempotent seed `install` and `update` both
-  run; what it writes and, just as important, what it does not.
-- `apps/api/src/health/health.controller.ts` — `/api/health/ready`, and why a
-  green result there is not evidence a migration ran.
-- `apps/cli/README.md`, section "Deploying to a server" — the command
-  reference (flags, exit codes) this runbook assumes you have open alongside
-  it.
+- `apps/cli/src/deploy/layout.ts` — the app-folder layout, `--apps-root`/
+  `--name`/`--root`, and why two apps on one box need separate compose
+  project names.
+- `apps/cli/src/deploy/checks/` — the ~33 doctor checks (`host.ts`,
+  `github.ts`, `database.ts`, `dns.ts`, `tls.ts`), run standalone by `doctor`
+  and as the required-only preflight of `install`/`update`.
+- `apps/cli/src/deploy/wizard/steps.ts` — the install wizard's steps, in the
+  order the CLI and the TUI both render them.
+- `apps/cli/src/deploy/install.ts` / `update.ts` — the install and update
+  pipelines.
+- `apps/cli/src/deploy/proxy.ts` — the shared, containerized reverse proxy:
+  vhost rendering, `docker run certbot/certbot` issuance, `docker exec`
+  validate/reload, and the ACME self-probe.
+- `apps/cli/src/deploy/deploy-info.ts` and
+  `apps/api/src/about/deploy-info.schema.ts` — the deployment record the CLI
+  writes and the API reads; the full schema is
+  [`docs/specs/vps-deploy.md` §19](../specs/vps-deploy.md#19-the-deploy-infoinfojson-schema).
+- `apps/cli/bootstrap-vps.sh` — the fresh-server bootstrap script.
+- `apps/cli/README.md`, section
+  ["Deploying to a server"](../../apps/cli/README.md#deploying-to-a-server) —
+  the full command and flag reference this runbook assumes you have open
+  alongside it; this runbook does not repeat every flag.
+- `.github/workflows/deploy-e2e.yml` — the **Deploy end-to-end (issue #118)**
+  CI job, described in "What backs these claims" below.
 
-**Half of this is now exercised on every relevant change; half is still not.**
-Since issue #133 the `Deploy E2E` workflow
-(`.github/workflows/deploy-e2e.yml`) runs `doctor`, `install`, `status`,
-`update --check` and `update` against a real Docker daemon and a real
-PostgreSQL on every change to `apps/cli/src/deploy/**`, `infra/compose/**`,
-either Dockerfile or `apps/api/prisma/**`, and nightly besides. It builds the
-images, applies the migrations, seeds, starts the stack and probes it — so
-`docker compose build`, the migrate step, the `.env` symlink, the `-p <name>`
-project naming and the loopback-only port binding are all covered by
-assertions now, not by inspection. `apps/cli/README.md`'s "Testing the deploy
-pipeline locally" runs the same sequence on your own machine.
+## What backs these claims
 
-**What is still unexercised is the public half**: the shared reverse proxy,
-the Let's Encrypt certificate, the DNS checks and the renewal cron. A CI
-runner has no public DNS and no proxy, so that job passes `--skip-proxy`
-throughout; what backs the claims about those pieces is the unit suite for
-`proxy.ts`, the vhost snapshot test, `docker compose … config` validating
-cleanly and a real `kvox deploy doctor` run. Treat the first real install on a
-new box as the first true exercise of the proxy and certificate path, and lean
-on `doctor` and `--staging` (section 8) accordingly.
+The full pipeline is exercised by CI on every change that touches it: the
+**Deploy end-to-end (issue #118)** workflow
+(`.github/workflows/deploy-e2e.yml`) runs `kvox deploy install`,
+`kvox deploy update --check` and `kvox deploy update` against a real Docker
+daemon and a real PostgreSQL service container, with `--skip-proxy` (a CI
+runner has no public DNS to prove routing against, so the proxy/certificate
+half is out of scope for that job specifically — the vhost rendering has its
+own snapshot test instead). It runs on every pull request and push touching
+`apps/cli/src/deploy/**`, `infra/compose/**` or the API/web Dockerfiles, and
+nightly. Treat a real install's first run on a new box as the first exercise
+of the proxy/certificate half specifically, and lean on `doctor` and
+`--staging` (section 8) accordingly.
 
 ---
 
@@ -68,25 +69,38 @@ intended first step — before you've written a line of configuration, before
 you've touched the shared proxy, before anything. Don't hand-verify this list
 yourself; let doctor do it, and fix whatever it reports.
 
-- An Ubuntu VPS you have root SSH access to.
+- An Ubuntu or Debian VPS you operate as `root` (directly, or over SSH with
+  root access).
 - Docker Engine, with the **Compose v2 plugin** (`docker compose`, not the
   standalone `docker-compose` v1 binary — see the troubleshooting table).
-- git and Node.js on the server, to clone the repository and build `kvox`.
-- A shared reverse proxy at `/opt/infra/proxy`, with `nginx/conf.d` and its
-  ACME webroot both writable. If this is the first app ever deployed to this
-  box, `install` bootstraps this for you; if a different app got there first,
-  it already exists and `install` reuses it.
-- certbot, for Let's Encrypt certificate issuance via the proxy's webroot.
+- The `devnet` external Docker network. `install` creates it for you if it's
+  missing (`docker network create devnet`); nothing else needs it created by
+  hand.
+- git and Node.js **>= 20** on the server, to clone the repository and build
+  `kvox`. The bootstrap script (section 2) installs both if they're missing.
+- The **GitHub CLI** (`gh`), installed and logged in
+  (`gh auth login --hostname github.com --git-protocol https`). `install`/
+  `update` clone and fetch over HTTPS using `gh`'s own stored token — there
+  is no SSH key or deploy token anywhere in this pipeline. A remote that
+  isn't on `github.com` skips this requirement and uses plain git.
+- A shared reverse proxy container at `/opt/infra/proxy`, with
+  `nginx/conf.d` and its ACME `webroot/` both writable. If this is the first
+  app ever deployed to this box, `install` bootstraps it for you; if a
+  different app got there first, it already exists and `install` reuses it.
+  There is no host nginx and no host certbot anywhere in this pipeline —
+  only `docker exec`/`docker run` against that container (section 8).
 - A DNS **A record** for your domain, already pointing at this server's
   public IP, before you run `install` — the certificate can't be issued
-  otherwise, and issuance failures spend real rate-limit budget (section 8).
+  otherwise, and a failed issuance spends real rate-limit budget (section
+  8).
 - An **external PostgreSQL** database, reachable from this server, that
   already exists. This application ships no `db` service — `base.compose.yml`
   deliberately has none — so you are responsible for standing one up
   (managed or self-hosted) before you install.
 - Google OAuth credentials whose **redirect URI matches
   `https://<domain>/api/auth/google/callback`** — the exact domain you're
-  about to deploy under, not a placeholder.
+  about to deploy under. The wizard prints this exact URI when it asks for
+  the credentials, so you never have to derive it yourself.
 
 ```bash
 kvox deploy doctor
@@ -98,81 +112,109 @@ it's safe to run against a production server at any time, not just before a
 first install. Run it plain first; add `--domain` once you know what domain
 you're deploying to, which turns on the DNS and certificate checks.
 
-## 2. Installing for the first time
+## 2. Fresh server in three commands
+
+For a brand-new box, [`bootstrap-vps.sh`](../../apps/cli/bootstrap-vps.sh)
+does everything up through a first `doctor` run and opens the interactive
+menu. From a fresh root shell on an Ubuntu or Debian server that already has
+Docker:
+
+```bash
+gh auth login --hostname github.com --git-protocol https
+gh repo view <owner>/<repo> --json name && curl -fsSL "$(gh api repos/<owner>/<repo>/contents/apps/cli/bootstrap-vps.sh --jq .download_url)" -o /tmp/bootstrap-vps.sh
+bash /tmp/bootstrap-vps.sh --repo <owner>/<repo>
+```
+
+For a **public** repository, the plain raw URL works with nothing installed
+first:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/apps/cli/bootstrap-vps.sh -o /tmp/bootstrap-vps.sh
+bash /tmp/bootstrap-vps.sh --repo <owner>/<repo>
+```
+
+**Verify:** the script prints each of its six steps before running it and
+checks the result after — `id -u`/`/etc/os-release`/`docker compose version`
+preconditions, `gh` install + `gh auth login` + `gh auth setup-git`, Node.js
+(installs Node 22 from NodeSource with a `[y/N]` prompt if missing or
+older than 20; `--yes` answers for you), cloning this repository to
+`/opt/infra/cli/<repo>` and building `kvox` onto `/usr/local/bin` (verified
+with `kvox --version`), creating `/opt/infra/apps`, then a read-only
+`kvox deploy doctor --skip-proxy` (its exit code is reported, not fatal) and
+either the interactive menu or, with `--no-tui`, the exact next command to
+run. It's idempotent — re-running it is a no-op except for `--update`, which
+pulls and rebuilds the CLI checkout itself. The full flag table and the
+script's own six-step breakdown are in
+[the CLI README](../../apps/cli/README.md#fresh-server-in-three-commands);
+this is the operator-facing shortcut, not a second copy of that reference.
+
+Skipping the script means doing its steps 2–5 yourself: clone your repository,
+`npm install --workspace=cli && npm run build --workspace=cli`, put
+`apps/cli/dist/cli.js` somewhere runnable, `mkdir -p /opt/infra/apps`, then
+continue at section 3 below.
+
+## 3. Installing for the first time
 
 `kvox deploy` has no SSH client and never dials out to a server on your
-behalf — you SSH in yourself, with your own credentials, and everything below
-runs **on the VPS**.
+behalf — you're already on the VPS (via the bootstrap script or your own
+SSH session), and everything below runs **on the VPS**.
 
-1. **SSH into the VPS.**
-
-   **Shortcut for a fresh box:** `apps/cli/bootstrap-vps.sh` does steps 2
-   and 3 for you from a root shell — it installs the GitHub CLI and Node.js
-   if they are missing, clones the repository to `/opt/infra/cli/<repo>`,
-   builds `kvox` onto `/usr/local/bin`, runs `deploy doctor`, and opens the
-   menu. Docker is the one thing it will not install. See
-   ["Fresh server in three commands" in the CLI README](../../apps/cli/README.md#fresh-server-in-three-commands)
-   for the download command and flags; the rest of this section is the
-   manual equivalent.
-
-2. **Clone the repository you want to deploy** (your fork, if you have one —
-   see section 6) and build `kvox` from source:
-
-   ```bash
-   git clone <your-repo-url>
-   cd <your-checkout>
-   npm install --workspace=cli
-   npm run build --workspace=cli
-   node apps/cli/dist/cli.js deploy doctor
-   ```
-
-   You need a real git checkout here, not the standalone `kvox` the
-   `curl | bash` installer in the main [CLI README](../../apps/cli/README.md)
-   produces — `deploy install` reads its default repository URL and ref from
-   *this checkout's own git remote* (section 6), and a standalone install has
-   no remote to read. If `~/.local/bin` is already on your `PATH` from an
-   earlier `kvox` install, the plain `kvox` command works the same as
-   `node apps/cli/dist/cli.js` from here on; this runbook uses `kvox` for
-   brevity.
-
-3. **Run `doctor`** (as above) and fix everything it reports before going
+1. **Run `doctor`** (section 1) and fix everything it reports before going
    further. A required failure here is cheaper to fix now than mid-install.
 
-4. **Run `install`:**
+2. **Run `install`:**
 
    ```bash
    kvox deploy install --domain app.example.com
    ```
 
-   This is interactive by default: it walks you through the essential
-   environment variables (database credentials, JWT/cookie secrets — offering
-   to generate the ones that can be generated, Google OAuth credentials,
-   `INITIAL_ADMIN_EMAIL`) with sensible defaults, then runs preflight,
-   checkout, environment validation, build, migrate, seed, start, health
-   wait, certificate issuance and vhost publish, and a final external HTTPS
-   verification, printing each step's result as it completes. `--domain` is
-   the one required flag; everything else — `--root` (default
-   `/opt/infra/apps`), `--proxy-root` (default `/opt/infra/proxy`), `--port`
-   (default `3535`) — has a workable default.
+   This is interactive by default, in nine steps, in this order — each
+   verified before the next opens, so a wrong answer is caught immediately
+   instead of fifteen questions later:
 
-   For a scripted or first-time-nervous install, add `--staging` (section 8)
-   and/or `--non-interactive` (which fails, listing what's unresolved,
-   instead of prompting — useful once you already know every value you want
-   to pass, or want a `.env` prepared ahead of time).
+   | Step | Asks for | Verified before moving on |
+   |---|---|---|
+   | Domain | The public hostname (`APP_URL` and the OAuth callback are derived from it) | `dns-resolves`, `dns-points-here` |
+   | Database | `POSTGRES_HOST`/`PORT`/`USER`/`PASSWORD`/`DB`/`SSL` — nothing is pre-filled for the host | `database-reachable`, `database-credentials`, `database-exists`, `database-privileges` |
+   | Secrets | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY` — generated with a CSPRNG unless you paste your own | — |
+   | Google OAuth | `GOOGLE_CLIENT_ID`/`SECRET`/`CALLBACK_URL` — the exact redirect URI is printed first | — |
+   | Administrator | `INITIAL_ADMIN_EMAIL` — also the certificate registration address unless `--email` overrides it | — |
+   | Object storage | S3-compatible storage keys, optional — blank skips it | a reachability probe, as a warning only |
+   | Resources | The loopback port, job worker slots, and container memory limits — each suggested from this server's own CPU/RAM, shown with its reason, and editable | — |
+   | Everything else | Every remaining `.env.example` key not already asked, only with `--all` | — |
+   | Review | The full set of answers, before anything is written | — |
 
-5. **If it fails partway through**, fix whatever it reported and run the
+   The full pipeline, in order, is: preflight → the `devnet` network →
+   `gh auth setup-git` → checkout → environment (the wizard above) →
+   validate-environment (the database checks) → build → migrate → seed →
+   start → wait for `/api/health/ready` → publish (prove the domain routes
+   here, issue the certificate, write the vhost) → an external HTTPS
+   verification, printing each step's result as it completes.
+
+   Everything lands under `/opt/infra/apps/<name>/`, where `<name>` defaults
+   to the repository's own name and doubles as the docker compose **project**
+   name — this is what keeps a second app on the same box from replacing the
+   first app's containers. Pass `--name <app>` to choose it explicitly, or
+   `--root <dir>` to name the full path outright.
+
+3. **If it fails partway through**, fix whatever it reported and run the
    *same command again* — `install` is idempotent, and each step is safe to
    re-run. Add `--resume` to skip straight to the step that failed rather
    than re-checking everything before it.
 
-6. **Once it succeeds**, do not treat a clean `install` as "the site is
-   live and correct" until you've done section 3 — the seed does not create
+4. **Once it succeeds**, do not treat a clean `install` as "the site is
+   live and correct" until you've done section 4 — the seed does not create
    anyone who can log in.
+
+For a scripted or first-time-nervous install, add `--staging` (section 8)
+and/or `--non-interactive --answers-file <path>` (which fails, listing
+what's unresolved, instead of prompting — the domain may be given in the
+file as `APP_DOMAIN`).
 
 Full flag reference and exit codes: [`apps/cli/README.md`, "Deploying to a
 server"](../../apps/cli/README.md#deploying-to-a-server).
 
-## 3. After install: the first login (do this before anything else)
+## 4. After install: the first login (do this before anything else)
 
 **A successful `install` does not create an admin user, or any user at
 all.** The seed (`apps/api/prisma/seed.ts`) writes an **allowlist row** for
@@ -180,10 +222,6 @@ all.** The seed (`apps/api/prisma/seed.ts`) writes an **allowlist row** for
 Allowlist" section of the root `CLAUDE.md` describes for local development —
 and nothing more. Nobody is an admin, and nobody has an account, until that
 exact email address completes Google OAuth login at `https://<domain>`.
-
-If you skip this step and go looking for why the admin panel is empty or why
-nobody can do anything privileged, you will not find a bug — you'll find a
-correctly-installed application with no users. So:
 
 1. Open `https://<domain>` in a browser.
 2. Log in with Google, using the exact address configured as
@@ -195,126 +233,229 @@ correctly-installed application with no users. So:
    restricts access to pre-authorized emails only, and `INITIAL_ADMIN_EMAIL`
    is the only address the seed adds automatically.
 
-## 4. Checking status and health
+**Verify:** `https://<domain>` loads over a trusted certificate (not the
+`--staging` one, if you used it) and the admin panel shows the account you
+just created.
+
+## 5. Status and about
+
+Two different questions, two different commands.
 
 ```bash
 kvox deploy status
-kvox deploy status --domain app.example.com
 ```
 
-`status` reports container state, an immediate `/api/health/ready` poll, a
-**separate frontend probe**, and — this is the part worth understanding, not
-just running — migration state reported on its own, not inferred from the
+**Is it up, and is it current?** Container state, an immediate
+`/api/health/ready` poll, a fetch-and-compare against the remote (bounded to
+ten seconds, never cloning — rendered as an `Update: N commits behind` line),
+and migration state reported **as its own fact**, never inferred from the
 health probe.
 
 **`/api/health/ready` returning 200 only proves the app can run `SELECT 1`
 against the configured database.** It passes against a completely empty,
 unmigrated database exactly as readily as a fully migrated one, because
-that's all the underlying check does. Nothing about a green readiness probe
-tells you the schema is current. This is precisely why `status` reports
-"Migrations: up to date" / "N pending" / "could not be determined" as its own
-line, and why the install/update pipelines treat their own migrate step's
-exit code — not the later health wait — as the only real evidence a
-migration ran.
-
-The frontend gets its own probe for the same kind of reason: the API can
-answer every request correctly while the site itself 502s, if the web
-container's own nginx and the shared proxy's upstream ever disagree about
-which port to talk on (see the troubleshooting table's last row). A single
-"healthy: true/false" that only checked the API would hide that class of
-failure completely.
+that's all the underlying check does. This is why `status` reports
+"Migrations: up to date" as its own line, and why the install/update
+pipelines treat their own migrate step's exit code — not the later health
+wait — as the only real evidence a migration ran.
 
 ```bash
+kvox deploy status --domain app.example.com   # also checks external HTTPS
 kvox deploy status --json || alert 'deployment unhealthy'
 ```
 
-Exit codes: `0` serving and schema current, `1` installed but unhealthy, `2`
-nothing installed at `--root`. The distinct exit `2` matters for monitoring —
-"nothing is installed here" and "something is installed and broken" need
-different alerts.
+Exit codes: `0` serving and current, `1` installed but unhealthy, `2`
+nothing installed under `--apps-root` (or at `--root`) — the distinct exit
+matters for monitoring, since "nothing is installed here" and "something is
+installed and broken" need different alerts.
 
-## 5. Updating
+```bash
+kvox deploy about
+```
+
+**What is deployed, when, by whom, and on what.** Three blocks — Application
+(the running process's own version, Node, uptime, PostgreSQL version and
+applied migration count, read live from `GET /api/admin/about`), Deployment
+(revision, ref, repository, domain, when installed/last updated, by which
+command, the previous revision, and the same `Update: N commits behind`
+line), and Server (hostname, OS, kernel, CPU, memory, disk, Docker/Compose/
+Node **as recorded at deploy time**, with any live value that has changed
+since shown beside it, e.g. `3.8 GiB (now 7.6 GiB)`). `--check` fetches the
+remote first so the Update line is current; without it, it reports what was
+last recorded. It is **informational, never a health verdict** — a stopped
+API or an unreachable remote is reported inline and still exits `0`; use
+`status` for the check a monitor should act on.
+
+**Verify:** `kvox deploy about --json | jq .deployment.commitSha` matches
+`git -C /opt/infra/apps/<name>/repo rev-parse HEAD` on the server.
+
+## 6. Updating
+
+```bash
+kvox deploy update --check
+```
+
+**Always run `--check` first.** It fetches and prints `current <sha> ->
+latest <sha>, N commits behind` with the commit subjects — or `already up to
+date` — records the result in `deploy-info/info.json` (what `about` and the
+web Console's About page both read), and exits `0` either way, **with
+nothing checked out, built, or written to the state file.** Read what it
+would apply before you apply it.
 
 ```bash
 kvox deploy update
 ```
 
-Fetches, and if the resolved ref's commit has moved, rebuilds, migrates,
-re-seeds, restarts, and re-verifies. `update` refuses outright if nothing is
-installed at `--root` — run `install` first.
-
-**If the revision hasn't moved, `update` exits `0` and does nothing else** —
-no rebuild, no restart, no seed. That's what makes it safe to run
-unattended, for example from cron:
+Fetches, and if the resolved ref's commit has moved, prints the same block
+`--check` would, then rebuilds, migrates, re-seeds, restarts, and
+re-verifies. It refuses outright if nothing is installed at `--apps-root`/
+`--root` — run `install` first. **If the revision hasn't moved, `update`
+exits `0` and does nothing else** — no rebuild, no restart, no seed — which
+is what makes it safe to run unattended:
 
 ```cron
-# Check for a new release every night at 03:00, do nothing if there isn't one
-0 3 * * * cd /opt/infra/apps/repo && kvox deploy update --non-interactive >> /var/log/kvox-update.log 2>&1
+# Check nightly at 03:00; does nothing if there's no new revision
+0 3 * * * cd /opt/infra/apps/<name> && kvox deploy update --non-interactive >> /var/log/kvox-update.log 2>&1
 ```
 
-Two behaviors are worth knowing before your first `update`, because both are
-deliberate and both surprise people who've operated the shell-script
-deployments this replaces:
+Two behaviors surprise people who've operated the shell-script deployments
+this replaces, and both are deliberate:
 
 **The seed re-runs by default, on every update.** `apps/api/prisma/seed.ts`
 is entirely upserts, and re-running it is the *only* way a permission or role
 row a newer release adds actually reaches a server that was installed
-earlier. Skip it, and a release that ships a new permission does nothing on
-your server — the feature ships, the permission doesn't exist in your
-database, and the first symptom is a confusing 403 with nothing in the logs
-pointing at "you needed to re-seed." The shell scripts this replaces never
-re-seeded; this is a deliberate change, not an oversight. Pass `--skip-seed`
-only if you've hand-edited seeded rows (a role's permission set, say) and
-don't want them upserted back to their defaults.
+earlier. Skip it only if you've hand-edited seeded rows and don't want them
+upserted back — `--skip-seed`.
 
 **There is no automatic rollback.** A partly-applied database migration
 can't be safely undone by checking out the old application code — that's a
-decision that needs a human looking at what actually happened, not a
-heuristic guessing at it. On failure, `update` prints the previous revision
-and the exact command to redeploy it:
+decision that needs a human, not a heuristic. On failure, `update` prints the
+previous revision and the exact command to redeploy it:
 
 ```bash
 kvox deploy update --ref <previous-sha> --force
 ```
 
-`--force` is what makes that command work even though the "ref" you're
-moving to is technically older than what's currently checked out — without
-it, `update` would see the ref hasn't "moved forward" in the way it expects
-and do nothing.
+**Verify:** `kvox deploy status` reports healthy and current, and
+`kvox deploy about --json | jq .deployment.commitSha` matches the new `HEAD`.
 
 Full flag reference: [`apps/cli/README.md`, "Deploying to a
 server"](../../apps/cli/README.md#deploying-to-a-server).
 
-## 6. Deploying a fork
+## 7. Certificates and the renewal cron
 
-You do not need to change anything in this CLI to deploy a fork, and that
-property is worth understanding rather than just trusting.
+Certificates live behind the shared proxy **container**, never on the host.
+Issuance during `install` runs `docker run --rm certbot/certbot certonly
+--webroot`, validated and reloaded with `docker exec <proxy-container> nginx
+-t` / `nginx -s reload` — there is no host `certbot` and no host `nginx`
+anywhere in this pipeline.
 
-`kvox deploy install`/`update` read the repository URL and ref from **the
-checkout you ran them from** (`repo.ts` walks upward from the current
-directory looking for `.git`, then reads `git remote get-url origin` and the
-current branch) — not from a value hardcoded anywhere in `apps/cli`.
-`--repo`/`--ref` override the detected values when you need to, but the
-default is always "whatever this checkout points at." The environment
-wizard's questions are parsed structurally from **your checkout's own**
-`infra/compose/.env.example`, not from a fixed list of field names baked into
-the CLI — rename the application, add a new secret, remove the Microsoft
-OAuth block, switch your default branch to `develop`, and the wizard follows
-all of it with no CLI change. The only two places a fork edits by hand are
-outside `kvox deploy` entirely: the `bin` field in `apps/cli/package.json`
-and `install.sh`'s default clone URL, both documented in the CLI README's
-"Renaming this for a fork" section — neither is part of the deploy path.
+```bash
+kvox deploy certs status
+```
 
-In practice: clone your fork on the VPS (step 2 of section 2), build `kvox`
-from *that* checkout, and run `deploy install` from inside it. It deploys
-your fork, at your fork's default branch, asking about your fork's own
-environment variables, automatically.
+Lists every certificate behind the proxy with its expiry. Exits `0` while
+all are valid, `1` when one has expired, `2` when there are none.
 
-## 7. Logs
+```bash
+kvox deploy certs renew
+kvox deploy certs renew --dry-run   # rehearse only; nothing written or reloaded
+```
 
-Every `doctor`, `install`, and `update` run writes two files under
-`<deployRoot>/logs/`: a timestamped human-readable `.log` and a matching
-machine-readable `.jsonl` (one JSON object per executed subprocess:
+Runs `docker run --rm certbot/certbot renew` against the proxy's own
+`letsencrypt/`/`webroot/` mounts; certbot itself decides what's due (within
+30 days of expiry), and the proxy is `docker exec`-reloaded **only** when
+something was actually renewed — a scheduled run on a quiet day touches
+nothing.
+
+```bash
+kvox deploy certs renew --install-cron
+```
+
+Writes `/etc/cron.d/kvox-certs-<name>` — `root`, twice daily at a minute
+derived from the app's name (so several apps on one box don't all fire
+together), running `certs renew --all` so one cron entry serves every app
+behind the shared proxy. `install` writes this same file automatically the
+first time it issues a certificate; `doctor`'s `certificate-renewal` check
+recognizes it (or `certbot.timer`, or any cron line mentioning `certbot`/
+`renew`) as evidence something is renewing certificates on this box.
+
+**Verify:** `crontab -l` inside `/etc/cron.d/kvox-certs-<name>` shows the
+entry, and `kvox deploy doctor --domain <domain>`'s `certificate-renewal`
+check passes.
+
+## 8. Using Let's Encrypt staging while you work out the setup
+
+```bash
+kvox deploy install --domain app.example.com --staging
+```
+
+`--staging` requests a certificate from Let's Encrypt's **staging**
+environment instead of production. The certificate it issues won't be
+trusted by a real browser, but the whole rest of the pipeline — the ACME
+self-probe, webroot, vhost rendering, `nginx -t` validation, reload — runs
+identically, so it's the right way to work out a first install's kinks.
+Before spending any rate-limit budget at all, `install` writes a nonce under
+the proxy's webroot and fetches it over
+`http://<domain>/.well-known/acme-challenge/…` — the exact path the real
+HTTP-01 challenge takes — and fails, naming the domain and what answered
+instead, if the DNS record is wrong or the proxy isn't routing (see the
+troubleshooting table).
+
+A **failed** production issuance spends real, shared rate-limit budget: five
+failures per hostname per hour, and 50 certificates per registered domain
+per week, shared with *every* subdomain on that server, not just this app.
+Use `--staging` until `doctor --domain <yours>` and a full `install
+--staging` both come back clean, then run `install` again without the flag —
+`install` skips issuance entirely when a usable certificate already exists,
+so re-running costs nothing once staging already worked.
+
+## 9. The layout on disk, and what's secret
+
+```
+/opt/infra/apps/<name>/
+  repo/                       the CLI's own clone
+  logs/                       the run journal (human .log + machine .jsonl)
+  data/                       bind-mounted persistent data
+  deploy-info/info.json       what the running application reads about itself
+  .env                        the real environment file, 0600
+  .appctl-deploy.json         the CLI's own state file, 0600
+```
+
+- **`.env`** (0600) is the canonical environment file. `repo/infra/compose/.env`
+  is a *relative* symlink to it (`../../../.env`), so `rm -rf repo` on a
+  reinstall never takes your secrets with it, and the link keeps working
+  wherever the app folder ends up moved or bind-mounted. **Secret.**
+- **`.appctl-deploy.json`** (0600) is the CLI's own deployment record — never
+  mounted anywhere, refused outright if a newer CLI wrote it and this one
+  doesn't understand the version. The filename keeps the pre-rename `appctl`
+  spelling on purpose: it's read back off live servers, and renaming it would
+  make every existing deployment invisible to `status`/`update`. **Secret**
+  by construction, though it holds no credentials itself — treat it as you
+  would any file that proves what's installed where.
+- **`deploy-info/info.json`** (0644) is a **second, non-secret** file the CLI
+  writes on every `install`/`update` (and refreshes `remote` on `update
+  --check`/`status`) specifically so the running API can answer `GET
+  /api/admin/about` with no database write and no restart — bind-mounted
+  **read-only** into the `api` container at `/app/deploy-info`. **Not
+  secret** — full schema:
+  [`docs/specs/vps-deploy.md` §19](../specs/vps-deploy.md#19-the-deploy-infoinfojson-schema).
+- **`repo/`** and **`data/`** hold no secrets of their own; `repo/` is an
+  ordinary git checkout of the application, and its own `.env` is the symlink
+  above.
+- **`logs/`** (0600, both files) holds the run journal. Every value the CLI
+  knows to be a secret is **redacted** from it before a single byte reaches
+  disk — see section 10.
+
+**Verify:** `stat -c '%a %n' /opt/infra/apps/<name>/.env
+/opt/infra/apps/<name>/.appctl-deploy.json` both read `600`; `stat -c '%a %n'
+/opt/infra/apps/<name>/deploy-info/info.json` reads `644`.
+
+## 10. Logs
+
+Every `doctor`, `install`, `update`, and `certs renew` run writes two files
+under `<deployRoot>/logs/`: a timestamped human-readable `.log` and a
+matching machine-readable `.jsonl` (one JSON object per executed subprocess:
 `argv`, `cwd`, `exitCode`, `durationMs`, captured `stdout`/`stderr`,
 `startedAt`). Both are written mode `0600`, and only the newest ten runs are
 kept — older ones are pruned at the start of each new run.
@@ -331,46 +472,38 @@ secret and won't be redacted. If you add a new secret-shaped variable to a
 fork, add a `secret: true` entry for it in `env-metadata.ts` so both masking
 and log redaction pick it up.
 
-## 8. Using Let's Encrypt staging while you work out the setup
+## 11. Deploying a fork
 
-```bash
-kvox deploy install --domain app.example.com --staging
-```
+You don't need to change anything in this CLI to deploy a fork. The
+repository URL and ref are read from your own checkout's git remote (a fork
+using `master` or `develop` as its default branch works with no `--ref`
+needed), and the environment wizard's questions are parsed structurally from
+*your fork's own* `infra/compose/.env.example`, not a list of field names
+hardcoded into the CLI. In practice: clone your fork on the VPS, build
+`kvox` from *that* checkout, and run `deploy install` from inside it — it
+deploys your fork, at your fork's default branch, asking about your fork's
+own environment variables, automatically.
 
-`--staging` requests a certificate from Let's Encrypt's **staging**
-environment instead of production. The certificate it issues won't be
-trusted by a real browser, but the whole rest of the pipeline — DNS,
-webroot, vhost rendering, `nginx -t` validation, reload — runs identically,
-so it's the right way to work out a first install's kinks.
-
-The reason this matters more than it might look: a **failed** production
-issuance spends real, shared rate-limit budget — five failures per hostname
-per hour, and 50 certificates per registered domain per week, shared with
-*every* subdomain on that server, not just this one app. Burn through that
-debugging a typo'd DNS record on your first attempt, and you (and anyone else
-deploying to the same box) are locked out of real certificates for the rest
-of the week. Use `--staging` until `doctor --domain <yours>` and a full
-`install --staging` both come back clean, then run `install` again without
-the flag for the real certificate — `install` skips issuance entirely when a
-usable certificate already exists, so re-running costs nothing if staging
-already got you a (test) one.
-
-## 9. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
-| Certificate issuance fails during `install` | The domain's DNS doesn't actually point at this server. | `doctor --domain <domain>` runs `dns-resolves` and `dns-points-here` specifically for this — the failure names both addresses (what the domain resolves to, and what this server's own address is) so a CDN or a stale record is obvious at a glance. |
-| Login redirects loop, or Google rejects the callback | `GOOGLE_CALLBACK_URL` disagrees with the domain you're actually serving. | `GOOGLE_CALLBACK_URL` is **derived automatically** from the domain you gave during install (`https://<domain>/api/auth/google/callback`) unless you deliberately overrode it in the wizard's `--all` review. If you're seeing this, something overrode the derived value — check the deployed `.env` and either fix it there or re-run the wizard for that key. |
-| Migration step succeeds, but the app can't connect to the database afterward | `POSTGRES_PASSWORD` contains a URL-reserved character (`@`, `:`, `/`, `#`). | Fixed for new deployments (issue #172) — the database URL is now built in one place and the password is percent-encoded. An **older** deployment predating that fix, or a hand-edited `.env`, can still hit this. Either change the password to avoid those characters or confirm your checkout includes the fix. |
-| `install`/`doctor` reports the loopback port is already in use, by something that isn't this deployment | Another app on the same VPS is already bound to that port. | Pick a different port for this app with `APP_BIND_PORT` in its `.env` (or `--port` during install), or stop whatever's holding the port. `doctor`'s `bind-port-free` check is written to *not* flag this app's own already-running nginx as a conflict — a false positive here means it's genuinely something else. |
-| Repeated `install` attempts start failing with a rate-limit error from Let's Encrypt | You burned the hourly/weekly certificate budget on earlier failed attempts (section 8). | Wait — retrying immediately makes it worse. Use `--staging` for everything except the attempt you actually intend to keep. |
+| `install`/`doctor` fails on `gh-authenticated` | `gh auth status` is failing — the GitHub CLI isn't logged in, or its token expired. | Run `gh auth status` directly to see the reason, then `gh auth login --hostname github.com --git-protocol https`. `install`/`update` also run `gh auth setup-git` for you afterward, so plain `git` immediately picks up the same credential. |
+| `install`/`doctor` fails on `proxy-container` | No container publishes port 443, and no container named `proxy-nginx` (the default) is running. | Start the shared proxy: `cd /opt/infra/proxy && docker compose up -d`. If it runs under a different name, pass `--proxy-container <name>`. |
+| Certificate issues, but the proxy fails to **reload** afterward even though `nginx -t` passed | The vhost binds `[::]` (IPv6) listeners, and this host — or the proxy container — has no IPv6 configured. `nginx -t` doesn't catch this; only the reload does, and it fails for every site behind that proxy, not just this one. | Enable IPv6 on the host, or re-render the vhost without it: `kvox deploy install --no-ipv6` (or `doctor`'s `proxy-ipv6` check names the same remedy ahead of time). |
+| Certificate issuance fails with a message naming the domain and "did not answer" or "answered ... instead of the probe" | The ACME self-probe — a nonce written under the proxy's own webroot and fetched back over `http://<domain>/.well-known/acme-challenge/…` — didn't get its own nonce back, so Let's Encrypt's real HTTP-01 challenge would fail identically. The DNS record doesn't point here, or port 80 isn't reaching the proxy. | `doctor --domain <domain>` runs the same `dns-resolves`/`dns-points-here` checks standalone, naming both addresses (what the domain resolves to, and this server's own) so a stale record or a CDN in front of it is obvious. Nothing was requested from Let's Encrypt — the self-probe runs *before* any rate-limit budget is spent. |
+| `install` fails creating or using the `devnet` Docker network | The network doesn't exist and something prevented `install` from creating it (a permissions issue, or it exists with an incompatible configuration from an unrelated project). | Create it directly: `docker network create devnet`, then re-run. `doctor`'s `docker-network-devnet` check reports the same remedy. |
+| Two apps on the same box interfere with each other — one's `up -d` seems to replace the other's containers, or they can't both bind their proxy vhost | They share a compose **project name** (a deployment from before issue #119 has no `--name` recorded at all, and every such deployment on a box shared the single project name `compose`). | Give each app an explicit `--name` under the shared `--apps-root` (`kvox deploy status`/`update`/`doctor` all default to *the one* app installed there, and refuse — listing them — the moment there's more than one). Containers land as `<name>-api-1`, `<name>-web-1`, `<name>-nginx-1`; two different names never collide. |
 | `docker compose` commands fail as if the command doesn't exist, or behave unexpectedly | The standalone `docker-compose` **v1** binary is installed instead of the Compose **v2 plugin** (`docker compose`, no hyphen). | `doctor`'s `docker-compose-v2` check catches this directly. Install the v2 plugin per Docker's current documentation; v1 is not a supported substitute anywhere in this pipeline. |
-| `status`/health checks show the API healthy, but the site itself returns 502 | The web container's own nginx and the shared proxy's upstream port have drifted out of agreement — the historical failure mode this exact pair of files used to have. | This is why `status` probes the frontend **separately** from `/api/health/ready` — an API-only health check would show green while the site is down. A stock deployment is guarded by a test asserting these two ports agree; if you've modified `apps/web/nginx.conf` or `infra/nginx/nginx.conf` in a fork, check that they still match. |
-| A file upload through `POST /api/storage/objects*` (not transcription — see below) rejects an audio file with "Allowed types: image/\*, application/pdf, video/\*" | This deployment's `.env` predates issue #21 and its `ALLOWED_MIME_TYPES` was never migrated to the current default, which includes `audio/*`. `.env` values are never rewritten by an update — only `.env.example` changed. | Add `audio/*` to `ALLOWED_MIME_TYPES` in this deployment's `.env` and restart the API container. You do **not** need this for recording/transcription: `POST /api/transcripts` (issue #79) enforces its own fixed `audio/*,video/*` check and has never read this setting since that fix, so an `.env` with a stale `ALLOWED_MIME_TYPES` no longer blocks recording — only direct generic-storage uploads of audio. See `docs/specs/transcription.md` §9.6. |
+| Login redirects loop, or Google rejects the callback | `GOOGLE_CALLBACK_URL` disagrees with the domain you're actually serving. | It's **derived automatically** from the domain you gave during install (`https://<domain>/api/auth/google/callback`) unless you deliberately overrode it in the wizard's `--all` review. If you're seeing this, check the deployed `.env` and either fix it there or re-run the wizard for that key. |
+| Repeated `install` attempts start failing with a rate-limit error from Let's Encrypt | You burned the hourly/weekly certificate budget on earlier failed attempts (section 8). | Wait — retrying immediately makes it worse. Use `--staging` for everything except the attempt you actually intend to keep. |
+| `install`/`doctor` reports the loopback port is already in use, by something that isn't this deployment | Another app on the same VPS is already bound to that port. | Pick a different port for this app with `APP_BIND_PORT` in its `.env` (or `--port` during install), or stop whatever's holding the port. `doctor`'s `bind-port-free` check is written not to flag this app's own already-running nginx as a conflict. |
+| `status`/health checks show the API healthy, but the site itself returns a bad gateway | The web container's own nginx and the shared proxy's upstream port have drifted out of agreement. | This is why `status` probes the frontend **separately** from `/api/health/ready` — an API-only health check would show green while the site is down. If you've modified `apps/web/nginx.conf` or `infra/nginx/nginx.conf` in a fork, check that they still agree on the port. |
 
 ## Summary checklist
 
 - [ ] `kvox deploy doctor` run clean (or only recommended warnings) before starting
+- [ ] `gh auth status` passes and the repository being deployed is visible to that account
 - [ ] DNS A record for the domain points at this server, confirmed by `doctor --domain <domain>`
 - [ ] Google OAuth redirect URI matches `https://<domain>/api/auth/google/callback` exactly
 - [ ] External PostgreSQL reachable, with credentials `doctor`/`install`'s environment validation accepts
@@ -378,6 +511,7 @@ already got you a (test) one.
 - [ ] `kvox deploy install --domain <domain>` completed, including the external HTTPS verification step
 - [ ] Logged in at `https://<domain>` as `INITIAL_ADMIN_EMAIL` — this, not the seed, is what creates the admin account
 - [ ] Additional users added to the allowlist from the admin panel
-- [ ] `kvox deploy status` reports healthy, with migrations "up to date," not just the readiness probe green
+- [ ] `kvox deploy status` reports healthy and current; `kvox deploy about` shows the expected revision
+- [ ] Renewal cron installed (`kvox deploy certs renew --install-cron`, or it was written automatically on first issuance) and `doctor`'s `certificate-renewal` check passes
 - [ ] `kvox deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
 - [ ] `<deployRoot>/logs/` reviewed for anything unexpected if any step above didn't go as described
