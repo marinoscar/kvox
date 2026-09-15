@@ -210,6 +210,68 @@ describe('the preflight step', () => {
     expect(error).toBeInstanceOf(PreconditionError);
     expect((error as Error).message).toContain('proxy-root');
   });
+
+  // --- --skip-github reaches the checks, not only the `auth` step (#133) ----
+  //
+  // Every CI runner has `gh` installed and nobody logged into it, so
+  // `gh-authenticated` - a REQUIRED check - fails there. The flag that is
+  // supposed to make this pipeline runnable against a `file://` remote has to
+  // cover the preflight too, or it covers only half of what it claims: the
+  // `auth` step stands down, the preflight refuses, and the install never
+  // starts. These two tests pin both halves.
+  describe('--skip-github', () => {
+    /** The same box, with `gh` present and nobody logged into it. */
+    const loggedOutRunCommand = (async (
+      argv: readonly string[],
+      options: RunCommandOptions,
+    ): Promise<CommandResult> => {
+      if (argv.join(' ').startsWith('gh auth status')) {
+        const result: CommandResult = {
+          argv: [...argv],
+          cwd: options.cwd,
+          exitCode: 1,
+          stdout: '',
+          stderr: 'You are not logged into any GitHub hosts.',
+          durationMs: 1,
+          timedOut: false,
+        };
+        throw new CommandFailedError(result.stderr, result);
+      }
+      return await noProxyRunCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    function loggedOutContext(options: Record<string, unknown>, lines: string[]) {
+      const context = preflightContext(options, lines) as {
+        runCommand: typeof import('./executor.js').runCommand;
+      };
+      context.runCommand = loggedOutRunCommand;
+      return context as never;
+    }
+
+    it('reports the gh checks as skipped rather than failing them', async () => {
+      const lines: string[] = [];
+
+      await expect(
+        preflight.run(loggedOutContext({ skipProxy: true, skipGithub: true }, lines)),
+      ).resolves.toBeUndefined();
+
+      expect(lines).toContain('skip gh-installed: --skip-github');
+      expect(lines).toContain('skip gh-authenticated: --skip-github');
+      expect(lines).toContain('skip gh-repo-access: --skip-github');
+      expect(lines.some((line) => line.startsWith('fail '))).toBe(false);
+    });
+
+    it('fails on a logged-out gh without the flag', async () => {
+      const lines: string[] = [];
+
+      const error = await preflight
+        .run(loggedOutContext({ skipProxy: true }, lines))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(PreconditionError);
+      expect((error as Error).message).toContain('gh-authenticated');
+    });
+  });
 });
 
 describe('the auth step', () => {

@@ -272,6 +272,18 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(context.options.skipProxy === undefined
             ? {}
             : { skipProxy: context.options.skipProxy }),
+          // --skip-github has to reach the CHECKS, not only the `auth` step
+          // below (#133). The three `gh-*` checks are `required`, and
+          // `gh-authenticated` fails outright on a box where `gh` is
+          // installed but nobody has logged in - which is every CI runner.
+          // Without this line the flag silently covered half of what it
+          // says it covers: the step stood down and the preflight failed
+          // anyway, so an install could never complete unattended against a
+          // remote that is not on GitHub. Doctor already passes it through
+          // (`runDoctorCommand`); this makes install agree with doctor.
+          ...(context.options.skipGithub === undefined
+            ? {}
+            : { skipGithub: context.options.skipGithub }),
         };
         const results = await runChecks(checks, checkContext);
 
