@@ -26,6 +26,7 @@ import { PdfNoteExporter } from './export/pdf.exporter';
 import { WordNoteExporter } from './export/word.exporter';
 import { NoteExportHandler } from './handlers/note-export.handler';
 import { NoteGenerateHandler } from './handlers/note-generate.handler';
+import { NoteRetitleHandler } from './handlers/note-retitle.handler';
 import { NotePurgeHandler } from './handlers/note-purge.handler';
 import { NotesHousekeepingHandler } from './handlers/notes-housekeeping.handler';
 import { NoteSourceExtractHandler } from './handlers/note-source-extract.handler';
@@ -121,6 +122,13 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // its first rank and nothing new: the resolution it performs is the one
     // `NoteGenerateHandler` already performs, reached through the same services.
     NoteTitleService,
+    // `note.retitle` (#184) — the retroactive half of the same epic. It is a
+    // handler and NOT a migration on purpose: titling spends the note owner's
+    // own vendor key, which `migrate deploy` must never do on their behalf.
+    // Registering it here is what makes both entry points able to queue work;
+    // it needs nothing this module did not already import, because it resolves
+    // no provider itself — it reuses `NoteTitleService`'s three ranks.
+    NoteRetitleHandler,
     // The notes themselves (#53). `NoteAccessService` is the ONE place that
     // decides 404-never-403 for a note, and the shape note sharing will extend
     // rather than replace — see its header.

@@ -3,7 +3,8 @@
 // =============================================================================
 //
 // Ten routes: create, list, summary, detail, edit, regenerate, browse history,
-// read one version, restore one, delete.
+// read one version, restore one, delete — plus #54's three exports and #184's
+// two retitles.
 //
 // PER-ROUTE `@Auth`, NO CLASS-LEVEL GUARD, matching `TranscriptsController` and
 // `NoteTemplatesController`: the permission a route enforces is readable on the
@@ -91,6 +92,8 @@ import {
   RegenerateNoteBodyDto,
   RegenerateNoteResultDto,
   RestoreNoteVersionBodyDto,
+  RetitleNoteResultDto,
+  RetitleSweepResultDto,
   UpdateNoteBodyDto,
   createNoteSchema,
   noteListQuerySchema,
@@ -270,6 +273,88 @@ export class NotesController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.exports.download(exportId, user);
+  }
+
+  // ===========================================================================
+  // Retitle (issue #184, epic #163)
+  // ===========================================================================
+
+  // ⚠ DECLARED BEFORE THE PARAMETERISED ROUTES, the same rule `summary` and
+  // `exporters` are declared under. `notes/retitle` is a literal two-segment
+  // path and today no `@Post(':id')` exists for it to be matched against — but
+  // the day one does, a route declared after it would be shadowed and answer
+  // 400 from `ParseUUIDPipe` for a path that exists. The rule is cheap; the
+  // failure it prevents is a live endpoint that silently stops working.
+  //
+  // Its sibling `:id/retitle` sits here beside it rather than down in the write
+  // section, so the pair reads as the one feature it is.
+  @Post('retitle')
+  @Auth({ permissions: [PERMISSIONS.NOTES_WRITE] })
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Retitle your library',
+    description:
+      'Queues a `note.retitle` job for a capped page of **your own** notes that are still ' +
+      'named after the template that generated them, and reports how many are left.\n\n' +
+      'A note is selected when it is `ready`, not deleted, and its `titleSource` is still ' +
+      '`template`. **A note you renamed yourself is never selected**, and neither is one this ' +
+      'pass has already named (`titleSource: ai`) — so calling this repeatedly converges ' +
+      'rather than re-billing you for the same library. Use ' +
+      '`POST /api/notes/{id}/retitle` to re-name a specific note regardless.\n\n' +
+      '**Resumable and stoppable.** `queued` is what this call started; `remaining` is what ' +
+      'still matches. Call again once the jobs settle; `remaining: 0` means done. Stop by not ' +
+      'calling again — each note is its own job and no batch state is left behind.\n\n' +
+      'Calling twice does **not** queue a note twice: a note with a `note.retitle` job already ' +
+      'pending or running collapses into that job.\n\n' +
+      '⚠ Each note is a small completion billed to **your** provider account. A note whose ' +
+      'title cannot be produced by the model falls back to its own first heading, and failing ' +
+      'that keeps the name it has — neither is an error.',
+  })
+  @ApiDataResponse(RetitleSweepResultDto, {
+    status: 202,
+    description: 'The jobs queued, and how many notes still match',
+  })
+  async retitleAll(@CurrentUser() user: RequestUser) {
+    return this.notes.retitleAll(user);
+  }
+
+  @Post(':id/retitle')
+  @Auth({ permissions: [PERMISSIONS.NOTES_WRITE] })
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary: 'Suggest a title for one note',
+    description:
+      'Queues a `note.retitle` job for this note and returns immediately — titling is a ' +
+      'provider call, so it is queue work, not something a request waits on. Re-read the note ' +
+      '(or watch the job) to see the new title.\n\n' +
+      'The title is taken from the note\'s own content: the model that generated it is asked ' +
+      'what it would call it, falling back to the body\'s first heading or sentence, falling ' +
+      'back to the name it already has. None of those fallbacks is an error.\n\n' +
+      '⚠ **This route will rename a note you named yourself.** Asking for a suggestion about ' +
+      'a note in front of you is an explicit choice, so it wins — unlike ' +
+      '`POST /api/notes/retitle`, which never touches a name a person chose because it sweeps ' +
+      'notes nobody is looking at. The previous title is not kept anywhere: a title is ' +
+      'metadata about the note, not versioned content of it.\n\n' +
+      '**409** while the note is `generating` — that generation names the note itself when it ' +
+      'commits, and two passes racing for one title spend tokens for one answer.\n\n' +
+      '⚠ Billed to **your** provider account.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiDataResponse(RetitleNoteResultDto, {
+    status: 202,
+    description: 'The `note.retitle` job queued for this note',
+  })
+  @ApiResponse({ status: 404, description: 'No such note, or no access to it' })
+  @ApiResponse({
+    status: 409,
+    description: 'The note is generating',
+    type: NoteConflictDto,
+  })
+  async retitle(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.notes.retitle(id, user);
   }
 
   @Get(':id')

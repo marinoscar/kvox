@@ -73,6 +73,27 @@ import { deriveTitleFromBody, truncateTitle } from './title-derivation';
 // `updateMany` guarded on `titleSource: { not: 'user' }` as well, so a rename
 // that lands in the window between the read and the write still wins the race —
 // the guard is in the WHERE clause, where a race cannot get between the two.
+//
+// -----------------------------------------------------------------------------
+// `force` (#184): THE ONE CALLER THAT MAY NAME A `user`-TITLED NOTE, AND WHY
+// -----------------------------------------------------------------------------
+//
+// `force: true` relaxes BOTH halves of the guard above — the early return and
+// the `WHERE` clause — and exactly one caller passes it:
+// `POST /api/notes/{id}/retitle`, the route behind "Suggest a title", on ONE
+// note the user is looking at. A person who presses that button on a note they
+// renamed themselves has just asked, explicitly and about this note, for a
+// suggestion; refusing them because of a column they never saw would be the
+// application overruling the user in the name of protecting them from
+// themselves.
+//
+// ⚠ THE ASYMMETRY IS THE POINT, AND IT IS NOT A DEFAULT WORTH "TIDYING UP".
+// `force` is `false` for the generation path (#182) and for the BULK sweep
+// (`POST /api/notes/retitle`, #184), because those two rename notes NOBODY IS
+// LOOKING AT: a sweep that quietly replaced fifty names a person chose would
+// be indistinguishable from data loss, and there is no undo. One explicit
+// request about one visible note is a different act from a background pass over
+// a library, and this flag is the whole difference between them.
 // =============================================================================
 
 /** What titling one note needs. Everything the caller already has in hand. */
@@ -86,6 +107,26 @@ export interface TitleNoteInput {
   providerId: string | null;
   /** `note_generations.model`. `null` skips rank 1. */
   model: string | null;
+  /**
+   * Rename even a note whose `titleSource` is `'user'`. Defaults to `false`.
+   *
+   * ⚠ ONE CALLER MAY SET THIS — see the header. `POST /api/notes/{id}/retitle`
+   * passes it because a person pressed "Suggest a title" on the note in front
+   * of them; the generation path and the bulk sweep must never pass it.
+   */
+  force?: boolean;
+  /**
+   * The `Job.type` this pass is running inside. Defaults to `note.generate`.
+   *
+   * ⚠ IT IS THE THROTTLE MAPPING, NOT A LABEL. `ProviderThrottleService` maps
+   * job type → provider key, so the type registered here is the one the queue
+   * will hold back while this user's vendor account is cooling down. #182's
+   * only caller runs inside `note.generate`; #184's runs inside `note.retitle`,
+   * and registering the generation's type from a retitle job would map a bucket
+   * for work this job is not. Several types SHARING one key is the designed
+   * case — they share one quota, which is why the key is not the job type.
+   */
+  jobType?: string;
 }
 
 /**
@@ -197,9 +238,10 @@ export class NoteTitleService {
       return note.title;
     }
 
-    if (note.titleSource === 'user') {
+    if (note.titleSource === 'user' && input.force !== true) {
       // ⚠ THE CHECK THE COLUMN EXISTS FOR. A person named this note; that name
-      // is theirs and no titling pass overwrites it, ever.
+      // is theirs and no titling pass overwrites it — unless that same person
+      // has just asked for a suggestion about this one note (`force`, #184).
       this.logger.debug(`Note ${note.id} has a user-chosen title; it is left alone`);
 
       return note.title;
@@ -222,7 +264,19 @@ export class NoteTitleService {
       // it: a rename that landed while the model was thinking must win, and
       // only the database can decide that without a window between the check
       // and the write.
-      where: { id: note.id, deletedAt: null, titleSource: { not: 'user' } },
+      //
+      // ⚠ AND IT RELAXES WITH `force`, IN LOCKSTEP WITH THE EARLY RETURN ABOVE.
+      // Leaving it in place under `force` would be the subtler half of the same
+      // bug the two-place guard exists to avoid: the pass would run, spend the
+      // user's tokens, report a title, and write nothing — a "Suggest a title"
+      // button that silently does nothing on exactly the notes it was offered
+      // for. `deletedAt: null` is NOT relaxed; no flag makes a row on its way
+      // out writable.
+      where: {
+        id: note.id,
+        deletedAt: null,
+        ...(input.force === true ? {} : { titleSource: { not: 'user' as const } }),
+      },
       data: { title: proposed, titleSource: 'ai' },
     });
 
@@ -344,10 +398,17 @@ export class NoteTitleService {
     // A's key is evidence about user A and about nobody else; a shared
     // `'ai-provider'` key would let one busy user's quota park every other
     // user's generations behind it — a relationship between the accounts that
-    // does not exist (`aiProviderThrottleKey`, docs/specs/notes.md §2.3). This
-    // pass runs inside `note.generate`, so it registers that type's key, which
-    // the handler has already set to this same value for this same user.
-    this.throttle.registerProviderKey(NOTE_GENERATE_JOB_TYPE, aiProviderThrottleKey(ownerId));
+    // does not exist (`aiProviderThrottleKey`, docs/specs/notes.md §2.3).
+    //
+    // The type registered is the one this pass is RUNNING INSIDE — `note.generate`
+    // by default, `note.retitle` when #184's handler calls us — so the cooldown a
+    // 429 trips holds back the type that provoked it. Both map to the same
+    // per-user key, which is exactly the "several types, one quota" case
+    // `ProviderThrottleService` documents.
+    this.throttle.registerProviderKey(
+      input.jobType ?? NOTE_GENERATE_JOB_TYPE,
+      aiProviderThrottleKey(ownerId),
+    );
 
     const ctx = createProviderContext(apiKey, settings.data);
 

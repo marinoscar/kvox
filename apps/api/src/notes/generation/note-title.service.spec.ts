@@ -204,6 +204,97 @@ describe('titleNote — a user-chosen title is never overwritten', () => {
 });
 
 // -----------------------------------------------------------------------------
+// `force` (#184): the one caller that may rename a note titled by its owner
+// -----------------------------------------------------------------------------
+
+describe('titleNote — `force: true` on a `titleSource: "user"` note', () => {
+  it('proceeds to rename it, unlike the default', async () => {
+    const fake = new FakeProvider(() => answering('A suggested title'));
+    const { service, prisma } = harness({
+      provider: fake,
+      note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
+    });
+
+    const result = await service.titleNote(input({ force: true }));
+
+    expect(result).toBe('A suggested title');
+    expect(fake.calls).toBe(1);
+    expect(prisma.note.updateMany).toHaveBeenCalled();
+  });
+
+  it('the updateMany WHERE clause OMITS `titleSource: { not: "user" }` — the half that is easy to half-fix', async () => {
+    const fake = new FakeProvider(() => answering('A suggested title'));
+    const { service, prisma } = harness({
+      provider: fake,
+      note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
+    });
+
+    await service.titleNote(input({ force: true }));
+
+    // ⚠ Asserted on the ACTUAL WHERE ARGUMENT, not on the return value alone.
+    // Relaxing only the early return above and leaving this clause in place
+    // would pass a return-value-only test while silently spending the user's
+    // tokens and writing NOTHING — `updateMany.count` would be 0 and the
+    // caller would never know why the title never changed. That is the
+    // regression this test is written to catch by name.
+    const [args] = prisma.note.updateMany.mock.calls[0];
+
+    expect(args.where).toEqual({ id: NOTE_ID, deletedAt: null });
+    expect(args.where).not.toHaveProperty('titleSource');
+  });
+
+  it('still guards `deletedAt: null` under force — no flag makes a row on its way out writable', async () => {
+    const fake = new FakeProvider(() => answering('A suggested title'));
+    const { service, prisma } = harness({
+      provider: fake,
+      note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
+    });
+
+    await service.titleNote(input({ force: true }));
+
+    const [args] = prisma.note.updateMany.mock.calls[0];
+
+    expect(args.where.deletedAt).toBeNull();
+  });
+});
+
+describe('titleNote — `force: false` or absent keeps both halves of the guard exactly as they were', () => {
+  it('force: false behaves identically to omitting it: the early return still applies to a user title', async () => {
+    const fake = new FakeProvider(() => answering('Should never be asked'));
+    const { service, prisma } = harness({
+      provider: fake,
+      note: noteRow({ title: 'My own name for this', titleSource: 'user' }),
+    });
+
+    const result = await service.titleNote(input({ force: false }));
+
+    expect(result).toBe('My own name for this');
+    expect(prisma.note.updateMany).not.toHaveBeenCalled();
+    expect(fake.calls).toBe(0);
+  });
+
+  it('force: false still carries `titleSource: { not: "user" }` in the updateMany WHERE clause', async () => {
+    const { service, prisma } = harness();
+
+    await service.titleNote(input({ force: false }));
+
+    const [args] = prisma.note.updateMany.mock.calls[0];
+
+    expect(args.where).toEqual({ id: NOTE_ID, deletedAt: null, titleSource: { not: 'user' } });
+  });
+
+  it('force left absent (undefined) behaves identically to `force: false`', async () => {
+    const { service, prisma } = harness();
+
+    await service.titleNote(input());
+
+    const [args] = prisma.note.updateMany.mock.calls[0];
+
+    expect(args.where).toEqual({ id: NOTE_ID, deletedAt: null, titleSource: { not: 'user' } });
+  });
+});
+
+// -----------------------------------------------------------------------------
 // A note on its way out is left alone
 // -----------------------------------------------------------------------------
 

@@ -851,6 +851,83 @@ hard-deleted at its ten-minute TTL (§4.4). Titling runs **before**
 `notes.note_ready` is raised, because that notification carries the title —
 raising it first would name a title the note stopped having a second later.
 
+#### 3.4.1 Retitling a library that already exists
+
+*(Issue #184, epic #163.)* §3.4 names a note the moment its body commits,
+which fixes every note made from then on and leaves every note already in the
+library called after its template. `note.retitle` is the retroactive half: one
+job per note, running the **same** three ranks through the same
+`NoteTitleService` — there is no second implementation of the ranks anywhere.
+
+**A job, and deliberately not a migration.** The obvious shape for "fix every
+existing row" is a data migration, and it is the wrong one here: rank 1 spends
+the note owner's own vendor key on their own account (§9), and `migrate
+deploy` must never bill a user's account on their behalf — least of all as an
+invisible side effect of an operator shipping a release. CLAUDE.md's standing
+rule settles it independently: a pass over a whole library outlives the
+request that asked for it. Being a job is also what makes the sweep operable —
+each note is one row in `GET /api/admin/jobs`, independently retryable, and a
+sweep is stopped by not asking for the next page.
+
+The type declares `profile: { maxRuntimeMs: 2 min, maxAttempts: 1 }` and is
+**server-only permanently** (no `nodeResultSchema`, no `persistNodeResult`),
+both for §2.2's and the generation handler's reasons unchanged: a retry
+re-bills a non-deterministic call, and the credential is the owner's own
+long-lived account key, which no worker node may hold. Its success means
+**"this note was considered"**, not "this note got an AI title" — `titleNote`
+never throws, so rank 2 and rank 3 are successful outcomes of a pass that ran,
+and a user with no key saved gets a heading-derived title and a green job.
+
+**Two entry points, and they differ on exactly one thing.**
+
+| | `POST /notes/{id}/retitle` | `POST /notes/retitle` |
+|---|---|---|
+| Scope | one note | a capped page (100) of the caller's own |
+| Renames a `titleSource: user` note | **yes** (`force: true`) | **never** |
+| Selection | this note, unless `generating` (409) | own, `ready`, not deleted, `titleSource: template`, oldest `updatedAt` first |
+| Queue dedup | `skipDedup: true` | the default active-dedup key |
+| Priority | column default (`0`) | `HOUSEKEEPING_PRIORITY` (100) |
+
+**⚠ The `force` asymmetry is the point, and it is not an inconsistency to
+tidy up.** A bulk sweep renames notes **nobody is looking at**, so quietly
+replacing fifty names a person chose would be indistinguishable from data
+loss, and there is no undo — a title is metadata about the note, not versioned
+content of it, so nothing keeps the old one. A person pressing "Suggest a
+title" on **one note in front of them** has asked, explicitly and about that
+note, for exactly this; refusing them on the strength of a column they never
+saw would be the application overruling the user to protect them from a choice
+they have just made. `force` relaxes both halves of §3.4's sticky guard — the
+early return and the `updateMany` `WHERE` clause — in lockstep, because
+relaxing only the first would spend the user's tokens and then write nothing.
+
+**⚠ The sweep selects `titleSource: 'template'`, which is narrower than "not
+`user`", and the narrowing is what makes it terminate.** `ai` is a note this
+exact pass has already named from its own content; re-including it would spend
+the owner's money to re-derive an answer they have, and — worse — would put
+every note the sweep had just finished with straight back into the selection,
+so `remaining` could never reach zero and a caller following the resumption
+protocol would loop forever, billing themselves each lap. A success writes
+`titleSource: 'ai'` and the note leaves the selection. That is the whole
+convergence argument, and `titleSource: 'template'` is also, word for word,
+the problem the issue describes: a note called whatever its template was
+called.
+
+**Oldest `updatedAt` first**, for a reason in the same register: a rename
+touches the row, so `@updatedAt` moves a titled note to the *back* of the
+ordering and the next call's page is the next hundred that still need it —
+no cursor for the caller to carry and no page to lose. Newest-first would hand
+back the same hundred every time. The honest residue: a note whose proposed
+title equals the one it has is not written, keeps its `updatedAt` and its
+`template` source, and will be reconsidered by a later call. It is rare, it is
+cheap, and the alternative — writing a row to record that nothing changed —
+would be worse.
+
+`queued` and `remaining` together **are** the resumption protocol: `queued` is
+what this call started, `remaining` is what still matches (counted at request
+time, so it does not yet reflect the jobs just queued). A response carrying
+only `queued` would leave a client unable to tell "the library is named" from
+"there are eight hundred still to go".
+
 ## 4. Data model
 
 Five tables (issue #48), all `snake_case`-mapped Prisma models, following the
@@ -1552,7 +1629,7 @@ restated. Exports expire after 7 days, swept by `notes.housekeeping` (§8.6).
 
 ### 8.5 Job types
 
-Five job types, all under `apps/api/src/notes/handlers/` except
+Six job types, all under `apps/api/src/notes/handlers/` except
 `note.source.extract`'s node executor counterpart
 (`apps/cli/src/node/executors/note-source-extract.ts`):
 
@@ -1563,6 +1640,7 @@ Five job types, all under `apps/api/src/notes/handlers/` except
 | `note.export` | `{ maxRuntimeMs: 5m, maxAttempts: 2 }`, priority **−10** | No, in v1 | The identical "renderers live in the API" reasoning `docs/specs/transcription.md` §1.5.6 states for `transcript.export`, cited by number rather than re-argued; priority −10 for the same "someone is watching a spinner" reason |
 | `note.purge` | Deployment default | No | Rule 2's "deletes rows/objects across several tables as it goes," mirroring `transcript.purge` (transcription.md §1.5.7) |
 | `notes.housekeeping` | Deployment default | No | Rule 2's "reads/writes across several tables in one sweep," mirroring `transcripts.housekeeping` (transcription.md §1.5.8); enqueued by a ten-minute `@Cron` through the shared `enqueueHousekeepingJob` helper (`docs/specs/job-queue.md` §7.10), which is what keeps `apps/api/test/jobs/cron-enqueue-only.spec.ts` passing once this cron exists |
+| `note.retitle` | `{ maxRuntimeMs: 2m, maxAttempts: 1 }`, sweep priority **100** | **No** | §3.4.1. Same per-user credential reason as `note.generate`, and the same `maxAttempts: 1`; `maxRuntimeMs` is two minutes because `NoteTitleService` already caps its own provider call at ≤30 s and the rest is two indexed row reads — and the lease derives from that number, so a dead worker's job is reclaimable in two minutes rather than ten. The bulk sweep enqueues at `HOUSEKEEPING_PRIORITY`; the single-note route takes the column default, because somebody pressed a button |
 
 `note.purge`, unlike `transcript.purge`, calls **no provider-side delete** —
 there is no remote copy of anything to clean up (§9.4 explains why a chat

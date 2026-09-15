@@ -71,6 +71,28 @@ export const MAX_PAGE_SIZE = 100;
 export const EXCERPT_CHARS = 280;
 
 /**
+ * Notes `POST /api/notes/retitle` queues in one call (issue #184, epic #163).
+ *
+ * ⚠ A CAP, NOT A PAGE SIZE — the difference matters. Each note queued here
+ * becomes a provider call billed to its owner's own vendor account, so the
+ * number is chosen as "how much of somebody's money may one button press
+ * spend before they see a result", not as "how many rows fit in a response".
+ * 100 notes is a few seconds of queue time and a few cents of somebody's own
+ * quota: enough that a normal library is done in one or two presses, small
+ * enough that a user who did not mean it can stop after the first.
+ *
+ * The sweep is RESUMABLE (call it again, `remaining` says whether there is a
+ * point) and STOPPABLE (stop calling it), which is what makes a low cap cost
+ * nothing — the alternative, an uncapped call over a library of thousands,
+ * is one request that cannot be taken back.
+ *
+ * Deliberately not configurable. A system setting would be a second place for
+ * "how many at once" to live, and there is no deployment for which a different
+ * number is right — a bigger library just presses the button again.
+ */
+export const RETITLE_SWEEP_LIMIT = 100;
+
+/**
  * The machine-readable `details.reason` values this controller's 409s carry.
  *
  * ⚠ THEY LIVE UNDER `details`, NOT AT THE TOP-LEVEL `code`. The global
@@ -536,6 +558,46 @@ export const noteVersionDetailResponseSchema = noteVersionSchema.extend({
 });
 
 export class NoteVersionDetailDto extends createZodDto(noteVersionDetailResponseSchema) {}
+
+/** `POST /api/notes/{id}/retitle` — the job queued for one note. */
+export const retitleNoteResponseSchema = z.object({
+  noteId: z.string().describe('The note a title was queued for.'),
+  jobId: z
+    .string()
+    .describe(
+      'The `note.retitle` job. Watch it in the admin job list, or just re-read the note: the ' +
+        'title changes when the job settles.',
+    ),
+});
+
+export class RetitleNoteResultDto extends createZodDto(retitleNoteResponseSchema) {}
+
+/**
+ * `POST /api/notes/retitle` — what the sweep did, and what is left.
+ *
+ * ⚠ THE TWO NUMBERS TOGETHER ARE THE RESUMPTION PROTOCOL. `queued` says what
+ * this call started; `remaining` says whether calling again would start
+ * anything more. A response carrying only `queued` would leave a client unable
+ * to tell "the library is named" from "there are eight hundred still to go",
+ * which is the one thing it has to decide before showing the button again.
+ */
+export const retitleSweepResponseSchema = z.object({
+  queued: z
+    .number()
+    .describe(
+      `Notes this call handed to the queue, at most ${RETITLE_SWEEP_LIMIT}. A note that already ` +
+        'had a `note.retitle` job pending or running collapses into that job rather than ' +
+        'getting a second one, so calling twice never doubles the work — or the bill.',
+    ),
+  remaining: z
+    .number()
+    .describe(
+      'Notes still matching the selection beyond the ones just queued. `0` means the sweep is ' +
+        'done; anything else means call again.',
+    ),
+});
+
+export class RetitleSweepResultDto extends createZodDto(retitleSweepResponseSchema) {}
 
 /**
  * The 409 body a stale `baseVersion` produces.

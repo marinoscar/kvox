@@ -16,14 +16,14 @@
 // would drag a provider — and its whole constructor graph — into a file that
 // only needed a string.
 //
-// FOUR OF THE FIVE ARE DECLARED HERE WITHOUT A HANDLER, deliberately, and the
-// same way `TRANSCODE_JOB_TYPE` was declared by #25 before #26 implemented it:
-// a constant both sides import is the only arrangement where the enqueue and
-// the registration cannot drift. Every enqueue site for one of those four must
-// check `JobHandlerRegistry.get(TYPE)` first, so a build without the handler
-// queues nothing rather than queueing a row no worker can ever claim — which
-// would sit `pending` forever and show in the admin job list as a permanent
-// backlog of one.
+// FOUR OF THE ORIGINAL FIVE WERE DECLARED HERE AHEAD OF THEIR HANDLERS,
+// deliberately, and the same way `TRANSCODE_JOB_TYPE` was declared by #25
+// before #26 implemented it: a constant both sides import is the only
+// arrangement where the enqueue and the registration cannot drift. Every
+// enqueue site for a type whose handler a build may not have must check
+// `JobHandlerRegistry.get(TYPE)` first, so such a build queues nothing rather
+// than queueing a row no worker can ever claim — which would sit `pending`
+// forever and show in the admin job list as a permanent backlog of one.
 // =============================================================================
 
 /**
@@ -51,6 +51,22 @@ export const NOTE_SOURCE_EXTRACT_JOB_TYPE = 'note.source.extract';
  * exporter registry.
  */
 export const NOTE_EXPORT_JOB_TYPE = 'note.export';
+
+/**
+ * Give one existing note a title taken from what it actually says.
+ *
+ * The retroactive half of epic #163: #182 names a note the moment its body
+ * commits, which fixes NEW notes and leaves every note already in the library
+ * called after its template. This type is how those get named — one job per
+ * note, queued by `POST /api/notes/{id}/retitle` (one) or
+ * `POST /api/notes/retitle` (a capped, resumable sweep).
+ *
+ * ⚠ A JOB AND DELIBERATELY NOT A MIGRATION. Titling spends the note owner's own
+ * vendor key, and `migrate deploy` must never bill a user's account on their
+ * behalf — quite apart from CLAUDE.md's rule that anything outliving the
+ * request that started it is a registered handler. See the handler's header.
+ */
+export const NOTE_RETITLE_JOB_TYPE = 'note.retitle';
 
 /** Remove every byte and every row a deleted note ever owned. ⚠ #53 owns it. */
 export const NOTE_PURGE_JOB_TYPE = 'note.purge';

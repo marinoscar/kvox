@@ -112,18 +112,22 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'transcript.export': 'Transcript export',
   'transcript.purge': 'Transcript purge',
   'transcripts.housekeeping': 'Transcript housekeeping',
-  // The note pipeline (#49, epic #45). ALL FIVE ARE LABELLED HERE even though
-  // only `note.generate` has a handler today — `note.source.extract` (#51),
-  // `note.export` (#54), `note.purge` and `notes.housekeeping` (#53) register
-  // theirs later. A label is a display string, not a registration: having it
-  // ready costs nothing, while a missing one shows an operator a raw dotted
-  // type in the admin job list the moment the first of those lands. Same
-  // reasoning as `media.audio.transcode` and `transcript.snapshot` above.
+  // The note pipeline (#49, epic #45). All five originally sat here ahead of
+  // their handlers — a label is a display string, not a registration, so having
+  // one ready costs nothing while a missing one shows an operator a raw dotted
+  // type the moment its type first appears. All five are registered today:
+  // `note.generate` (#49), `note.source.extract` (#51), `note.export` (#54),
+  // `note.purge` and `notes.housekeeping` (#53).
   'note.generate': 'Note generation',
   'note.source.extract': 'Document text extraction',
   'note.export': 'Note export',
   'note.purge': 'Note purge',
   'notes.housekeeping': 'Note housekeeping',
+  // Retroactive titling (#184, epic #163), registered by its own issue. "Note
+  // retitle" and not "Note titling": a dashboard filtered by this type during a
+  // library sweep is showing one row per note being RE-named, and the operator
+  // reading it wants the verb that says these notes already had a title.
+  'note.retitle': 'Note retitle',
   // The user-facing Danger Zone (#80). "Account data deletion" rather than
   // "User data purge": an operator meeting this row in the job list is meeting
   // the most destructive thing an ordinary account can ask this application to
