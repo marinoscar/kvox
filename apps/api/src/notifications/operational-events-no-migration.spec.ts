@@ -79,6 +79,11 @@ const MIGRATIONS_AT_288 = [
   // statements and three indexes — a search index, and equally not about
   // notifications.
   '20260915120000_add_search_vectors',
+  // #180 (epic #163): `notes.title_source`, one enum column recording where a
+  // note's title came from so an AI titling pass can tell a name a person
+  // chose from one it may improve on. A provenance column, and equally not
+  // about notifications.
+  '20260915210000_add_note_title_source',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

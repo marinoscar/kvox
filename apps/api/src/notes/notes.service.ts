@@ -81,6 +81,7 @@ import {
   type NoteListItem,
   type NoteListQueryDto,
   type NoteResponse,
+  type NoteTitleSource,
   type NoteVersionsQueryDto,
   type RegenerateNoteDto,
   type RestoreNoteVersionDto,
@@ -172,13 +173,22 @@ export class NotesService {
       policy,
     });
 
-    const title = dto.title?.trim() || template.name;
+    // ⚠ THE TITLE AND WHERE IT CAME FROM ARE DECIDED TOGETHER, here, once. A
+    // human typing a name is the strongest signal this application ever gets
+    // about what a note should be called, so it is recorded as `user` and the
+    // AI titling path reads exactly this field before it renames anything. The
+    // fallback is `template`: nobody named this note, it inherited the recipe's
+    // name, and a later titling pass is welcome to improve on that.
+    const supplied = dto.title?.trim();
+    const title = supplied || template.name;
+    const titleSource: NoteTitleSource = supplied ? 'user' : 'template';
 
     const created = await this.prisma.$transaction(async (tx) => {
       const note = await tx.note.create({
         data: {
           ownerId: user.id,
           title,
+          titleSource,
           // ⚠ `body: ''` AND `currentVersion: 0`, which agree with each other:
           // the invariant is "body equals the version at currentVersion", and
           // version 0 is the one version number that names no row. A `draft`
@@ -210,6 +220,7 @@ export class NotesService {
 
     await this.audit(user.id, 'note:create', created.note.id, {
       title,
+      titleSource,
       templateId: template.id,
       sourceType: selector.sourceType,
       provider: provider.id,
@@ -409,9 +420,13 @@ export class NotesService {
     this.assertNotDeleting(note);
 
     if (dto.body === undefined) {
+      // ⚠ A RENAME IS ALWAYS `user`. This branch exists only because a title
+      // was sent, so the person editing has just told us what they want this
+      // note called — the strongest signal there is, and the one the AI titling
+      // path checks before it renames anything.
       const updated = await this.prisma.note.update({
         where: { id: note.id },
-        data: { title: dto.title!.trim() },
+        data: { title: dto.title!.trim(), titleSource: 'user' },
       });
 
       return this.shape(updated);
@@ -770,7 +785,14 @@ export class NotesService {
         data: {
           currentVersion: nextVersion,
           body: input.body,
-          ...(input.title !== undefined ? { title: input.title } : {}),
+          // ⚠ `titleSource` MOVES ONLY WITH THE TITLE. A body-only save (and a
+          // restore, which supplies none) must leave the provenance exactly as
+          // it was — otherwise every edit would quietly claim the user named a
+          // note the AI or the template named, and the titling path would stop
+          // renaming notes nobody ever titled.
+          ...(input.title !== undefined
+            ? { title: input.title, titleSource: 'user' as const }
+            : {}),
           // A note whose body a human just wrote is no longer `failed`: the
           // failure was the generation's, and there is content now.
           ...(input.note.status === 'failed' ? { status: 'ready' as const, failureReason: null } : {}),
@@ -1047,6 +1069,7 @@ export function detailShape(note: Note, templateName: string | null): NoteRespon
   return {
     id: note.id,
     title: note.title,
+    titleSource: note.titleSource,
     body: note.body,
     status: note.status,
     currentVersion: note.currentVersion,

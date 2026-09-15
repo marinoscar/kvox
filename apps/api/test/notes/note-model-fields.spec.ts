@@ -25,6 +25,10 @@
 //     and `model` (who/what produced the current body) — see the block
 //     comment above the `Note` model in schema.prisma for the
 //     `notes.body` / `note_versions.body` invariant this locks down.
+//   - `notes` also carries `title_source` (#180, epic #163) — the one column
+//     that tells an AI titling pass whether a name was chosen by a person and
+//     is therefore sticky, or merely inherited from the template and may be
+//     improved on.
 //   - `note_generations` carries a `jobId` column, `@unique`/nullable/
 //     `SetNull`, mirroring `DatabaseBackupRun.jobId`/`TranscriptExport
 //     .jobId` — see the block comment above the `NoteGeneration` model.
@@ -62,11 +66,12 @@ function expectFieldsMapToThemselves(enumName: keyof typeof Prisma) {
 }
 
 describe('Prisma.NoteScalarFieldEnum', () => {
-  it('has exactly the field names issue #48 documents Note to have', () => {
+  it('has exactly the field names issue #48 documents Note to have, plus #180\'s titleSource', () => {
     expectScalarFields('NoteScalarFieldEnum', [
       'id',
       'ownerId',
       'title',
+      'titleSource',
       'body',
       'status',
       'currentVersion',
