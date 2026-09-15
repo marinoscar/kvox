@@ -73,6 +73,12 @@ const MIGRATIONS_AT_288 = [
   // which is the one thing the shared `credentials` table structurally could
   // not offer. A credential store, and equally not about notifications.
   '20260914150000_add_user_ai_credentials',
+  // #174 (epic #164): the generated `tsvector` columns and GIN indexes that
+  // make full-text search over transcript and note CONTENT possible. Three
+  // `ALTER TABLE ... ADD COLUMN ... GENERATED ALWAYS AS (...) STORED`
+  // statements and three indexes — a search index, and equally not about
+  // notifications.
+  '20260915120000_add_search_vectors',
   // #180 (epic #163): `notes.title_source`, one enum column recording where a
   // note's title came from so an AI titling pass can tell a name a person
   // chose from one it may improve on. A provenance column, and equally not
