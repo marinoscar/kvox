@@ -14,6 +14,14 @@ import { runUpdate } from '../../deploy/update.js';
 import { runCommand } from '../../deploy/executor.js';
 import { metadataFor } from '../../deploy/env-metadata.js';
 import { parseEnvExample, type EnvVarSpec } from '../../deploy/env-spec.js';
+import {
+  DEFAULT_APPS_ROOT,
+  DEFAULT_BIND_PORT,
+  DEFAULT_PROXY_ROOT,
+  locateApp,
+  locateInstalledApp,
+  type ResolvedLayout,
+} from '../../deploy/layout.js';
 import { readState, type DeployState } from '../../deploy/state.js';
 import { formatError } from '../../errors.js';
 import { ErrorNotice, Field, Frame } from '../layout.js';
@@ -81,9 +89,18 @@ export interface FieldSpec {
 /** Lines kept in the live log. Unbounded growth is a leak on a long build. */
 const MAX_LOG_LINES = 2_000;
 
-const DEFAULT_ROOT = '/opt/infra/apps';
-const DEFAULT_PROXY_ROOT = '/opt/infra/proxy';
-const DEFAULT_BIND_PORT = 3535;
+/**
+ * The one app under the default apps root, when exactly one is installed
+ * (#119). This screen has no --name yet (that is #131/#132's wizard), so it
+ * acts on the single installed app or, before any install, on nothing.
+ */
+function locateDefaultApp(): ResolvedLayout | undefined {
+  try {
+    return locateApp({ appsRoot: DEFAULT_APPS_ROOT });
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * The questions install needs, derived from the template.
@@ -131,10 +148,13 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
   const mounted = useRef(true);
   const abortRef = useRef<AbortController | undefined>(undefined);
 
+  const layout = useRef<ResolvedLayout | undefined>(undefined);
   const state = useRef<DeployState | undefined>(undefined);
   if (state.current === undefined) {
     try {
-      state.current = readState(DEFAULT_ROOT);
+      layout.current = locateDefaultApp();
+      state.current =
+        layout.current === undefined ? undefined : readState(layout.current.deployRoot);
     } catch {
       state.current = undefined;
     }
@@ -255,7 +275,7 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
 
     return (
       <Frame title="Deploy" hints={['enter select', 'esc back']}>
-        <Text dimColor>Acting on {DEFAULT_ROOT}</Text>
+        <Text dimColor>Acting on {layout.current?.deployRoot ?? DEFAULT_APPS_ROOT}</Text>
         <Box marginTop={1}>
           <SelectInput
             items={items}
@@ -421,8 +441,9 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
 
 function loadSpecs(): EnvVarSpec[] {
   try {
+    const deployRoot = locateDefaultApp()?.deployRoot ?? DEFAULT_APPS_ROOT;
     return parseEnvExample(
-      readFileSync(join(DEFAULT_ROOT, 'repo', 'infra', 'compose', '.env.example'), 'utf8'),
+      readFileSync(join(deployRoot, 'repo', 'infra', 'compose', '.env.example'), 'utf8'),
     );
   } catch {
     // Before a first checkout there is no template to read; the domain
@@ -443,11 +464,13 @@ async function perform(
   appendLine: (line: string) => void,
 ): Promise<string[]> {
   if (action === 'doctor') {
+    const layout = locateDefaultApp();
     const results: CompletedCheck[] = await runChecks(
       ALL_CHECKS,
       {
         runCommand,
-        deployRoot: DEFAULT_ROOT,
+        deployRoot: layout?.deployRoot ?? DEFAULT_APPS_ROOT,
+        ...(layout === undefined ? {} : { name: layout.name }),
         bindPort: DEFAULT_BIND_PORT,
         proxyRoot: DEFAULT_PROXY_ROOT,
       },
@@ -465,9 +488,11 @@ async function perform(
   }
 
   if (action === 'status') {
+    const layout = locateInstalledApp({ appsRoot: DEFAULT_APPS_ROOT });
     const report: HealthReport = await collectHealth({
       runCommand,
-      deployRoot: DEFAULT_ROOT,
+      deployRoot: layout.deployRoot,
+      name: layout.name,
       bindPort: DEFAULT_BIND_PORT,
     });
 
@@ -482,7 +507,7 @@ async function perform(
 
   if (action === 'update') {
     const result = await runUpdate({
-      deployRoot: DEFAULT_ROOT,
+      deployRoot: locateInstalledApp({ appsRoot: DEFAULT_APPS_ROOT }).deployRoot,
       ...(hooks === undefined ? {} : { hooks }),
     });
     return result.changed
@@ -494,7 +519,8 @@ async function perform(
   const env = new Map([...answers].filter(([key]) => !key.startsWith('__')));
 
   const result = await runInstall({
-    deployRoot: DEFAULT_ROOT,
+    // <apps-root>/<repository name>, resolved by runInstall itself (#119).
+    appsRoot: DEFAULT_APPS_ROOT,
     bindPort: DEFAULT_BIND_PORT,
     proxyRoot: DEFAULT_PROXY_ROOT,
     domain,

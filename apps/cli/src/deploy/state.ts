@@ -45,6 +45,22 @@ export interface DeployState {
   /** Loopback port the proxy forwards to. */
   bindPort: number;
   deployRoot: string;
+  /**
+   * The app-folder layout (#119): `deployRoot` is `<appsRoot>/<name>`, and
+   * `name` is also the compose project name, so the containers are
+   * `<name>-api-1` and so on.
+   *
+   * ALL FOUR ARE OPTIONAL, AND `DEPLOY_STATE_VERSION` STAYS AT 1: a state file
+   * written before #119 lacks them and still means exactly what it meant. A
+   * reader falls back to the directory's own name (`projectNameFor`) and the
+   * default proxy root rather than refusing the file.
+   */
+  name?: string | undefined;
+  appsRoot?: string | undefined;
+  /** The shared reverse proxy's directory, recorded so `update` need not derive it. */
+  proxyRoot?: string | undefined;
+  /** The proxy container's name, once a later child of #118 resolves it. */
+  proxyContainer?: string | undefined;
   installedAt: string;
   lastDeployedAt: string;
   lastCommand: 'install' | 'update';

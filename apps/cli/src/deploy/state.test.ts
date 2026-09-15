@@ -46,6 +46,25 @@ describe('writeState / readState', () => {
     expect(readState(root)).toEqual(state);
   });
 
+  it('round-trips the optional layout fields, at the same state version', () => {
+    // #119 adds name/appsRoot/proxyRoot/proxyContainer without bumping the
+    // version: a file written before them still means what it meant, and a
+    // file written with them reads back whole.
+    const root = makeRoot();
+    const state: DeployState = {
+      ...sample(root),
+      name: 'demo',
+      appsRoot: '/opt/infra/apps',
+      proxyRoot: '/opt/infra/proxy',
+      proxyContainer: 'proxy-nginx',
+    };
+
+    writeState(state);
+
+    expect(readState(root)).toEqual(state);
+    expect(readState(root)?.version).toBe(DEPLOY_STATE_VERSION);
+  });
+
   it('writes the file 0600', () => {
     const root = makeRoot();
     writeState(sample(root));
