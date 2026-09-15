@@ -1240,3 +1240,117 @@ describe('HomePage — the counts strip', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+// =============================================================================
+// The search entry point — issue #172, epic #166
+// =============================================================================
+
+describe('HomePage — the search entry point', () => {
+  /**
+   * Scoped to the hero's own region, like the New-note suite above.
+   *
+   * The library views have their own search boxes, and `SettingsHub` has a
+   * third; a bare `getByRole('searchbox')` on this page happens to be
+   * unambiguous today and would stop being so the moment any section grew a
+   * filter.
+   */
+  function hero() {
+    return within(screen.getByRole('region', { name: 'Hi, Test' }));
+  }
+
+  function field() {
+    return hero().getByRole('searchbox', { name: 'Search transcripts' });
+  }
+
+  it('offers a named search field on the landing screen', async () => {
+    // The page's fourth question — "find it again later" — had no entry point
+    // here at all before #172.
+    renderHome();
+    await waitForLoaded();
+
+    expect(field()).toBeInTheDocument();
+    expect(hero().getByRole('button', { name: 'Search' })).toBeInTheDocument();
+  });
+
+  it('sends a submitted term to the transcripts library', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+
+    await user.type(field(), 'standup{Enter}');
+
+    expect(mockNavigate).toHaveBeenCalledWith('/transcripts?q=standup');
+  });
+
+  it('sends the same term when the submit button is clicked', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+
+    await user.type(field(), 'standup');
+    await user.click(hero().getByRole('button', { name: 'Search' }));
+
+    expect(mockNavigate).toHaveBeenCalledWith('/transcripts?q=standup');
+  });
+
+  it('encodes a term carrying URL-significant characters', async () => {
+    // `&` would otherwise start a second query parameter and `#` would truncate
+    // the term into a fragment.
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+
+    await user.type(field(), 'budget & scope #4{Enter}');
+
+    expect(mockNavigate).toHaveBeenCalledWith('/transcripts?q=budget%20%26%20scope%20%234');
+  });
+
+  it('does not navigate on an empty or whitespace-only term', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+
+    await user.click(field());
+    await user.keyboard('{Enter}');
+    await user.type(field(), '   {Enter}');
+    await user.click(hero().getByRole('button', { name: 'Search' }));
+
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('withholds the field from a user without transcripts:read', async () => {
+    renderHome({
+      ...homeUser,
+      permissions: homeUser.permissions.filter(
+        (permission) => permission !== 'transcripts:read',
+      ),
+    });
+    await waitForLoaded();
+
+    expect(hero().queryByRole('searchbox')).not.toBeInTheDocument();
+  });
+
+  it('fires NO network request, not even while a term is being typed', async () => {
+    // ⚠ THE EPIC-LEVEL CRITERION. A live-results dropdown would be a request
+    // PER KEYSTROKE on the landing screen, which is precisely what this page's
+    // "one request per content type, plus the one capability probe" rule
+    // forbids. The control types locally and navigates once.
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    await user.type(field(), 'standup');
+
+    expect([...new Set(observedRequests)].sort()).toEqual(EXPECTED_REQUESTS);
+    expect(observedRequests).toHaveLength(3);
+  });
+
+  it('has no accessibility violations with the field present', async () => {
+    const { container } = renderHome();
+    await waitForLoaded();
+    await screen.findByRole('button', { name: 'New transcript' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
