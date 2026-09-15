@@ -418,6 +418,10 @@ describe('UserMenu', () => {
 
     it('shows Console to a non-admin holding system_settings:read', async () => {
       // The exact user the old split-brain stranded.
+      //
+      // This row matters more since #106 than it did when it was written: the
+      // bottom bar no longer carries Console at all, so below `sm` this menu is
+      // the only way into the admin surface.
       const user = userEvent.setup();
       setPermissions(['system_settings:read'], false);
 
@@ -478,8 +482,19 @@ describe('UserMenu', () => {
       // `expected` below is derived from the LIVE table, so a fixture missing
       // a permission would compare a four-row expectation against a three-row
       // menu and fail — which is the assertion working, not a quirk to route
-      // around. (Either one of the two would make the `library` row visible on
-      // its own; both are held because the seeded roles hold both.)
+      // around.
+      //
+      // ⚠ SINCE #106 THE TWO PERMISSIONS GATE TWO SEPARATE ROWS, one each,
+      // where they used to jointly gate the ONE `library` row through its
+      // `anyPermission`. Both are held because the seeded roles hold both; the
+      // per-row independence is asserted in `destinations.test.ts` rather than
+      // through this menu.
+      //
+      // ⚠ AND THE LIVE TABLE INCLUDES CONSOLE, deliberately. `UserMenu` reads
+      // `DESTINATIONS`, not `BOTTOM_BAR_DESTINATIONS`: a menu is flat, has no
+      // foot to pin a mode to, and since #106 is the ONLY chrome that carries
+      // Console below `sm`. Deriving `expected` from the full table is what
+      // makes this test fail if someone "aligns" the menu with the bar.
       setPermissions(
         ['users:read', 'system_settings:read', 'transcripts:read', 'notes:read'],
         true,
@@ -496,6 +511,9 @@ describe('UserMenu', () => {
       for (const label of expected) {
         expect(screen.getByRole('menuitem', { name: label })).toBeInTheDocument();
       }
+      // Stated literally as well as derived: a table that silently lost a row
+      // would make the derived loop pass over whatever is left.
+      expect(expected).toEqual(['Transcripts', 'Notes', 'User Settings', 'Console']);
       // The destinations plus Logout, and nothing invented locally.
       expect(screen.getAllByRole('menuitem')).toHaveLength(expected.length + 1);
     });

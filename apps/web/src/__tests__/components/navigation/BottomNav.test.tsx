@@ -8,6 +8,14 @@ import { BottomNav } from '../../../components/navigation/BottomNav';
 /**
  * The phone half of the coverage migrated from the deleted `Sidebar.test.tsx`:
  * four items, permission gating, active highlight, navigate-on-click.
+ *
+ * ⚠ THE FOUR ITEMS ARE DIFFERENT ITEMS SINCE #106. They were Home · Library ·
+ * Settings · Console; they are Home · Transcripts · Notes · Settings. Console
+ * is `pinned` — a mode, not a peer destination — and the bar draws
+ * `BOTTOM_BAR_DESTINATIONS`, which excludes pinned rows entirely. The suites
+ * below therefore assert its ABSENCE under every permission set, because "the
+ * admin sees four tabs" alone would still pass with Console present and Notes
+ * missing.
  */
 
 vi.mock('../../../hooks/usePermissions', () => ({
@@ -32,9 +40,13 @@ function setPermissions(granted: string[], isAdmin = false) {
 }
 
 // The seeded `admin` role's navigation-relevant permissions. `transcripts:read`
-// is in the set since #30 — it is seeded to ALL THREE roles, so an admin
-// fixture without it would be a user that cannot exist, and every assertion
-// below about the bar's four-action ceiling would silently be testing three.
+// is in the set since #30 and `notes:read` since #57 — both are seeded to ALL
+// THREE roles, so an admin fixture without them would be a user that cannot
+// exist, and every assertion below about the bar's four-action ceiling would
+// silently be testing two. The two admin permissions stay in the set even
+// though #106 took Console off this bar: they are what a real admin holds, and
+// the "never shows Console" suite needs them present to prove the absence is
+// not just a missing grant.
 const ADMIN_PERMISSIONS = [
   'users:read',
   'system_settings:read',
@@ -88,43 +100,58 @@ describe('BottomNav', () => {
   });
 
   describe('Destinations', () => {
-    it('renders all four destinations for a fully permitted user', () => {
-      // FOUR since #30 added the library — the bar's documented ceiling
-      // exactly, not one short of it. See `BottomNav`'s header: a fifth
-      // destination is a redesign, not an addition.
+    it('renders exactly Home, Transcripts, Notes and User Settings for an admin (#106)', () => {
+      // FOUR, and these four. The bar's ceiling is four labelled tabs at 360px
+      // and #106 reaches it BY DESIGN: `BOTTOM_BAR_DESTINATIONS` is every
+      // NON-PINNED destination, and there are exactly four.
       //
-      // ⚠ STILL FOUR AFTER #57, which is the whole point of that issue: Notes
-      // became a second route prefix on the `library` row rather than a fifth
-      // tab. This assertion is the executable form of that decision — a `notes`
-      // destination added later fails here, loudly, before anybody has to
-      // discover at 360px that five labelled tabs do not fit.
+      // ⚠ CONSOLE IS ASSERTED ABSENT IN THE SAME TEST, not in a separate one.
+      // The failure this guards is a swap, not a count: restore Console to the
+      // bar and drop Notes and the bar still has four buttons, still shows
+      // labels, and still passes any assertion phrased as "four actions".
       renderPhone();
 
       expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Console' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
     });
 
-    it('shows Library to a user holding transcripts:read and nothing else', () => {
+    it('renders the four tabs in declaration order (#106)', () => {
+      // Declaration order IS navigation order, and the order is the design:
+      // the two things the product produces sit between Home and Settings.
+      // `getAllByRole` returns document order, which for a flex row is visual
+      // order.
+      renderPhone();
+
+      expect(
+        screen.getAllByRole('button').map((tab) => tab.getAttribute('aria-label')),
+      ).toEqual(['Home', 'Transcripts', 'Notes', 'User Settings']);
+    });
+
+    it('shows Transcripts to a user holding transcripts:read and nothing else', () => {
       // The seeded Viewer. `transcripts:read` is granted to every role, so
       // this is the ordinary user of this application rather than an edge case.
       setPermissions(['transcripts:read'], false);
       renderPhone();
 
-      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Notes' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
     });
 
-    it('shows Library to a user holding notes:read and nothing else (#57)', () => {
-      // The other half of the row's `anyPermission`. A deployment that revoked
-      // transcripts but kept notes must not lose the only tab that reaches
-      // either — on a phone, a destination with no bottom-bar presence is
-      // effectively hidden.
+    it('shows Notes and NOT Transcripts to a notes:read-only user (#106)', () => {
+      // The row that used to be `library` was reachable on EITHER permission,
+      // so this user got one tab that fronted both subtrees. Two destinations
+      // gated on one permission each means the bar now shows exactly the half
+      // they can read — and, crucially, does NOT show the half they cannot,
+      // which under the old model was the tab they would be bounced off.
       setPermissions(['notes:read'], false);
       renderPhone();
 
-      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Transcripts' })).not.toBeInTheDocument();
     });
 
     it('shows the compact label as visible text but the full label as the accessible name', () => {
@@ -132,16 +159,17 @@ describe('BottomNav', () => {
       // not fit into — so it keeps the full phrase as its ACCESSIBLE name and
       // shows the short one, and nothing is lost to a screen reader.
       //
-      // `library` is the case where the two fields agree since #57 ("Library"
-      // fits both), which is asserted here rather than left implicit: the split
-      // is still real for `settings`, and a future longer library label must go
-      // back through this same treatment rather than overflow the bar.
+      // `transcripts` and `notes` are the cases where the two fields agree
+      // (#106), asserted here rather than left implicit: the split is still
+      // real for `settings`, and "Transcripts" is the longest caption the bar
+      // draws — it fits only because the theme pins the SELECTED label back to
+      // 0.75rem (`theme/components.ts`).
       renderPhone();
 
       expect(screen.getByText('Settings')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
-      expect(screen.getByText('Library')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByText('Transcripts')).toBeInTheDocument();
+      expect(screen.getByText('Notes')).toBeInTheDocument();
     });
 
     it('never renders more than four actions — showLabels depends on it', () => {
@@ -155,26 +183,35 @@ describe('BottomNav', () => {
       setPermissions([]);
       renderPhone();
 
-      // Home and User Settings only: both Library and Console are gated.
+      // Home and User Settings only: Transcripts and Notes are each gated, and
+      // Console is not on this bar at any permission level.
       expect(screen.getAllByRole('button')).toHaveLength(2);
-      expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Library' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Transcripts' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Notes' })).not.toBeInTheDocument();
     });
 
-    it('gates on permission rather than the admin role', () => {
-      setPermissions(['system_settings:read'], false);
-      renderPhone();
+    it('NEVER shows Console, whatever permissions are held (#106)', () => {
+      // Every permission set that used to produce a Console tab, asserted in
+      // one place. `console` is `pinned`, and the bar filters pinned rows out
+      // BEFORE the permission gate runs — so no grant can put it back. It is
+      // reachable below `sm` through the avatar UserMenu instead, which
+      // `UserMenu.test.tsx` covers.
+      for (const granted of [
+        ['system_settings:read'],
+        ['users:read'],
+        ['system_settings:read', 'users:read'],
+        ADMIN_PERMISSIONS,
+      ]) {
+        setPermissions(granted, true);
+        const view = renderPhone();
 
-      expect(screen.getByRole('button', { name: 'Console' })).toBeInTheDocument();
-    });
+        expect(
+          screen.queryByRole('button', { name: 'Console' }),
+          `Console appeared for ${granted.join(', ')}`,
+        ).not.toBeInTheDocument();
 
-    it('shows Console on users:read alone', () => {
-      // `console` is gated on EITHER admin permission (`anyPermission`), and a
-      // user holding only this one must still get the row.
-      setPermissions(['users:read'], false);
-      renderPhone();
-
-      expect(screen.getByRole('button', { name: 'Console' })).toBeInTheDocument();
+        view.unmount();
+      }
     });
   });
 
@@ -187,19 +224,40 @@ describe('BottomNav', () => {
     });
 
     it('resolves a child route to its parent destination', () => {
-      renderPhone('/admin/settings/users');
+      renderPhone('/transcripts/abc-123/history');
 
-      expect(screen.getByRole('button', { name: 'Console' })).toHaveClass('Mui-selected');
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toHaveClass('Mui-selected');
+      expect(screen.getByRole('button', { name: 'Notes' })).not.toHaveClass('Mui-selected');
     });
 
-    it('still selects Console on the redirected /admin/users path', () => {
-      // `/admin/users` redirects to `/admin/settings/users` (#92), but the bar
-      // renders for the one frame before the redirect commits. `console` owns
-      // `/admin`, not `/admin/settings`, precisely so that frame highlights the
-      // right row instead of nothing.
-      renderPhone('/admin/users/abc-123');
+    it('lights the two content tabs INDEPENDENTLY (#106)', () => {
+      // Under the merged `library` row both subtrees lit the same tab, which is
+      // exactly what #106 undid. Both directions are asserted, because a
+      // leftover shared prefix would light one tab on both routes and look like
+      // a highlight bug rather than a model bug.
+      const transcripts = renderPhone('/transcripts');
+      expect(screen.getByRole('button', { name: 'Transcripts' })).toHaveClass('Mui-selected');
+      expect(screen.getByRole('button', { name: 'Notes' })).not.toHaveClass('Mui-selected');
+      transcripts.unmount();
 
-      expect(screen.getByRole('button', { name: 'Console' })).toHaveClass('Mui-selected');
+      renderPhone('/notes/abc-123');
+      expect(screen.getByRole('button', { name: 'Notes' })).toHaveClass('Mui-selected');
+      expect(screen.getByRole('button', { name: 'Transcripts' })).not.toHaveClass(
+        'Mui-selected',
+      );
+    });
+
+    it('selects NOTHING on an admin route — Console is not on this bar (#106)', () => {
+      // `console` still OWNS `/admin` in the destination model, so
+      // `resolveActiveDestination` answers `console` here. The bar must render
+      // that as "nothing selected" rather than as a phantom highlight, which is
+      // the same path the existing "a destination the user cannot see" case
+      // takes — `false`, never `null`.
+      renderPhone('/admin/settings/users');
+
+      for (const action of screen.getAllByRole('button')) {
+        expect(action).not.toHaveClass('Mui-selected');
+      }
     });
 
     it('selects NOTHING on a route no destination owns', () => {
@@ -238,7 +296,7 @@ describe('BottomNav', () => {
       const user = userEvent.setup();
       renderPhone('/');
 
-      for (const name of ['User Settings', 'Library', 'Console', 'Home']) {
+      for (const name of ['User Settings', 'Transcripts', 'Notes', 'Home']) {
         await user.click(screen.getByRole('button', { name }));
         await waitFor(() => {
           expect(screen.getByRole('button', { name })).toHaveClass('Mui-selected');

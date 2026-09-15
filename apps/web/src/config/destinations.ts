@@ -34,15 +34,50 @@
  * candidates and an ambiguous active state on every admin route. So the two are
  * replaced by a single `console` destination that owns the whole `/admin`
  * subtree.
+ *
+ * TWO LIBRARY DESTINATIONS, NOT ONE (issue #106)
+ * ----------------------------------------------
+ * `library` — one row owning both `/transcripts` and `/notes`, fronting a page
+ * whose Transcripts | Notes tab strip was the real navigation — is gone. It
+ * existed for exactly one reason: #57 needed somewhere to put Notes, the bottom
+ * bar held four actions, and `console` was occupying the fourth. Renaming
+ * `transcripts` to `library` bought a fourth slot at the price of burying the
+ * app's two primary nouns one tap below a row named after neither of them.
+ *
+ * #106 pays back that debt by moving Console OFF the bottom bar rather than
+ * merging two nouns onto one row. Console is a MODE — an operator surface a
+ * user switches into — and it already had a better home: pinned at the rail's
+ * foot (#105) at `sm` and up, and listed in the avatar UserMenu at every width.
+ * Taking it out of the bar leaves exactly four NON-PINNED destinations —
+ * Home · Transcripts · Notes · Settings — which is the bar's ceiling reached BY
+ * DESIGN rather than by the coincidence of which permissions a given user
+ * happens to hold.
+ *
+ * Two alternatives were considered and rejected:
+ *
+ *  - **A per-surface `surfaces: ['rail', 'bar', 'menu']` field.** It generalises
+ *    `pinned` into three independent booleans that must be kept mutually
+ *    consistent, for a distinction this app draws exactly once. Three fields
+ *    admit eight states, six of which are nonsense ("in the bar but not the
+ *    menu"), and nothing would reject them. `pinned` names the one real
+ *    distinction — mode versus peer destination — and each surface decides what
+ *    that means for itself: the rail relocates it, the menu lists it inline, the
+ *    bar omits it.
+ *  - **Keeping `library` and adding `notes` as a fifth row.** Notes would then
+ *    be reachable from two places that disagree about what they are (a tab
+ *    inside Library, and a destination beside it), and the bar would be at five
+ *    labelled actions — which does not fit at 360px, the constraint that started
+ *    all of this.
  */
 
 import type { SvgIconComponent } from '@mui/icons-material';
 import HomeIcon from '@mui/icons-material/Home';
-import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
+import GraphicEqIcon from '@mui/icons-material/GraphicEq';
+import DescriptionIcon from '@mui/icons-material/Description';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
-export type DestinationKey = 'home' | 'library' | 'settings' | 'console';
+export type DestinationKey = 'home' | 'transcripts' | 'notes' | 'settings' | 'console';
 
 /**
  * Does `prefix` own `path`? True when the path equals the prefix or continues
@@ -69,25 +104,19 @@ export function owns(prefix: string, path: string): boolean {
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
   home: ['/'],
-  // TWO PREFIXES, ONE DESTINATION (#57, epic #45). `/transcripts` owns its
-  // whole subtree (the library, `/transcripts/new`, `/transcripts/:id` and
-  // `/transcripts/:id/history` — #30, #31, epic #19) and `/notes` owns its own
-  // (`/notes`, `/notes/new`, `/notes/:id`, `/notes/:id/history`).
+  // ONE PREFIX EACH SINCE #106. Each owns its whole subtree — `/transcripts`
+  // covers the library, `/transcripts/new`, `/transcripts/:id` and
+  // `/transcripts/:id/history` (#30, #31, epic #19); `/notes` covers `/notes`,
+  // `/notes/new`, `/notes/:id` and `/notes/:id/history` (#57, epic #45) —
+  // because a reader drilled into one transcript, or watching one note being
+  // written, has not left the surface they started on.
   //
-  // ⚠ THE SECOND PREFIX IS WHY THE DESTINATION WAS RENAMED RATHER THAN A FIFTH
-  // ONE ADDED. Four is the bottom bar's ceiling — see `DESTINATIONS` below and
-  // `BottomNav`'s header — so `notes` could not become a fifth tab without
-  // redesigning that bar. It should not have been one anyway: a transcript and
-  // the note derived from it are two answers to one question ("what do I
-  // have"), which is the same parallel-content judgement
-  // `LibraryPage`'s own Transcripts | Notes tabs make one level down, and the
-  // same one its Mine | Shared tabs make one level below that.
-  //
-  // One entry per prefix and not one merged regex, because both are the same
-  // destination as far as "which tab is lit" is concerned: a reader drilled
-  // into one transcript, or watching one note being written, has not left the
-  // library.
-  library: ['/transcripts', '/notes'],
+  // These were a single `library: ['/transcripts', '/notes']` entry between
+  // #57 and #106. Splitting them is what makes the two rows light up
+  // independently; a merged entry would leave the bar highlighting the same tab
+  // for both halves of the app.
+  transcripts: ['/transcripts'],
+  notes: ['/notes'],
   settings: ['/settings'],
   console: ['/admin'],
 };
@@ -121,7 +150,7 @@ export interface Destination {
   key: DestinationKey;
   /** Full label — the expanded rail, the bottom bar, the user menu. */
   label: string;
-  /** Shown in the 56px collapsed rail, which will not hold "System Settings". */
+  /** Shown in the 72px collapsed rail, which will not hold "System Settings". */
   compactLabel: string;
   Icon: SvgIconComponent;
   path: string;
@@ -130,16 +159,18 @@ export interface Destination {
   /**
    * Reachable when the user holds ANY ONE of these permissions.
    *
-   * Added by #92 for `console`, which fronts pages from two different
-   * controllers: someone with `users:read` alone must reach the Users &
-   * Allowlist page, and someone with `system_settings:read` alone must reach
-   * the settings pages. Neither may be dropped, and the single-string
-   * `permission` field cannot express "or".
+   * Added by #92 for `console`, which is its ONE user today: it fronts pages
+   * from two different controllers, so someone with `users:read` alone must
+   * reach the Users & Allowlist page, and someone with `system_settings:read`
+   * alone must reach the settings pages. Neither may be dropped, and the
+   * single-string `permission` field cannot express "or".
    *
-   * `library` is the second such destination since #57 (epic #45), for the
-   * identical reason: it fronts `transcripts.controller.ts` and
-   * `notes.controller.ts`, and a user entitled to only one of the two must
-   * still reach the surface that holds both.
+   * `library` was the second user between #57 and #106, for the same reason —
+   * one row fronting `transcripts.controller.ts` and `notes.controller.ts`.
+   * Splitting that row into two destinations dissolved the "or": each now names
+   * the single permission its own controller enforces. The field stays, because
+   * `console` still needs it and because the next surface that fronts two
+   * controllers will too.
    *
    * Widening `permission` to `string | string[]` was the alternative and was
    * rejected: an array there reads as ALL by every convention in this codebase
@@ -153,22 +184,29 @@ export interface Destination {
    */
   anyPermission?: readonly string[];
   /**
-   * Render this destination pinned at the FOOT of the navigation rail, below a
-   * divider, rather than inline in the destination list (#105).
+   * This destination is a MODE, not a peer destination — and each surface draws
+   * a mode differently (#105, redefined by #106):
    *
-   * `console` is the only one today, and the flag exists so the rail never has
-   * to spell `key === 'console'` in its render. A magic key there would be a
+   *   - **The navigation rail** renders it pinned at its FOOT, below a divider,
+   *     rather than inline in the destination list.
+   *   - **The user menu** lists it inline with the rest, because a flat menu has
+   *     no foot to pin to and no room to invent a second group for one row.
+   *   - **The bottom bar OMITS it entirely** (`BOTTOM_BAR_DESTINATIONS`). A bar
+   *     has no foot either — it IS the foot — so there is nowhere to put a
+   *     pinned row that would not read as a fifth peer destination. Console
+   *     stays reachable below `sm` through the avatar menu, which is where a
+   *     phone user reaches every other non-destination control.
+   *
+   * `console` is the only one today, and the flag exists so no surface has to
+   * spell `key === 'console'` in its render. A magic key there would be a
    * second, invisible answer to "what is the admin surface" — the exact
    * split-brain this file's header describes — and it would silently stop
    * being true the day the admin destination is renamed or a second mode is
-   * added. Declaring it here keeps ONE place that knows Console is a MODE and
-   * not a peer of the library destinations, which is what its position at the
-   * foot communicates.
+   * added.
    *
-   * RAIL-ONLY, deliberately. The bottom bar has no foot to pin to (it IS the
-   * foot) and the user menu is a flat list, so both keep reading `DESTINATIONS`
-   * in declaration order and ignore this flag. Ordering here therefore still
-   * has to be the correct order for those surfaces.
+   * Ordering in `DESTINATIONS` is still the correct order for the menu, which
+   * reads the array as declared. The rail lifts pinned rows to its foot and the
+   * bar filters them out; neither reorders what is left.
    */
   pinned?: boolean;
 }
@@ -193,21 +231,30 @@ export function isDestinationVisible(
 }
 
 /**
- * The four destinations, in navigation order: Home, Library, Settings,
- * Console. That is the bottom bar's ceiling exactly — see `BottomNav`'s header
- * — so a fifth destination is not an addition, it is a redesign.
+ * The five destinations, in navigation order: Home, Transcripts, Notes,
+ * Settings, Console.
  *
- * ISSUE #57 (epic #45) TESTED THAT CEILING AND RENAMED RATHER THAN ADDED.
- * Notes needed a home, and `notes` as a fifth tab would have been a redesign of
- * the bottom bar to buy a WORSE information architecture — "what do I have"
- * split across two destinations, with the transcript → note relationship the
- * epic exists to create invisible in navigation. So `transcripts` became
- * `library`, owning both `/transcripts` and `/notes`, and the bar stayed at
- * four.
+ * FOUR NON-PINNED DESTINATIONS IS THE BOTTOM BAR'S CEILING, and since #106 the
+ * app sits exactly at it BY DESIGN rather than by coincidence. Five labelled
+ * tabs do not fit at 360px; four do. Console is the fifth entry here and the
+ * fifth row in the user menu, but it is `pinned` — a mode — so it never enters
+ * `BOTTOM_BAR_DESTINATIONS` at all. A fifth NON-PINNED destination is therefore
+ * not an addition but a redesign of the bar (an overflow tab, or labels off);
+ * a second pinned one costs nothing here.
  *
- * Declaration order IS navigation order on every surface. The rail is the one
- * exception, and only for the tail of the list: it lifts `pinned` destinations
- * out to its foot (#105) while leaving the rest in this order.
+ * WHAT #106 UNDID. Issue #57 (epic #45) needed a home for Notes, found the bar
+ * already at four, and renamed `transcripts` to `library` so one row could own
+ * both subtrees — with a Transcripts | Notes tab strip inside the page doing
+ * the real navigating. That kept the count at four by spending the app's two
+ * primary nouns on a row named after neither. #106 spends Console's bar slot
+ * instead, which is the cheaper thing to give up: Console is chrome for
+ * operators, reachable at the rail's foot and in the avatar menu at every
+ * width, while Transcripts and Notes are what the product is for.
+ *
+ * Declaration order IS navigation order on every surface that draws several.
+ * The rail is the one exception, and only for the tail of the list: it lifts
+ * `pinned` destinations out to its foot (#105) while leaving the rest in this
+ * order.
  *
  * GATING IS BY PERMISSION, NOT BY ROLE, and the permission is the one the API
  * actually enforces — verified against the controllers rather than assumed:
@@ -217,12 +264,12 @@ export function isDestinationVisible(
  *   - `transcripts.controller.ts`     → `transcripts:read`
  *   - `notes.controller.ts`           → `notes:read`
  *
- * `console` AND `library` are each reachable on EITHER of their two permissions
- * (see `anyPermission`), because each fronts pages from two controllers and a
- * user entitled to only one half must still reach the surface. The per-page gates inside
- * `/admin/settings/*` are what decide which cards and routes that user actually
- * gets — `config/adminSections.tsx` declares them, and `App.tsx` wraps each
- * route in the matching `RequirePermission`.
+ * `console` is the only destination reachable on EITHER of two permissions (see
+ * `anyPermission`), because it is the only one that fronts pages from two
+ * controllers. The per-page gates inside `/admin/settings/*` are what decide
+ * which cards and routes that user actually gets — `config/adminSections.tsx`
+ * declares them, and `App.tsx` wraps each route in the matching
+ * `RequirePermission`.
  *
  * That is the same REACHABILITY-vs-CONTENT split this file has always drawn:
  * the Users & Allowlist page gates on `users:read` to be reached, while its
@@ -242,50 +289,50 @@ export const DESTINATIONS: readonly Destination[] = [
     path: '/',
   },
   {
-    // Issues #30 (epic #19) and #57 (epic #45). ONE destination over two
-    // route subtrees — see `DESTINATION_ROUTES.library` for why Notes is a
-    // prefix here rather than a fifth row.
+    // Issue #30 (epic #19), restored to a destination of its own by #106.
     //
-    // ⚠ GATED ON EITHER PERMISSION, NOT ON `transcripts:read` ALONE, and the
-    // pair is verified against the controllers rather than assumed:
-    // `transcripts.controller.ts` carries
-    // `@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })` on its reads and
-    // `notes.controller.ts` carries `PERMISSIONS.NOTES_READ` on its own. A
-    // single `permission: 'transcripts:read'` here would have been the #92 bug
-    // in a new place: a deployment that revoked transcripts but kept notes
-    // would lose the row that is the only way to reach either.
+    // ONE PERMISSION, NOT AN `anyPermission` PAIR. This row fronts exactly one
+    // controller — `transcripts.controller.ts` carries
+    // `@Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_READ] })` on its reads —
+    // so the "or" the `library` row needed has no meaning here. A deployment
+    // that revokes transcripts and keeps notes now loses this row and keeps the
+    // Notes one, which is exactly the outcome `library`'s `anyPermission`
+    // existed to fake with a single row.
     //
-    // Both are seeded to ALL THREE roles (both controllers' headers say so:
-    // recording a conversation and turning it into a note are the actions the
-    // two epics exist to enable, and a new account's default role is Viewer),
-    // so in practice this row is visible to everybody — but the GATE is still
-    // the permissions, because a deployment that revokes both must lose the row.
-    //
-    // The per-TAB gate inside the page is separate and is about CONTENT rather
-    // than reachability: `LibraryPage` hides the Transcripts tab from a user
-    // without `transcripts:read` and the Notes tab from one without
-    // `notes:read`. Exactly the split `/admin/settings` already draws between
-    // its own `anyPermission` and its per-card permissions.
-    key: 'library',
-    label: 'Library',
-    // Both fields say "Library" since #57, and the redundancy is the honest
-    // state rather than an oversight: `label` is the accessible name and the
-    // expanded rail's caption, `compactLabel` is what the 56px rail and a 4-up
-    // bottom bar at 360px can physically draw, and "Library" fits both. The
-    // fields stay distinct because `settings` still needs them to be ("User
-    // Settings" / "Settings"), and because the day this label grows is the day
-    // the split is load-bearing again.
-    compactLabel: 'Library',
-    // NOT the audio waveform this row carried while it was "Transcripts": half
-    // of what it now fronts is prose the user never recorded.
-    Icon: LibraryBooksIcon,
-    // `/transcripts` rather than `/notes`, so the row lands on the tab the
-    // destination has had since #30. A user holding `notes:read` and NOT
-    // `transcripts:read` is redirected on to `/notes` by the route's own
-    // fallback in `App.tsx` — the reachability the `anyPermission` above
-    // promises is kept by the router, not by a second opinion here.
+    // Seeded to ALL THREE roles (the controller's header says why: recording a
+    // conversation is the action epic #19 exists to enable, and a new account's
+    // default role is Viewer), so in practice this row is visible to everybody
+    // — but the GATE is still the permission, because a deployment that revokes
+    // it must lose the row.
+    key: 'transcripts',
+    label: 'Transcripts',
+    // Both fields say "Transcripts", and at 11 characters it is the longest
+    // compact label this app ships — which is why `RAIL_WIDTH_COLLAPSED` went
+    // from 56 to 72 in #106. See `NavigationRail`'s measurement comment: a
+    // 48px caption box cannot hold it, and abbreviating it to "Audio" would
+    // name something other than what the row fronts.
+    compactLabel: 'Transcripts',
+    // The audio waveform this row carried before #57 renamed it to Library.
+    // It fronts recordings again, so it gets the recording icon back.
+    Icon: GraphicEqIcon,
     path: '/transcripts',
-    anyPermission: ['transcripts:read', 'notes:read'],
+    permission: 'transcripts:read',
+  },
+  {
+    // Issue #57 (epic #45), promoted from a tab to a destination by #106.
+    //
+    // ONE PERMISSION, for the same reason as its sibling above:
+    // `notes.controller.ts` carries `PERMISSIONS.NOTES_READ` on its reads and
+    // nothing else gates this subtree. Seeded to all three roles, same as the
+    // transcript pair.
+    key: 'notes',
+    label: 'Notes',
+    compactLabel: 'Notes',
+    // A page of prose, never a waveform: a note is generated text, and half of
+    // what this app holds is not something the user recorded.
+    Icon: DescriptionIcon,
+    path: '/notes',
+    permission: 'notes:read',
   },
   {
     key: 'settings',
@@ -301,12 +348,29 @@ export const DESTINATIONS: readonly Destination[] = [
     Icon: AdminIcon,
     path: '/admin/settings',
     anyPermission: ['system_settings:read', 'users:read'],
-    // Pinned at the rail's foot (#105) — a mode, not a third library
-    // destination. The permission gate above still runs first: a user who
-    // cannot reach Console gets no pinned row AND no stray divider.
+    // A MODE, not a fifth peer destination — see `pinned`. Pinned at the rail's
+    // foot (#105), listed inline in the user menu, and omitted from the bottom
+    // bar entirely (#106). The permission gate above still runs first: a user
+    // who cannot reach Console gets no pinned row AND no stray divider.
     pinned: true,
   },
 ];
+
+/**
+ * The destinations the phone bottom bar draws — every NON-PINNED one.
+ *
+ * A DERIVED LIST, never a second hand-written array. The bar's ceiling is four
+ * actions; the model's promise since #106 is that exactly four destinations are
+ * non-pinned, and deriving the bar's list from the flag is what makes the two
+ * statements the same statement. A hand-maintained copy would let a fifth tab
+ * appear silently the day someone adds a destination and forgets this file.
+ *
+ * `BottomNav` still filters this by permission on top — a user sees at most
+ * four tabs and possibly fewer.
+ */
+export const BOTTOM_BAR_DESTINATIONS: readonly Destination[] = DESTINATIONS.filter(
+  (d) => !d.pinned,
+);
 
 /**
  * Which destination, if any, owns `pathname`.

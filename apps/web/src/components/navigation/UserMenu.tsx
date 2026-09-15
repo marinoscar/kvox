@@ -52,6 +52,15 @@ export function UserMenu() {
   //
   // Home is dropped: the brand in the AppBar already routes there, and a menu
   // row duplicating on-screen chrome is the exact bloat this epic removes.
+  //
+  // ⚠ `DESTINATIONS`, NOT `BOTTOM_BAR_DESTINATIONS` — the pinned ones belong
+  // here (#106). A menu is a flat list with no foot to pin a mode to and no
+  // room to invent a second group for one row, so Console is listed inline like
+  // every other destination. This is also the ONLY chrome that carries Console
+  // below `sm`, since #106 took it off the bottom bar: a phone user reaches the
+  // admin surface here, exactly as they reach sign-out here. Filtering pinned
+  // rows out of this list — the "obvious" symmetry with `BottomNav` — would
+  // make Console unreachable on a phone altogether.
   const menuDestinations = DESTINATIONS.filter(
     (destination) =>
       destination.key !== 'home' && isDestinationVisible(destination, hasPermission),

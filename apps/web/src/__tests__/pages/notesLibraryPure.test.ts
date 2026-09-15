@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
 import {
-  LIBRARY_TAB_PATHS,
-  libraryTabFromPath,
-} from '../../pages/libraryTabs';
-import { DESTINATION_ROUTES, resolveActiveDestination } from '../../config/destinations';
-import {
   NOTE_SOURCE_KINDS,
   buildNoteSource,
   emptyNewNoteDraft,
@@ -20,47 +15,21 @@ import {
 import type { NoteSourceFields } from '../../utils/noteSource';
 
 /**
- * The library's pure parts — issue #57, epic #45.
+ * The notes surface's pure parts — issue #57, epic #45.
  *
  * Everything here is a function over data, which is exactly why it is a
  * separate file: these are the decisions that are easy to get wrong and
  * expensive to assert through a rendered form.
+ *
+ * This file was `libraryTabs.test.ts` until #106. Its first suite covered
+ * `pages/libraryTabs.ts` — the Transcripts | Notes tab-is-the-URL mapping —
+ * which that issue deleted along with the tab strip it served: `/transcripts`
+ * and `/notes` are two destinations rendering two pages now, so there is no
+ * pathname-to-tab function left to test. What that suite actually guarded, that
+ * each path lights its own navigation row, moved to
+ * `__tests__/config/destinations.test.ts`, which asserts it against the
+ * destination table directly rather than through a page's tab state.
  */
-
-describe('libraryTabs', () => {
-  it('maps each tab to the route that IS that tab', () => {
-    expect(LIBRARY_TAB_PATHS).toEqual({ transcripts: '/transcripts', notes: '/notes' });
-  });
-
-  it('resolves every note path to the Notes tab, children included', () => {
-    expect(libraryTabFromPath('/notes')).toBe('notes');
-    expect(libraryTabFromPath('/notes/new')).toBe('notes');
-    expect(libraryTabFromPath('/notes/abc-123')).toBe('notes');
-    expect(libraryTabFromPath('/notes/abc-123/history')).toBe('notes');
-  });
-
-  it('matches at the SEGMENT BOUNDARY, like every other prefix in this app', () => {
-    // A bare `startsWith('/notes')` claims both of these, and the failure looks
-    // like a routing bug rather than the string bug it is.
-    expect(libraryTabFromPath('/notesfoo')).toBe('transcripts');
-    expect(libraryTabFromPath('/notes-archive')).toBe('transcripts');
-  });
-
-  it('resolves everything else to Transcripts, total over any path', () => {
-    expect(libraryTabFromPath('/transcripts')).toBe('transcripts');
-    expect(libraryTabFromPath('/transcripts/abc/history')).toBe('transcripts');
-  });
-
-  it('keeps both tab routes owned by the ONE library destination', () => {
-    // The navigational half of "two views of one question": switching tabs must
-    // never change which navigation row is lit. Asserted against the live
-    // destination table rather than a copy of it.
-    for (const path of Object.values(LIBRARY_TAB_PATHS)) {
-      expect(resolveActiveDestination(path)).toBe('library');
-    }
-    expect([...DESTINATION_ROUTES.library].sort()).toEqual(['/notes', '/transcripts']);
-  });
-});
 
 describe('newNote — the body the form produces', () => {
   it('offers exactly three source kinds', () => {

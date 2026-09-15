@@ -53,9 +53,10 @@ function setPrefs(railCollapsed: boolean) {
 // joined the set with #30 and `notes:read` with #57: both are seeded to ALL
 // THREE roles, so an admin fixture without them would be a user that cannot
 // exist — and the row-count assertions below would silently be measuring a rail
-// with one row missing. The two together are what make the ONE `library` row
-// visible; either alone would also do it (see its `anyPermission`), which is
-// asserted separately below rather than relied on here.
+// with a row missing. Since #106 they gate two SEPARATE rows, one each, rather
+// than jointly making one `library` row visible: the independent-gating test
+// below is what asserts that, and this fixture holds both so the five-row count
+// is the full rail.
 const ADMIN_PERMISSIONS = [
   'users:read',
   'system_settings:read',
@@ -71,46 +72,58 @@ describe('NavigationRail', () => {
   });
 
   describe('Destinations', () => {
-    it('renders all four destinations for a fully permitted user', () => {
-      // FOUR since #30 added the library — still four after #57 renamed it
-      // and gave it a second route subtree, which is the whole point of that
-      // change. Still ONE admin row, not two: issue
-      // #92 merged `User Management` and `System Settings` into `Console`,
-      // because two rows both matching `/admin/*` give the rail two active
-      // candidates on every admin route.
+    it('renders all FIVE destinations for a fully permitted user (#106)', () => {
+      // FIVE since #106 split the merged `library` row into Transcripts and
+      // Notes — the rail draws every destination, pinned ones included, and
+      // Console keeps its own row at the foot. That is the difference from the
+      // bottom bar, which draws four and omits the pinned one: a rail HAS a
+      // foot to pin a mode to.
+      //
+      // Still ONE admin row, not two: issue #92 merged `User Management` and
+      // `System Settings` into `Console`, because two rows both matching
+      // `/admin/*` give the rail two active candidates on every admin route.
       setPermissions(ADMIN_PERMISSIONS, true);
 
       render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      expect(within(nav).getAllByRole('link')).toHaveLength(4);
+      expect(within(nav).getAllByRole('link')).toHaveLength(5);
       expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Notes' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Console' })).toBeInTheDocument();
+      // The row #106 replaced must not come back beside the two that replaced
+      // it.
+      expect(screen.queryByRole('link', { name: 'Library' })).not.toBeInTheDocument();
     });
 
-    it('hides Library from a user holding NEITHER of its permissions (#30, #57)', () => {
+    it('hides both content rows from a user holding neither permission (#106)', () => {
       // `setPermissions([])` in the outer `beforeEach`, so this is the same
       // "grants nothing" fixture the Console assertion below uses.
       render(<NavigationRail />);
 
-      expect(screen.queryByRole('link', { name: 'Library' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Transcripts' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Notes' })).not.toBeInTheDocument();
     });
 
-    it('shows Library to a user holding EITHER of its permissions (#57)', () => {
-      // The row fronts two controllers since #57, so a deployment that revokes
-      // one must not lose the only way to reach the other. Both directions are
-      // asserted, because keeping whichever permission was already written here
-      // and silently dropping the new one is exactly how this gets broken.
+    it('gates the two content rows INDEPENDENTLY (#106)', () => {
+      // The merged row was reachable on EITHER permission, so a notes-only
+      // user got a row pointing at `/transcripts`. Two rows gated on one
+      // permission each means each user sees exactly the halves they can read
+      // — asserted in both directions, because keeping the old `anyPermission`
+      // on either row shows both to everybody and looks fine until someone
+      // clicks the one they cannot open.
       setPermissions(['transcripts:read']);
       const first = render(<NavigationRail />);
-      expect(screen.getByRole('link', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Transcripts' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Notes' })).not.toBeInTheDocument();
       first.unmount();
 
       setPermissions(['notes:read']);
       render(<NavigationRail />);
-      expect(screen.getByRole('link', { name: 'Library' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Notes' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Transcripts' })).not.toBeInTheDocument();
     });
 
     it('hides Console from a user holding neither admin permission', () => {
@@ -244,7 +257,7 @@ describe('NavigationRail', () => {
 
     it('stays collapsed below lg even when the stored preference says expanded', async () => {
       // Honouring `railCollapsed: false` at 800px would render a 220px rail on
-      // a screen that has room for 56.
+      // a screen that has room for 72.
       setPrefs(false);
       render(<NavigationRail />);
 
@@ -315,6 +328,7 @@ describe('NavigationRail', () => {
       expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
         '/',
         '/transcripts',
+        '/notes',
         '/settings',
         '/admin/settings',
       ]);
@@ -356,18 +370,23 @@ describe('NavigationRail', () => {
         expect(screen.getByRole('link', { name: 'Users & Allowlist' })).toBeInTheDocument();
       });
 
-      it('renders a permanent Back to library row linking to /', () => {
+      it('renders a permanent Back to Home row linking to / (#106 renamed it)', () => {
         render(<NavigationRail />, {
           wrapperOptions: { route: '/admin/settings/users', user: mockAdminUser },
         });
 
-        expect(screen.getByRole('link', { name: 'Back to library' })).toHaveAttribute(
+        // "Back to Home" since #106, not "Back to library": the row links to
+        // `/`, and there has been no destination called Library since that
+        // issue split it into Transcripts and Notes. A row named after where
+        // it actually goes cannot go stale the next time the destination set
+        // changes.
+        expect(screen.getByRole('link', { name: 'Back to Home' })).toHaveAttribute(
           'href',
           '/',
         );
       });
 
-      it('hides the Console destination row — Back to library is the way out instead', () => {
+      it('hides the Console destination row — Back to Home is the way out instead', () => {
         render(<NavigationRail />, {
           wrapperOptions: { route: '/admin/settings/users', user: mockAdminUser },
         });
@@ -389,7 +408,7 @@ describe('NavigationRail', () => {
     describe('does not engage outside expanded desktop', () => {
       it('stays library navigation at sm-lg on the same /admin/* path — the expanded-only rule', async () => {
         // The rule most likely to be "fixed" into always-on later: Console mode
-        // is `isConsole && expanded`, never `isConsole` alone. A 56px column
+        // is `isConsole && expanded`, never `isConsole` alone. A 72px column
         // cannot host labelled group headers (see the file header), so the
         // medium tier keeps library destinations even under `/admin`.
         setPermissions(FULL_ADMIN_PERMISSIONS, true);
@@ -454,7 +473,7 @@ describe('NavigationRail', () => {
       });
 
       it('marks nothing active on the hub path /admin/settings itself', () => {
-        // No card's own path matches the hub path, and `Back to library` is
+        // No card's own path matches the hub path, and `Back to Home` is
         // explicitly `active={false}` — so nothing should carry aria-current.
         render(<NavigationRail />, {
           wrapperOptions: { route: '/admin/settings', user: mockAdminUser },
@@ -557,6 +576,7 @@ describe('NavigationRail', () => {
       expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
         '/',
         '/transcripts',
+        '/notes',
         '/settings',
         '/admin/settings',
       ]);
@@ -584,7 +604,7 @@ describe('NavigationRail', () => {
       expect(pinnedList(nav).previousElementSibling?.tagName).toBe('HR');
     });
 
-    it('stays absent inside Console mode — Back to library is the affordance instead (#94)', () => {
+    it('stays absent inside Console mode — Back to Home is the affordance instead (#94)', () => {
       setPermissions(ADMIN_PERMISSIONS, true);
       render(<NavigationRail />, {
         wrapperOptions: { route: '/admin/settings/users', user: mockAdminUser },
@@ -628,13 +648,19 @@ describe('NavigationRail', () => {
     });
   });
 
-  describe('Collapsed caption chrome (#105)', () => {
-    // The bug: `mx: 0.5` + `px: 0.5` (16px of horizontal margin+padding) left
-    // a ~40px caption box inside the 56px collapsed rail, and "Settings" /
-    // "Console" both measure ~41px at the caption's 0.625rem — so both
-    // ellipsised. The fix halves each to 0.25 (8px total), leaving a 48px
-    // box. jsdom performs no layout, so a textContent check alone cannot see
-    // an ellipsis — only the underlying chrome, asserted here via
+  describe('Collapsed caption chrome (#105, widened by #106)', () => {
+    // #105's bug: `mx: 0.5` + `px: 0.5` (16px of horizontal margin+padding)
+    // left a ~40px caption box inside the 56px collapsed rail, and "Settings"
+    // / "Console" both measure ~41px at the caption's 0.625rem — so both
+    // ellipsised. Its fix halved each to 0.25 (8px total), leaving a 48px box.
+    //
+    // #106 keeps that 8px and widens the RAIL: "Transcripts" is 11 characters
+    // (~54px in Inter, ~57px in the widest sans fallback) and no padding
+    // reclaimed from a 56px rail can hold it, because 48px was already the
+    // whole interior. `RAIL_WIDTH_COLLAPSED` is 72 and the box is 64px.
+    //
+    // jsdom performs no layout, so a textContent check alone cannot see an
+    // ellipsis — only the underlying chrome, asserted here via
     // getComputedStyle, can catch a regression back to the old spacing.
     function horizontalChrome(el: Element): number {
       const style = getComputedStyle(el);
@@ -646,11 +672,14 @@ describe('NavigationRail', () => {
       );
     }
 
-    it('keeps RAIL_WIDTH_COLLAPSED at 56 — the fix reclaims chrome, not rail width', () => {
-      expect(RAIL_WIDTH_COLLAPSED).toBe(56);
+    it('widens RAIL_WIDTH_COLLAPSED to 72 — #105 reclaimed chrome, #106 needed width', () => {
+      // It was 56 between #55 and #106, and #105 deliberately left it there.
+      // The input to that decision changed, not its reasoning: see the
+      // constant's own comment.
+      expect(RAIL_WIDTH_COLLAPSED).toBe(72);
     });
 
-    it('reclaims the collapsed row chrome to 8px total, leaving a 48px caption box', async () => {
+    it('keeps the collapsed row chrome at 8px total, leaving a 64px caption box', async () => {
       setPermissions(ADMIN_PERMISSIONS, true);
       render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
 
@@ -660,12 +689,14 @@ describe('NavigationRail', () => {
       // caption is aria-hidden, so it cannot be found by accessible name.
       const settingsRow = screen.getByRole('link', { name: 'User Settings' });
       const consoleRow = screen.getByRole('link', { name: 'Console' });
+      const transcriptsRow = screen.getByRole('link', { name: 'Transcripts' });
 
       expect(horizontalChrome(settingsRow)).toBeCloseTo(8, 5);
       expect(horizontalChrome(consoleRow)).toBeCloseTo(8, 5);
-      // RAIL_WIDTH_COLLAPSED (56) minus that chrome is the 48px box the fix's
-      // comment measures the captions against.
-      expect(RAIL_WIDTH_COLLAPSED - horizontalChrome(settingsRow)).toBe(48);
+      expect(horizontalChrome(transcriptsRow)).toBeCloseTo(8, 5);
+      // RAIL_WIDTH_COLLAPSED (72) minus that chrome is the 64px box #106's
+      // comment measures "Transcripts" (~57px worst case) against.
+      expect(RAIL_WIDTH_COLLAPSED - horizontalChrome(transcriptsRow)).toBe(64);
     });
 
     it('renders the collapsed captions as full text content, not an abbreviation', async () => {
@@ -677,8 +708,14 @@ describe('NavigationRail', () => {
       // The caption is aria-hidden; query by literal text rather than by
       // accessible name, which stays the full label either way and would not
       // distinguish a full caption from a shortened one.
+      //
+      // "Transcripts" is the one this suite is really about since #106 —
+      // abbreviating it to "Audio" was the cheap alternative to widening the
+      // rail, and this is what fails if someone takes it.
       expect(screen.getByText('Settings')).toBeInTheDocument();
       expect(screen.getByText('Console')).toBeInTheDocument();
+      expect(screen.getByText('Transcripts')).toBeInTheDocument();
+      expect(screen.getByText('Notes')).toBeInTheDocument();
     });
   });
 });

@@ -151,7 +151,7 @@ let current: Note;
 let regenerateCalls = 0;
 
 beforeEach(() => {
-  // See `LibraryPage.test.tsx`: `localStorage` survives between tests and the
+  // See `NotesPage.test.tsx`: `localStorage` survives between tests and the
   // theme provider seeds itself from this key.
   localStorage.setItem('theme_mode', 'light');
   // The source-name cache is MODULE-LEVEL and deliberately never invalidated
@@ -479,7 +479,7 @@ describe('NotePage — the rest of the page', () => {
   });
 
   it('has no axe violations in the dark theme', async () => {
-    // ⚠ THROUGH `localStorage` — see `LibraryPage.test.tsx`'s own note: the
+    // ⚠ THROUGH `localStorage` — see `NotesPage.test.tsx`’s own note: the
     // helper's `theme` option is declared and not read, so passing it would
     // render the light theme and assert nothing.
     localStorage.setItem('theme_mode', 'dark');

@@ -339,7 +339,7 @@ describe('AppBar', () => {
    * back up.
    */
   describe('Drill-down on transcript routes (#30)', () => {
-    it('shows Back + "Transcript" on a transcript, going up to the library', async () => {
+    it('shows Back + "Transcript" on a transcript, going up to the list', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route: '/transcripts/abc-123' } });
@@ -356,7 +356,7 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/transcripts');
     });
 
-    it('goes up from version history to the TRANSCRIPT, not to the library', async () => {
+    it('goes up from version history to the TRANSCRIPT, not to the list', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);
       render(<AppBar />, {
@@ -394,13 +394,14 @@ describe('AppBar', () => {
 
       await user.click(screen.getByRole('button', { name: 'Back' }));
 
-      // ⚠ `/notes`, NOT `/transcripts`. They are one destination, but the TAB
-      // is the URL (#57) — going up to `/transcripts` would silently switch
-      // which half of the library the reader is looking at.
+      // ⚠ `/notes`, NOT `/transcripts`. Two destinations since #106, so this is
+      // simply up-one-level within the note's own subtree — and it was already
+      // required when they were one destination with two tabs, because going up
+      // to `/transcripts` would silently switch which half the reader saw.
       expect(mockNavigate).toHaveBeenCalledWith('/notes');
     });
 
-    it('goes up from a note’s version history to the NOTE, not to the library (#57)', async () => {
+    it('goes up from a note’s version history to the NOTE, not to the list (#57)', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route: '/notes/abc-123/history' } });
@@ -426,10 +427,15 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/notes');
     });
 
-    it('keeps the wordmark on /notes — it is the other TAB, not a page below one (#57)', () => {
-      // The same reasoning as `/transcripts` below: a back arrow on a tab of
-      // the current destination is a second, contradictory answer to "where am
-      // I", and the bottom bar is already answering it.
+    it('keeps the wordmark on /notes — it is a DESTINATION, not a page below one (#106)', () => {
+      // The same reasoning as `/transcripts` below: a back arrow on the
+      // destination the user is already on is a second, contradictory answer to
+      // "where am I", and the bottom bar is already answering it.
+      //
+      // The CONCLUSION is older than the reason. Between #57 and #106 this
+      // path kept the wordmark because it was the other TAB of one `library`
+      // destination; since #106 it is a destination in its own right with its
+      // own bottom-bar tab. Either way, no back arrow.
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route: '/notes' } });
 
@@ -445,7 +451,7 @@ describe('AppBar', () => {
       expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     });
 
-    it('keeps the wordmark on the LIBRARY itself — it is a destination, not a drill-down', () => {
+    it('keeps the wordmark on /transcripts — a destination, not a drill-down', () => {
       // `/transcripts` has a bottom-bar tab of its own, so a back arrow there
       // would be a second, contradictory answer to "where am I".
       setViewportWidth(375);
@@ -453,6 +459,27 @@ describe('AppBar', () => {
 
       expect(screen.getByText(APP_NAME)).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('keeps the wordmark on BOTH content destinations below sm (#106)', () => {
+      // Stated once more as a pair, because #106 is the issue that made these
+      // two symmetrical: they were one destination and one of its tabs, and
+      // they are now siblings. A drill-down entry added for either — the
+      // plausible mistake when a page gains its own file — turns a destination
+      // into something the bar says you are on and the header says you are
+      // below.
+      for (const route of ['/transcripts', '/notes']) {
+        setViewportWidth(375);
+        const view = render(<AppBar />, { wrapperOptions: { route } });
+
+        expect(screen.getByText(APP_NAME), `${route} lost the wordmark`).toBeInTheDocument();
+        expect(
+          screen.queryByRole('button', { name: 'Back' }),
+          `${route} grew a back arrow`,
+        ).not.toBeInTheDocument();
+
+        view.unmount();
+      }
     });
 
     it('keeps the wordmark on a transcript route at >= sm', () => {
