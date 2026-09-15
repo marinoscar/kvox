@@ -61,6 +61,12 @@ export interface DeployState {
   proxyRoot?: string | undefined;
   /** The proxy container's name, once a later child of #118 resolves it. */
   proxyContainer?: string | undefined;
+  /**
+   * The canonical `.env`, `<deployRoot>/.env` since #120. Optional for the
+   * same reason the four above are: a state written before it lacks it, and
+   * `envFilePath(deployRoot)` is the answer either way.
+   */
+  envPath?: string | undefined;
   installedAt: string;
   lastDeployedAt: string;
   lastCommand: 'install' | 'update';

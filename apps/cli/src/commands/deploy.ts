@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import type { Command } from 'commander';
 
 import { CLI_NAME } from '../branding.js';
@@ -13,7 +10,7 @@ import {
   type CheckStatus,
   type CompletedCheck,
 } from '../deploy/checks/index.js';
-import { parseEnvFile } from '../deploy/env-spec.js';
+import { readEnvFile } from '../deploy/env-file.js';
 import {
   collectHealth,
   isHealthy,
@@ -333,11 +330,10 @@ export async function runDoctorCommand(
 /** Reads the deployment's .env, when there is one, for the database checks. */
 function readEnvironment(deployRoot: string): { env: Map<string, string> } | undefined {
   try {
-    const contents = readFileSync(
-      join(deployRoot, 'repo', 'infra', 'compose', '.env'),
-      'utf8',
-    );
-    return { env: parseEnvFile(contents) };
+    // `<root>/.env` since #120, falling back to the pre-#120 location inside
+    // the clone without moving anything - doctor never writes.
+    const env = readEnvFile(deployRoot);
+    return env === undefined ? undefined : { env };
   } catch {
     // Absent before a first install; the database checks then report `skip`.
     return undefined;

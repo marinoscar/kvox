@@ -210,6 +210,21 @@ export {
 } from './deploy/layout.js';
 export type { InstalledApp, LocateOptions, ResolvedLayout } from './deploy/layout.js';
 
+// The deployment's .env at the app root, linked into the clone (#120).
+// Exported because the link discipline and the pre-#120 migration are the
+// behaviour worth exercising directly, and because `readEnvFile` is what
+// every command that needs the environment reads through.
+export {
+  ENV_FILENAME,
+  composeEnvLinkTarget,
+  composeEnvPath,
+  ensureComposeEnvLink,
+  envFilePath,
+  readEnvFile,
+  writeEnvFile,
+} from './deploy/env-file.js';
+export type { EnsureEnvLinkResult } from './deploy/env-file.js';
+
 export type { DeployHooks, StepOutcome, StepResult } from './deploy/hooks.js';
 
 // The wizard's questions come from infra/compose/.env.example rather than a
