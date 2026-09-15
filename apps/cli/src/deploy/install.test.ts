@@ -720,6 +720,44 @@ describe('runInstall against a fake VPS', () => {
     expect(progress.some((message) => message.includes('Moved .env'))).toBe(true);
   });
 
+  it('verifies the database inside the wizard and follows the port it chose (issue #127)', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+
+    const result = await install(root, {
+      // No APP_BIND_PORT answer and a port the wizard is free to overrule.
+      answers: new Map([...vps.answers()].filter(([key]) => key !== 'APP_BIND_PORT')),
+      bindPort: 3535,
+    });
+
+    // The database step ran its checks against the typed values, before the
+    // separate validate-environment step, and journaled them.
+    const journal = readFileSync(result.journalPath, 'utf8');
+    expect(journal).toContain('pass database-reachable');
+    expect(journal).toContain('pass database-credentials');
+    // Whatever port the wizard settled on is the one the state records and
+    // the one written to .env: the pipeline follows the wizard, not the flag.
+    const env = readFileSync(envFilePath(root), 'utf8');
+    const written = /^APP_BIND_PORT=(\d+)$/m.exec(env)?.[1];
+    expect(written).toBeDefined();
+    expect(readState(root)?.bindPort).toBe(Number(written));
+  });
+
+  it('refuses an unattended install whose database check fails, naming the check', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    vps.failWhen(
+      (argv) => argv[0] === 'docker' && argv[1] === 'run' && argv.includes('psql'),
+      'psql: error: connection to server failed: FATAL: password authentication failed for user "app" (28P01)',
+    );
+
+    const error = await install(root).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain('database-credentials');
+    expect((error as Error).message).toContain('password authentication failed');
+    // Nothing was built; the failure came from the environment step itself.
+    expect(vps.seen.some((argv) => argv[1] === 'compose' && argv.includes('build'))).toBe(false);
+  });
+
   it('writes deploy-info/info.json with schema 1 and installedAt equal to updatedAt', async () => {
     const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
 

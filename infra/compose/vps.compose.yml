@@ -14,10 +14,19 @@
 # BE PUBLISHED ON A PUBLIC INTERFACE. Everything reaches the application
 # through the host proxy, which terminates TLS and holds the certificate.
 #
-# The one other thing in here is the read-only `deploy-info` mount on the api
-# service (issue #120): metadata the CLI writes about THIS deployment on THIS
-# server, which is VPS-specific by definition - local dev has no deploy and
-# nothing to mount.
+# Two other things live here, both VPS-specific by definition:
+#
+#   - The read-only `deploy-info` mount on the api service (issue #120):
+#     metadata the CLI writes about THIS deployment on THIS server. Local dev
+#     has no deploy and nothing to mount.
+#   - The container memory limits as `${API_MEM_LIMIT:-512M}` and
+#     `${WEB_MEM_LIMIT:-128M}` interpolations (issue #127). The install wizard
+#     suggests them from the server's RAM and writes them to .env; the
+#     defaults equal prod.compose.yml's fixed limits, so a .env without them
+#     changes nothing. They are set at the SAME KEY prod.compose.yml uses
+#     (`deploy.resources.limits.memory`), not the legacy `mem_limit`: compose
+#     refuses a service that sets distinct values on both, and an overlay
+#     only replaces the scalar it names.
 # =============================================================================
 
 services:
@@ -68,6 +77,12 @@ services:
       - ${DEPLOY_ROOT:-../../..}/deploy-info:/app/deploy-info:ro
     environment:
       - DEPLOY_INFO_PATH=/app/deploy-info/info.json
+    # Suggested by the wizard from this server's RAM (issue #127); the default
+    # is prod.compose.yml's own limit, so an older .env is unchanged.
+    deploy:
+      resources:
+        limits:
+          memory: ${API_MEM_LIMIT:-512M}
     logging:
       driver: "json-file"
       options:
@@ -75,9 +90,13 @@ services:
         max-file: "3"
 
   # ---------------------------------------------------------------------------
-  # Web - log rotation
+  # Web - log rotation, memory limit
   # ---------------------------------------------------------------------------
   web:
+    deploy:
+      resources:
+        limits:
+          memory: ${WEB_MEM_LIMIT:-128M}
     logging:
       driver: "json-file"
       options:

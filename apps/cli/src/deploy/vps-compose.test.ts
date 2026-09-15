@@ -29,6 +29,13 @@ function apiBlock(body: string): string {
   return match[1] as string;
 }
 
+/** The `web:` block, up to the next top-level service or the end. */
+function webBlock(body: string): string {
+  const match = /^  web:\n([\s\S]*?)(?=^  \w+:|$(?![\s\S]))/m.exec(body);
+  if (match === null) throw new Error('vps.compose.yml has no web service');
+  return match[1] as string;
+}
+
 describe('the deploy-info mount (issue #120)', () => {
   const body = readFileSync(COMPOSE_FILE, 'utf8');
   const api = apiBlock(body);
@@ -59,6 +66,17 @@ describe('the deploy-info mount (issue #120)', () => {
     // repo/infra/compose is three levels below <root>, so the default is
     // right for every deployment; DEPLOY_ROOT in .env is belt and braces.
     expect(api).toContain('${DEPLOY_ROOT:-../../..}');
+  });
+
+  it('interpolates the memory limits from the environment, defaulting to prod\'s fixed values (issue #127)', () => {
+    // At prod.compose.yml's own key, `deploy.resources.limits.memory`, so the
+    // overlay REPLACES the scalar. The legacy `mem_limit` would sit beside
+    // prod's limit instead, and compose refuses a service that sets distinct
+    // values on both - which is exactly what a wizard-suggested 1G would be.
+    expect(api).toMatch(/^\s+memory: \$\{API_MEM_LIMIT:-512M\}$/m);
+    expect(webBlock(body)).toMatch(/^\s+memory: \$\{WEB_MEM_LIMIT:-128M\}$/m);
+    const uncommented = body.split('\n').filter((line) => !line.trimStart().startsWith('#'));
+    expect(uncommented.join('\n')).not.toContain('mem_limit');
   });
 
   it('mounts it exactly once, on the api service alone', () => {

@@ -41,6 +41,28 @@ export interface ServerFacts {
   nodeVersion: string | null;
 }
 
+/**
+ * Every fact unknown. What a caller that has not (or cannot) read the server
+ * hands the wizard: a suggestion that needs a fact it does not have answers
+ * undefined and the template default stands, so `init` on a laptop and a
+ * unit test with no `df` behave the same way.
+ */
+export function unknownServerFacts(): ServerFacts {
+  return {
+    hostname: null,
+    os: null,
+    kernel: null,
+    arch: null,
+    cpuModel: null,
+    cpus: null,
+    memoryBytes: null,
+    diskBytes: null,
+    dockerVersion: null,
+    composeVersion: null,
+    nodeVersion: null,
+  };
+}
+
 /** The host reads, injectable so each can be made to fail on its own. */
 export interface ServerProbes {
   hostname: () => string;

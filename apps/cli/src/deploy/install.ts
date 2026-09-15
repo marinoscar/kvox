@@ -27,6 +27,7 @@ import {
   appNameFor,
   appRootFor,
   locateApp,
+  siblingBindPorts,
   type ResolvedLayout,
 } from './layout.js';
 import {
@@ -403,17 +404,40 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
             ? onDisk
             : new Map([...(onDisk ?? new Map()), ...context.options.answers]);
 
-        const domain = context.options.domain;
-        if (domain === undefined) {
-          throw new UsageError(
-            'A domain is required so APP_URL and the OAuth callback can be derived. Pass --domain.',
-          );
-        }
+        // The wizard's server-derived suggestions (#127): what this machine
+        // is, and which ports the other apps under the apps root hold - from
+        // their state files, so a stopped sibling still counts.
+        const facts = await collectServerFacts({
+          runCommand: context.runCommand,
+          root: context.options.deployRoot,
+        });
+        const siblingPorts = siblingBindPorts(context.options.appsRoot, context.options.deployRoot);
 
-        const { values } = await runEnvWizard({
+        const result = await runEnvWizard({
           specs,
-          domain,
+          // Asked in the wizard's own domain step when not given (#127); an
+          // unattended run without one is reported there as unresolved.
+          ...(context.options.domain === undefined ? {} : { domain: context.options.domain }),
           ...(existing === undefined ? {} : { existing }),
+          facts,
+          siblingPorts,
+          // The domain and database steps verify their answers before the
+          // next question, with the same registry the preflight ran.
+          inlineChecks: {
+            context: {
+              runCommand: context.runCommand,
+              deployRoot: context.options.deployRoot,
+              name: context.options.name,
+              bindPort: context.options.bindPort,
+              proxyRoot: context.options.proxyRoot,
+              ...(context.options.skipProxy === undefined
+                ? {}
+                : { skipProxy: context.options.skipProxy }),
+              ...((context.options.proxyContainer ?? context.proxyContainer) === undefined
+                ? {}
+                : { proxyContainer: context.options.proxyContainer ?? context.proxyContainer }),
+            },
+          },
           ...(context.options.all === undefined ? {} : { all: context.options.all }),
           ...(context.options.nonInteractive === undefined
             ? {}
@@ -423,8 +447,26 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
             ? {}
             : { ctx: context.options.promptContext }),
         });
+        const { values } = result;
 
-        values.set('APP_BIND_PORT', String(context.options.bindPort));
+        for (const check of result.checks) {
+          context.journal.line(`${check.status} ${check.id}: ${check.detail}`);
+        }
+
+        if (context.options.domain === undefined && result.domain !== '') {
+          context.options.domain = result.domain;
+          context.journal.line(`Domain ${result.domain} (from the wizard)`);
+        }
+
+        // The wizard's APP_BIND_PORT - suggested from the server or typed -
+        // is the port every later step binds, probes and publishes; an
+        // explicit --port arrives here as an answer, so it still wins.
+        const chosenPort = Number(values.get('APP_BIND_PORT'));
+        if (Number.isInteger(chosenPort) && chosenPort > 0 && chosenPort < 65536) {
+          context.options.bindPort = chosenPort;
+        } else {
+          values.set('APP_BIND_PORT', String(context.options.bindPort));
+        }
         // Not in .env.example, and deliberately not in ENV_METADATA either:
         // serializeEnvFile carries it under its "not in the template" banner.
         // It is what makes a hand-run `docker compose ... ps` in this
@@ -706,8 +748,11 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     deployRoot: options.deployRoot,
     command: 'install',
     // Seeded from an existing .env so a resumed run redacts from the first
-    // line, before the wizard has run again.
-    secrets: secretsFrom(readEnvFile(options.deployRoot) ?? new Map()),
+    // line, before the wizard has run again - and from the answers given up
+    // front (--answer, --answers-file, the TUI), which count as typed (#127).
+    secrets: secretsFrom(
+      new Map([...(readEnvFile(options.deployRoot) ?? new Map()), ...(options.answers ?? new Map())]),
+    ),
   });
 
   journal.line(`App ${options.name} at ${options.deployRoot}`);

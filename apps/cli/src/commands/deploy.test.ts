@@ -918,6 +918,91 @@ describe('kvox deploy install flags (issue #125)', () => {
   });
 });
 
+describe('kvox deploy install --answer / --answers-file (issue #127)', () => {
+  it('passes --answer values through as answers, repeatable', async () => {
+    const probe = installProbe();
+    await runDeploy(
+      ['install', '--domain', 'app.example.test', '--answer', 'POSTGRES_HOST=db.internal', '--answer', 'POSTGRES_PASSWORD=s3cret=with=equals'],
+      { install: probe.install },
+    );
+
+    expect(probe.seen().answers?.get('POSTGRES_HOST')).toBe('db.internal');
+    // Everything after the first `=` is the value.
+    expect(probe.seen().answers?.get('POSTGRES_PASSWORD')).toBe('s3cret=with=equals');
+  });
+
+  it('reads an answers file in .env format, with --answer overriding it', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'appctl-answers-')), 'answers.env');
+    writeFileSync(file, ['# the database', 'POSTGRES_HOST=db.internal', 'POSTGRES_USER=app', 'INITIAL_ADMIN_EMAIL=ops@example.test', ''].join('\n'));
+    const probe = installProbe();
+
+    await runDeploy(
+      ['install', '--domain', 'app.example.test', '--answers-file', file, '--answer', 'POSTGRES_USER=other'],
+      { install: probe.install },
+    );
+
+    const answers = probe.seen().answers;
+    expect(answers?.get('POSTGRES_HOST')).toBe('db.internal');
+    expect(answers?.get('POSTGRES_USER')).toBe('other');
+    expect(answers?.get('INITIAL_ADMIN_EMAIL')).toBe('ops@example.test');
+  });
+
+  it('takes the domain from the answers file as APP_DOMAIN, and does not pass it on as a key', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'appctl-answers-')), 'answers.env');
+    writeFileSync(file, 'APP_DOMAIN=app.example.test\nPOSTGRES_HOST=db.internal\n');
+    const probe = installProbe();
+
+    await runDeploy(['install', '--non-interactive', '--answers-file', file], { install: probe.install });
+
+    expect(probe.seen().domain).toBe('app.example.test');
+    expect(probe.seen().answers?.has('APP_DOMAIN')).toBe(false);
+  });
+
+  it('rejects a bad answer before anything runs, naming the key', async () => {
+    const probe = installProbe();
+    const result = await runDeploy(
+      ['install', '--domain', 'app.example.test', '--answer', 'INITIAL_ADMIN_EMAIL=not-an-email'],
+      { install: probe.install },
+    );
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('INITIAL_ADMIN_EMAIL');
+    expect((result.error as Error).message).toContain('email');
+    expect(() => probe.seen()).toThrow('install never ran');
+  });
+
+  it('rejects an --answer that is not KEY=VALUE', async () => {
+    const result = await runDeploy(['install', '--domain', 'app.example.test', '--answer', 'POSTGRES_HOST'], {
+      install: installProbe().install,
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('KEY=VALUE');
+  });
+
+  it('fails clearly when the answers file cannot be read', async () => {
+    const result = await runDeploy(['install', '--answers-file', '/nonexistent/answers.env'], {
+      install: installProbe().install,
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('/nonexistent/answers.env');
+  });
+
+  it('treats an explicit --port as the APP_BIND_PORT answer, and leaves it to the wizard otherwise', async () => {
+    const explicit = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--port', '4000'], { install: explicit.install });
+    expect(explicit.seen().bindPort).toBe(4000);
+    expect(explicit.seen().answers?.get('APP_BIND_PORT')).toBe('4000');
+
+    const suggested = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test'], { install: suggested.install });
+    // The default stands for the preflight; the wizard's suggestion decides.
+    expect(suggested.seen().bindPort).toBe(3535);
+    expect(suggested.seen()).not.toHaveProperty('answers');
+  });
+});
+
 /** A proxy directory with one issued certificate for `domain`. */
 function proxyRootWith(...domains: string[]): string {
   const root = mkdtempSync(join(tmpdir(), 'appctl-certs-proxy-'));

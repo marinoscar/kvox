@@ -13,6 +13,7 @@ import {
   locateApp,
   locateInstalledApp,
   projectNameFor,
+  siblingBindPorts,
 } from './layout.js';
 import {
   DEPLOY_STATE_VERSION,
@@ -100,6 +101,33 @@ describe('listInstalledApps', () => {
     writeFileSync(deployStatePath(join(root, 'broken')), '{ not json');
 
     expect(listInstalledApps(root).map((app) => app.name)).toEqual(['good']);
+  });
+});
+
+describe('siblingBindPorts (issue #127)', () => {
+  it('reports every other app\'s recorded port with its name, stopped or not', () => {
+    // From the state files, never a bind probe: a stopped app holds its port
+    // just as firmly once it is started again.
+    const root = appsRoot();
+    install(root, 'alpha', { bindPort: 3535 });
+    install(root, 'beta', { bindPort: 3536 });
+
+    expect(siblingBindPorts(root)).toEqual([
+      { name: 'alpha', port: 3535 },
+      { name: 'beta', port: 3536 },
+    ]);
+  });
+
+  it('leaves out the app being installed, so a reinstall does not see its own port as taken', () => {
+    const root = appsRoot();
+    const own = install(root, 'alpha', { bindPort: 3535 });
+    install(root, 'beta', { bindPort: 3536 });
+
+    expect(siblingBindPorts(root, own)).toEqual([{ name: 'beta', port: 3536 }]);
+  });
+
+  it('is empty before anything is installed', () => {
+    expect(siblingBindPorts(join(appsRoot(), 'missing'))).toEqual([]);
   });
 });
 
