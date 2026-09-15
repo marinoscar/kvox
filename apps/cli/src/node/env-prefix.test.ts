@@ -23,7 +23,7 @@ import { ENV_PREFIX } from '../branding.js';
 // it protects would have to include the guard. That is the same reasoning
 // `branding.test.ts` uses for the `bin` key.
 //
-// COMMENTS ARE STRIPPED FIRST. `config.ts` explains `APPCTL_TOKEN` in prose in
+// COMMENTS ARE STRIPPED FIRST. `config.ts` explains `KVOX_TOKEN` in prose in
 // half a dozen places, and prose is exactly where the concrete name belongs:
 // it is what the reader will type. What must not exist is a `process.env`
 // lookup or a help string carrying the name, because those are the ones a
@@ -45,7 +45,7 @@ function sourceFiles(dir: string, acc: string[] = []): string[] {
     }
     if (!/\.tsx?$/.test(entry)) continue;
     // Tests may name variables outright: asserting `NO_TUI_ENV_VAR ===
-    // 'APPCTL_NO_TUI'` is the whole point of such a test, and a rename is
+    // 'KVOX_NO_TUI'` is the whole point of such a test, and a rename is
     // MEANT to break it.
     if (/\.test\.tsx?$/.test(entry)) continue;
     acc.push(full);

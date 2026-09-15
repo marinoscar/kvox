@@ -457,7 +457,7 @@ function isCancellation(error: unknown): boolean {
  * The extra sentence the SCREEN can add and the error cannot.
  *
  * The messages from device-auth.ts already carry their own remedy ("Run
- * `appctl login` to get a new code"), so this only adds what is specific to
+ * `kvox login` to get a new code"), so this only adds what is specific to
  * being inside the TUI — which key to press — and, for a denial, the fact that
  * retrying means re-asking a person who just said no.
  */

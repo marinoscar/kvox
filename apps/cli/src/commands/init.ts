@@ -5,7 +5,7 @@ import { runInit } from '../init/run-init.js';
 import type { PromptContext } from '../prompt.js';
 
 // =============================================================================
-// `appctl init`  (issue #344, epic #341)
+// `kvox init`  (issue #344, epic #341)
 // =============================================================================
 //
 // The command that runs BEFORE there is anything to log in to: it turns a
@@ -16,7 +16,7 @@ import type { PromptContext } from '../prompt.js';
 //
 // It follows the group's two standing rules from program.ts: human output goes
 // to STDERR, and a refusal exits NON-ZERO. Refusing to overwrite an existing
-// .env is a refusal, not a no-op success - `appctl init && docker compose up`
+// .env is a refusal, not a no-op success - `kvox init && docker compose up`
 // must not proceed as though a file had been written.
 // =============================================================================
 

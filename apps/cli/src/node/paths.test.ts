@@ -26,7 +26,7 @@ describe('node state paths (issue #272)', () => {
   });
 
   it('ignores a blank override rather than resolving to the empty path', () => {
-    // A compose file with `APPCTL_STATE_DIR=` sets the variable to an empty
+    // A compose file with `KVOX_STATE_DIR=` sets the variable to an empty
     // string. Treating that as a directory would put the pidfile at `/node.pid`.
     expect(nodeStateDir({ home: HOME, env: { [WORKER_ENV.stateDir]: '   ' } })).toBe(
       `${HOME}/${CONFIG_DIR_NAME}/node`,

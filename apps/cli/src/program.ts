@@ -110,7 +110,7 @@ export async function run(argv: string[], options?: RunOptions): Promise<number>
   // NO ARGUMENTS: the ONLY invocation that can open the ink TUI (#145).
   // ---------------------------------------------------------------------------
   // The check is HERE, before `parseAsync`, and that placement is the whole
-  // guarantee: an explicit subcommand never reaches this branch, so `appctl api
+  // guarantee: an explicit subcommand never reaches this branch, so `kvox api
   // GET /api/auth/me` behaves identically in a terminal, in cron and in a
   // pipeline. The TUI is the no-argument experience, not a mode that could
   // capture a scripted invocation (epic #110, success criterion 7).

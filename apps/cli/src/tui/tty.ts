@@ -189,7 +189,7 @@ function refuse(refusal: TuiRefusal, reason: string): TuiGateDecision {
  * bare `!== undefined` test would read both as "yes, this is CI" — refusing
  * the TUI to a developer who explicitly asked not to be treated as one. An
  * empty value is likewise an unset variable that a shell happens to export,
- * the same reading config.ts gives `APPCTL_TOKEN=`.
+ * the same reading config.ts gives `KVOX_TOKEN=`.
  */
 function isEnvFlagSet(value: string | undefined): boolean {
   if (value === undefined) return false;

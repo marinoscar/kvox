@@ -29,7 +29,7 @@ import { ApiError, AuthRequiredError } from './errors.js';
 // =============================================================================
 //
 // These are REAL filesystem tests — `fs.mkdtempSync` gives each test its own
-// throwaway `$TMPDIR/appctl-config-test-XXXXXX` directory used as `home` via
+// throwaway `$TMPDIR/kvox-config-test-XXXXXX` directory used as `home` via
 // `ConfigContext`, and every test removes it in `afterEach`. Mode bits
 // (`0600` on the file, `0700` on the directory) are exactly the kind of thing
 // a mocked `fs` would happily agree exists without ever proving it — see
@@ -169,7 +169,7 @@ describe('resolveConfig — environment overrides the file', () => {
 });
 
 describe('requireCredentials — the three "nothing usable" messages', () => {
-  it('names the missing variable when only APPCTL_TOKEN is set (no file)', () => {
+  it('names the missing variable when only KVOX_TOKEN is set (no file)', () => {
     const c: ConfigContext = { home: tmpDir, env: { [TOKEN_ENV_VAR]: 'pat_only' } };
 
     expect(() => requireCredentials(c)).toThrow(AuthRequiredError);
@@ -182,7 +182,7 @@ describe('requireCredentials — the three "nothing usable" messages', () => {
     }
   });
 
-  it('names the missing variable when only APPCTL_SERVER_URL is set (no file)', () => {
+  it('names the missing variable when only KVOX_SERVER_URL is set (no file)', () => {
     const c: ConfigContext = {
       home: tmpDir,
       env: { [SERVER_URL_ENV_VAR]: 'https://app.example.com' },

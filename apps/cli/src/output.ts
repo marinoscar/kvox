@@ -9,8 +9,8 @@
 //   STDOUT CARRIES THE RESPONSE BODY AND NOTHING ELSE.
 //   Status lines, spinners, warnings and errors go to STDERR.
 //
-// That rule is not a style preference. `appctl api GET /api/users --raw | jq`
-// and `appctl api GET /api/users --raw > users.json` are the two things the
+// That rule is not a style preference. `kvox api GET /api/users --raw | jq`
+// and `kvox api GET /api/users --raw > users.json` are the two things the
 // command is FOR (#144), and a single stray byte on stdout — a spinner frame,
 // an ANSI reset sequence, a "200 OK" line — makes `jq` exit with a parse error
 // and makes the saved file unusable. The failure is total, not partial, and it

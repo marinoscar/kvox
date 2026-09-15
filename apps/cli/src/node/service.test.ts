@@ -42,7 +42,7 @@ function systemctl(): { calls: string[][]; run: (args: string[]) => string } {
 describe('the unit file (issue #276)', () => {
   it('derives its name and description rather than writing them out', () => {
     // A rename must reach the unit file. Otherwise a fork ends up with a
-    // service called `appctl-node` for a product that has not been called that
+    // service called `kvox-node` for a product that has not been called that
     // in a year, and nothing fails.
     expect(SERVICE_UNIT_NAME).toBe(`${CLI_NAME}-node.service`);
     expect(renderUnit()).toContain(`Description=${APP_NAME} worker node (${CLI_NAME})`);

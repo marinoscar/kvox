@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { CLI_NAME } from '../branding.js';
 import { UsageError } from '../errors.js';
 import type { runCommand } from './executor.js';
 import type { DeployHooks } from './hooks.js';
@@ -89,6 +90,12 @@ export function renderVhost(target: ProxyTarget, options?: { maxBodyBytes?: numb
   const maxBody = options?.maxBodyBytes;
   const clientMaxBody = maxBody === undefined ? '100m' : `${Math.ceil(maxBody / (1024 * 1024))}m`;
 
+  // THE SENTINEL KEEPS THE OLD `appctl` NAME ON PURPOSE. The binary is called
+  // `kvox` now, but this marker is WRITTEN INTO vhost files on live servers and
+  // PARSED BACK by `removeVhost` below. Rename it and the CLI stops recognising
+  // the vhosts it wrote itself under the old marker: it refuses to manage them,
+  // and an operator has to edit every server by hand to recover. There is
+  // deliberately no migration — see .claude/skills/rename-app/references/do-not-rename.md.
   return `# Managed by appctl deploy. Edits will be overwritten.
 # Application: ${target.domain}
 
@@ -346,11 +353,13 @@ export async function removeVhost(
   if (!existsSync(path)) return;
 
   // Only ever a file this tool wrote: the header is the marker, and a vhost
-  // without it belongs to somebody else.
+  // without it belongs to somebody else. The marker still says `appctl` even
+  // though the binary is `kvox` — see renderVhost above; it is read back off
+  // servers provisioned before the rename and must never be "fixed".
   const contents = readFileSync(path, 'utf8');
   if (!contents.startsWith('# Managed by appctl deploy')) {
     throw new UsageError(
-      `${path} was not written by appctl, so it will not be removed. Remove it by hand if that is really what you want.`,
+      `${path} was not written by ${CLI_NAME}, so it will not be removed. Remove it by hand if that is really what you want.`,
     );
   }
 

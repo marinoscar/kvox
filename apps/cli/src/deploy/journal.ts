@@ -15,7 +15,7 @@ import type { CommandResult } from './executor.js';
 // Two files per run, because they have two different readers:
 //
 //   <command>-<timestamp>.log    a human reading it over SSH
-//   <command>-<timestamp>.jsonl  a program, and `appctl deploy status --json`
+//   <command>-<timestamp>.jsonl  a program, and `kvox deploy status --json`
 //
 // REDACTION IS THE SECURITY-CRITICAL PART AND IT IS STRUCTURAL. These logs are
 // written to be pasted into bug reports; that is their purpose. So every

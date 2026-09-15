@@ -27,7 +27,7 @@ import {
 } from './local-profile.js';
 
 // =============================================================================
-// `appctl init` - the local environment bootstrap  (issue #344, epic #341)
+// `kvox init` - the local environment bootstrap  (issue #344, epic #341)
 // =============================================================================
 //
 // A fresh clone of this template cannot be started. `infra/compose/.env` does

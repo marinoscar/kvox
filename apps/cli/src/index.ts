@@ -233,7 +233,7 @@ export type {
   WizardSummaryRow,
 } from './deploy/env-wizard.js';
 
-// The LOCAL half of that same wizard (#344): `appctl init` bootstraps a fresh
+// The LOCAL half of that same wizard (#344): `kvox init` bootstraps a fresh
 // checkout by pointing the deploy machinery at this machine instead of a VPS.
 // Exported because the profile is pure - the metadata resolver, the spec
 // adjustments and the next-step rendering are all decidable without a
