@@ -58,6 +58,8 @@ interface Line {
   y1: number;
   x2: number;
   y2: number;
+  /** Whether a round cap applies, from the `<line>` itself or its `<g>`. */
+  roundCap: boolean;
 }
 
 /**
@@ -80,7 +82,7 @@ function num(tag: string, name: string): number {
   return raw === null ? 0 : Number.parseFloat(raw);
 }
 
-function parse(file: string): { rects: Rect[]; lines: Line[]; roundCaps: number } {
+function parse(file: string): { rects: Rect[]; lines: Line[] } {
   const svg = readFileSync(join(PUBLIC_DIR, file), 'utf8');
   // The comment block above the markup mentions `rect` and `line` in prose, so
   // only the element form counts.
@@ -94,16 +96,34 @@ function parse(file: string): { rects: Rect[]; lines: Line[]; roundCaps: number 
     fill: attr(m[0], 'fill'),
   }));
 
-  const lines = [...body.matchAll(/<line\b[^>]*>/g)].map((m) => ({
-    x1: num(m[0], 'x1'),
-    y1: num(m[0], 'y1'),
-    x2: num(m[0], 'x2'),
-    y2: num(m[0], 'y2'),
-  }));
+  // `stroke-linecap` INHERITS, so where it is written is a formatting choice,
+  // not a semantic one: today both files put it once on the `<g>` around the
+  // two arms, and moving it onto each `<line>` would be the identical drawing.
+  // A test that counted occurrences of the attribute would fail on that purely
+  // cosmetic edit while still passing if somebody put a round cap on some
+  // unrelated element and left the arms butt-ended — wrong in both directions.
+  // So resolve it the way a renderer does: own attribute first, then the
+  // enclosing group. The markup is flat and hand-written (one level of `<g>`,
+  // no nesting), which is what makes this single-level walk sufficient.
+  const lines: Line[] = [];
+  let groupCap: string | null = null;
+  for (const [tag] of body.matchAll(/<\/?(?:g|line)\b[^>]*>/g)) {
+    if (tag.startsWith('</g')) {
+      groupCap = null;
+    } else if (tag.startsWith('<g')) {
+      groupCap = attr(tag, 'stroke-linecap');
+    } else {
+      lines.push({
+        x1: num(tag, 'x1'),
+        y1: num(tag, 'y1'),
+        x2: num(tag, 'x2'),
+        y2: num(tag, 'y2'),
+        roundCap: (attr(tag, 'stroke-linecap') ?? groupCap) === 'round',
+      });
+    }
+  }
 
-  const roundCaps = [...body.matchAll(/stroke-linecap="round"/g)].length;
-
-  return { rects, lines, roundCaps };
+  return { rects, lines };
 }
 
 /**
@@ -186,13 +206,18 @@ describe('the brand mark', () => {
   });
 
   it.each(FILES)('%s draws the K as one stem and two round-capped arms', (file) => {
-    const { rects, lines, roundCaps } = parse(file);
+    const { rects, lines } = parse(file);
 
     expect(stemOf(rects)).toBeDefined();
     expect(lines).toHaveLength(2);
-    // The caps are what make the Pillow drawing match: the generator has to
-    // add a circle at each endpoint because its line width gives butt ends.
-    expect(roundCaps).toBe(1);
+    // The caps are what make the Pillow drawing match: the generator has to add
+    // a circle at each endpoint because its `line` width gives BUTT ends, and
+    // `joint="curve"` only affects joints between segments. A butt-ended arm
+    // here would be a diagonal chop the PNGs do not have — a mismatch nothing
+    // else in this repository can see.
+    for (const line of lines) {
+      expect(line.roundCap).toBe(true);
+    }
   });
 
   it.each(FILES)('%s ends the waveform exactly on the mark\'s right edge', (file) => {

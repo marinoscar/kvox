@@ -46,9 +46,9 @@ test.describe('Admin settings hub', () => {
     const main = page.locator('main');
     await expect(main.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await expect(main.getByText('Maintenance')).toBeVisible();
-    // Rail present and expanded — the Console-mode "Back to library" row only
+    // Rail present and expanded — the Console-mode "Back to Home" row only
     // renders when `expanded` is true (see `NavigationRail.tsx`).
-    await expect(page.getByRole('link', { name: 'Back to library' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Back to Home' })).toBeVisible();
 
     await expect(page).toHaveScreenshot('admin-hub-1919x862-3up-console-expanded.png', {
       fullPage: true,
@@ -66,7 +66,7 @@ test.describe('Admin settings hub', () => {
     await expect(main.getByText('Maintenance')).toBeVisible();
     // Below `lg` the rail is unconditionally collapsed AND stays in LIBRARY
     // mode (Console mode is expanded-only) — so the pinned Console row shows
-    // here, not "Back to library".
+    // here, not "Back to Home".
     await expect(page.getByRole('link', { name: 'Console' })).toBeVisible();
 
     await expect(page).toHaveScreenshot('admin-hub-767x844-2up-rail-collapsed.png', {

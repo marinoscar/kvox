@@ -6,7 +6,7 @@ import { harnessUrl, waitForInter } from '../support/harness';
  * on any `/admin/*` route once the rail is expanded (`isDesktop && !railCollapsed`,
  * so `lg`/1200px and up here).
  *
- * `Back to library` IS always the first row in console mode — read directly
+ * `Back to Home` IS always the first row in console mode — read directly
  * from the component: it renders UNCONDITIONALLY at the top of the
  * `consoleMode` branch, before the `consoleSections.map(...)` group loop, with
  * no permission gate of its own (getting into Console mode at all already
@@ -28,7 +28,7 @@ import { harnessUrl, waitForInter } from '../support/harness';
  * `admin-hub.spec.ts`).
  */
 
-test('Console rail: Back to library + General/Access/Operations groups @ lg', async ({
+test('Console rail: Back to Home + General/Access/Operations groups @ lg', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -38,7 +38,7 @@ test('Console rail: Back to library + General/Access/Operations groups @ lg', as
 
   const rail = page.locator('nav[aria-label="Console navigation"]');
   await expect(rail).toBeVisible();
-  await expect(rail.getByRole('link', { name: 'Back to library' })).toBeVisible();
+  await expect(rail.getByRole('link', { name: 'Back to Home' })).toBeVisible();
   await expect(rail.getByText('General', { exact: true })).toBeVisible();
   await expect(rail.getByText('Access', { exact: true })).toBeVisible();
   await expect(rail.getByRole('link', { name: 'Maintenance' })).toBeVisible();

@@ -328,6 +328,24 @@ else): a `failed` note always offers **Regenerate**, which is `POST
 one-attempt budget — regeneration is the queue's manual retry, deliberately
 placed one explicit user action away from ever happening automatically.
 
+**The dialog behind that button is a form, not a confirmation** (issue #109,
+epic #105). It is prefilled with the note's current template, context text
+and model, and it sends a **diff**: an untouched form posts `{}` — byte for
+byte what the confirmation-only dialog always sent — a cleared context box
+posts `contextText: null`, and a moved template or model posts only that
+field. The endpoint's own fallback rule ("every omitted field is what the
+note already records") is what makes a diff safe; sending the whole form
+would rewrite rows the user never touched.
+
+Two branches the dialog must handle rather than assume away: a template that
+no longer exists blocks confirmation until one is chosen, and a server `409
+template_required` is rendered **inside the still-open dialog**, because it
+is a question the user can answer without losing the rest of their form. The
+model list is `GET /api/ai/config`'s, the same probe every other AI surface
+gates on; a model the deployment no longer permits is named in helper text
+and replaced, never silently dropped. See
+[`docs/specs/ux-refresh.md`](ux-refresh.md) §4.
+
 ### 2.3 The rate-limit throttle key is per user, not per deployment
 
 `ProviderThrottleService.registerProviderKey(type, `ai-provider:${userId}`)`
@@ -1651,27 +1669,39 @@ requested work, not a security-relevant change to their account.
   itself — pure reducers, `materialize()`, per-entity concurrency, ordinal
   gaps — has no equivalent structure in a note to operate over. A full body
   per version is simpler, smaller, and sufficient.
-- **A fifth top-level navigation destination for Notes.** Rejected per
-  `apps/web/src/config/destinations.ts`'s own header, restated by the epic
-  itself: *"the bottom bar's ceiling is exactly four … a fifth destination is
-  not an addition, it is a redesign."* Notes join the existing `transcripts`
-  destination, renamed `library`, owning both `/transcripts` and `/notes` —
-  the same **destination-vs-tab** reasoning `docs/specs/settings-ui.md` §2
-  already states for Users/Allowlist, and the exact judgement the
-  transcripts library page's own existing Mine/Shared-with-me tabs already
-  made: two answers to "what do I have," not a hierarchy.
+- **A fifth top-level navigation destination for Notes.** Rejected *at the
+  time*, per `apps/web/src/config/destinations.ts`'s own header, restated by
+  the epic itself: *"the bottom bar's ceiling is exactly four … a fifth
+  destination is not an addition, it is a redesign."* Notes therefore joined
+  the existing `transcripts` destination, renamed `library`, owning both
+  `/transcripts` and `/notes` — the same **destination-vs-tab** reasoning
+  `docs/specs/settings-ui.md` §2 already states for Users/Allowlist, and the
+  exact judgement the transcripts library page's own existing
+  Mine/Shared-with-me tabs already made: two answers to "what do I have," not
+  a hierarchy.
+
+  ⚠ **SUPERSEDED BY EPIC #105.** Transcripts and Notes are now two sibling
+  destinations, and the tab strip between them is gone. Nothing above was
+  wrong when it was written: the constraint was the bottom bar's four-tab
+  ceiling, and #106 made room by moving `Console` off that bar entirely
+  (it is `pinned`, so it renders at the navigation rail's foot and in the
+  avatar menu instead). The rule this reasoning rests on never said tabs
+  were *required* for parallel content, only that they were permitted — see
+  [`docs/specs/ux-refresh.md`](ux-refresh.md) §1.
 - **A single `/library` route rendering both lists from client-side state.**
   Rejected: Notes needs the same real, deep-linkable sub-routes Transcripts
   already has (`/notes/new`, `/notes/:id`, `/notes/:id/history`), the same
   way `/transcripts/new` and `/transcripts/:id` exist as real routes today,
   not modal or client-only views. `/transcripts` and `/notes` stay two
-  separate routes, both owned by the `library` destination — `destinations
-  .ts`'s `DESTINATION_ROUTES` type was already `Record<DestinationKey,
-  readonly string[]>`, so a destination owning two prefixes needed no type
-  change, only a second array entry — and a shared `LibraryTabs.tsx`
-  component renders the Transcripts | Notes switcher at the top of both
-  pages, the same way `TranscriptsLibraryPage.tsx` already renders its own
-  Mine/Shared-with-me tabs one level down.
+  separate routes, and that half of this decision still stands.
+
+  ⚠ **The rest is superseded by epic #105.** The two routes were owned by one
+  `library` destination and shared a Transcripts | Notes switcher; since #106
+  each route is its own destination and there is no switcher. What survives
+  unchanged is the reason for rejecting client-side state: both halves still
+  need real, deep-linkable sub-routes. The two pages now share
+  `LibraryPageFrame.tsx` — a title, a create action, and the breakpoint-aware
+  placement of that action — rather than a tab strip.
 - **Synchronous generation inside the request.** Rejected per CLAUDE.md
   rule 1: a chat completion can legitimately take from several seconds to a
   few minutes, well past what an HTTP request should hold open, and it needs

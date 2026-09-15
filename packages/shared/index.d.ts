@@ -20,7 +20,7 @@ export declare const APP_NAME: string;
 export declare const TAGLINE: string;
 
 /**
- * Typed `string`, not `'#1976d2'`, for the same reason as `APP_NAME` above: a
+ * Typed `string`, not `'#4f46e5'`, for the same reason as `APP_NAME` above: a
  * literal type would let a consumer or a test pin the current colour at the
  * type level, and rebranding a fork would then fail the typecheck in some file
  * that has nothing to do with this package.
