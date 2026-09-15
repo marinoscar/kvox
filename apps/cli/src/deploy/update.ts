@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { ALL_CHECKS, DEVNET_CHECK_ID, checksPassed, runChecks } from './checks/index.js';
+import {
+  ALL_CHECKS,
+  DEFAULT_PROXY_CONTAINER,
+  DEVNET_CHECK_ID,
+  checksPassed,
+  runChecks,
+  type CheckContext,
+} from './checks/index.js';
 import { writeDeployInfo } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
@@ -15,7 +22,15 @@ import { collectHealth, isHealthy, waitForHealthy } from './health.js';
 import type { DeployHooks } from './hooks.js';
 import { openJournal, type Journal } from './journal.js';
 import { DEFAULT_PROXY_ROOT, projectNameFor } from './layout.js';
-import { certificateStatus, installVhost, issueCertificate, type ProxyTarget } from './proxy.js';
+import {
+  certificateExpiry,
+  certificateStatus,
+  installVhost,
+  issueCertificate,
+  renewCertificates,
+  type FetchLike,
+  type ProxyTarget,
+} from './proxy.js';
 import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
 import { requireState, writeState, type DeployState } from './state.js';
@@ -58,12 +73,18 @@ export interface UpdateOptions {
   nonInteractive?: boolean | undefined;
   skipSeed?: boolean | undefined;
   skipProxy?: boolean | undefined;
+  /** `--proxy-container`; otherwise the state's, else the preflight's find. */
+  proxyContainer?: string | undefined;
+  /** `--no-ipv6`: render the vhost without `[::]` listeners. */
+  ipv6?: boolean | undefined;
   runCommand?: typeof defaultRunCommand | undefined;
   hooks?: DeployHooks | undefined;
   promptContext?: PromptContext | undefined;
   cwd?: string | undefined;
   /** Values collected elsewhere; see InstallOptions.answers. */
   answers?: ReadonlyMap<string, string> | undefined;
+  /** Injected so the routing self-probe is testable without public DNS. */
+  fetch?: FetchLike | undefined;
 }
 
 interface UpdateContext extends StepContext {
@@ -79,10 +100,34 @@ interface UpdateContext extends StepContext {
   env?: Map<string, string> | undefined;
   /** Set when the remote has not moved, so the rest of the pipeline stands down. */
   unchanged?: boolean | undefined;
+  /** Written by the preflight from the `proxy-container` check (#122). */
+  proxyContainer?: string | undefined;
+  /** Written by the preflight from the `proxy-ipv6` check (#122). */
+  ipv6?: boolean | undefined;
 }
 
-/** Certificates are renewed within this window, not on every deploy. */
+/**
+ * Certificates are renewed within this window, not on every deploy.
+ *
+ * Let's Encrypt issues for 90 days and recommends renewing at 60; a deploy
+ * that lands inside the last 30 renews rather than leaving it to the cron,
+ * because "the cron was never installed" is a failure this catches for free.
+ */
 const RENEW_WITHIN_DAYS = 30;
+
+/**
+ * Whether the certificate on disk expires within RENEW_WITHIN_DAYS. Exported
+ * for its test. Unreadable is `false`: the publish step then leaves renewal
+ * to the cron rather than guessing.
+ */
+export async function certificateDueForRenewal(
+  target: ProxyTarget,
+  run: typeof defaultRunCommand,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const expiry = await certificateExpiry(target, run, now);
+  return expiry.daysLeft !== undefined && expiry.daysLeft <= RENEW_WITHIN_DAYS;
+}
 
 /**
  * Read from the state rather than derived from the deploy root (#119): the
@@ -133,22 +178,38 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           DEVNET_CHECK_ID,
           'git-installed',
           'disk-space',
+          // The publish step talks to the proxy container and decides on
+          // IPv6 (#125); both answers come from these two checks, which
+          // stand down (`skip`) for a deployment that is not published.
+          'proxy-container',
+          'proxy-ipv6',
         ]);
 
+        // Held in a variable because the proxy checks WRITE to it.
+        const checkContext: CheckContext = {
+          runCommand: context.runCommand,
+          deployRoot: context.options.deployRoot,
+          name: context.name,
+          bindPort: context.state.bindPort,
+          proxyRoot: proxyRootFor(context.state),
+          ...(context.options.proxyContainer ?? context.state.proxyContainer) === undefined
+            ? {}
+            : { proxyContainer: context.options.proxyContainer ?? context.state.proxyContainer },
+          ...(context.options.skipProxy === true || context.state.domain === undefined
+            ? { skipProxy: true }
+            : {}),
+        };
         const results = await runChecks(
           ALL_CHECKS.filter((check) => wanted.has(check.id)),
-          {
-            runCommand: context.runCommand,
-            deployRoot: context.options.deployRoot,
-            name: context.name,
-            bindPort: context.state.bindPort,
-            proxyRoot: proxyRootFor(context.state),
-          },
+          checkContext,
         );
 
         for (const result of results) {
           context.journal.line(`${result.status} ${result.id}: ${result.detail}`);
         }
+
+        context.proxyContainer = checkContext.proxyContainer;
+        context.ipv6 = checkContext.ipv6;
 
         if (!checksPassed(results)) {
           throw new PreconditionError(
@@ -398,23 +459,53 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           proxyRoot: proxyRootFor(context.state),
         };
 
+        // The flag, else the state written by install, else what the
+        // preflight found, else the conventional name (#122, #125).
+        const proxyContainer =
+          context.options.proxyContainer ??
+          context.state.proxyContainer ??
+          context.proxyContainer ??
+          DEFAULT_PROXY_CONTAINER;
+        context.proxyContainer = proxyContainer;
+        const ipv6 = context.options.ipv6 ?? context.ipv6;
+
         const status = certificateStatus(target);
         if (!status.exists) {
           const email = context.env?.get('INITIAL_ADMIN_EMAIL') ?? '';
           if (email !== '') {
             await issueCertificate(target, {
               runCommand: context.runCommand,
+              proxyContainer,
               email,
+              ...(context.options.fetch === undefined ? {} : { fetch: context.options.fetch }),
               ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
             });
           }
+        } else if (await certificateDueForRenewal(target, context.runCommand)) {
+          // Within the window: renew now rather than trust that a cron exists.
+          // Reloads the proxy only if certbot actually renewed something.
+          context.journal.line(`Certificate for ${target.domain} expires within ${RENEW_WITHIN_DAYS} days; renewing`);
+          await renewCertificates({
+            proxyRoot: target.proxyRoot,
+            proxyContainer,
+            runCommand: context.runCommand,
+            certName: target.domain,
+            ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
+          });
         }
 
         // Rewritten and re-validated so a change to the template reaches an
         // existing deployment; identical content is a no-op with no reload.
+        // maxBodyBytes travels too, or every update would silently reset the
+        // upload limit to the default and reload for nothing.
         await installVhost(target, {
           runCommand: context.runCommand,
+          proxyContainer,
+          ...(ipv6 === undefined ? {} : { ipv6 }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
+          ...(context.env?.get('MAX_FILE_SIZE') === undefined
+            ? {}
+            : { maxBodyBytes: Number(context.env.get('MAX_FILE_SIZE')) }),
         });
       },
     },
@@ -515,6 +606,9 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     ref: context.target?.ref ?? state.ref,
     commitSha: context.commitSha ?? state.commitSha,
     previousSha: context.previousSha,
+    ...((context.proxyContainer ?? state.proxyContainer) === undefined
+      ? {}
+      : { proxyContainer: context.proxyContainer ?? state.proxyContainer }),
     envPath: envFilePath(options.deployRoot),
     lastDeployedAt: now,
     lastAttemptAt: now,

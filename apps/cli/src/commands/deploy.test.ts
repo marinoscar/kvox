@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import type { Check, CheckContext, CompletedCheck } from '../deploy/checks/index.js';
 import { DEPLOY_STATE_VERSION, deployStatePath, type DeployState } from '../deploy/state.js';
 import type { CommandResult, RunCommandOptions } from '../deploy/executor.js';
+import { CLI_NAME } from '../branding.js';
+import type { InstallOptions } from '../deploy/install.js';
 import { EXIT, exitCodeFor } from '../errors.js';
 import {
   PUBLIC_IP_ENV_VAR,
@@ -610,5 +612,264 @@ describe('kvox deploy status', () => {
 
     expect(result.stderr).toContain('certificate has expired');
     expect(exitCodeFor(result.error)).toBe(EXIT.FAILURE);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// `kvox deploy install` flags and `kvox deploy certs`  (issue #125)
+// ---------------------------------------------------------------------------
+
+async function runDeploy(
+  argv: readonly string[],
+  extra: Partial<DeployContext>,
+): Promise<RunResult> {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  const program = new Command();
+  program.exitOverride();
+  registerDeployCommand(program, {
+    stdout: { write: (chunk: string) => stdout.push(chunk) },
+    stderr: { write: (chunk: string) => stderr.push(chunk) },
+    isTty: false,
+    ...extra,
+  });
+
+  let error: unknown;
+  try {
+    await program.parseAsync(['deploy', ...argv], { from: 'user' });
+  } catch (caught) {
+    error = caught;
+  }
+
+  return { stdout: stdout.join(''), stderr: stderr.join(''), error };
+}
+
+/** Captures what the install command hands to the pipeline. */
+function installProbe(): { install: typeof import('../deploy/install.js').runInstall; seen: () => InstallOptions } {
+  let captured: InstallOptions | undefined;
+  return {
+    install: (async (options: InstallOptions) => {
+      captured = options;
+      return { deployRoot: '/tmp/x', name: 'x', commitSha: 'a'.repeat(40), journalPath: '/tmp/x/log', nextStep: 'log in' };
+    }) as typeof import('../deploy/install.js').runInstall,
+    seen: () => {
+      if (captured === undefined) throw new Error('install never ran');
+      return captured;
+    },
+  };
+}
+
+describe('kvox deploy install flags (issue #125)', () => {
+  it('passes --proxy-container through', async () => {
+    const probe = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--proxy-container', 'edge'], { install: probe.install });
+    expect(probe.seen().proxyContainer).toBe('edge');
+  });
+
+  it('passes ipv6: false for --no-ipv6, and nothing otherwise so the probe decides', async () => {
+    const off = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--no-ipv6'], { install: off.install });
+    expect(off.seen().ipv6).toBe(false);
+
+    const unset = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test'], { install: unset.install });
+    expect(unset.seen()).not.toHaveProperty('ipv6');
+  });
+
+  it('leaves installCron undefined by default, true for --install-cron, false for --no-install-cron', async () => {
+    const unset = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test'], { install: unset.install });
+    // Undefined is the third state: "when a certificate was issued".
+    expect(unset.seen()).not.toHaveProperty('installCron');
+
+    const on = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--install-cron'], { install: on.install });
+    expect(on.seen().installCron).toBe(true);
+
+    const off = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--no-install-cron'], { install: off.install });
+    expect(off.seen().installCron).toBe(false);
+  });
+});
+
+/** A proxy directory with one issued certificate for `domain`. */
+function proxyRootWith(...domains: string[]): string {
+  const root = mkdtempSync(join(tmpdir(), 'appctl-certs-proxy-'));
+  for (const domain of domains) {
+    mkdirSync(join(root, 'letsencrypt', 'live', domain), { recursive: true });
+    writeFileSync(join(root, 'letsencrypt', 'live', domain, 'fullchain.pem'), 'cert');
+    writeFileSync(join(root, 'letsencrypt', 'live', domain, 'cert.pem'), 'cert');
+  }
+  return root;
+}
+
+/** Records every argv; certbot answers with `certbotOutput`, openssl with `notAfter`. */
+function certsRunCommand(seen: string[][], certbotOutput = 'No renewals were attempted.\n', notAfter = 'Dec 31 00:00:00 2099 GMT') {
+  return (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+    seen.push([...argv]);
+    const stdout = argv.includes('certbot/certbot') ? certbotOutput : argv[0] === 'openssl' ? `notAfter=${notAfter}\n` : '';
+    return { argv: [...argv], cwd: options.cwd, exitCode: 0, stdout, stderr: '', durationMs: 1, timedOut: false };
+  }) as typeof import('../deploy/executor.js').runCommand;
+}
+
+function publishedRoot(root: string, proxyRoot: string, name = 'demo'): string {
+  mkdirSync(root, { recursive: true });
+  const state: DeployState = {
+    version: DEPLOY_STATE_VERSION,
+    repoUrl: 'https://example.test/o/r',
+    ref: 'main',
+    commitSha: 'abcdef0123456789abcdef0123456789abcdef01',
+    domain: 'app.example.test',
+    bindPort: 3535,
+    deployRoot: root,
+    name,
+    appsRoot: join(root, '..'),
+    proxyRoot,
+    proxyContainer: 'edge-proxy',
+    installedAt: '2026-01-01T00:00:00.000Z',
+    lastDeployedAt: '2026-01-02T00:00:00.000Z',
+    lastCommand: 'install',
+    appctlVersion: '1.0.0',
+  };
+  writeFileSync(deployStatePath(root), JSON.stringify(state));
+  return root;
+}
+
+describe('kvox deploy certs renew', () => {
+  it('runs certbot renew for this app\'s domain through docker, against the recorded proxy', async () => {
+    const proxyRoot = proxyRootWith('app.example.test');
+    const root = publishedRoot(join(appsRoot(), 'demo'), proxyRoot);
+    const seen: string[][] = [];
+
+    const result = await runDeploy(['certs', 'renew', '--root', root], { runCommand: certsRunCommand(seen) });
+
+    expect(result.error).toBeUndefined();
+    expect(seen).toEqual([
+      [
+        'docker', 'run', '--rm',
+        '-v', `${proxyRoot}/letsencrypt:/etc/letsencrypt`,
+        '-v', `${proxyRoot}/webroot:/var/www/certbot`,
+        'certbot/certbot', 'renew', '--webroot', '-w', '/var/www/certbot', '--non-interactive',
+        '--cert-name', 'app.example.test',
+      ],
+    ]);
+    expect(result.stderr).toContain('Nothing was due');
+  });
+
+  it('--dry-run passes certbot\'s --dry-run, prints the argv, never reloads, and exits 0', async () => {
+    const root = publishedRoot(join(appsRoot(), 'demo'), proxyRootWith('app.example.test'));
+    const seen: string[][] = [];
+    const simulated = 'Congratulations, all simulated renewals succeeded:\n  /etc/letsencrypt/live/app.example.test/fullchain.pem (success)\n';
+
+    const result = await runDeploy(['certs', 'renew', '--root', root, '--dry-run'], { runCommand: certsRunCommand(seen, simulated) });
+
+    expect(result.error).toBeUndefined();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('--dry-run');
+    expect(seen[0]).toContain('certbot/certbot');
+    expect(result.stderr).toContain('certbot/certbot renew');
+    expect(result.stderr).toContain('--dry-run');
+    expect(seen.some((argv) => argv.includes('reload'))).toBe(false);
+  });
+
+  it('--all renews every lineage, without --cert-name, and needs no installed app', async () => {
+    const proxyRoot = proxyRootWith('a.example.test', 'b.example.test');
+    const seen: string[][] = [];
+
+    const result = await runDeploy(
+      ['certs', 'renew', '--all', '--apps-root', appsRoot(), '--proxy-root', proxyRoot, '--proxy-container', 'edge'],
+      { runCommand: certsRunCommand(seen) },
+    );
+
+    expect(result.error).toBeUndefined();
+    expect(seen[0]).not.toContain('--cert-name');
+    expect(seen[0]).toContain(`${proxyRoot}/letsencrypt:/etc/letsencrypt`);
+  });
+
+  it('reloads the recorded container only when certbot renewed something', async () => {
+    const root = publishedRoot(join(appsRoot(), 'demo'), proxyRootWith('app.example.test'));
+    const seen: string[][] = [];
+    const renewed = 'Congratulations, all renewals succeeded:\n  /etc/letsencrypt/live/app.example.test/fullchain.pem (success)\n';
+
+    const result = await runDeploy(['certs', 'renew', '--root', root, '--json'], { runCommand: certsRunCommand(seen, renewed) });
+
+    expect(result.error).toBeUndefined();
+    expect(seen[1]).toEqual(['docker', 'exec', 'edge-proxy', 'nginx', '-s', 'reload']);
+    const report = JSON.parse(result.stdout) as { renewed: string[]; reloaded: boolean };
+    expect(report).toMatchObject({ renewed: ['app.example.test'], reloaded: true });
+    expect(result.stderr).toBe('');
+  });
+
+  it('--install-cron writes the cron file once and leaves it alone on the second run', async () => {
+    const apps = appsRoot();
+    const root = publishedRoot(join(apps, 'demo'), proxyRootWith('app.example.test'));
+    const cronDir = mkdtempSync(join(tmpdir(), 'appctl-certs-cron-'));
+    const ctx: Partial<DeployContext> = { runCommand: certsRunCommand([]), cronDir, cliPath: '/usr/local/bin/cli' };
+
+    const first = await runDeploy(['certs', 'renew', '--root', root, '--install-cron'], ctx);
+    expect(first.error).toBeUndefined();
+    expect(first.stderr).toContain(`Wrote ${join(cronDir, `${CLI_NAME}-certs-demo`)}`);
+    const contents = readFileSync(join(cronDir, `${CLI_NAME}-certs-demo`), 'utf8');
+    expect(contents).toContain(`/usr/local/bin/cli deploy certs renew --all --apps-root ${join(root, '..')} --name demo`);
+
+    const second = await runDeploy(['certs', 'renew', '--root', root, '--install-cron'], ctx);
+    expect(second.stderr).toContain('Kept');
+    expect(readFileSync(join(cronDir, `${CLI_NAME}-certs-demo`), 'utf8')).toBe(contents);
+  });
+
+  it('refuses without --all when nothing is installed, naming the way out', async () => {
+    const result = await runDeploy(['certs', 'renew', '--apps-root', appsRoot()], { runCommand: certsRunCommand([]) });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('--all');
+  });
+});
+
+describe('kvox deploy certs status', () => {
+  it('lists every certificate with its expiry, exit 0 while all are valid', async () => {
+    const proxyRoot = proxyRootWith('a.example.test', 'b.example.test');
+
+    const result = await runDeploy(['certs', 'status', '--apps-root', appsRoot(), '--proxy-root', proxyRoot], {
+      runCommand: certsRunCommand([]),
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toContain('a.example.test');
+    expect(result.stderr).toContain('b.example.test');
+    expect(result.stderr).toMatch(/expires in \d+ day\(s\)/);
+  });
+
+  it('exits 1 naming an expired certificate', async () => {
+    const proxyRoot = proxyRootWith('old.example.test');
+
+    const result = await runDeploy(['certs', 'status', '--apps-root', appsRoot(), '--proxy-root', proxyRoot, '--json'], {
+      runCommand: certsRunCommand([], '', 'Jan  1 00:00:00 2020 GMT'),
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.FAILURE);
+    expect((result.error as Error).message).toContain('old.example.test');
+    const report = JSON.parse(result.stdout) as { certificates: Array<{ domain: string; daysLeft: number }> };
+    expect(report.certificates[0]?.domain).toBe('old.example.test');
+    expect(report.certificates[0]?.daysLeft).toBeLessThan(0);
+  });
+
+  it('exits 2 when there is nothing under the proxy', async () => {
+    const result = await runDeploy(['certs', 'status', '--apps-root', appsRoot(), '--proxy-root', proxyRootWith()], {
+      runCommand: certsRunCommand([]),
+    });
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+  });
+
+  it('reads the proxy root from the installed app when none is given', async () => {
+    const proxyRoot = proxyRootWith('app.example.test');
+    const root = publishedRoot(join(appsRoot(), 'demo'), proxyRoot);
+
+    const result = await runDeploy(['certs', 'status', '--root', root], { runCommand: certsRunCommand([]) });
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toContain(proxyRoot);
   });
 });

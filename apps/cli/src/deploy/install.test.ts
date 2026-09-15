@@ -1,4 +1,14 @@
-import { lstatSync, mkdtempSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -169,6 +179,9 @@ describe('the preflight step', () => {
     expect(lines).toContain('skip proxy-root: --skip-proxy');
     expect(lines).toContain('skip proxy-container: --skip-proxy');
     expect(lines).toContain('skip certbot-image: --skip-proxy');
+    // Recommended, but run here anyway: its answer decides whether the vhost
+    // binds [::] (#125).
+    expect(lines).toContain('skip proxy-ipv6: --skip-proxy');
     expect(lines.some((line) => line.startsWith('fail '))).toBe(false);
   });
 
@@ -258,6 +271,176 @@ describe('the network step', () => {
     } as never).catch(() => undefined);
 
     expect(seen.some((argv) => argv.join(' ').startsWith('docker network inspect'))).toBe(false);
+  });
+});
+
+describe('the publish step', () => {
+  function publishStep() {
+    const step = buildInstallSteps().find((candidate) => candidate.id === 'publish');
+    if (step === undefined) throw new Error('no publish step');
+    return step;
+  }
+
+  function proxyRoot(): string {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-publish-proxy-'));
+    mkdirSync(join(root, 'nginx', 'conf.d'), { recursive: true });
+    mkdirSync(join(root, 'webroot'), { recursive: true });
+    return root;
+  }
+
+  function writeCertificate(root: string): void {
+    const live = join(root, 'letsencrypt', 'live', 'app.example.test');
+    mkdirSync(live, { recursive: true });
+    writeFileSync(join(live, 'fullchain.pem'), 'cert');
+  }
+
+  /** Serves the self-probe's nonce out of the proxy's own webroot. */
+  function routedFetch(root: string): typeof globalThis.fetch {
+    return (async (input: string | URL | Request) => {
+      const file = join(root, 'webroot', new URL(String(input)).pathname);
+      return existsSync(file) ? new Response(readFileSync(file, 'utf8')) : new Response('', { status: 404 });
+    }) as typeof globalThis.fetch;
+  }
+
+  function contextFor(
+    root: string,
+    options: Record<string, unknown>,
+    context: Record<string, unknown> = {},
+  ) {
+    const seen: string[][] = [];
+    const lines: string[] = [];
+    const runCommand = (async (argv: readonly string[], runOptions: RunCommandOptions): Promise<CommandResult> => {
+      seen.push([...argv]);
+      return { argv: [...argv], cwd: runOptions.cwd, exitCode: 0, stdout: '', stderr: '', durationMs: 1, timedOut: false };
+    }) as typeof import('./executor.js').runCommand;
+
+    const cronDir = mkdtempSync(join(tmpdir(), 'appctl-publish-cron-'));
+    return {
+      context: {
+        options: {
+          deployRoot: '/tmp/x',
+          name: 'demo',
+          appsRoot: '/tmp',
+          bindPort: 3535,
+          proxyRoot: root,
+          domain: 'app.example.test',
+          email: 'admin@example.test',
+          fetch: routedFetch(root),
+          cliPath: '/usr/local/bin/cli',
+          cronDir,
+          ...options,
+        },
+        runCommand,
+        journal: { line: (line: string) => void lines.push(line) },
+        completed: new Set<string>(),
+        ...context,
+      } as never,
+      seen,
+      lines,
+      cronDir,
+    };
+  }
+
+  it('issues through docker certbot, then validates and reloads through docker exec on the detected container', async () => {
+    const root = proxyRoot();
+    const { context, seen } = contextFor(root, {}, { proxyContainer: 'edge-proxy' });
+
+    await publishStep().run(context);
+
+    expect(seen.map((argv) => argv.slice(0, 3).join(' '))).toEqual([
+      'docker run --rm',
+      'docker exec edge-proxy',
+      'docker exec edge-proxy',
+    ]);
+    expect(seen[0]).toContain('certbot/certbot');
+    expect(seen[1]?.slice(3)).toEqual(['nginx', '-t']);
+    expect(seen[2]?.slice(3)).toEqual(['nginx', '-s', 'reload']);
+  });
+
+  it('prefers --proxy-container over the detected one, and falls back to the conventional name', async () => {
+    const flagged = contextFor(proxyRoot(), { proxyContainer: 'named' }, { proxyContainer: 'detected' });
+    await publishStep().run(flagged.context);
+    expect(flagged.seen[1]?.[2]).toBe('named');
+
+    const bare = contextFor(proxyRoot(), {});
+    await publishStep().run(bare.context);
+    expect(bare.seen[1]?.[2]).toBe('proxy-nginx');
+  });
+
+  it('writes the vhost with container paths, the upload limit from the environment, and no [::] when IPv6 is off', async () => {
+    const root = proxyRoot();
+    const { context } = contextFor(
+      root,
+      {},
+      { env: new Map([['MAX_FILE_SIZE', String(2 * 1024 * 1024 * 1024)]]), ipv6: false, proxyContainer: 'p' },
+    );
+
+    await publishStep().run(context);
+
+    const vhost = readFileSync(join(root, 'nginx', 'conf.d', 'app.example.test.conf'), 'utf8');
+    expect(vhost).toContain('root /var/www/certbot;');
+    expect(vhost).toContain('ssl_certificate     /etc/letsencrypt/live/app.example.test/fullchain.pem;');
+    expect(vhost).not.toContain(root);
+    expect(vhost).toContain('client_max_body_size 2048m;');
+    expect(vhost).not.toContain('[::]');
+  });
+
+  it('lets --no-ipv6 override a probe that found IPv6', async () => {
+    const root = proxyRoot();
+    const { context } = contextFor(root, { ipv6: false }, { ipv6: true, proxyContainer: 'p' });
+
+    await publishStep().run(context);
+
+    expect(readFileSync(join(root, 'nginx', 'conf.d', 'app.example.test.conf'), 'utf8')).not.toContain('[::]');
+  });
+
+  it('fails at the self-probe, before certbot, when the domain does not route here', async () => {
+    const root = proxyRoot();
+    const { context, seen } = contextFor(root, {
+      fetch: (async () => new Response('somebody else', { status: 200 })) as typeof globalThis.fetch,
+    });
+
+    const error = await publishStep().run(context).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('app.example.test');
+    expect(seen).toEqual([]);
+    expect(existsSync(join(root, 'nginx', 'conf.d', 'app.example.test.conf'))).toBe(false);
+  });
+
+  it('installs the renewal cron when it issued a certificate', async () => {
+    const root = proxyRoot();
+    const { context, cronDir } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+    const cron = readFileSync(join(cronDir, `${CLI_NAME}-certs-demo`), 'utf8');
+    expect(cron).toContain('/usr/local/bin/cli deploy certs renew --all --apps-root /tmp --name demo');
+  });
+
+  it('leaves the cron alone when the certificate already existed, unless --install-cron', async () => {
+    const existing = proxyRoot();
+    writeCertificate(existing);
+    const kept = contextFor(existing, {});
+    await publishStep().run(kept.context);
+    // No certbot run either: the certificate was already there.
+    expect(kept.seen.some((argv) => argv.includes('certbot/certbot'))).toBe(false);
+    expect(readdirSync(kept.cronDir)).toEqual([]);
+
+    const forced = proxyRoot();
+    writeCertificate(forced);
+    const written = contextFor(forced, { installCron: true });
+    await publishStep().run(written.context);
+    expect(readdirSync(written.cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+  });
+
+  it('honours --no-install-cron even when it issued a certificate', async () => {
+    const { context, cronDir } = contextFor(proxyRoot(), { installCron: false });
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([]);
   });
 });
 
