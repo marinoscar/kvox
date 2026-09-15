@@ -4,7 +4,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { UsageError } from '../errors.js';
+import { PreconditionError, UsageError } from '../errors.js';
+import { CommandFailedError, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
   buildInstallSteps,
   composeArgv,
@@ -88,6 +89,72 @@ describe('the install pipeline', () => {
     for (const id of ids) {
       expect(skipReasonFor(id, { domain: 'app.example.test' })).toBeUndefined();
     }
+  });
+});
+
+describe('the preflight step', () => {
+  /** A box with docker, git and gh, and NO proxy of any kind. */
+  const noProxyRunCommand = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+    const line = argv.join(' ');
+    const canned: { exitCode: number; stdout?: string; stderr?: string } =
+      line.startsWith('docker --version') ? { exitCode: 0, stdout: 'Docker version 27.3.1' }
+      : line.startsWith('docker info') ? { exitCode: 0, stdout: '27.3.1' }
+      : line.startsWith('docker compose version') ? { exitCode: 0, stdout: 'v2.29.0' }
+      : line.startsWith('git --version') ? { exitCode: 0, stdout: 'git version 2.43.0' }
+      : line.startsWith('gh --version') ? { exitCode: 0, stdout: 'gh version 2.40.1' }
+      : line.startsWith('gh auth status') ? { exitCode: 0, stdout: 'Logged in to github.com account octocat' }
+      : line.startsWith('df -Pk') ? { exitCode: 0, stdout: 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 100000000 10000000 80000000 12% /' }
+      : { exitCode: 1, stderr: `${argv[0]}: no such thing` };
+    const result: CommandResult = {
+      argv: [...argv],
+      cwd: options.cwd,
+      exitCode: canned.exitCode,
+      stdout: canned.stdout ?? '',
+      stderr: canned.stderr ?? '',
+      durationMs: 1,
+      timedOut: false,
+    };
+    if (result.exitCode !== 0) throw new CommandFailedError(result.stderr, result);
+    return result;
+  }) as typeof import('./executor.js').runCommand;
+
+  function preflightContext(options: Record<string, unknown>, lines: string[]) {
+    return {
+      options: {
+        deployRoot: mkdtempSync(join(tmpdir(), 'appctl-preflight-')),
+        bindPort: 3535,
+        proxyRoot: '/nonexistent/proxy',
+        ...options,
+      },
+      runCommand: noProxyRunCommand,
+      journal: { line: (text: string) => lines.push(text) },
+      hooks: undefined,
+      completed: new Set<string>(),
+    } as never;
+  }
+
+  const preflight = buildInstallSteps().find((step) => step.id === 'preflight');
+  if (preflight === undefined) throw new Error('no preflight step');
+
+  it('passes with --skip-proxy on a box with no proxy, reporting the skips', async () => {
+    const lines: string[] = [];
+
+    await expect(preflight.run(preflightContext({ skipProxy: true }, lines))).resolves.toBeUndefined();
+
+    // The proxy checks ran and said why they stood down, rather than failing.
+    expect(lines).toContain('skip proxy-root: --skip-proxy');
+    expect(lines).toContain('skip proxy-container: --skip-proxy');
+    expect(lines).toContain('skip certbot-image: --skip-proxy');
+    expect(lines.some((line) => line.startsWith('fail '))).toBe(false);
+  });
+
+  it('fails on the missing proxy without the flag', async () => {
+    const lines: string[] = [];
+
+    const error = await preflight.run(preflightContext({}, lines)).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(PreconditionError);
+    expect((error as Error).message).toContain('proxy-root');
   });
 });
 
