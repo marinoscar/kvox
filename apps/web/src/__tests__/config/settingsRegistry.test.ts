@@ -654,6 +654,10 @@ describe('the Operations group (#266)', () => {
         // other registry entirely.)
         'AI',
         'Maintenance',
+        // #126, epic #118 — likewise, and for the same reason: the About
+        // controller enforces `system_settings:read` and nothing of its own,
+        // so it appears for exactly the admin this assertion describes.
+        'About',
         'Users & Allowlist',
       ]);
     });
@@ -988,5 +992,85 @@ describe('the AI cards (#55, epic #45)', () => {
     expect(
       settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/settings/ai'),
     ).toBeNull();
+  });
+});
+
+/**
+ * Issue #126, epic #118 (decision 8) — the `About` card.
+ *
+ * Two things worth asserting that nothing else does:
+ *
+ *  1. IT IS A GENERAL CARD, AFTER MAINTENANCE, and it is the only card that
+ *     is strictly neither "configuration an administrator sets" nor "the
+ *     running system". It lives in General because its permission IS the
+ *     General permission; an Operations card would have to carry one of the
+ *     strings the Operations controllers enforce, none of which the About
+ *     controller checks.
+ *  2. THE PERMISSION IS LITERALLY THE STRING `about.controller.ts` ENFORCES —
+ *     `system_settings:read`, read off the API workspace rather than restated,
+ *     per CLAUDE.md Settings UI Pattern rule 3. There is deliberately no
+ *     `about:read`: a permission no role is seeded with would be a card nobody
+ *     can open.
+ */
+describe('the About card (#126)', () => {
+  const general = ADMIN_SECTIONS.find((section) => section.label === 'General');
+  const about = general?.cards.find((card) => card.title === 'About');
+
+  const API_SRC = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../api/src');
+  const rolesConstants = readFileSync(
+    resolve(API_SRC, 'common/constants/roles.constants.ts'),
+    'utf8',
+  );
+  const aboutController = readFileSync(resolve(API_SRC, 'about/about.controller.ts'), 'utf8');
+
+  it('is the last General card, directly after Maintenance', () => {
+    // Appended, not inserted: the hub, the rail and the drill-down list all
+    // render this array in declaration order, and an insertion would move
+    // cards a reader has learnt the position of.
+    const titles = general?.cards.map((card) => card.title) ?? [];
+    expect(titles.at(-1)).toBe('About');
+    expect(titles.at(-2)).toBe('Maintenance');
+  });
+
+  it('is routed to /admin/settings/about, and is not inert', () => {
+    expect(about?.path).toBe('/admin/settings/about');
+    expect(about?.disabled).toBeUndefined();
+    expect(about?.alwaysShow).toBeUndefined();
+  });
+
+  it('carries the description the page mirrors word for word', () => {
+    expect(about?.description).toBe(
+      'What is running here: version, revision, when it was installed and last updated, and the server it runs on.',
+    );
+  });
+
+  it('binds to system_settings:read, which about.controller.ts enforces — and to no about:read', () => {
+    expect(about?.permission).toBe('system_settings:read');
+    expect(rolesConstants).toContain("SYSTEM_SETTINGS_READ: 'system_settings:read'");
+    // The mechanical half of rule 3: the controller really does gate on it.
+    expect(aboutController).toContain('PERMISSIONS.SYSTEM_SETTINGS_READ');
+    // And the permission the card would have invented does not exist anywhere
+    // the API could seed it.
+    expect(rolesConstants).not.toMatch(/about:read/);
+  });
+
+  it('is visible to a system_settings:read holder and to nobody without it', () => {
+    const settingsOnly = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission === 'system_settings:read',
+    );
+    expect(titlesOf(settingsOnly)).toContain('About');
+
+    const usersOnly = visibleSettingsSections(
+      ADMIN_SECTIONS,
+      (permission) => permission === 'users:read',
+    );
+    expect(titlesOf(usersOnly)).not.toContain('About');
+  });
+
+  it('titles the compact AppBar "About" at its route', () => {
+    expect(
+      settingsPageTitle(ADMIN_SECTIONS, ADMIN_HUB_PATH, ADMIN_HUB_TITLE, '/admin/settings/about'),
+    ).toBe('About');
   });
 });
