@@ -116,6 +116,25 @@ server.events.on('request:start', ({ request }) => {
  * rule `HomePage`'s header states. Every section on this page renders from what
  * these already returned, so this list growing is the review question, not an
  * incidental detail of whichever test noticed.
+ *
+ * ⚠ EVERY TEST THAT COMPARES `observedRequests` AGAINST THIS CONSTANT MUST KEEP
+ * `notes.recent` EITHER EMPTY OR MADE OF SOURCE-LESS ROWS. `RecentNotes` hands
+ * `notes.recent` straight to `useNoteSourceNames` (issue #57/#107, its own
+ * header has the full story) — a real, documented, ASYNC lookup that fires its
+ * OWN `GET /api/transcripts/:id` or `GET /api/notes/:id` per distinct,
+ * uncached source a recent note names. That is a genuine fourth request this
+ * list does not include because none of these tests are pinning it, not
+ * because it cannot happen. A fixture here whose `notes.recent` contains a
+ * `note()` with its default `sourceTranscriptId: 't1'` WILL intermittently add
+ * `/api/transcripts/t1` to `observedRequests`, exactly as it did in PR #205
+ * (`HomePage — needs attention` › `fires NO additional request when the page
+ * loads`) — passing locally and on most CI shards because the lookup usually
+ * had not started before the assertion ran, and failing once it had. The
+ * `it('fires NO...')`/`it('adds no request...')` tests in the `New note` hero
+ * action, counts strip, and search entry point blocks below share this exact
+ * hazard (they just happen to already keep `notes.recent` empty); if one of
+ * them starts failing the same way, fix ITS fixture the way that comment
+ * does — never loosen this array.
  */
 const EXPECTED_REQUESTS = [
   '/api/notes/summary',
@@ -909,6 +928,28 @@ describe('HomePage — needs attention', () => {
     // ⚠ THE EPIC-LEVEL CRITERION. The rows come from the two summaries the page
     // already makes; a `GET /api/transcripts?status=failed` for one section
     // would be this page's "one request per content type" rule broken.
+    //
+    // ⚠ ROOT CAUSE OF A REAL CI FAILURE — PR #205, `Web Tests` shard 2/4. Read
+    // this before touching the fixture below. This describe block's own
+    // `beforeEach` puts `note()` — `sourceType: 'transcript'`,
+    // `sourceTranscriptId: 't1'` — in `notes.recent`, and `RecentNotes` hands
+    // that array straight to `useNoteSourceNames` (issue #57/#107): a real,
+    // documented, ASYNC per-source lookup (see that hook's header for why it
+    // exists and why the actual fix belongs in the API, not here) that fires
+    // its OWN `GET /api/transcripts/t1` to resolve "from *Weekly standup*".
+    // That is a genuine, legitimate fourth request whenever a recent note has
+    // a source — it is simply not part of what THIS test is pinning. The old
+    // assertion here passed locally and on 3 of 4 CI shards only because the
+    // lookup usually had not started before the assertion ran, and failed
+    // once CI load let it start in time — an order/timing-dependent failure,
+    // not a flake to retry away. So this test asks for a notes summary whose
+    // `recent` list is EMPTY: no source to resolve, no async request to race,
+    // while `failed: [FAILED_NOTE]` keeps "Needs attention" rendering exactly
+    // as truthfully as the shared fixture did (that section reads
+    // `notes.summary.failed`, never `.recent` — see `HomePage.tsx`).
+    respondWith(summary({ recent: [transcript()], failed: [FAILED_TRANSCRIPT] }), {
+      notes: noteSummary({ failed: [FAILED_NOTE] }),
+    });
     renderHome();
     await screen.findByRole('heading', { name: 'Needs attention' });
     await waitFor(() => expect(noteSummaryRequests).toBe(1));
@@ -1133,6 +1174,38 @@ describe('HomePage — recent notes', () => {
     await screen.findByRole('alert');
 
     expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+  });
+
+  it('resolves a shared source name with ONE request, not one per note', async () => {
+    // Pins `useNoteSourceNames` (issue #57/#107) itself, which is otherwise
+    // invisible in this suite — that invisibility is exactly how it could
+    // ambush an unrelated `EXPECTED_REQUESTS` assertion elsewhere in this file
+    // (see the comment on that constant, and PR #205). The two notes from this
+    // block's `beforeEach` both default to `sourceTranscriptId: 't1'`, so this
+    // test asserts BOTH halves of the hook's contract at once: the lookup
+    // really does fire a `GET` for a note's source, and a second note naming
+    // the SAME source causes no second request — the hook's module-level
+    // cache and in-flight dedup.
+    // ⚠ An exact path, never `/transcripts/:id`: both notes share `t1`, but a
+    // param route would also match `/transcripts/summary` — the same
+    // `summary`-is-a-legal-id trap `respondWith` warns about — and shadow the
+    // `beforeEach`'s summary handler because `server.use` here registers last.
+    let transcriptRequests = 0;
+    server.use(
+      http.get(`${API_BASE}/transcripts/t1`, () => {
+        transcriptRequests += 1;
+        return HttpResponse.json({
+          data: { id: 't1', title: 'Weekly sync recording', currentVersion: 1 },
+        });
+      }),
+    );
+    renderHome();
+    await screen.findByRole('heading', { name: 'Recent notes' });
+
+    // Both cards resolve the name once the one request lands.
+    expect(await screen.findAllByRole('link', { name: 'Weekly sync recording' })).toHaveLength(2);
+    expect(transcriptRequests).toBe(1);
+    expect(observedRequests.filter((path) => path === '/api/transcripts/t1')).toHaveLength(1);
   });
 
   it('has no accessibility violations', async () => {
