@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { Option, type Command } from 'commander';
 
 import { CLI_NAME, envVar } from '../branding.js';
@@ -12,6 +14,8 @@ import {
   type CompletedCheck,
 } from '../deploy/checks/index.js';
 import { readEnvFile } from '../deploy/env-file.js';
+import { metadataFor } from '../deploy/env-metadata.js';
+import { parseEnvFile } from '../deploy/env-spec.js';
 import {
   collectHealth,
   isHealthy,
@@ -171,13 +175,17 @@ export function registerDeployCommand(
   )
     .option('--domain <domain>', 'Public domain to publish under')
     .option('--proxy-root <path>', 'Shared reverse proxy directory', DEFAULT_PROXY_ROOT)
-    .option('--port <port>', 'Loopback port the proxy forwards to', String(DEFAULT_BIND_PORT))
+    // No default: the wizard suggests the first free port from 3535 that no
+    // other app under --apps-root has recorded (#127). Given, it is an answer.
+    .option('--port <port>', `Loopback port the proxy forwards to (default: suggested, from ${DEFAULT_BIND_PORT})`)
     .option('--repo <url>', 'Repository to deploy (default: this checkout\'s origin)')
     .option('--ref <ref>', 'Branch, tag or commit (default: the remote default branch)')
     .option('--email <email>', 'Certificate registration address')
     .option('--group <name>', 'Optional feature group; repeat for more', collectGroup, [])
     .option('--all', 'Review every environment variable, not only the essential ones')
     .option('--non-interactive', 'Never prompt; fail listing anything unresolved')
+    .option('--answer <KEY=VALUE>', 'Supply one environment value without a prompt; repeat for more', collectAnswer, [])
+    .option('--answers-file <path>', 'Supply environment values from a .env-format file')
     .option('--reinstall', 'Install over an existing deployment')
     .option('--resume', 'Continue from the step that failed')
     .option('--skip-doctor', 'Skip the prerequisite checks')
@@ -202,7 +210,19 @@ export function registerDeployCommand(
         `  ${CLI_NAME} deploy install --domain app.example.com`,
         `  ${CLI_NAME} deploy install --domain app.example.com --staging`,
         `  ${CLI_NAME} deploy install --non-interactive --domain app.example.com`,
+        `  ${CLI_NAME} deploy install --non-interactive --answers-file answers.env`,
         `  ${CLI_NAME} deploy install --domain app.example.com --no-ipv6`,
+        '',
+        'The environment is collected in steps - domain, database, secrets,',
+        'OAuth, admin, resources - and each is verified before the next: the',
+        'DNS record when the domain is typed, the connection and credentials',
+        'when the database is. Secrets are generated; the port, worker slots and',
+        'memory limits are suggested from this server with their reason.',
+        '',
+        '--answer and --answers-file seed values without a prompt. With',
+        '--non-interactive, a file holding the domain (APP_DOMAIN), the',
+        'database, the OAuth client and the admin email is enough: every secret',
+        'is generated and every resource suggested.',
         '',
         'What it does, in order: checks prerequisites, clones the repository,',
         'collects the environment, validates the database, builds the images,',
@@ -234,6 +254,8 @@ export function registerDeployCommand(
     .option('--force', 'Rebuild even when the revision has not changed')
     .option('--no-cache', 'Rebuild images without the layer cache')
     .option('--non-interactive', 'Never prompt; fail listing anything unresolved')
+    .option('--answer <KEY=VALUE>', 'Supply a value a new revision asks for; repeat for more', collectAnswer, [])
+    .option('--answers-file <path>', 'Supply such values from a .env-format file')
     .option('--skip-seed', 'Do not re-run the database seed')
     .option('--skip-proxy', 'Do not touch the reverse proxy')
     .option('--json', 'Print a machine-readable result on stdout')
@@ -721,16 +743,77 @@ function collectGroup(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
+function collectAnswer(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+/** The pseudo-key an answers file may use for the domain, which is not an .env key. */
+export const DOMAIN_ANSWER_KEY = 'APP_DOMAIN';
+
+const ANSWER_FLAG = /^([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/;
+
+/**
+ * `--answer KEY=VALUE` (repeatable) and `--answers-file <path>` (#127), as
+ * one map: the file first, then the flags, so a flag overrides the file.
+ *
+ * Every value is checked against the key's own validator HERE, before the
+ * pipeline touches the server: a typo in an answers file should fail in a
+ * millisecond with the key named, not after a clone and a preflight. The
+ * wizard validates again, with the same validators, for values it reads
+ * from disk; this is the earlier of the two checks, not a different one.
+ */
+export function collectAnswers(
+  flags: readonly string[],
+  answersFile: string | undefined,
+  readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
+): Map<string, string> {
+  const answers = new Map<string, string>();
+
+  if (answersFile !== undefined) {
+    let contents: string;
+    try {
+      contents = readFile(answersFile);
+    } catch (error) {
+      throw new UsageError(
+        `Cannot read --answers-file ${answersFile}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    for (const [key, value] of parseEnvFile(contents)) answers.set(key, value);
+  }
+
+  for (const flag of flags) {
+    const match = ANSWER_FLAG.exec(flag);
+    if (match === null) {
+      throw new UsageError(`--answer expects KEY=VALUE, got ${JSON.stringify(flag)}.`);
+    }
+    answers.set(match[1] as string, match[2] as string);
+  }
+
+  const problems: string[] = [];
+  for (const [key, value] of answers) {
+    if (key === DOMAIN_ANSWER_KEY) continue;
+    const message = metadataFor(key).validate?.(value);
+    if (message !== undefined) problems.push(`  - ${key} ${message}`);
+  }
+  if (problems.length > 0) {
+    throw new UsageError(`Invalid answer(s):\n${problems.join('\n')}`);
+  }
+
+  return answers;
+}
+
 export interface InstallCommandOptions extends LayoutCommandOptions {
   domain?: string | undefined;
   proxyRoot: string;
-  port: string;
+  port?: string | undefined;
   repo?: string | undefined;
   ref?: string | undefined;
   email?: string | undefined;
   group: string[];
   all?: boolean | undefined;
   nonInteractive?: boolean | undefined;
+  answer: string[];
+  answersFile?: string | undefined;
   reinstall?: boolean | undefined;
   resume?: boolean | undefined;
   skipDoctor?: boolean | undefined;
@@ -755,16 +838,31 @@ export async function runInstallCommand(
   const stderr = ctx?.stderr ?? process.stderr;
   const json = options.json === true;
 
+  const answers = collectAnswers(options.answer, options.answersFile);
+  // `--port` is an answer like any other, so the wizard never second-guesses
+  // it; without one, the wizard suggests and the pipeline follows its choice.
+  if (options.port !== undefined && !answers.has('APP_BIND_PORT')) {
+    answers.set('APP_BIND_PORT', options.port);
+  }
+  const bindPort = Number(answers.get('APP_BIND_PORT') ?? DEFAULT_BIND_PORT);
+  if (!Number.isInteger(bindPort) || bindPort <= 0 || bindPort >= 65536) {
+    throw new UsageError(`--port must be a port number between 1 and 65535, got ${JSON.stringify(options.port)}.`);
+  }
+  // The domain may come from the answers file too, as APP_DOMAIN.
+  const domain = options.domain ?? answers.get(DOMAIN_ANSWER_KEY);
+  answers.delete(DOMAIN_ANSWER_KEY);
+
   const installOptions: InstallOptions = {
     // Resolved inside runInstall, before the journal opens: the name may
     // still have to come from the repository.
     appsRoot: options.appsRoot,
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.root === undefined ? {} : { deployRoot: options.root }),
-    bindPort: Number(options.port),
+    bindPort,
     proxyRoot: options.proxyRoot,
     groups: options.group as EnvGroup[],
-    ...(options.domain === undefined ? {} : { domain: options.domain }),
+    ...(answers.size === 0 ? {} : { answers }),
+    ...(domain === undefined ? {} : { domain }),
     ...(options.repo === undefined ? {} : { repo: options.repo }),
     ...(options.ref === undefined ? {} : { ref: options.ref }),
     ...(options.email === undefined ? {} : { email: options.email }),
@@ -839,6 +937,8 @@ export interface UpdateCommandOptions extends LayoutCommandOptions {
   force?: boolean | undefined;
   cache: boolean;
   nonInteractive?: boolean | undefined;
+  answer: string[];
+  answersFile?: string | undefined;
   skipSeed?: boolean | undefined;
   skipProxy?: boolean | undefined;
   json?: boolean | undefined;
@@ -858,8 +958,12 @@ export async function runUpdateCommand(
     root: options.root,
   });
 
+  const answers = collectAnswers(options.answer, options.answersFile);
+  answers.delete(DOMAIN_ANSWER_KEY);
+
   const updateOptions: UpdateOptions = {
     deployRoot: layout.deployRoot,
+    ...(answers.size === 0 ? {} : { answers }),
     ...(options.ref === undefined ? {} : { ref: options.ref }),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.cache === false ? { noCache: true } : {}),
