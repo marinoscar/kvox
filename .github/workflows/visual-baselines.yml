@@ -68,7 +68,7 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Check out the branch itself rather than the detached merge commit,
           # so the commit below has somewhere to land.
