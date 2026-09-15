@@ -20,6 +20,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import {
   TRANSCRIPT_ACTIVE_POLL_MS,
   TRANSCRIPT_IDLE_POLL_MS,
+  TRANSCRIPT_PAGE_SIZE,
   useTranscript,
   useTranscriptSegments,
   useTranscripts,
@@ -64,6 +65,11 @@ function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {
     sourceSizeBytes: '1024',
     ...overrides,
   };
+}
+
+/** `count` distinct rows, ids prefixed so pages never collide. */
+function pageOf(prefix: string, count: number): TranscriptListItem[] {
+  return Array.from({ length: count }, (_, i) => listItem(`${prefix}${i}`));
 }
 
 /** No notification centre mounted — the default for most of these. */
@@ -221,6 +227,228 @@ describe('useTranscripts — the list', () => {
     // A short settle, so a refetch that WAS going to happen has had its chance.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mockGetTranscripts).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useTranscripts — revalidation reconciles rather than replaces (#167)', () => {
+  it('does not truncate an accumulated list on a background revalidation — the headline case', async () => {
+    // The bug this whole issue is about: load two hundred rows (here, three
+    // pages via `loadMore`), look away, and have twenty again. Sixty rows
+    // in, `refresh()` must still show sixty, not `TRANSCRIPT_PAGE_SIZE`.
+    const page1 = pageOf('p1-', TRANSCRIPT_PAGE_SIZE);
+    const page2 = pageOf('p2-', TRANSCRIPT_PAGE_SIZE);
+    const page3 = pageOf('p3-', TRANSCRIPT_PAGE_SIZE);
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page1, nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page2, nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page3, nextCursor: null });
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(TRANSCRIPT_PAGE_SIZE));
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.transcripts).toHaveLength(60);
+
+    // The revalidation re-reads the WHOLE 60-row span, not page one.
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [...page1, ...page2, ...page3],
+      nextCursor: null,
+    });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(mockGetTranscripts).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 60 }));
+    // ⚠ Without the fix this is 20 — a full replace with page one.
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('updates a changed row in place, without duplicating it', async () => {
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [listItem('t1', { title: 'Old title' }), listItem('t2')],
+      nextCursor: null,
+    });
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(2));
+
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [listItem('t1', { title: 'New title' }), listItem('t2')],
+      nextCursor: null,
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts).toHaveLength(2);
+    expect(result.current.transcripts.find((t) => t.id === 't1')?.title).toBe('New title');
+  });
+
+  it('drops a row deleted server-side, rather than keeping a stale copy', async () => {
+    // This is the case the rejected per-row-patch design could never detect:
+    // a row simply absent from the fresh answer is indistinguishable from "it
+    // is further down the list" unless the whole covered span is trusted.
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [listItem('t1'), listItem('t2'), listItem('t3')],
+      nextCursor: null,
+    });
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(3));
+
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [listItem('t1'), listItem('t3')],
+      nextCursor: null,
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts.map((t) => t.id)).toEqual(['t1', 't3']);
+  });
+
+  it('surfaces a newly created row at the top, and the count holds', async () => {
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [listItem('t1'), listItem('t2')],
+      nextCursor: null,
+    });
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(2));
+
+    // Ordered by `updatedAt` descending, so a brand-new row is first.
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [listItem('t3'), listItem('t1'), listItem('t2')],
+      nextCursor: null,
+    });
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts.map((t) => t.id)).toEqual(['t3', 't1', 't2']);
+  });
+
+  it('still RESETS to one page on a filter change — do not over-fix the reset path', async () => {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: [listItem('a')], nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: [listItem('b')], nextCursor: null });
+
+    const { result, rerender } = renderHook(
+      ({ q }: { q: string }) => useTranscripts('owned', { q, pollIntervalMs: 0 }),
+      { initialProps: { q: '' } },
+    );
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(1));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.transcripts).toHaveLength(2);
+
+    // A filter change gives `load` a new identity, which re-runs the mount
+    // effect as `load(true)` — a RESET, not a revalidation. It must collapse
+    // back to one page rather than merging with what a different filter loaded.
+    mockGetTranscripts.mockResolvedValueOnce({ items: [listItem('fresh')], nextCursor: null });
+    rerender({ q: 'filtered' });
+
+    await waitFor(() =>
+      expect(result.current.transcripts.map((t) => t.id)).toEqual(['fresh']),
+    );
+  });
+
+  it('does not truncate the loaded list on the tab-refocus catch-up fetch', async () => {
+    // `useVisiblePolling` fires one immediate fetch on `visibilitychange` back
+    // to visible, through the exact same `load(false)` revalidation path as
+    // the idle poll — it must not truncate either.
+    let documentHidden = false;
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => documentHidden,
+    });
+
+    const page1 = pageOf('p1-', TRANSCRIPT_PAGE_SIZE);
+    const page2 = pageOf('p2-', TRANSCRIPT_PAGE_SIZE);
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page1, nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page2, nextCursor: null });
+
+    // A real, positive interval — the visibility listener is only attached
+    // when polling is actually enabled.
+    const { result } = renderHook(() => useTranscripts('owned'));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(TRANSCRIPT_PAGE_SIZE));
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.transcripts).toHaveLength(40);
+
+    mockGetTranscripts.mockResolvedValueOnce({
+      items: [...page1, ...page2],
+      nextCursor: null,
+    });
+
+    documentHidden = true;
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    documentHidden = false;
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(mockGetTranscripts).toHaveBeenCalledTimes(3));
+    expect(result.current.transcripts).toHaveLength(40);
+
+    documentHidden = false;
+  });
+
+  it('drops a revalidation that settles after a loadMore invalidated its plan (the listGeneration race)', async () => {
+    // A revalidation planned against 20 rows that settles AFTER `loadMore` has
+    // made it 40 computed its `cursorIsAuthoritative` against a list that no
+    // longer exists. Adopting its cursor would rewind `nextCursor` to just
+    // past row twenty and strand page three behind it forever.
+    const page1 = pageOf('p1-', TRANSCRIPT_PAGE_SIZE);
+    const page2 = pageOf('p2-', TRANSCRIPT_PAGE_SIZE);
+    mockGetTranscripts.mockResolvedValueOnce({ items: page1, nextCursor: 'c2' });
+
+    let resolveRevalidate: (value: { items: TranscriptListItem[]; nextCursor: string | null }) => void =
+      () => {};
+    mockGetTranscripts.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRevalidate = resolve;
+        }),
+    );
+    mockGetTranscripts.mockResolvedValueOnce({ items: page2, nextCursor: 'c3' });
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(TRANSCRIPT_PAGE_SIZE));
+
+    // Kick off a revalidation and let it hang mid-flight.
+    act(() => {
+      void result.current.refresh();
+    });
+    await waitFor(() => expect(mockGetTranscripts).toHaveBeenCalledTimes(2));
+
+    // `loadMore` lands first, bumping `listGeneration`.
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.transcripts).toHaveLength(40);
+    expect(result.current.nextCursor).toBe('c3');
+
+    // The stale revalidation finally settles, carrying a cursor that points
+    // just past row twenty — it must be DROPPED entirely.
+    await act(async () => {
+      resolveRevalidate({ items: page1, nextCursor: 'stale-cursor-into-row-20' });
+      await Promise.resolve();
+    });
+
+    // ⚠ Neither the row count nor the cursor moved. A regression here would
+    // show 20 rows (the stale merge winning) or `nextCursor` rewound to the
+    // stale cursor (stranding page three behind it).
+    expect(result.current.transcripts).toHaveLength(40);
+    expect(result.current.nextCursor).toBe('c3');
   });
 });
 
