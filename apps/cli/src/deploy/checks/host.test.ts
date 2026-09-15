@@ -57,6 +57,7 @@ const HEALTHY: Responder = (argv) => {
   if (line.startsWith('docker --version')) return { exitCode: 0, stdout: 'Docker version 27.3.1, build abc' };
   if (line.startsWith('docker info')) return { exitCode: 0, stdout: '27.3.1' };
   if (line.startsWith('docker compose version')) return { exitCode: 0, stdout: 'Docker Compose version v2.29.0' };
+  if (line.startsWith('docker network inspect devnet')) return { exitCode: 0, stdout: '[{"Name":"devnet"}]' };
   if (line.startsWith('git --version')) return { exitCode: 0, stdout: 'git version 2.43.0' };
   if (line.startsWith('df -Pk')) {
     return {
@@ -251,6 +252,36 @@ describe('docker checks', () => {
     expect(result.status).toBe('fail');
     expect(result.detail).toContain('legacy');
     expect(result.remedy).toContain('docker-compose-plugin');
+  });
+});
+
+describe('docker-network-devnet', () => {
+  it('passes when the network exists', async () => {
+    const result = await find('docker-network-devnet').run(context());
+    expect(result.status).toBe('pass');
+  });
+
+  it('fails with the exact create command when it does not', async () => {
+    // base.compose.yml declares it external, so `up -d` on a box without it
+    // fails naming the network but not the command; the remedy is the command.
+    const result = await find('docker-network-devnet').run(
+      context({
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker network inspect')
+            ? { exitCode: 1, stderr: 'Error: No such network: devnet' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.remedy).toContain('docker network create devnet');
+  });
+
+  it('is required and waits for the daemon', () => {
+    const check = find('docker-network-devnet');
+    expect(check.severity).toBe('required');
+    expect(check.requires).toContain('docker-daemon');
   });
 });
 

@@ -152,6 +152,34 @@ const dockerComposeV2: Check = {
   },
 };
 
+/**
+ * The external Docker network every app on the host joins.
+ *
+ * base.compose.yml declares it `external: true`, so compose never creates it
+ * and `up -d` on a box without it fails with a message that names the
+ * network but not the command. Install creates it (the one thing besides
+ * directories it is allowed to create); doctor only reports it.
+ */
+export const DEVNET_NETWORK = 'devnet';
+export const DEVNET_CHECK_ID = 'docker-network-devnet';
+
+const dockerNetworkDevnet: Check = {
+  id: DEVNET_CHECK_ID,
+  title: `Docker network ${DEVNET_NETWORK}`,
+  severity: 'required',
+  requires: ['docker-daemon'],
+  async run(context) {
+    const { ok } = await probe(context, ['docker', 'network', 'inspect', DEVNET_NETWORK]);
+    return ok
+      ? { status: 'pass', detail: 'exists' }
+      : {
+          status: 'fail',
+          detail: 'does not exist',
+          remedy: `Create it once per host: docker network create ${DEVNET_NETWORK}`,
+        };
+  },
+};
+
 const gitInstalled: Check = {
   id: 'git-installed',
   title: 'git installed',
@@ -427,6 +455,7 @@ export const HOST_CHECKS: readonly Check[] = [
   dockerInstalled,
   dockerDaemon,
   dockerComposeV2,
+  dockerNetworkDevnet,
   gitInstalled,
   nodeVersion,
   diskSpace,

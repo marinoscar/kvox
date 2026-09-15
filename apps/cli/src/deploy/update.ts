@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { ALL_CHECKS, checksPassed, runChecks } from './checks/index.js';
+import { ALL_CHECKS, DEVNET_CHECK_ID, checksPassed, runChecks } from './checks/index.js';
 import { diffEnv, parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -129,6 +129,9 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           'docker-installed',
           'docker-daemon',
           'docker-compose-v2',
+          // Update does not create it (install does); a missing network would
+          // otherwise surface as `up -d` failing halfway through the pipeline.
+          DEVNET_CHECK_ID,
           'git-installed',
           'disk-space',
         ]);

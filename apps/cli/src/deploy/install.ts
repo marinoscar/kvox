@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
-import { ALL_CHECKS, checksPassed, requiredChecks, runChecks } from './checks/index.js';
+import {
+  ALL_CHECKS,
+  DEVNET_CHECK_ID,
+  DEVNET_NETWORK,
+  checksPassed,
+  requiredChecks,
+  runChecks,
+} from './checks/index.js';
 import { parseEnvExample, parseEnvFile, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
 import type { EnvGroup } from './env-metadata.js';
@@ -166,7 +173,11 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ? 'skipped with --skip-doctor'
           : undefined,
       async run(context) {
-        const results = await runChecks(requiredChecks(ALL_CHECKS), {
+        // Every required check except the devnet one: the `network` step
+        // right after this creates that network, so failing on its absence
+        // here would refuse the very install that fixes it.
+        const checks = requiredChecks(ALL_CHECKS).filter((check) => check.id !== DEVNET_CHECK_ID);
+        const results = await runChecks(checks, {
           runCommand: context.runCommand,
           deployRoot: context.options.deployRoot,
           name: context.options.name,
@@ -192,6 +203,32 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
               `\nRun \`${CLI_NAME} deploy doctor\` for the full report.`,
           );
         }
+      },
+    },
+    {
+      id: 'network',
+      title: `Ensure the ${DEVNET_NETWORK} network`,
+      async run(context) {
+        // base.compose.yml declares devnet `external: true`, so compose never
+        // creates it. Idempotent, and - with the directories - the one thing
+        // install is allowed to create that the doctor only reports.
+        const run = (argv: readonly string[]) =>
+          context.runCommand(argv, {
+            cwd: context.options.deployRoot,
+            timeoutMs: 60_000,
+            redact: context.journal.redact,
+          });
+
+        try {
+          context.journal.command(await run(['docker', 'network', 'inspect', DEVNET_NETWORK]));
+          context.journal.line(`${DEVNET_NETWORK} already exists`);
+          return;
+        } catch {
+          // Absent; created below.
+        }
+
+        context.journal.command(await run(['docker', 'network', 'create', DEVNET_NETWORK]));
+        context.hooks?.onProgress?.(`Created the ${DEVNET_NETWORK} network`);
       },
     },
     {
