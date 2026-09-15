@@ -89,6 +89,19 @@ server.events.on('request:start', ({ request }) => {
   observedRequests.push(new URL(request.url).pathname);
 });
 
+/**
+ * ⚠ THIS IS THE FILE'S ONE AND ONLY REQUEST OBSERVER.
+ *
+ * A test must NEVER call `server.events.removeAllListeners()` — that would
+ * tear down the `request:start` listener above for the rest of the file, so
+ * `observedRequests` would silently stop collecting anything for every test
+ * that runs afterward. The assertion then either passes vacuously against an
+ * empty array or fails in a way that looks unrelated to this file. If a test
+ * needs a request log of its own, read `observedRequests` (reset every test
+ * in `respondWith`, called from `beforeEach` below) instead of registering a
+ * second listener.
+ */
+
 /** The three calls this page is allowed to make, and no fourth. */
 const EXPECTED_REQUESTS = [
   '/api/notes/summary',
@@ -142,6 +155,14 @@ beforeEach(() => {
   // Module-level and shared by every mount, so it would otherwise leak resolved
   // source names (and resolved negatives) between the suites below.
   clearNoteSourceNameCache();
+  // `respondWith` resets `observedRequests.length = 0` (among the other
+  // counters) and runs before every test in every `describe` block below,
+  // because this is the file's OUTER `beforeEach` — Vitest runs it ahead of
+  // any nested `describe`'s own `beforeEach`, which may call `respondWith`
+  // again but never skips this one. Without that reset, `observedRequests`
+  // would just keep growing across the whole file and an assertion like
+  // `expect(observedRequests).toHaveLength(3)` would be meaningless past the
+  // first test that reads it.
   respondWith(summary({ recent: [transcript()] }));
 });
 
@@ -440,24 +461,13 @@ describe('HomePage — the New note hero action', () => {
     // The action costs nothing: there is no `GET /api/ai/config` probe behind
     // it and no fourth call on the landing screen. The page's rule stays "one
     // summary request per content type, plus the one capability probe".
-    const paths: string[] = [];
-    server.events.on('request:start', ({ request }) => {
-      paths.push(new URL(request.url).pathname);
-    });
-    try {
-      renderHome();
-      await waitForLoaded();
-      await waitFor(() => expect(noteSummaryRequests).toBe(1));
-      expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
+    renderHome();
+    await waitForLoaded();
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+    expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
 
-      expect([...paths].sort()).toEqual([
-        '/api/notes/summary',
-        '/api/transcription/config',
-        '/api/transcripts/summary',
-      ]);
-    } finally {
-      server.events.removeAllListeners();
-    }
+    expect([...new Set(observedRequests)].sort()).toEqual(EXPECTED_REQUESTS);
+    expect(observedRequests).toHaveLength(3);
   });
 
   it('has no accessibility violations with both hero actions present', async () => {
