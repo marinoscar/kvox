@@ -104,11 +104,13 @@ import { NoteBodyEditor } from '../components/notes/NoteBodyEditor';
 import type { NoteEditorView } from '../components/notes/NoteBodyEditor';
 import { NoteConflictDialog } from '../components/notes/NoteConflictDialog';
 import { NoteExportDialog } from '../components/notes/NoteExportDialog';
+import { NoteGenerationContext } from '../components/notes/NoteGenerationContext';
 import { NoteProvenance } from '../components/notes/NoteProvenance';
 import { NoteStatusChip } from '../components/notes/NoteStatusChip';
-import { RegenerateNoteDialog } from '../components/notes/RegenerateNoteDialog';
+import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNoteDialogContainer';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { useNoteSourceName } from '../hooks/useNoteSourceNames';
+import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
 import { isNoteInFlight, useNote } from '../hooks/useNotes';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { ApiError } from '../services/api';
@@ -121,13 +123,24 @@ import {
   regenerateNote,
   updateNote,
 } from '../services/notes';
+import type { RegenerateNoteInput } from '../services/notes';
 
 export function NotePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { note, isLoading, error, refresh, setNote } = useNote(id);
-  const { keyConfigured, isLoading: isAiLoading } = useAiConfig();
+  const { config: aiConfig, keyConfigured, isLoading: isAiLoading } = useAiConfig();
   const sourceName = useNoteSourceName(note);
+  /**
+   * The template this note was generated from, for the context panel (#109).
+   *
+   * ⚠ CALLED WITH `note?.templateId`, WHICH IS `undefined` UNTIL THE NOTE
+   * LANDS — and `useNoteTemplateDetail` answers `idle` with no request for
+   * that, which is why this can sit above the page's early returns without
+   * either breaking the rules of hooks or firing a request for an id nobody
+   * has yet.
+   */
+  const templateDetail = useNoteTemplateDetail(note?.templateId);
 
   /** The buffer the stream has produced, offset-reconciled by the service. */
   const [streamed, setStreamed] = useState('');
@@ -354,7 +367,14 @@ export function NotePage() {
   // Regeneration
   // ---------------------------------------------------------------------------
 
-  const handleRegenerate = useCallback(async () => {
+  /**
+   * Regenerate with whatever the dialog decided to change (#109).
+   *
+   * ⚠ THE INPUT IS A DIFF THE DIALOG BUILT, NOT THIS PAGE'S STATE. An unchanged
+   * confirmation hands over `{}` — byte-for-byte the request #58 sent — so the
+   * "same again" path is untouched by this feature. See `regenerateInput.ts`.
+   */
+  const handleRegenerate = useCallback(async (input: RegenerateNoteInput) => {
     if (!id) return;
 
     setIsRegenerating(true);
@@ -363,7 +383,7 @@ export function NotePage() {
     setStreamed('');
 
     try {
-      const result = await regenerateNote(id);
+      const result = await regenerateNote(id, input);
 
       // Adopt the returned row immediately — it is already `generating` — so
       // the stream effect re-opens on this render rather than after a poll.
@@ -371,6 +391,17 @@ export function NotePage() {
       setWatching(true);
       setRegenerateOpen(false);
     } catch (err) {
+      // ⚠ `template_required` IS A QUESTION, NOT A FAILURE — AND THE DIALOG
+      // STAYS OPEN. The note's template row is gone, the API cannot guess a
+      // replacement, and the one control that can answer is the select the user
+      // is already looking at. Closing the dialog to show this on the page
+      // would put the answer and the question on different screens.
+      if (noteConflictReason(err) === 'template_required') {
+        setRegenerateError('Choose a template to regenerate with');
+
+        return;
+      }
+
       setRegenerateError(
         err instanceof ApiError ? err.message : 'The note could not be regenerated',
       );
@@ -523,6 +554,19 @@ export function NotePage() {
       <Box sx={{ mb: 2 }}>
         <NoteProvenance note={note} sourceName={sourceName} />
       </Box>
+
+      {/* The long form of the same question (#109): the template's actual
+          recipe, the free-text context — which is rendered NOWHERE else in this
+          application — and the model. Collapsed, directly under the sentence it
+          expands on; see `NoteGenerationContext`'s own header for why the two
+          are not one control. */}
+      <NoteGenerationContext
+        note={note}
+        sourceName={sourceName}
+        template={templateDetail.template}
+        templateState={templateDetail.state}
+        templateError={templateDetail.error}
+      />
 
       {inFlight && (
         <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
@@ -736,18 +780,24 @@ export function NotePage() {
         currentVersion={note.currentVersion}
       />
 
-      <RegenerateNoteDialog
-        open={regenerateOpen}
-        currentVersion={note.currentVersion}
-        templateName={note.templateName}
-        busy={isRegenerating}
-        error={regenerateError}
-        onCancel={() => {
-          setRegenerateOpen(false);
-          setRegenerateError(null);
-        }}
-        onConfirm={() => void handleRegenerate()}
-      />
+      {/* ⚠ MOUNTED ONLY WHILE OPEN. The container owns the two template reads
+          the dialog needs, so simply READING a note — which is what this page
+          is for — issues neither. See the container's own header. */}
+      {regenerateOpen && (
+        <RegenerateNoteDialogContainer
+          open={regenerateOpen}
+          note={note}
+          models={aiConfig?.models ?? []}
+          defaultModel={aiConfig?.defaultModel ?? null}
+          busy={isRegenerating}
+          error={regenerateError}
+          onCancel={() => {
+            setRegenerateOpen(false);
+            setRegenerateError(null);
+          }}
+          onConfirm={(input) => void handleRegenerate(input)}
+        />
+      )}
 
       <Dialog
         open={pendingLeave !== null}

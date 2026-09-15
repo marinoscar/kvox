@@ -73,6 +73,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AiKeyRequired } from '../components/ai/AiKeyRequired';
+import { ModelSelect } from '../components/notes/ModelSelect';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteTemplates } from '../hooks/useNoteTemplates';
@@ -120,7 +121,7 @@ export function NewNotePage() {
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const [searchParams] = useSearchParams();
 
-  const { keyConfigured, available, isLoading: aiLoading } = useAiConfig();
+  const { config, keyConfigured, available, isLoading: aiLoading } = useAiConfig();
   const { templates, isLoading: templatesLoading } = useNoteTemplates();
 
   /**
@@ -147,6 +148,17 @@ export function NewNotePage() {
   const [extraction, setExtraction] = useState<NoteDocumentExtraction | null>(null);
   const [documentError, setDocumentError] = useState<string | null>(null);
 
+  /**
+   * The model, ONLY when the user has picked one (#109).
+   *
+   * ⚠ AN OVERRIDE, NOT A VALUE. `null` means "whatever the default resolves to
+   * right now", which is what makes switching templates update the picker
+   * without an effect and without ever clobbering a choice the user made. The
+   * effect-based alternative — mirroring the default into state whenever the
+   * template changes — has to decide whether the current value was chosen or
+   * inherited, and there is nothing in a `string` that says which.
+   */
+  const [modelOverride, setModelOverride] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   /** Set by a 409 `ai_key_missing`, which renders `AiKeyRequired` over the form. */
@@ -282,6 +294,28 @@ export function NewNotePage() {
   // Submit
   // ---------------------------------------------------------------------------
 
+  const models = useMemo(() => config?.models ?? [], [config]);
+
+  /**
+   * What the model picker shows when the user has not touched it.
+   *
+   * The chosen template's own model FIRST, because a template that names one is
+   * expressing a requirement of the recipe — but only when the deployment still
+   * permits it, since `ai.allowedModels` can narrow at any time and a form that
+   * pre-selected a forbidden model would send a request the API refuses.
+   * Otherwise the deployment's default.
+   */
+  const defaultModel = useMemo(() => {
+    const chosen = templates.find((template) => template.id === draft.templateId);
+    const pinned = chosen?.model;
+
+    if (pinned && models.some((model) => model.id === pinned)) return pinned;
+
+    return config?.defaultModel ?? '';
+  }, [config, draft.templateId, models, templates]);
+
+  const model = modelOverride ?? defaultModel;
+
   const ready = useMemo(() => isNewNoteReady(draft, documentReady), [documentReady, draft]);
 
   const handleGenerate = async () => {
@@ -297,6 +331,13 @@ export function NewNotePage() {
         // Omitted rather than sent empty: the API treats an absent context as
         // "none", and a blank string would be an empty paragraph in the prompt.
         contextText: draft.contextText.trim() || undefined,
+        // ⚠ ONLY WHEN THE USER CHANGED IT. The API resolves the same default
+        // this form displays — the template's model, else the deployment's — so
+        // sending the unchanged value would pin a model into the request that
+        // the user never chose, and freeze it against a template or a policy
+        // that later names a different one. An untouched form therefore
+        // produces byte-for-byte the body it produced before #109.
+        model: model !== '' && model !== defaultModel ? model : undefined,
       });
       // `replace: true` — the form is finished and Back should return to the
       // library, not to a form whose submit has already happened.
@@ -535,6 +576,13 @@ export function NewNotePage() {
           Loading your templates…
         </Typography>
       )}
+      <ModelSelect
+        value={model}
+        onChange={setModelOverride}
+        models={models}
+        disabled={models.length === 0}
+        helperText="Defaults to the template's model."
+      />
       <Typography variant="caption" color="text.secondary">
         The template decides the shape of the note — its sections, its tone, its
         length.{' '}
