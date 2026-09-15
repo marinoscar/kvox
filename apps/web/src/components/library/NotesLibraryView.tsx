@@ -83,8 +83,15 @@ const SEARCH_DEBOUNCE_MS = 300;
  *
  * So the row is two parts: the action area IS the note, and this footer is
  * where it came from. Both are real targets, neither is inside the other.
+ *
+ * EXPORTED since issue #107, because the home page's `NoteSummaryCard` shows
+ * the same provenance line. Not copied: a second implementation would be a
+ * second place for the fallback wording, the document-has-no-page rule and —
+ * the one that actually bites — the outside-the-action-area placement to drift
+ * apart, and the copy that got it wrong would fail axe on a page whose own
+ * suite never rendered this component.
  */
-function SourceLine({ note, name }: { note: NoteListItem; name: string | undefined }) {
+export function SourceLine({ note, name }: { note: NoteListItem; name: string | undefined }) {
   const ref = noteSourceRef(note);
   const path = noteSourcePath(note);
   const label = name ?? (ref ? noteSourceFallbackLabel(ref.type) : 'an unknown source');

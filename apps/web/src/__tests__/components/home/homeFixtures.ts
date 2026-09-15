@@ -17,6 +17,7 @@ import { vi } from 'vitest';
 import { mockUser, type MockUser } from '../../utils/test-utils';
 
 import type { UploadManagerContextValue, ManagedUpload } from '../../../contexts/UploadManagerContext';
+import type { NoteListItem, NoteSummary } from '../../../services/notes';
 import type { TranscriptListItem, TranscriptSummary } from '../../../services/transcripts';
 import type { UploadSessionRecord } from '../../../services/uploadSessions';
 import type { TranscriptionConfig } from '../../../services/transcription';
@@ -64,6 +65,63 @@ export function summary(overrides: Partial<TranscriptSummary> = {}): TranscriptS
       shared: shared.length,
       inProgress: inProgress.length,
       failed: 0,
+      ...overrides.counts,
+    },
+  };
+}
+
+/**
+ * One note row — issue #107.
+ *
+ * `sourceType: 'transcript'` with a real `sourceTranscriptId`, because the
+ * provenance line is part of every card and a row with no resolvable source
+ * would silently exercise only the fallback path.
+ */
+export function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
+  return {
+    id: 'n1',
+    title: 'Standup minutes',
+    status: 'ready',
+    currentVersion: 1,
+    provider: 'openai',
+    model: 'gpt-4o-mini',
+    sourceType: 'transcript',
+    sourceTranscriptId: 't1',
+    sourceNoteId: null,
+    sourceObjectId: null,
+    templateId: 'tpl-1',
+    templateName: 'Meeting minutes',
+    currentGenerationId: null,
+    failureReason: null,
+    excerpt: 'The team agreed to ship the export dialog before the end of the month.',
+    createdAt: FIXED_ISO,
+    updatedAt: FIXED_ISO,
+    ...overrides,
+  };
+}
+
+/**
+ * A whole `GET /api/notes/summary` answer — issue #107.
+ *
+ * The counts are DERIVED from the lists by default, exactly as `summary()`
+ * above derives the transcript ones: a fixture whose `counts.total` disagreed
+ * with its own `recent` would make `isNewUser` (which reads the count) and the
+ * rendered list (which reads the array) tell two different stories, and the
+ * suite asserting one of them would pass while the page was wrong.
+ */
+export function noteSummary(overrides: Partial<NoteSummary> = {}): NoteSummary {
+  const recent = overrides.recent ?? [];
+  const inProgress = overrides.inProgress ?? [];
+  const failed = overrides.failed ?? [];
+  return {
+    inProgress,
+    recent,
+    failed,
+    counts: {
+      total: recent.length + inProgress.length + failed.length,
+      ready: recent.length,
+      inProgress: inProgress.length,
+      failed: failed.length,
       ...overrides.counts,
     },
   };
@@ -182,5 +240,24 @@ export const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
  */
 export const homeUser: MockUser = {
   ...mockUser,
-  permissions: [...mockUser.permissions, 'transcripts:read', 'transcripts:write'],
+  permissions: [
+    ...mockUser.permissions,
+    'transcripts:read',
+    'transcripts:write',
+    // `notes:*` is seeded to all three roles too (`apps/api/prisma/seed.ts`),
+    // for the same stated reason: generating a note is the core product action,
+    // not an operational surface. A home-page fixture without them would be a
+    // user that cannot exist, asserted against as though it were the norm.
+    'notes:read',
+    'notes:write',
+    // `GET /api/storage/objects/:id` is what resolves a document-sourced note's
+    // name in `useNoteSourceNames`. Seeded to every role.
+    'storage:read',
+  ],
+};
+
+/** The same account with the notes permissions taken away. See #107's tests. */
+export const noNotesUser: MockUser = {
+  ...homeUser,
+  permissions: homeUser.permissions.filter((p) => !p.startsWith('notes:')),
 };

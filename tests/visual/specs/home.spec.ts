@@ -16,10 +16,11 @@ import { installHomeApi } from '../support/homeApi';
  * would wrongly hand the phone treatment to. 1440 is the third column count.
  *
  * ⚠ THIS PAGE'S LAYOUT IS ENTIRELY CSS, WHICH IS EXACTLY WHY IT NEEDS PIXELS.
- * `RecentTranscripts` and `SharedWithMe` reflow from one column to two to three
- * to four purely through `Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}` — there
- * is no `useMediaQuery` anywhere on the page, deliberately, so that the five
- * coupled breakpoint gates stay five. jsdom performs no layout at all, so the
+ * `RecentTranscripts`, `RecentNotes` (#107) and `SharedWithMe` reflow from one
+ * column to two to three to four purely through
+ * `Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}` — there is no `useMediaQuery`
+ * anywhere on the page, deliberately, so that the five coupled breakpoint gates
+ * stay five. jsdom performs no layout at all, so the
  * Vitest suite cannot observe a column count: a regression that collapsed the
  * desktop grid to a single column would leave every unit test green. These
  * baselines are the only thing that can see it.
@@ -72,6 +73,13 @@ test.describe('Home — populated', () => {
         // precisely the frame after the skeleton.
         await expect(page.getByRole('heading', { name: 'Hi, Visual' })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Recent', exact: true })).toBeVisible();
+        // The notes section is a SECOND summary request (#107), settling
+        // independently of the transcript one — so the greeting appearing says
+        // nothing about whether it has landed. `exact` because "Recent" above
+        // would otherwise match this heading too.
+        await expect(
+          page.getByRole('heading', { name: 'Recent notes', exact: true }),
+        ).toBeVisible();
         // `Shared with me` is the last section on the page, so its presence
         // means everything above it has rendered too.
         await expect(
@@ -133,6 +141,12 @@ test.describe('Home — work in flight', () => {
         // nothing here today but trivially could be tomorrow.
         await expect(page.getByText('Transcribing', { exact: true })).toBeVisible();
         await expect(page.getByText('Preparing audio', { exact: true })).toBeVisible();
+        // A generating note sits in the same section (#107), and its own
+        // "Recent notes" section below settles on a separate request.
+        await expect(page.getByText('Generating…', { exact: true })).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: 'Recent notes', exact: true }),
+        ).toBeVisible();
 
         await expect(page).toHaveScreenshot(`home-in-progress-${name}-${theme}.png`);
       });
@@ -165,6 +179,11 @@ test.describe('Home — transcription not configured', () => {
       // hatch is part of this capture.
       await expect(
         page.getByRole('button', { name: 'Set up transcription', exact: true }),
+      ).toBeVisible();
+      // The notes section settles on its own request; capturing before it lands
+      // would bake this section's skeleton into the baseline.
+      await expect(
+        page.getByRole('heading', { name: 'Recent notes', exact: true }),
       ).toBeVisible();
 
       await expect(page).toHaveScreenshot(`home-unconfigured-${name}-light.png`);
