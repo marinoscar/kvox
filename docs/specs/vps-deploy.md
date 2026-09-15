@@ -47,17 +47,21 @@ Source of truth for every claim below:
   document follows, and the key model `env-metadata.ts`'s validator for
   `SECRETS_ENCRYPTION_KEY` must match.
 
-**Nothing described past this line exists yet.** There is no `apps/cli/src/deploy/`
-directory, no `deploy` subcommand, no `deploy` TUI screen or route, no
-`infra/compose/vps.compose.yml`, and none of the four Phase 0 infra fixes in
-section 2 have been made. This document is what the epic and its 17 child
-issues build *against*, not a description of code already in the repository.
-Every fact cited above about the *existing* codebase has been verified
-against the files named; the *proposed* architecture in every other section
-is a design, not an implementation report, and a child issue is free to
-discover a better answer to a specific sub-problem as long as it keeps the
-contracts this document promises to the pieces around it (the hooks shape,
-the exit codes, the state file location, the log redaction guarantee).
+**Sections 1–17 below are the original design, epic #168 — do not rewrite
+them to match what shipped.** They are what that epic's 17 child issues built
+*against*, and they are left as the historical record of that design, not a
+description of the code as it stands today. Everything described in them now
+exists — `kvox deploy doctor|install|update|status`, `apps/cli/src/deploy/`,
+`infra/compose/vps.compose.yml` and the rest — but a first real VPS install
+(epic #118, issues #119–#134) found six places where what shipped diverges
+from what sections 1–17 describe, for reasons discovered only by running the
+pipeline against a real server, a real shared proxy and a second app on the
+same box. **§18 is where those corrections live**, verified against the code
+in this repository rather than against this document, with the rejected
+alternative each one closes off. Read a claim in sections 1–17 against §18's
+correction table before trusting it; a claim not in that table is still
+accurate. §19 documents the `deploy-info/info.json` contract §15 refers to
+forward, which did not exist when sections 1–17 were written.
 
 ---
 
@@ -764,3 +768,208 @@ above, for whoever slices this into the 17 child issues:
     `ScrollBox`'s `followTail`.
 11. `infra/compose/vps.compose.yml` + this document's own follow-up: once
     real usage exists, fold anything this design got wrong back into it.
+
+## 18. v2: the real VPS (epic #118)
+
+Epic #168 (sections 1–17) designed `kvox deploy` against no VPS, no Docker
+daemon and no shared proxy — `docs/deployment/vps.md` said so plainly until
+this epic. Epic #118 (issues #119–#134) is what running the pipeline for
+real corrected. Every claim below is verified against the source files named,
+not against sections 1–17 or against any issue's plan.
+
+### 18.1 What sections 1–17 got wrong, and where it is now corrected
+
+| § / claim | What sections 1–17 describe | What ships today | Fixed by |
+|---|---|---|---|
+| §3, §5 — deploy root | A single `--path` flag, default deploy root `/opt/<repo-name>` | `--apps-root <dir>` (default `/opt/infra/apps`) + `--name <app>` selects `<apps-root>/<name>`; `--root <dir>` is the escape hatch naming the full path outright. `<name>` is *also* the docker compose project name | #119 (`apps/cli/src/deploy/layout.ts`) |
+| §10 — certificate issuance | A host-installed `certbot` | `docker run --rm certbot/certbot …` against the shared proxy's `letsencrypt/`/`webroot/` directories. There is no host certbot anywhere in the pipeline | #125 (`apps/cli/src/deploy/proxy.ts`, `certbotArgv`) |
+| §10 — vhost validate/reload | Host `nginx -t` / `nginx -s reload` | `docker exec <proxy-container> nginx -t` / `nginx -s reload`. There is no host nginx; the proxy container is resolved once (`--proxy-container`, or whatever publishes `:443`, or `proxy-nginx`) and recorded in state | #125 (`apps/cli/src/deploy/proxy.ts`, `validateProxy`/`reloadProxy`) |
+| §10 — rendered vhost | The illustrative vhost names host filesystem paths for the certificate | Every path in the real vhost is the path the *proxy container* sees (`/etc/letsencrypt/live/<domain>/…`, `/var/www/certbot`), declared once in `PROXY_MOUNTS` and shared by the `docker run` argv and the render — the two cannot disagree | #125 (`apps/cli/src/deploy/proxy.ts`, `PROXY_MOUNTS`, `renderVhost`) |
+| §13 — deploy state | `DeployState.updatedAt`, stamped "on every successful run" | `state.json` carries `lastDeployedAt` (never stamped on a failed attempt — a failed update must not claim a deploy that never happened) and a separate `lastAttemptAt`. A **second file**, `deploy-info/info.json`, is what the running application reads — `state.json` stays the CLI's private 0600 file, never mounted anywhere | #120 (`apps/cli/src/deploy/state.ts`, `apps/cli/src/deploy/deploy-info.ts`) |
+| §6 — where `.env` is written | `<deploy-root>/repo/infra/compose/.env` | `<deploy-root>/.env` (0600), with `repo/infra/compose/.env` a *relative* symlink (`../../../.env`) to it — so `rm -rf repo` during a reinstall never takes the secrets with it, and a moved/bind-mounted app folder keeps working because the link is relative | #120 (`apps/cli/src/deploy/env-file.ts`) |
+| §15 — `vps.compose.yml` scope | "Nothing else belongs in this file" beyond the loopback port override | Loopback binding is still the file's main job, but it also carries the `api` service's **read-only** bind mount of `<deploy-root>/deploy-info` at `/app/deploy-info` plus `DEPLOY_INFO_PATH` — the deployment metadata §19 describes, which is VPS-specific by construction and belongs nowhere else | #120 (`infra/compose/vps.compose.yml`) |
+
+Nothing else in sections 1–17 is known to be wrong. The command surface in
+§3, the module map in §4, the env-wizard design in §6, the install/update
+pipelines in §7–§8, the doctor registry in §9, the `DeployHooks` seam in
+§11, the journal/redaction contract in §12 and the TUI integration in §14
+all match the shipped code in shape, even where a detail (an extra flag, an
+extra check) was added on top. Where this document could not verify a
+sub-claim precisely (the exact set of ~32 doctor checks against §9's
+"minimum" list, for instance), it is left alone rather than guessed at — see
+this issue's report for what that means in practice.
+
+### 18.2 Architecture decisions (epic #118), with the alternative each closes off
+
+These are numbered in the source as `epic #118, decision N` — the same
+number appears at every call site listed, so a future correction can find
+every place a decision governs.
+
+1. **Git access on the server is `gh`, and only `gh`.** `install`/`update`
+   require the GitHub CLI installed and logged in, run `gh auth setup-git` so
+   plain `git clone`/`fetch` reach a **private** repository over HTTPS with
+   `gh`'s own token, and rewrite an `ssh://`/`git@github.com:` origin to
+   HTTPS so that credential helper is what git actually uses. *Rules out*: any
+   SSH-key handling in this CLI (an operator's private key staged on the
+   server, or an agent-forwarding story) and a `GITHUB_TOKEN`-shaped
+   environment variable to manage. A remote not on `github.com` is not a
+   failure — it falls back to plain git, and `--skip-github` skips the whole
+   group for a non-GitHub remote (e.g. CI's `file://` origin). (`apps/cli/src/deploy/checks/github.ts`, `apps/cli/src/deploy/repo.ts`)
+2. **No database hostname is ever pre-filled.** The env wizard's database
+   step starts blank for `POSTGRES_HOST` on every path, including a re-run.
+   *Rules out* silently carrying over a value that might be stale or might be
+   a different environment's database entirely — a wrong pre-fill accepted
+   without a second look is a worse failure mode than retyping a hostname.
+   (`apps/cli/src/deploy/env-metadata.ts`)
+3. **The proxy is a container, with no host fallback.** There is no host
+   nginx and no host certbot on the target server, ever — nginx is addressed
+   only through `docker exec <proxy-container>`, and certificates only
+   through `docker run --rm certbot/certbot`. *Rules out* a host-binary
+   fallback path: a validation that runs against a config the real (containerized)
+   proxy never reads is a check that lies, and rendering host filesystem
+   paths into the vhost fails `nginx -t` in the one nginx that matters — see
+   18.1's vhost/validate rows. (`apps/cli/src/deploy/proxy.ts`)
+4. **The proxy's two bind mounts are declared exactly once.**
+   `PROXY_MOUNTS` (letsencrypt, webroot — host path and container path for
+   each) is the single table both the `docker run certbot` argv and the
+   rendered vhost read. *Rules out* the two ever independently drifting —
+   the failure mode a hand-written vhost path and a hand-written `docker run
+   -v` flag, edited in two files, would eventually hit. (`apps/cli/src/deploy/proxy.ts`, `PROXY_MOUNTS`)
+5. **Every certbot invocation shares one `docker run --rm` prefix.**
+   `certbotArgv()` builds the mount flags and the image name once; issuance
+   and renewal both call it. *Rules out* the issuance and renewal code paths
+   naming the image or the mounts separately and drifting apart.
+   (`apps/cli/src/deploy/proxy.ts`, `certbotArgv`)
+6. **DNS routing is proven before any certificate rate-limit budget is
+   spent.** `probeAcmeRouting` writes a nonce under the proxy's webroot and
+   fetches it over the public `http://<domain>/.well-known/acme-challenge/…`
+   URL — the exact path the real HTTP-01 challenge takes — before
+   `issueCertificate` ever calls certbot. *Rules out* discovering a bad DNS
+   record only after a failed issuance has already spent part of the
+   5-per-hour / 50-per-week Let's Encrypt budget, which is shared with every
+   other app behind the same proxy. (`apps/cli/src/deploy/proxy.ts`, `probeAcmeRouting`)
+7. **A second, non-secret file is what the running application reads about
+   its own deployment.** `deploy-info/info.json` (§19) is written by the CLI
+   on every `install`/`update` and has its `remote` block refreshed by
+   `update --check` and `status`, entirely separate from the CLI's own
+   private `state.json`. *Rules out* two alternatives considered and
+   rejected: exposing `state.json` itself (0600, refused on a version
+   mismatch, never meant to be mounted anywhere) and environment variables
+   (read once at container start, so `remote` — only known after a later
+   `update --check` — could never reach a running container without a
+   restart). (`apps/cli/src/deploy/deploy-info.ts`)
+8. **`GET /api/admin/about` is gated on `system_settings:read`, not a new
+   permission.** "What is deployed here" is an administrator's configuration
+   read, the same standing as every other `system_settings:read` surface.
+   *Rules out* a dedicated `about:read` permission that every existing
+   deployment's seed would need re-running to grant before anyone could open
+   the card. (`apps/api/src/about/about.controller.ts`)
+9. **A server-derived suggestion (port, worker slots, memory limit) is
+   always shown with its reason, and is always editable.** *Rules out*
+   silently applying a suggested value with no explanation and no way to
+   override it before it is written. (`apps/cli/src/tui/components/field-state.ts`, `Suggestion.reason`)
+10. **The TUI validates every field exactly as the plain command would.**
+    There is no TUI-only relaxation or extra check. *Rules out* the two
+    surfaces drifting into accepting or rejecting different values for the
+    same key — the same "one sequence, two renderers" discipline §11 already
+    states for `DeployHooks`. (`apps/cli/src/tui/screens/deploy/doctor-model.ts`)
+
+## 19. The `deploy-info/info.json` schema
+
+One document, two independent implementations that must agree on its shape:
+the CLI writes it (`apps/cli/src/deploy/deploy-info.ts`) and the API reads it
+back (`apps/api/src/about/deploy-info.schema.ts`, consumed by
+`apps/api/src/about/about.service.ts`). This section is the one place both
+are described together, so neither drifts from the other without a reader of
+this section noticing.
+
+**Location.** `<deploy-root>/deploy-info/info.json`, world-readable (`0644`)
+— unlike `state.json` (`0600`), nothing in this file is secret by
+construction. `vps.compose.yml` bind-mounts the **directory**, read-only, at
+`/app/deploy-info` inside the `api` container (never the file itself — the
+CLI rewrites it with a temp-file-then-rename, which replaces the inode, and
+a single-file bind mount would leave the container reading the old one
+forever). `DEPLOY_INFO_PATH` (default `/app/deploy-info/info.json`) is what
+the API resolves on **every** request, so a rewritten file takes effect on
+the very next response with no restart.
+
+**Schema version.** `DEPLOY_INFO_SCHEMA = 1` (`apps/cli/src/deploy/deploy-info.ts`),
+independent of `DEPLOY_STATE_VERSION`. It is the **one** field the API's
+reader treats as strict (`z.literal(1)`) — every other field is optional and
+nullable, because the file is the CLI's best effort at deploy time
+(`dockerVersion` is `null` when `docker --version` failed to parse;
+`remote` is `null` until the first `update --check`), and a missing value is
+information ("the CLI could not tell"), not a parse failure. Every object in
+the API's Zod schema also carries `.passthrough()`, so a newer CLI adding a
+field never makes an older API answer `invalid` — the extra field rides
+through to the client untouched.
+
+**Shape**, as the CLI's `DeployInfo` interface and the API's
+`deployInfoSchema` both describe it:
+
+```ts
+interface DeployInfo {
+  schema: 1;
+  app: {
+    name: string;            // the app folder / compose project name
+    version: string | null;  // apps/api/package.json in the deployed clone
+    commitSha: string;
+    ref: string;
+    repoUrl: string;
+  };
+  installedAt: string;       // ISO-8601 UTC, set once, never overwritten
+  updatedAt: string;         // = state.lastDeployedAt: last SUCCESSFUL deploy
+  lastCommand: 'install' | 'update';
+  deployedBy: { cli: string; version: string };
+  domain: string | null;
+  bindPort: number;
+  host: {                    // captured at deploy time; see server-facts.ts
+    hostname: string | null;
+    os: string | null;
+    kernel: string | null;
+    arch: string | null;
+    cpuModel: string | null;
+    cpus: number | null;
+    memoryBytes: number | null;
+    diskBytes: number | null;
+    dockerVersion: string | null;
+    composeVersion: string | null;
+    nodeVersion: string | null;
+  };
+  remote: {                  // null until the first `update --check`
+    sha: string;
+    commitsBehind: number;
+    checkedAt: string;       // ISO-8601 UTC
+  } | null;
+}
+```
+
+**Write path.** `writeDeployInfo` (install/update, full document) and
+`updateDeployInfoRemote` (`update --check`/`status`, replaces only `remote`,
+a no-op when no file exists yet — a pre-#120 deployment has nothing to
+patch, and a check is not the moment to invent one) both go through
+`writeDeployInfoDocument`: validate with the same `validateDeployInfo` the
+reader uses (a document this module would refuse to read is never written in
+the first place), `mkdirSync` the directory `0755` (world-traversable — the
+API container's unprivileged user has to read through it, and nothing in it
+is secret), then a `wx`-flagged temp file at `0644` and `renameSync` over the
+target, inside the same directory the mount points at.
+
+**Read path.** `AboutService.readDeployInfo` (`apps/api/src/about/about.service.ts`)
+reads the file on every `GET /api/admin/about` request, parses it against
+`deployInfoSchema`, and always answers **200**: no file is
+`deployInfoStatus: "absent"`; unreadable (permissions, a torn write outside
+the temp-then-rename window) is `"unreadable"`; JSON that fails schema
+validation is `"invalid"`; a successful parse is `"ok"`. `updateAvailable` is
+derived from `remote.commitsBehind` (`null` when the CLI has never checked)
+— **never** from a network call the API itself makes; this endpoint performs
+no network I/O, ever (18.2 decision 7's whole reason for existing). Every
+value under a key matching `/password|secret|key|token/i`, at any depth
+`.passthrough()` let through, is stripped before the response is built — a
+defense against a future CLI, or a hand-edited file, putting something
+secret-shaped into a document this design otherwise promises is safe to show
+every admin.
+
+**Test fixture.** `apps/api/src/about/__fixtures__/deploy-info.json` is the
+shared vector both sides are tested against, so the writer and the reader
+cannot drift without one of the two suites noticing.
