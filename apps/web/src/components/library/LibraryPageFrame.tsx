@@ -81,7 +81,13 @@ export function LibraryPageFrame({ title, action, children }: LibraryPageFramePr
   // refused a user who cannot read this surface — what is left to decide is
   // whether the one who CAN read it may also create, which is a different
   // permission (`:write`) and a different question.
-  const canCreate = action !== null && hasPermission(action.permission);
+  //
+  // Resolved to the ACTION or `null` rather than to a boolean beside it: the
+  // two renderings below both need the action's fields, and a separate
+  // `canCreate` flag leaves the compiler unable to see that they are only
+  // reached when there is one — which is how the `canCreate && action &&`
+  // double guard gets written and then half-deleted later.
+  const createAction = action && hasPermission(action.permission) ? action : null;
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto' }}>
@@ -100,24 +106,24 @@ export function LibraryPageFrame({ title, action, children }: LibraryPageFramePr
         {/* The FAB below is the phone's primary action; at `sm` and up the same
             action is an ordinary button in the header, where there is room for
             it and where a floating control would only cover content. */}
-        {canCreate && !isPhone && action && (
+        {createAction && !isPhone && (
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => navigate(action.path)}
+            onClick={() => navigate(createAction.path)}
           >
-            {action.label}
+            {createAction.label}
           </Button>
         )}
       </Box>
 
       {children}
 
-      {canCreate && isPhone && action && (
+      {createAction && isPhone && (
         <Fab
           color="primary"
-          aria-label={action.label}
-          onClick={() => navigate(action.path)}
+          aria-label={createAction.label}
+          onClick={() => navigate(createAction.path)}
           sx={{
             position: 'fixed',
             right: 16,

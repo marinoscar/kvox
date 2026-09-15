@@ -91,7 +91,10 @@ const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
 const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
-const LibraryPage = lazy(() => import('../src/pages/LibraryPage'));
+// Two pages since #106, where one served both routes — the harness mirrors
+// `App.tsx`'s lazy imports exactly, so a page split there is a page split here.
+const TranscriptsPage = lazy(() => import('../src/pages/TranscriptsPage'));
+const NotesPage = lazy(() => import('../src/pages/NotesPage'));
 const NewTranscriptPage = lazy(() => import('../src/pages/NewTranscriptPage'));
 const TranscriptPage = lazy(() => import('../src/pages/TranscriptPage'));
 const TranscriptHistoryPage = lazy(() => import('../src/pages/TranscriptHistoryPage'));
@@ -261,9 +264,9 @@ function HarnessRoutes() {
             element={
               <RequirePermission
                 permission="transcripts:read"
-                fallback={<Navigate to="/notes" replace />}
+                fallback={<Navigate to="/" replace />}
               >
-                <LibraryPage />
+                <TranscriptsPage />
               </RequirePermission>
             }
           />
@@ -305,14 +308,16 @@ function HarnessRoutes() {
             }
           />
 
-          {/* Notes (#57, epic #45). `/notes` renders the SAME `LibraryPage`
-              `/transcripts` does — the tab is the route. Gates copied verbatim
-              from `App.tsx`, like every other guarded route in this file. */}
+          {/* Notes (#57, epic #45). Its OWN page since #106 — a sibling
+              destination rather than the other tab of one `library` row, with
+              `/transcripts`' fallback restored to `/` to match. Gates copied
+              verbatim from `App.tsx`, like every other guarded route in this
+              file. */}
           <Route
             path="/notes"
             element={
               <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
-                <LibraryPage />
+                <NotesPage />
               </RequirePermission>
             }
           />
