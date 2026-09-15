@@ -61,7 +61,7 @@ const DO_NOT_RENAME = [
   ['apps/api/src/common/crypto/secret-cipher.ts', "the HKDF label 'enterpriseappbase:secret-cipher:v1:' — changing it makes every stored credential permanently undecryptable"],
   ['apps/api/src/common/exceptions/verbatim-error-body.exception.ts', 'a cross-realm Symbol.for() registry key'],
   ['apps/cli/src/deploy/proxy.ts', "the '# Managed by appctl deploy' sentinel, which is written AND parsed on live servers"],
-  ['apps/cli/src/deploy/state.ts', "the '.appctl-deploy.json' filename, read from live servers"],
+  ['apps/cli/src/deploy/state.ts', "the '.appctl-deploy.json' filename, read from live servers, AND the appctlVersion field inside it — renaming a field is an unversioned wire break"],
 ];
 
 // =============================================================================
@@ -494,7 +494,14 @@ function warnAboutCliRename(from, to) {
     - apps/cli/Dockerfile declares 14 ENV ${from.toUpperCase()}_* variables.
     - infra/compose/worker.compose.yml carries the same prefix.
     - Machines already running this CLI have ~/.${from}/ and a systemd unit
-      under the old name. They are not migrated for you.
+      under the old name. install.sh cleans up an install left by the
+      PREVIOUS name only; it knows nothing about a name you invent here.
+    - THE DOCUMENTATION IS NOT REWRITTEN. ~16 files (docs/, CLAUDE.md,
+      packages/shared/README.md, .claude/skills/rename-app/**) show
+      "${from} <subcommand>" in prose and command blocks. They are listed in
+      template-identity.test.ts's ALLOWLIST, so the identity guard will NOT
+      flag them either — that is the trade this fork made by naming the
+      binary after the repository. Search and replace them by hand.
   ────────────────────────────────────────────────────────────────────────────
 `);
 }
