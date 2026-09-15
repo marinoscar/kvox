@@ -222,6 +222,13 @@ describe('TranscriptPage — a viewer sees no editing controls', () => {
 
     expect(screen.queryByRole('button', { name: /^Actions for the line/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Edit the line/ })).toBeNull();
+    // ⚠ "No editing controls" is not "no controls". The per-line play button
+    // (#108) is deliberately still here for a viewer: hearing one line is a
+    // READ, and the assertions above must not be widened into one that would
+    // take it away.
+    expect(
+      screen.getAllByRole('button', { name: /^Play this line/ }).length,
+    ).toBeGreaterThan(0);
   });
 
   it('mounts no merge affordances in the speakers panel', async () => {

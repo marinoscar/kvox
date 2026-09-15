@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { axe } from 'vitest-axe';
+import 'vitest-axe/extend-expect';
 
 import { render } from '../../utils/test-utils';
 import { SegmentList } from '../../../components/transcripts/SegmentList';
@@ -74,6 +76,8 @@ beforeEach(() => {
     value: scrollTo,
   });
 });
+
+const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
 const SPEAKERS: TranscriptSpeaker[] = [
   { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
@@ -316,5 +320,99 @@ describe('SegmentList — auto-follow and "Jump to current"', () => {
     expect(
       screen.queryByRole('button', { name: 'Jump to current' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('SegmentList — per-line playback (#108)', () => {
+  it('gives every row a play button named by speaker and time', () => {
+    // "Play" alone would be four identical buttons on screen at once, and a
+    // screen-reader user moving by button would have no way to tell which line
+    // they were about to hear.
+    renderList({ onPlaySegment: vi.fn() });
+
+    expect(
+      screen.getByRole('button', { name: 'Play this line, Ana at 0:00' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Play this line, Ben at 0:05' }),
+    ).toBeInTheDocument();
+  });
+
+  it('mounts NO play button when no handler is given', () => {
+    // The read-only preview (the history page, the visual baselines) gets the
+    // reader #30 shipped: the control does not exist rather than existing
+    // disabled, because a disabled button is still something to announce.
+    renderList();
+
+    expect(screen.queryByRole('button', { name: /^Play this line/ })).toBeNull();
+  });
+
+  it('shows Pause, and reports itself pressed, on the line actually playing', () => {
+    renderList({ onPlaySegment: vi.fn(), activeSegmentId: 's1', isPlaying: true });
+
+    const pause = screen.getByRole('button', { name: 'Pause this line' });
+    expect(pause).toHaveAttribute('aria-pressed', 'true');
+    // Exactly one row at a time, and every other row is unpressed.
+    expect(screen.queryAllByRole('button', { name: 'Pause this line' })).toHaveLength(1);
+    expect(
+      screen.getByRole('button', { name: 'Play this line, Ana at 0:00' }),
+    ).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('shows Play again when the active line is paused', () => {
+    // `activeSegmentId` outlives a browser-level pause for a moment; a Pause
+    // icon over silent audio is worse than a slightly late one.
+    renderList({ onPlaySegment: vi.fn(), activeSegmentId: 's1', isPlaying: false });
+
+    expect(screen.queryByRole('button', { name: 'Pause this line' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Play this line, Ben at 0:05' }),
+    ).toBeInTheDocument();
+  });
+
+  it('hands the WHOLE segment to the handler, not just its bounds', async () => {
+    const user = userEvent.setup();
+    const onPlaySegment = vi.fn();
+    const segments = makeSegments(50);
+    renderList({ onPlaySegment }, segments);
+
+    await user.click(screen.getByRole('button', { name: 'Play this line, Ben at 0:05' }));
+
+    expect(onPlaySegment).toHaveBeenCalledWith(segments[1]);
+  });
+
+  it('pauses instead of restarting when the line is already playing', async () => {
+    const user = userEvent.setup();
+    const onPlaySegment = vi.fn();
+    const onPause = vi.fn();
+    renderList({ onPlaySegment, onPause, activeSegmentId: 's1', isPlaying: true });
+
+    await user.click(screen.getByRole('button', { name: 'Pause this line' }));
+
+    expect(onPause).toHaveBeenCalled();
+    expect(onPlaySegment).not.toHaveBeenCalled();
+  });
+
+  it('does not disengage auto-follow when the button is clicked', () => {
+    // A click is not a `wheel`/`touchstart`/`keydown` on the scroll region, so
+    // following survives — which is what a reader who just asked to hear a line
+    // wants. See the component header for the keyboard case.
+    renderList({ onPlaySegment: vi.fn(), currentSegmentIndex: 5 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play this line, Ana at 0:00' }));
+
+    expect(screen.queryByRole('button', { name: 'Jump to current' })).toBeNull();
+  });
+
+  it('has no accessibility violations with the buttons mounted', async () => {
+    const { container } = renderList({
+      onPlaySegment: vi.fn(),
+      onPause: vi.fn(),
+      activeSegmentId: 's1',
+      isPlaying: true,
+      currentSegmentIndex: 1,
+    });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });

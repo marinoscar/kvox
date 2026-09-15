@@ -757,6 +757,12 @@ export function TranscriptPage() {
       wordsBySegment={wordsBySegment}
       onPlayFrom={engine.playFromMs}
       selectedSpeakerIds={selectedSpeakerIds}
+      // Per-line playback (#108). Unconditional, unlike the editing props
+      // below: hearing one line is a READ, so a viewer gets it too.
+      activeSegmentId={engine.activeSegmentId}
+      isPlaying={engine.isPlaying}
+      onPlaySegment={engine.playSegment}
+      onPause={engine.pause}
       editable={canEdit}
       editingSegmentId={editingSegmentId}
       onStartEdit={setEditingSegmentId}
