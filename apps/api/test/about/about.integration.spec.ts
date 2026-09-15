@@ -112,7 +112,7 @@ describe('About API (Integration)', () => {
     expect(body.deployInfoStatus).toBe('ok');
     expect(body.deployInfo).toMatchObject({
       schema: 1,
-      app: { name: 'kvox', commitSha: fixture.app.commitSha },
+      app: { name: 'example-app', commitSha: fixture.app.commitSha },
       host: { hostname: 'vps-01' },
     });
     // Unknown field rides through — the file is `.passthrough()`.
