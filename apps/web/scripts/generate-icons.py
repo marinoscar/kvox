@@ -21,25 +21,35 @@ hand, on a machine with Python 3 and Pillow:
 
 THE MARK
 =============================================================================
-A K-WAVE MONOGRAM: the letter K whose stem is a single bar and whose arms are
-the diverging envelope of an audio waveform. Four vertical rounded bars on a
-square mark box of side M:
+A K MONOGRAM: one vertical stem and two round-capped diagonal arms, on a
+square mark box of side M whose origin is its own top-left corner.
 
-    column 0   the stem          one bar, full height M
-    column 1   the junction      two bars of 0.22 M, centred +/- 0.11 M
-    column 2   the spread        two bars of 0.22 M, centred +/- 0.24 M
-    column 3   the mouth         two bars of 0.22 M, centred +/- 0.37 M
+    stroke     W = 0.17 M         stem width and arm stroke alike
+    cap radius W / 2 = 0.085 M
+    stem       (0, 0) to (0.17 M, M), corner radius 0.085 M
+    junction   (0.085 M, 0.5 M)   ON the stem's centre line, not its edge
+    upper arm  junction to (0.915 M, 0.085 M)
+    lower arm  junction to (0.915 M, 0.915 M)
 
-    bar width  0.17 M            corner radius = half the bar width
-    pitch      (M - 0.17 M) / 3  so the outer columns touch the box edges
-    extent     0.37 M + 0.11 M = 0.48 M from centre, inside the half-box
+Two properties of those numbers are load-bearing. The arms begin on the stem's
+CENTRE LINE rather than its right edge, so stroke and stem merge into one
+shape instead of meeting at a visible seam. And 0.915 is 1 - 0.085, i.e. every
+endpoint is inset by exactly one cap radius, so each round cap lands flush
+against the mark box and nothing overflows: 0.915 + 0.085 = 1.0 exactly.
 
-Column 1's pair meet exactly on the centre line, which is the junction that
-makes the shape read as a K; columns 2 and 3 open outwards, which is what
-makes it read as a waveform. Rounded rectangles are the ONLY primitive used,
-on purpose — see the geometry block below for why a K with true diagonal
-strokes is not drawable here, and why a microphone or a speech bubble was not
-the answer either.
+⚠ THE FIRST ATTEMPT AT THIS MARK DID NOT WORK, and the reason is worth keeping.
+It drew the arms as four columns of short axis-aligned rounded bars, on the
+theory that Pillow draws rectangles more readily than anything else. It did not
+read as a K. Consecutive columns sit a clear horizontal gap (about 0.107 M)
+apart, so the bars never joined into a diagonal — they stayed six separate
+dots and the icon read as a domino. Both toolchains turn out to draw a
+round-capped line perfectly well (`stroke-linecap="round"` in SVG; in Pillow a
+`line` plus a circle centred on each endpoint, because its `width` gives butt
+ends and `joint="curve"` only affects joints between segments), so the letter
+is drawn honestly. Rejected alternatives: tapered strokes, which need a path
+Pillow cannot mirror; a microphone or a speech bubble, the two most generic
+marks in this product category; and rasterising the SVG, which is the CI
+dependency this template exists to avoid.
 
 The mark itself also exists as hand-editable vector art in
 `apps/web/public/icons/source.svg`, and a second time, at the tighter favicon
@@ -182,25 +192,6 @@ FOREGROUND_COLOR = "#ffffff"
 # =============================================================================
 # Mark geometry — all fractions, so the mark is resolution independent
 # =============================================================================
-# The mark: a K-WAVE MONOGRAM. Four vertical rounded bars on a square mark box
-# of side M. Column 0 is the K's stem, full height. Columns 1-3 are its arms:
-# each is a PAIR of short bars sitting symmetrically above and below the box's
-# vertical centre, the pair spreading further apart with every column, so the
-# three pairs trace the diverging envelope of a waveform — the K's two arms and
-# an audio waveform being, conveniently, the same drawing.
-#
-# WHY BARS AND NOT A REAL K
-# A K drawn honestly has two DIAGONAL strokes, and Pillow's only primitives
-# here are `rounded_rectangle` (axis-aligned) and `polygon` (hard-edged, no
-# corner radius) — a rotated rounded stroke is not expressible without either a
-# rasteriser or hand-composited circles, and this file exists precisely so that
-# no image toolchain beyond Pillow is ever required (see the module docstring).
-# Sampling the diagonal at three columns keeps the letter readable while
-# staying inside the one primitive both this script and a plain SVG `<rect>`
-# can draw identically. Rejected alternatives: a microphone and a speech
-# bubble, both of which are the two most generic marks in this product
-# category and say nothing about whose transcript it is; and rasterising
-# `icons/source.svg`, which is the CI dependency this template refuses.
 CORNER_RADIUS_RATIO = 0.22   # rounded-square plate radius, as a fraction of size
 
 # THE MARK: a K monogram -- one vertical stem, and two diagonal arms meeting on
@@ -232,14 +223,25 @@ MARK_RATIO_STANDARD = 0.68   # rounded plate, corners are ours to shape
 MARK_RATIO_MASKABLE = 0.50   # inside the 80%-diameter safe zone with room to spare
 MARK_RATIO_BADGE = 0.70      # no plate, so the mark can breathe wider
 MARK_RATIO_FAVICON = 0.80    # tab-sized: padding costs whole pixels, so spend fewer
-# MASKABLE SAFE ZONE, RE-CHECKED FOR A SQUARE MARK (rule 1 above). The safe
-# zone is a centred circle of 80% DIAMETER, i.e. radius 0.40 x size. A square
-# box is at its furthest from the centre at its CORNERS, not its edges, so the
-# check is the half-diagonal, not the half-side:
-#     0.50 x 0.50 x sqrt(2) = 0.354 x size  <  0.40 x size
-# 0.354 < 0.40, so even the corners of the mark box clear the safe circle, and
-# the drawn bars — whose own extremes are 0.48 of the box, not 0.50 — clear it
-# by more. Raising MARK_RATIO_MASKABLE above 0.5657 would push the corners out.
+# MASKABLE SAFE ZONE, RE-CHECKED FOR THE DIAGONAL MARK (rule 1 above). The safe
+# zone is a centred circle of 80% DIAMETER, i.e. radius 0.40 x size, and what
+# has to clear it is the mark's furthest DRAWN pixel from the box centre — not
+# the box's own corner, which nothing is drawn in.
+#
+# Two candidates tie for furthest, by symmetry. The stem's rounded top-left
+# corner is an arc of radius 0.085 about (0.085, 0.085); the point on it at 45
+# degrees is (0.085 - 0.085/sqrt(2)) on both axes = 0.0249, which is
+#     sqrt(2) x (0.5 - 0.0249) = 0.672 of the box from its centre.
+# The upper arm's end cap is a circle of radius 0.085 about (0.915, 0.085),
+# whose centre is sqrt(2) x 0.415 = 0.587 from the box centre; add the radius
+# and it is 0.672 too. So the mark's reach is 0.672 M, not the box's 0.707.
+#
+# At MARK_RATIO_MASKABLE:
+#     0.672 x 0.50 = 0.336 x size  <  0.40 x size
+# 0.336 < 0.40, so the mark clears the safe circle with about 16% of the radius
+# to spare. The ceiling is 0.40 / 0.672 = 0.595 — raising MARK_RATIO_MASKABLE
+# past that would push the stem's top corner out of the safe zone, where a
+# circular launcher mask would shave it off.
 
 # Anti-aliasing. Pillow's drawing primitives are hard-edged, so everything is
 # drawn at this multiple and downsampled with LANCZOS; that resample IS the

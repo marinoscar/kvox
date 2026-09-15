@@ -333,11 +333,42 @@ describe('TranscriptPage — read mode', () => {
     ).toBeInTheDocument();
   });
 
-  it('offers the four playback speeds', async () => {
+  it('offers the four playback speeds as buttons in the CARD transport', async () => {
+    // The desktop docking, where the width for a four-button group exists.
+    // The phone's own reachability is asserted separately below (#112) — this
+    // assertion is about the `card` variant specifically, so it must not be
+    // rewritten into something both variants happen to satisfy.
     renderPage();
 
     for (const rate of ['1 times speed', '1.25 times speed', '1.5 times speed', '2 times speed']) {
       expect(await screen.findByRole('button', { name: rate })).toBeInTheDocument();
+    }
+    expect(
+      screen.queryByRole('button', { name: /^Playback speed, / }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('reaches all four speeds from the MINI transport’s one chip (#112)', async () => {
+    // At 360px the four-button group is about a third of the transport. The
+    // phone gets a single cycling chip instead — so the thing that has to be
+    // proved is that cycling still REACHES every rate the group offered, and
+    // wraps back to 1×.
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Weekly standup');
+    await act(async () => setViewportWidth(390));
+
+    const speedChip = () => screen.getByRole('button', { name: /^Playback speed, / });
+
+    expect(speedChip()).toHaveAccessibleName('Playback speed, 1 times. Press to change.');
+    // The four-button group is gone, which is the point of the change.
+    expect(screen.queryByRole('button', { name: '1.5 times speed' })).not.toBeInTheDocument();
+
+    for (const rate of ['1.25', '1.5', '2', '1']) {
+      await user.click(speedChip());
+      expect(speedChip()).toHaveAccessibleName(
+        `Playback speed, ${rate} times. Press to change.`,
+      );
     }
   });
 

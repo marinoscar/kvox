@@ -59,6 +59,19 @@ import { buildScrubberRegions, speakerColor } from '../../utils/transcriptDispla
  */
 export const MINI_PLAYER_HEIGHT = 112;
 
+/**
+ * The next speed in the cycle, wrapping 2× back to 1×.
+ *
+ * Lives beside `PLAYBACK_RATES` rather than hard-coding the four values, so
+ * adding a rate to the engine adds it to the cycle for free.
+ */
+function nextRate(rate: PlaybackRate): PlaybackRate {
+  const index = PLAYBACK_RATES.indexOf(rate);
+  // `-1` cannot happen through the engine's own type, but `(-1 + 1) % 4 === 0`
+  // lands on 1× rather than `undefined` if it ever did.
+  return PLAYBACK_RATES[(index + 1) % PLAYBACK_RATES.length];
+}
+
 interface TranscriptPlayerProps {
   engine: PlaybackEngine;
   segments: readonly TranscriptSegment[];
@@ -220,21 +233,57 @@ export function TranscriptPlayer({
           </Typography>
         </Box>
 
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={engine.rate}
-          aria-label="Playback speed"
-          // `?? engine.rate` — MUI hands back `null` when the pressed button is
-          // the active one, and a null rate would make the element silent.
-          onChange={(_, value: PlaybackRate | null) => engine.setRate(value ?? engine.rate)}
-        >
-          {PLAYBACK_RATES.map((rate) => (
-            <ToggleButton key={rate} value={rate} aria-label={`${rate} times speed`}>
-              {rate}×
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
+        {/* TWO SPEED CONTROLS, CHOSEN BY `variant` AND NOT BY A MEDIA QUERY.
+            The derivation is the whole argument: the `mini` dock is the phone
+            docking and already exists only there (the page picks it, and the
+            file header above explains its bottom offset in the same terms), so
+            "is this a phone" has already been answered by the time this
+            renders. A `useMediaQuery` here would be a second, independent
+            answer to a question the prop already carries — and a sixth
+            breakpoint gate in a codebase that documents exactly five coupled
+            ones (`common/Layout.tsx`).
+
+            At 360px the four-button group is about a third of the transport's
+            width, spent on a control most listeners set once or never. The
+            chip is one tap per change and roughly 48px.
+
+            The rejected alternative is a `Select`: it costs TWO taps for every
+            change (open, choose) to save nothing at four values, and it opens
+            a menu over the transport on the screen with the least room for
+            one. Cycling is only worse than a menu once the list is long enough
+            that wrapping around is a chore — `PLAYBACK_RATES` is four. */}
+        {variant === 'card' ? (
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={engine.rate}
+            aria-label="Playback speed"
+            // `?? engine.rate` — MUI hands back `null` when the pressed button is
+            // the active one, and a null rate would make the element silent.
+            onChange={(_, value: PlaybackRate | null) => engine.setRate(value ?? engine.rate)}
+          >
+            {PLAYBACK_RATES.map((rate) => (
+              <ToggleButton key={rate} value={rate} aria-label={`${rate} times speed`}>
+                {rate}×
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        ) : (
+          <Chip
+            size="small"
+            clickable
+            variant="outlined"
+            label={`${engine.rate}×`}
+            // The name carries the current VALUE and the VERB, because neither
+            // is recoverable from the other. "1.5×" alone does not say it is a
+            // control; "Playback speed" alone does not say what it is set to,
+            // and there is no `aria-pressed` state that could — this cycles
+            // through four values rather than toggling one.
+            aria-label={`Playback speed, ${engine.rate} times. Press to change.`}
+            onClick={() => engine.setRate(nextRate(engine.rate))}
+            sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}
+          />
+        )}
       </Box>
     </Box>
   );
