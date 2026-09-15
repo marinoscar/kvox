@@ -74,6 +74,41 @@ let noteSummaryRequests = 0;
  */
 let requestOrder: string[] = [];
 
+/**
+ * EVERY request this render made, whatever the route — issue #170, epic #166.
+ *
+ * `summaryRequests` and `noteSummaryRequests` only count the two routes this
+ * file installs handlers for, so a section that grew a fetch of its own would
+ * be invisible to them: it would hit a default handler in `mocks/handlers.ts`,
+ * answer 200, and both counters would still read 1. This listener is attached
+ * to MSW itself, so it sees the ACTUAL network the page produces, which is what
+ * the page's one-request-per-content-type rule is a claim about.
+ */
+const observedRequests: string[] = [];
+server.events.on('request:start', ({ request }) => {
+  observedRequests.push(new URL(request.url).pathname);
+});
+
+/**
+ * ⚠ THIS IS THE FILE'S ONE AND ONLY REQUEST OBSERVER.
+ *
+ * A test must NEVER call `server.events.removeAllListeners()` — that would
+ * tear down the `request:start` listener above for the rest of the file, so
+ * `observedRequests` would silently stop collecting anything for every test
+ * that runs afterward. The assertion then either passes vacuously against an
+ * empty array or fails in a way that looks unrelated to this file. If a test
+ * needs a request log of its own, read `observedRequests` (reset every test
+ * in `respondWith`, called from `beforeEach` below) instead of registering a
+ * second listener.
+ */
+
+/** The three calls this page is allowed to make, and no fourth. */
+const EXPECTED_REQUESTS = [
+  '/api/notes/summary',
+  '/api/transcription/config',
+  '/api/transcripts/summary',
+];
+
 interface RespondOptions {
   config?: TranscriptionConfig;
   notes?: NoteSummary;
@@ -86,6 +121,7 @@ function respondWith(data: TranscriptSummary, options: RespondOptions = {}) {
   summaryRequests = 0;
   noteSummaryRequests = 0;
   requestOrder = [];
+  observedRequests.length = 0;
   server.use(
     http.get(`${API_BASE}/transcripts/summary`, async () => {
       summaryRequests += 1;
@@ -119,6 +155,14 @@ beforeEach(() => {
   // Module-level and shared by every mount, so it would otherwise leak resolved
   // source names (and resolved negatives) between the suites below.
   clearNoteSourceNameCache();
+  // `respondWith` resets `observedRequests.length = 0` (among the other
+  // counters) and runs before every test in every `describe` block below,
+  // because this is the file's OUTER `beforeEach` — Vitest runs it ahead of
+  // any nested `describe`'s own `beforeEach`, which may call `respondWith`
+  // again but never skips this one. Without that reset, `observedRequests`
+  // would just keep growing across the whole file and an assertion like
+  // `expect(observedRequests).toHaveLength(3)` would be meaningless past the
+  // first test that reads it.
   respondWith(summary({ recent: [transcript()] }));
 });
 
@@ -417,24 +461,13 @@ describe('HomePage — the New note hero action', () => {
     // The action costs nothing: there is no `GET /api/ai/config` probe behind
     // it and no fourth call on the landing screen. The page's rule stays "one
     // summary request per content type, plus the one capability probe".
-    const paths: string[] = [];
-    server.events.on('request:start', ({ request }) => {
-      paths.push(new URL(request.url).pathname);
-    });
-    try {
-      renderHome();
-      await waitForLoaded();
-      await waitFor(() => expect(noteSummaryRequests).toBe(1));
-      expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
+    renderHome();
+    await waitForLoaded();
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+    expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
 
-      expect([...paths].sort()).toEqual([
-        '/api/notes/summary',
-        '/api/transcription/config',
-        '/api/transcripts/summary',
-      ]);
-    } finally {
-      server.events.removeAllListeners();
-    }
+    expect([...new Set(observedRequests)].sort()).toEqual(EXPECTED_REQUESTS);
+    expect(observedRequests).toHaveLength(3);
   });
 
   it('has no accessibility violations with both hero actions present', async () => {
@@ -1068,6 +1101,147 @@ describe('HomePage — transcription is not configured', () => {
 });
 
 // =============================================================================
+// The counts strip (#170, epic #166)
+// =============================================================================
+
+describe('HomePage — the counts strip', () => {
+  const POPULATED = () =>
+    summary({
+      recent: [transcript()],
+      counts: { owned: 12, shared: 3, inProgress: 0, failed: 0 },
+    });
+
+  it('shows the strip with the counts the summaries already returned', async () => {
+    respondWith(POPULATED(), {
+      notes: noteSummary({ counts: { total: 7, ready: 7, inProgress: 0, failed: 0 } }),
+    });
+    renderHome();
+    await waitForLoaded();
+
+    const strip = await screen.findByRole('region', { name: 'Your library at a glance' });
+    expect(within(strip).getByRole('link', { name: '12 Transcripts' })).toBeInTheDocument();
+    expect(within(strip).getByRole('link', { name: '3 Shared with me' })).toBeInTheDocument();
+    expect(await within(strip).findByRole('link', { name: '7 Notes' })).toBeInTheDocument();
+  });
+
+  it('FIRES NO REQUEST OF ITS OWN — the page still makes exactly three calls', async () => {
+    // ⚠ THE SUCCESS CRITERION OF THIS ISSUE, and the reason `observedRequests`
+    // watches MSW rather than this file's own handlers: a strip that asked for
+    // its own `GET /api/transcripts?status=failed` to get an "accurate" failure
+    // count would leave `summaryRequests` reading 1 and still have added a
+    // third content request to the app's landing screen.
+    respondWith(POPULATED(), {
+      notes: noteSummary({ counts: { total: 7, ready: 7, inProgress: 0, failed: 2 } }),
+    });
+    renderHome();
+    await waitForLoaded();
+    await screen.findByRole('region', { name: 'Your library at a glance' });
+    // Settled: both summaries answered and the probe resolved.
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    expect([...new Set(observedRequests)].sort()).toEqual(EXPECTED_REQUESTS);
+    expect(observedRequests).toHaveLength(3);
+  });
+
+  it('adds no request when the attention entry is on screen either', async () => {
+    // The one entry whose number is arithmetic over BOTH summaries — the most
+    // tempting place to reach for a count of one's own.
+    respondWith(
+      summary({ recent: [transcript()], counts: { owned: 4, shared: 0, inProgress: 0, failed: 2 } }),
+      { notes: noteSummary({ counts: { total: 1, ready: 0, inProgress: 0, failed: 1 } }) },
+    );
+    renderHome();
+    await waitForLoaded();
+
+    expect(
+      await screen.findByRole('link', { name: '3 Needs attention' }),
+    ).toHaveAttribute('href', '/transcripts?status=failed');
+    expect(observedRequests).toHaveLength(3);
+  });
+
+  it('hides Needs attention when nothing has failed', async () => {
+    respondWith(POPULATED());
+    renderHome();
+    await waitForLoaded();
+    await screen.findByRole('region', { name: 'Your library at a glance' });
+
+    expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
+  });
+
+  it('shows no Notes entry for a user without notes:read', async () => {
+    renderHome(noNotesUser);
+    await waitForLoaded();
+
+    const strip = await screen.findByRole('region', { name: 'Your library at a glance' });
+    expect(within(strip).queryByText('Notes')).not.toBeInTheDocument();
+    // And still no notes request, which is the point of the permission gate.
+    expect(observedRequests).not.toContain('/api/notes/summary');
+  });
+
+  it('is absent on the first-run journey', async () => {
+    // A strip of zeros above the walkthrough explaining how to stop it reading
+    // zero. `HomePage` gates the mount on `!isNewUser` for exactly this.
+    respondWith(summary());
+    renderHome();
+    await screen.findByRole('heading', { name: 'Start here' });
+
+    expect(
+      screen.queryByRole('region', { name: 'Your library at a glance' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('is absent when the summary read FAILED', async () => {
+    // Every count would be zero because nothing was ever read, not because
+    // nothing exists — the same load-bearing reasoning as the journey gate.
+    server.use(
+      http.get(`${API_BASE}/transcripts/summary`, () => HttpResponse.error()),
+      http.get(`${API_BASE}/transcription/config`, () =>
+        HttpResponse.json({ data: TRANSCRIPTION_AVAILABLE }),
+      ),
+    );
+    renderHome();
+    await screen.findByRole('alert');
+
+    expect(
+      screen.queryByRole('region', { name: 'Your library at a glance' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('sits between the hero and In progress', async () => {
+    // Order is the whole design of this page — see its header's list of the
+    // five questions and the order a phone screen can afford them.
+    respondWith(
+      summary({
+        inProgress: [transcript({ id: 'p1', status: 'processing' })],
+        recent: [transcript()],
+        counts: { owned: 9, shared: 0, inProgress: 1, failed: 0 },
+      }),
+    );
+    renderHome();
+    await waitForLoaded();
+
+    const strip = await screen.findByRole('region', { name: 'Your library at a glance' });
+    const hero = screen.getByRole('heading', { level: 1 });
+    const inProgress = screen.getByRole('heading', { name: /In progress/ });
+    expect(hero.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      strip.compareDocumentPosition(inProgress) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('has no accessibility violations with the strip on screen', async () => {
+    respondWith(POPULATED(), {
+      notes: noteSummary({ counts: { total: 7, ready: 7, inProgress: 0, failed: 2 } }),
+    });
+    const { container } = renderHome();
+    await waitForLoaded();
+    await screen.findByRole('region', { name: 'Your library at a glance' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
 // The search entry point — issue #172, epic #166
 // =============================================================================
 
@@ -1161,26 +1335,15 @@ describe('HomePage — the search entry point', () => {
     // PER KEYSTROKE on the landing screen, which is precisely what this page's
     // "one request per content type, plus the one capability probe" rule
     // forbids. The control types locally and navigates once.
-    const paths: string[] = [];
-    server.events.on('request:start', ({ request }) => {
-      paths.push(new URL(request.url).pathname);
-    });
-    try {
-      const user = userEvent.setup();
-      renderHome();
-      await waitForLoaded();
-      await waitFor(() => expect(noteSummaryRequests).toBe(1));
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
 
-      await user.type(field(), 'standup');
+    await user.type(field(), 'standup');
 
-      expect([...paths].sort()).toEqual([
-        '/api/notes/summary',
-        '/api/transcription/config',
-        '/api/transcripts/summary',
-      ]);
-    } finally {
-      server.events.removeAllListeners();
-    }
+    expect([...new Set(observedRequests)].sort()).toEqual(EXPECTED_REQUESTS);
+    expect(observedRequests).toHaveLength(3);
   });
 
   it('has no accessibility violations with the field present', async () => {
