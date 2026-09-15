@@ -889,3 +889,114 @@ export interface UpdateMaintenanceInput {
   message?: string;
   allowAdmins?: boolean;
 }
+
+// =============================================================================
+// About — issue #126, epic #118
+// =============================================================================
+//
+// The web mirror of `GET /api/admin/about` (`apps/api/src/about/about.dto.ts`
+// and `deploy-info.schema.ts`). Mirrored rather than shared for the same reason
+// `MaintenanceStatus` above is: there is no cross-package type surface between
+// `apps/api` and `apps/web`.
+//
+// Every field inside `deployInfo` is OPTIONAL AND NULLABLE, exactly as the API
+// reads it: the file is the CLI's best effort at deploy time, and a missing
+// value is information ("the CLI could not tell"), never a parse failure. The
+// API's objects are `.passthrough()`, so a newer CLI's extra fields arrive here
+// too; they are simply not typed, and the About page ignores what it does not
+// know.
+
+/** Why `deployInfo` is, or is not, populated. `absent` is the ordinary dev-stack state. */
+export type DeployInfoStatus = 'ok' | 'absent' | 'unreadable' | 'invalid';
+
+export interface DeployInfoApp {
+  name?: string | null;
+  version?: string | null;
+  /** The full SHA; the page shortens it for display and copies it whole. */
+  commitSha?: string | null;
+  ref?: string | null;
+  repoUrl?: string | null;
+}
+
+export interface DeployInfoDeployedBy {
+  cli?: string | null;
+  version?: string | null;
+}
+
+/** Host facts captured by the CLI at deploy time — inside the container they would be the container's. */
+export interface DeployInfoHost {
+  hostname?: string | null;
+  os?: string | null;
+  kernel?: string | null;
+  arch?: string | null;
+  cpuModel?: string | null;
+  cpus?: number | null;
+  memoryBytes?: number | null;
+  diskBytes?: number | null;
+  dockerVersion?: string | null;
+  composeVersion?: string | null;
+  nodeVersion?: string | null;
+}
+
+/** What `kvox deploy update --check` last recorded. */
+export interface DeployInfoRemote {
+  sha?: string | null;
+  commitsBehind?: number | null;
+  /** ISO-8601 UTC. */
+  checkedAt?: string | null;
+}
+
+export interface DeployInfo {
+  /** The only strict field: anything else is not this file. */
+  schema: 1;
+  app?: DeployInfoApp | null;
+  /** ISO-8601 UTC. */
+  installedAt?: string | null;
+  /** ISO-8601 UTC. */
+  updatedAt?: string | null;
+  lastCommand?: string | null;
+  deployedBy?: DeployInfoDeployedBy | null;
+  domain?: string | null;
+  bindPort?: number | null;
+  host?: DeployInfoHost | null;
+  /** Null until the first `update --check`. */
+  remote?: DeployInfoRemote | null;
+}
+
+/** What only the running API process knows about itself. */
+export interface AboutRuntime {
+  apiVersion: string;
+  nodeVersion: string;
+  /** ISO-8601 UTC. */
+  processStartedAt: string;
+  uptimeSeconds: number;
+  /** ISO-8601 UTC, `Z`-suffixed — the clock every other timestamp on the page is compared against. */
+  serverTimeUtc: string;
+  environment: string;
+}
+
+/** What only a live database connection can answer. */
+export interface AboutDatabase {
+  /** `SELECT version()`, verbatim. */
+  serverVersion: string;
+  appliedMigrations: number;
+  lastMigrationName: string | null;
+  /** ISO-8601 UTC; null when no migration has finished. */
+  lastMigrationAt: string | null;
+}
+
+export interface AboutResponse {
+  /** Null unless `deployInfoStatus` is `ok`. */
+  deployInfo: DeployInfo | null;
+  deployInfoStatus: DeployInfoStatus;
+  /** The read/parse message when `deployInfoStatus` is not `ok`; otherwise null. */
+  detail: string | null;
+  runtime: AboutRuntime;
+  /** Null with `databaseError` set when the query failed; the route still answers 200. */
+  database: AboutDatabase | null;
+  databaseError: string | null;
+  /** `remote.commitsBehind > 0`. NULL MEANS UNKNOWN, NOT "NO" — the CLI has never checked. */
+  updateAvailable: boolean | null;
+  /** `remote.checkedAt`, passed through; null when the CLI has never checked. */
+  checkedAt: string | null;
+}

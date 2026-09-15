@@ -95,6 +95,9 @@ const AiSettingsPage = lazy(() => import('./pages/Admin/AiSettingsPage'));
 // which is the screen a BLOCKED user sees rather than the page that opens and
 // closes the window.
 const AdminMaintenancePage = lazy(() => import('./pages/Admin/MaintenancePage'));
+// Issue #126, epic #118 — what is deployed here. Lazy like every other admin
+// page: nobody who never opens the Console needs it in the entry chunk.
+const AboutPage = lazy(() => import('./pages/Admin/AboutPage'));
 // Issue #266, epic #254 — the background queue's two Operations pages. Lazy
 // like every other admin page: both pull in the shared DataTable, and neither
 // is on the path of a user who never opens the Console.
@@ -626,6 +629,26 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <AdminMaintenancePage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #126, epic #118 (decision 8). Same permission string
+                      the `About` card declares and the same one
+                      `about/about.controller.ts` enforces on its GET — the
+                      invariant `destinations.test.ts` asserts for every card.
+                      Deliberately no `about:read`: "what is deployed here" is
+                      an administrator's configuration read, and a permission
+                      no role is seeded with would be a route nobody can open.
+                      The page is read-only, so there is no write gate for it
+                      to hold internally. */}
+                  <Route
+                    path="/admin/settings/about"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AboutPage />
                       </RequirePermission>
                     }
                   />

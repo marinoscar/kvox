@@ -233,6 +233,17 @@ describe('AppBar', () => {
       expect(screen.getByText('Users & Allowlist')).toBeInTheDocument();
     });
 
+    it('resolves the About title at its admin detail route (#126)', () => {
+      // A card declared in the registry is picked up by the title resolver
+      // with no wiring of its own — which is the whole point of the registry,
+      // and what this asserts for the newest General card.
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/admin/settings/about' } });
+
+      expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+      expect(screen.getByText('About')).toBeInTheDocument();
+    });
+
     it('resolves the hub title at the user settings hub', () => {
       setViewportWidth(375);
       render(<AppBar />, { wrapperOptions: { route: '/settings' } });

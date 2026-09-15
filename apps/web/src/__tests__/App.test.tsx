@@ -23,7 +23,7 @@ import App from '../App';
  * `/admin/settings/*`, a shared heading would let a mis-wired route pass by
  * rendering a sibling — which is precisely the failure a route split invites.
  * (Email and Web Push are not stood in here — neither is exercised by this
- * route-guard suite — so only Notifications, Maintenance and Users are
+ * route-guard suite — so only Notifications, Maintenance, About and Users are
  * mocked below, alongside the hub itself.)
  */
 vi.mock('../pages/Admin/SettingsHubPage', () => ({
@@ -36,6 +36,15 @@ vi.mock('../pages/Admin/NotificationSettingsPage', () => ({
 
 vi.mock('../pages/Admin/MaintenancePage', () => ({
   default: () => <h1>Admin Maintenance</h1>,
+}));
+
+// Issue #126, epic #118. Same rationale as the stand-ins above, plus one
+// specific to this page: the real one opens `GET /api/admin/about` on mount,
+// which this route-guard suite is not about. Its own suite covers that; this
+// file only proves `App.tsx` wires `/admin/settings/about` to it under
+// `system_settings:read`.
+vi.mock('../pages/Admin/AboutPage', () => ({
+  default: () => <h1>Admin About</h1>,
 }));
 
 vi.mock('../pages/Admin/UsersPage', () => ({
@@ -637,6 +646,7 @@ describe('App', () => {
     it.each([
       ['/admin/settings/notifications', 'Admin Notifications'],
       ['/admin/settings/maintenance', 'Admin Maintenance'],
+      ['/admin/settings/about', 'Admin About'],
     ])('renders %s for a user holding system_settings:read', async (path, heading) => {
       signInAs(READER, ['contributor']);
 
@@ -651,7 +661,11 @@ describe('App', () => {
       });
     });
 
-    it.each(['/admin/settings/notifications', '/admin/settings/maintenance'])(
+    it.each([
+      '/admin/settings/notifications',
+      '/admin/settings/maintenance',
+      '/admin/settings/about',
+    ])(
       'redirects a user without system_settings:read away from %s',
       async (path) => {
         signInAs(['user_settings:read']);
