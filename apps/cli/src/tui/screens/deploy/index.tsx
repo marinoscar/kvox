@@ -8,6 +8,7 @@ import { DEFAULT_APPS_ROOT, listInstalledApps } from '../../../deploy/layout.js'
 import { Frame } from '../../layout.js';
 import { DoctorScreen } from './doctor.js';
 import { InstallWizard } from './install.js';
+import { UpdateScreen } from './update.js';
 
 // =============================================================================
 // The deploy screen  (issue #131, epic #118; replacing #184's single screen)
@@ -82,7 +83,6 @@ export function deployMenuItems(state: DeployMenuState): DeployMenuItem[] {
 
 /** What a phase that is not built yet tells the operator to run instead. */
 export const PLACEHOLDER_COMMANDS: Readonly<Record<string, string>> = {
-  update: 'deploy update',
   status: 'deploy status',
   certs: 'deploy certs status',
   about: 'api GET /api/admin/about',
@@ -116,6 +116,16 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
   if (phase === 'doctor') {
     return (
       <DoctorScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'update') {
+    return (
+      <UpdateScreen
         onDone={() => {
           setPhase('choose');
         }}
