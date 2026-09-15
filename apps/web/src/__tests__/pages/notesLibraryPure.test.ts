@@ -6,7 +6,17 @@ import {
   emptyNewNoteDraft,
   isNewNoteReady,
 } from '../../pages/newNote';
-import { NOTE_STATUS_FILTERS } from '../../pages/notesLibraryFilters';
+import {
+  NOTE_STATUS_FILTERS,
+  noteStatusFromQuery,
+  searchFromQuery as notesSearchFromQuery,
+} from '../../pages/notesLibraryFilters';
+import {
+  TRANSCRIPT_STATUS_FILTERS,
+  searchFromQuery,
+  transcriptScopeFromQuery,
+  transcriptStatusFromQuery,
+} from '../../pages/transcriptsLibraryFilters';
 import {
   noteSourceFallbackLabel,
   noteSourcePath,
@@ -29,6 +39,15 @@ import type { NoteSourceFields } from '../../utils/noteSource';
  * each path lights its own navigation row, moved to
  * `__tests__/config/destinations.test.ts`, which asserts it against the
  * destination table directly rather than through a page's tab state.
+ *
+ * ⚠ SINCE #170 THIS FILE ALSO COVERS THE TRANSCRIPTS LIBRARY'S PARSERS, which
+ * its name does not advertise. The deep-link seeding that issue added is ONE
+ * decision spanning two filter modules — both libraries read the same `?q`, and
+ * each validates `?status` against its own offered list — and the assertion
+ * that matters most (`searchFromQuery` is literally the same function under
+ * both imports, not two implementations that agree today) can only be written
+ * with both modules in scope. Splitting it in two would put the halves of one
+ * rule where neither reader sees the other.
  */
 
 describe('newNote — the body the form produces', () => {
@@ -144,5 +163,101 @@ describe('notesLibraryFilters', () => {
     // nobody filters for it, and "Generating" already covers what a reader
     // means by it.
     expect(values).not.toContain('draft');
+  });
+});
+
+/**
+ * The deep-link parsers — issue #170, epic #166.
+ *
+ * Pure functions over `URLSearchParams`, which is exactly why they live in the
+ * filter modules and are asserted here rather than through a mounted page: the
+ * interesting rules are what happens to input nobody typed deliberately (an
+ * unknown status, a status the page does not offer, a missing parameter), and
+ * a rendered `<Select>` is a slow and indirect way to ask.
+ */
+
+function query(search: string): URLSearchParams {
+  return new URLSearchParams(search);
+}
+
+describe('transcriptScopeFromQuery', () => {
+  it('reads ?scope=shared', () => {
+    expect(transcriptScopeFromQuery(query('?scope=shared'))).toBe('shared');
+  });
+
+  it('reads ?scope=owned', () => {
+    expect(transcriptScopeFromQuery(query('?scope=owned'))).toBe('owned');
+  });
+
+  it('falls back to the user’s own transcripts for anything else', () => {
+    // A broken link should land somebody on their own library, which is the
+    // tab the page opens on anyway — never on an error.
+    expect(transcriptScopeFromQuery(query(''))).toBe('owned');
+    expect(transcriptScopeFromQuery(query('?scope=everything'))).toBe('owned');
+    expect(transcriptScopeFromQuery(query('?scope='))).toBe('owned');
+    // `all` is a real API scope with no tab to select. It is not a tab value.
+    expect(transcriptScopeFromQuery(query('?scope=all'))).toBe('owned');
+  });
+});
+
+describe('transcriptStatusFromQuery', () => {
+  it('reads every status the page actually offers', () => {
+    for (const option of TRANSCRIPT_STATUS_FILTERS) {
+      expect(transcriptStatusFromQuery(query(`?status=${option.value}`))).toBe(option.value);
+    }
+  });
+
+  it('falls back to "all" for an unknown status', () => {
+    expect(transcriptStatusFromQuery(query('?status=bogus'))).toBe('all');
+  });
+
+  it('falls back to "all" when there is no status at all', () => {
+    expect(transcriptStatusFromQuery(query(''))).toBe('all');
+    expect(transcriptStatusFromQuery(query('?status='))).toBe('all');
+  });
+});
+
+describe('noteStatusFromQuery', () => {
+  it('reads every status the page actually offers', () => {
+    for (const option of NOTE_STATUS_FILTERS) {
+      expect(noteStatusFromQuery(query(`?status=${option.value}`))).toBe(option.value);
+    }
+  });
+
+  it('refuses a real NoteStatus the page does not offer', () => {
+    // ⚠ THE CASE THIS VALIDATION EXISTS FOR. `draft` is a legitimate API
+    // status and deliberately absent from the filter list, so seeding it would
+    // leave the `<Select>` holding a value that matches no `<MenuItem>` — a
+    // control rendered blank, filtering the list by something the reader can
+    // neither see nor undo.
+    expect(noteStatusFromQuery(query('?status=draft'))).toBe('all');
+  });
+
+  it('falls back to "all" for an unknown or absent status', () => {
+    expect(noteStatusFromQuery(query('?status=bogus'))).toBe('all');
+    expect(noteStatusFromQuery(query(''))).toBe('all');
+  });
+});
+
+describe('searchFromQuery', () => {
+  it('reads ?q verbatim', () => {
+    expect(searchFromQuery(query('?q=budget%20review'))).toBe('budget review');
+  });
+
+  it('answers the empty string when there is no ?q', () => {
+    expect(searchFromQuery(query(''))).toBe('');
+  });
+
+  it('does not trim — the box shows what the URL said', () => {
+    // Seeding a text input with something other than what the link carried
+    // would make the user's first edit look like a correction they did not
+    // make. Emptiness is decided where it is asked (`isFiltered`), not here.
+    expect(searchFromQuery(query('?q=%20%20'))).toBe('  ');
+  });
+
+  it('is ONE function, reachable under the same name from both filter modules', () => {
+    // Two libraries whose deep links disagreed about the name of the search
+    // parameter is the failure this re-export prevents.
+    expect(notesSearchFromQuery).toBe(searchFromQuery);
   });
 });

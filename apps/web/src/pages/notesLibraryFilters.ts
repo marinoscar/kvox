@@ -32,3 +32,51 @@ export const NOTE_STATUS_FILTERS: readonly NoteStatusFilterOption[] = [
   { value: 'failed', label: 'Failed' },
   { value: 'deleting', label: 'Deleting' },
 ];
+
+/**
+ * =============================================================================
+ * THE URL SEEDS THE VIEW'S STATE. IT DOES NOT BIND TO IT.
+ * =============================================================================
+ *
+ * `/notes?status=failed` and `?q=budget` are deep links into this library —
+ * issue #170, epic #166 — and the two functions below are what turns that query
+ * string into the view's INITIAL state, once, on mount. The full decision, the
+ * rejected full two-way sync, and why the debounce is the reason for rejecting
+ * it are recorded in `transcriptsLibraryFilters.ts`'s matching block; this
+ * module deliberately does not restate the argument, because there is one
+ * decision here and it must not be able to drift into two.
+ *
+ * ⚠ THERE IS NO `?scope` HERE, and that is not an omission. `GET /api/notes`
+ * lists the caller's own notes and nothing else — a note has no share model and
+ * no `notes:read_any` exists for anybody, ever (CLAUDE.md's RBAC table says so
+ * in as many words) — so the Notes view has no scope tab for a parameter to
+ * seed. A `scope` parser here would be a control this library cannot grow.
+ */
+
+/**
+ * `?status=<value>` → the status filter, VALIDATED AGAINST THE OFFERED LIST.
+ *
+ * Membership of `NOTE_STATUS_FILTERS` is the check, not membership of
+ * `NoteStatus`, for the reason its transcript twin states: the list is what the
+ * `<Select>` can display, and `draft` is a real `NoteStatus` this page
+ * deliberately does not offer. `?status=draft` therefore answers `'all'` rather
+ * than seeding a filter whose value matches no `<MenuItem>` and renders the
+ * control blank.
+ *
+ * Absent, unknown, empty and `all` all answer `'all'`, which the view already
+ * translates into omitting `status` from the request.
+ */
+export function noteStatusFromQuery(params: URLSearchParams): NoteStatus | 'all' {
+  const raw = params.get('status');
+  const offered = NOTE_STATUS_FILTERS.find((option) => option.value === raw);
+  return offered ? offered.value : 'all';
+}
+
+/**
+ * `?q=<text>` → the search box's initial text.
+ *
+ * RE-EXPORTED, never re-implemented. Both libraries read the same `?q` and a
+ * second spelling of "which parameter carries the search term" is exactly the
+ * kind of divergence a deep link discovers in production rather than in review.
+ */
+export { searchFromQuery } from './transcriptsLibraryFilters';
