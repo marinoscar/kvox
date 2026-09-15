@@ -21,7 +21,7 @@ import {
 // The whole point of branding.ts is that CLI_NAME is the single seed a fork
 // edits. These tests assert the DERIVATION, not the literal value of
 // CLI_NAME — so they keep passing (and keep proving the rule holds) if a
-// fork ever renames `appctl` to something else. Only the package.json `bin`
+// fork ever renames `kvox` to something else. Only the package.json `bin`
 // test below is allowed to compare against the live CLI_NAME value directly,
 // because that comparison IS the guard the module's own comment asks for.
 // =============================================================================

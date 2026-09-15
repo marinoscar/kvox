@@ -30,7 +30,7 @@ import { nodeStateDir } from '../node/paths.js';
 import { maybeReexecWithHeapLimit } from '../node/runtime-tuning.js';
 
 // =============================================================================
-// `appctl node` — the worker-node command group  (issue #272, epic #254)
+// `kvox node` — the worker-node command group  (issue #272, epic #254)
 // =============================================================================
 //
 // This file establishes the GROUP; the subcommands arrive with the issues that

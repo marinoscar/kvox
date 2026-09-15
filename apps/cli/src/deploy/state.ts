@@ -12,10 +12,10 @@ import { CliError, EXIT, type ExitCode } from '../errors.js';
 // installed, where, and at which commit. `status` needs the same. This file is
 // where the answer lives.
 //
-// IT IS NOT IN ~/.appctl/config.json, AND THAT IS NOT A STYLE CHOICE.
+// IT IS NOT IN ~/.kvox/config.json, AND THAT IS NOT A STYLE CHOICE.
 // `writeConfigFile` copies an ALLOW-LIST of fields and drops everything else on
 // every write (see config.ts). Deploy state placed there would survive until
-// the next `appctl login` and then vanish, turning a working deployment into
+// the next `kvox login` and then vanish, turning a working deployment into
 // one the CLI believes was never installed. Its own file, next to the
 // deployment it describes, also means the state travels with the server rather
 // than with whichever operator's home directory happened to run the install.
@@ -24,6 +24,12 @@ import { CliError, EXIT, type ExitCode } from '../errors.js';
 /** Bumped only when a field changes meaning; unknown versions are refused. */
 export const DEPLOY_STATE_VERSION = 1;
 
+// THE FILENAME KEEPS THE OLD `appctl` NAME ON PURPOSE. The binary is called
+// `kvox` now, but this file is READ BACK OFF LIVE SERVERS to discover what is
+// deployed there. Rename it and every existing deployment becomes invisible:
+// `deploy status` reports nothing and `deploy update` behaves as though it were
+// a first install. There is deliberately no migration — see
+// .claude/skills/rename-app/references/do-not-rename.md.
 export const DEPLOY_STATE_FILENAME = '.appctl-deploy.json';
 
 export interface DeployState {
@@ -42,7 +48,16 @@ export interface DeployState {
   installedAt: string;
   lastDeployedAt: string;
   lastCommand: 'install' | 'update';
-  /** Which appctl wrote this, for diagnosing a state file from the future. */
+  /**
+   * Which CLI version wrote this, for diagnosing a state file from the future.
+   *
+   * THE FIELD NAME KEEPS THE OLD `appctl` NAME ON PURPOSE, for the same reason
+   * DEPLOY_STATE_FILENAME above does: it is serialized into
+   * `.appctl-deploy.json` on live servers. `DEPLOY_STATE_VERSION` is bumped
+   * only when a field CHANGES MEANING, so renaming a field would be an
+   * unversioned wire break that no version check could catch. There is
+   * deliberately no migration.
+   */
   appctlVersion: string;
   /** The revision this replaced, for a manual roll-back. */
   previousSha?: string | undefined;
@@ -111,7 +126,7 @@ export function readState(deployRoot: string): DeployState | undefined {
   if (version !== DEPLOY_STATE_VERSION) {
     // Refused rather than guessed. Misreading a state file means updating the
     // wrong checkout or reporting the wrong commit as deployed, and a newer
-    // appctl having written it is the likeliest cause.
+    // a newer CLI having written it is the likeliest cause.
     throw new DeployStateError(
       `${path} has state version ${String(version)}, but this ${CLI_NAME} understands ${DEPLOY_STATE_VERSION}. Upgrade ${CLI_NAME}, or remove the file to re-install.`,
     );

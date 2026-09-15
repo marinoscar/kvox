@@ -16,7 +16,7 @@ Two readers need them and only one of them is the handler:
 1. The handler, which exposes one as `nodeResultSchema` (that is what makes
    its type node-eligible — see `../job-handler.interface.ts`).
 2. **Clients**, through `GET /api/nodes/job-types`, which converts each one
-   with `z.toJSONSchema()` and publishes it. That is how `appctl` validates a
+   with `z.toJSONSchema()` and publishes it. That is how `kvox` validates a
    result *before* posting it, against the server's own definition rather than
    against a copy it carries.
 

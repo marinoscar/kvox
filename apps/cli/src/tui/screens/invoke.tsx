@@ -24,7 +24,7 @@ import { ScrollBox } from '../scroll-box.js';
 // =============================================================================
 //
 // #145's third screen: method, path, body, and the response rendered scrollably.
-// It is the TUI face of `appctl api` (#144) and it reuses that command's
+// It is the TUI face of `kvox api` (#144) and it reuses that command's
 // validation rather than re-deriving it — `parseRequestPath` for the path (the
 // leading slash, the optional `/api` prefix, the "that is a URL, not a path"
 // refusal), `resolveRequestBody` for the payload, `ALLOWED_METHODS` for the

@@ -4,7 +4,7 @@
 // (issue #173, epic #168)
 //
 // This is `DeviceLoginHooks` applied to deployment, and the reasoning is
-// identical (see device-login.ts): two consumers, one sequence. `appctl deploy
+// identical (see device-login.ts): two consumers, one sequence. `kvox deploy
 // install` renders these callbacks as lines on stderr; the ink screen in #184
 // renders the same callbacks as React state.
 //

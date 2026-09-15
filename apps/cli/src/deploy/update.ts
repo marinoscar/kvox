@@ -20,7 +20,7 @@ import { composeArgv, composeCwd, secretsFrom } from './install.js';
 import type { PromptContext } from '../prompt.js';
 
 // =============================================================================
-// `appctl deploy update`  (issue #182, epic #168)
+// `kvox deploy update`  (issue #182, epic #168)
 // =============================================================================
 //
 // Installing is the rare operation; updating is the one performed weekly, often

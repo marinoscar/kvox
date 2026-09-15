@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 
+import { CLI_NAME } from '../../branding.js';
 import type { Check, CheckContext, CheckResult } from './types.js';
 import {
   contextFs,
@@ -180,7 +181,7 @@ const nodeVersion: Check = {
       : {
           status: 'warn',
           detail: `v${process.versions.node}`,
-          remedy: `appctl targets Node ${MIN_NODE_MAJOR} or newer; upgrade before relying on this host to build.`,
+          remedy: `${CLI_NAME} targets Node ${MIN_NODE_MAJOR} or newer; upgrade before relying on this host to build.`,
         };
   },
 };

@@ -62,8 +62,8 @@ export const EXIT = {
    * A prerequisite is not met, so nothing was attempted (#178, epic #168).
    *
    * SPLIT OUT FROM FAILURE because it is the one a script can act on:
-   * `appctl deploy doctor || provision-the-box` is the intended shape, and
-   * "this server is not ready" has to be distinguishable from "appctl itself
+   * `kvox deploy doctor || provision-the-box` is the intended shape, and
+   * "this server is not ready" has to be distinguishable from "kvox itself
    * broke". Additive, like every code above it - never renumber.
    */
   PRECONDITION: 6,

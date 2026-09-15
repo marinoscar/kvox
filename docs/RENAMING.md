@@ -86,8 +86,8 @@ edits:
 
 | Target | Why it can't derive |
 |---|---|
-| `install.sh` (the `curl \| bash` header comment, the `APPCTL_REPO` default) | **This is the sharpest example.** It is fetched and executed via `curl \| bash` *before the repository exists on disk* — there is nothing to read a manifest out of, because the clone that manifest lives in hasn't happened yet. This is a permanent codemod target; it can never move to the "derived" group. |
-| `apps/cli/README.md` (the same install/uninstall one-liners and `APPCTL_REPO` default, restated in docs) | Prose describing the installer above — same reasoning, once removed. |
+| `install.sh` (the `curl \| bash` header comment, the `KVOX_REPO` default) | **This is the sharpest example.** It is fetched and executed via `curl \| bash` *before the repository exists on disk* — there is nothing to read a manifest out of, because the clone that manifest lives in hasn't happened yet. This is a permanent codemod target; it can never move to the "derived" group. |
+| `apps/cli/README.md` (the same install/uninstall one-liners and `KVOX_REPO` default, restated in docs) | Prose describing the installer above — same reasoning, once removed. |
 | `README.md` (title, tagline, CI badge URL, clone/`cd` instructions, directory-tree root) | The one place in the codebase where the product name and repo slug appear as hand-written prose rather than as a rendered value. |
 | `infra/compose/.env.example` and `base.compose.yml` (`OTEL_SERVICE_NAME` default) | These are Compose-file string defaults, not JavaScript — nothing executes `@app/shared` to produce them. The codemod changes the *value* only; it never adds a new key, because `apps/cli/src/deploy/env-spec.test.ts` counts every commented `# KEY=value` line in `.env.example` as a declared variable, and a new key would fail that test. |
 | `infra/compose/test.compose.yml`, `apps/api/.env.test`, `scripts/dev.ps1` (test database name and container name) | Same reasoning as the OTEL default — Compose/env-file values, not code. |
@@ -174,26 +174,26 @@ holds, not the fictional values above.)
 
 `--cli-name` is deliberately a separate flag from `--name`, not a value
 derived from it. A product called "Acme Hub" may well still ship a binary
-called `appctl` — `git` isn't called `github-cli`, `kubectl` isn't called
+called `kvox` — `git` isn't called `github-cli`, `kubectl` isn't called
 `kubernetes-cli`, and there's no reason a fork's control client should be
 forced to match the product name syllable-for-syllable. `apps/cli/src/branding.ts`
 carries the full rationale; the summary is that `CLI_NAME` seeds three
 things the product name has no business touching: the executable shown in
-`--help`, the config directory (`~/.appctl/`), and the environment-variable
-prefix (`APPCTL_`).
+`--help`, the config directory (`~/.kvox/`), and the environment-variable
+prefix (`KVOX_`).
 
 Renaming the binary is a bigger, and honestly a more expensive, change than
 renaming the product, and the script says so out loud when you pass
 `--cli-name`. State the cost plainly, because it is real:
 
-- **~6 CLI test files assert literal `APPCTL_` environment-variable names on
+- **~6 CLI test files assert literal `KVOX_` environment-variable names on
   purpose** — they are *meant* to break on a rename, as a forcing function
   to catch every place that reads the old prefix. Fix them by hand.
-- **`apps/cli/Dockerfile` declares 14 `ENV APPCTL_*` lines.** All 14 need the
+- **`apps/cli/Dockerfile` declares 14 `ENV KVOX_*` lines.** All 14 need the
   new prefix.
 - **`infra/compose/worker.compose.yml` carries the same prefix.**
 - **Machines already running the CLI are not migrated for you.** They have a
-  config directory (`~/.appctl/`) and, if deployed via `appctl deploy`, a
+  config directory (`~/.kvox/`) and, if deployed via `kvox deploy`, a
   systemd unit under the old name. The rename only affects what a fresh
   install produces; existing installations keep working under the old name
   until someone manually migrates or reinstalls them.
@@ -243,8 +243,8 @@ stay exactly as it is. The first row is the one that matters most.
 |---|---|---|
 | The HKDF label `enterpriseappbase:secret-cipher:v1:` | `apps/api/src/common/crypto/secret-cipher.ts` | **Every stored credential becomes permanently undecryptable.** This string happens to be lowercase and to contain the template's old name, which makes it look renameable — it isn't. A case-insensitive find-and-replace across the repository is the realistic way this gets broken by someone who never opened this file; say so explicitly, because "don't do a blind find-and-replace" is the actual lesson here. (Naming the literal here is safe: the guard test's check is case-sensitive against the *current product name*, and this label is lowercase and structurally different from it, so quoting it does not trip CI.) |
 | The `Symbol.for(...)` registry key | `apps/api/src/common/exceptions/verbatim-error-body.exception.ts` | `Symbol.for` interns by string across realms (a worker thread, a separately-loaded copy of the module). Changing the string breaks that cross-realm identity check silently — two symbols that were supposed to compare equal stop doing so. |
-| The `# Managed by appctl deploy` sentinel comment | `apps/cli/src/deploy/proxy.ts` | This line is written into an nginx vhost file on a live server *and* parsed back out of it later to recognise which vhosts the CLI itself manages. Change the string and the CLI stops recognising vhosts it wrote before the change. |
-| The `.appctl-deploy.json` filename | `apps/cli/src/deploy/state.ts` | Read from live deployment servers as the CLI's own state file. Renaming it orphans the deployment state of every server the CLI has already touched. |
+| The `# Managed by appctl deploy` sentinel comment | `apps/cli/src/deploy/proxy.ts` | This line is written into an nginx vhost file on a live server *and* parsed back out of it later to recognise which vhosts the CLI itself manages. Change the string and the CLI stops recognising vhosts it wrote before the change. The command is `kvox deploy` now; this sentinel keeps the historical `appctl` spelling on purpose, because it's read back from vhost files already written by servers deployed before this rename. |
+| The `.appctl-deploy.json` filename | `apps/cli/src/deploy/state.ts` | Read from live deployment servers as the CLI's own state file. Renaming it orphans the deployment state of every server the CLI has already touched. Kept under its historical `appctl` name for the identical reason — it's the same file already sitting on servers deployed under the old name, and `appctlVersion`, the field inside it recording the CLI version at time of write, stays spelled the same way for the same reason. |
 | `@app/shared`, and the `api` / `web` / `nginx` Compose service names | — | These are internal plumbing names, not identity — nothing user-facing reads them, and nothing about a rebrand depends on them. |
 
 ## CI will be red until you regenerate the baselines
@@ -337,7 +337,7 @@ against a checkout that still looks like the template.
 npm run setup
 ```
 
-This builds the CLI and runs `appctl init` — the deploy wizard pointed at
+This builds the CLI and runs `kvox init` — the deploy wizard pointed at
 your own machine. It exists because `cp .env.example .env` produces a file
 whose three secrets are the literal placeholder string
 `your-super-secret-key-min-32-characters-long` and whose Google credentials

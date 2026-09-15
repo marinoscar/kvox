@@ -1,11 +1,11 @@
-# CLI (`appctl`)
+# CLI (`kvox`)
 
 First-party command-line client for the API. It authenticates with the same
 device authorization flow as any other headless client, stores a personal
 access token, and then lets you call any API endpoint from a shell — which
 matters because this repository is a **baseline**: new endpoints get added
 and old ones get renamed constantly, and a CLI that hard-codes a subcommand
-per resource goes stale the day it ships. `appctl` has exactly one command
+per resource goes stale the day it ships. `kvox` has exactly one command
 that talks to the API (`api <method> <path>`), so it stays correct against
 endpoints that don't exist yet.
 
@@ -17,21 +17,21 @@ covers — they're what you'd script or run in CI.
 
 ## Install
 
-There's no published package; the installer builds `appctl` from this repo
+There's no published package; the installer builds `kvox` from this repo
 and deploys a standalone copy — you don't need a local clone to end up with
-a working `appctl` on your PATH.
+a working `kvox` on your PATH.
 
 **Platforms:** `install.sh` is a bash script — macOS, Linux and WSL are
 supported. There is no native Windows (PowerShell/cmd) support; on Windows,
 install inside WSL. The installer detects WSL and prints a dedicated box
 about `~/.local/bin` usually not being on `$PATH` there (see below).
 
-Three ways to end up with `appctl`, depending on what you're doing:
+Three ways to end up with `kvox`, depending on what you're doing:
 
 | Path | Command | When |
 | --- | --- | --- |
 | Piped one-liner | `curl -fsSL .../install.sh \| bash` | Normal use — no clone needed |
-| Local clone | `APPCTL_SRC=/path/to/repo bash /path/to/repo/install.sh` | You already have the repo, or you're offline / testing the installer |
+| Local clone | `KVOX_SRC=/path/to/repo bash /path/to/repo/install.sh` | You already have the repo, or you're offline / testing the installer |
 | Workspace build | `npm run build --workspace=cli` then `node apps/cli/dist/cli.js` | You're developing the CLI itself — see [Building from source](#building-from-source-development) |
 
 The piped one-liner:
@@ -41,24 +41,24 @@ curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | b
 ```
 
 It's safe to re-run: the installer detects an existing install at
-`~/.appctl/app`, shows the old → new version transition, and updates it in
+`~/.kvox/app`, shows the old → new version transition, and updates it in
 place — the same command is also how you update.
 
 ### Install from a local clone
 
 If you already have the repo checked out (or want to test the installer
 itself without a network round-trip), point it at that directory with
-`APPCTL_SRC` instead of letting it `git clone`:
+`KVOX_SRC` instead of letting it `git clone`:
 
 ```bash
-APPCTL_SRC=/path/to/repo bash /path/to/repo/install.sh
+KVOX_SRC=/path/to/repo bash /path/to/repo/install.sh
 ```
 
 ### Verify the install
 
 ```bash
-appctl --version
-appctl --help
+kvox --version
+kvox --help
 ```
 
 The installer already does this for you as its last step: it runs the new
@@ -67,20 +67,20 @@ the app/shim paths), and warns if the version reported by the binary doesn't
 match the version it just built from source — a sign something went wrong
 partway through the deploy step.
 
-If the shell instead reports `appctl: command not found`, the shim's
+If the shell instead reports `kvox: command not found`, the shim's
 directory isn't on your `$PATH` — see the `export PATH=...` guidance below.
 
 ### What to do next
 
-- Log in: `appctl login` (see [Logging in](#logging-in)).
-- Make a call: `appctl api GET /api/auth/me` (see
+- Log in: `kvox login` (see [Logging in](#logging-in)).
+- Make a call: `kvox api GET /api/auth/me` (see
   [Calling the API](#calling-the-api)).
-- Run `appctl` with no arguments in a real terminal to open the interactive
+- Run `kvox` with no arguments in a real terminal to open the interactive
   ink menu instead of using subcommands.
 
 ### Installing a specific version or branch
 
-`APPCTL_REF` (default `main`) controls what the installer checks out. It is
+`KVOX_REF` (default `main`) controls what the installer checks out. It is
 passed straight to `git clone --depth 1 --branch`, so a branch or tag name
 always works; a raw commit SHA is not reliably accepted there, so pin to a
 tag rather than a SHA. It has to be set for the `bash` process itself, not
@@ -88,31 +88,31 @@ for `curl`, since a variable set before a command in a pipeline only applies
 to that command:
 
 ```bash
-# Works — APPCTL_REF is set on the process that reads it
-curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | APPCTL_REF=v1.2.3 bash
+# Works — KVOX_REF is set on the process that reads it
+curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | KVOX_REF=v1.2.3 bash
 
-# Does NOT work — this sets APPCTL_REF for curl, not for bash
-APPCTL_REF=v1.2.3 curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
+# Does NOT work — this sets KVOX_REF for curl, not for bash
+KVOX_REF=v1.2.3 curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
 ```
 
-The `APPCTL_SRC` form doesn't need this — a local clone is already checked
+The `KVOX_SRC` form doesn't need this — a local clone is already checked
 out at whatever ref you have on disk.
 
 ### Installing from a private fork
 
-`GITHUB_TOKEN` and `APPCTL_REPO` (both in the
+`GITHUB_TOKEN` and `KVOX_REPO` (both in the
 [environment variable table](#installer-environment-variables) below) work
-together for a private fork: set `APPCTL_REPO` to your fork's clone URL and
+together for a private fork: set `KVOX_REPO` to your fork's clone URL and
 `GITHUB_TOKEN` to a PAT that can read it. The same "set it on `bash`, not
 `curl`" rule applies:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh \
-  | APPCTL_REPO=https://github.com/youruser/your-fork.git GITHUB_TOKEN=ghp_xxx bash
+  | KVOX_REPO=https://github.com/youruser/your-fork.git GITHUB_TOKEN=ghp_xxx bash
 ```
 
 The installer only rewrites a literal `https://github.com/` prefix in
-`APPCTL_REPO` into `https://$GITHUB_TOKEN@github.com/`, and only for that one
+`KVOX_REPO` into `https://$GITHUB_TOKEN@github.com/`, and only for that one
 `git clone`. The token ends up in the temporary checkout's git remote URL —
 nowhere else — and that temp directory is deleted (via an `EXIT` trap) as
 soon as the installer finishes, whether it succeeds or fails.
@@ -120,7 +120,7 @@ soon as the installer finishes, whether it succeeds or fails.
 ### Update
 
 Re-run the same command you installed with — the curl one-liner above, or
-the `APPCTL_SRC` form for a local clone. Either way the installer detects
+the `KVOX_SRC` form for a local clone. Either way the installer detects
 the existing install and updates it in place.
 
 ### Uninstall
@@ -135,9 +135,9 @@ or, from a local clone:
 bash install.sh --uninstall
 ```
 
-This removes the installed app directory (`~/.appctl/app`) and the `appctl`
-shim (`~/.local/bin/appctl` by default). It leaves
-`~/.appctl/config.json` — your stored server URL and credentials — untouched;
+This removes the installed app directory (`~/.kvox/app`) and the `kvox`
+shim (`~/.local/bin/kvox` by default). It leaves
+`~/.kvox/config.json` — your stored server URL and credentials — untouched;
 uninstalling doesn't log you out.
 
 `install.sh --help` (or `-h`) prints its usage, options and environment
@@ -147,12 +147,12 @@ variables and exits without installing or touching anything on disk.
 
 | Path | What |
 | --- | --- |
-| `~/.appctl/app` | The installed CLI — replaced wholesale on every update |
-| `~/.local/bin/appctl` | The shim that `exec`s `node ~/.appctl/app/dist/cli.js "$@"` |
-| `~/.appctl/config.json` | Your server URL and stored credentials — never touched by install, update or uninstall |
+| `~/.kvox/app` | The installed CLI — replaced wholesale on every update |
+| `~/.local/bin/kvox` | The shim that `exec`s `node ~/.kvox/app/dist/cli.js "$@"` |
+| `~/.kvox/config.json` | Your server URL and stored credentials — never touched by install, update or uninstall |
 
-The app root and shim directory are overridable via `APPCTL_HOME` and
-`APPCTL_BIN_DIR` — see the
+The app root and shim directory are overridable via `KVOX_HOME` and
+`KVOX_BIN_DIR` — see the
 [environment variable table](#installer-environment-variables) below.
 
 ### Requirements
@@ -163,7 +163,7 @@ The installer checks for these before doing anything else:
 | --- | --- | --- |
 | `node` | >= 20 | apps/cli's own `engines.node` floor |
 | `npm` | any | ships with Node.js |
-| `git` | any | only needed unless you use `APPCTL_SRC` |
+| `git` | any | only needed unless you use `KVOX_SRC` |
 | `curl` | any | only needed for the piped one-liner |
 
 apps/cli has no native modules, so there's no C-compiler / build-toolchain
@@ -173,24 +173,24 @@ requirement — just these four.
 
 1. Checks dependencies (`node`, `npm`, `git`, `curl`; warns, but doesn't
    fail, on low disk space).
-2. Gets the source — either `git clone --depth 1` of `APPCTL_REPO` at
-   `APPCTL_REF`, or a copy of `APPCTL_SRC` if set — into a temp directory
+2. Gets the source — either `git clone --depth 1` of `KVOX_REPO` at
+   `KVOX_REF`, or a copy of `KVOX_SRC` if set — into a temp directory
    that's cleaned up on exit.
 3. Builds the CLI workspace: `npm install --workspace=cli` then
    `npm run build --workspace=cli`, from that temp checkout.
 4. Deploys the standalone app: copies `apps/cli/dist`, `package.json` and
-   `README.md` into `~/.appctl/app` (replacing any previous install), then
+   `README.md` into `~/.kvox/app` (replacing any previous install), then
    runs `npm install --omit=dev` there to pull in just the runtime
    dependencies (commander, ink, ink-select-input, ink-spinner,
    ink-text-input, react).
-5. Writes the `appctl` shim to `~/.local/bin/appctl` — a small script that
-   `exec`s `node ~/.appctl/app/dist/cli.js "$@"` — and makes it executable.
+5. Writes the `kvox` shim to `~/.local/bin/kvox` — a small script that
+   `exec`s `node ~/.kvox/app/dist/cli.js "$@"` — and makes it executable.
 6. Checks whether the shim's directory is on `$PATH` and, if not, prints the
    `export` line to add to your shell config (see below).
 7. Verifies the install by running the new shim's `--version` and printing
    an install summary (version, install size, paths).
 
-If `~/.local/bin` (or your custom `APPCTL_BIN_DIR`) isn't on `$PATH`, add
+If `~/.local/bin` (or your custom `KVOX_BIN_DIR`) isn't on `$PATH`, add
 this to `~/.bashrc` or `~/.zshrc` and reload your shell:
 
 ```bash
@@ -207,21 +207,21 @@ Set these before running the installer to override its defaults:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `APPCTL_REPO` | `https://github.com/marinoscar/kvox.git` | Git clone URL |
-| `APPCTL_REF` | `main` | Branch/tag/commit to install |
-| `APPCTL_HOME` | `$HOME/.appctl` | App install root (same directory the CLI stores `config.json` in) |
-| `APPCTL_BIN_DIR` | `$HOME/.local/bin` | Directory for the `appctl` shim |
+| `KVOX_REPO` | `https://github.com/marinoscar/kvox.git` | Git clone URL |
+| `KVOX_REF` | `main` | Branch/tag/commit to install |
+| `KVOX_HOME` | `$HOME/.kvox` | App install root (same directory the CLI stores `config.json` in) |
+| `KVOX_BIN_DIR` | `$HOME/.local/bin` | Directory for the `kvox` shim |
 | `GITHUB_TOKEN` | (unset) | Optional GitHub PAT, for cloning a private repo |
-| `APPCTL_SRC` | (unset) | Local directory to install from instead of cloning |
+| `KVOX_SRC` | (unset) | Local directory to install from instead of cloning |
 
 `NO_COLOR` and the installer's own `--no-color` flag both disable ANSI
 colour in its output.
 
 ### Troubleshooting the install
 
-- **`appctl: command not found`** — the shim directory isn't on `$PATH`.
+- **`kvox: command not found`** — the shim directory isn't on `$PATH`.
   Add the `export PATH="$PATH:$HOME/.local/bin"` line above (substituting
-  your `APPCTL_BIN_DIR` if you set one) to your shell config and reload the
+  your `KVOX_BIN_DIR` if you set one) to your shell config and reload the
   shell (`source ~/.bashrc` or `source ~/.zshrc`).
 - **Node too old, or missing** — the installer checks `node >= 20` before
   doing anything else and exits with `Node.js >= 20 is required (found:
@@ -229,22 +229,22 @@ colour in its output.
   missing at all, pointing at nvm (`nvm install --lts`) or your distro's
   Node package either way.
 - **`Git clone failed. If the repo is private, set GITHUB_TOKEN or use
-  APPCTL_SRC.`** — the script's own message on a failed clone. This also
-  covers a bad `APPCTL_REF`: `git clone --branch` fails the same way for a
+  KVOX_SRC.`** — the script's own message on a failed clone. This also
+  covers a bad `KVOX_REF`: `git clone --branch` fails the same way for a
   ref that doesn't exist as it does for a private repo with no credential.
 - **Low disk space** — printed as a warning (`Low disk space at install
   target (...MB free; ~50 MB needed)`), never a failure; the install
   continues.
 - **"Version mismatch" warning after install** — the installer compares the
   version it just built against what the freshly-installed binary reports
-  and warns if they differ. Usually a stale shim, or a second `appctl`
-  earlier on `$PATH` shadowing the one just installed — `which -a appctl`
+  and warns if they differ. Usually a stale shim, or a second `kvox`
+  earlier on `$PATH` shadowing the one just installed — `which -a kvox`
   shows every copy and the order your shell will find them in.
 
 ## Logging in
 
 ```bash
-appctl login
+kvox login
 ```
 
 This runs the device authorization flow (RFC 8628) — the same "open this URL
@@ -264,12 +264,12 @@ and enter this code" flow you'd use for the CLI on a smart TV. It:
 The credential minted here is a **personal access token** (a `pat_...`
 string), not a short-lived session JWT — that's what makes it practical to
 stay logged in for days between commands. It's stored, along with the server
-URL, in `~/.appctl/config.json`. That file is created with `0600`
+URL, in `~/.kvox/config.json`. That file is created with `0600`
 permissions (owner read/write only) even across restarts and partial
 rewrites — see the extensive comment on `writeConfigFile` in
 `apps/cli/src/config.ts` if you want the mechanics of how that's guaranteed
 under a hostile umask. The token itself is never printed by any command; if
-you need to see what's stored, `appctl config` prints the server URL and a
+you need to see what's stored, `kvox config` prints the server URL and a
 masked hint (`pat_abcd••••••••` — the first eight characters, then a
 fixed-width mask) instead.
 
@@ -283,8 +283,8 @@ token on the command line puts it in your shell history and in `ps` output
 for other users on the machine, which is why the CLI warns about it after a
 successful `--token` login.
 
-There is deliberately no `appctl logout` subcommand — logout only exists as
-a screen in the interactive menu (`appctl` with no arguments, then choose
+There is deliberately no `kvox logout` subcommand — logout only exists as
+a screen in the interactive menu (`kvox` with no arguments, then choose
 Logout). It calls `DELETE /api/pat/{id}` to revoke the token on the server
 *before* deleting the local file, on purpose: the PAT this CLI holds is
 long-lived, so simply deleting the local copy would leave a fully valid,
@@ -296,7 +296,7 @@ equivalent of the interactive logout.
 ## Calling the API
 
 ```bash
-appctl api GET /api/auth/me
+kvox api GET /api/auth/me
 ```
 
 `api` is the one command that talks to arbitrary endpoints. The response
@@ -304,7 +304,7 @@ body goes to stdout and nothing else does — status line, spinner and errors
 all go to stderr — so a pipeline sees exactly the server's JSON:
 
 ```bash
-appctl api GET /api/users --raw | jq '.data[].email'
+kvox api GET /api/users --raw | jq '.data[].email'
 ```
 
 `--raw` prints compact, uncoloured JSON with a trailing newline and nothing
@@ -315,7 +315,7 @@ not the unwrapped `data` field — because a paginated list's `data` +
 `TransformInterceptor` as `{ data, meta }` look identical from the outside,
 and unwrapping one of them silently drops the pagination info.
 
-Other flags, from `appctl api --help`:
+Other flags, from `kvox api --help`:
 
 ```
 Arguments:
@@ -332,25 +332,25 @@ Options:
 ```
 
 The exit code is `0` only for a 2xx response; anything else exits non-zero
-with the server's own error message, so `appctl api ... || echo failed` (or
+with the server's own error message, so `kvox api ... || echo failed` (or
 just relying on `set -e`) works the way you'd expect in a script. The `/api`
-prefix is optional — `appctl api GET /api/auth/me` and `appctl api GET
+prefix is optional — `kvox api GET /api/auth/me` and `kvox api GET
 /auth/me` request the same thing, since the client's base URL already ends
 in `/api`.
 
 ## Deploying to a server
 
 ```bash
-appctl deploy doctor
+kvox deploy doctor
 ```
 
 Four subcommands (`doctor`, `install`, `update`, `status`) take this
 repository — or, far more likely, your fork of it — from an empty VPS to
 running, migrated, seeded, and served over HTTPS at a real domain, and back
 to the latest revision on every subsequent deploy. They run **on the VPS
-itself**: SSH in with your own credentials, build `appctl` from a checkout
+itself**: SSH in with your own credentials, build `kvox` from a checkout
 there (see [Building from source](#building-from-source-development) below),
-and run these from inside it. There's no SSH client in `appctl` and no
+and run these from inside it. There's no SSH client in `kvox` and no
 laptop-driven orchestration — it never dials out to a server on your behalf.
 
 For the full walkthrough — prerequisites, the manual step after install,
@@ -361,8 +361,8 @@ For why it's built this way, see
 ### Checking prerequisites
 
 ```bash
-appctl deploy doctor
-appctl deploy doctor --domain app.example.com
+kvox deploy doctor
+kvox deploy doctor --domain app.example.com
 ```
 
 Nothing is installed, written or started — it's read-only, so it's safe to
@@ -375,14 +375,14 @@ database (reachable, credentials valid, database exists, can create tables,
 TLS), and — once `--domain` turns them on — DNS and the certificate.
 
 ```bash
-appctl deploy doctor --json | jq '.checks[] | select(.status=="fail")'
+kvox deploy doctor --json | jq '.checks[] | select(.status=="fail")'
 ```
 
 Exits `6` (`EXIT.PRECONDITION`) when a required check fails, `0` when only
 recommended checks fail — warnings never fail the run. `--json` prints a
 machine-readable report on stdout and nothing on stderr.
 
-Other flags, from `appctl deploy doctor --help`:
+Other flags, from `kvox deploy doctor --help`:
 
 ```
 Options:
@@ -403,7 +403,7 @@ an unreachable database before you're mid-pipeline, not partway through one.
 ### Installing
 
 ```bash
-appctl deploy install --domain app.example.com
+kvox deploy install --domain app.example.com
 ```
 
 Runs preflight → checkout → environment → validate-environment → build →
@@ -415,8 +415,8 @@ value hardcoded in the CLI — a fork deploys itself with no configuration
 change; see "Deploying a fork" below.
 
 ```bash
-appctl deploy install --domain app.example.com --staging
-appctl deploy install --non-interactive --domain app.example.com
+kvox deploy install --domain app.example.com --staging
+kvox deploy install --non-interactive --domain app.example.com
 ```
 
 Use `--staging` while you're still working out the setup — it requests a
@@ -435,7 +435,7 @@ the step that failed rather than re-running everything before it.
 discards uncommitted changes in the checkout it manages; `--skip-doctor`,
 `--skip-proxy` and `--skip-seed` each skip exactly the one stage they name.
 
-Other flags, from `appctl deploy install --help`:
+Other flags, from `kvox deploy install --help`:
 
 ```
 Options:
@@ -477,7 +477,7 @@ needed — nothing here assumes `main`), and the environment wizard's
 questions are parsed structurally from *your fork's own*
 `infra/compose/.env.example`, not a list of field names hardcoded into the
 CLI. Rename the app, add a new secret to your `.env.example`, remove a
-feature block: `appctl deploy install` follows all of it with no flag
+feature block: `kvox deploy install` follows all of it with no flag
 changes, for the same reason `api <method> <path>` (above) doesn't go stale
 as endpoints change — nothing about a specific repository's shape is baked
 into the tool.
@@ -485,7 +485,7 @@ into the tool.
 ### Updating
 
 ```bash
-appctl deploy update
+kvox deploy update
 ```
 
 Brings an already-installed server up to the latest revision (or, with
@@ -493,7 +493,7 @@ Brings an already-installed server up to the latest revision (or, with
 It refuses to run at all if nothing is installed at `--root` yet.
 
 ```bash
-appctl deploy update --ref v1.4.0
+kvox deploy update --ref v1.4.0
 ```
 
 If the resolved ref's commit hasn't moved since the last successful run,
@@ -513,9 +513,9 @@ want them upserted back.
 There's no automatic rollback. A partly-applied database migration can't be
 undone by checking out the old code, so on failure `update` prints the
 previous revision and the exact command to redeploy it —
-`appctl deploy update --ref <sha> --force` — and leaves that decision to you.
+`kvox deploy update --ref <sha> --force` — and leaves that decision to you.
 
-Other flags, from `appctl deploy update --help`:
+Other flags, from `kvox deploy update --help`:
 
 ```
 Options:
@@ -532,7 +532,7 @@ Options:
 ### Checking status
 
 ```bash
-appctl deploy status
+kvox deploy status
 ```
 
 Reports whether the deployment at `--root` is healthy: container state, an
@@ -540,8 +540,8 @@ immediate `/api/health/ready` poll, migration state, and — with `--domain` —
 an external HTTPS check.
 
 ```bash
-appctl deploy status --domain app.example.com
-appctl deploy status --json || alert 'deployment unhealthy'
+kvox deploy status --domain app.example.com
+kvox deploy status --json || alert 'deployment unhealthy'
 ```
 
 `/api/health/ready` returning 200 only proves the app can run `SELECT 1`
@@ -553,7 +553,7 @@ probe.
 Exits `0` when serving and the schema is current, `1` when installed but
 unhealthy, `2` when nothing is installed at `--root`.
 
-Other flags, from `appctl deploy status --help`:
+Other flags, from `kvox deploy status --help`:
 
 ```
 Options:
@@ -575,7 +575,7 @@ issue or hand to someone else for help.
 
 ## Running a worker node
 
-`appctl node` turns this machine into a worker for the application's job
+`kvox node` turns this machine into a worker for the application's job
 queue (epic #254). A node claims jobs from the server, runs them locally,
 and submits results — the same handler code the API server would have run,
 on hardware you control. Nodes coordinate through nothing but the database,
@@ -585,11 +585,11 @@ about the others.
 ### Enrolling a machine
 
 ```bash
-appctl node enroll
+kvox node enroll
 ```
 
 One command from nothing to a machine that holds its own credential. It
-runs the same device-authorization login `appctl login` does, then uses that
+runs the same device-authorization login `kvox login` does, then uses that
 session to mint a **node credential** (`nod_…`) and stores it for you. You
 never see or paste the secret.
 
@@ -602,7 +602,7 @@ a separate command rather than just reusing your login token.
 | Flag | Meaning |
 |---|---|
 | `-s, --server <url>` | Server URL, when this machine has no stored one |
-| `-n, --name <name>` | Name for the credential in the web UI (default: `appctl node: user@host`) |
+| `-n, --name <name>` | Name for the credential in the web UI (default: `kvox node: user@host`) |
 | `--expires-in-days <n>` | Expire the credential after N days (default: never — see below) |
 | `--no-browser` | Print the verification URL instead of opening one |
 | `--show-token` | Also print the credential on stdout, for provisioning another machine |
@@ -614,14 +614,14 @@ confined to `/api/nodes/*`. Revocation is the control, and it is immediate —
 revoke from the web UI and the next request fails.
 
 If the server predates node credentials you get a named error, not a stack
-trace, pointing at the fallback: create a PAT in the web UI, `appctl login
+trace, pointing at the fallback: create a PAT in the web UI, `kvox login
 --token <pat>`, then register. That works, but the PAT carries your full
 account authority.
 
 ### Registering the node
 
 ```bash
-appctl node register --concurrency 4 --types example.checksum
+kvox node register --concurrency 4 --types example.checksum
 ```
 
 Creates (or re-attaches to) this machine's row in the fleet. Registration is
@@ -661,7 +661,7 @@ machine.
 easiest type to offload: it needs no credential and no database route at all,
 only `ffmpeg` and `ffprobe` on `PATH` (the same startup self-test refuses to
 declare the type without *both* — they ship in one package, but the executor
-runs them as two programs). `appctl node install-deps` installs them on
+runs them as two programs). `kvox node install-deps` installs them on
 Debian/RHEL/Alpine; the container image already has them. It is offered
 whenever an administrator leaves `transcription.transcodeNodeOffloadEnabled`
 on, which is the default — there is no second switch, because there is no
@@ -670,16 +670,16 @@ credential to broker.
 ### Inspecting the resolved settings
 
 ```bash
-appctl node config          # human-readable, on stderr
-appctl node config --json   # machine-readable, on stdout — never includes the token
+kvox node config          # human-readable, on stderr
+kvox node config --json   # machine-readable, on stdout — never includes the token
 ```
 
 ### Running the worker
 
 ```bash
-appctl node start                 # foreground, attachable
-appctl node start --daemon        # detached, logging to ~/.appctl/node/logs/node.log
-appctl node start --headless      # container/service mode
+kvox node start                 # foreground, attachable
+kvox node start --daemon        # detached, logging to ~/.kvox/node/logs/node.log
+kvox node start --headless      # container/service mode
 ```
 
 **Every run hosts the control socket**, foreground or detached — a worker you
@@ -697,12 +697,12 @@ means it is going away.
 ### Inspecting and controlling a running worker
 
 ```bash
-appctl node status                # live snapshot from the running worker
-appctl node status --json
-appctl node logs -n 200           # recent lines
-appctl node logs --follow         # attach and stream
-appctl node set-concurrency 8     # applies live; persists either way
-appctl node stop
+kvox node status                # live snapshot from the running worker
+kvox node status --json
+kvox node logs -n 200           # recent lines
+kvox node logs --follow         # attach and stream
+kvox node set-concurrency 8     # applies live; persists either way
+kvox node stop
 ```
 
 `status` is never simply unavailable: with no worker running it falls back to
@@ -735,11 +735,11 @@ capability over an object, and a log file is a thing people attach to issues.
 ### Health checks, dependencies and running as a service
 
 ```bash
-appctl node doctor                 # three independent groups of checks
-appctl node install-deps --dry-run # the dependency step framework
-appctl node service install        # systemd user unit
-appctl node service status
-appctl node service uninstall
+kvox node doctor                 # three independent groups of checks
+kvox node install-deps --dry-run # the dependency step framework
+kvox node service install        # systemd user unit
+kvox node service status
+kvox node service uninstall
 ```
 
 `doctor` checks **this machine**, **the server** and **the worker**
@@ -751,7 +751,7 @@ For database-backup offload (`db.backup.run`) it also reports the `pg_dump`
 client version and, with `--db-host`, a TCP probe of the database:
 
 ```bash
-appctl node doctor --db-host db.internal:5432
+kvox node doctor --db-host db.internal:5432
 ```
 
 Both are **warnings, never failures**. Most nodes in a fleet will never take
@@ -786,7 +786,7 @@ the worker re-execs itself once with an explicit, RAM-aware
 `--max-old-space-size`, and the original process becomes a signal-forwarding
 shim — so a container `SIGTERM` still reaches the worker and still drains, and
 a signal-killed child makes the shim die of the *same* signal rather than
-reporting a clean exit to its supervisor. Set `APPCTL_HEAP_LIMIT_MB=0` to turn
+reporting a clean exit to its supervisor. Set `KVOX_HEAP_LIMIT_MB=0` to turn
 re-tuning off entirely (the right answer when a cgroup or a PaaS already
 manages memory).
 
@@ -796,7 +796,7 @@ growth trend in MB/hour. A single reading cannot tell a leak from GC sawtooth;
 the trend is what turns "it died" into "it was climbing 40 MB/hour".
 
 **The pre-OOM valve** fires once, when `heapUsed / heapLimit` crosses
-`APPCTL_MEMORY_THRESHOLD` (default 0.9), in this order:
+`KVOX_MEMORY_THRESHOLD` (default 0.9), in this order:
 
 1. write a heap snapshot — **first**, before the drain collects the evidence away
 2. log the decision with the sample
@@ -804,7 +804,7 @@ the trend is what turns "it died" into "it was climbing 40 MB/hour".
 4. exit `71`, for a supervised restart
 
 > ⚠️ **The valve requires a supervisor.** It exits deliberately after a clean
-> drain, so without `Restart=on-failure` (`appctl node service install` sets
+> drain, so without `Restart=on-failure` (`kvox node service install` sets
 > this) or `restart: unless-stopped` in compose, a *successful* drain leaves
 > the worker down.
 
@@ -814,13 +814,13 @@ valve it would never fire at all, the process would recycle cleanly forever,
 and the retainer could never be named.
 
 ```bash
-appctl node heap-snapshot   # ask the LIVE daemon to write one
+kvox node heap-snapshot   # ask the LIVE daemon to write one
 ```
 
 Asking the live daemon is the point: restarting to attach a diagnostic flag
 discards exactly the accumulated state that names the retainer. Snapshots go to
 `<state dir>/heap-snapshots`, newest five kept, and are skipped with a clear
-reason when free disk is under 1.5× the live heap. `APPCTL_HEAP_SNAPSHOTS=false`
+reason when free disk is under 1.5× the live heap. `KVOX_HEAP_SNAPSHOTS=false`
 disables all three snapshot paths at once.
 
 ### Running a fleet in containers
@@ -838,11 +838,11 @@ node — its name derives from the container hostname, which Docker makes unique
 — and they load-balance through the server's `FOR UPDATE SKIP LOCKED` claim, so
 two replicas can never receive the same job.
 
-> **Do not set `APPCTL_NODE_NAME` or `APPCTL_NODE_ID` when scaling.** Every
+> **Do not set `KVOX_NODE_NAME` or `KVOX_NODE_ID` when scaling.** Every
 > replica would reattach to the *same* node row, and the server's per-node
 > claim cap would be shared between processes that each think they own it.
 
-Only `APPCTL_SERVER_URL` and `APPCTL_TOKEN` are required: with no config file
+Only `KVOX_SERVER_URL` and `KVOX_TOKEN` are required: with no config file
 the worker synthesises everything else from the environment and starts.
 
 Two settings in `worker.compose.yml` are load-bearing rather than decorative:
@@ -868,7 +868,7 @@ with the same tag conventions.
 
 ### The interactive dashboard
 
-Run `appctl` with no arguments in a real terminal and choose **Worker node**.
+Run `kvox` with no arguments in a real terminal and choose **Worker node**.
 It offers a live dashboard, `doctor`, the log, and both `register` and
 `enroll` — all calling the same functions the subcommands call, so there is no
 second implementation of anything.
@@ -902,8 +902,8 @@ Run `npm run docs:worker-env --workspace=cli` to regenerate it after changing
 <!-- GENERATED:WORKER_ENV_TABLE:START -->
 | Variable | Description |
 | --- | --- |
-| `KVOX_SERVER_URL` | `APPCTL_SERVER_URL` — reused from `config.ts`, never minted again. |
-| `KVOX_TOKEN` | `APPCTL_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. |
+| `KVOX_SERVER_URL` | `KVOX_SERVER_URL` — reused from `config.ts`, never minted again. |
+| `KVOX_TOKEN` | `KVOX_TOKEN` — reused from `config.ts`. A `nod_` credential, normally. |
 | `KVOX_NODE_ID` | The node row this process re-attaches to, so a restart is not a new node. |
 | `KVOX_NODE_NAME` | Display name; defaults to the hostname. Reattachment keys on it server-side. |
 | `KVOX_CONCURRENCY` | How many jobs this process runs at once. 1–64, per the server's own cap. |
@@ -918,10 +918,10 @@ Run `npm run docs:worker-env --workspace=cli` to regenerate it after changing
 | `KVOX_HEAP_SNAPSHOTS` | `false` to disable ALL THREE heap-snapshot paths (#277). |
 <!-- GENERATED:WORKER_ENV_TABLE:END -->
 
-With `APPCTL_SERVER_URL` and `APPCTL_TOKEN` set and no config file at all, the
+With `KVOX_SERVER_URL` and `KVOX_TOKEN` set and no config file at all, the
 worker synthesises its settings from the environment and starts. If it cannot
 write the file back (a read-only container home is common), it warns and keeps
-going — set `APPCTL_NODE_ID` so a restart re-attaches instead of registering
+going — set `KVOX_NODE_ID` so a restart re-attaches instead of registering
 again.
 
 ## CI usage
@@ -931,11 +931,11 @@ home directory to have logged in from earlier, so skip `login` entirely and
 set:
 
 ```bash
-export APPCTL_SERVER_URL=https://app.example.com
-export APPCTL_TOKEN=pat_...
+export KVOX_SERVER_URL=https://app.example.com
+export KVOX_TOKEN=pat_...
 ```
 
-The environment always wins over `~/.appctl/config.json` when both are
+The environment always wins over `~/.kvox/config.json` when both are
 present, specifically so a pipeline's service token can't be shadowed by
 whatever a developer happens to have logged in as on a shared runner.
 
@@ -944,12 +944,12 @@ Create and revoke the token itself from the web UI's **Access Tokens** page
 for CI use; the device flow is how the CLI gets one for a human logging in
 interactively.
 
-`appctl` also refuses to launch its interactive menu unless stdout and stdin
+`kvox` also refuses to launch its interactive menu unless stdout and stdin
 are both real terminals, `TERM` is set to something other than `dumb`, and
-neither `CI` nor `CONTINUOUS_INTEGRATION` is set — so `appctl api ...` in a
+neither `CI` nor `CONTINUOUS_INTEGRATION` is set — so `kvox api ...` in a
 pipeline behaves identically whether or not those variables happen to be
 set. If you need to force that refusal in an environment that looks like a
-terminal but isn't one you want to interact with, set `APPCTL_NO_TUI` to
+terminal but isn't one you want to interact with, set `KVOX_NO_TUI` to
 any truthy value (anything except empty, `0`, `false`, or `no`); every
 explicit subcommand ignores this gate entirely and is unaffected by it.
 
@@ -974,16 +974,16 @@ See [`docs/RENAMING.md`](../../docs/RENAMING.md) for the full rebrand
 walkthrough — this section only covers what's specific to the CLI.
 
 **The executable's own identity** — the command name shown in `--help` and
-errors, the config directory (`~/.appctl/`), and the `APPCTL_`
+errors, the config directory (`~/.kvox/`), and the `KVOX_`
 environment-variable prefix — is derived from a separate constant:
 
 ```ts
 // apps/cli/src/branding.ts
-export const CLI_NAME = 'appctl';
+export const CLI_NAME = 'kvox';
 ```
 
 The split is intentional: a product called "Acme" may perfectly well still
-ship a command called `appctl`, and renaming the binary moves a filesystem
+ship a command called `kvox`, and renaming the binary moves a filesystem
 path and an environment-variable prefix, which renaming the product must not.
 
 Change that one line (see the comment above it in `branding.ts` for the
@@ -995,15 +995,15 @@ to itself by name follow automatically. The one place it can't reach is the
 code runs, so it has to be updated by hand to match, and a test in
 `apps/cli/src/branding.test.ts` asserts the two stay in sync.
 
-Note that the env var prefix is `APPCTL_`, not `APP_` — a bare `APP_` prefix
+Note that the env var prefix is `KVOX_`, not `APP_` — a bare `APP_` prefix
 is generic enough to collide with unrelated variables in a shared CI shell,
 so the prefix is derived from the (longer, more specific) binary name
 instead. If you've seen `APP_SERVER_URL` / `APP_TOKEN` mentioned elsewhere,
 that's what it would have been under a shorter, collision-prone prefix;
-`APPCTL_SERVER_URL` / `APPCTL_TOKEN` is what the code actually reads.
+`KVOX_SERVER_URL` / `KVOX_TOKEN` is what the code actually reads.
 
-`install.sh`'s default `APPCTL_REPO` (the git URL it clones when
-`APPCTL_SRC` isn't set) is a second place a fork has to edit by hand,
+`install.sh`'s default `KVOX_REPO` (the git URL it clones when
+`KVOX_SRC` isn't set) is a second place a fork has to edit by hand,
 alongside the `bin` key above. It's a standalone shell script that runs
 *before* any of this repo's own code executes — `git clone`s the source
 first — so it has no way to read `CLI_NAME` out of `branding.ts` and derive
@@ -1042,8 +1042,8 @@ or, from inside `apps/cli`:
 node dist/cli.js --help
 ```
 
-If you want the bare `appctl` command on your PATH without publishing, `npm
-link` from `apps/cli` (`package.json`'s `bin` field maps `appctl` to
+If you want the bare `kvox` command on your PATH without publishing, `npm
+link` from `apps/cli` (`package.json`'s `bin` field maps `kvox` to
 `./dist/cli.js`) does that using the standard npm mechanism.
 
 For iterating on the CLI's own source without rebuilding on every change,

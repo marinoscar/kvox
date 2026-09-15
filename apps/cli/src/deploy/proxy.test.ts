@@ -315,7 +315,7 @@ describe('issueCertificate', () => {
 });
 
 describe('removeVhost', () => {
-  it('refuses to remove a vhost appctl did not write', async () => {
+  it('refuses to remove a vhost kvox did not write', async () => {
     const root = makeProxyRoot();
     const path = vhostPath(target(root));
     writeFileSync(path, 'server { listen 80; } # somebody else wrote this\n');

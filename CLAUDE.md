@@ -34,7 +34,7 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
       src/
       src/__tests__/
       Dockerfile            # Web container (near its code)
-    cli/                    # First-party command-line client (`appctl`)
+    cli/                    # First-party command-line client (`kvox`)
       src/
         commands/           # `login`, `api`, `config` subcommands
         tui/                # Interactive ink menu (real terminals only)
@@ -414,7 +414,7 @@ cd apps/api && npm run prisma:migrate
 - **API Reference (Scalar)**: http://localhost:3535/api/docs
 - **Uptrace**: http://localhost:14318 (when otel stack running)
 
-## Command-Line Client (`appctl`)
+## Command-Line Client (`kvox`)
 
 `apps/cli` is the first-party CLI for this API (epic #110). It is a workspace
 package (`--workspace=cli`) that is built from this monorepo and not published;
@@ -428,7 +428,7 @@ do not restate it here.
 
 ### Deploying to a VPS
 
-VPS deployment (epic #168) lives entirely in this CLI as `appctl deploy
+VPS deployment (epic #168) lives entirely in this CLI as `kvox deploy
 doctor|install|update|status` — there is no separate deploy script or
 Ansible playbook anywhere in this repo, and there shouldn't be. The design
 (why it runs on the VPS with no SSH client in the CLI, why TLS is terminated
@@ -1080,7 +1080,7 @@ Note: `DATABASE_URL` is constructed automatically from these variables at runtim
 - `SECRETS_ENCRYPTION_KEY` - Base64-encoded 32-byte AES-256 key (generate with `openssl rand -base64 32`) that encrypts runtime-configured credentials (e.g. an SMTP password an admin enters through the app) before they are stored in the `credentials` table. Optional until a credential is stored; see `docs/runbooks/rotate-secrets-encryption-key.md`. Note: credentials configured at runtime through the UI/API live encrypted in the database, not in the environment — unlike every other secret in this section.
 
 **Background Job Queue** (all bare/unprefixed, like `POSTGRES_*` — API-side vars never take
-the CLI's `APPCTL_` prefix; see `infra/compose/.env.example` for the full comments):
+the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments):
 - `JOBS_MAX_ATTEMPTS` - Attempts before a job is permanently `failed`, charged at claim time (default: 3)
 - `JOBS_RETRY_BASE_MS` / `JOBS_RETRY_MAX_MS` - Retry backoff bounds, doubling with jitter (default: 2000 / 60000)
 - `JOBS_RATELIMIT_MAX_HITS` - Times a job may be provider-rate-limited before giving up — a budget separate from `JOBS_MAX_ATTEMPTS` (default: 10)

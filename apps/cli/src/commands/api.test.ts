@@ -8,7 +8,7 @@ import type { BodyResolutionContext } from '../request-body.js';
 import { parseQueryPair, parseRequestPath, registerApiCommand } from './api.js';
 
 // =============================================================================
-// `appctl api <method> <path>`  (issue #144, epic #110)
+// `kvox api <method> <path>`  (issue #144, epic #110)
 // =============================================================================
 //
 // NO REAL SOCKET IS EVER OPENED. `ApiClient` (constructed inside
@@ -20,7 +20,7 @@ import { parseQueryPair, parseRequestPath, registerApiCommand } from './api.js';
 // into the next test.
 //
 // Credentials are supplied through `ConfigContext.env` (never the real
-// process environment, never a real `~/.appctl` file) so `requireCredentials`
+// process environment, never a real `~/.kvox` file) so `requireCredentials`
 // always succeeds without touching the filesystem or this machine's actual
 // login state.
 //
@@ -66,7 +66,7 @@ function baseCtx(
   return {
     // A path that cannot exist, so `readConfigFile` always sees ENOENT and
     // credentials come from `env` alone — no dependency on this machine's
-    // real home directory or a real `~/.appctl/config.json`.
+    // real home directory or a real `~/.kvox/config.json`.
     home: '/nonexistent-appctl-test-home-144',
     env: {
       [SERVER_URL_ENV_VAR]: 'http://test.local',
@@ -84,7 +84,7 @@ interface RunResult {
 
 /**
  * Build a fresh `Command`, register `api` on it with the given ctx, and
- * invoke `appctl api <args...>`. Mirrors config.test.ts's
+ * invoke `kvox api <args...>`. Mirrors config.test.ts's
  * `registerConfigCommand(program, ctx)` + `parseAsync(..., { from: 'user' })`
  * pattern.
  *

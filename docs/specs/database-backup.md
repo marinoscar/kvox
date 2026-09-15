@@ -1326,7 +1326,7 @@ that simply did not happen. `psql` is **degradable**: it is used only for two
 best-effort provenance reads (`db_version`, `migration_name`), and without it
 the backup is taken, uploaded and verified with two `null` columns.
 
-`appctl node doctor` reports both the client version and — with
+`kvox node doctor` reports both the client version and — with
 `--db-host host[:port]` — a TCP probe of the database, **as warnings, never
 failures**. A node that cannot reach the database must simply not declare the
 type; failing `doctor` would tell every node in a fleet that it is broken

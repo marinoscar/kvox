@@ -27,7 +27,7 @@ import { WORKER_ENV } from './worker-env.js';
 //   2. A CONFIG IS SYNTHESISED FROM THE ENVIRONMENT ALONE when no file exists
 //      and both the server URL and the token are present. That single
 //      behaviour is what lets a worker container run with ZERO interactive
-//      setup: `docker run -e APPCTL_SERVER_URL=... -e APPCTL_TOKEN=nod_...`
+//      setup: `docker run -e KVOX_SERVER_URL=... -e KVOX_TOKEN=nod_...`
 //      and nothing else. Without it, every replica in a fleet would need a
 //      config file baked in or mounted, which is a secret in an image or a
 //      volume per replica.

@@ -1231,7 +1231,7 @@ flowchart LR
     subgraph Server["API server process"]
         WP["In-process worker pool<br/>(JOBS_WORKER_CONCURRENCY slots)"]
     end
-    subgraph Node["Remote worker node (appctl node start)"]
+    subgraph Node["Remote worker node (kvox node start)"]
         NC["Claim loop"]
     end
     DB[("jobs table<br/>(PostgreSQL)")]
@@ -1966,7 +1966,7 @@ alternatives, and (where relevant) an operator runbook it defers to:
 | [database-restore.md](specs/database-restore.md) | Database restore and rollback — the pre-flight gates, the three outcomes, the maintenance-window coordination |
 | [browser-notifications.md](specs/browser-notifications.md) | OS-level browser notifications and Web Push — the service worker, the notification capability model, the admin kill switch |
 | [notification-broadcasts.md](specs/notification-broadcasts.md) | Admin notification broadcasts — composing and sending an announcement to every user, the fan-out job types |
-| [vps-deploy.md](specs/vps-deploy.md) | `appctl deploy` — VPS installation and update design, why it runs on the VPS with no SSH client in the CLI |
+| [vps-deploy.md](specs/vps-deploy.md) | `kvox deploy` — VPS installation and update design, why it runs on the VPS with no SSH client in the CLI |
 
 ---
 

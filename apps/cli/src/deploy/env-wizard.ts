@@ -51,7 +51,7 @@ export interface WizardOptions {
    * Resolves the annotation for a key. Defaults to `metadataFor` - the VPS
    * deployment's ENV_METADATA, which is what every existing caller wants.
    *
-   * THIS IS THE PROFILE SEAM (issue #344). `appctl init` bootstraps a LOCAL
+   * THIS IS THE PROFILE SEAM (issue #344). `kvox init` bootstraps a LOCAL
    * checkout, and local differs from a VPS in exactly the places this registry
    * encodes: NODE_ENV is not forced to production, APP_URL is not derived from
    * a public domain, and the observability defaults are wanted rather than

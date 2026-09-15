@@ -8,10 +8,10 @@ import { WORKER_ENV } from './worker-env.js';
 // Where a worker keeps its runtime state  (issue #272, epic #254)
 // =============================================================================
 //
-// One derivation, from `configDirPath()` — i.e. `~/.appctl/`, which is itself
+// One derivation, from `configDirPath()` — i.e. `~/.kvox/`, which is itself
 // derived from `CONFIG_DIR_NAME` and therefore from `CLI_NAME`. There is no
 // second hard-coded path anywhere in the node subsystem, and no
-// `~/.appctl-node/`: a second directory is a second identity to rename, a
+// `~/.kvox-node/`: a second directory is a second identity to rename, a
 // second thing to mount into a container, and a second place for a token to
 // end up.
 //
@@ -49,7 +49,7 @@ export const TMP_DIR_NAME = 'tmp';
  * The worker's state directory.
  *
  * Defaults under the CLI's own config directory rather than beside it, so
- * `~/.appctl/` remains the single thing a user backs up, deletes or mounts.
+ * `~/.kvox/` remains the single thing a user backs up, deletes or mounts.
  */
 export function nodeStateDir(ctx?: NodePathsContext): string {
   const override = (ctx?.env ?? process.env)[WORKER_ENV.stateDir];

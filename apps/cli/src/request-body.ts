@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 
+import { CLI_NAME } from './branding.js';
 import { UsageError } from './errors.js';
 
 // =============================================================================
@@ -15,7 +16,7 @@ import { UsageError } from './errors.js';
 //
 // WHY THE FILE AND STDIN FORMS ARE NOT A CONVENIENCE. #144 gives the reason
 // directly: bodies do not belong in shell history, and a POST body is the
-// common case for that. `appctl api POST /api/allowlist --data '{"email":...}'`
+// common case for that. `kvox api POST /api/allowlist --data '{"email":...}'`
 // is fine; the same command carrying an API key, a person's details, or a
 // 40KB settings document is a credential-and-PII leak into `~/.bash_history`,
 // into `ps` output visible to every other user on the box, and into the CI log
@@ -154,7 +155,7 @@ function readFileText(path: string, ctx?: BodyResolutionContext): string {
 /**
  * Read stdin to the end.
  *
- * THE TTY GUARD IS THE POINT OF THIS FUNCTION. Without it, `appctl api POST
+ * THE TTY GUARD IS THE POINT OF THIS FUNCTION. Without it, `kvox api POST
  * /api/allowlist --data -` typed at an interactive prompt simply HANGS — the
  * terminal is a valid stdin that will never reach EOF until the user happens
  * to know to press Ctrl-D. To anyone who mistyped the flag that is an
@@ -178,7 +179,7 @@ async function readStdinText(ctx?: BodyResolutionContext): Promise<string> {
   if (isTTY) {
     throw new UsageError(
       '--data - reads the request body from stdin, but stdin is a terminal. ' +
-        'Pipe the body in (`cat body.json | appctl api ...`) or use --data @body.json.',
+        `Pipe the body in (\`cat body.json | ${CLI_NAME} api ...\`) or use --data @body.json.`,
     );
   }
 

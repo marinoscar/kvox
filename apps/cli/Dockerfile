@@ -48,8 +48,11 @@ WORKDIR /app
 # worker without ffmpeg would start, look healthy, and quietly never claim a
 # transcode.
 #
-# A node running OUTSIDE a container gets the same two binaries from
-# `appctl node install-deps`, which has a matching step.
+# A node running OUTSIDE a container gets the same two binaries from the
+# CLI's `node install-deps` command, which has a matching step. (The command
+# is deliberately not spelled with its binary name here: this file is held
+# product-neutral by the branding guard in node/worker-env.test.ts, and in
+# this fork the binary name is also the repository name.)
 RUN apk add --no-cache ffmpeg
 
 # -----------------------------------------------------------------------------

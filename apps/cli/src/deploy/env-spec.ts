@@ -4,7 +4,7 @@
 //
 // THIS REPOSITORY IS A TEMPLATE. Forks add variables, remove variables and
 // rename them. A hardcoded list of questions in the CLI would be wrong the day
-// after the fork, and every downstream repository would have to patch appctl
+// after the fork, and every downstream repository would have to patch kvox
 // before it could deploy itself - which is exactly the problem the shell
 // scripts this epic replaces already have.
 //
