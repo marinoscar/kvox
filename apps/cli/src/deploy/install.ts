@@ -37,10 +37,16 @@ import {
   type FetchLike,
   type ProxyTarget,
 } from './proxy.js';
-import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
+import {
+  ensureCheckout,
+  ensureGitHubAuth,
+  githubSlug,
+  resolveRepoTarget,
+  type RepoTarget,
+} from './repo.js';
 import { collectServerFacts } from './server-facts.js';
 import { readState, writeState, type DeployState } from './state.js';
-import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
+import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
 import type { PromptContext } from '../prompt.js';
 
@@ -94,6 +100,12 @@ export interface InstallOptions {
   skipDoctor?: boolean | undefined;
   skipProxy?: boolean | undefined;
   skipSeed?: boolean | undefined;
+  /**
+   * `--skip-github`: never consult `gh`, even for a GitHub remote. CI's
+   * `file://` remote is skipped anyway (not on GitHub); this is for a box
+   * that reaches GitHub some other way and must not be asked to log in.
+   */
+  skipGithub?: boolean | undefined;
   noCache?: boolean | undefined;
   force?: boolean | undefined;
   email?: string | undefined;
@@ -187,6 +199,23 @@ export function secretsFrom(env: ReadonlyMap<string, string>): SecretEntry[] {
   return [...env.entries()]
     .filter(([key]) => metadataFor(key).secret === true)
     .map(([key, value]) => ({ key, value }));
+}
+
+/**
+ * The repository to deploy, resolved once. `runInstall` resolves it at entry
+ * when the app name has to come from it; otherwise the first step that needs
+ * it (`auth`, then `checkout`) does, and later ones read it back.
+ */
+async function resolveTarget(context: InstallContext): Promise<RepoTarget> {
+  if (context.target !== undefined) return context.target;
+  const target = await resolveRepoTarget({
+    cwd: context.options.cwd ?? process.cwd(),
+    runCommand: context.runCommand,
+    ...(context.options.repo === undefined ? {} : { repoFlag: context.options.repo }),
+    ...(context.options.ref === undefined ? {} : { refFlag: context.options.ref }),
+  });
+  context.target = target;
+  return target;
 }
 
 async function compose(
@@ -292,18 +321,39 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
       },
     },
     {
+      id: 'auth',
+      title: 'Authenticate with GitHub',
+      skip: (context) => {
+        if (context.options.skipGithub === true) return 'skipped with --skip-github';
+        // Decided here when the remote is already known; otherwise `run`
+        // resolves it and stands down itself for another forge.
+        const url = context.options.repo ?? context.target?.url;
+        if (url !== undefined && githubSlug(url) === null) return 'not a GitHub remote';
+        return undefined;
+      },
+      async run(context) {
+        // On the server the credential is `gh` (#123, epic #118 decision 1):
+        // stop here, with the login command, rather than at git's own prompt
+        // for a password that no longer exists - and BEFORE the clone.
+        const target = await resolveTarget(context);
+        const auth = await ensureGitHubAuth({
+          runCommand: context.runCommand,
+          repoUrl: target.url,
+          cwd: context.options.deployRoot,
+          ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
+        });
+        context.journal.line(
+          auth === undefined
+            ? `${target.url} is not a GitHub remote; plain git will be used`
+            : `git reaches ${auth.slug} through gh's credential helper`,
+        );
+      },
+    },
+    {
       id: 'checkout',
       title: 'Fetch the application',
       async run(context) {
-        // Already resolved at entry when the app name had to come from it.
-        const target =
-          context.target ??
-          (await resolveRepoTarget({
-            cwd: context.options.cwd ?? process.cwd(),
-            runCommand: context.runCommand,
-            ...(context.options.repo === undefined ? {} : { repoFlag: context.options.repo }),
-            ...(context.options.ref === undefined ? {} : { refFlag: context.options.ref }),
-          }));
+        const target = await resolveTarget(context);
 
         context.journal.line(`Deploying ${target.url} @ ${target.ref} (${target.source})`);
 
@@ -678,7 +728,9 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
 
   if (result.failed !== undefined) {
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
-    throw new Error(
+    // A precondition (the preflight, a logged-out gh) keeps its exit code 6.
+    throw pipelineFailure(
+      result,
       `${result.failed.title} failed: ${result.failed.detail ?? 'unknown error'}\n` +
         `The full log is at ${journal.path}\n` +
         `Fix the cause and re-run with --resume to continue from this step.`,

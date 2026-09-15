@@ -252,6 +252,7 @@ export {
   isUtcTimestamp,
   readDeployInfo,
   readDeployedAppVersion,
+  updateDeployInfoRemote,
   validateDeployInfo,
   writeDeployInfo,
 } from './deploy/deploy-info.js';
@@ -347,9 +348,13 @@ export type {
 // Working out what to deploy without naming a repository (#179) - the other
 // half of the template-safety property, alongside the env spec.
 export {
+  compareRevisions,
   displayRepoUrl,
   ensureCheckout,
+  ensureGitHubAuth,
+  fetchRemote,
   findGitRoot,
+  githubSlug,
   hasEmbeddedCredentials,
   normaliseRepoUrl,
   resolveRepoTarget,
@@ -357,8 +362,11 @@ export {
 export type {
   CheckoutOptions,
   CheckoutResult,
+  FetchResult,
+  GitHubAuthOptions,
   RepoTarget,
   ResolveRepoOptions,
+  RevisionComparison,
 } from './deploy/repo.js';
 
 // Publishing the app through the shared host proxy (#181). The rollback in
@@ -405,8 +413,8 @@ export type {
   WaitOptions,
 } from './deploy/health.js';
 
-export { registerDeployCommand, renderHealth, renderResult, renderSummary } from './commands/deploy.js';
-export type { DeployContext, DoctorReport } from './commands/deploy.js';
+export { describeAge, registerDeployCommand, renderHealth, renderResult, renderSummary } from './commands/deploy.js';
+export type { DeployContext, DoctorReport, StatusUpdate } from './commands/deploy.js';
 
 // The install pipeline (#180). Steps are DATA so the --skip flags, --resume,
 // and the TUI's progress view all read one sequence.
@@ -425,5 +433,17 @@ export type { InstallOptions, InstallResult } from './deploy/install.js';
 
 // The update pipeline (#182). Its preconditions are the opposite of install's,
 // which is why it is its own command rather than a flag.
-export { buildUpdateSteps, runUpdate } from './deploy/update.js';
-export type { UpdateOptions, UpdateResult } from './deploy/update.js';
+export {
+  buildUpdateSteps,
+  checkForUpdate,
+  remoteFromCheck,
+  renderUpdateCheck,
+  runUpdate,
+} from './deploy/update.js';
+export type {
+  UpdateCheck,
+  UpdateCheckOptions,
+  UpdateCheckResult,
+  UpdateOptions,
+  UpdateResult,
+} from './deploy/update.js';

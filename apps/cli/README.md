@@ -486,8 +486,11 @@ install. It runs around 32 checks, in five groups:
 - **GitHub CLI** — `gh` installed, `gh auth status` passing, and the
   repository being deployed visible to that account (`gh repo view`). All
   three are required: the server clones a private repository over HTTPS with
-  gh's token. A remote that isn't on github.com is skipped, not failed;
-  `--skip-github` skips the group.
+  gh's token — `install` and `update` run `gh auth setup-git` for you, and
+  an `ssh://` or `git@github.com:` origin copied from a laptop is rewritten
+  to HTTPS so that helper is the credential git uses. A remote that isn't on
+  github.com is skipped, not failed, and deployed with plain git;
+  `--skip-github` skips the group (and the pipelines' `auth` step).
 - **Database** — the external PostgreSQL database: reachable, credentials
   valid, database exists, can create tables, TLS.
 - **DNS** and **TLS** — once `--domain` turns them on: the name resolves and
@@ -542,14 +545,18 @@ an unreachable database before you're mid-pipeline, not partway through one.
 kvox deploy install --domain app.example.com
 ```
 
-Runs preflight → network → checkout → environment → validate-environment →
-build → migrate → seed → start → health → publish → verify, in that order,
-printing each step's result as it completes. `--domain` is the one required
-flag. `network` creates the external `devnet` Docker network the compose
-files declare when the host does not have it yet, and is a no-op when it
-does. Everything is written under `<apps-root>/<name>/`, and the `.env` it
-writes carries `COMPOSE_PROJECT_NAME=<name>` so a hand-run `docker compose`
-in the compose directory sees the same project the CLI does.
+Runs preflight → network → auth → checkout → environment →
+validate-environment → build → migrate → seed → start → health → publish →
+verify, in that order, printing each step's result as it completes.
+`--domain` is the one required flag. `network` creates the external `devnet`
+Docker network the compose files declare when the host does not have it yet,
+and is a no-op when it does. `auth` is where a logged-out GitHub CLI stops
+the run — exit `6`, with the `gh auth login` command to fix it — *before*
+anything is cloned; for a GitHub remote it runs `gh auth setup-git` so plain
+`git` fetches with gh's token, and for any other remote it stands down.
+Everything is written under `<apps-root>/<name>/`, and the `.env` it writes
+carries `COMPOSE_PROJECT_NAME=<name>` so a hand-run `docker compose` in the
+compose directory sees the same project the CLI does.
 
 The repository and ref come from **this checkout's own git remote**, not a
 value hardcoded in the CLI — a fork deploys itself with no configuration
@@ -620,6 +627,7 @@ Options:
   --skip-doctor        Skip the prerequisite checks
   --skip-proxy         Do not touch the reverse proxy or request a certificate
   --skip-seed          Do not run the database seed
+  --skip-github        Never consult the GitHub CLI, even for a GitHub remote
   --no-cache           Rebuild images without the layer cache
   --force              Discard uncommitted changes in the checkout
   --staging            Use Let's Encrypt staging while working out the setup
@@ -659,17 +667,35 @@ kvox deploy update
 ```
 
 Brings an already-installed server up to the latest revision (or, with
-`--ref`, to a specific one): fetch, build, migrate, seed, restart, verify.
-It refuses to run at all if nothing is installed under `--apps-root` yet.
+`--ref`, to a specific one): auth, fetch, build, migrate, seed, restart,
+verify. It refuses to run at all if nothing is installed under `--apps-root`
+yet.
 
 ```bash
+kvox deploy update --check
 kvox deploy update --ref v1.4.0
 ```
+
+`--check` answers "is there anything to update, and what?" without doing
+it: it fetches, then prints `current <sha12> → latest <sha12>, N commits
+behind` followed by the commit subjects (or `already up to date at
+<sha12>`), records the result as `remote` in `deploy-info/info.json` —
+which is what the About page reads — and exits `0` either way, with nothing
+checked out, built or written to the state file. `--json` prints that
+object (`current`, `latest`, `commitsBehind`, `commits`, `checkedAt`) on
+stdout. A plain `update` prints the same block before it builds, so you see
+what is about to be applied; there is deliberately no auto-update when
+behind and no update cron.
 
 If the resolved ref's commit hasn't moved since the last successful run,
 `update` exits `0` **without doing anything** — no rebuild, no restart —
 which is what makes it safe to run unattended, e.g. from cron. `--force`
 rebuilds anyway even when the revision is unchanged.
+
+The `auth` step runs `gh auth status` and `gh auth setup-git` on every
+update for a GitHub remote — idempotently, so a server whose git config was
+reset heals here rather than stalling on git's own password prompt. A
+logged-out `gh` stops the update with exit `6` before the fetch.
 
 The database seed **re-runs by default** on every `update`. The seed is
 entirely upserts, and re-running it is the only way a permission or role a
@@ -699,12 +725,15 @@ Options:
                      "/opt/infra/apps")
   --name <app>       App folder and compose project name
   --root <dir>       Deployment directory, overriding --apps-root/--name
+  --check            Report what an update would apply, then stop; nothing is
+                     changed
   --ref <ref>        Branch, tag or commit to move to
   --force            Rebuild even when the revision has not changed
   --no-cache         Rebuild images without the layer cache
   --non-interactive  Never prompt; fail listing anything unresolved
   --skip-seed        Do not re-run the database seed
   --skip-proxy       Do not touch the reverse proxy
+  --skip-github      Never consult the GitHub CLI, even for a GitHub remote
   --json             Print a machine-readable result on stdout
 ```
 
@@ -716,7 +745,13 @@ kvox deploy status
 
 Reports whether the installed app is healthy: container state, an
 immediate `/api/health/ready` poll, migration state, and — with `--domain` —
-an external HTTPS check.
+an external HTTPS check. It also runs the same fetch-and-compare
+`update --check` does (bounded to ten seconds, never cloning) and renders it
+as an `Update` line — `3 commits behind (latest <sha12>, checked just now)`
+— refreshing `remote` in `deploy-info/info.json` on the way; `--json`
+includes it as `remote`. When the remote can't be reached the line reads
+`update check: unavailable (<reason>)` and the verdict is unaffected:
+"is it serving?" and "is it current?" are different questions.
 
 ```bash
 kvox deploy status --domain app.example.com

@@ -14,6 +14,7 @@ import {
   isUtcTimestamp,
   readDeployInfo,
   readDeployedAppVersion,
+  updateDeployInfoRemote,
   validateDeployInfo,
   writeDeployInfo,
   type DeployInfo,
@@ -189,6 +190,34 @@ describe('writeDeployInfo / readDeployInfo', () => {
 
   it('returns undefined when there is no file', () => {
     expect(readDeployInfo(makeRoot())).toBeUndefined();
+  });
+
+  it('patches only remote, keeping everything the last deploy wrote (update --check, status)', () => {
+    const root = makeRoot();
+    makeClone(root, '1.2.3');
+    writeDeployInfo(root, sampleState(root), FACTS);
+    // The clone moves on after the deploy; a check must not re-read it.
+    makeClone(root, '9.9.9');
+    const remote = { sha: 'b'.repeat(40), commitsBehind: 3, checkedAt: '2026-09-16T00:00:00.000Z' };
+
+    const path = updateDeployInfoRemote(root, remote);
+
+    expect(path).toBe(deployInfoPath(root));
+    expect(readDeployInfo(root)).toEqual({
+      ...buildDeployInfo(root, sampleState(root), FACTS, { appVersion: '1.2.3' }),
+      remote,
+    });
+    expect(statSync(path as string).mode & 0o777).toBe(0o644);
+    expect(readdirSync(deployInfoDir(root))).toEqual(['info.json']);
+  });
+
+  it('patches nothing, and invents nothing, when there is no file yet', () => {
+    const root = makeRoot();
+
+    const path = updateDeployInfoRemote(root, { sha: 'b'.repeat(40), commitsBehind: 0, checkedAt: '2026-09-16T00:00:00.000Z' });
+
+    expect(path).toBeUndefined();
+    expect(readDeployInfo(root)).toBeUndefined();
   });
 
   it('rejects a file that is not JSON, or not this schema', () => {

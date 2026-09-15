@@ -12,7 +12,7 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { writeDeployInfo } from './deploy-info.js';
+import { updateDeployInfoRemote, writeDeployInfo, type DeployRemote } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
@@ -31,10 +31,19 @@ import {
   type FetchLike,
   type ProxyTarget,
 } from './proxy.js';
-import { ensureCheckout, resolveRepoTarget, type RepoTarget } from './repo.js';
+import {
+  compareRevisions,
+  ensureCheckout,
+  ensureGitHubAuth,
+  fetchRemote,
+  githubSlug,
+  resolveRepoTarget,
+  type FetchResult,
+  type RepoTarget,
+} from './repo.js';
 import { collectServerFacts } from './server-facts.js';
 import { requireState, writeState, type DeployState } from './state.js';
-import { runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
+import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { composeArgv, composeCwd, secretsFrom } from './install.js';
 import type { PromptContext } from '../prompt.js';
 
@@ -63,6 +72,16 @@ import type { PromptContext } from '../prompt.js';
 //      causes worse outages than one that stops and reports. A failed update
 //      leaves the previous SHA recorded and hands back the command to redeploy
 //      it, which is an honest manual recovery path.
+//
+//   3. IT SHOWS ITS DIFF FIRST, AND `--check` STOPS THERE (issue #123, epic
+//      #118 decision 12). The `fetch` step fetches and resolves WITHOUT moving
+//      the clone, works out `current -> latest, N commits behind` and the
+//      subjects, records `remote` in deploy-info, and only then checks out.
+//      With `--check` the pipeline ends at that step: no checkout, no state
+//      write, no build - an answer to "is there anything to update?" that a
+//      cron, the About page and the TUI's confirmation can all rely on to
+//      have changed nothing. Update itself stays a deliberate human action:
+//      there is no auto-update when behind, and no update cron.
 // =============================================================================
 
 export interface UpdateOptions {
@@ -73,6 +92,13 @@ export interface UpdateOptions {
   nonInteractive?: boolean | undefined;
   skipSeed?: boolean | undefined;
   skipProxy?: boolean | undefined;
+  /** `--skip-github`: never consult `gh`; see InstallOptions.skipGithub. */
+  skipGithub?: boolean | undefined;
+  /**
+   * `--check`: fetch, compare and report, then stop. Nothing is checked out,
+   * built or written except deploy-info's `remote`.
+   */
+  check?: boolean | undefined;
   /** `--proxy-container`; otherwise the state's, else the preflight's find. */
   proxyContainer?: string | undefined;
   /** `--no-ipv6`: render the vhost without `[::]` listeners. */
@@ -97,6 +123,8 @@ interface UpdateContext extends StepContext {
   target?: RepoTarget | undefined;
   previousSha?: string | undefined;
   commitSha?: string | undefined;
+  /** What the fetch found, before anything moved (#123). */
+  check?: UpdateCheck | undefined;
   env?: Map<string, string> | undefined;
   /** Set when the remote has not moved, so the rest of the pipeline stands down. */
   unchanged?: boolean | undefined;
@@ -158,6 +186,134 @@ async function compose(
 /** Every step after `fetch` stands down when the remote has not moved. */
 function skipWhenUnchanged(context: UpdateContext): string | undefined {
   return context.unchanged === true ? 'already up to date' : undefined;
+}
+
+// ---------------------------------------------------------------------------
+// What an update would bring  (issue #123)
+// ---------------------------------------------------------------------------
+
+/** The answer to "is there anything to update, and what?" */
+export interface UpdateCheck {
+  /** The deployed commit, from the state. */
+  current: string;
+  /** What the ref resolves to on the remote now. */
+  latest: string;
+  /** `git rev-list --count current..latest`. */
+  commitsBehind: number;
+  /** The newest 50 non-merge commits in that range, newest first. */
+  commits: { sha: string; subject: string }[];
+  /** ISO-8601 UTC. */
+  checkedAt: string;
+}
+
+/** The `remote` deploy-info records for a check. */
+export function remoteFromCheck(check: UpdateCheck): DeployRemote {
+  return { sha: check.latest, commitsBehind: check.commitsBehind, checkedAt: check.checkedAt };
+}
+
+export interface UpdateCheckOptions {
+  deployRoot: string;
+  state: DeployState;
+  runCommand: typeof defaultRunCommand;
+  /** A ref other than the deployed one; `--ref`. */
+  ref?: string | undefined;
+  cwd?: string | undefined;
+  hooks?: DeployHooks | undefined;
+  /** Bounds the fetch; `status` gives it ten seconds, a deploy does not. */
+  fetchTimeoutMs?: number | undefined;
+  /** Refuse to clone; `status` must not create a checkout to answer. */
+  requireExisting?: boolean | undefined;
+}
+
+export interface UpdateCheckResult {
+  target: RepoTarget;
+  fetched: FetchResult;
+  check: UpdateCheck;
+}
+
+/**
+ * Fetches, resolves the ref, and compares it with what is deployed - without
+ * moving the clone. Shared by the update pipeline's `fetch` step and by
+ * `status`, so the two never disagree about how far behind a server is.
+ */
+export async function checkForUpdate(options: UpdateCheckOptions): Promise<UpdateCheckResult> {
+  const target = await resolveRepoTarget({
+    cwd: options.cwd ?? process.cwd(),
+    runCommand: options.runCommand,
+    state: options.state,
+    ...(options.ref === undefined ? {} : { refFlag: options.ref }),
+  });
+
+  const fetched = await fetchRemote(target, {
+    deployRoot: options.deployRoot,
+    runCommand: options.runCommand,
+    ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
+    ...(options.fetchTimeoutMs === undefined ? {} : { fetchTimeoutMs: options.fetchTimeoutMs }),
+    ...(options.requireExisting === undefined ? {} : { requireExisting: options.requireExisting }),
+  });
+
+  const current = options.state.commitSha;
+  const comparison = await compareRevisions(
+    { cwd: fetched.path, runCommand: options.runCommand },
+    current,
+    fetched.resolved,
+  );
+
+  return {
+    target,
+    fetched,
+    check: {
+      current,
+      latest: fetched.resolved,
+      ...comparison,
+      checkedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/** Twelve characters, the same width `status` shows the revision at. */
+function shortSha(sha: string): string {
+  return sha.slice(0, 12);
+}
+
+/**
+ * The human rendering of a check: a headline, then one line per commit.
+ * Used by the pipeline (through the hooks, before `build`), by `update
+ * --check`, and by the TUI's confirmation.
+ */
+export function renderUpdateCheck(check: UpdateCheck): string[] {
+  if (check.commitsBehind === 0 && check.current === check.latest) {
+    return [`already up to date at ${shortSha(check.current)}`];
+  }
+  const noun = check.commitsBehind === 1 ? 'commit' : 'commits';
+  return [
+    `current ${shortSha(check.current)} → latest ${shortSha(check.latest)}, ${check.commitsBehind} ${noun} behind`,
+    ...check.commits.map((commit) => `${commit.sha}  ${commit.subject}`),
+  ];
+}
+
+/**
+ * Records the check in deploy-info (epic #118 decision 7: `remote` is
+ * refreshed by `update --check` and `status`, never by the API). An existing
+ * file is patched so nothing the last deploy wrote is rebuilt. A deployment
+ * from before #120 has no file: `--check` writes its first one from the
+ * unchanged state, while a real update leaves that to the deploy itself, so
+ * a failed update still creates nothing the application could misread.
+ */
+async function recordUpdateCheck(context: UpdateContext, check: UpdateCheck): Promise<void> {
+  const remote = remoteFromCheck(check);
+  let path = updateDeployInfoRemote(context.options.deployRoot, remote);
+  if (path === undefined && context.options.check === true) {
+    path = writeDeployInfo(
+      context.options.deployRoot,
+      context.state,
+      await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
+      { remote },
+    );
+  }
+  if (path !== undefined) {
+    context.journal.line(`Recorded remote ${shortSha(remote.sha)} (${remote.commitsBehind} behind) in ${path}`);
+  }
 }
 
 export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
@@ -222,24 +378,68 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
       },
     },
     {
+      id: 'auth',
+      title: 'Authenticate with GitHub',
+      skip: (context) => {
+        if (context.options.skipGithub === true) return 'skipped with --skip-github';
+        if (githubSlug(context.state.repoUrl) === null) return 'not a GitHub remote';
+        return undefined;
+      },
+      async run(context) {
+        // Every update, not only the install: `gh auth setup-git` is
+        // idempotent, and a server whose git config was reset heals here
+        // rather than stalling on git's own prompt in the fetch (#123).
+        const auth = await ensureGitHubAuth({
+          runCommand: context.runCommand,
+          repoUrl: context.state.repoUrl,
+          cwd: context.options.deployRoot,
+          ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
+        });
+        if (auth !== undefined) {
+          context.journal.line(`git reaches ${auth.slug} through gh's credential helper`);
+        }
+      },
+    },
+    {
       id: 'fetch',
       title: 'Look for a new revision',
       async run(context) {
-        const target = await resolveRepoTarget({
-          cwd: context.options.cwd ?? process.cwd(),
-          runCommand: context.runCommand,
+        // Fetch and compare BEFORE anything moves, so what an update is about
+        // to apply is shown first - and, with --check, is all that happens.
+        const { target, fetched, check } = await checkForUpdate({
+          deployRoot: context.options.deployRoot,
           state: context.state,
-          ...(context.options.ref === undefined ? {} : { refFlag: context.options.ref }),
+          runCommand: context.runCommand,
+          ...(context.options.ref === undefined ? {} : { ref: context.options.ref }),
+          ...(context.options.cwd === undefined ? {} : { cwd: context.options.cwd }),
+          ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
+        context.target = target;
+        context.check = check;
+
+        const [headline, ...subjects] = renderUpdateCheck(check);
+        context.journal.line(headline ?? '');
+        context.hooks?.onProgress?.(headline ?? '');
+        for (const line of subjects) {
+          context.journal.line(`  ${line}`);
+          context.hooks?.onLog?.(line);
+        }
+
+        await recordUpdateCheck(context, check);
+
+        if (context.options.check === true) {
+          // The clone stays where it was; runUpdate ends the pipeline here.
+          return;
+        }
 
         const checkout = await ensureCheckout(target, {
           deployRoot: context.options.deployRoot,
           runCommand: context.runCommand,
+          fetched,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           ...(context.options.force === undefined ? {} : { force: context.options.force }),
         });
 
-        context.target = target;
         context.previousSha = checkout.previousSha;
         context.commitSha = checkout.sha;
 
@@ -540,6 +740,20 @@ export interface UpdateResult {
   commitSha: string;
   journalPath: string;
   durationMs: number;
+  /** What the fetch found; the whole answer under `--check`. */
+  check?: UpdateCheck | undefined;
+}
+
+/**
+ * Under `--check` the pipeline is the steps up to and including `fetch`,
+ * literally - not the full list with the rest skipped - so the hooks count
+ * `[3/3]` rather than announcing seven steps that were never going to run.
+ */
+function stepsFor(options: UpdateOptions): DeployStep<UpdateContext>[] {
+  const steps = buildUpdateSteps();
+  if (options.check !== true) return steps;
+  const fetch = steps.findIndex((step) => step.id === 'fetch');
+  return steps.slice(0, fetch + 1);
 }
 
 export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
@@ -568,19 +782,34 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     ...(env === undefined ? {} : { env }),
   };
 
-  const result = await runPipeline(buildUpdateSteps(), context);
+  const result = await runPipeline(stepsFor(options), context);
 
   if (result.failed !== undefined) {
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     const previous = context.previousSha ?? state.commitSha;
 
-    throw new Error(
+    // A precondition (a logged-out gh) keeps its exit code 6.
+    throw pipelineFailure(
+      result,
       `${result.failed.title} failed: ${result.failed.detail ?? 'unknown error'}\n` +
         `The full log is at ${journal.path}\n` +
         // An honest manual recovery path. A partially-applied migration cannot
         // be undone by checking out the old code, so this does not pretend to.
         `To go back to the previous revision: ${CLI_NAME} deploy update --ref ${previous} --force`,
     );
+  }
+
+  if (options.check === true) {
+    // Nothing was checked out or deployed, so the state is not written and
+    // `previousSha` is not touched: the file's mtime is the proof.
+    journal.finish('success', 'check only');
+    return {
+      changed: false,
+      commitSha: state.commitSha,
+      journalPath: journal.path,
+      durationMs: Date.now() - startedAt,
+      ...(context.check === undefined ? {} : { check: context.check }),
+    };
   }
 
   if (context.unchanged === true) {
@@ -595,6 +824,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       commitSha: context.commitSha ?? state.commitSha,
       journalPath: journal.path,
       durationMs: Date.now() - startedAt,
+      ...(context.check === undefined ? {} : { check: context.check }),
     };
   }
 
@@ -626,15 +856,28 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     commitSha: context.commitSha ?? state.commitSha,
     journalPath: journal.path,
     durationMs: Date.now() - startedAt,
+    ...(context.check === undefined ? {} : { check: context.check }),
   };
 }
 
-/** Writes deploy-info from the state, after `writeState` - never before. */
+/**
+ * Writes deploy-info from the state, after `writeState` - never before.
+ *
+ * `remote` is what this very run found: the deployed commit now IS the
+ * latest the fetch resolved, so it is recorded as zero behind rather than
+ * dropped to null - an About page that said "never checked" right after an
+ * update would be wrong about the one moment it is certainly current.
+ */
 async function refreshDeployInfo(context: UpdateContext, state: DeployState): Promise<void> {
+  const remote: DeployRemote | null =
+    context.check === undefined
+      ? null
+      : { sha: state.commitSha, commitsBehind: 0, checkedAt: context.check.checkedAt };
   const path = writeDeployInfo(
     context.options.deployRoot,
     state,
     await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
+    { remote },
   );
   context.journal.line(`Wrote ${path}`);
 }
