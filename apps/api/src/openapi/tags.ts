@@ -302,6 +302,16 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'The maintenance window: turning it on, the message callers see while it is open, and ' +
           'whether administrators keep access. Gated on `system_settings:write`.',
       },
+      {
+        name: 'About',
+        description:
+          'What is deployed here: the deployment record the CLI wrote at deploy time (version, ' +
+          'commit, ref, install and update timestamps, host facts, the last remote check), plus ' +
+          'the running process\'s own facts and the database\'s. Gated on `system_settings:read` ' +
+          '— an administrator\'s configuration read, deliberately not a permission of its own. ' +
+          'Read-only, and never makes a network call: "is an update available" is whatever the ' +
+          'CLI last recorded.',
+      },
     ],
   },
 ];

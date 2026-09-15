@@ -262,6 +262,8 @@ This section states the rules; that file explains why.
    real, verified mapping as the model:
    - `system_settings:read` / `system_settings:write` →
      `system-settings.controller.ts`
+   - `system_settings:read` → `about.controller.ts` (the About card, epic
+     #118 decision 8 — deliberately no `about:read`)
    - `users:read` → `users.controller.ts`
    - `allowlist:read` → `allowlist.controller.ts` (gates content **inside**
      the Users & Allowlist page, not the route — see rule 2's
@@ -562,6 +564,17 @@ uses. See [`docs/specs/maintenance-mode.md`](docs/specs/maintenance-mode.md)
 and [`docs/runbooks/maintenance-mode.md`](docs/runbooks/maintenance-mode.md).
 - `GET /api/admin/maintenance` - Effective state plus each contributing layer (`system_settings:read`)
 - `PUT /api/admin/maintenance` - Open or close the window (`system_settings:write`)
+
+### About (Admin-only)
+What is deployed here (issue #124, epic #118). Gated on `system_settings:read`
+and **deliberately not a permission of its own** — an administrator's
+configuration read, and the exact string the `/admin/settings/about` card
+(#126) carries. Reads the CLI's `deploy-info/info.json` (`DEPLOY_INFO_PATH`,
+default `/app/deploy-info/info.json`) on **every request**, **never performs
+network I/O**, and **always answers 200** — the dev stack has no file and
+answers `deployInfoStatus: "absent"`; an unreachable database answers
+`database: null` + `databaseError`. See [`docs/API.md`](docs/API.md#about-admin-only).
+- `GET /api/admin/about` - The deploy-info record (`deployInfoStatus`: `ok`/`absent`/`unreadable`/`invalid`), live runtime facts, database facts, and `updateAvailable` derived from `remote.commitsBehind` (`null` = the CLI has never checked) (`system_settings:read`)
 
 ### Database Backup (Admin-only)
 - `GET /api/admin/db-backup/node-credential-preflight` - Whether a worker node can be handed a
@@ -1056,6 +1069,7 @@ Key variables (see `infra/compose/.env.example` for full list):
 - `NODE_ENV` - Environment (development/production)
 - `PORT` - API port (default: 3000)
 - `APP_URL` - Base URL (default: http://localhost:3535)
+- `DEPLOY_INFO_PATH` - Where `GET /api/admin/about` reads the CLI's `deploy-info/info.json` from (default: `/app/deploy-info/info.json`, the read-only bind mount `kvox deploy` sets up). Read on every request, so a rewrite needs no restart; a missing file is `deployInfoStatus: "absent"`, never an error
 
 **Database (individual connection parameters):**
 - `POSTGRES_HOST` - Database hostname (default: localhost)
