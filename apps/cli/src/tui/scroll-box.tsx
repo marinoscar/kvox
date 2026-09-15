@@ -1,4 +1,5 @@
 import { Box, Text, useInput } from 'ink';
+import Spinner from 'ink-spinner';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useTerminalSize } from './layout.js';
@@ -49,6 +50,17 @@ export interface ScrollBoxProps {
    * and the only one that is not annoying.
    */
   followTail?: boolean | undefined;
+  /**
+   * A header line above the viewport (#129): "Build log", "Events". Drawn
+   * only when given, so every existing caller renders exactly as before.
+   */
+  title?: string | undefined;
+  /**
+   * A spinner in the header while work is appending lines (#129). Drawn in
+   * the header line, so a live log announces it is live without a screen
+   * needing its own spinner row above the box.
+   */
+  busy?: boolean | undefined;
 }
 
 /** Never show fewer than this, even in a very short terminal. */
@@ -59,11 +71,17 @@ export function ScrollBox({
   reservedRows,
   isActive,
   followTail,
+  title,
+  busy,
 }: ScrollBoxProps): ReactNode {
   const { rows } = useTerminalSize();
   const [offset, setOffset] = useState(0);
 
-  const viewportRows = Math.max(MIN_VIEWPORT_ROWS, rows - (reservedRows ?? 12));
+  // The header is one row of the box, so it comes out of the viewport and
+  // not out of the screen's `reservedRows` budget — a screen that fitted the
+  // frame to the terminal before it had a title still fits after.
+  const hasHeader = title !== undefined || busy === true;
+  const viewportRows = Math.max(MIN_VIEWPORT_ROWS, rows - (reservedRows ?? 12) - (hasHeader ? 1 : 0));
   const maxOffset = Math.max(0, lines.length - viewportRows);
   // The previous maximum, so "is the user at the bottom?" can be answered
   // before this render's content changed what the bottom is.
@@ -107,6 +125,17 @@ export function ScrollBox({
 
   return (
     <Box flexDirection="column">
+      {hasHeader ? (
+        <Box>
+          {busy === true ? (
+            <Text color="cyan">
+              <Spinner type="dots" />{' '}
+            </Text>
+          ) : null}
+          {title === undefined ? null : <Text bold>{title}</Text>}
+        </Box>
+      ) : null}
+
       {visible.map((line, index) => (
         // The index is part of the key because the SAME TEXT can legitimately
         // appear twice in formatted JSON (`  },` on consecutive lines is the
