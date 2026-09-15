@@ -148,7 +148,7 @@ jobs:
           --health-retries 12
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # NOT the default shallow clone. Step 9 adds a commit and asks the
           # CLI for `git rev-list --count <deployed>..<latest>`; a depth-1
