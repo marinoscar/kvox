@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../executor.js';
-import { HOST_CHECKS, evaluateDf, parseDf } from './host.js';
+import { HOST_CHECKS, evaluateDf, evaluateUfw, parseDf } from './host.js';
 import { ALL_CHECKS, requiredChecks } from './index.js';
 import {
   checksPassed,
@@ -65,9 +65,20 @@ const HEALTHY: Responder = (argv) => {
       stdout: 'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 100000000 10000000 80000000 12% /',
     };
   }
-  if (line.startsWith('certbot --version')) return { exitCode: 0, stdout: 'certbot 2.9.0' };
-  if (line.startsWith('nginx -t')) return { exitCode: 0, stderr: 'syntax is ok' };
+  // The GitHub CLI, installed and logged in (github.test.ts covers the detail).
+  if (line.startsWith('gh --version')) return { exitCode: 0, stdout: 'gh version 2.40.1 (2023-12-13)' };
+  if (line.startsWith('gh auth status')) return { exitCode: 0, stdout: 'Logged in to github.com account octocat' };
+  if (line.startsWith('gh repo view')) return { exitCode: 0, stdout: '{"name":"r"}' };
+  // The containerised proxy: found by its published port, on the host
+  // network, with a valid config and IPv6 - and the certbot image pulled.
+  if (line.startsWith('docker ps --filter publish=443')) return { exitCode: 0, stdout: 'proxy-nginx' };
   if (line.startsWith('docker ps')) return { exitCode: 0, stdout: '' };
+  if (line.includes('{{.State.Running}}')) return { exitCode: 0, stdout: 'true' };
+  if (line.includes('{{.HostConfig.NetworkMode}}')) return { exitCode: 0, stdout: 'host' };
+  if (line.startsWith('docker image inspect certbot/certbot')) return { exitCode: 0, stdout: 'certbot/certbot:latest' };
+  if (line.startsWith('docker exec proxy-nginx nginx -t')) return { exitCode: 0, stderr: 'nginx: configuration file /etc/nginx/nginx.conf test is successful' };
+  if (line.includes('cat /proc/net/if_inet6')) return { exitCode: 0, stdout: '00000000000000000000000000000001 01 80 10 80 lo' };
+  if (line.startsWith('ufw status')) return { exitCode: 0, stdout: 'Status: active\n\nTo   Action   From\n80/tcp   ALLOW   Anywhere\n443/tcp  ALLOW   Anywhere' };
   return undefined;
 };
 
@@ -98,6 +109,70 @@ describe('the registry as a whole', () => {
     const bad = results.filter((result) => result.status === 'fail' || result.status === 'warn');
 
     expect(bad).toEqual([]);
+    expect(checksPassed(results)).toBe(true);
+    // Nothing skipped either: on a healthy box every host check has an answer.
+    expect(results.filter((result) => result.status === 'skip')).toEqual([]);
+  });
+
+  it('never spawns certbot or nginx on the host', async () => {
+    // Epic #118, decision 3: the proxy is a container and certificates come
+    // from `docker run certbot/certbot`. A host binary is never consulted.
+    const seen: string[] = [];
+    await runChecks(
+      HOST_CHECKS,
+      context({
+        runCommand: fakeRunCommand((argv) => {
+          seen.push(argv[0] ?? '');
+          return HEALTHY(argv);
+        }),
+      }),
+    );
+
+    expect(seen).not.toContain('certbot');
+    expect(seen).not.toContain('nginx');
+    expect(HOST_CHECKS.map((check) => check.id)).not.toContain('certbot-installed');
+  });
+
+  it('skips every proxy-related check under --skip-proxy, and still passes', async () => {
+    // The pipeline must be runnable where there is no proxy at all (CI), so
+    // a preflight told to ignore the proxy must not fail on it.
+    const results = await runChecks(
+      HOST_CHECKS,
+      context({
+        skipProxy: true,
+        fs: emptyFs,
+        portListening: async () => false,
+        runCommand: fakeRunCommand((argv) => {
+          const line = argv.join(' ');
+          // `docker network inspect devnet` is the devnet check, not a proxy
+          // probe: it must keep answering healthily here.
+          if (line.startsWith('docker network')) return HEALTHY(argv);
+          if (line.startsWith('docker ps') || line.includes('inspect') || line.startsWith('docker exec') || line.startsWith('ufw')) {
+            return { exitCode: 1, stderr: 'no such container' };
+          }
+          return HEALTHY(argv);
+        }),
+      }),
+    );
+
+    const byId = new Map(results.map((result) => [result.id, result]));
+    for (const id of [
+      'proxy-root',
+      'proxy-container',
+      'proxy-network-mode',
+      'proxy-ipv6',
+      'certbot-image',
+      'port-80-listening',
+      'port-443-listening',
+      'proxy-config-valid',
+      'ufw-ports',
+    ]) {
+      expect(byId.get(id)?.status, id).toBe('skip');
+      expect(byId.get(id)?.detail, id).toBe('--skip-proxy');
+    }
+    // Dependants of a skipped check skip too, through `requires`.
+    expect(byId.get('proxy-conf-writable')?.status).toBe('skip');
+    expect(byId.get('acme-webroot')?.status).toBe('skip');
     expect(checksPassed(results)).toBe(true);
   });
 
@@ -172,6 +247,18 @@ describe('runChecks', () => {
 
     expect(results[1]?.status).toBe('skip');
     expect(results[1]?.detail).toContain('boom');
+  });
+
+  it('hands a skipped prerequisite reason down, so a flag reads the same throughout', async () => {
+    const flagged: Check = {
+      ...ok,
+      id: 'flagged',
+      run: async () => ({ status: 'skip', detail: '--skip-proxy' }),
+    };
+    const results = await runChecks([flagged, { ...dependent, requires: ['flagged'] }], context());
+
+    expect(results[1]?.status).toBe('skip');
+    expect(results[1]?.detail).toBe('--skip-proxy');
   });
 
   it('streams each result as it completes', async () => {
@@ -440,21 +527,31 @@ describe('proxy checks', () => {
     expect(result.remedy).toContain('webroot');
   });
 
-  it('skips the nginx -t check when there is no host nginx binary', async () => {
-    // A containerised proxy is the documented setup, so this check simply
-    // cannot answer - which is not the same as a problem.
+  it('validates the config inside the container it found, never on the host', async () => {
+    const seen: string[][] = [];
     const result = await find('proxy-config-valid').run(
-      context({ runCommand: fakeRunCommand(() => undefined) }),
+      context({
+        proxyContainer: 'edge',
+        runCommand: fakeRunCommand((argv) => {
+          seen.push([...argv]);
+          return argv.join(' ').startsWith('docker exec edge nginx -t')
+            ? { exitCode: 0, stderr: 'syntax is ok' }
+            : HEALTHY(argv);
+        }),
+      }),
     );
 
-    expect(result.status).toBe('skip');
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('edge');
+    expect(seen).toEqual([['docker', 'exec', 'edge', 'nginx', '-t']]);
   });
 
   it('warns when the shared proxy config is already broken', async () => {
     const result = await find('proxy-config-valid').run(
       context({
+        proxyContainer: 'proxy-nginx',
         runCommand: fakeRunCommand((argv) =>
-          argv.join(' ').startsWith('nginx -t')
+          argv.join(' ').startsWith('docker exec proxy-nginx nginx -t')
             ? { exitCode: 1, stderr: 'nginx: [emerg] unknown directive "bogus"' }
             : HEALTHY(argv),
         ),
@@ -462,7 +559,223 @@ describe('proxy checks', () => {
     );
 
     expect(result.status).toBe('warn');
+    expect(result.detail).toContain('unknown directive');
     expect(result.remedy).toContain('every site');
+  });
+
+  it('is skipped by the runner when no proxy container was found', async () => {
+    // Without a container there is nothing to exec into; `requires` handles it.
+    const results = await runChecks(
+      HOST_CHECKS,
+      context({
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker ps') || argv.join(' ').includes('{{.State.Running}}')
+            ? { exitCode: 1, stderr: 'No such object' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(results.find((result) => result.id === 'proxy-container')?.status).toBe('fail');
+    expect(results.find((result) => result.id === 'proxy-config-valid')?.status).toBe('skip');
+  });
+});
+
+describe('proxy-container', () => {
+  it('finds the container publishing 443 and records it for the later checks', async () => {
+    const ctx = context();
+    const result = await find('proxy-container').run(ctx);
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toBe('proxy-nginx');
+    // Written into the context so proxy-config-valid execs into the same one.
+    expect(ctx.proxyContainer).toBe('proxy-nginx');
+  });
+
+  it('verifies the name the operator gave rather than searching', async () => {
+    const seen: string[][] = [];
+    const ctx = context({
+      proxyContainer: 'edge',
+      runCommand: fakeRunCommand((argv) => {
+        seen.push([...argv]);
+        return HEALTHY(argv);
+      }),
+    });
+    const result = await find('proxy-container').run(ctx);
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toBe('edge');
+    expect(seen).toEqual([['docker', 'inspect', '--format', '{{.State.Running}}', 'edge']]);
+  });
+
+  it('fails when the named container is not running', async () => {
+    const result = await find('proxy-container').run(
+      context({
+        proxyContainer: 'edge',
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').includes('{{.State.Running}}')
+            ? { exitCode: 0, stdout: 'false' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('edge');
+    expect(result.remedy).toContain('docker compose up -d');
+  });
+
+  it('falls back to the conventional name when nothing publishes 443', async () => {
+    // A proxy on network_mode: host has no published ports for the filter to
+    // find - which is exactly the configuration the vhost needs.
+    const ctx = context({
+      runCommand: fakeRunCommand((argv) =>
+        argv.join(' ').startsWith('docker ps --filter publish=443')
+          ? { exitCode: 0, stdout: '' }
+          : HEALTHY(argv),
+      ),
+    });
+    const result = await find('proxy-container').run(ctx);
+
+    expect(result.status).toBe('pass');
+    expect(ctx.proxyContainer).toBe('proxy-nginx');
+  });
+
+  it('fails with the compose command when no proxy is running at all', async () => {
+    const result = await find('proxy-container').run(
+      context({
+        runCommand: fakeRunCommand((argv) => {
+          const line = argv.join(' ');
+          if (line.startsWith('docker ps')) return { exitCode: 0, stdout: '' };
+          if (line.includes('{{.State.Running}}')) return { exitCode: 1, stderr: 'Error: No such object: proxy-nginx' };
+          return HEALTHY(argv);
+        }),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.remedy).toContain('cd /opt/infra/proxy && docker compose up -d');
+    expect(result.remedy).toContain('--proxy-container');
+  });
+});
+
+describe('proxy-network-mode', () => {
+  it('passes on network_mode: host', async () => {
+    const result = await find('proxy-network-mode').run(context({ proxyContainer: 'proxy-nginx' }));
+    expect(result.status).toBe('pass');
+  });
+
+  it('warns on a bridged proxy, explaining that 127.0.0.1 is unreachable from it', async () => {
+    const result = await find('proxy-network-mode').run(
+      context({
+        proxyContainer: 'proxy-nginx',
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').includes('{{.HostConfig.NetworkMode}}')
+            ? { exitCode: 0, stdout: 'bridge' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('warn');
+    expect(result.detail).toContain('bridge');
+    expect(result.remedy).toContain('127.0.0.1:3535');
+    expect(result.remedy).toContain('network_mode: host');
+  });
+});
+
+describe('certbot-image', () => {
+  it('passes when the image has been pulled', async () => {
+    const result = await find('certbot-image').run(context());
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('certbot/certbot');
+  });
+
+  it('fails with the pull command, and never pulls itself', async () => {
+    const seen: string[][] = [];
+    const result = await find('certbot-image').run(
+      context({
+        runCommand: fakeRunCommand((argv) => {
+          seen.push([...argv]);
+          return argv.join(' ').startsWith('docker image inspect')
+            ? { exitCode: 1, stderr: 'Error: No such image: certbot/certbot' }
+            : HEALTHY(argv);
+        }),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.remedy).toContain('docker pull certbot/certbot');
+    // Rule 4: doctor is read-only. The pull is the remedy, not the check.
+    expect(seen.some((argv) => argv.includes('pull'))).toBe(false);
+  });
+});
+
+describe('proxy-ipv6', () => {
+  it('passes and records ipv6 when the container has an address', async () => {
+    const ctx = context({ proxyContainer: 'proxy-nginx' });
+    const result = await find('proxy-ipv6').run(ctx);
+
+    expect(result.status).toBe('pass');
+    expect(ctx.ipv6).toBe(true);
+  });
+
+  it('accepts the host table when the container cannot answer', async () => {
+    const ctx = context({
+      proxyContainer: 'proxy-nginx',
+      fs: { ...permissiveFs, readFile: () => 'fe800000000000000000000000000001 02 40 20 80 eth0\n' },
+      runCommand: fakeRunCommand((argv) =>
+        argv.join(' ').includes('if_inet6') ? { exitCode: 1, stderr: 'no such file' } : HEALTHY(argv),
+      ),
+    });
+    const result = await find('proxy-ipv6').run(ctx);
+
+    expect(result.status).toBe('pass');
+    expect(ctx.ipv6).toBe(true);
+  });
+
+  it('warns, naming --no-ipv6, when neither has one', async () => {
+    const ctx = context({
+      proxyContainer: 'proxy-nginx',
+      fs: { ...permissiveFs, readFile: () => '' },
+      runCommand: fakeRunCommand((argv) =>
+        argv.join(' ').includes('if_inet6') ? { exitCode: 0, stdout: '' } : HEALTHY(argv),
+      ),
+    });
+    const result = await find('proxy-ipv6').run(ctx);
+
+    // nginx -t passes on `listen [::]` with IPv6 off; the reload is what fails.
+    expect(result.status).toBe('warn');
+    expect(result.remedy).toContain('--no-ipv6');
+    expect(ctx.ipv6).toBe(false);
+  });
+});
+
+describe('ufw-ports', () => {
+  it('skips when ufw is not installed', async () => {
+    const result = await find('ufw-ports').run(
+      context({
+        runCommand: fakeRunCommand((argv) =>
+          argv[0] === 'ufw' ? undefined : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    expect(result.status).toBe('skip');
+  });
+
+  it('passes on an inactive firewall and on one allowing both ports', () => {
+    expect(evaluateUfw('Status: inactive').status).toBe('pass');
+    expect(evaluateUfw('Status: active\n80,443/tcp  ALLOW  Anywhere').status).toBe('pass');
+    expect(evaluateUfw("Status: active\nNginx Full  ALLOW  Anywhere").status).toBe('pass');
+  });
+
+  it('warns with the ufw allow commands when a port is blocked', () => {
+    const result = evaluateUfw('Status: active\n\n22/tcp  ALLOW  Anywhere\n80/tcp  ALLOW  Anywhere');
+
+    expect(result.status).toBe('warn');
+    expect(result.detail).toContain('443');
+    expect(result.remedy).toContain('ufw allow 443/tcp');
   });
 });
 

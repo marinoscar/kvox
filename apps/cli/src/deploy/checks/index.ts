@@ -1,6 +1,7 @@
 import type { Check } from './types.js';
 import { DATABASE_CHECKS } from './database.js';
 import { DNS_CHECKS } from './dns.js';
+import { GITHUB_CHECKS } from './github.js';
 import { HOST_CHECKS } from './host.js';
 import { TLS_CHECKS } from './tls.js';
 
@@ -15,9 +16,12 @@ import { TLS_CHECKS } from './tls.js';
 // =============================================================================
 
 // Host first: everything else depends on docker being usable, and a server
-// with no docker should say so before it starts probing databases.
+// with no docker should say so before it starts probing databases. GitHub
+// next (#122): the clone is the first thing install does after preflight, so
+// "the repository cannot be reached" belongs right after "the box works".
 export const ALL_CHECKS: readonly Check[] = [
   ...HOST_CHECKS,
+  ...GITHUB_CHECKS,
   ...DATABASE_CHECKS,
   ...DNS_CHECKS,
   ...TLS_CHECKS,
@@ -29,8 +33,19 @@ export function requiredChecks(checks: readonly Check[] = ALL_CHECKS): Check[] {
 }
 
 export * from './types.js';
-export { DEVNET_CHECK_ID, DEVNET_NETWORK, HOST_CHECKS, evaluateDf, parseDf } from './host.js';
+export {
+  DEVNET_CHECK_ID,
+  DEVNET_NETWORK,
+  HOST_CHECKS,
+  DEFAULT_PROXY_CONTAINER,
+  CERTBOT_IMAGE,
+  evaluateDf,
+  evaluateUfw,
+  parseDf,
+} from './host.js';
 export type { DfReading } from './host.js';
+export { GITHUB_CHECKS, parseGithubRepo } from './github.js';
+export { probe, type ProbeOutcome } from './probe.js';
 export { DATABASE_CHECKS, databaseSettings, probeTcp } from './database.js';
 export { DNS_CHECKS } from './dns.js';
-export { TLS_CHECKS, parseNotAfter } from './tls.js';
+export { TLS_CHECKS, findRenewal, parseNotAfter } from './tls.js';

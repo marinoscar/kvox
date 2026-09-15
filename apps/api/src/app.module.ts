@@ -33,6 +33,7 @@ import { NotesModule } from './notes/notes.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
+import { AboutModule } from './about/about.module';
 
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -168,6 +169,13 @@ import configuration from './config/configuration';
     // provides runs in front of every route in this application, and that
     // belongs in the module that owns the application.
     MaintenanceModule,
+
+    // About (#124, epic #118): `GET /api/admin/about` — the deployment record
+    // the CLI wrote, plus live runtime and database facts. Beside
+    // MaintenanceModule because it is gated on the same `system_settings:read`
+    // and is the other admin surface that must answer while the operator is
+    // diagnosing a broken deployment.
+    AboutModule,
 
     // Transcription (#23, epic #19): the provider framework, the AssemblyAI
     // provider, the admin settings surface and the non-admin capability probe.

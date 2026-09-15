@@ -1,6 +1,6 @@
-import type { Command } from 'commander';
+import { Option, type Command } from 'commander';
 
-import { CLI_NAME } from '../branding.js';
+import { CLI_NAME, envVar } from '../branding.js';
 import {
   ALL_CHECKS,
   checksPassed,
@@ -18,6 +18,7 @@ import {
   type ProbeResult,
 } from '../deploy/health.js';
 import { readState } from '../deploy/state.js';
+import { resolveRepoTarget } from '../deploy/repo.js';
 import { runInstall, type InstallOptions } from '../deploy/install.js';
 import {
   DEFAULT_APPS_ROOT,
@@ -50,6 +51,12 @@ import { shouldUseColour } from '../output.js';
 
 export { DEFAULT_APPS_ROOT, DEFAULT_BIND_PORT, DEFAULT_PROXY_ROOT };
 
+/**
+ * `--public-ip` from the environment (issue #122). Built through envVar() so
+ * a rename of the CLI renames it; see the env-prefix guard.
+ */
+export const PUBLIC_IP_ENV_VAR = envVar('PUBLIC_IP');
+
 const ESC = String.fromCharCode(27);
 const RESET = ESC + '[0m';
 
@@ -76,6 +83,10 @@ export interface DoctorCommandOptions extends LayoutCommandOptions {
   proxyRoot: string;
   port: string;
   domain?: string | undefined;
+  proxyContainer?: string | undefined;
+  publicIp?: string | undefined;
+  skipProxy?: boolean | undefined;
+  skipGithub?: boolean | undefined;
   json?: boolean | undefined;
   color: boolean;
 }
@@ -89,6 +100,8 @@ export interface DeployContext {
   isTty?: boolean | undefined;
   /** Injected so `status` can be tested without a running deployment. */
   fetch?: typeof globalThis.fetch | undefined;
+  /** Where doctor looks for a checkout to name the repository; tests point it away. */
+  cwd?: string | undefined;
 }
 
 export function registerDeployCommand(
@@ -105,6 +118,13 @@ export function registerDeployCommand(
     .option('--proxy-root <path>', 'Shared reverse proxy directory', DEFAULT_PROXY_ROOT)
     .option('--port <port>', 'Loopback port the proxy forwards to', String(DEFAULT_BIND_PORT))
     .option('--domain <domain>', 'Public domain; enables the DNS and TLS checks')
+    .option('--proxy-container <name>', 'Verify this proxy container instead of finding one')
+    .addOption(
+      new Option('--public-ip <ip>', "This server's public address, for the DNS check behind NAT")
+        .env(PUBLIC_IP_ENV_VAR),
+    )
+    .option('--skip-proxy', 'Skip the proxy, certificate, port and DNS checks')
+    .option('--skip-github', 'Skip the GitHub CLI checks (a non-GitHub remote)')
     .option('--json', 'Print a machine-readable report on stdout')
     .option('--no-color', 'Disable colour even on a terminal')
     .addHelpText(
@@ -114,6 +134,8 @@ export function registerDeployCommand(
         'Examples:',
         `  ${CLI_NAME} deploy doctor`,
         `  ${CLI_NAME} deploy doctor --domain app.example.com`,
+        `  ${CLI_NAME} deploy doctor --domain app.example.com --public-ip 203.0.113.10`,
+        `  ${CLI_NAME} deploy doctor --skip-proxy`,
         `  ${CLI_NAME} deploy doctor --json | jq '.checks[] | select(.status=="fail")'`,
         '',
         'Exit codes:',
@@ -277,15 +299,21 @@ export async function runDoctorCommand(
   // the app's own to recognise yet.
   const layout = locateApp({ appsRoot: options.appsRoot, name: options.name, root: options.root });
   const deployRoot = layout?.deployRoot ?? options.appsRoot;
+  const exec = ctx?.runCommand ?? runCommand;
 
   const context: CheckContext = {
-    runCommand: ctx?.runCommand ?? runCommand,
+    runCommand: exec,
     deployRoot,
     ...(layout === undefined ? {} : { name: layout.name }),
     proxyRoot: options.proxyRoot,
     bindPort: Number(options.port),
     ...(options.domain === undefined ? {} : { domain: options.domain }),
+    ...(options.proxyContainer === undefined ? {} : { proxyContainer: options.proxyContainer }),
+    ...(options.publicIp === undefined || options.publicIp === '' ? {} : { publicIp: options.publicIp }),
+    ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
+    ...(options.skipGithub === undefined ? {} : { skipGithub: options.skipGithub }),
     ...(readEnvironment(deployRoot) ?? {}),
+    ...(await resolveRepoUrl(deployRoot, exec, ctx?.cwd)),
   };
 
   // Under --json nothing is written until the end: a partial checklist on
@@ -324,6 +352,32 @@ export async function runDoctorCommand(
     throw new PreconditionError(
       `${failed.length} required check(s) failed: ${failed.map((result) => result.id).join(', ')}`,
     );
+  }
+}
+
+/**
+ * The repository `gh-repo-access` should ask about, when one can be known.
+ *
+ * The recorded state first (an installed deployment), then the checkout this
+ * command runs in - the same order install and update resolve their target.
+ * Outside both there is simply nothing to ask about: the check reports
+ * `skip`, and doctor stays runnable from any directory.
+ */
+async function resolveRepoUrl(
+  deployRoot: string,
+  exec: typeof runCommand,
+  cwd: string = process.cwd(),
+): Promise<{ repoUrl: string } | Record<string, never>> {
+  try {
+    const state = readState(deployRoot);
+    const target = await resolveRepoTarget({
+      cwd,
+      runCommand: exec,
+      ...(state === undefined ? {} : { state }),
+    });
+    return { repoUrl: target.url };
+  } catch {
+    return {};
   }
 }
 

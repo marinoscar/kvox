@@ -1,10 +1,12 @@
 import { CLI_NAME } from '../../branding.js';
+import { probe } from './probe.js';
 import type { Check, CheckContext, CheckResult } from './types.js';
 import {
   contextFs,
   contextMemory,
   contextPortFree,
   contextPortListening,
+  skippedByProxyFlag,
 } from './types.js';
 
 // =============================================================================
@@ -36,29 +38,6 @@ function truncate(text: string, limit: number): string {
 function formatBytes(bytes: number): string {
   const gigabytes = bytes / (1024 * 1024 * 1024);
   return `${gigabytes.toFixed(1)} GB`;
-}
-
-/** Runs a command purely to see whether it works. Never throws. */
-async function probe(
-  context: CheckContext,
-  argv: readonly string[],
-): Promise<{ ok: boolean; stdout: string; stderr: string }> {
-  try {
-    const result = await context.runCommand(argv, {
-      cwd: process.cwd(),
-      timeoutMs: 20_000,
-    });
-    return { ok: true, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
-  } catch (error) {
-    const failure = error as { result?: { stdout?: string; stderr?: string } };
-    return {
-      ok: false,
-      stdout: (failure.result?.stdout ?? '').trim(),
-      stderr:
-        (failure.result?.stderr ?? '').trim() ||
-        (error instanceof Error ? error.message : String(error)),
-    };
-  }
 }
 
 const dockerInstalled: Check = {
@@ -344,11 +323,48 @@ const bindPortFree: Check = {
   },
 };
 
+// -----------------------------------------------------------------------------
+// The shared reverse proxy  (issue #122, epic #118)
+// -----------------------------------------------------------------------------
+//
+// THE PROXY IS A CONTAINER, and it is only ever addressed through `docker
+// exec` (epic #118, decision 3). There is no host nginx and no host certbot on
+// the target server, and there are deliberately no host-binary fallbacks
+// here: a check that validates a config the real proxy never reads is a check
+// that lies. `certbot-installed` and the host `nginx -t` branch were retired,
+// not kept.
+//
+// The container is resolved ONCE, by `proxy-container`, in this order: the
+// name the operator gave (`--proxy-container`, or state), else whichever
+// container publishes :443, else the conventional name below. The result is
+// written into the context so every later check - and, through install and
+// update, the publisher - talks to the same container.
+//
+// Under `--skip-proxy` every check in this section answers `skip`. That flag
+// is how the pipeline runs where there is no proxy at all (CI, #133), and a
+// preflight that fails on a proxy it was told to ignore is not a preflight.
+// -----------------------------------------------------------------------------
+
+/**
+ * The proxy's conventional name, tried last when nothing publishes :443.
+ *
+ * A proxy running with `network_mode: host` has no published ports for the
+ * filter to find, which is exactly the configuration the vhost needs (it
+ * forwards to 127.0.0.1). So the name is a real fallback, not a guess.
+ */
+export const DEFAULT_PROXY_CONTAINER = 'proxy-nginx';
+
+/** The image certificates are issued and renewed with (`docker run --rm`). */
+export const CERTBOT_IMAGE = 'certbot/certbot';
+
 const proxyRoot: Check = {
   id: 'proxy-root',
   title: 'Shared proxy directory',
   severity: 'required',
   async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
     const fs = contextFs(context);
     return fs.isDirectory(context.proxyRoot)
       ? { status: 'pass', detail: context.proxyRoot }
@@ -366,6 +382,9 @@ const proxyConfWritable: Check = {
   severity: 'required',
   requires: ['proxy-root'],
   async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
     const fs = contextFs(context);
     const confd = `${context.proxyRoot}/nginx/conf.d`;
 
@@ -392,6 +411,9 @@ const acmeWebroot: Check = {
   severity: 'required',
   requires: ['proxy-root'],
   async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
     const fs = contextFs(context);
     const webroot = `${context.proxyRoot}/webroot`;
 
@@ -412,20 +434,175 @@ const acmeWebroot: Check = {
   },
 };
 
-const certbotInstalled: Check = {
-  id: 'certbot-installed',
-  title: 'certbot available',
+/** True when a container of that name exists and is running. */
+async function isRunning(context: CheckContext, name: string): Promise<boolean> {
+  const { ok, stdout } = await probe(context, [
+    'docker', 'inspect', '--format', '{{.State.Running}}', name,
+  ]);
+  return ok && stdout === 'true';
+}
+
+const proxyContainer: Check = {
+  id: 'proxy-container',
+  title: 'Shared proxy container',
   severity: 'required',
+  requires: ['docker-daemon'],
   async run(context) {
-    const host = await probe(context, ['certbot', '--version']);
-    if (host.ok) {
-      // certbot prints its version on stderr in some builds.
-      return { status: 'pass', detail: (host.stdout || host.stderr).split('\n')[0] ?? 'installed' };
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    const remedy = `Start the shared proxy: cd ${context.proxyRoot} && docker compose up -d`;
+
+    // An operator who named the container is asking about THAT one; finding a
+    // different container on :443 would not answer their question.
+    if (context.proxyContainer !== undefined) {
+      const name = context.proxyContainer;
+      return (await isRunning(context, name))
+        ? { status: 'pass', detail: name }
+        : {
+            status: 'fail',
+            detail: `${name} is not running`,
+            remedy: `${remedy} (or pass the right name with --proxy-container)`,
+          };
     }
+
+    // The port the vhost depends on, before the name it conventionally has.
+    const published = await probe(context, [
+      'docker', 'ps', '--filter', 'publish=443', '--format', '{{.Names}}',
+    ]);
+    const names = published.stdout.split('\n').map((line) => line.trim()).filter((line) => line !== '');
+    const found = names[0];
+
+    if (found !== undefined) {
+      context.proxyContainer = found;
+      return {
+        status: 'pass',
+        detail: names.length === 1 ? found : `${found} (also publishing 443: ${names.slice(1).join(', ')})`,
+      };
+    }
+
+    if (await isRunning(context, DEFAULT_PROXY_CONTAINER)) {
+      context.proxyContainer = DEFAULT_PROXY_CONTAINER;
+      return { status: 'pass', detail: DEFAULT_PROXY_CONTAINER };
+    }
+
     return {
       status: 'fail',
-      detail: 'not installed',
-      remedy: 'Install certbot: apt-get install certbot',
+      detail: `no container publishes port 443 and ${DEFAULT_PROXY_CONTAINER} is not running`,
+      remedy: `${remedy} (or name it with --proxy-container)`,
+    };
+  },
+};
+
+const proxyNetworkMode: Check = {
+  id: 'proxy-network-mode',
+  title: 'Proxy on the host network',
+  severity: 'recommended',
+  requires: ['proxy-container'],
+  async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    const name = context.proxyContainer ?? DEFAULT_PROXY_CONTAINER;
+    const { ok, stdout, stderr } = await probe(context, [
+      'docker', 'inspect', '--format', '{{.HostConfig.NetworkMode}}', name,
+    ]);
+
+    if (!ok) {
+      return {
+        status: 'warn',
+        detail: stderr.split('\n')[0] ?? `could not inspect ${name}`,
+        remedy: `Inspect it by hand: docker inspect ${name}`,
+      };
+    }
+    if (stdout === 'host') return { status: 'pass', detail: `${name} uses network_mode: host` };
+
+    return {
+      status: 'warn',
+      detail: `${name} uses network mode "${stdout}"`,
+      // The vhost forwards to the loopback address of the HOST; from a bridge
+      // network 127.0.0.1 is the proxy container itself.
+      remedy: `The vhost targets 127.0.0.1:${context.bindPort}, which a bridged proxy cannot reach. Run the proxy with network_mode: host (in ${context.proxyRoot}/compose.yml, then docker compose up -d).`,
+    };
+  },
+};
+
+const proxyConfigValid: Check = {
+  id: 'proxy-config-valid',
+  title: 'Proxy config currently valid',
+  severity: 'recommended',
+  requires: ['proxy-container'],
+  async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    const name = context.proxyContainer ?? DEFAULT_PROXY_CONTAINER;
+    // Inside the container, because that is the only nginx that will ever
+    // read this configuration. There is no host-binary branch on purpose.
+    const result = await probe(context, ['docker', 'exec', name, 'nginx', '-t']);
+    if (result.ok) return { status: 'pass', detail: `nginx -t passes in ${name}` };
+
+    return {
+      status: 'warn',
+      detail: result.stderr.split('\n').find((line) => line.includes('nginx:')) ?? `nginx -t failed in ${name}`,
+      remedy:
+        'The shared proxy is already misconfigured. Fix it before deploying, or the reload at the end of the install will fail for every site on this host.',
+    };
+  },
+};
+
+const certbotImage: Check = {
+  id: 'certbot-image',
+  title: 'certbot image present',
+  severity: 'required',
+  requires: ['docker-daemon'],
+  async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    // Inspect, never pull: rule 4 - doctor is read-only, and a pull is a
+    // network download that belongs in the remedy, not in the check.
+    const { ok, stdout } = await probe(context, [
+      'docker', 'image', 'inspect', CERTBOT_IMAGE, '--format', '{{index .RepoTags 0}}',
+    ]);
+    return ok
+      ? { status: 'pass', detail: stdout === '' ? CERTBOT_IMAGE : stdout }
+      : {
+          status: 'fail',
+          detail: `${CERTBOT_IMAGE} has not been pulled`,
+          remedy: `Pull it: docker pull ${CERTBOT_IMAGE}`,
+        };
+  },
+};
+
+const proxyIpv6: Check = {
+  id: 'proxy-ipv6',
+  title: 'IPv6 available to the proxy',
+  severity: 'recommended',
+  requires: ['proxy-container'],
+  async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    const name = context.proxyContainer ?? DEFAULT_PROXY_CONTAINER;
+
+    // What the proxy can bind is what matters; under network_mode: host it
+    // is the host's own table, and the host file is the second opinion.
+    const inside = await probe(context, ['docker', 'exec', name, 'sh', '-c', 'cat /proc/net/if_inet6']);
+    const host = contextFs(context).readFile?.('/proc/net/if_inet6') ?? '';
+
+    if ((inside.ok && inside.stdout !== '') || host.trim() !== '') {
+      context.ipv6 = true;
+      return { status: 'pass', detail: 'an IPv6 address is configured' };
+    }
+
+    context.ipv6 = false;
+    return {
+      status: 'warn',
+      detail: `no IPv6 address on the host or in ${name}`,
+      // nginx -t passes on a `listen [::]:443` with IPv6 disabled; the RELOAD
+      // is what fails, and it fails for every site on the box.
+      remedy: `The vhost binds [::]:80 and [::]:443, and the reload fails without IPv6 even though nginx -t passes. Enable IPv6 on the host, or render the vhost without it: ${CLI_NAME} deploy install --no-ipv6`,
     };
   },
 };
@@ -435,6 +612,9 @@ const portListening = (port: number, purpose: string): Check => ({
   title: `Port ${port} served`,
   severity: 'recommended',
   async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
     const listening = await contextPortListening(context)(port);
     return listening
       ? { status: 'pass', detail: `something is serving ${port}` }
@@ -446,30 +626,51 @@ const portListening = (port: number, purpose: string): Check => ({
   },
 });
 
-const proxyConfigValid: Check = {
-  id: 'proxy-config-valid',
-  title: 'Proxy config currently valid',
-  severity: 'recommended',
-  requires: ['proxy-root'],
-  async run(context) {
-    const host = await probe(context, ['nginx', '-t']);
-    if (host.ok) return { status: 'pass', detail: 'nginx -t passes' };
+/** Reads `ufw status` output. Exported for its test. */
+export function evaluateUfw(output: string): CheckResult {
+  if (/^Status:\s*inactive/im.test(output)) {
+    return { status: 'pass', detail: 'ufw is inactive; nothing is filtered' };
+  }
 
-    // A containerised proxy is the documented setup, so a missing host binary
-    // is not itself a problem - it just means this check cannot answer.
-    if (/command not found/i.test(host.stderr)) {
+  const allowed = (port: number): boolean =>
+    output.split('\n').some(
+      (line) =>
+        /ALLOW/i.test(line) &&
+        // "80/tcp", "80,443/tcp", "80" alone, or the named profiles.
+        (new RegExp(`(^|[\\s,])${port}(/tcp)?([\\s,]|$)`).test(line) ||
+          /Nginx Full|WWW Full/i.test(line)),
+    );
+
+  const missing = [80, 443].filter((port) => !allowed(port));
+  return missing.length === 0
+    ? { status: 'pass', detail: '80 and 443 are allowed' }
+    : {
+        status: 'warn',
+        detail: `ufw is active and port(s) ${missing.join(', ')} are not allowed`,
+        remedy: `Allow them: ufw allow 80/tcp && ufw allow 443/tcp`,
+      };
+}
+
+const ufwPorts: Check = {
+  id: 'ufw-ports',
+  title: 'Firewall allows 80 and 443',
+  severity: 'recommended',
+  async run(context) {
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    const { ok, stdout, stderr } = await probe(context, ['ufw', 'status']);
+    if (ok) return evaluateUfw(stdout);
+
+    if (/root|permission/i.test(stderr)) {
       return {
-        status: 'skip',
-        detail: 'no host nginx binary; the proxy is probably containerised',
+        status: 'warn',
+        detail: 'ufw status needs root',
+        remedy: 'Check by hand: sudo ufw status',
       };
     }
-
-    return {
-      status: 'warn',
-      detail: (host.stderr.split('\n').find((line) => line.includes('nginx:')) ?? 'nginx -t failed'),
-      remedy:
-        'The shared proxy is already misconfigured. Fix it before deploying, or the reload at the end of the install will fail for every site on this host.',
-    };
+    // No ufw is not a finding: a box may use nftables, a cloud firewall, or nothing.
+    return { status: 'skip', detail: 'ufw is not installed' };
   },
 };
 
@@ -486,8 +687,12 @@ export const HOST_CHECKS: readonly Check[] = [
   proxyRoot,
   proxyConfWritable,
   acmeWebroot,
-  certbotInstalled,
+  proxyContainer,
+  proxyNetworkMode,
+  proxyIpv6,
+  certbotImage,
   portListening(80, "Let's Encrypt's HTTP-01 challenge needs port 80."),
   portListening(443, 'HTTPS traffic needs port 443.'),
   proxyConfigValid,
+  ufwPorts,
 ];
