@@ -6,6 +6,7 @@ import { CLI_NAME } from '../../../branding.js';
 import { describeConfig } from '../../../config.js';
 import { DEFAULT_APPS_ROOT, listInstalledApps } from '../../../deploy/layout.js';
 import { Frame } from '../../layout.js';
+import { DoctorScreen } from './doctor.js';
 import { InstallWizard } from './install.js';
 
 // =============================================================================
@@ -82,7 +83,6 @@ export function deployMenuItems(state: DeployMenuState): DeployMenuItem[] {
 /** What a phase that is not built yet tells the operator to run instead. */
 export const PLACEHOLDER_COMMANDS: Readonly<Record<string, string>> = {
   update: 'deploy update',
-  doctor: 'deploy doctor',
   status: 'deploy status',
   certs: 'deploy certs status',
   about: 'api GET /api/admin/about',
@@ -107,8 +107,21 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
       if (phase === 'choose') onDone();
       else setPhase('choose');
     },
-    { isActive: phase !== 'install' },
+    // The menu itself, plus any phase still rendered as a placeholder here.
+    // A phase with a real screen owns its own Esc, and two handlers for one
+    // key is exactly what `app.tsx`'s conditional mounting exists to avoid.
+    { isActive: phase === 'choose' || PLACEHOLDER_COMMANDS[phase] !== undefined },
   );
+
+  if (phase === 'doctor') {
+    return (
+      <DoctorScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
 
   if (phase === 'install') {
     return (

@@ -64,7 +64,6 @@ describe('deployMenuItems', () => {
   it('gives every destination that is not yet a screen the command that does the same work', () => {
     const later: Array<Exclude<Phase, 'choose' | 'install'>> = [
       'update',
-      'doctor',
       'status',
       'certs',
       'about',
