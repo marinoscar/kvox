@@ -1,7 +1,8 @@
 import { basename } from 'node:path';
 
 import { CLI_NAME } from '../../branding.js';
-import type { Check, CheckContext, CheckResult } from './types.js';
+import { probe } from './probe.js';
+import type { Check, CheckResult } from './types.js';
 import {
   contextFs,
   contextMemory,
@@ -38,29 +39,6 @@ function truncate(text: string, limit: number): string {
 function formatBytes(bytes: number): string {
   const gigabytes = bytes / (1024 * 1024 * 1024);
   return `${gigabytes.toFixed(1)} GB`;
-}
-
-/** Runs a command purely to see whether it works. Never throws. */
-async function probe(
-  context: CheckContext,
-  argv: readonly string[],
-): Promise<{ ok: boolean; stdout: string; stderr: string }> {
-  try {
-    const result = await context.runCommand(argv, {
-      cwd: process.cwd(),
-      timeoutMs: 20_000,
-    });
-    return { ok: true, stdout: result.stdout.trim(), stderr: result.stderr.trim() };
-  } catch (error) {
-    const failure = error as { result?: { stdout?: string; stderr?: string } };
-    return {
-      ok: false,
-      stdout: (failure.result?.stdout ?? '').trim(),
-      stderr:
-        (failure.result?.stderr ?? '').trim() ||
-        (error instanceof Error ? error.message : String(error)),
-    };
-  }
 }
 
 const dockerInstalled: Check = {

@@ -1,4 +1,4 @@
-import { accessSync, constants, statSync } from 'node:fs';
+import { accessSync, constants, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { totalmem } from 'node:os';
 
@@ -47,9 +47,27 @@ export interface CheckFs {
   exists(path: string): boolean;
   isDirectory(path: string): boolean;
   isWritable(path: string): boolean;
+  /** File contents, or undefined when unreadable. Optional so older fakes still type. */
+  readFile?(path: string): string | undefined;
+  /** Directory entries (names only), or undefined when unreadable. */
+  readDir?(path: string): readonly string[] | undefined;
 }
 
 export const realFs: CheckFs = {
+  readFile(path) {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch {
+      return undefined;
+    }
+  },
+  readDir(path) {
+    try {
+      return readdirSync(path);
+    } catch {
+      return undefined;
+    }
+  },
   exists(path) {
     try {
       statSync(path);
@@ -125,6 +143,41 @@ export interface CheckContext {
   resolveHost?: ((hostname: string) => Promise<string[]>) | undefined;
   /** This host's own public addresses, when they can be determined. */
   ownAddresses?: (() => Promise<string[]>) | undefined;
+
+  // ---- Doctor v2 (issue #122, epic #118) ------------------------------------
+
+  /** The repository being deployed, when known. `gh-repo-access` needs it. */
+  repoUrl?: string | undefined;
+  /**
+   * The shared proxy's container name. Given by `--proxy-container` or state,
+   * otherwise WRITTEN by `proxy-container` once it has found one, so the
+   * checks after it (and the publisher, #125) address the same container.
+   */
+  proxyContainer?: string | undefined;
+  /** Written by `proxy-ipv6`: whether the vhost may bind `[::]` (#125 reads it). */
+  ipv6?: boolean | undefined;
+  /**
+   * This host's public address as stated by the operator (`--public-ip`).
+   * Behind NAT the interfaces carry a private address, and an external echo
+   * service is deliberately not consulted (see dns.ts); this is the override.
+   */
+  publicIp?: string | undefined;
+  /** `--skip-proxy`: proxy, certificate, port and DNS checks report `skip`. */
+  skipProxy?: boolean | undefined;
+  /** `--skip-dns`: the `dns-*` checks report `skip`. */
+  skipDns?: boolean | undefined;
+  /** `--skip-github`: the `gh-*` checks report `skip` (CI's `file://` remote). */
+  skipGithub?: boolean | undefined;
+}
+
+/**
+ * The `skip` a proxy-related check answers under `--skip-proxy`, or undefined.
+ *
+ * One helper rather than a condition in each check, so every check names the
+ * flag the same way and none of them forgets to.
+ */
+export function skippedByProxyFlag(context: CheckContext): CheckResult | undefined {
+  return context.skipProxy === true ? { status: 'skip', detail: '--skip-proxy' } : undefined;
 }
 
 export interface Check {
