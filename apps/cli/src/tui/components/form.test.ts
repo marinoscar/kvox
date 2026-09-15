@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { firstInvalidField, formLabelWidth, formValue, type FormFieldSpec } from './form.js';
+import {
+  firstInvalidField,
+  focusIndexFor,
+  formLabelWidth,
+  formValue,
+  type FormFieldSpec,
+} from './form.js';
 import { choiceIndex } from './select-field.js';
 
 // The Form's focus and submit decisions, asserted as the data they derive
@@ -69,5 +75,21 @@ describe('choiceIndex', () => {
 
   it('falls back to the first choice for a value that is not a choice', () => {
     expect(choiceIndex(choices, 'skip')).toBe(0);
+  });
+});
+
+describe('focusIndexFor', () => {
+  it('finds the field a screen names, so a failed check lands on it', () => {
+    expect(focusIndexFor(FIELDS, 'POSTGRES_PORT')).toBe(1);
+  });
+
+  it('is -1 when nothing is named, which moves no focus at all', () => {
+    expect(focusIndexFor(FIELDS, undefined)).toBe(-1);
+  });
+
+  it('is -1 for a field this step does not have, rather than blaming field 0', () => {
+    // The step's own fallback decides where to go; silently focusing the first
+    // field would put the cursor on an answer that was accepted.
+    expect(focusIndexFor(FIELDS, 'JWT_SECRET')).toBe(-1);
   });
 });

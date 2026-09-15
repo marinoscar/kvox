@@ -50,6 +50,20 @@ export interface FormProps {
   onSubmit: () => void;
   /** Keys are ignored while false. Default true. */
   isActive?: boolean | undefined;
+  /**
+   * Move the keyboard to this field.
+   *
+   * Focus is the form's own business (the contract above), with ONE exception:
+   * a step that verifies its answers after the fact — the install wizard's
+   * database step running `database-credentials` (#131) — learns which field
+   * was wrong only once the form has already submitted. Re-entering the step
+   * at field one would make the operator Tab past four correct answers to
+   * reach the password. Changing this prop moves focus; it is not a
+   * controlled index, so the form still owns every move the keys make. A
+   * screen that may blame the SAME field twice clears this back to undefined
+   * between attempts — an unchanged prop moves nothing.
+   */
+  focusKey?: string | undefined;
 }
 
 /** The value a form shows for `field`: the answer, or the select's first choice. */
@@ -69,12 +83,28 @@ export function firstInvalidField(
   );
 }
 
+/** Index of `key` in `fields`, or -1 when no field has it. */
+export function focusIndexFor(
+  fields: ReadonlyArray<FormFieldSpec>,
+  key: string | undefined,
+): number {
+  if (key === undefined) return -1;
+  return fields.findIndex((field) => field.key === key);
+}
+
 /** The label column: the widest label, so the fields line up. */
 export function formLabelWidth(fields: ReadonlyArray<FormFieldSpec>): number {
   return fields.reduce((widest, field) => Math.max(widest, field.label.length), 0);
 }
 
-export function Form({ fields, values, onChange, onSubmit, isActive }: FormProps): ReactNode {
+export function Form({
+  fields,
+  values,
+  onChange,
+  onSubmit,
+  isActive,
+  focusKey,
+}: FormProps): ReactNode {
   const active = isActive ?? true;
   const [rawIndex, setIndex] = useState(0);
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -87,6 +117,20 @@ export function Form({ fields, values, onChange, onSubmit, isActive }: FormProps
     setIndex(0);
     setSubmitAttempted(false);
   }, [fieldKeys]);
+
+  // After `fieldKeys`, so a step that re-enters with BOTH a new field list and
+  // a field to blame lands on the blamed field rather than being reset to the
+  // top by the effect above.
+  useEffect(() => {
+    const target = focusIndexFor(fields, focusKey);
+    if (target >= 0) {
+      setIndex(target);
+      setSubmitAttempted(true);
+    }
+    // `fields` is excluded deliberately: this must fire when the SCREEN names a
+    // field, not on every render that rebuilds the array.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey, fieldKeys]);
 
   const current = fields[index];
   const currentState =

@@ -1,0 +1,867 @@
+import { Box, Text, useInput } from 'ink';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+
+import { CLI_NAME } from '../../../branding.js';
+import {
+  ALL_CHECKS,
+  probeTcp,
+  runChecks,
+  type CheckContext,
+  type CompletedCheck,
+} from '../../../deploy/checks/index.js';
+import { metadataFor, type Suggestion } from '../../../deploy/env-metadata.js';
+import { parseEnvExample, type EnvVarSpec } from '../../../deploy/env-spec.js';
+import { runCommand as defaultRunCommand } from '../../../deploy/executor.js';
+import type { StepResult } from '../../../deploy/hooks.js';
+import { runInstall } from '../../../deploy/install.js';
+import {
+  DEFAULT_APPS_ROOT,
+  DEFAULT_BIND_PORT,
+  DEFAULT_PROXY_ROOT,
+  appNameFor,
+  appRootFor,
+  siblingBindPorts,
+} from '../../../deploy/layout.js';
+import { DEFAULT_PROXY_CONTAINER } from '../../../deploy/checks/index.js';
+import { resolveRepoTarget } from '../../../deploy/repo.js';
+import { collectServerFacts, unknownServerFacts, type ServerFacts } from '../../../deploy/server-facts.js';
+import { DOMAIN_FIELD } from '../../../deploy/wizard/steps.js';
+import { formatError } from '../../../errors.js';
+import {
+  Checklist,
+  ConfirmDialog,
+  Form,
+  KeyValue,
+  WizardFrame,
+  useWizard,
+  type FormFieldSpec,
+} from '../../components/index.js';
+import { ErrorNotice, useIsMounted } from '../../layout.js';
+import { ScrollBox } from '../../scroll-box.js';
+import {
+  ABORTED_DETAIL,
+  ABORT_DIALOG,
+  ALL_FIELD,
+  GROUPS_FIELD,
+  OPTION_MODE_PREFIX,
+  INSTALL_CRON_FIELD,
+  INTERNAL_DEFAULTS,
+  MAX_LOG_LINES,
+  NAME_FIELD,
+  PUBLIC_IP_FIELD,
+  REF_FIELD,
+  REPO_FIELD,
+  REVIEW_STEP_ID,
+  SECRET_MODE_PREFIX,
+  STAGING_FIELD,
+  WELCOME_STEP_ID,
+  answerOf,
+  applyOptionMode,
+  applySecretMode,
+  checkItems,
+  checksAllowLeaving,
+  doneModel,
+  prepareStep,
+  envAnswers,
+  failedField,
+  failedModel,
+  formFieldsFor,
+  formatDuration,
+  groupsOf,
+  installSteps,
+  isTrue,
+  pipelineItems,
+  railSteps,
+  requiredFailures,
+  stepCheckItems,
+  reviewRows,
+  stepContextFor,
+  welcomeChecks,
+  withAnswer,
+  type InstallAnswers,
+  type InstallStep,
+  type OptionMode,
+  type PipelineProgress,
+  type SecretMode,
+} from './install-model.js';
+
+// =============================================================================
+// The install wizard  (issue #131, epic #118)
+// =============================================================================
+//
+// ELEVEN SCREENS OVER ONE ROUTE. `routes.ts` is closed and has no history
+// stack, so the steps are an index inside this component (`useWizard`) rather
+// than eleven routes that would each return to the TOP menu. Every question
+// comes from `deploy/wizard/steps.ts` through `install-model.ts`; this file
+// renders them and owns the three things a renderer owns — the keyboard, the
+// AbortController, and when the network is touched.
+//
+// NOTHING IS WRITTEN TO DISK BEFORE THE REVIEW IS CONFIRMED. The wizard reads
+// (the doctor's probes, DNS, the database, the server's own facts) but the
+// first write is `runInstall`'s `environment` step, which cannot run until
+// Review's `ConfirmDialog` returns true. Leaving the wizard at step 9
+// therefore discards nothing, because nothing existed to discard.
+//
+// TWO HAZARDS, BOTH LEARNED FROM THE SCREEN THIS REPLACES
+//
+//   1. THE ABORT CONTROLLER MUST ACTUALLY REACH THE CHILD PROCESS. The old
+//      screen created one and never passed it anywhere, so Esc "cancelled" a
+//      `docker compose build` that went on running on a production server.
+//      Here it is threaded through a wrapped `runCommand` into `executor.ts`,
+//      which kills with SIGTERM. Esc while running opens the danger
+//      confirmation docs/specs/vps-deploy.md §14 asks for rather than being
+//      refused outright.
+//   2. THE EXIT CODE INVERTS HERE. A normal TUI exit is 0 even after a failed
+//      install (tui/index.tsx), so the failure has to be UNMISTAKABLE in the
+//      frame — the exit code will not carry it.
+//
+// WHY Ctrl-R AND NOT `r` FOR "RE-RUN THE CHECKS". Welcome shows the doctor
+// checklist BESIDE editable text fields (the app name, the repository, the
+// ref). ink delivers every keystroke to every mounted handler, so a bare `r`
+// would re-run the doctor in the middle of typing an app name containing one.
+// A modifier is the only binding that can coexist with a focused text field.
+// =============================================================================
+
+export interface InstallWizardProps {
+  /** Leave the wizard: back from Welcome, or Enter on Done/Failed. */
+  onDone: () => void;
+  appsRoot?: string | undefined;
+  proxyRoot?: string | undefined;
+}
+
+type Phase = 'wizard' | 'running' | 'done' | 'failed' | 'aborted';
+
+interface CheckRun {
+  results: CompletedCheck[];
+  running: boolean;
+}
+
+const IDLE: CheckRun = { results: [], running: false };
+
+interface RunOutcome {
+  done?: ReturnType<typeof doneModel> | undefined;
+  failed?: ReturnType<typeof failedModel> | undefined;
+}
+
+export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProps): ReactNode {
+  const isMounted = useIsMounted();
+  const roots = useMemo(
+    () => ({ apps: appsRoot ?? DEFAULT_APPS_ROOT, proxy: proxyRoot ?? DEFAULT_PROXY_ROOT }),
+    [appsRoot, proxyRoot],
+  );
+
+  const specs = useMemo(() => loadTemplateSpecs(roots.apps), [roots.apps]);
+
+  const [answers, setAnswers] = useState<InstallAnswers>(INTERNAL_DEFAULTS);
+  const [phase, setPhase] = useState<Phase>('wizard');
+  const [facts, setFacts] = useState<ServerFacts>(() => unknownServerFacts());
+  const [suggestions, setSuggestions] = useState<Readonly<Record<string, Suggestion>>>({});
+  const [welcome, setWelcome] = useState<CheckRun>(IDLE);
+  const [stepChecks, setStepChecks] = useState<CheckRun>(IDLE);
+  const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
+  const [confirming, setConfirming] = useState(false);
+  const [progress, setProgress] = useState<PipelineProgress[]>([]);
+  const [lines, setLines] = useState<string[]>([]);
+  const [startedAt, setStartedAt] = useState<number | undefined>(undefined);
+  const [elapsed, setElapsed] = useState(0);
+  const [outcome, setOutcome] = useState<RunOutcome>({});
+  /** The repository has been resolved (or given up on): the name is settled. */
+  const [ready, setReady] = useState(false);
+
+  const abortRef = useRef<AbortController | undefined>(undefined);
+
+  // Memoised on the two answers that can CHANGE the step list, never on the
+  // whole `answers` object. A step list rebuilt on every keystroke hands every
+  // effect keyed on `step` a new object identity each render — which would
+  // clear the focus a failed check had just set, on the very next frame.
+  const groupsKey = answerOf(answers, GROUPS_FIELD);
+  const reviewAll = isTrue(answers, ALL_FIELD);
+  const groups = useMemo(() => groupsOf({ [GROUPS_FIELD]: groupsKey }), [groupsKey]);
+  const steps = useMemo(
+    () => installSteps(specs, { groups, all: reviewAll }),
+    [specs, groups, reviewAll],
+  );
+
+  const wizard = useWizard(railSteps(steps), {
+    onFinish: () => {
+      /* Review's ConfirmDialog starts the run; `next()` is never called there. */
+    },
+    onCancel: onDone,
+    isActive: phase === 'wizard' && !confirming && !stepChecks.running,
+  });
+
+  const step = steps[wizard.index] ?? steps[0];
+
+  // ---------------------------------------------------------------------------
+  // Facts, suggestions and the repository, read once
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const collected = await collectServerFacts({
+        runCommand: defaultRunCommand,
+        root: roots.apps,
+      }).catch(() => unknownServerFacts());
+      if (!cancelled && isMounted()) setFacts(collected);
+
+      const target = await resolveRepoTarget({
+        cwd: process.cwd(),
+        runCommand: defaultRunCommand,
+      }).catch(() => undefined);
+      if (cancelled || !isMounted()) return;
+      // Whether or not a remote was found, the app name is now as settled as
+      // it is going to get — and the doctor probes paths derived from it.
+      setReady(true);
+      if (target === undefined) return;
+      setAnswers((current) => {
+        // Never overwrite something already typed: the operator's answer is
+        // the more recent statement of intent.
+        let next = current;
+        if ((next[REPO_FIELD] ?? '') === '') next = withAnswer(next, REPO_FIELD, target.url);
+        if ((next[REF_FIELD] ?? '') === '') next = withAnswer(next, REF_FIELD, target.ref);
+        if ((next[NAME_FIELD] ?? '') === '') next = withAnswer(next, NAME_FIELD, appNameFor(target.url));
+        return next;
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isMounted, roots.apps]);
+
+  const name = answerOf(answers, NAME_FIELD) || 'app';
+  const deployRoot = appRootFor(roots.apps, name);
+
+  // ---------------------------------------------------------------------------
+  // The doctor, live on Welcome
+  // ---------------------------------------------------------------------------
+
+  const checkBase = useCallback(
+    (): Omit<CheckContext, 'domain' | 'env'> => ({
+      runCommand: defaultRunCommand,
+      deployRoot,
+      name,
+      bindPort: Number(answers['APP_BIND_PORT'] ?? DEFAULT_BIND_PORT) || DEFAULT_BIND_PORT,
+      proxyRoot: roots.proxy,
+      // The whole point of running the doctor while somebody watches: the
+      // proxy checks are the ones a fresh server fails, so they are NOT
+      // skipped here.
+      skipProxy: false,
+      ...(answerOf(answers, PUBLIC_IP_FIELD) === ''
+        ? {}
+        : { publicIp: answerOf(answers, PUBLIC_IP_FIELD) }),
+    }),
+    [answers, deployRoot, name, roots.proxy],
+  );
+
+  const doctorChecks = useMemo(() => welcomeChecks(), []);
+
+  const startDoctor = useCallback(() => {
+    setWelcome({ results: [], running: true });
+    const base = checkBase();
+    void (async () => {
+      const results = await runChecks(doctorChecks, base, (result) => {
+        if (!isMounted()) return;
+        setWelcome((current) => ({ ...current, results: [...current.results, result] }));
+      }).catch(() => [] as CompletedCheck[]);
+      if (isMounted()) setWelcome({ results, running: false });
+    })();
+  }, [checkBase, doctorChecks, isMounted]);
+
+  // Held until `ready`: the checks read `deployRoot`, which is
+  // `<apps root>/<name>`, and the name arrives from the repository a moment
+  // after mount. Probing `/opt/infra/apps/app` first would report on a
+  // directory this install is not going to use.
+  const doctorStarted = useRef(false);
+  useEffect(() => {
+    if (!ready || doctorStarted.current) return;
+    doctorStarted.current = true;
+    startDoctor();
+  }, [ready, startDoctor]);
+
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input.toLowerCase() === 'r' && !welcome.running) startDoctor();
+    },
+    { isActive: phase === 'wizard' && step?.id === WELCOME_STEP_ID && !confirming },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Per-step arrival: generate secrets, compute suggestions
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (step === undefined) return;
+    setStepChecks(IDLE);
+    setFocusKey(undefined);
+    setAnswers((current) => prepareStep(current, step, specs));
+  }, [step, specs]);
+
+  useEffect(() => {
+    if (step === undefined) return;
+    const pending = step.fields.filter(
+      (ref) => metadataFor(ref).suggest !== undefined && suggestions[ref] === undefined,
+    );
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+    void (async () => {
+      const found: Record<string, Suggestion> = {};
+      for (const key of pending) {
+        const suggest = metadataFor(key).suggest;
+        if (suggest === undefined) continue;
+        const suggestion = await suggest({
+          domain: answerOf(answers, DOMAIN_FIELD),
+          answers: envAnswers(answers),
+          facts,
+          siblingPorts: siblingBindPorts(roots.apps, deployRoot),
+        }).catch(() => undefined);
+        if (suggestion !== undefined) found[key] = suggestion;
+      }
+      if (cancelled || !isMounted() || Object.keys(found).length === 0) return;
+      setSuggestions((current) => ({ ...found, ...current }));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // `answers` is deliberately not a dependency: a suggestion is computed
+    // once per step, from what was known when it opened, and is never
+    // recomputed under a field the operator is typing into.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, facts, deployRoot, roots.apps, isMounted]);
+
+  // ---------------------------------------------------------------------------
+  // Leaving a step: its checks run first
+  // ---------------------------------------------------------------------------
+
+  const leaveStep = useCallback(() => {
+    if (step === undefined) return;
+
+    if (step.id === WELCOME_STEP_ID) {
+      if (welcome.running || requiredFailures(welcome.results).length > 0) return;
+      wizard.next();
+      return;
+    }
+
+    const onLeave = step.data?.onLeave;
+    if (onLeave === undefined) {
+      wizard.next();
+      return;
+    }
+
+    setFocusKey(undefined);
+    setStepChecks({ results: [], running: true });
+    const base = checkBase();
+    void (async () => {
+      const results = await onLeave({
+        ...stepContextFor(answers, facts),
+        checks: ALL_CHECKS,
+        runChecks,
+        probeTcp,
+        base,
+      }).catch((error: unknown) => [
+        {
+          id: `${step.id}-checks`,
+          title: `${step.title} checks`,
+          severity: 'required' as const,
+          status: 'fail' as const,
+          detail: formatError(error),
+          remedy: 'The check itself failed; the values above can still be corrected.',
+          durationMs: 0,
+        },
+      ]);
+      if (!isMounted()) return;
+      setStepChecks({ results, running: false });
+      if (checksAllowLeaving(results)) {
+        wizard.next();
+        return;
+      }
+      setFocusKey(failedField(results, step));
+    })();
+  }, [answers, checkBase, facts, isMounted, step, welcome, wizard]);
+
+  // ---------------------------------------------------------------------------
+  // The run
+  // ---------------------------------------------------------------------------
+
+  const append = useCallback(
+    (line: string) => {
+      if (!isMounted()) return;
+      // Oldest-first: the end of a build log is the part that matters.
+      setLines((current) => [...current, line].slice(-MAX_LOG_LINES));
+    },
+    [isMounted],
+  );
+
+  const start = useCallback(() => {
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setPhase('running');
+    setProgress([]);
+    setLines([]);
+    setStartedAt(Date.now());
+
+    // The ONE place the abort reaches the work: every child process this
+    // install spawns is started through here, so SIGTERM arrives wherever the
+    // pipeline happens to be.
+    const runCommand: typeof defaultRunCommand = (argv, options) =>
+      defaultRunCommand(argv, { ...options, signal: controller.signal });
+
+    void (async () => {
+      try {
+        const result = await runInstall({
+          appsRoot: roots.apps,
+          name,
+          bindPort:
+            Number(answers['APP_BIND_PORT'] ?? DEFAULT_BIND_PORT) || DEFAULT_BIND_PORT,
+          proxyRoot: roots.proxy,
+          ...(answerOf(answers, DOMAIN_FIELD) === ''
+            ? {}
+            : { domain: answerOf(answers, DOMAIN_FIELD) }),
+          answers: envAnswers(answers),
+          groups,
+          all: isTrue(answers, ALL_FIELD),
+          staging: isTrue(answers, STAGING_FIELD),
+          installCron: isTrue(answers, INSTALL_CRON_FIELD),
+          ...(answerOf(answers, REPO_FIELD) === '' ? {} : { repo: answerOf(answers, REPO_FIELD) }),
+          ...(answerOf(answers, REF_FIELD) === '' ? {} : { ref: answerOf(answers, REF_FIELD) }),
+          // Every question was asked above; readline cannot ask another while
+          // ink holds stdin in raw mode, so the wizard runs with nothing left.
+          nonInteractive: true,
+          runCommand,
+          hooks: {
+            onStepStart: ({ id, title }) => {
+              if (!isMounted()) return;
+              setProgress((current) => [
+                ...current.filter((entry) => entry.id !== id),
+                { id, title, outcome: 'running' },
+              ]);
+            },
+            onStepResult: (result: StepResult) => {
+              if (!isMounted()) return;
+              setProgress((current) =>
+                current.map((entry) =>
+                  entry.id === result.id
+                    ? {
+                        id: result.id,
+                        title: result.title,
+                        outcome: result.outcome,
+                        durationMs: result.durationMs,
+                        detail: result.detail,
+                      }
+                    : entry,
+                ),
+              );
+            },
+            onProgress: append,
+            onLog: append,
+          },
+        });
+
+        if (!isMounted()) return;
+        setOutcome({
+          done: doneModel({
+            ...(result.domain === undefined ? {} : { domain: result.domain }),
+            commitSha: result.commitSha,
+            journalPath: result.journalPath,
+            deployRoot: result.deployRoot,
+            name: result.name,
+            nextStep: result.nextStep,
+          }),
+        });
+        setPhase('done');
+      } catch (error) {
+        if (!isMounted()) return;
+        if (controller.signal.aborted) {
+          setPhase('aborted');
+          return;
+        }
+        const message = formatError(error);
+        setOutcome({
+          failed: failedModel({
+            message,
+            ...(currentStepId(progressRef.current) === undefined
+              ? {}
+              : { stepId: currentStepId(progressRef.current) }),
+            ...(journalPathIn(message) === undefined
+              ? {}
+              : { journalPath: journalPathIn(message) }),
+            domain: answerOf(answers, DOMAIN_FIELD),
+          }),
+        });
+        setPhase('failed');
+      }
+    })();
+  }, [answers, append, groups, isMounted, name, roots.apps, roots.proxy]);
+
+  // `progress` read from inside the async closure above without making the
+  // whole run depend on it.
+  const progressRef = useRef<PipelineProgress[]>([]);
+  progressRef.current = progress;
+
+  useEffect(() => {
+    if (phase !== 'running' || startedAt === undefined) return;
+    const timer = setInterval(() => {
+      if (isMounted()) setElapsed(Date.now() - startedAt);
+    }, 1_000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [phase, startedAt, isMounted]);
+
+  // Load-bearing: without it, leaving the screen tears down the UI and leaves
+  // a `docker compose build` running on a production server.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    [],
+  );
+
+  useInput(
+    (_input, key) => {
+      if (key.escape) setConfirming(true);
+    },
+    { isActive: phase === 'running' && !confirming },
+  );
+
+  useInput(
+    (_input, key) => {
+      if (key.return || key.escape) onDone();
+    },
+    { isActive: phase === 'done' || phase === 'failed' || phase === 'aborted' },
+  );
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
+  if (phase === 'running') {
+    return (
+      <WizardFrame
+        title={`Install — running (${formatDuration(elapsed)})`}
+        steps={railSteps(steps)}
+        current={steps.length - 1}
+        hints={confirming ? ['enter select'] : ['esc stop', '↑↓ scroll the log']}
+      >
+        {confirming ? (
+          <ConfirmDialog
+            message={ABORT_DIALOG.message}
+            detail={ABORT_DIALOG.detail}
+            danger
+            confirmLabel={ABORT_DIALOG.confirmLabel}
+            cancelLabel={ABORT_DIALOG.cancelLabel}
+            onResult={(confirmed) => {
+              setConfirming(false);
+              if (!confirmed) return;
+              abortRef.current?.abort();
+              setPhase('aborted');
+            }}
+          />
+        ) : (
+          <Checklist items={pipelineItems(progress)} />
+        )}
+        <Box marginTop={1} flexDirection="column">
+          <ScrollBox
+            lines={lines}
+            reservedRows={22}
+            title="Build log"
+            busy={!confirming}
+            followTail
+            isActive={!confirming}
+          />
+        </Box>
+      </WizardFrame>
+    );
+  }
+
+  if (phase === 'done' && outcome.done !== undefined) {
+    return (
+      <WizardFrame
+        title="Install — done"
+        steps={railSteps(steps)}
+        current={steps.length - 1}
+        hints={['enter return to the menu']}
+      >
+        <Text color="green" bold>
+          {outcome.done.title}
+        </Text>
+        <Box marginTop={1}>
+          <KeyValue rows={outcome.done.rows} />
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          <Text bold>{outcome.done.nextStep}</Text>
+          <Text dimColor>Press Enter to return.</Text>
+        </Box>
+      </WizardFrame>
+    );
+  }
+
+  if (phase === 'failed' && outcome.failed !== undefined) {
+    return (
+      <WizardFrame
+        title="Install — failed"
+        steps={railSteps(steps)}
+        current={steps.length - 1}
+        hints={['enter return to the menu']}
+      >
+        <ErrorNotice
+          message={outcome.failed.message}
+          // The exit code will be 0 whatever happened here, so the frame has
+          // to carry the failure on its own.
+          hint={`${outcome.failed.actionLabel} — \`${CLI_NAME} deploy install --resume\`.`}
+        />
+        <Box marginTop={1}>
+          <KeyValue rows={outcome.failed.rows} />
+        </Box>
+      </WizardFrame>
+    );
+  }
+
+  if (phase === 'aborted') {
+    return (
+      <WizardFrame
+        title="Install — stopped"
+        steps={railSteps(steps)}
+        current={steps.length - 1}
+        hints={['enter return to the menu']}
+      >
+        <Text color="yellow" bold>
+          Stopped.
+        </Text>
+        <Box flexDirection="column" marginTop={1}>
+          {ABORTED_DETAIL.map((line) => (
+            <Text key={line} dimColor>
+              {line}
+            </Text>
+          ))}
+        </Box>
+      </WizardFrame>
+    );
+  }
+
+  if (step === undefined) {
+    return (
+      <WizardFrame title="Install" steps={[]} current={0} hints={['esc back']}>
+        <Text>Nothing to ask.</Text>
+      </WizardFrame>
+    );
+  }
+
+  const context = stepContextFor(answers, facts);
+  const intro = step.data?.intro(context) ?? welcomeIntro(deployRoot);
+  const fields = formFieldsFor(step, { specs, answers, suggestions });
+  const reviewing = step.id === REVIEW_STEP_ID;
+
+  return (
+    <WizardFrame
+      title="Install"
+      steps={railSteps(steps)}
+      current={wizard.index}
+      hints={hintsFor(step, reviewing)}
+    >
+      <Box flexDirection="column">
+        {intro.map((line, index) => (
+          <Text key={`${index}:${line}`} dimColor>
+            {line === '' ? ' ' : line}
+          </Text>
+        ))}
+      </Box>
+
+      {step.id === WELCOME_STEP_ID ? (
+        <Box marginTop={1} flexDirection="column">
+          <Text bold>Prerequisites</Text>
+          <Checklist items={checkItems(doctorChecks, welcome.results, welcome.running)} />
+          {!welcome.running && requiredFailures(welcome.results).length > 0 ? (
+            <Box marginTop={1}>
+              <ErrorNotice
+                message={`${requiredFailures(welcome.results).length} required check(s) failed. The install cannot start until they pass.`}
+                hint="Fix them on the server, then press ctrl-r to run them again."
+              />
+            </Box>
+          ) : null}
+        </Box>
+      ) : null}
+
+      {reviewing ? (
+        <Box marginTop={1} flexDirection="column">
+          <KeyValue
+            rows={reviewRows({
+              specs,
+              answers,
+              suggestions,
+              facts,
+              name,
+              deployRoot,
+              repoUrl: answerOf(answers, REPO_FIELD) || '(this checkout)',
+              ref: answerOf(answers, REF_FIELD) || '(default branch)',
+              proxyContainer: DEFAULT_PROXY_CONTAINER,
+            })}
+          />
+          <Box marginTop={1}>
+            <ConfirmDialog
+              message="Install with these values?"
+              detail={['Nothing has been written yet. This is the first change to the server.']}
+              confirmLabel="Yes, install now"
+              onResult={(confirmed) => {
+                if (confirmed) start();
+                else wizard.back();
+              }}
+            />
+          </Box>
+        </Box>
+      ) : (
+        <Box marginTop={1} flexDirection="column">
+          <Form
+            fields={fields}
+            values={answers}
+            isActive={!stepChecks.running && !confirming}
+            {...(focusKey === undefined ? {} : { focusKey })}
+            onChange={(key, value) => {
+              setAnswers((current) => applyChange(current, key, value, fields, specs));
+            }}
+            onSubmit={leaveStep}
+          />
+          {stepChecks.running || stepChecks.results.length > 0 ? (
+            <Box marginTop={1} flexDirection="column">
+              <Checklist items={stepCheckItems(step, stepChecks.results, stepChecks.running)} />
+            </Box>
+          ) : null}
+        </Box>
+      )}
+    </WizardFrame>
+  );
+}
+
+/**
+ * One change from the form.
+ *
+ * The only non-trivial case is a generated secret's mode: choosing "paste"
+ * clears the value that was minted for the operator, and choosing "generate"
+ * mints a fresh one — so the masked field always shows what will be written.
+ * Typing into the value of a generate-mode secret switches the mode itself,
+ * because otherwise the next visit to the step would overwrite what was typed.
+ */
+function applyChange(
+  answers: InstallAnswers,
+  key: string,
+  value: string,
+  fields: readonly FormFieldSpec[],
+  specs: readonly EnvVarSpec[],
+): InstallAnswers {
+  if (key.startsWith(SECRET_MODE_PREFIX)) {
+    if (answers[key] === value) return answers;
+    return applySecretMode(answers, key.slice(SECRET_MODE_PREFIX.length), value as SecretMode);
+  }
+
+  if (key.startsWith(OPTION_MODE_PREFIX)) {
+    if (answers[key] === value) return answers;
+    const target = key.slice(OPTION_MODE_PREFIX.length);
+    return applyOptionMode(
+      answers,
+      target,
+      value as OptionMode,
+      specs.find((spec) => spec.key === target),
+    );
+  }
+
+  // Typing into the value of a key whose mode says otherwise switches the
+  // mode: without it the next visit to the step would overwrite what was
+  // typed with a freshly generated secret, or with the template's default.
+  for (const [prefix, typed] of [
+    [SECRET_MODE_PREFIX, 'paste'],
+    [OPTION_MODE_PREFIX, 'edit'],
+  ] as const) {
+    const modeKey = `${prefix}${key}`;
+    if (!fields.some((field) => field.key === modeKey)) continue;
+    if (answers[modeKey] === typed) break;
+    return withAnswer(withAnswer(answers, modeKey, typed), key, value);
+  }
+
+  return withAnswer(answers, key, value);
+}
+
+function hintsFor(step: InstallStep, reviewing: boolean): string[] {
+  if (reviewing) return ['enter select', 'esc back'];
+  const base = ['tab next field', 'enter continue', 'esc back'];
+  if (step.id === WELCOME_STEP_ID) return [...base, 'ctrl-r re-run checks'];
+  if (step.optional === true) return [...base, 'blank to skip'];
+  return base;
+}
+
+function welcomeIntro(deployRoot: string): string[] {
+  return [
+    'This installs the application on THIS server, under',
+    '',
+    `    ${deployRoot}`,
+    '',
+    'The prerequisites are being checked below as you read. Nothing is written',
+    'to this server until the review at the end is confirmed.',
+  ];
+}
+
+/** The step that was running when the pipeline stopped. */
+function currentStepId(progress: readonly PipelineProgress[]): string | undefined {
+  return (
+    progress.find((entry) => entry.outcome === 'failed')?.id ??
+    progress.find((entry) => entry.outcome === 'running')?.id
+  );
+}
+
+/** `runInstall`'s failure message names the journal; pull it back out for the table. */
+function journalPathIn(message: string): string | undefined {
+  return /The full log is at (\S+)/.exec(message)?.[1];
+}
+
+/**
+ * The template the questions come from.
+ *
+ * Two places, in order: the deployment's own clone (a reinstall or a resume),
+ * then the checkout this CLI is being run from (the first install, where
+ * nothing has been cloned onto the server yet — `bootstrap-vps.sh` leaves the
+ * operator in exactly such a checkout). Before either exists the domain
+ * question alone is still enough to get started, which is why this returns an
+ * empty list rather than throwing.
+ */
+export function loadTemplateSpecs(appsRoot: string): EnvVarSpec[] {
+  for (const path of templateCandidates(appsRoot)) {
+    try {
+      if (!existsSync(path)) continue;
+      return parseEnvExample(readFileSync(path, 'utf8'));
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+function templateCandidates(appsRoot: string): string[] {
+  const relative = join('infra', 'compose', '.env.example');
+  const candidates: string[] = [];
+
+  try {
+    for (const entry of readdirNames(appsRoot)) {
+      candidates.push(join(appsRoot, entry, 'repo', relative));
+    }
+  } catch {
+    /* No apps root yet: the first install. */
+  }
+
+  let directory = process.cwd();
+  for (let depth = 0; depth < 8; depth += 1) {
+    candidates.push(join(directory, relative));
+    const parent = dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+
+  return candidates;
+}
+
+function readdirNames(path: string): string[] {
+  return readdirSync(path, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+}
