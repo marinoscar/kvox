@@ -20,6 +20,7 @@ import {
   unquote,
   type EnvVarSpec,
 } from './env-spec.js';
+import { unknownServerFacts } from './server-facts.js';
 
 const REAL_TEMPLATE = resolve(
   __dirname,
@@ -337,7 +338,12 @@ describe('env metadata', () => {
   });
 
   it('derives the URLs that must agree with the certificate domain', () => {
-    const context = { domain: 'app.example.test', answers: new Map<string, string>() };
+    const context = {
+      domain: 'app.example.test',
+      answers: new Map<string, string>(),
+      facts: unknownServerFacts(),
+      siblingPorts: [],
+    };
 
     expect(metadataFor('APP_URL').derive?.(context)).toBe('https://app.example.test');
     expect(metadataFor('GOOGLE_CALLBACK_URL').derive?.(context)).toBe(

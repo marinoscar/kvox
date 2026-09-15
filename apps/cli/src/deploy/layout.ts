@@ -103,6 +103,27 @@ export function listInstalledApps(appsRoot: string): InstalledApp[] {
   return apps;
 }
 
+/** A port another app under the apps root has recorded as its own. */
+export interface SiblingPort {
+  /** The app's name, for the wizard's "3535 is used by <name>" reason. */
+  name: string;
+  port: number;
+}
+
+/**
+ * The bind port of every OTHER app installed under `appsRoot` (#127).
+ *
+ * Read from the state files, not from what is listening: a STOPPED app is
+ * invisible to a bind probe, and the wizard must never suggest a port that
+ * app will take back the moment it is started. The app at `deployRoot` is
+ * left out so a reinstall does not see its own port as taken.
+ */
+export function siblingBindPorts(appsRoot: string, deployRoot?: string): SiblingPort[] {
+  return listInstalledApps(appsRoot)
+    .filter((app) => app.deployRoot !== deployRoot)
+    .map((app) => ({ name: app.name, port: app.state.bindPort }));
+}
+
 export interface LocateOptions {
   appsRoot: string;
   name?: string | undefined;

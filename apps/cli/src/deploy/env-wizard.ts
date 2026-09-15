@@ -12,6 +12,7 @@ import {
   type EnvVarMetadata,
 } from './env-metadata.js';
 import type { EnvVarSpec } from './env-spec.js';
+import { unknownServerFacts } from './server-facts.js';
 
 // =============================================================================
 // The install wizard  (issue #175, epic #168)
@@ -139,7 +140,12 @@ export async function runEnvWizard(options: WizardOptions): Promise<WizardResult
     }
 
     if (metadata.derive !== undefined) {
-      const derived = metadata.derive({ domain, answers: values });
+      const derived = metadata.derive({
+        domain,
+        answers: values,
+        facts: unknownServerFacts(),
+        siblingPorts: [],
+      });
       if (derived !== undefined) {
         values.set(spec.key, derived);
         summary.push({ key: spec.key, display: derived, source: 'derived' });
