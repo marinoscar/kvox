@@ -62,6 +62,7 @@ import { getNote, getNoteSummary, getNotes } from '../../services/notes';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { NOTE_ACTIVE_POLL_MS, useNotes } from '../../hooks/useNotes';
 import type { NoteListItem } from '../../services/notes';
+import { clearFeedCache } from '../../utils/feedCache';
 
 const mockGetNotes = vi.mocked(getNotes);
 const mockGetNote = vi.mocked(getNote);
@@ -470,5 +471,135 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     });
 
     expect(result.current.notes.map((n) => n.id)).toEqual(['newest']);
+  });
+});
+
+/**
+ * =============================================================================
+ * THE FEED SURVIVES A DRILL-DOWN — issue #168
+ * =============================================================================
+ *
+ * `useTranscripts.test.tsx`'s twin block, and the same reasoning: a separate
+ * defect from the revalidation one above, surviving its fix, because the rows
+ * live in `useState` inside this hook and unmount with the page.
+ *
+ * `unmount()` then `renderHook(...)` with the same options IS the drill-down.
+ *
+ * ⚠ `cacheKey` is OPT-IN, and the transcript detail page's note list is the
+ * reason it has to be: it calls this same hook with a `sourceTranscriptId` and
+ * must neither read from nor evict entries in the library's cache. The last
+ * test in this block pins that.
+ */
+describe('useNotes — a cached feed survives the drill-down', () => {
+  beforeEach(() => {
+    clearFeedCache();
+  });
+
+  async function loadSixtyRows(cacheKey: string) {
+    mockGetNotes
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const rendered = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey }));
+    await waitFor(() => expect(rendered.result.current.notes).toHaveLength(20));
+    await act(async () => {
+      await rendered.result.current.loadMore();
+    });
+    await act(async () => {
+      await rendered.result.current.loadMore();
+    });
+    expect(rendered.result.current.notes).toHaveLength(60);
+    return rendered;
+  }
+
+  it('brings back all 60 rows and the cursor after unmount and remount', async () => {
+    const { unmount } = await loadSixtyRows('notes||');
+    unmount();
+
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey: 'notes||' }));
+
+    expect(result.current.notes).toHaveLength(60);
+    expect(result.current.nextCursor).toBe('c4');
+  });
+
+  it('paints those rows on the FIRST frame, with no spinner over them', async () => {
+    const { unmount } = await loadSixtyRows('notes||');
+    unmount();
+
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey: 'notes||' }));
+
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('REVALIDATES rather than resetting on that remount', async () => {
+    // The trap: a remount that reset would adopt page one and truncate the
+    // restored feed back to twenty — #167's bug arriving through #168's door.
+    const { unmount } = await loadSixtyRows('notes||');
+    unmount();
+
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey: 'notes||' }));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mockGetNotes).toHaveBeenCalled();
+    expect(result.current.notes).toHaveLength(60);
+  });
+
+  it('starts over for a DIFFERENT filter, never replaying rows that no longer match', async () => {
+    const { unmount } = await loadSixtyRows('notes||');
+    unmount();
+
+    mockGetNotes.mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+
+    const { result } = renderHook(() =>
+      useNotes({ q: 'budget', pollIntervalMs: 0, cacheKey: 'notes|budget|' }),
+    );
+
+    expect(result.current.notes).toHaveLength(0);
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.notes.map((n) => n.id)).toEqual(['match']));
+  });
+
+  it('keeps each filter\'s own feed, so switching back restores it', async () => {
+    await loadSixtyRows('notes||').then((r) => r.unmount());
+
+    mockGetNotes.mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+    const searched = renderHook(() =>
+      useNotes({ q: 'budget', pollIntervalMs: 0, cacheKey: 'notes|budget|' }),
+    );
+    await waitFor(() => expect(searched.result.current.notes).toHaveLength(1));
+    searched.unmount();
+
+    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    const { result } = renderHook(() => useNotes({ pollIntervalMs: 0, cacheKey: 'notes||' }));
+
+    expect(result.current.notes).toHaveLength(60);
+  });
+
+  it('caches NOTHING without a cacheKey — what the transcript detail page gets', async () => {
+    mockGetNotes
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const first = renderHook(() =>
+      useNotes({ sourceTranscriptId: 'tr-1', pollIntervalMs: 0 }),
+    );
+    await waitFor(() => expect(first.result.current.notes).toHaveLength(20));
+    await act(async () => {
+      await first.result.current.loadMore();
+    });
+    expect(first.result.current.notes).toHaveLength(40);
+    first.unmount();
+
+    const { result } = renderHook(() =>
+      useNotes({ sourceTranscriptId: 'tr-1', pollIntervalMs: 0 }),
+    );
+
+    expect(result.current.notes).toHaveLength(0);
+    expect(result.current.isLoading).toBe(true);
   });
 });
