@@ -41,6 +41,8 @@ import type {
   NoteStatus,
   NoteSummary,
 } from '../services/notes';
+import { reconcileFeed } from '../utils/feedReconcile';
+import type { FeedState } from '../utils/feedReconcile';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useIsMounted } from './useIsMounted';
 import { useVisiblePolling } from './useVisiblePolling';
@@ -116,6 +118,15 @@ export interface UseNotesResult {
   nextCursor: string | null;
   isLoadingMore: boolean;
   loadMore: () => Promise<void>;
+  /**
+   * Re-read page one INTO the accumulated list — a revalidation, not a reset.
+   *
+   * It used to reset to the first page, and that was issue #167: a `refresh()`
+   * after a row action threw away every page the user had pressed "Load more"
+   * for. New notes appear at the top, changed ones update in place, notes
+   * removed from page one's window disappear, and everything already loaded
+   * below that window stays loaded. See `utils/feedReconcile.ts`.
+   */
   refresh: () => Promise<void>;
 }
 
@@ -134,16 +145,55 @@ export interface UseNotesOptions {
  *
  * CURSOR-PAGINATED, never offset: the list is ordered by `updatedAt` and every
  * generation and every save rewrite that column, so offset paging over it skips
- * rows and repeats others while a user scrolls. `loadMore` APPENDS and
- * `refresh` resets to the first page — two different operations, deliberately
- * not sharing one state setter, because that is how a "load more" quietly
- * starts truncating the list.
+ * rows and repeats others while a user scrolls.
+ *
+ * =============================================================================
+ * A BACKGROUND READ REVALIDATES; ONLY A NEW QUESTION RESETS
+ * =============================================================================
+ *
+ * Issue #167, and the fix is deliberately IDENTICAL to `useTranscripts`' —
+ * these two list hooks are twins, they had the same bug, and a merge rule that
+ * lands in one shape here and another shape there is a merge rule that drifts.
+ * The full argument is in `useTranscripts.ts`'s copy of this banner and in
+ * `utils/feedReconcile.ts`; the short form:
+ *
+ * This list is live — the poll, the tab-refocus fetch, and a `refresh()` after
+ * every row action all re-read PAGE ONE — and replacing the held rows with that
+ * page silently collapsed two `loadMore` presses' worth of notes back to twenty.
+ * So `load` takes an explicit MODE rather than a `showLoading` boolean:
+ *
+ *   • `'reset'` — the question changed. Adopt the page wholesale, raise
+ *     `isLoading`.
+ *   • `'revalidate'` — the same question, asked again in the background. Merge
+ *     the page into what is held, through `reconcileFeed`, no loading flag.
+ *
+ * THE MODE IS THE RIGHT DISCRIMINATOR because `load`'s identity changes exactly
+ * when the query does — `q`, `status` and `sourceTranscriptId` are its only
+ * deps — so the single call site that passes `'reset'` (the effect keyed on
+ * `load`) is precisely the "start over" case. Reconciling there would splice
+ * notes matching the OLD filter into the answer to a new one.
+ *
+ * `loadMore` APPENDS, and it is still a different operation from both: it reads
+ * a LATER page and dedupes on id. The state it shares with them is one object
+ * (`{ items, nextCursor }`) so the rows and the cursor that describes where
+ * they stop can never be updated in two places and disagree.
  */
 export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   const { q, status, sourceTranscriptId, pollIntervalMs } = options;
 
-  const [notes, setNotes] = useState<NoteListItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  /**
+   * The rows and their cursor, in ONE state value.
+   *
+   * Not two `useState`s. Every write below is a FUNCTIONAL update, because
+   * `load` is a `useCallback` whose deps deliberately exclude the list — a
+   * closure over `notes`/`nextCursor` here would be stale on exactly the poll
+   * that matters and would reintroduce the truncation this fixes.
+   */
+  const [feed, setFeed] = useState<FeedState<NoteListItem>>({
+    items: [],
+    nextCursor: null,
+  });
+  const { items: notes, nextCursor } = feed;
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,9 +210,9 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   const requestToken = useRef(0);
 
   const load = useCallback(
-    async (showLoading: boolean) => {
+    async (mode: 'reset' | 'revalidate') => {
       const token = (requestToken.current += 1);
-      if (showLoading) setIsLoading(true);
+      if (mode === 'reset') setIsLoading(true);
       try {
         const params: NoteListParams = {
           q,
@@ -172,8 +222,15 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
         };
         const response = await getNotes(params);
         if (!isMounted() || token !== requestToken.current) return;
-        setNotes(response.items);
-        setNextCursor(response.nextCursor);
+        if (mode === 'reset') {
+          // A new question. Whatever was accumulated answered a different one.
+          setFeed({ items: response.items, nextCursor: response.nextCursor });
+        } else {
+          // The same question. Merge page one back into the accumulated list —
+          // items and cursor together, inside one updater, so they cannot
+          // disagree. See `utils/feedReconcile.ts` for what the merge buys.
+          setFeed((current) => reconcileFeed(current, response));
+        }
         setError(null);
       } catch (err) {
         if (!isMounted() || token !== requestToken.current) return;
@@ -185,8 +242,12 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
     [isMounted, q, sourceTranscriptId, status],
   );
 
+  // THE ONLY `'reset'` CALL SITE. This effect fires on mount and again whenever
+  // `load`'s identity changes, which is exactly when `q`/`status`/
+  // `sourceTranscriptId` do — so "this effect ran" and "the question changed"
+  // are the same event.
   useEffect(() => {
-    void load(true);
+    void load('reset');
   }, [load]);
 
   // Derived, not constant — see the file header. `0` is "no interval at all",
@@ -197,10 +258,11 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   );
   const interval = pollIntervalMs ?? (anyInFlight ? NOTE_ACTIVE_POLL_MS : 0);
 
-  // A POLL DOES NOT RAISE THE LOADING FLAG — the rows stay on screen and keep
-  // their scroll offset. A spinner every five seconds over data that is already
+  // A POLL REVALIDATES — it does not raise the loading flag, and it does not
+  // throw away pages the user loaded. The rows stay on screen and keep their
+  // scroll offset. A spinner every five seconds over data that is already
   // correct is the fastest way to make a live list unusable.
-  useVisiblePolling(() => void load(false), interval);
+  useVisiblePolling(() => void load('revalidate'), interval);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || isLoadingMore) return;
@@ -218,11 +280,15 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
       // requests can legitimately appear on both pages — cursor paging bounds
       // the window, it does not freeze the ordering — and React would then warn
       // about a duplicate key while rendering the row twice.
-      setNotes((current) => {
-        const seen = new Set(current.map((item) => item.id));
-        return [...current, ...response.items.filter((item) => !seen.has(item.id))];
+      setFeed((current) => {
+        const seen = new Set(current.items.map((item) => item.id));
+        return {
+          items: [...current.items, ...response.items.filter((item) => !seen.has(item.id))],
+          // This page's own cursor, unlike a revalidation's: `loadMore` is the
+          // operation that actually advances the window.
+          nextCursor: response.nextCursor,
+        };
       });
-      setNextCursor(response.nextCursor);
       setError(null);
     } catch (err) {
       if (isMounted()) setError(messageFor(err, 'Failed to load more notes'));
@@ -231,7 +297,7 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
     }
   }, [isLoadingMore, isMounted, nextCursor, q, sourceTranscriptId, status]);
 
-  const refresh = useCallback(() => load(false), [load]);
+  const refresh = useCallback(() => load('revalidate'), [load]);
 
   return { notes, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
 }

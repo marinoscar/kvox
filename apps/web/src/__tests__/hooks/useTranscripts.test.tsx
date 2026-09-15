@@ -51,6 +51,28 @@ function listItem(id: string, overrides: Partial<TranscriptListItem> = {}): Tran
   };
 }
 
+/**
+ * `n` rows starting at `from`, newest first, one minute apart — `t0` is newest.
+ *
+ * The `updatedAt` spacing is load-bearing, not cosmetic: `reconcileFeed` decides
+ * which held rows survive a revalidation by comparing them against the page's
+ * OLDEST row, so a fixture where every row shares one timestamp would exercise
+ * only the `id` tie-break and would pass whatever the date comparison did.
+ */
+function page(from: number, n = 20): TranscriptListItem[] {
+  return Array.from({ length: n }, (_, i) => {
+    const index = from + i;
+    const minute = String(59 - (index % 60)).padStart(2, '0');
+    const hour = String(23 - Math.floor(index / 60)).padStart(2, '0');
+    return listItem(`t${index}`, { updatedAt: `2026-01-01T${hour}:${minute}:00.000Z` });
+  });
+}
+
+/** Drive `document.hidden`, which is a getter and cannot simply be assigned. */
+function hidden(value: boolean): void {
+  Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+}
+
 function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {
   return {
     ...listItem('t1'),
@@ -221,6 +243,352 @@ describe('useTranscripts — the list', () => {
     // A short settle, so a refetch that WAS going to happen has had its chance.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mockGetTranscripts).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * =============================================================================
+ * THE INTERACTION #167 WAS ABOUT
+ * =============================================================================
+ *
+ * Every test above covers `loadMore` OR `load` in isolation, and both were
+ * always correct in isolation. The defect lived in what happens when a
+ * background read of PAGE ONE lands on a list that `loadMore` had grown — the
+ * list was replaced with the page, so sixty rows became twenty, silently, up to
+ * three times a minute.
+ *
+ * Four separate call sites trigger that read, and each gets its own test here
+ * rather than being represented by one: they reach `load` through four
+ * different mechanisms (an interval, a real `visibilitychange`, the
+ * notification effect, a handler calling `refresh`), and a regression is free
+ * to break one while leaving the others working.
+ *
+ * ⚠ The counterpart tests live in `useNotes.test.tsx` and are deliberately
+ * test-for-test identical. The two hooks are twins by design — both file
+ * headers say so — and a divergence between these two suites is the signal that
+ * one of them drifted.
+ */
+describe('useTranscripts — a background read REVALIDATES, it does not truncate', () => {
+  /** Three pages: 20 rows, then 20 more, then 20 more. */
+  function threePages() {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' });
+  }
+
+  async function loadThreePages() {
+    const rendered = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(rendered.result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await rendered.result.current.loadMore();
+    });
+    await act(async () => {
+      await rendered.result.current.loadMore();
+    });
+    expect(rendered.result.current.transcripts).toHaveLength(60);
+    return rendered;
+  }
+
+  it('leaves 60 rows after the 20-second POLL fires', async () => {
+    threePages();
+    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = await loadThreePages();
+
+    // The poll is driven through the real hook rather than by calling `refresh`
+    // — the interval is the path that actually runs on a settled library with
+    // nothing in flight, and it is the one nobody was watching.
+    const { result: polled, rerender } = renderHook(
+      ({ interval }: { interval: number }) =>
+        useTranscripts('owned', { pollIntervalMs: interval }),
+      { initialProps: { interval: 0 } },
+    );
+    rerender({ interval: TRANSCRIPT_IDLE_POLL_MS });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts).toHaveLength(60);
+    expect(result.current.transcripts[59].id).toBe('t59');
+    expect(polled.current.isLoading).toBe(false);
+  });
+
+  it('leaves 60 rows when the interval actually elapses', async () => {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: TRANSCRIPT_IDLE_POLL_MS }),
+    );
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.transcripts).toHaveLength(60);
+
+    const before = mockGetTranscripts.mock.calls.length;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // Drive the interval by hand rather than with fake timers: the hook's
+    // `await` chain needs real microtask turns to settle, and mixing the two
+    // makes this test about the timer mock rather than about the merge.
+    await act(async () => {
+      await result.current.refresh();
+    });
+    expect(mockGetTranscripts.mock.calls.length).toBeGreaterThan(before);
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('leaves 60 rows after the tab REGAINS FOCUS', async () => {
+    // `useVisiblePolling` does one immediate catch-up fetch on the way back to
+    // visible. That fetch is page one, and before #167 it was the fastest way
+    // to lose a loaded feed: switch tabs and come straight back.
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: TRANSCRIPT_IDLE_POLL_MS }),
+    );
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    const before = mockGetTranscripts.mock.calls.length;
+
+    await act(async () => {
+      hidden(true);
+      document.dispatchEvent(new Event('visibilitychange'));
+      hidden(false);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mockGetTranscripts.mock.calls.length).toBeGreaterThan(before);
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('leaves 60 rows after a transcripts.* NOTIFICATION', async () => {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
+      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result, rerender } = renderHook(() =>
+      useTranscripts('owned', { pollIntervalMs: 0 }),
+    );
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    withNotifications([{ id: 'n1', eventKey: 'transcripts.transcript_ready' }]);
+    await act(async () => {
+      rerender();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('leaves 60 rows after refresh() following a row action', async () => {
+    threePages();
+    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = await loadThreePages();
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts).toHaveLength(60);
+  });
+
+  it('keeps the CURSOR where loadMore left it, so paging does not rewind', async () => {
+    threePages();
+    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = await loadThreePages();
+    expect(result.current.nextCursor).toBe('c4');
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.nextCursor).toBe('c4');
+  });
+
+  it('shows a NEW row at the top without disturbing the loaded pages', async () => {
+    threePages();
+    mockGetTranscripts.mockResolvedValue({
+      items: [listItem('fresh', { updatedAt: '2026-02-01T00:00:00.000Z' }), ...page(0).slice(0, 19)],
+      nextCursor: 'c2',
+    });
+
+    const { result } = await loadThreePages();
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts[0].id).toBe('fresh');
+    expect(result.current.transcripts).toHaveLength(61);
+  });
+
+  it('updates a CHANGED row in place rather than rendering it twice', async () => {
+    threePages();
+    const moved = listItem('t45', {
+      title: 'Renamed just now',
+      updatedAt: '2026-02-01T00:00:00.000Z',
+    });
+    mockGetTranscripts.mockResolvedValue({
+      items: [moved, ...page(0).slice(0, 19)],
+      nextCursor: 'c2',
+    });
+
+    const { result } = await loadThreePages();
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    const matches = result.current.transcripts.filter((t) => t.id === 't45');
+    expect(matches).toHaveLength(1);
+    expect(matches[0].title).toBe('Renamed just now');
+    expect(result.current.transcripts[0].id).toBe('t45');
+  });
+
+  it('makes a row REMOVED from page one\'s window disappear', async () => {
+    threePages();
+    // t007 deleted elsewhere; t020 backfills the window it vacated.
+    mockGetTranscripts.mockResolvedValue({
+      items: [...page(0).filter((t) => t.id !== 't7'), ...page(20).slice(0, 1)],
+      nextCursor: 'c2',
+    });
+
+    const { result } = await loadThreePages();
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.transcripts.map((t) => t.id)).not.toContain('t7');
+  });
+
+  it('RESETS on a new question — a search term must not keep the old rows', async () => {
+    // The clause that breaks if somebody decides every load should reconcile:
+    // `load`'s identity changes exactly when the query does, and reconciling
+    // there splices rows matching the OLD filter into the answer to a new one.
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
+      .mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+
+    const { result, rerender } = renderHook(
+      ({ q }: { q: string }) => useTranscripts('owned', { q, pollIntervalMs: 0 }),
+      { initialProps: { q: '' } },
+    );
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+    expect(result.current.transcripts).toHaveLength(40);
+
+    rerender({ q: 'budget' });
+
+    await waitFor(() => expect(result.current.transcripts.map((t) => t.id)).toEqual(['match']));
+    expect(result.current.nextCursor).toBeNull();
+  });
+
+  it('RESETS on a scope change too', async () => {
+    mockGetTranscripts
+      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
+      .mockResolvedValue({ items: [listItem('shared-1')], nextCursor: null });
+
+    const { result, rerender } = renderHook(
+      ({ scope }: { scope: 'owned' | 'shared' }) =>
+        useTranscripts(scope, { pollIntervalMs: 0 }),
+      { initialProps: { scope: 'owned' as const } },
+    );
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+
+    rerender({ scope: 'shared' as const });
+
+    await waitFor(() =>
+      expect(result.current.transcripts.map((t) => t.id)).toEqual(['shared-1']),
+    );
+  });
+
+  it('raises isLoading on a reset and NEVER on a revalidation', async () => {
+    // A spinner every twenty seconds over data that is already correct is the
+    // fastest way to make a live list unusable — and it would also throw away
+    // the scroll position the rows are holding.
+    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    const seen: boolean[] = [];
+    await act(async () => {
+      const pending = result.current.refresh();
+      seen.push(result.current.isLoading);
+      await pending;
+    });
+
+    expect(seen).toEqual([false]);
+    expect(result.current.isLoading).toBe(false);
+  });
+
+  it('drops a stale REVALIDATION so it cannot resurrect rows', async () => {
+    // The request-token guard has to cover the revalidate path as well as the
+    // reset one: a slow poll settling after a newer read would otherwise merge
+    // an out-of-date page one into the current list.
+    let resolveSlow: (value: { items: TranscriptListItem[]; nextCursor: string | null }) => void =
+      () => {};
+    mockGetTranscripts.mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' });
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+
+    mockGetTranscripts
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSlow = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ items: [listItem('newest')], nextCursor: null });
+
+    let slow: Promise<void> = Promise.resolve();
+    await act(async () => {
+      slow = result.current.refresh();
+      await result.current.refresh();
+    });
+    expect(result.current.transcripts.map((t) => t.id)).toEqual(['newest']);
+
+    await act(async () => {
+      resolveSlow({ items: page(20), nextCursor: 'c3' });
+      await slow;
+    });
+
+    expect(result.current.transcripts.map((t) => t.id)).toEqual(['newest']);
   });
 });
 
