@@ -576,6 +576,33 @@ that server. `--non-interactive` skips every prompt and fails, listing
 what's unresolved, rather than asking; pair it with `--all` to review every
 environment variable instead of only the essential dozen.
 
+The environment is collected in **steps** — domain, database, secrets,
+Google OAuth, admin, resources — and each is verified before the next
+question: the DNS record when the domain is typed, the connection,
+credentials, database and privileges when the database is. A failed check
+re-enters the step with its remedy shown, so a wrong password is corrected
+on the spot. Nothing is pre-filled for the database host. Secrets are
+generated (on every path, including `--non-interactive`); the loopback
+port, the job worker slots and the container memory limits are **suggested
+from the server** — the first free port from 3535 that no other app under
+`--apps-root` has recorded, `min(4, cpus − 1)`, and a limit sized to the
+RAM — and each suggestion is shown with its reason and can be edited. The
+OAuth step prints the exact redirect URI to register before asking for the
+client id.
+
+`--answer KEY=VALUE` (repeatable) and `--answers-file <path>` (a `.env`-format
+file; the file first, then the flags) seed values without a prompt. The
+domain may be given in the file as `APP_DOMAIN`. Every value goes through
+the same validator the prompt would apply, before anything runs:
+
+```bash
+kvox deploy install --non-interactive --answers-file answers.env
+```
+
+with only the domain, the database, the OAuth client and the admin email in
+the file is a complete install — every secret generated, every resource
+suggested and printed with its reason in the review table.
+
 `install` is idempotent — if it fails partway through, fix whatever it
 reported and run the same command again, or add `--resume` to continue from
 the step that failed rather than re-running everything before it.
@@ -613,7 +640,8 @@ Options:
   --domain <domain>    Public domain to publish under
   --proxy-root <path>  Shared reverse proxy directory (default:
                        "/opt/infra/proxy")
-  --port <port>        Loopback port the proxy forwards to (default: "3535")
+  --port <port>        Loopback port the proxy forwards to (default: suggested,
+                       from 3535)
   --repo <url>         Repository to deploy (default: this checkout's origin)
   --ref <ref>          Branch, tag or commit (default: the remote default
                        branch)
@@ -622,6 +650,9 @@ Options:
   --all                Review every environment variable, not only the essential
                        ones
   --non-interactive    Never prompt; fail listing anything unresolved
+  --answer <KEY=VALUE>  Supply one environment value without a prompt; repeat
+                       for more (default: [])
+  --answers-file <path>  Supply environment values from a .env-format file
   --reinstall          Install over an existing deployment
   --resume             Continue from the step that failed
   --skip-doctor        Skip the prerequisite checks
@@ -731,6 +762,9 @@ Options:
   --force            Rebuild even when the revision has not changed
   --no-cache         Rebuild images without the layer cache
   --non-interactive  Never prompt; fail listing anything unresolved
+  --answer <KEY=VALUE>  Supply a value a new revision asks for; repeat for more
+                     (default: [])
+  --answers-file <path>  Supply such values from a .env-format file
   --skip-seed        Do not re-run the database seed
   --skip-proxy       Do not touch the reverse proxy
   --skip-github      Never consult the GitHub CLI, even for a GitHub remote

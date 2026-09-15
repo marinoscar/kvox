@@ -1,5 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
+import { isLoopbackPortFree } from './checks/types.js';
+import { DEFAULT_BIND_PORT, type SiblingPort } from './layout.js';
+import type { ServerFacts } from './server-facts.js';
+
 // =============================================================================
 // The handful of keys that need more than their template default
 // =============================================================================
@@ -25,6 +29,32 @@ export interface DeriveContext {
   domain: string;
   /** Answers collected so far, in prompt order. */
   answers: ReadonlyMap<string, string>;
+  /**
+   * What kind of server this is (#127): CPUs, RAM, and so on, as read by
+   * server-facts.ts. Every field is null when nothing could be read, and a
+   * suggestion that needs an unknown fact answers undefined.
+   */
+  facts: ServerFacts;
+  /**
+   * The bind port every OTHER app under the apps root has recorded, from
+   * their state files (`siblingBindPorts`). A stopped app is invisible to a
+   * bind probe, so the port scan must consult these as well.
+   */
+  siblingPorts: readonly SiblingPort[];
+  /** Loopback bind probe; injected so the port suggestion is testable. */
+  portFree?: ((port: number) => Promise<boolean>) | undefined;
+}
+
+/**
+ * A server-derived default (#127). Differs from a `derive` in exactly one
+ * way: it is ALWAYS shown, with its reason, and always editable - an
+ * operator who never saw "3536 because 3535 is used by demo" would publish a
+ * vhost to the wrong port and never know why.
+ */
+export interface Suggestion {
+  value: string;
+  /** One clause, shown beside the value: "4 CPUs detected". */
+  reason: string;
 }
 
 export interface EnvVarMetadata {
@@ -32,12 +62,27 @@ export interface EnvVarMetadata {
   secret?: boolean;
   /** Asked even when the template supplies a default. */
   essential?: boolean;
+  /**
+   * In an UNATTENDED run, the template default is an acceptable answer for
+   * this essential key. Essential keys otherwise refuse the template default
+   * without a terminal, because `POSTGRES_PASSWORD=postgres` is a placeholder
+   * nobody chose; `POSTGRES_SSL=false` is a real setting somebody did.
+   */
+  defaultAcceptable?: boolean;
   /** Offer to generate a value rather than make someone invent one. */
   generate?: 'base64-32';
   /** Returns a message when the value is unusable, undefined when it is fine. */
   validate?: (value: string) => string | undefined;
   /** Computed from the domain and earlier answers; never prompted for. */
   derive?: (context: DeriveContext) => string | undefined;
+  /**
+   * Proposed from the server (#127) when nothing usable is set yet. Shown with
+   * its reason and editable; undefined means "no opinion", and the template
+   * default stands.
+   */
+  suggest?: (context: DeriveContext) => Promise<Suggestion | undefined>;
+  /** Extra help shown under the template's own comment when the key is asked. */
+  help?: string;
   /** Forced for a VPS deployment. Not offered, not overridable by a prompt. */
   fixed?: string;
   /** Only asked when the operator opted into this group. */
@@ -134,6 +179,95 @@ export function validatePort(value: string): string | undefined {
     : 'must be a port number between 1 and 65535';
 }
 
+export function validateBoolean(value: string): string | undefined {
+  return value === 'true' || value === 'false' ? undefined : 'must be true or false';
+}
+
+export function validatePositiveInteger(value: string): string | undefined {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? undefined : 'must be a whole number above 0';
+}
+
+/** A Docker size: `512M`, `1g`, `2048m`. Compose accepts either case. */
+export function validateMemorySize(value: string): string | undefined {
+  return /^\d+[kmg]?b?$/i.test(value) ? undefined : 'must be a size such as 512M or 1G';
+}
+
+// -----------------------------------------------------------------------------
+// The server-derived suggestions  (issue #127, epic #118)
+// -----------------------------------------------------------------------------
+//
+// Each is a pure function of DeriveContext, so the tests hand it a fake
+// server. NONE OF THESE IS APPLIED SILENTLY: the wizard shows every
+// suggestion with its reason, and a value already set (on disk, or given
+// with --answer) is never second-guessed.
+
+/** How far past the default port to look before giving up. */
+const PORT_SCAN_LIMIT = 100;
+
+const GIB = 1024 * 1024 * 1024;
+
+function formatGib(bytes: number): string {
+  return `${Math.round((bytes / GIB) * 10) / 10} GiB RAM detected`;
+}
+
+/**
+ * The first port from 3535 that is free on loopback AND recorded by no other
+ * app. Both are consulted because each misses something: a bind probe cannot
+ * see a stopped sibling, and a state file cannot see a stray process.
+ */
+export async function suggestBindPort(context: DeriveContext): Promise<Suggestion | undefined> {
+  const portFree = context.portFree ?? isLoopbackPortFree;
+  const skipped: string[] = [];
+
+  for (let port = DEFAULT_BIND_PORT; port < DEFAULT_BIND_PORT + PORT_SCAN_LIMIT; port += 1) {
+    const sibling = context.siblingPorts.find((entry) => entry.port === port);
+    if (sibling !== undefined) {
+      skipped.push(`${port} is used by ${sibling.name}`);
+      continue;
+    }
+    if (!(await portFree(port))) {
+      skipped.push(`${port} is in use on this server`);
+      continue;
+    }
+    return {
+      value: String(port),
+      reason: skipped.length === 0 ? `${port} is free` : skipped.join(', '),
+    };
+  }
+
+  return undefined;
+}
+
+/** `min(4, max(1, cpus - 1))`: one core left for the request path. */
+export async function suggestWorkerConcurrency(
+  context: DeriveContext,
+): Promise<Suggestion | undefined> {
+  const cpus = context.facts.cpus;
+  if (cpus === null || cpus < 1) return undefined;
+  return {
+    value: String(Math.min(4, Math.max(1, cpus - 1))),
+    reason: `${cpus} CPU${cpus === 1 ? '' : 's'} detected`,
+  };
+}
+
+export async function suggestApiMemoryLimit(
+  context: DeriveContext,
+): Promise<Suggestion | undefined> {
+  const bytes = context.facts.memoryBytes;
+  if (bytes === null) return undefined;
+  const value = bytes >= 8 * GIB ? '2g' : bytes >= 4 * GIB ? '1g' : '512m';
+  return { value, reason: formatGib(bytes) };
+}
+
+export async function suggestWebMemoryLimit(
+  context: DeriveContext,
+): Promise<Suggestion | undefined> {
+  const bytes = context.facts.memoryBytes;
+  if (bytes === null) return undefined;
+  return { value: bytes >= 4 * GIB ? '256m' : '128m', reason: formatGib(bytes) };
+}
+
 export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
   // --- Application ---------------------------------------------------------
   NODE_ENV: { fixed: 'production' },
@@ -143,6 +277,15 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
     // .env, and both restate information the operator has already given.
     derive: ({ domain }) => `https://${domain}`,
   },
+  // --- Resources (#127) ----------------------------------------------------
+  // Suggested from the server, never silently: see the functions above.
+  APP_BIND_PORT: { validate: validatePort, suggest: suggestBindPort },
+  JOBS_WORKER_CONCURRENCY: {
+    validate: validatePositiveInteger,
+    suggest: suggestWorkerConcurrency,
+  },
+  API_MEM_LIMIT: { validate: validateMemorySize, suggest: suggestApiMemoryLimit },
+  WEB_MEM_LIMIT: { validate: validateMemorySize, suggest: suggestWebMemoryLimit },
 
   // --- Database ------------------------------------------------------------
   // Asked explicitly rather than defaulted: .env.example says `localhost`
@@ -151,11 +294,25 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
   // service name that only resolves INSIDE the stack (devdb.compose.yml defines
   // it); `localhost` only works from the host. Inheriting either blindly would
   // be wrong for the other case.
+  //
+  // NO HOSTNAME IS EVER PRE-FILLED FOR POSTGRES_HOST (epic #118, decision 2).
+  // This CLI is a template; a default hostname would be the template author's
+  // server, not the operator's.
   POSTGRES_HOST: { essential: true },
   POSTGRES_PORT: { validate: validatePort },
   POSTGRES_USER: { essential: true },
   POSTGRES_PASSWORD: { essential: true, secret: true },
   POSTGRES_DB: { essential: true },
+  POSTGRES_SSL: {
+    // Asked, because checks/database.ts already honours it (PGSSLMODE=require)
+    // and a managed PostgreSQL that requires TLS refuses a plaintext session
+    // with an error that names nothing about SSL. `false` is a real answer,
+    // not a placeholder, so an unattended run may take it.
+    essential: true,
+    defaultAcceptable: true,
+    validate: validateBoolean,
+    help: 'true or false. Set true when the server requires TLS; the database check that runs next verifies the connection either way.',
+  },
 
   // --- JWT / session -------------------------------------------------------
   JWT_SECRET: {

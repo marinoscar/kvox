@@ -14,6 +14,7 @@ import { runUpdate } from '../../deploy/update.js';
 import { runCommand } from '../../deploy/executor.js';
 import { metadataFor } from '../../deploy/env-metadata.js';
 import { parseEnvExample, type EnvVarSpec } from '../../deploy/env-spec.js';
+import { essentialFields, type WizardField } from '../../deploy/wizard/steps.js';
 import {
   DEFAULT_APPS_ROOT,
   DEFAULT_BIND_PORT,
@@ -77,14 +78,8 @@ type Phase =
   | { kind: 'done'; action: Action; summary: string[] }
   | { kind: 'failed'; action: Action; message: string };
 
-export interface FieldSpec {
-  key: string;
-  label: string;
-  help: string;
-  placeholder: string;
-  secret: boolean;
-  validate?: ((value: string) => string | undefined) | undefined;
-}
+/** One question on screen; the shape steps.ts hands every renderer (#127). */
+export type FieldSpec = WizardField;
 
 /** Lines kept in the live log. Unbounded growth is a leak on a long build. */
 const MAX_LOG_LINES = 2_000;
@@ -108,38 +103,12 @@ function locateDefaultApp(): ResolvedLayout | undefined {
  * A hand-rolled union of thirty step variants does not scale, so the wizard is
  * DATA and the screen keeps a cursor into it - which also preserves the "one
  * thing accepting input at any moment" invariant that invoke.tsx argues for.
+ * Since #127 the data is the shared step list in deploy/wizard/steps.ts, so
+ * this flat screen and the readline wizard ask the same keys in the same
+ * order; the multi-step screen that renders the steps themselves is #131.
  */
 export function fieldsForInstall(specs: readonly EnvVarSpec[]): FieldSpec[] {
-  const fields: FieldSpec[] = [
-    {
-      key: '__domain',
-      label: 'Domain',
-      help: 'The public hostname this will be served on. APP_URL and the OAuth callback are derived from it.',
-      placeholder: 'app.example.com',
-      secret: false,
-      validate: (value) =>
-        /^[a-z0-9.-]+$/i.test(value) ? undefined : 'must be a hostname',
-    },
-  ];
-
-  for (const spec of specs) {
-    const metadata = metadataFor(spec.key);
-    if (metadata.never === true || metadata.fixed !== undefined) continue;
-    if (metadata.derive !== undefined) continue;
-    if (metadata.group !== undefined) continue;
-    if (metadata.essential !== true) continue;
-
-    fields.push({
-      key: spec.key,
-      label: spec.key,
-      help: spec.help,
-      placeholder: spec.defaultValue,
-      secret: metadata.secret === true,
-      ...(metadata.validate === undefined ? {} : { validate: metadata.validate }),
-    });
-  }
-
-  return fields;
+  return essentialFields(specs);
 }
 
 export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {

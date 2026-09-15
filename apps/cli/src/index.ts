@@ -207,8 +207,9 @@ export {
   locateApp,
   locateInstalledApp,
   projectNameFor,
+  siblingBindPorts,
 } from './deploy/layout.js';
-export type { InstalledApp, LocateOptions, ResolvedLayout } from './deploy/layout.js';
+export type { InstalledApp, LocateOptions, ResolvedLayout, SiblingPort } from './deploy/layout.js';
 
 // The deployment's .env at the app root, linked into the clone (#120).
 // Exported because the link discipline and the pre-#120 migration are the
@@ -234,6 +235,7 @@ export {
   parseComposeVersion,
   parseDockerVersion,
   parseOsRelease,
+  unknownServerFacts,
 } from './deploy/server-facts.js';
 export type { ServerFacts, ServerFactsOptions, ServerProbes } from './deploy/server-facts.js';
 
@@ -278,11 +280,47 @@ export {
   ENV_METADATA,
   generateBase64Key,
   metadataFor,
+  suggestApiMemoryLimit,
+  suggestBindPort,
+  suggestWebMemoryLimit,
+  suggestWorkerConcurrency,
   validateBase64Key32,
+  validateBoolean,
   validateEmail,
+  validateMemorySize,
   validatePort,
+  validatePositiveInteger,
 } from './deploy/env-metadata.js';
-export type { DeriveContext, EnvGroup, EnvVarMetadata } from './deploy/env-metadata.js';
+export type {
+  DeriveContext,
+  EnvGroup,
+  EnvVarMetadata,
+  Suggestion,
+} from './deploy/env-metadata.js';
+
+// The wizard as data (#127): the step list both the readline wizard and the
+// ink screens (#131) render, so neither owns a question of its own.
+export {
+  DOMAIN_FIELD,
+  INSTALL_WIZARD_STEPS,
+  STORAGE_CHECK_ID,
+  essentialFields,
+  googleRedirectUri,
+  resolveSteps,
+  runStepChecks,
+  validateDomain,
+} from './deploy/wizard/steps.js';
+export type {
+  FieldInput,
+  FieldRef,
+  MetadataResolver,
+  ResolvedStep,
+  StepCheckBase,
+  StepCheckContext,
+  WizardField,
+  WizardStep,
+  WizardStepContext,
+} from './deploy/wizard/steps.js';
 
 // The wizard, and the three prompt primitives it needed (#175). `confirm`,
 // `promptSecret` and `select` live in prompt.ts beside the one-question helper
@@ -292,6 +330,7 @@ export type { SelectChoice } from './prompt.js';
 
 export { runEnvWizard } from './deploy/env-wizard.js';
 export type {
+  WizardCheckOptions,
   WizardOptions,
   WizardResult,
   WizardSummaryRow,
