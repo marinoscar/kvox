@@ -117,6 +117,14 @@ from the hub today.
 
 ## 2. The destination-gate vs. tab-gate distinction
 
+> **Since epic #105:** this distinction decides which pattern *applies*, but
+> it never says parallel content must be tabs. Transcripts and Notes were two
+> tabs of one `library` destination while the bottom bar had no fifth slot,
+> and became sibling destinations once #106 freed one by moving `Console` off
+> that bar. Same rule, more room — see
+> [`ux-refresh.md`](ux-refresh.md) §1 for the navigation model that replaced
+> them.
+
 Tabs did not go away — `UsersPage.tsx` (`/admin/settings/users`) still keeps
 its two, Users and Allowlist, and epic #90 kept them on purpose. The
 distinction that decides which pattern applies is stated precisely in
@@ -293,6 +301,22 @@ reach as naturally as a function argument can. The comment's actual guard is
 the enumerated checklist and the instruction to check all five by hand,
 because the one member most likely to be forgotten is also the one a shared
 symbol would not have protected regardless.
+
+### Still five, after epic #105
+
+Two things moved near these gates without becoming one:
+
+- **The collapsed rail widened 56 → 72px** (#106), because the 11-character
+  destination name "Transcripts" does not fit a 48px caption box at 0.625rem
+  and an abbreviation would misdescribe the row. A *width* is not a gate —
+  `showRail`'s breakpoint is untouched.
+- **`components/library/LibraryPageFrame.tsx` reads `down('sm')`**, and it is
+  the page-level read `LibraryPage` always had, relocated when #106 split that
+  page into `TranscriptsPage` and `NotesPage`. It decides where one page puts
+  its create action — a header button at `sm` and up, a FAB below it — never
+  whether a piece of app chrome mounts. That is the line between a page's own
+  responsive decision and a shell gate, and it is why the count here is still
+  five.
 
 ## 6. Accessibility requirements
 

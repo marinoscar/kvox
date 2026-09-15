@@ -30,11 +30,18 @@
  * =============================================================================
  *
  * A note takes tens of seconds to write. `NoteStatusChip` carries the spinner,
- * and the row additionally shows a determinate-looking bar and its first
- * sentences as they arrive (`excerpt` is whatever the body holds right now), so
- * the list is a progress display rather than a row that sits inert and then
- * changes. The list hook polls only while something is in flight — see
- * `useNotes` — so a settled library costs nothing.
+ * and the row swaps its excerpt for an INDETERMINATE bar while the note is in
+ * flight, so the list is a progress display rather than a row that sits inert
+ * and then changes.
+ *
+ * ⚠ The bar and the excerpt are EITHER/OR, not both — read the render, which
+ * has always been a ternary. This paragraph used to claim the row showed both
+ * at once, and described the bar as "determinate-looking" while the comment
+ * beside it says the opposite and explains why: the API publishes no
+ * percentage, and inventing one would be a bar that lies.
+ *
+ * The list hook polls only while something is in flight — see `useNotes` — so
+ * a settled library costs nothing.
  */
 
 import Alert from '@mui/material/Alert';

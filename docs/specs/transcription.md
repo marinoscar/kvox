@@ -1377,13 +1377,64 @@ these windows, skip everything else":
 speaker as metadata, so a phone's lock screen and a desktop's OS media
 control surface both show something meaningful rather than a bare filename.
 Action handlers: `play`/`pause` map directly; `seekbackward`/`seekforward`
-implement the ±15s skip the in-app player also exposes; `previoustrack`/
+implement the ±10s skip the in-app player also exposes; `previoustrack`/
 `nexttrack` map to the previous/next **segment** rather than a literal
 previous/next track, so the hardware media keys on a headset or a lock
 screen become a segment-scoped skip control, matching what tapping a
 timestamp in the segment list already does. `setPositionState` keeps the
 lock screen's own scrubber in sync with `currentTime` so the two controls
 never disagree about where playback actually is.
+
+### 7.4 Per-segment playback
+
+Issue #108, epic #105. A reader can play **one line** and have playback stop
+at its end, from a 40px control in each segment row. The engine exposes
+`playSegment(segment)` and `activeSegmentId` beside the transport it already
+had.
+
+Three properties of this are load-bearing, and all three are pinned by tests
+in `apps/web/src/__tests__/hooks/usePlaybackEngine.test.tsx`:
+
+1. **It bypasses the speaker filter.** `playSegment` writes `currentTime`
+   directly rather than going through `seekToMs`, which snaps to the
+   selection's intervals (§7.2). A line the filter excludes is still a line
+   the user pointed at, and snapping out of it on the first tick would make
+   the button silently do nothing on exactly the rows where a reader is most
+   likely to press it.
+2. **The boundary check and the interval logic are one `if/else`, never two
+   independent checks.** Letting the interval branch run underneath an active
+   segment play would re-introduce the snap the previous point exists to
+   avoid.
+3. ⚠ **Everything below that branch still runs on every tick.** The obvious
+   way to write the boundary check is an early `return`, and it would freeze
+   both the scrubber and the active-line highlight for the entire length of
+   the line being played — the only two pieces of feedback that tell a user
+   the button did anything at all.
+
+Segment mode ends on any scrub, skip, timestamp activation, previous/next
+segment, `pause`, or the media element's own `pause`/`ended`. A Media
+Session `play` resumes ordinary playback rather than the segment, because it
+routes through `play` → `seekToMs`, which clears the mode; that is
+documented rather than special-cased.
+
+**One emergent behaviour is pinned rather than papered over.** When a
+speaker filter is active *and* the played line's `endMs` falls outside every
+filter window, the engine parks on the boundary as specified, and the
+pre-existing interval loop — which runs every frame regardless of play
+state, and has just had segment mode cleared out from under it — then pulls
+the playhead to the nearest allowed position on the next frame. That comes
+from §7.2's loop, not from this feature, and it is the better of the two
+available answers: the alternative leaves the playhead somewhere the next
+Play jumps away from with nothing on screen explaining why.
+
+**The transport's skip is ±10s, not ±15s.** It had been 15s in `SKIP_MS` and
+in the accessible labels while the buttons drew MUI's `Replay10`/`Forward10`
+glyphs, which ship in 5/10/30 only. The labels were the half that was wrong.
+
+See [`docs/specs/ux-refresh.md`](ux-refresh.md) §3 for the full reasoning,
+including why the 24px timestamp deliberately stays small beside the new
+40px control.
+
 
 ## 8. Exports
 

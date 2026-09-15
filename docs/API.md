@@ -3910,6 +3910,13 @@ kept**: the previous body is already a version and stays one.
 
 **Request:** `{ "templateId": "…", "contextText": null, "model": "…" }` — every field optional; an empty body re-runs exactly what the note already records.
 
+The web client sends **only the fields the user actually changed**: an
+untouched form posts `{}`, and clearing the context box posts
+`contextText: null` (the explicit clear this endpoint defines, distinct from
+omitting the field). A changed `templateId` or `contextText` is persisted
+onto the note and governs later regenerations too; `model` applies to this
+generation alone.
+
 ⚠ Billed to **your** provider account.
 
 **Error Cases:**
