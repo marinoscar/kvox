@@ -92,14 +92,18 @@ vi.mock('../pages/UserNotificationsPage', () => ({
  * gain. Distinct headings, so a mis-wired route cannot pass by rendering a
  * sibling.
  *
- * ⚠ ONE STAND-IN SERVES TWO ROUTES. `/transcripts` and `/notes` render the SAME
- * `LibraryPage` — the tab is the URL (#57) — so this mock is what both land on,
- * and the assertions below distinguish them by the PATH the router kept rather
- * than by two different headings. A second stand-in would have been a second
- * page, which is precisely what this design does not have.
+ * ⚠ TWO STAND-INS SINCE #106, WHERE ONE SERVED BOTH ROUTES. `/transcripts` and
+ * `/notes` used to render the same `LibraryPage` — the tab was the URL (#57) —
+ * so the suites below could only distinguish them by the PATH the router kept.
+ * They are two pages now, so each gets its own heading and a route wired to the
+ * wrong page fails on the heading rather than being invisible.
  */
-vi.mock('../pages/LibraryPage', () => ({
-  default: () => <h1>Library Page</h1>,
+vi.mock('../pages/TranscriptsPage', () => ({
+  default: () => <h1>Transcripts Page</h1>,
+}));
+
+vi.mock('../pages/NotesPage', () => ({
+  default: () => <h1>Notes Page</h1>,
 }));
 
 vi.mock('../pages/NewNotePage', () => ({
@@ -426,7 +430,7 @@ describe('App', () => {
     const READER = ['transcripts:read'];
 
     it.each([
-      ['/transcripts', 'Library Page'],
+      ['/transcripts', 'Transcripts Page'],
       ['/transcripts/abc-123', 'Transcript Viewer Page'],
       ['/transcripts/abc-123/history', 'Transcript History Page'],
     ])('renders %s as %s for a user holding transcripts:read', async (path, heading) => {
@@ -447,7 +451,7 @@ describe('App', () => {
       // two-segment path, and React Router ranks the literal higher — a
       // regression there would render the viewer for `/transcripts/new`.
       const allHeadings = [
-        'Library Page',
+        'Transcripts Page',
         'New Transcript Page',
         'Transcript Viewer Page',
         'Transcript History Page',
@@ -475,7 +479,7 @@ describe('App', () => {
       );
     });
 
-    it('sends a read-only user from /transcripts/new to the library, not to home', async () => {
+    it('sends a read-only user from /transcripts/new to the list, not to home', async () => {
       signInAs(READER);
 
       render(
@@ -486,7 +490,9 @@ describe('App', () => {
 
       await waitFor(
         () =>
-          expect(screen.getByRole('heading', { name: 'Library Page' })).toBeInTheDocument(),
+          expect(
+            screen.getByRole('heading', { name: 'Transcripts Page' }),
+          ).toBeInTheDocument(),
         { timeout: 5000 },
       );
       expect(
@@ -511,12 +517,19 @@ describe('App', () => {
       },
     );
 
-    it('sends a notes-only user from /transcripts to the Notes tab, not to home (#57)', async () => {
-      // The `library` destination is reachable on EITHER permission, and its
-      // `path` is `/transcripts` — so this user clicks the row they were
-      // legitimately shown and arrives at a route they cannot read. Bouncing
-      // them to `/` would be the #92 bug: a nav row promising a surface the
-      // router refuses. One tab sideways is the half they CAN read.
+    it('sends a notes-only user from /transcripts HOME, not sideways (#106)', async () => {
+      // ⚠ THE INVERSE OF WHAT #57 ASSERTED HERE, and the change is the point.
+      // Then, the ONE `library` row was reachable on either permission with
+      // `/transcripts` as its path, so a notes-only user clicked a row they
+      // were legitimately shown and landed on a route they could not read —
+      // bouncing them to `/` would have been the #92 bug, a nav row promising a
+      // surface the router refuses, so the fallback pointed one tab sideways.
+      //
+      // #106 gives each subtree its own destination gated on its own single
+      // permission, so this user is never shown a Transcripts row at all. They
+      // can only arrive here by an old bookmark or a typed URL, and for that
+      // `/` is the honest answer — `/notes` would be a guess about what they
+      // meant.
       signInAs(['notes:read']);
 
       render(
@@ -525,11 +538,8 @@ describe('App', () => {
         </MemoryRouter>,
       );
 
-      await waitFor(
-        () =>
-          expect(screen.getByRole('heading', { name: 'Library Page' })).toBeInTheDocument(),
-        { timeout: 5000 },
-      );
+      await waitFor(() => expectOnHomePage(), { timeout: 5000 });
+      expect(screen.queryByRole('heading', { name: 'Notes Page' })).not.toBeInTheDocument();
     });
   });
 
@@ -542,7 +552,7 @@ describe('App', () => {
     const READER = ['notes:read'];
 
     it.each([
-      ['/notes', 'Library Page'],
+      ['/notes', 'Notes Page'],
       ['/notes/abc-123', 'Note Page'],
       ['/notes/abc-123/history', 'Note History Page'],
     ])('renders %s as %s for a user holding notes:read', async (path, heading) => {
@@ -562,7 +572,7 @@ describe('App', () => {
       // Isolation: `/notes/new` and `/notes/:id` both match a two-segment
       // path, and React Router ranks the literal higher — a regression there
       // would render the note viewer for `/notes/new`.
-      const allHeadings = ['Library Page', 'New Note Page', 'Note Page', 'Note History Page'];
+      const allHeadings = ['Notes Page', 'New Note Page', 'Note Page', 'Note History Page'];
       for (const other of allHeadings.filter((h) => h !== heading)) {
         expect(screen.queryByRole('heading', { name: other })).not.toBeInTheDocument();
       }
@@ -583,7 +593,7 @@ describe('App', () => {
       );
     });
 
-    it('sends a read-only user from /notes/new to the library, not to home', async () => {
+    it('sends a read-only user from /notes/new to the list, not to home', async () => {
       signInAs(READER);
 
       render(
@@ -593,7 +603,7 @@ describe('App', () => {
       );
 
       await waitFor(
-        () => expect(screen.getByRole('heading', { name: 'Library Page' })).toBeInTheDocument(),
+        () => expect(screen.getByRole('heading', { name: 'Notes Page' })).toBeInTheDocument(),
         { timeout: 5000 },
       );
       expect(screen.queryByRole('heading', { name: 'New Note Page' })).not.toBeInTheDocument();
