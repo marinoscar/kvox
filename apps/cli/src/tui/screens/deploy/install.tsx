@@ -11,7 +11,7 @@ import {
   type CheckContext,
   type CompletedCheck,
 } from '../../../deploy/checks/index.js';
-import { metadataFor, type EnvGroup, type Suggestion } from '../../../deploy/env-metadata.js';
+import { metadataFor, type Suggestion } from '../../../deploy/env-metadata.js';
 import { parseEnvExample, type EnvVarSpec } from '../../../deploy/env-spec.js';
 import { runCommand as defaultRunCommand } from '../../../deploy/executor.js';
 import type { StepResult } from '../../../deploy/hooks.js';
@@ -44,6 +44,7 @@ import {
   ABORTED_DETAIL,
   ABORT_DIALOG,
   ALL_FIELD,
+  OPTION_MODE_PREFIX,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
   MAX_LOG_LINES,
@@ -56,16 +57,18 @@ import {
   STAGING_FIELD,
   WELCOME_STEP_ID,
   answerOf,
+  applyOptionMode,
   applySecretMode,
   checkItems,
   checksAllowLeaving,
   doneModel,
-  ensureGeneratedSecrets,
+  prepareStep,
   envAnswers,
   failedField,
   failedModel,
   formFieldsFor,
   formatDuration,
+  groupsOf,
   installSteps,
   isTrue,
   pipelineItems,
@@ -77,6 +80,7 @@ import {
   withAnswer,
   type InstallAnswers,
   type InstallStep,
+  type OptionMode,
   type PipelineProgress,
   type SecretMode,
 } from './install-model.js';
@@ -164,10 +168,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
 
   const abortRef = useRef<AbortController | undefined>(undefined);
 
-  const groups = useMemo<EnvGroup[]>(
-    () => (answerOf(answers, '__groups') === '' ? [] : (answerOf(answers, '__groups').split(',') as EnvGroup[])),
-    [answers],
-  );
+  const groups = useMemo(() => groupsOf(answers), [answers]);
   const steps = useMemo(
     () => installSteps(specs, { groups, all: isTrue(answers, ALL_FIELD) }),
     [specs, groups, answers],
@@ -277,7 +278,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     if (step === undefined) return;
     setStepChecks(IDLE);
     setFocusKey(undefined);
-    setAnswers((current) => ensureGeneratedSecrets(current, step, specs));
+    setAnswers((current) => prepareStep(current, step, specs));
   }, [step, specs]);
 
   useEffect(() => {
@@ -699,7 +700,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
             isActive={!stepChecks.running && !confirming}
             {...(focusKey === undefined ? {} : { focusKey })}
             onChange={(key, value) => {
-              setAnswers((current) => applyChange(current, key, value, fields));
+              setAnswers((current) => applyChange(current, key, value, fields, specs));
             }}
             onSubmit={leaveStep}
           />
@@ -737,16 +738,35 @@ function applyChange(
   key: string,
   value: string,
   fields: readonly FormFieldSpec[],
+  specs: readonly EnvVarSpec[],
 ): InstallAnswers {
   if (key.startsWith(SECRET_MODE_PREFIX)) {
-    const target = key.slice(SECRET_MODE_PREFIX.length);
     if (answers[key] === value) return answers;
-    return applySecretMode(answers, target, value as SecretMode);
+    return applySecretMode(answers, key.slice(SECRET_MODE_PREFIX.length), value as SecretMode);
   }
 
-  const modeKey = `${SECRET_MODE_PREFIX}${key}`;
-  if (fields.some((field) => field.key === modeKey) && answers[modeKey] === 'generate') {
-    return withAnswer(withAnswer(answers, modeKey, 'paste'), key, value);
+  if (key.startsWith(OPTION_MODE_PREFIX)) {
+    if (answers[key] === value) return answers;
+    const target = key.slice(OPTION_MODE_PREFIX.length);
+    return applyOptionMode(
+      answers,
+      target,
+      value as OptionMode,
+      specs.find((spec) => spec.key === target),
+    );
+  }
+
+  // Typing into the value of a key whose mode says otherwise switches the
+  // mode: without it the next visit to the step would overwrite what was
+  // typed with a freshly generated secret, or with the template's default.
+  for (const [prefix, typed] of [
+    [SECRET_MODE_PREFIX, 'paste'],
+    [OPTION_MODE_PREFIX, 'edit'],
+  ] as const) {
+    const modeKey = `${prefix}${key}`;
+    if (!fields.some((field) => field.key === modeKey)) continue;
+    if (answers[modeKey] === typed) break;
+    return withAnswer(withAnswer(answers, modeKey, typed), key, value);
   }
 
   return withAnswer(answers, key, value);

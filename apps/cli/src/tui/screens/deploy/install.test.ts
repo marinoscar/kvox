@@ -19,6 +19,7 @@ import {
 import {
   ABORT_DIALOG,
   ALL_FIELD,
+  GROUPS_FIELD,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
   PIPELINE_STEPS,
@@ -26,6 +27,7 @@ import {
   REVIEW_STEP_ID,
   STAGING_FIELD,
   WELCOME_STEP_ID,
+  applyOptionMode,
   applySecretMode,
   checkItems,
   doneModel,
@@ -35,7 +37,10 @@ import {
   failedModel,
   formFieldsFor,
   formatDuration,
+  groupsOf,
   installSteps,
+  optionModeField,
+  prepareStep,
   pipelineItems,
   railSteps,
   reviewRows,
@@ -172,6 +177,9 @@ describe('installSteps', () => {
     // Not hidden by a condition here: its `fields` resolve to nothing, and a
     // step with nothing to ask is not shown.
     expect(stepsFor({ all: true }).map((step) => step.id)).not.toContain('storage');
+    expect(stepsFor({ all: true, groups: groupsOf({ [GROUPS_FIELD]: 'storage' }) }).map((step) => step.id)).toContain(
+      'storage',
+    );
   });
 
   it('places every essential key of the template in exactly one step', () => {
@@ -198,6 +206,16 @@ describe('installSteps', () => {
     const domain = stepById('domain');
     expect(domain.fields[0]).toBe(DOMAIN_FIELD);
     expect(domain.fields).toContain(PUBLIC_IP_FIELD);
+  });
+
+  it('asks the app name, the repository, the ref, the groups and the depth on Welcome', () => {
+    expect(stepById(WELCOME_STEP_ID).fields).toEqual([
+      '__name',
+      '__repo',
+      '__ref',
+      GROUPS_FIELD,
+      ALL_FIELD,
+    ]);
   });
 
   it('adds the TLS choice and the renewal cron to the resources step', () => {
@@ -600,5 +618,53 @@ describe('the Done and Failed models', () => {
     const model = failedModel({ message: 'boom' });
 
     expect(model.rows.find((row) => row.key === 'Journal')?.value).toBe('(not opened)');
+  });
+});
+
+describe('the catch-all step', () => {
+  const step = stepById('optional');
+
+  it('offers keep, edit or skip per key, defaulting to keep', () => {
+    const fields = formFieldsFor(step, { specs: SPECS, answers: {} });
+    const mode = fields.find((field) => field.key === optionModeField('PORT'));
+
+    expect(mode?.kind).toBe('select');
+    expect(mode?.kind === 'select' ? mode.choices.map((choice) => choice.value) : []).toEqual([
+      'keep',
+      'edit',
+      'skip',
+    ]);
+  });
+
+  it("puts the template's own value behind `keep`, so the review shows what is written", () => {
+    const prepared = prepareStep({}, step, SPECS);
+
+    expect(prepared[optionModeField('PORT')]).toBe('keep');
+    expect(prepared['PORT']).toBe('3000');
+    expect(envAnswers(prepared).get('PORT')).toBe('3000');
+  });
+
+  it('leaves the key out of the file entirely on skip', () => {
+    const skipped = applyOptionMode(prepareStep({}, step, SPECS), 'PORT', 'skip', undefined);
+
+    expect(skipped['PORT']).toBe('');
+    expect(envAnswers(skipped).has('PORT')).toBe(false);
+  });
+
+  it('does not touch a step that is not the catch-all', () => {
+    const prepared = prepareStep({}, stepById('database'), SPECS);
+
+    expect(prepared[optionModeField('POSTGRES_HOST')]).toBeUndefined();
+  });
+});
+
+describe('groupsOf', () => {
+  it('is empty until the operator opts in on Welcome', () => {
+    expect(groupsOf({})).toEqual([]);
+    expect(groupsOf({ [GROUPS_FIELD]: '' })).toEqual([]);
+  });
+
+  it('reads the comma-separated list the Welcome step records', () => {
+    expect(groupsOf({ [GROUPS_FIELD]: 'storage' })).toEqual(['storage']);
   });
 });

@@ -67,6 +67,8 @@ import {
 /** The step the wizard opens on. Not a `steps.ts` step: it asks no env key. */
 export const WELCOME_STEP_ID = 'welcome';
 export const REVIEW_STEP_ID = 'review';
+/** The step every key no earlier step claimed lands in (`steps.ts`). */
+export const CATCH_ALL_STEP_ID = 'optional';
 
 /** Answers that are wizard state rather than environment variables. */
 export const INTERNAL_PREFIX = '__';
@@ -74,17 +76,40 @@ export const NAME_FIELD = '__name';
 export const REPO_FIELD = '__repo';
 export const REF_FIELD = '__ref';
 export const ALL_FIELD = '__all';
+/** Which optional variable GROUPS the operator opted into, comma-separated. */
+export const GROUPS_FIELD = '__groups';
 export const PUBLIC_IP_FIELD = '__publicIp';
 export const STAGING_FIELD = '__staging';
 export const INSTALL_CRON_FIELD = '__installCron';
 /** `__mode:JWT_SECRET` — generate the value, or paste one. */
 export const SECRET_MODE_PREFIX = '__mode:';
+/** `__opt:SENTRY_DSN` — keep the template's value, edit it, or leave it out. */
+export const OPTION_MODE_PREFIX = '__opt:';
 
 export function secretModeField(key: string): string {
   return `${SECRET_MODE_PREFIX}${key}`;
 }
 
+export function optionModeField(key: string): string {
+  return `${OPTION_MODE_PREFIX}${key}`;
+}
+
 export type SecretMode = 'generate' | 'paste';
+
+/**
+ * The three answers an already-defaulted variable has.
+ *
+ * `keep` is not the same as `skip`: keeping writes the template's value,
+ * skipping leaves the key out of the file altogether — which for a
+ * commented-out key in `.env.example` is what the template itself says.
+ */
+export type OptionMode = 'keep' | 'edit' | 'skip';
+
+export const OPTION_MODE_CHOICES: ReadonlyArray<SelectChoice<OptionMode>> = [
+  { value: 'keep', label: 'Keep', hint: "The template's own value, unchanged." },
+  { value: 'edit', label: 'Edit', hint: 'Type a value in the field below.' },
+  { value: 'skip', label: 'Skip', hint: 'Leave the key out of the environment file.' },
+];
 
 export const SECRET_MODE_CHOICES: ReadonlyArray<SelectChoice<SecretMode>> = [
   {
@@ -142,6 +167,12 @@ export function isTrue(answers: InstallAnswers, key: string): boolean {
   return answers[key] === 'true';
 }
 
+/** The optional variable groups the operator opted into on Welcome. */
+export function groupsOf(answers: InstallAnswers): EnvGroup[] {
+  const raw = answerOf(answers, GROUPS_FIELD);
+  return raw === '' ? [] : (raw.split(',').filter((part) => part !== '') as EnvGroup[]);
+}
+
 // -----------------------------------------------------------------------------
 // The step list
 // -----------------------------------------------------------------------------
@@ -161,7 +192,13 @@ const EXTRA_FIELDS: Readonly<Record<string, readonly string[]>> = {
   resources: [STAGING_FIELD, INSTALL_CRON_FIELD],
 };
 
-const WELCOME_FIELDS: readonly string[] = [NAME_FIELD, REPO_FIELD, REF_FIELD, ALL_FIELD];
+const WELCOME_FIELDS: readonly string[] = [
+  NAME_FIELD,
+  REPO_FIELD,
+  REF_FIELD,
+  GROUPS_FIELD,
+  ALL_FIELD,
+];
 
 export interface InstallStepOptions {
   /** Optional variable groups the operator opted into. */
@@ -205,7 +242,7 @@ export function installSteps(
   for (const { step, fields } of resolveSteps(INSTALL_WIZARD_STEPS, specs, {
     ...(options.groups === undefined ? {} : { groups: options.groups }),
   })) {
-    if (step.id === 'optional' && options.all !== true) continue;
+    if (step.id === CATCH_ALL_STEP_ID && options.all !== true) continue;
 
     const asked = fields.filter(
       (ref) => ref === DOMAIN_FIELD || (byKey.has(ref) && isAsked(metadataFor(ref))),
@@ -274,6 +311,20 @@ const INTERNAL_FIELDS: Readonly<Record<string, FormFieldSpec>> = {
       },
     ],
   },
+  [GROUPS_FIELD]: {
+    kind: 'select',
+    key: GROUPS_FIELD,
+    label: 'Object storage',
+    help: 'Uploads need S3-compatible storage. It can be configured later by editing the environment file.',
+    choices: [
+      { value: '', label: 'Not now', hint: 'The storage step is skipped.' },
+      {
+        value: 'storage',
+        label: 'Configure it now',
+        hint: 'Adds a step for the bucket, region, endpoint and keys.',
+      },
+    ],
+  },
   [PUBLIC_IP_FIELD]: {
     kind: 'text',
     key: PUBLIC_IP_FIELD,
@@ -313,6 +364,7 @@ const INTERNAL_FIELDS: Readonly<Record<string, FormFieldSpec>> = {
 /** Defaults for the fields this renderer adds. */
 export const INTERNAL_DEFAULTS: InstallAnswers = {
   [ALL_FIELD]: 'false',
+  [GROUPS_FIELD]: '',
   [STAGING_FIELD]: 'false',
   [INSTALL_CRON_FIELD]: 'true',
 };
@@ -387,6 +439,29 @@ export function formFieldsFor(step: InstallStep, input: FormInput): FormFieldSpe
       continue;
     }
 
+    // The catch-all step reviews variables that ALREADY have an answer in the
+    // template. "Keep it" is the common case there and must not require
+    // retyping the value, so the three outcomes are a list rather than a
+    // convention about what a blank line means.
+    if (step.id === CATCH_ALL_STEP_ID) {
+      fields.push({
+        kind: 'select',
+        key: optionModeField(ref),
+        label: ref,
+        choices: OPTION_MODE_CHOICES,
+        ...(helpFor(spec, metadata) === '' ? {} : { help: helpFor(spec, metadata) }),
+      });
+      fields.push({
+        kind: 'text',
+        key: ref,
+        label: `  value`,
+        ...(metadata.secret === true ? { secret: true } : {}),
+        placeholder: placeholderFor(spec, metadata, suggestion),
+        validate: optionalise(metadata.validate, true),
+      });
+      continue;
+    }
+
     fields.push({
       kind: 'text',
       key: ref,
@@ -400,6 +475,27 @@ export function formFieldsFor(step: InstallStep, input: FormInput): FormFieldSpe
   }
 
   return fields;
+}
+
+/**
+ * Applies one keep/edit/skip choice.
+ *
+ * `keep` writes the template's own value so the review shows what will be in
+ * the file; `skip` clears it, which `envAnswers` drops. `edit` leaves whatever
+ * is there for the field below to replace.
+ */
+export function applyOptionMode(
+  answers: InstallAnswers,
+  key: string,
+  mode: OptionMode,
+  spec: EnvVarSpec | undefined,
+): InstallAnswers {
+  const next = withAnswer(answers, optionModeField(key), mode);
+  if (mode === 'skip') return withAnswer(next, key, '');
+  if (mode === 'keep') {
+    return withAnswer(next, key, spec === undefined || spec.optional ? '' : spec.defaultValue);
+  }
+  return next;
 }
 
 function helpFor(spec: EnvVarSpec, metadata: EnvVarMetadata): string {
@@ -468,6 +564,39 @@ export function ensureGeneratedSecrets(
     }
   }
   return next;
+}
+
+/**
+ * Defaults every catch-all key's keep/edit/skip choice to `keep`, and puts
+ * the template's own value behind it — so the review table shows what will be
+ * written rather than a blank the operator has to infer a default for.
+ */
+export function ensureOptionModes(
+  answers: InstallAnswers,
+  step: InstallStep,
+  specs: readonly EnvVarSpec[],
+): InstallAnswers {
+  if (step.id !== CATCH_ALL_STEP_ID) return answers;
+
+  const byKey = new Map(specs.map((spec) => [spec.key, spec]));
+  let next = answers;
+  for (const ref of step.fields) {
+    const spec = byKey.get(ref);
+    if (spec === undefined) continue;
+    if (next[optionModeField(ref)] !== undefined) continue;
+    next = applyOptionMode(next, ref, 'keep', spec);
+  }
+  return next;
+}
+
+/** Everything a step needs filled in before it is first drawn. */
+export function prepareStep(
+  answers: InstallAnswers,
+  step: InstallStep,
+  specs: readonly EnvVarSpec[],
+  generate: () => string = generateBase64Key,
+): InstallAnswers {
+  return ensureOptionModes(ensureGeneratedSecrets(answers, step, specs, generate), step, specs);
 }
 
 /** Switching to `paste` clears the generated value; back to `generate` mints a new one. */
