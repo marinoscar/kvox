@@ -194,6 +194,22 @@ export {
 } from './deploy/state.js';
 export type { DeployState } from './deploy/state.js';
 
+// The app-folder layout (#119): `<apps-root>/<name>` is the deploy root and
+// `<name>` the compose project. Exported because the resolution rules are pure
+// and the two subcommand layers (commander and the TUI) both read them.
+export {
+  DEFAULT_APPS_ROOT,
+  DEFAULT_BIND_PORT,
+  DEFAULT_PROXY_ROOT,
+  appNameFor,
+  appRootFor,
+  listInstalledApps,
+  locateApp,
+  locateInstalledApp,
+  projectNameFor,
+} from './deploy/layout.js';
+export type { InstalledApp, LocateOptions, ResolvedLayout } from './deploy/layout.js';
+
 export type { DeployHooks, StepOutcome, StepResult } from './deploy/hooks.js';
 
 // The wizard's questions come from infra/compose/.env.example rather than a
