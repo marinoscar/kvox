@@ -344,11 +344,11 @@ in `/api`.
 kvox deploy doctor
 ```
 
-Five subcommands (`doctor`, `install`, `update`, `status`, `certs`) take this
-repository — or, far more likely, your fork of it — from an empty VPS to
-running, migrated, seeded, and served over HTTPS at a real domain, and back
-to the latest revision on every subsequent deploy. They run **on the VPS
-itself**: SSH in with your own credentials, build `kvox` from a checkout
+Six subcommands (`doctor`, `install`, `update`, `status`, `about`, `certs`)
+take this repository — or, far more likely, your fork of it — from an empty
+VPS to running, migrated, seeded, and served over HTTPS at a real domain, and
+back to the latest revision on every subsequent deploy. They run **on the
+VPS itself**: SSH in with your own credentials, build `kvox` from a checkout
 there (see [Building from source](#building-from-source-development) below),
 and run these from inside it. There's no SSH client in `kvox` and no
 laptop-driven orchestration — it never dials out to a server on your behalf.
@@ -357,6 +357,23 @@ For the full walkthrough — prerequisites, the manual step after install,
 troubleshooting — see [`docs/deployment/vps.md`](../../docs/deployment/vps.md).
 For why it's built this way, see
 [`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md).
+
+Every subcommand exits `0` on success. The exit codes that matter for
+scripting:
+
+| Exit | Meaning | Which commands use it |
+|---|---|---|
+| `0` | Success | all |
+| `1` | A step failed / installed but unhealthy | `bootstrap-vps.sh`; `status` (unhealthy); `certs status` (a certificate has expired) |
+| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about` (nothing under `--apps-root`/`--root`); `certs status` (no certificates under the proxy) |
+| `6` (`EXIT.PRECONDITION`) | A required `doctor` check failed before anything was changed | `doctor`; `install`/`update`'s own preflight step (a logged-out `gh` stops `install`/`update` here too, before anything is cloned) |
+
+`about` is the one exception worth calling out: it is informational and
+never a health verdict, so a stopped API container or an unreachable remote
+is reported inline and still exits `0` — only "nothing is installed" is an
+error there, and it shares exit `2` with `status` for that one case, so a
+script can tell "no deployment" apart from "a deployment whose API is
+down."
 
 ### Fresh server in three commands
 
@@ -931,6 +948,16 @@ Options (renew):
   --install-cron            Also write /etc/cron.d/kvox-certs-<name> so this
                             runs twice a day
   --json                    Print a machine-readable result on stdout
+```
+
+```
+Options (status):
+  --apps-root <dir>    Directory that holds one folder per app
+  --name <app>         App folder and compose project name
+  --root <dir>         Deployment directory, overriding --apps-root/--name
+  --proxy-root <path>  Shared reverse proxy directory (default: the app's,
+                       else /opt/infra/proxy)
+  --json               Print a machine-readable report on stdout
 ```
 
 ### Logs
