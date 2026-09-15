@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { UsageError } from '../errors.js';
+import type { CommandResult, RunCommandOptions } from './executor.js';
 import {
   buildInstallSteps,
   composeArgv,
@@ -15,8 +16,7 @@ import {
 } from './install.js';
 import { DEPLOY_STATE_VERSION, writeState, type DeployState } from './state.js';
 
-function installedRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+function installedRoot(root = mkdtempSync(join(tmpdir(), 'appctl-install-'))): string {
   const state: DeployState = {
     version: DEPLOY_STATE_VERSION,
     repoUrl: 'https://example.test/o/r',
@@ -32,6 +32,11 @@ function installedRoot(): string {
   writeState(state);
   return root;
 }
+
+/** Never reached by the tests below; the precondition fires first. */
+const neverRun = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+  throw new Error(`unexpected command: ${argv.join(' ')} in ${options.cwd}`);
+}) as typeof import('./executor.js').runCommand;
 
 describe('the install pipeline', () => {
   const steps = buildInstallSteps();
@@ -108,12 +113,70 @@ describe('runInstall preconditions', () => {
   });
 });
 
+describe('runInstall layout resolution', () => {
+  // Each case installs a state file where the resolved root SHOULD be and
+  // relies on the existing-deployment refusal to name it, which proves the
+  // resolution without running a single pipeline step.
+  it('deploys to <apps-root>/<repository name> by default', async () => {
+    const appsRoot = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+    installedRoot(join(appsRoot, 'myapp'));
+
+    const error = await runInstall({
+      appsRoot,
+      repo: 'https://example.test/o/MyApp.git',
+      ref: 'main',
+      cwd: appsRoot,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain(join(appsRoot, 'myapp'));
+  });
+
+  it('lets --name choose the folder under the apps root', async () => {
+    const appsRoot = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+    installedRoot(join(appsRoot, 'custom'));
+
+    const error = await runInstall({
+      appsRoot,
+      name: 'custom',
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toContain(join(appsRoot, 'custom'));
+  });
+
+  it('lets --root override the whole path, ignoring the apps root', async () => {
+    const root = installedRoot();
+
+    const error = await runInstall({
+      appsRoot: '/nowhere',
+      deployRoot: root,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect((error as Error).message).toContain(root);
+    expect((error as Error).message).not.toContain('/nowhere');
+  });
+});
+
 describe('compose invocation', () => {
-  it('layers base, prod and vps in that order', () => {
-    // vps.compose.yml must come last: its `!override` on ports only replaces
-    // what the earlier files declared if it is applied after them.
-    expect(composeArgv(['up', '-d']).join(' ')).toBe(
-      'docker compose -f base.compose.yml -f prod.compose.yml -f vps.compose.yml up -d',
+  it('pins the project name and layers base, prod and vps in that order', () => {
+    // `-p <name>` keeps two apps on one box from sharing the project `compose`
+    // and replacing each other's containers (#119). vps.compose.yml must come
+    // last: its `!override` on ports only replaces what the earlier files
+    // declared if it is applied after them.
+    expect(composeArgv('demo', ['up', '-d']).join(' ')).toBe(
+      'docker compose -p demo -f base.compose.yml -f prod.compose.yml -f vps.compose.yml up -d',
     );
   });
 
