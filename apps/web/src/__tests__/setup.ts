@@ -2,6 +2,7 @@ import '@testing-library/jest-dom';
 import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
+import { clearFeedCache } from '../utils/feedCache';
 
 // Set base URL for fetch
 const BASE_URL = 'http://localhost:3000';
@@ -336,6 +337,15 @@ beforeAll(() => {
 
 beforeEach(() => {
   installNotificationMocks();
+  // The library feed cache (#168) is module-level and lives for the TAB by
+  // design — which under a test runner means it lives for the whole FILE unless
+  // something resets it. Two tests in one file rendering `/transcripts` with
+  // the same filters would otherwise share one entry, and the second would be
+  // seeded with the first's rows and cursor before its own handlers ever ran.
+  // Cleared globally rather than per-file because the surfaces that mount a
+  // library feed (the two library pages and anything embedding them) should not
+  // each have to know that this cache exists.
+  clearFeedCache();
 });
 
 afterEach(() => {

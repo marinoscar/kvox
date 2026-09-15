@@ -70,6 +70,8 @@ import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useNoteSourceNames, noteSourceKey } from '../../hooks/useNoteSourceNames';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
+import { useScrollRestoration } from '../../hooks/useScrollRestoration';
+import { feedCacheKey } from '../../utils/feedCache';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -228,9 +230,39 @@ export function NotesLibraryView() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /**
+   * Where this feed's loaded pages and its scroll offset live across a
+   * drill-down — issue #168.
+   *
+   * EVERY ACTIVE FILTER IS IN THE KEY. A key that ignored the search term or
+   * the status would replay rows that demonstrably do not match the question
+   * on screen; keying on all of them makes a filter change a cache MISS, which
+   * correctly starts the list over, and gives each filter its own remembered
+   * scroll position for free.
+   *
+   * ⚠ THE DEBOUNCED TERM, NOT THE RAW INPUT. Keying on every keystroke would
+   * mint (and immediately evict) an entry per character, which is both a
+   * pointless cost and a good way to push the entry the user is coming back to
+   * out of a bounded cache.
+   */
+  const cacheKey = useMemo(
+    () => feedCacheKey('notes', [debouncedSearch, status]),
+    [debouncedSearch, status],
+  );
+
+  // The other half of the drill-down, and the reason this page reuses the hook
+  // the settings hub already uses rather than growing a second implementation:
+  // it already handles the restore deadline, the `sessionStorage` namespacing,
+  // and the rule that a real gesture wins outright. Called UNCONDITIONALLY and
+  // outside any branch, per the rules of hooks. Because the key carries the
+  // filters, switching one writes the old filter's offset under the old key and
+  // restores the new one's — which is exactly the behaviour you want.
+  useScrollRestoration(cacheKey);
+
   const { notes, isLoading, error, nextCursor, isLoadingMore, loadMore } = useNotes({
     q: debouncedSearch,
     status: status === 'all' ? undefined : status,
+    cacheKey,
   });
 
   const sourceNames = useNoteSourceNames(notes);

@@ -73,6 +73,8 @@ import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
 import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useTranscripts } from '../../hooks/useTranscripts';
+import { useScrollRestoration } from '../../hooks/useScrollRestoration';
+import { feedCacheKey } from '../../utils/feedCache';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -241,10 +243,41 @@ export function TranscriptsLibraryView() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  /**
+   * Where this feed's loaded pages and its scroll offset live across a
+   * drill-down — issue #168.
+   *
+   * EVERY ACTIVE FILTER IS IN THE KEY, the scope tab included. A key that
+   * ignored the tab would replay "Mine" under "Shared with me"; one that
+   * ignored the search term would replay a previous search's results under a
+   * new one. Keying on all three makes a filter change a cache MISS, which
+   * correctly starts the list over, and gives each filter its own remembered
+   * scroll position for free.
+   *
+   * ⚠ THE DEBOUNCED TERM, NOT THE RAW INPUT. Keying on every keystroke would
+   * mint (and immediately evict) an entry per character, which is both a
+   * pointless cost and a good way to push the entry the user is coming back to
+   * out of a bounded cache.
+   */
+  const cacheKey = useMemo(
+    () => feedCacheKey('transcripts', [tab, debouncedSearch, status]),
+    [debouncedSearch, status, tab],
+  );
+
+  // The other half of the drill-down, and the reason this page reuses the hook
+  // the settings hub already uses rather than growing a second implementation:
+  // it already handles the restore deadline, the `sessionStorage` namespacing,
+  // and the rule that a real gesture wins outright. Called UNCONDITIONALLY and
+  // outside any branch, per the rules of hooks. Because the key carries the
+  // filters, switching the scope tab writes the old tab's offset under the old
+  // key and restores the new tab's — which is exactly the behaviour you want.
+  useScrollRestoration(cacheKey);
+
   const { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
     useTranscripts(tab, {
       q: debouncedSearch,
       status: status === 'all' ? undefined : status,
+      cacheKey,
     });
 
   /**
