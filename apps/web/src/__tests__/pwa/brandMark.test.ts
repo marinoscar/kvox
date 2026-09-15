@@ -283,4 +283,41 @@ describe('the brand mark', () => {
       }
     }
   });
+
+  /**
+   * =============================================================================
+   * WELL-FORMED XML IS A SEPARATE CLAIM FROM "THE GEOMETRY MATCHES" (issue #157)
+   * =============================================================================
+   *
+   * Both brand SVGs once shipped with a `--` typed as a prose dash inside their
+   * header comment. HTML tolerates that; XML does not — a doubled hyphen is
+   * illegal anywhere in a comment body, full stop. Every other test in this file
+   * passed anyway, because `parse()` above slices the string with `<rect\b` /
+   * `<line\b` regexes: a regex reads past a malformed comment exactly as
+   * happily as it reads past a well-formed one, so the shape comparison never
+   * touches the one thing that was actually broken. `<img src="favicon.svg">`
+   * and `<link rel="icon" type="image/svg+xml">` both hand these bytes to the
+   * browser's XML parser, not its HTML parser, and there a fatal error aborts
+   * the whole document — which is why this shipped as a broken-image glyph on
+   * the login page and in the AppBar, in production, for hours, with every
+   * test in this suite green.
+   *
+   * So this uses an actual XML parser rather than a `--`-substring check,
+   * deliberately: a stray unescaped `&`, an unclosed tag, or a mismatched
+   * element are the same class of failure from a browser's point of view, and
+   * a substring search would catch none of them. jsdom's `DOMParser` parses
+   * `text/xml`/`image/svg+xml` strictly and reports a `<parsererror>` element
+   * instead of throwing, which is what `expect(...).toHaveLength(0)` reads
+   * below. Do not delete this as "redundant with the shape comparison" — the
+   * shape comparison is a statement about two files agreeing with each other,
+   * this is a statement about either file being loadable at all, and #157 is
+   * proof the first can hold while the second fails silently.
+   */
+  it.each(FILES)('%s is well-formed XML', (file) => {
+    const svg = readFileSync(join(PUBLIC_DIR, file), 'utf8');
+    const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+    const errors = doc.getElementsByTagName('parsererror');
+
+    expect(errors).toHaveLength(0);
+  });
 });
