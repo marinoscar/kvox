@@ -208,9 +208,11 @@ function buildPlan(old, next) {
   // install.sh can never read the manifest: it is fetched and run via
   // `curl | bash` BEFORE the repository exists on disk. Permanent codemod target.
   add('install.sh', old.rawUrl, next.rawUrl, 1, 'the curl|bash install URL in the header comment');
-  add('install.sh', old.cloneUrl, next.cloneUrl, 2, 'the APPCTL_REPO default and its documentation');
-  add('apps/cli/README.md', old.rawUrl, next.rawUrl, 2, 'the install and uninstall one-liners');
-  add('apps/cli/README.md', old.cloneUrl, next.cloneUrl, 1, 'the APPCTL_REPO default in the env table');
+  add('install.sh', old.cloneUrl, next.cloneUrl, 2, 'the KVOX_REPO default and its documentation');
+  add('apps/cli/README.md', old.rawUrl, next.rawUrl, 5,
+      'the install and uninstall one-liners, the two version-pinning examples, and the private-fork example');
+  add('apps/cli/README.md', old.cloneUrl, next.cloneUrl, 1, 'the KVOX_REPO default in the env table');
+  add('README.md', old.rawUrl, next.rawUrl, 1, 'the CLI install one-liner in the Command-line client section');
   add('README.md', old.cloneUrl, next.cloneUrl, 1, 'the git clone line in Getting started');
   add('README.md', `https://github.com/${old.repoSlug}/actions`, `https://github.com/${next.repoSlug}/actions`, 2,
       'the CI badge image and its link target');
