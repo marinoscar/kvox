@@ -5,6 +5,7 @@ import type { Note, NoteGeneration, Prisma } from '@prisma/client';
 import type { NoteFailedEmailData, NoteReadyEmailData } from '../../email';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NoteTitleService } from './note-title.service';
 
 // =============================================================================
 // Persisting one generation (issue #49, epic #45, docs/specs/notes.md §5.1)
@@ -48,6 +49,22 @@ import { PrismaService } from '../../prisma/prisma.service';
 // Notification": a dispatch inside would hold the transaction open across an
 // SMTP round trip, and a rollback after the send would mail somebody about a
 // note that does not exist.
+//
+// -----------------------------------------------------------------------------
+// TITLING SITS BETWEEN THOSE TWO, AND FOR BOTH OF THEIR REASONS (#182)
+// -----------------------------------------------------------------------------
+//
+// `NoteTitleService` names the note from what it says. It is called AFTER the
+// transaction and OUTSIDE it, for exactly the reason `notify` is: its first
+// rank is a provider round trip, and a network call inside that transaction
+// would hold it open across the internet. And it is called BEFORE `notify`,
+// because the "your note is ready" email carries the note's title — raising it
+// first would name a title the note stopped having a second later.
+//
+// ⚠ IT CANNOT FAIL THE NOTE. `titleNote` never throws (see its header): by the
+// time it runs the body, the version and `status: 'ready'` are durable, and a
+// titling failure that propagated would turn a successful generation into a
+// failed job in front of a user who had just watched their note being written.
 // =============================================================================
 
 /** A generation row with the note it belongs to (null for a preview). */
@@ -85,6 +102,7 @@ export class NoteGenerationService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
+    private readonly titles: NoteTitleService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -230,6 +248,10 @@ export class NoteGenerationService {
       });
     });
 
+    // ⚠ A PREVIEW IS NEVER TITLED, and returns before the call below. It has no
+    // note to name, is never listed anywhere, and is hard-deleted at its
+    // ten-minute TTL — spending a request and a user's tokens on a name nobody
+    // will ever read is the one clearly wrong thing to do here.
     if (!generation.noteId) return;
 
     // AFTER the transaction, OUTSIDE it. `notify` is detached and never
@@ -238,9 +260,24 @@ export class NoteGenerationService {
 
     if (!note) return;
 
+    // NAME THE NOTE FIRST, TELL THE OWNER SECOND (#182). Both are outside the
+    // transaction, and the order between them is not arbitrary: the email
+    // carries the title, so a notification raised first would name the title
+    // the note had a moment ago. `titleNote` NEVER THROWS — see the header, and
+    // its own — so this line cannot fail a note that is already committed; it
+    // returns the title the note carries now, or `null` when it could not read
+    // the row, in which case the copy this job loaded is the best we have.
+    const title = await this.titles.titleNote({
+      noteId: note.id,
+      ownerId: note.ownerId,
+      body: content,
+      providerId: generation.providerId,
+      model: generation.model,
+    });
+
     const payload: NoteReadyEmailData = {
       noteId: note.id,
-      title: note.title,
+      title: title ?? note.title,
       templateName: generation.templateNameSnapshot,
       providerLabel: input.providerLabel,
       model: generation.model,

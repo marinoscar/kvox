@@ -199,6 +199,11 @@ function harness(generation: Record<string, unknown>, note: Record<string, unkno
     prisma as never,
     { notify: jest.fn().mockResolvedValue(undefined) } as never,
     { get: jest.fn().mockReturnValue('https://app.example.com') } as never,
+    // #182's titling pass, stubbed. A PREVIEW IS NEVER TITLED — `commit`
+    // returns before the call — so this stub exists to satisfy the constructor
+    // and must stay unused; that it is never called is itself the assertion
+    // this spec's subject cares about.
+    { titleNote: jest.fn().mockResolvedValue(null) } as never,
   );
 
   const handler = new NoteGenerateHandler(
