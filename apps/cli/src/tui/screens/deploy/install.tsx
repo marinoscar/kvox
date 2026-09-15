@@ -44,6 +44,7 @@ import {
   ABORTED_DETAIL,
   ABORT_DIALOG,
   ALL_FIELD,
+  GROUPS_FIELD,
   OPTION_MODE_PREFIX,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
@@ -74,6 +75,7 @@ import {
   pipelineItems,
   railSteps,
   requiredFailures,
+  stepCheckItems,
   reviewRows,
   stepContextFor,
   welcomeChecks,
@@ -165,13 +167,21 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined);
   const [elapsed, setElapsed] = useState(0);
   const [outcome, setOutcome] = useState<RunOutcome>({});
+  /** The repository has been resolved (or given up on): the name is settled. */
+  const [ready, setReady] = useState(false);
 
   const abortRef = useRef<AbortController | undefined>(undefined);
 
-  const groups = useMemo(() => groupsOf(answers), [answers]);
+  // Memoised on the two answers that can CHANGE the step list, never on the
+  // whole `answers` object. A step list rebuilt on every keystroke hands every
+  // effect keyed on `step` a new object identity each render — which would
+  // clear the focus a failed check had just set, on the very next frame.
+  const groupsKey = answerOf(answers, GROUPS_FIELD);
+  const reviewAll = isTrue(answers, ALL_FIELD);
+  const groups = useMemo(() => groupsOf({ [GROUPS_FIELD]: groupsKey }), [groupsKey]);
   const steps = useMemo(
-    () => installSteps(specs, { groups, all: isTrue(answers, ALL_FIELD) }),
-    [specs, groups, answers],
+    () => installSteps(specs, { groups, all: reviewAll }),
+    [specs, groups, reviewAll],
   );
 
   const wizard = useWizard(railSteps(steps), {
@@ -201,7 +211,11 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
         cwd: process.cwd(),
         runCommand: defaultRunCommand,
       }).catch(() => undefined);
-      if (cancelled || !isMounted() || target === undefined) return;
+      if (cancelled || !isMounted()) return;
+      // Whether or not a remote was found, the app name is now as settled as
+      // it is going to get — and the doctor probes paths derived from it.
+      setReady(true);
+      if (target === undefined) return;
       setAnswers((current) => {
         // Never overwrite something already typed: the operator's answer is
         // the more recent statement of intent.
@@ -248,7 +262,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     setWelcome({ results: [], running: true });
     const base = checkBase();
     void (async () => {
-      const results = await runChecks(doctorChecks, base as CheckContext, (result) => {
+      const results = await runChecks(doctorChecks, base, (result) => {
         if (!isMounted()) return;
         setWelcome((current) => ({ ...current, results: [...current.results, result] }));
       }).catch(() => [] as CompletedCheck[]);
@@ -256,12 +270,16 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     })();
   }, [checkBase, doctorChecks, isMounted]);
 
+  // Held until `ready`: the checks read `deployRoot`, which is
+  // `<apps root>/<name>`, and the name arrives from the repository a moment
+  // after mount. Probing `/opt/infra/apps/app` first would report on a
+  // directory this install is not going to use.
   const doctorStarted = useRef(false);
   useEffect(() => {
-    if (doctorStarted.current) return;
+    if (!ready || doctorStarted.current) return;
     doctorStarted.current = true;
     startDoctor();
-  }, [startDoctor]);
+  }, [ready, startDoctor]);
 
   useInput(
     (input, key) => {
@@ -399,7 +417,9 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           bindPort:
             Number(answers['APP_BIND_PORT'] ?? DEFAULT_BIND_PORT) || DEFAULT_BIND_PORT,
           proxyRoot: roots.proxy,
-          domain: answerOf(answers, DOMAIN_FIELD),
+          ...(answerOf(answers, DOMAIN_FIELD) === ''
+            ? {}
+            : { domain: answerOf(answers, DOMAIN_FIELD) }),
           answers: envAnswers(answers),
           groups,
           all: isTrue(answers, ALL_FIELD),
@@ -706,16 +726,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           />
           {stepChecks.running || stepChecks.results.length > 0 ? (
             <Box marginTop={1} flexDirection="column">
-              <Checklist
-                items={checkItems(
-                  (step.data?.checkIds ?? []).flatMap((id) => {
-                    const check = ALL_CHECKS.find((candidate) => candidate.id === id);
-                    return check === undefined ? [] : [check];
-                  }),
-                  stepChecks.results,
-                  stepChecks.running,
-                )}
-              />
+              <Checklist items={stepCheckItems(step, stepChecks.results, stepChecks.running)} />
             </Box>
           ) : null}
         </Box>

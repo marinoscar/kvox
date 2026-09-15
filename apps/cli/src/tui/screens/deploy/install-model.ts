@@ -703,6 +703,37 @@ export function checkItems(
   });
 }
 
+/**
+ * The checklist under a step's form.
+ *
+ * A step that names `checkIds` shows all of them from the first frame, the
+ * way Welcome does. The storage step names none — its `onLeave` is a single
+ * ad-hoc probe rather than registry entries — so there its results ARE the
+ * list, and the rows appear as they arrive.
+ */
+export function stepCheckItems(
+  step: InstallStep,
+  results: readonly CompletedCheck[],
+  running: boolean,
+  registry: readonly Check[] = ALL_CHECKS,
+): ChecklistItem[] {
+  const ids = step.data?.checkIds ?? [];
+  const declared = ids.flatMap((id) => {
+    const check = registry.find((candidate) => candidate.id === id);
+    return check === undefined ? [] : [check];
+  });
+
+  if (declared.length > 0) return checkItems(declared, results, running);
+
+  return results.map((result) => ({
+    id: result.id,
+    title: result.title,
+    status: result.status,
+    detail: result.detail,
+    ...(result.remedy === undefined ? {} : { remedy: result.remedy }),
+  }));
+}
+
 /** The required failures, in the order they were reported. */
 export function requiredFailures(results: readonly CompletedCheck[]): CompletedCheck[] {
   return results.filter(

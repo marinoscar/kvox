@@ -45,6 +45,7 @@ import {
   railSteps,
   reviewRows,
   secretModeField,
+  stepCheckItems,
   welcomeChecks,
   withAnswer,
   type InstallAnswers,
@@ -436,6 +437,28 @@ describe('the live doctor on Welcome', () => {
     const id = checks[0]?.id ?? '';
     const items = checkItems(checks, [fail(id)], false);
 
+    expect(items[0]?.remedy).toBe('do the thing');
+  });
+});
+
+describe('stepCheckItems', () => {
+  it('shows a step\'s declared checks from the first frame, pending until they run', () => {
+    const items = stepCheckItems(stepById('domain'), [], true);
+
+    expect(items.map((item) => item.id)).toEqual(['dns-resolves', 'dns-points-here']);
+    expect(items.map((item) => item.status)).toEqual(['running', 'pending']);
+  });
+
+  it('falls back to the results themselves for a step that declares no registry ids', () => {
+    // The storage step's `onLeave` is one ad-hoc probe, not registry entries,
+    // so listing "all of them" up front is not possible — and its single warn
+    // must still reach the screen.
+    const items = stepCheckItems(stepById('storage'), [
+      fail('storage-reachable', { status: 'warn', severity: 'recommended', title: 'Object storage reachable' }),
+    ], false);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.status).toBe('warn');
     expect(items[0]?.remedy).toBe('do the thing');
   });
 });
