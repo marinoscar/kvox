@@ -35,6 +35,7 @@ import {
   Typography,
   ButtonBase,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import type { DataTableColumn, DataTableDensity, DataTableRowAction } from '../types';
@@ -154,10 +155,13 @@ export function DataCard<Row>({
         ...(selected
           ? {
               borderColor: 'primary.main',
+              // Derived from `primary.main` rather than a frozen `rgba()` copy
+              // of it — same change, same reasoning, as `BulkActionBar.tsx`,
+              // and the two MUST keep painting the same wash: a selected card
+              // and the bulk bar that appears above it when you select it are
+              // one visual state expressed in two components.
               bgcolor: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? 'rgba(144, 202, 249, 0.10)'
-                  : 'rgba(25, 118, 210, 0.06)',
+                alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06),
             }
           : {}),
       }}
