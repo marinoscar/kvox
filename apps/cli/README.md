@@ -21,6 +21,21 @@ There's no published package; the installer builds `appctl` from this repo
 and deploys a standalone copy — you don't need a local clone to end up with
 a working `appctl` on your PATH.
 
+**Platforms:** `install.sh` is a bash script — macOS, Linux and WSL are
+supported. There is no native Windows (PowerShell/cmd) support; on Windows,
+install inside WSL. The installer detects WSL and prints a dedicated box
+about `~/.local/bin` usually not being on `$PATH` there (see below).
+
+Three ways to end up with `appctl`, depending on what you're doing:
+
+| Path | Command | When |
+| --- | --- | --- |
+| Piped one-liner | `curl -fsSL .../install.sh \| bash` | Normal use — no clone needed |
+| Local clone | `APPCTL_SRC=/path/to/repo bash /path/to/repo/install.sh` | You already have the repo, or you're offline / testing the installer |
+| Workspace build | `npm run build --workspace=cli` then `node apps/cli/dist/cli.js` | You're developing the CLI itself — see [Building from source](#building-from-source-development) |
+
+The piped one-liner:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
 ```
@@ -38,6 +53,69 @@ itself without a network round-trip), point it at that directory with
 ```bash
 APPCTL_SRC=/path/to/repo bash /path/to/repo/install.sh
 ```
+
+### Verify the install
+
+```bash
+appctl --version
+appctl --help
+```
+
+The installer already does this for you as its last step: it runs the new
+shim's `--version`, prints an install summary (version, install size, and
+the app/shim paths), and warns if the version reported by the binary doesn't
+match the version it just built from source — a sign something went wrong
+partway through the deploy step.
+
+If the shell instead reports `appctl: command not found`, the shim's
+directory isn't on your `$PATH` — see the `export PATH=...` guidance below.
+
+### What to do next
+
+- Log in: `appctl login` (see [Logging in](#logging-in)).
+- Make a call: `appctl api GET /api/auth/me` (see
+  [Calling the API](#calling-the-api)).
+- Run `appctl` with no arguments in a real terminal to open the interactive
+  ink menu instead of using subcommands.
+
+### Installing a specific version or branch
+
+`APPCTL_REF` (default `main`) controls what the installer checks out. It is
+passed straight to `git clone --depth 1 --branch`, so a branch or tag name
+always works; a raw commit SHA is not reliably accepted there, so pin to a
+tag rather than a SHA. It has to be set for the `bash` process itself, not
+for `curl`, since a variable set before a command in a pipeline only applies
+to that command:
+
+```bash
+# Works — APPCTL_REF is set on the process that reads it
+curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | APPCTL_REF=v1.2.3 bash
+
+# Does NOT work — this sets APPCTL_REF for curl, not for bash
+APPCTL_REF=v1.2.3 curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh | bash
+```
+
+The `APPCTL_SRC` form doesn't need this — a local clone is already checked
+out at whatever ref you have on disk.
+
+### Installing from a private fork
+
+`GITHUB_TOKEN` and `APPCTL_REPO` (both in the
+[environment variable table](#installer-environment-variables) below) work
+together for a private fork: set `APPCTL_REPO` to your fork's clone URL and
+`GITHUB_TOKEN` to a PAT that can read it. The same "set it on `bash`, not
+`curl`" rule applies:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/marinoscar/kvox/main/install.sh \
+  | APPCTL_REPO=https://github.com/youruser/your-fork.git GITHUB_TOKEN=ghp_xxx bash
+```
+
+The installer only rewrites a literal `https://github.com/` prefix in
+`APPCTL_REPO` into `https://$GITHUB_TOKEN@github.com/`, and only for that one
+`git clone`. The token ends up in the temporary checkout's git remote URL —
+nowhere else — and that temp directory is deleted (via an `EXIT` trap) as
+soon as the installer finishes, whether it succeeds or fails.
 
 ### Update
 
@@ -61,6 +139,21 @@ This removes the installed app directory (`~/.appctl/app`) and the `appctl`
 shim (`~/.local/bin/appctl` by default). It leaves
 `~/.appctl/config.json` — your stored server URL and credentials — untouched;
 uninstalling doesn't log you out.
+
+`install.sh --help` (or `-h`) prints its usage, options and environment
+variables and exits without installing or touching anything on disk.
+
+### Where things land
+
+| Path | What |
+| --- | --- |
+| `~/.appctl/app` | The installed CLI — replaced wholesale on every update |
+| `~/.local/bin/appctl` | The shim that `exec`s `node ~/.appctl/app/dist/cli.js "$@"` |
+| `~/.appctl/config.json` | Your server URL and stored credentials — never touched by install, update or uninstall |
+
+The app root and shim directory are overridable via `APPCTL_HOME` and
+`APPCTL_BIN_DIR` — see the
+[environment variable table](#installer-environment-variables) below.
 
 ### Requirements
 
@@ -123,6 +216,30 @@ Set these before running the installer to override its defaults:
 
 `NO_COLOR` and the installer's own `--no-color` flag both disable ANSI
 colour in its output.
+
+### Troubleshooting the install
+
+- **`appctl: command not found`** — the shim directory isn't on `$PATH`.
+  Add the `export PATH="$PATH:$HOME/.local/bin"` line above (substituting
+  your `APPCTL_BIN_DIR` if you set one) to your shell config and reload the
+  shell (`source ~/.bashrc` or `source ~/.zshrc`).
+- **Node too old, or missing** — the installer checks `node >= 20` before
+  doing anything else and exits with `Node.js >= 20 is required (found:
+  ...)` if it's too old, or `node is required but not found.` if it's
+  missing at all, pointing at nvm (`nvm install --lts`) or your distro's
+  Node package either way.
+- **`Git clone failed. If the repo is private, set GITHUB_TOKEN or use
+  APPCTL_SRC.`** — the script's own message on a failed clone. This also
+  covers a bad `APPCTL_REF`: `git clone --branch` fails the same way for a
+  ref that doesn't exist as it does for a private repo with no credential.
+- **Low disk space** — printed as a warning (`Low disk space at install
+  target (...MB free; ~50 MB needed)`), never a failure; the install
+  continues.
+- **"Version mismatch" warning after install** — the installer compares the
+  version it just built against what the freshly-installed binary reports
+  and warns if they differ. Usually a stale shim, or a second `appctl`
+  earlier on `$PATH` shadowing the one just installed — `which -a appctl`
+  shows every copy and the order your shell will find them in.
 
 ## Logging in
 
@@ -896,7 +1013,15 @@ under its own "Defaults" comment block and has to be changed there directly.
 ## Building from source (development)
 
 The install path above is for end users. If you're developing the CLI
-itself inside this monorepo, build and run it from the workspace instead:
+itself inside this monorepo, build and run it from the workspace instead.
+
+Building inside the workspace needs Node **>= 24** — the monorepo root's own
+`engines.node` floor (`package.json`), which covers the full dev toolchain
+across `apps/api`, `apps/web` and `apps/cli` together. That's higher than
+the `>= 20` the [Requirements](#requirements) table above states, and the
+two aren't in tension: that table is `apps/cli`'s own floor for the
+*installed*, standalone CLI, built by `install.sh` outside this monorepo
+against `apps/cli/package.json` alone.
 
 ```bash
 # from the repo root, after the workspace's node_modules are installed
