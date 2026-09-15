@@ -8,6 +8,7 @@ import { DEFAULT_APPS_ROOT, listInstalledApps } from '../../../deploy/layout.js'
 import { Frame } from '../../layout.js';
 import { DoctorScreen } from './doctor.js';
 import { InstallWizard } from './install.js';
+import { StatusScreen } from './status.js';
 import { UpdateScreen } from './update.js';
 
 // =============================================================================
@@ -83,7 +84,6 @@ export function deployMenuItems(state: DeployMenuState): DeployMenuItem[] {
 
 /** What a phase that is not built yet tells the operator to run instead. */
 export const PLACEHOLDER_COMMANDS: Readonly<Record<string, string>> = {
-  status: 'deploy status',
   certs: 'deploy certs status',
   about: 'api GET /api/admin/about',
 };
@@ -126,6 +126,16 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
   if (phase === 'update') {
     return (
       <UpdateScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'status') {
+    return (
+      <StatusScreen
         onDone={() => {
           setPhase('choose');
         }}
