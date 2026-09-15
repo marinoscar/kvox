@@ -3946,6 +3946,70 @@ generation alone.
 
 ---
 
+#### POST /notes/{id}/retitle
+Name one note from what it actually says — the action behind "Suggest a
+title" (issue #184, epic #163). Queues a `note.retitle` job and returns
+**202** immediately: titling is a provider call, so it is queue work, not
+something a request waits on. Re-read the note to see the new title.
+
+The title comes from the same three ranks a freshly generated note is named
+by (`docs/specs/notes.md` §3.4): the model that generated it is asked what it
+would call it, falling back to the body's first heading or sentence, falling
+back to the name it already has. **None of those fallbacks is an error** — a
+caller with no API key saved gets a heading-derived title and a successful
+job.
+
+⚠ **This route will rename a note the caller named themselves**, and it is the
+only one that will. Asking for a suggestion about a note in front of you is an
+explicit choice, so it wins; the bulk sweep below never touches a name a
+person chose, because it renames notes nobody is looking at. The previous
+title is not kept anywhere — a title is metadata about the note, not versioned
+content of it.
+
+**Requires:** `notes:write` · **Response:** `202` with `{ "noteId": "…", "jobId": "…" }`
+
+⚠ Billed to **your** provider account.
+
+**Error Cases:**
+- `404` - No such note, or no access to it
+- `409` - `generating` (the generation names the note itself when it commits; two passes racing for one title spend tokens for one answer)
+
+---
+
+#### POST /notes/retitle
+The bulk sweep: queue a `note.retitle` job for a capped page of the caller's
+own notes that are **still named after the template that generated them**, and
+report how many are left.
+
+**Selected:** your own notes that are `ready`, not deleted, and whose
+`titleSource` is still `template`. **Oldest `updatedAt` first** — a rename
+touches the row, so a titled note moves to the back of that ordering and the
+next call's page is the next hundred that still need it, with no cursor for
+the caller to carry.
+
+⚠ **A note whose `titleSource` is `user` or `ai` is never selected.** `user` is
+a name a person chose. `ai` is a note this exact pass has already named from
+its own content, and re-running it would spend the owner's money to re-derive
+an answer they already have — which is also what makes the sweep terminate:
+each success writes `titleSource: ai` and the note leaves the selection, so
+`remaining` genuinely reaches `0`. Use `POST /notes/{id}/retitle` to re-name a
+specific note regardless.
+
+**Resumable and stoppable.** `queued` is what this call started; `remaining`
+is what still matches, counted at request time, so it does not yet reflect the
+jobs just queued. Call again once they settle. Stop by not calling again —
+each note is its own job, independently retryable from the admin job list, and
+no batch state is left behind. Calling twice does **not** queue a note twice:
+a note with a `note.retitle` job already pending or running collapses into it.
+
+At most **100** notes per call.
+
+**Requires:** `notes:write` · **Response:** `202` with `{ "queued": 100, "remaining": 412 }`
+
+⚠ Each note is a small completion billed to **your** provider account.
+
+---
+
 #### POST /notes/{id}/versions/{version}/restore
 **History is never rewritten.** Appends a new version (`kind: restore`)
 whose body is the old one's, recording `restoredFromVersion`. Every version
