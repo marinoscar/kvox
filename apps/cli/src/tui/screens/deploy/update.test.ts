@@ -146,8 +146,29 @@ describe('updateDiffHints', () => {
     expect(hints.join(' ')).not.toContain('ctrl-s');
   });
 
+  it('gives the arrows to exactly one of the two children at a time', () => {
+    // The commit ScrollBox and the confirm's SelectInput both bind ↑/↓ and
+    // are on screen together; ink delivers the keystroke to both, so Tab
+    // arbitrates. Only one of them may advertise the arrows.
+    const answering = updateDiffHints(false, 'confirm');
+    const scrolling = updateDiffHints(false, 'commits');
+
+    expect(answering).toContain('tab scroll the commits');
+    expect(answering.join(' ')).not.toContain('↑↓');
+
+    expect(scrolling).toContain('↑↓ scroll the commits');
+    expect(scrolling).toContain('tab back to the answer');
+    // The flag toggles belong to the confirm half only.
+    expect(scrolling.join(' ')).not.toContain('re-seed');
+  });
+
+  it('starts with the confirm holding the keyboard — the question is the point', () => {
+    expect(updateDiffHints(false)).toEqual(updateDiffHints(false, 'confirm'));
+  });
+
   it('offers only Enter when there is nothing to apply', () => {
     expect(updateDiffHints(true)).toEqual(['enter return', 'esc back']);
+    expect(updateDiffHints(true, 'commits')).toEqual(['enter return', 'esc back']);
   });
 });
 

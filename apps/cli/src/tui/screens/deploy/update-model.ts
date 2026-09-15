@@ -157,6 +157,9 @@ export function updateFlagRows(flags: UpdateFlags): KeyValueRow[] {
   ];
 }
 
+/** Which half of the diff phase the keyboard is pointed at. */
+export type DiffFocus = 'confirm' | 'commits';
+
 /**
  * The keys the diff phase binds.
  *
@@ -166,10 +169,22 @@ export function updateFlagRows(flags: UpdateFlags): KeyValueRow[] {
  * diff phase is a table, a scroll box and a two-item select. `ctrl-s` was
  * rejected outright: on most terminals it is XOFF and freezes the session,
  * which is a far worse outcome than the collision the modifier avoids.
+ *
+ * TAB IS NOT DECORATION. `ScrollBox` and `ConfirmDialog`'s `SelectInput` both
+ * bind ↑/↓, and they are on screen TOGETHER here — the one layout in this
+ * epic where that happens (the install wizard only ever shows its log beside
+ * a confirm with the log deactivated). ink delivers the keystroke to both, so
+ * ↑ would move the answer AND scroll the commits on the same press. Tab makes
+ * ownership explicit and is bound by neither component, so it is the one key
+ * that can arbitrate. The confirm owns it first, because the question is what
+ * the operator came here to answer.
  */
-export function updateDiffHints(upToDate: boolean): string[] {
+export function updateDiffHints(upToDate: boolean, focus: DiffFocus = 'confirm'): string[] {
   if (upToDate) return ['enter return', 'esc back'];
-  return ['enter select', 's re-seed', 'c cache', '↑↓ scroll the commits', 'esc back'];
+  if (focus === 'commits') {
+    return ['↑↓ scroll the commits', 'tab back to the answer', 'esc back'];
+  }
+  return ['enter select', 's re-seed', 'c cache', 'tab scroll the commits', 'esc back'];
 }
 
 // -----------------------------------------------------------------------------

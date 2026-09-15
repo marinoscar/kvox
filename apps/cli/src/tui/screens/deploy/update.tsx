@@ -22,6 +22,7 @@ import {
   updateFailedModel,
   updateFlagRows,
   updateItems,
+  type DiffFocus,
   type UpdateFlags,
 } from './update-model.js';
 
@@ -80,6 +81,7 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
     failed?: ReturnType<typeof updateFailedModel> | undefined;
   }>({});
   const [confirmingAbort, setConfirmingAbort] = useState(false);
+  const [diffFocus, setDiffFocus] = useState<DiffFocus>('confirm');
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined);
   const [elapsed, setElapsed] = useState(0);
 
@@ -277,6 +279,13 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
         if (key.return) onDone();
         return;
       }
+      // Tab hands the arrows to one of the two children; see
+      // `updateDiffHints`'s comment for why it has to be arbitrated at all.
+      if (key.tab) {
+        setDiffFocus((current) => (current === 'confirm' ? 'commits' : 'confirm'));
+        return;
+      }
+      if (diffFocus !== 'confirm') return;
       const letter = input.toLowerCase();
       if (letter === 's') setFlags((current) => ({ ...current, skipSeed: !current.skipSeed }));
       if (letter === 'c') setFlags((current) => ({ ...current, noCache: !current.noCache }));
@@ -452,7 +461,7 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
       title="Update"
       steps={[railStep]}
       current={0}
-      hints={updateDiffHints(diff.upToDate)}
+      hints={updateDiffHints(diff.upToDate, diffFocus)}
     >
       {diff.upToDate ? (
         <Text bold color="green">
@@ -472,7 +481,12 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
       ) : (
         <>
           <Box marginTop={1} flexDirection="column">
-            <ScrollBox lines={diff.commits} reservedRows={20} title="What is new" isActive />
+            <ScrollBox
+              lines={diff.commits}
+              reservedRows={20}
+              title="What is new"
+              isActive={diffFocus === 'commits'}
+            />
           </Box>
           <Box marginTop={1}>
             <KeyValue rows={updateFlagRows(flags)} />
@@ -483,6 +497,7 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
               detail={diff.confirm.detail}
               confirmLabel={diff.confirm.confirmLabel}
               cancelLabel={diff.confirm.cancelLabel}
+              isActive={diffFocus === 'confirm'}
               onResult={(confirmed) => {
                 if (confirmed) start();
                 else onDone();
