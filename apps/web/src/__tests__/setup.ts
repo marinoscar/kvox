@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { server } from './mocks/server';
 
@@ -311,6 +311,23 @@ class IntersectionObserverMock {
 global.IntersectionObserver = IntersectionObserverMock as any;
 
 // Setup MSW server
+/**
+ * Testing Library's own async timeout, raised from its 1s default (#108).
+ *
+ * `vitest.config.ts` already allows a test 20s, but `findBy*`/`waitFor` run on
+ * a SEPARATE budget that the config above does not reach, and 1s of it is spent
+ * competing with every other worker for the CPU. The transcript suites mount a
+ * virtualized list over a full fixture and are the first to lose that race:
+ * `TranscriptCorrections.test.tsx` passes 31/31 on its own and times out on the
+ * very first `findByRole` when four other files run beside it.
+ *
+ * This WEAKENS NO ASSERTION. A `findBy*` whose element never appears still
+ * fails; it simply stops calling a slow machine a broken one. The ceiling stays
+ * well under the 20s test timeout, so a genuinely missing element still reports
+ * as a query failure naming the role, rather than as a bare test timeout.
+ */
+configure({ asyncUtilTimeout: 5_000 });
+
 beforeAll(() => {
   server.listen({
     onUnhandledRequest: 'warn' // Changed from 'error' to 'warn' for debugging

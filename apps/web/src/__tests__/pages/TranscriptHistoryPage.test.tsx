@@ -226,6 +226,9 @@ describe('TranscriptHistoryPage — previewing a version', () => {
     // The preview is the reader, so it carries none of the editing affordances.
     expect(within(dialog).queryByRole('button', { name: /^Edit the line/ })).toBeNull();
     expect(within(dialog).queryByRole('button', { name: /^Actions for the line/ })).toBeNull();
+    // Nor the per-line play button (#108): a version preview has no player at
+    // all, so a control that would start one belongs to the viewer, not here.
+    expect(within(dialog).queryByRole('button', { name: /^Play this line/ })).toBeNull();
   });
 
   it('says a version older than the first snapshot is still being prepared', async () => {

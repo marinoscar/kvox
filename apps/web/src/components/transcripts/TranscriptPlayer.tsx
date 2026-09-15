@@ -35,10 +35,10 @@ import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import CancelIcon from '@mui/icons-material/Cancel';
-import Forward15Icon from '@mui/icons-material/Forward10';
+import Forward10Icon from '@mui/icons-material/Forward10';
 import PauseIcon from '@mui/icons-material/Pause';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import Replay15Icon from '@mui/icons-material/Replay10';
+import Replay10Icon from '@mui/icons-material/Replay10';
 import { useTheme } from '@mui/material/styles';
 import { useMemo } from 'react';
 
@@ -185,12 +185,16 @@ export function TranscriptPlayer({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {/* The label and the glyph agree again (#108). MUI ships only
+              Replay/Forward 5, 10 and 30, so the icon has always drawn "10"
+              while these names said "15 seconds" — `SKIP_MS` is now 10 s and
+              the labels say so. */}
           <IconButton
-            aria-label="Skip back 15 seconds"
+            aria-label="Skip back 10 seconds"
             onClick={() => engine.skip(-SKIP_MS)}
             size="small"
           >
-            <Replay15Icon />
+            <Replay10Icon />
           </IconButton>
           <IconButton
             aria-label={engine.isPlaying ? 'Pause' : 'Play'}
@@ -200,11 +204,11 @@ export function TranscriptPlayer({
             {engine.isPlaying ? <PauseIcon /> : <PlayArrowIcon />}
           </IconButton>
           <IconButton
-            aria-label="Skip forward 15 seconds"
+            aria-label="Skip forward 10 seconds"
             onClick={() => engine.skip(SKIP_MS)}
             size="small"
           >
-            <Forward15Icon />
+            <Forward10Icon />
           </IconButton>
           <Typography
             variant="caption"
