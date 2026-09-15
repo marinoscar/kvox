@@ -152,7 +152,7 @@ describe('AboutService', () => {
       expect(about.detail).toBeNull();
       expect(about.deployInfo).toMatchObject({
         schema: 1,
-        app: { name: 'kvox', commitSha: fixture.app.commitSha, ref: 'main' },
+        app: { name: 'example-app', commitSha: fixture.app.commitSha, ref: 'main' },
         installedAt: fixture.installedAt,
         updatedAt: fixture.updatedAt,
         domain: 'app.example.com',

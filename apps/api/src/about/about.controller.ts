@@ -41,7 +41,7 @@ export class AboutController {
       'unreachable database answers `database: null` with `databaseError` set. The file is ' +
       'read on every request, so rewriting it takes effect without a restart.\n\n' +
       '**Never performs network I/O.** `updateAvailable` and `checkedAt` are derived from ' +
-      'the `remote` block the CLI last recorded (`kvox deploy update --check`), never from ' +
+      'the `remote` block the CLI last recorded (the deploy CLI, `deploy update --check`), never from ' +
       'a call made here; both are `null` until the CLI has checked at least once. Every ' +
       'timestamp is ISO-8601 UTC.',
   })

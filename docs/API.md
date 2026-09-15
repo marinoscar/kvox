@@ -2163,7 +2163,7 @@ Opens or closes the window. Writes the persisted `maintenance` namespace and rec
 
 What is deployed here (issue #124, epic #118). One read-only route reporting the deployment record the CLI wrote at deploy time, plus what only the running process and a live database connection can answer. Gated on `system_settings:read` — **deliberately not a permission of its own** (epic #118 decision 8): "what is deployed here" is an administrator's configuration read, and the web card at `/admin/settings/about` (#126) carries this exact string per the Settings UI Pattern rule 3. Not exempt from the maintenance window — it is an admin page, and administrators bypass the window already unless `allowAdmins` is `false`.
 
-**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. `updateAvailable` and `checkedAt` are derived from the `remote` block the CLI last recorded (`kvox deploy update --check` / `status`), never from a call made here.
+**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. `updateAvailable` and `checkedAt` are derived from the `remote` block the CLI last recorded (the deploy CLI, `deploy update --check` / `status`), never from a call made here.
 
 #### GET /admin/about
 **Requires:** `system_settings:read`
@@ -2176,11 +2176,11 @@ Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/dep
   "data": {
     "deployInfo": {
       "schema": 1,
-      "app": { "name": "kvox", "version": "1.4.0", "commitSha": "3f2a9c1d…", "ref": "main", "repoUrl": "https://github.com/example-org/example-app" },
+      "app": { "name": "example-app", "version": "1.4.0", "commitSha": "3f2a9c1d…", "ref": "main", "repoUrl": "https://github.com/example-org/example-app" },
       "installedAt": "2026-08-01T09:15:00.000Z",
       "updatedAt": "2026-09-14T22:41:07.000Z",
       "lastCommand": "update",
-      "deployedBy": { "cli": "kvox", "version": "1.4.0" },
+      "deployedBy": { "cli": "example-cli", "version": "1.4.0" },
       "domain": "app.example.com",
       "bindPort": 3535,
       "host": { "hostname": "vps-01", "os": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-45-generic", "arch": "x64", "cpuModel": "AMD EPYC 7B13", "cpus": 4, "memoryBytes": 8323072000, "diskBytes": 80530636800, "dockerVersion": "27.1.1", "composeVersion": "2.29.1", "nodeVersion": "22.11.0" },

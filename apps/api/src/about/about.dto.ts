@@ -7,7 +7,7 @@ import { deployInfoSchema } from './deploy-info.schema';
 // =============================================================================
 //
 // Three sources, three provenances, published side by side so a client (the
-// web About card, #126; `kvox deploy about`, #128) never has to guess where a
+// web About card, #126; the deploy CLI `about` command, #128) never has to guess where a
 // number came from:
 //
 //   * `deployInfo` — the CLI's `deploy-info/info.json`, read from disk on every
@@ -105,7 +105,7 @@ export const ABOUT_RESPONSE_EXAMPLE = {
     deployInfo: {
       schema: 1,
       app: {
-        name: 'kvox',
+        name: 'example-app',
         version: '1.4.0',
         commitSha: '3f2a9c1d8e7b6a5f4c3d2e1f0a9b8c7d6e5f4a3b',
         ref: 'main',
@@ -114,7 +114,7 @@ export const ABOUT_RESPONSE_EXAMPLE = {
       installedAt: '2026-08-01T09:15:00.000Z',
       updatedAt: '2026-09-14T22:41:07.000Z',
       lastCommand: 'update',
-      deployedBy: { cli: 'kvox', version: '1.4.0' },
+      deployedBy: { cli: 'example-cli', version: '1.4.0' },
       domain: 'app.example.com',
       bindPort: 3535,
       host: {
