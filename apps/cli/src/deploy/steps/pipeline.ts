@@ -1,3 +1,4 @@
+import { PreconditionError } from '../../errors.js';
 import type { DeployHooks, StepResult } from '../hooks.js';
 import type { Journal } from '../journal.js';
 
@@ -38,6 +39,18 @@ export interface PipelineResult {
    * broke" instead of being flattened into a generic failure.
    */
   error?: unknown;
+}
+
+/**
+ * The error a command throws for a failed pipeline: `message` is the
+ * command's own wording (the log path, the recovery command), and the CLASS
+ * is the failed step's when that step stopped on a precondition, so the
+ * exit code says "this server is not ready" rather than "the CLI broke".
+ */
+export function pipelineFailure(result: PipelineResult, message: string): Error {
+  return result.error instanceof PreconditionError
+    ? new PreconditionError(message, { cause: result.error })
+    : new Error(message, result.error === undefined ? undefined : { cause: result.error });
 }
 
 /**
