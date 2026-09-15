@@ -74,6 +74,39 @@ let noteSummaryRequests = 0;
  */
 let requestOrder: string[] = [];
 
+/**
+ * EVERY path this render touched, whoever made the request.
+ *
+ * The counters above are per endpoint and can only ever say "the two I know
+ * about answered once each"; this says what the WHOLE page asked for, which is
+ * the only way to assert that a new section added no fourth call of its own.
+ *
+ * ⚠ REGISTERED ONCE, AT MODULE SCOPE, AND NEVER TORN DOWN. Two suites here used
+ * to attach their own listener and call `server.events.removeAllListeners()` in
+ * a `finally` — which removes EVERY listener on the shared server, including
+ * this one, so any later test in the file would observe an empty array and pass
+ * by seeing nothing. The array is emptied in `beforeEach` instead; nothing in
+ * this file may call `removeAllListeners()` again.
+ */
+const observedRequests: string[] = [];
+server.events.on('request:start', ({ request }) => {
+  observedRequests.push(new URL(request.url).pathname);
+});
+
+/**
+ * The three calls a home-page load is allowed to make, sorted.
+ *
+ * One summary per CONTENT TYPE plus the one deployment capability probe — the
+ * rule `HomePage`'s header states. Every section on this page renders from what
+ * these already returned, so this list growing is the review question, not an
+ * incidental detail of whichever test noticed.
+ */
+const EXPECTED_REQUESTS = [
+  '/api/notes/summary',
+  '/api/transcription/config',
+  '/api/transcripts/summary',
+];
+
 interface RespondOptions {
   config?: TranscriptionConfig;
   notes?: NoteSummary;
@@ -115,6 +148,7 @@ async function waitForLoaded() {
 
 beforeEach(() => {
   mockNavigate.mockClear();
+  observedRequests.length = 0;
   mockUseUploadManager.mockReturnValue(manager());
   // Module-level and shared by every mount, so it would otherwise leak resolved
   // source names (and resolved negatives) between the suites below.
@@ -417,24 +451,12 @@ describe('HomePage — the New note hero action', () => {
     // The action costs nothing: there is no `GET /api/ai/config` probe behind
     // it and no fourth call on the landing screen. The page's rule stays "one
     // summary request per content type, plus the one capability probe".
-    const paths: string[] = [];
-    server.events.on('request:start', ({ request }) => {
-      paths.push(new URL(request.url).pathname);
-    });
-    try {
-      renderHome();
-      await waitForLoaded();
-      await waitFor(() => expect(noteSummaryRequests).toBe(1));
-      expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
+    renderHome();
+    await waitForLoaded();
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+    expect(hero().getByRole('button', { name: 'New note' })).toBeInTheDocument();
 
-      expect([...paths].sort()).toEqual([
-        '/api/notes/summary',
-        '/api/transcription/config',
-        '/api/transcripts/summary',
-      ]);
-    } finally {
-      server.events.removeAllListeners();
-    }
+    expect([...observedRequests].sort()).toEqual(EXPECTED_REQUESTS);
   });
 
   it('has no accessibility violations with both hero actions present', async () => {
@@ -721,6 +743,185 @@ describe('HomePage — in progress', () => {
   it('has no accessibility violations', async () => {
     const { container } = renderHome();
     await screen.findByRole('heading', { name: 'In progress' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
+// Needs attention
+// =============================================================================
+
+const FAILED_TRANSCRIPT = transcript({
+  id: 't-failed',
+  title: 'Board meeting',
+  status: 'failed',
+  transcriptionStatus: 'failed',
+  failureReason: 'The provider rejected the audio.',
+});
+
+const FAILED_NOTE = note({
+  id: 'n-failed',
+  title: 'Board minutes',
+  status: 'failed',
+  failureReason: 'Your API key was rejected.',
+});
+
+describe('HomePage — needs attention', () => {
+  beforeEach(() => {
+    respondWith(summary({ recent: [transcript()], failed: [FAILED_TRANSCRIPT] }), {
+      notes: noteSummary({ recent: [note()], failed: [FAILED_NOTE] }),
+    });
+    // The two retry endpoints, answered for real rather than spied on: which
+    // endpoint each button reaches is the thing most likely to be wrong, and a
+    // mocked service function asserts nothing about it.
+    server.use(
+      http.post(`${API_BASE}/transcripts/:id/retry`, () =>
+        HttpResponse.json({ data: { ...FAILED_TRANSCRIPT, status: 'processing' } }),
+      ),
+      http.post(`${API_BASE}/notes/:id/regenerate`, () =>
+        HttpResponse.json({
+          data: {
+            note: { ...FAILED_NOTE, status: 'generating' },
+            generationId: 'gen-1',
+            jobId: 'job-1',
+            providerId: 'openai',
+            model: 'gpt-4o-mini',
+          },
+        }),
+      ),
+    );
+  });
+
+  it('shows the section', async () => {
+    renderHome();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Needs attention' }),
+    ).toBeInTheDocument();
+  });
+
+  it('lists the failed transcript AND the failed note', async () => {
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    const region = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(region).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(region).getByRole('heading', { name: 'Board meeting' })).toBeInTheDocument();
+    expect(within(region).getByRole('heading', { name: 'Board minutes' })).toBeInTheDocument();
+  });
+
+  it('sits under In progress and above Recent', async () => {
+    // THE ORDERING IS THE DECISION, not an accident of where the JSX landed —
+    // see the comment on the mount in `HomePage`. "What is happening right
+    // now?" keeps the top of the page because its rows stop being actionable
+    // (a live upload's controls exist only in this tab); "what went wrong two
+    // hours ago?" still outranks "what was I working on?", because a failed
+    // recording is not recent work to revisit, it is work that never happened.
+    mockUseUploadManager.mockReturnValue(manager({ uploads: [upload()] }));
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings.indexOf('In progress')).toBeLessThan(headings.indexOf('Needs attention'));
+    expect(headings.indexOf('Needs attention')).toBeLessThan(headings.indexOf('Recent'));
+  });
+
+  it('is ABSENT on a healthy account', async () => {
+    // Not an empty box, not a "nothing needs attention" card. The steady state
+    // of this app is that nothing is broken.
+    respondWith(summary({ recent: [transcript()] }), { notes: noteSummary({ recent: [note()] }) });
+    renderHome();
+    await waitForLoaded();
+
+    expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
+  });
+
+  it('is ABSENT in the first-run journey state', async () => {
+    // Not reachable through the API — `isNewUser` needs `recent` empty and a
+    // failed transcript is in `recent` too — but the section is mounted inside
+    // the non-new-user branch so that it cannot become reachable either.
+    respondWith(
+      summary({
+        failed: [FAILED_TRANSCRIPT],
+        counts: { owned: 0, shared: 0, inProgress: 0, failed: 1 },
+      }),
+    );
+    renderHome();
+    await screen.findByRole('heading', { name: 'Start here' });
+
+    expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
+  });
+
+  it('shows no note rows without notes:read', async () => {
+    // The hook is disabled entirely for that user, so the page hands the
+    // section an empty notes list rather than gating a button inside it.
+    renderHome(noNotesUser);
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    expect(screen.queryByRole('heading', { name: 'Board minutes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Regenerate/ })).not.toBeInTheDocument();
+  });
+
+  it('withholds the transcript retry without transcripts:write', async () => {
+    renderHome({
+      ...homeUser,
+      permissions: homeUser.permissions.filter((p) => p !== 'transcripts:write'),
+    });
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    expect(
+      screen.queryByRole('button', { name: 'Retry Board meeting' }),
+    ).not.toBeInTheDocument();
+    // The ROW is still there — the news is not gated, only the action.
+    expect(screen.getByRole('heading', { name: 'Board meeting' })).toBeInTheDocument();
+  });
+
+  it('fires NO additional request when the page loads', async () => {
+    // ⚠ THE EPIC-LEVEL CRITERION. The rows come from the two summaries the page
+    // already makes; a `GET /api/transcripts?status=failed` for one section
+    // would be this page's "one request per content type" rule broken.
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    expect([...observedRequests].sort()).toEqual(EXPECTED_REQUESTS);
+  });
+
+  it('retries a transcript and re-reads the transcript summary', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    await user.click(screen.getByRole('button', { name: 'Retry Board meeting' }));
+
+    // The refreshed summary is what takes the row off the list.
+    await waitFor(() => expect(summaryRequests).toBe(2));
+    expect(
+      observedRequests.filter((path) => path === '/api/transcripts/t-failed/retry'),
+    ).toHaveLength(1);
+    // AND NOT the notes summary: a transcript retry changed nothing about it.
+    expect(noteSummaryRequests).toBe(1);
+  });
+
+  it('regenerates a note and re-reads the notes summary', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate Board minutes' }));
+
+    await waitFor(() => expect(noteSummaryRequests).toBe(2));
+    expect(summaryRequests).toBe(1);
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
@@ -1161,26 +1362,14 @@ describe('HomePage — the search entry point', () => {
     // PER KEYSTROKE on the landing screen, which is precisely what this page's
     // "one request per content type, plus the one capability probe" rule
     // forbids. The control types locally and navigates once.
-    const paths: string[] = [];
-    server.events.on('request:start', ({ request }) => {
-      paths.push(new URL(request.url).pathname);
-    });
-    try {
-      const user = userEvent.setup();
-      renderHome();
-      await waitForLoaded();
-      await waitFor(() => expect(noteSummaryRequests).toBe(1));
+    const user = userEvent.setup();
+    renderHome();
+    await waitForLoaded();
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
 
-      await user.type(field(), 'standup');
+    await user.type(field(), 'standup');
 
-      expect([...paths].sort()).toEqual([
-        '/api/notes/summary',
-        '/api/transcription/config',
-        '/api/transcripts/summary',
-      ]);
-    } finally {
-      server.events.removeAllListeners();
-    }
+    expect([...observedRequests].sort()).toEqual(EXPECTED_REQUESTS);
   });
 
   it('has no accessibility violations with the field present', async () => {
