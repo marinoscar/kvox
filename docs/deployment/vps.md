@@ -38,16 +38,26 @@ Source of truth for every claim below:
   reference (flags, exit codes) this runbook assumes you have open alongside
   it.
 
-**The full install has not been run end to end against a real VPS.** The
-environment this was built in has no Docker daemon, so there has been no
-opportunity to run `kvox deploy install` against an actual server with real
-DNS and a real Let's Encrypt certificate. What backs the claims in this
-document is: the unit test suite for every module listed above (including the
-doctor checks, the pipelines, and the proxy/certificate logic), `docker
-compose -f base.compose.yml -f prod.compose.yml -f vps.compose.yml config`
-validating cleanly, and a real `kvox deploy doctor` run. Treat the first
-real install on a new box as the first true end-to-end exercise of this path,
-and lean on `doctor` and `--staging` (section 8) accordingly.
+**Half of this is now exercised on every relevant change; half is still not.**
+Since issue #133 the `Deploy E2E` workflow
+(`.github/workflows/deploy-e2e.yml`) runs `doctor`, `install`, `status`,
+`update --check` and `update` against a real Docker daemon and a real
+PostgreSQL on every change to `apps/cli/src/deploy/**`, `infra/compose/**`,
+either Dockerfile or `apps/api/prisma/**`, and nightly besides. It builds the
+images, applies the migrations, seeds, starts the stack and probes it — so
+`docker compose build`, the migrate step, the `.env` symlink, the `-p <name>`
+project naming and the loopback-only port binding are all covered by
+assertions now, not by inspection. `apps/cli/README.md`'s "Testing the deploy
+pipeline locally" runs the same sequence on your own machine.
+
+**What is still unexercised is the public half**: the shared reverse proxy,
+the Let's Encrypt certificate, the DNS checks and the renewal cron. A CI
+runner has no public DNS and no proxy, so that job passes `--skip-proxy`
+throughout; what backs the claims about those pieces is the unit suite for
+`proxy.ts`, the vhost snapshot test, `docker compose … config` validating
+cleanly and a real `kvox deploy doctor` run. Treat the first real install on a
+new box as the first true exercise of the proxy and certificate path, and lean
+on `doctor` and `--staging` (section 8) accordingly.
 
 ---
 

@@ -942,6 +942,88 @@ whether you typed it or the wizard generated it — is redacted from both
 files before a single byte reaches disk, so they're safe to attach to an
 issue or hand to someone else for help.
 
+### Testing the deploy pipeline locally
+
+Every test under `src/deploy/` injects a fake `runCommand`, so none of them
+runs `docker`. The pipeline as a whole — `docker compose build`, the migrate
+step's `run --rm --no-deps api npm run prisma:migrate`, the `.env` symlink
+into the clone, the `-p <name>` project naming — is exercised end to end by
+the `Deploy E2E` workflow (`.github/workflows/deploy-e2e.yml`, issue #133),
+which runs on any change under `src/deploy/`, `infra/compose/`, either
+Dockerfile or `apps/api/prisma/`, plus nightly so base-image drift is caught
+too.
+
+You can run the same thing on your own machine. You need Docker, Compose v2,
+and a PostgreSQL the containers can reach — the workflow uses a service
+container at the docker0 gateway; locally, anything works as long as the
+host and the containers agree on the address.
+
+```bash
+# From the repository root, in a clone you don't mind deploying from.
+npm ci
+npm run build --workspace=cli
+
+# The CLI deploys a REPOSITORY, not a working tree, so HEAD must be a real
+# branch that the clone can resolve.
+git checkout -B e2e
+
+# devnet is `external: true` in base.compose.yml; nothing creates it for you.
+docker network create devnet
+
+# Copy the CI answers and edit POSTGRES_* for your database. Every other
+# value is a placeholder on a reserved name and can stay as it is.
+cp .github/e2e/answers.env /tmp/answers.env
+
+node apps/cli/dist/cli.js deploy doctor \
+  --apps-root /tmp/apps --skip-proxy --skip-github --json | jq .
+
+node apps/cli/dist/cli.js deploy install \
+  --apps-root /tmp/apps --name e2e \
+  --repo "file://$PWD" --ref e2e \
+  --domain e2e.invalid --port 3535 \
+  --skip-proxy --skip-github --non-interactive \
+  --answers-file /tmp/answers.env
+
+node apps/cli/dist/cli.js deploy status --apps-root /tmp/apps --json | jq .
+node apps/cli/dist/cli.js deploy update --apps-root /tmp/apps \
+  --skip-proxy --skip-github --check --json | jq .
+```
+
+Four flags make this work anywhere, and each is load-bearing:
+
+- `--skip-proxy` — there is no shared reverse proxy and no public DNS, so
+  the proxy, certificate and DNS checks report `skip` rather than failing.
+  Nothing is published: the stack still binds `127.0.0.1:3535` only.
+- `--skip-github` — a `file://` remote is not on GitHub, so `gh` is never
+  consulted for the clone anyway; the flag is what also stands the three
+  required `gh-*` prerequisite checks down on a machine where `gh` is
+  installed and logged out.
+- `--non-interactive` with `--answers-file` — every secret is generated with
+  the CSPRNG and every resource limit suggested from the machine, so the
+  answers file only carries the database, the OAuth client and the admin
+  address.
+- `--repo "file://$PWD"` — the scheme survives `normaliseRepoUrl` untouched
+  (only GitHub remotes are rewritten to HTTPS), so the clone is a plain local
+  `git clone`.
+
+`--domain e2e.invalid` is a reserved name that can never resolve; it exists
+so `APP_URL`, the derived OAuth callback and the state file are populated
+exactly as a real install populates them.
+
+To go round again, `deploy update --apps-root /tmp/apps --skip-proxy
+--skip-github` after moving the branch (`git commit --allow-empty` is
+enough — the SHA is all the pipeline compares). To clean up:
+
+```bash
+cd /tmp/apps/e2e/repo/infra/compose
+docker compose -p e2e -f base.compose.yml -f prod.compose.yml -f vps.compose.yml down -v
+rm -rf /tmp/apps/e2e
+docker network rm devnet
+```
+
+The journal from each run is under `/tmp/apps/e2e/logs/`, redacted, and is
+the first place to look when a step fails — see [Logs](#logs) above.
+
 ## Running a worker node
 
 `kvox node` turns this machine into a worker for the application's job
