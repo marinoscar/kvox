@@ -484,6 +484,124 @@ describe('TranscriptsService', () => {
     });
   });
 
+  // ===========================================================================
+  // GET /api/transcripts/summary — the home page's "Needs attention" list
+  // ===========================================================================
+  //
+  // Issue #171 (epic #166) added a `failed` LIST beside the `failed` COUNT the
+  // endpoint already had. Prisma is a double here, so what is asserted is the
+  // QUERY the method issues — its scope, its order and its cap — plus the one
+  // thing no query shape can show: that the count and the list are two
+  // separate numbers and the cap never leaks into the count.
+  describe('summary', () => {
+    /** The eight rows the failed query answers with, newest first. */
+    const failedRows = Array.from({ length: 8 }, (_, index) =>
+      transcriptRow({
+        id: `failed-${index}`,
+        status: 'failed',
+        updatedAt: new Date(Date.UTC(2026, 0, 20 - index)),
+      }),
+    );
+
+    /** A failed transcript somebody ELSE owns and shared with this caller. */
+    const sharedFailedRow = transcriptRow({
+      id: 'shared-failed',
+      ownerId: 'someone-else',
+      status: 'failed',
+    });
+
+    /** The `findMany` args of the one call whose `where` names `status: 'failed'`. */
+    const failedQuery = () =>
+      prisma.transcript.findMany.mock.calls
+        .map(([args]) => args as Record<string, never>)
+        .find((args) => (args.where as Record<string, unknown>).status === 'failed') as
+        | Record<string, never>
+        | undefined;
+
+    beforeEach(() => {
+      // The caller holds one share, and the transcript behind it has failed.
+      prisma.transcriptShare.findMany.mockResolvedValue([
+        { transcriptId: sharedFailedRow.id, role: 'viewer' },
+      ]);
+
+      prisma.transcript.findMany.mockImplementation((args: Record<string, never>) => {
+        const where = args.where as Record<string, unknown>;
+
+        if (where.status === 'failed') return Promise.resolve(failedRows);
+        if (where.id) return Promise.resolve([sharedFailedRow]);
+        if (where.status) return Promise.resolve([]);
+
+        return Promise.resolve([]);
+      });
+
+      prisma.transcript.count.mockImplementation((args: Record<string, never>) =>
+        Promise.resolve((args.where as Record<string, unknown>).status === 'failed' ? 30 : 42),
+      );
+    });
+
+    it('returns the caller\'s failed transcripts as a list, not only a count', async () => {
+      const summary = await service.summary(USER.id);
+
+      expect(summary.failed.map((item) => item.id)).toEqual(
+        failedRows.map((row) => row.id),
+      );
+    });
+
+    it('asks for them owner-scoped, newest first, excluding soft-deleted rows', async () => {
+      await service.summary(USER.id);
+
+      expect(failedQuery()).toEqual({
+        where: { deletedAt: null, ownerId: USER.id, status: 'failed' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: 8,
+      });
+    });
+
+    it('caps the list at eight, the same cap `recent` and `sharedWithMe` use', async () => {
+      await service.summary(USER.id);
+
+      expect(failedQuery()?.take).toBe(8);
+    });
+
+    // OWNER-SCOPED, unlike `inProgress`, which unions the caller's shares:
+    // retry is owner-only, so a stranger's failure is an item the caller could
+    // not act on. The share is real here — it shows up in `sharedWithMe` — so
+    // its absence from `failed` is the scope rule working, not an empty
+    // fixture.
+    it('leaves out a failed transcript that was merely SHARED with the caller', async () => {
+      const summary = await service.summary(USER.id);
+
+      expect(summary.sharedWithMe.map((item) => item.id)).toContain(sharedFailedRow.id);
+      expect(summary.failed.map((item) => item.id)).not.toContain(sharedFailedRow.id);
+      expect(failedQuery()?.where).not.toHaveProperty('OR');
+    });
+
+    // ⚠ The regression this exists to catch is `failed: failedItems.length`,
+    // which would read 8 for a user with thirty broken recordings and quietly
+    // turn the cap into the truth.
+    it('keeps `counts.failed` the TRUE total when more than eight have failed', async () => {
+      const summary = await service.summary(USER.id);
+
+      expect(summary.counts.failed).toBe(30);
+      expect(summary.failed).toHaveLength(8);
+    });
+
+    // The method's whole reason to exist is ONE round trip. A fifth query
+    // awaited after the others would still pass every assertion above, so this
+    // asserts the shape directly: with no query ever resolving, all four lists
+    // and both counts must still have been ISSUED.
+    it('issues the failed query in the same round trip as the other lists', async () => {
+      prisma.transcript.findMany.mockImplementation(() => new Promise(() => {}));
+      prisma.transcript.count.mockImplementation(() => new Promise(() => {}));
+
+      void service.summary(USER.id);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(prisma.transcript.findMany).toHaveBeenCalledTimes(4);
+      expect(prisma.transcript.count).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('detail', () => {
     it('publishes the source size as a decimal STRING, never a BigInt', async () => {
       // `JSON.stringify` throws on a BigInt rather than rounding it, and a

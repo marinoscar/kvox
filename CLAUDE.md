@@ -640,7 +640,7 @@ learning. There is deliberately no admin read-any. See
 here.
 - `POST /api/transcripts` - Create the transcript **and** its resumable upload in one call (`transcripts:write`). 409 when transcription is not configured (the deployment is not ready — not the caller's fault), 400 over the active provider's size ceiling. The upload object is created `managed_by: 'transcripts'`, which a client cannot ask for
 - `GET /api/transcripts` - List, cursor-paginated over `(updatedAt, id)` — every pipeline transition rewrites `updatedAt`, so offset paging would skip and repeat rows (`transcripts:read`)
-- `GET /api/transcripts/summary` - Three lists and four counts for the home page, in one round trip (`transcripts:read`)
+- `GET /api/transcripts/summary` - Four lists and four counts for the home page, in one round trip (`transcripts:read`). The fourth list is `failed` — the caller's **own** failed transcripts, owner-scoped (retry is owner-only) and capped at eight, while `counts.failed` stays the true total
 - `GET /api/transcripts/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with **no body** on a match
 - `GET /api/transcripts/{id}/segments` - Compact, **no word timings** (the largest thing in this schema); same ETag
 - `GET /api/transcripts/{id}/words?fromMs&toMs` - Word timings for one window, selected by **overlap** not containment; capped at 30 minutes and silently narrowed rather than refused
