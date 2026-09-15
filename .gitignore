@@ -1,5 +1,9 @@
 # Dependencies
+# Both forms: a worktree provisioned with SYMLINKED dependencies has a
+# `node_modules` symlink, which `node_modules/` does not match — so it
+# showed up as an untracked file and could be committed by `git add -A`.
 node_modules/
+node_modules
 
 # Build outputs
 dist/
