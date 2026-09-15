@@ -2159,6 +2159,77 @@ Opens or closes the window. Writes the persisted `maintenance` namespace and rec
 
 ---
 
+### About (Admin-only)
+
+What is deployed here (issue #124, epic #118). One read-only route reporting the deployment record the CLI wrote at deploy time, plus what only the running process and a live database connection can answer. Gated on `system_settings:read` — **deliberately not a permission of its own** (epic #118 decision 8): "what is deployed here" is an administrator's configuration read, and the web card at `/admin/settings/about` (#126) carries this exact string per the Settings UI Pattern rule 3. Not exempt from the maintenance window — it is an admin page, and administrators bypass the window already unless `allowAdmins` is `false`.
+
+**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. `updateAvailable` and `checkedAt` are derived from the `remote` block the CLI last recorded (`kvox deploy update --check` / `status`), never from a call made here.
+
+#### GET /admin/about
+**Requires:** `system_settings:read`
+
+Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/deploy-info/info.json`, bind-mounted read-only by the CLI) **on every request**, so rewriting the file takes effect on the next response with no restart. **Always answers 200**: the local dev stack and CI have no such file and must still render the page; an operator diagnosing a broken database is the person who most needs the rest of it.
+
+**Response:**
+```json
+{
+  "data": {
+    "deployInfo": {
+      "schema": 1,
+      "app": { "name": "kvox", "version": "1.4.0", "commitSha": "3f2a9c1d…", "ref": "main", "repoUrl": "https://github.com/example-org/example-app" },
+      "installedAt": "2026-08-01T09:15:00.000Z",
+      "updatedAt": "2026-09-14T22:41:07.000Z",
+      "lastCommand": "update",
+      "deployedBy": { "cli": "kvox", "version": "1.4.0" },
+      "domain": "app.example.com",
+      "bindPort": 3535,
+      "host": { "hostname": "vps-01", "os": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-45-generic", "arch": "x64", "cpuModel": "AMD EPYC 7B13", "cpus": 4, "memoryBytes": 8323072000, "diskBytes": 80530636800, "dockerVersion": "27.1.1", "composeVersion": "2.29.1", "nodeVersion": "22.11.0" },
+      "remote": { "sha": "9b8c7d6e…", "commitsBehind": 2, "checkedAt": "2026-09-15T06:00:00.000Z" }
+    },
+    "deployInfoStatus": "ok",
+    "detail": null,
+    "runtime": {
+      "apiVersion": "1.4.0",
+      "nodeVersion": "v22.11.0",
+      "processStartedAt": "2026-09-14T22:41:30.000Z",
+      "uptimeSeconds": 43110,
+      "serverTimeUtc": "2026-09-15T10:40:00.000Z",
+      "environment": "production"
+    },
+    "database": {
+      "serverVersion": "PostgreSQL 16.4 (Debian 16.4-1.pgdg120+1) on x86_64-pc-linux-gnu, …",
+      "appliedMigrations": 42,
+      "lastMigrationName": "20260901120000_add_note_exports",
+      "lastMigrationAt": "2026-09-14T22:41:12.000Z"
+    },
+    "databaseError": null,
+    "updateAvailable": true,
+    "checkedAt": "2026-09-15T06:00:00.000Z"
+  }
+}
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deployInfo` | object \| null | The file as written by the CLI, parsed. Every field inside is nullable (the CLI's best effort at deploy time), objects are `.passthrough()` so a newer CLI's extra fields ride through, and any key matching `password`/`secret`/`key`/`token` (case-insensitive, at any depth) is stripped before it is relayed. `null` unless `deployInfoStatus` is `ok`. |
+| `deployInfoStatus` | `ok` \| `absent` \| `unreadable` \| `invalid` | `absent`: no file at the path — the ordinary state outside a CLI deploy. `unreadable`: the file exists but could not be read or is not JSON (a torn write; the next request reads the finished file). `invalid`: JSON, but not this schema. |
+| `detail` | string \| null | The read/parse message when the status is not `ok`. |
+| `runtime` | object | `apiVersion` (`APP_VERSION`, else the npm version, else `package.json`), `nodeVersion`, `processStartedAt`, `uptimeSeconds`, `serverTimeUtc` (always `Z`-suffixed — the clock every other timestamp is compared against), `environment` (`NODE_ENV`). |
+| `database` | object \| null | `serverVersion` (`SELECT version()` verbatim), `appliedMigrations` (rows in `_prisma_migrations` with `finished_at` set), `lastMigrationName`, `lastMigrationAt`. `null` with `databaseError` set when the query fails — the route still answers 200. |
+| `databaseError` | string \| null | Why `database` is null, when it is. |
+| `updateAvailable` | boolean \| null | `remote.commitsBehind > 0`. **`null` means unknown, not "no"** — the CLI has never run a remote check. Derived here so the web card and the terminal agree. |
+| `checkedAt` | string \| null | `remote.checkedAt`, passed through; `null` until the CLI has checked. |
+
+Every timestamp is ISO-8601 UTC.
+
+**Error Cases:**
+- 401 Unauthorized - Missing or invalid token
+- 403 Forbidden - Caller lacks `system_settings:read`
+
+---
+
 ### Database Backup (Admin-only)
 
 Three permissions: `db_backup:read` (config read, list, single get, download), `db_backup:write` (config write, manual trigger, cancel, delete), and `db_backup:restore` — **deliberately separate from `db_backup:write`** — for restore and rollback. See [`docs/specs/database-backup.md`](specs/database-backup.md) and [`docs/specs/database-restore.md`](specs/database-restore.md) for the streaming/verification contract, the pre-flight gates, and the rejected alternatives; this section documents only the request/response contract. Literal routes (`config`, `runs`) are matched before `runs/:id`.
