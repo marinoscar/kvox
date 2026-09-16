@@ -12,7 +12,12 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { updateDeployInfoRemote, writeDeployInfo, type DeployRemote } from './deploy-info.js';
+import {
+  ensureDeployInfoDir,
+  updateDeployInfoRemote,
+  writeDeployInfo,
+  type DeployRemote,
+} from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
@@ -805,6 +810,25 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
   // The precondition install does not have, and the reason this is its own
   // command: nothing to update is a different situation from nothing installed.
   const state = requireState(options.deployRoot);
+
+  // BEFORE the pipeline, and that ordering is the whole point (#159).
+  //
+  // `update` used to pre-create nothing: the first thing to touch deploy-info
+  // was `refreshDeployInfo` at the very END of a successful run, long after
+  // `restart` had run the `compose up` that makes the Docker daemon create the
+  // missing bind source as root:root. A deployment first installed by a CLI
+  // from before #155 already has that root-owned directory, so a non-root
+  // update spent a full build, migrate, restart and health check only to die
+  // on `EACCES … deploy-info/info.json.<pid>.tmp` with every step green.
+  //
+  // Creating it here fixes both halves: the directory exists before any
+  // compose command, so Docker never gets to invent it, and a directory this
+  // CLI cannot make right is refused NOW with the `chown` to paste - not after
+  // the deployment has already been applied. `--check` reaches
+  // `recordUpdateCheck` before any compose command and so was already safe by
+  // accident; it is safe on purpose from here.
+  ensureDeployInfoDir(options.deployRoot);
+
   const startedAt = Date.now();
 
   // Read through `readEnvFile` rather than a fixed path: a deployment from

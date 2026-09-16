@@ -1,4 +1,6 @@
 import {
+  chmodSync as chmodSyncFs,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -8,13 +10,13 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PreconditionError } from '../errors.js';
-import { readDeployInfo, writeDeployInfo } from './deploy-info.js';
+import { DeployInfoError, deployInfoDir, readDeployInfo, writeDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
 import { DEPLOY_STATE_VERSION, NotInstalledError, deployStatePath, readState, writeState, type DeployState } from './state.js';
@@ -35,6 +37,37 @@ import {
   runUpdate,
   type UpdateCheck,
 } from './update.js';
+
+// =============================================================================
+// One mocked call, for one test (#159)
+// =============================================================================
+//
+// A `deploy-info` the Docker daemon created as root:root, which a non-root
+// `update` can neither chmod nor write into, cannot be staged for real: this
+// suite runs as whatever user CI gives it (the `deploy-e2e` job runs as an
+// unprivileged one, which is how this class of failure became visible at
+// all), and a test needing two uids would be skipped exactly where it
+// matters. So `chmodSync` is failed at the seam, and only for the one path a
+// test names - everything else passes through via `importOriginal`.
+// =============================================================================
+
+let chmodShouldFailFor: string | undefined;
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    chmodSync: (...args: Parameters<typeof actual.chmodSync>) => {
+      const target = String(args[0]);
+      if (chmodShouldFailFor !== undefined && target.endsWith(chmodShouldFailFor)) {
+        throw Object.assign(new Error(`EPERM: operation not permitted, chmod '${target}'`), {
+          code: 'EPERM',
+        });
+      }
+      return actual.chmodSync(...args);
+    },
+  };
+});
 
 describe('the update pipeline', () => {
   const steps = buildUpdateSteps();
@@ -344,6 +377,7 @@ describe('runUpdate against a fake VPS', () => {
   });
 
   afterEach(async () => {
+    chmodShouldFailFor = undefined;
     vi.unstubAllGlobals();
     await vps.close();
   });
@@ -637,6 +671,110 @@ describe('runUpdate against a fake VPS', () => {
     expect((error as Error).message).toContain('gh auth login');
     // Refused before the fetch, so the state still says what it said.
     expect(readState(root)?.lastAttemptAt).toBeUndefined();
+  });
+
+  // ===========================================================================
+  // deploy-info is prepared BEFORE the pipeline  (issue #159)
+  // ===========================================================================
+
+  it('repairs a 0700 deploy-info before it runs a single compose command', async () => {
+    // `update` pre-created nothing: the first thing to touch deploy-info was
+    // the write at the very END of a successful run, after `restart` had run
+    // the `compose up` that makes the Docker daemon create a missing bind
+    // source as root:root. The directory is now right before any command runs.
+    const root = installedApp(vps);
+    mkdirSync(deployInfoDir(root), { recursive: true, mode: 0o700 });
+    chmodSyncFs(deployInfoDir(root), 0o700);
+    const modes: number[] = [];
+
+    const watching = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      modes.push(statSync(deployInfoDir(root)).mode & 0o777);
+      return await vps.runCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    await runUpdate({
+      deployRoot: root,
+      runCommand: watching,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+    });
+
+    expect(modes.length).toBeGreaterThan(0);
+    // Every command, not just the last: `compose up` must never find it 0700.
+    expect(modes.filter((mode) => mode !== 0o755)).toEqual([]);
+    expect(statSync(deployInfoDir(root)).mode & 0o777).toBe(0o755);
+    expect(readDeployInfo(root)?.lastCommand).toBe('update');
+  });
+
+  it('creates deploy-info even when the deployment never had one', async () => {
+    const root = installedApp(vps);
+    const seenBefore: boolean[] = [];
+
+    const watching = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      seenBefore.push(existsSync(deployInfoDir(root)));
+      return await vps.runCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    await runUpdate({
+      deployRoot: root,
+      runCommand: watching,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+    });
+
+    // So the Docker daemon never gets the chance to invent it as root:root.
+    expect(seenBefore.filter((existed) => !existed)).toEqual([]);
+  });
+
+  it('refuses a deploy-info it cannot fix before anything is deployed, naming the chown', async () => {
+    const root = installedApp(vps);
+    mkdirSync(deployInfoDir(root), { recursive: true });
+    chmodShouldFailFor = 'deploy-info';
+
+    const error = await update(root).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(DeployInfoError);
+    const message = (error as Error).message;
+    const { uid, gid } = userInfo();
+    expect(message).toContain(`Cannot prepare ${deployInfoDir(root)}`);
+    expect(message).toContain(`sudo chown -R ${uid}:${gid} ${deployInfoDir(root)}`);
+    expect(message).toContain(`sudo chmod 755 ${deployInfoDir(root)}`);
+    // Not the raw EACCES on `info.json.<pid>.tmp` this issue is about, and
+    // not after a full build/migrate/restart: nothing ran at all.
+    expect(message).not.toContain('.tmp');
+    expect(vps.seen).toEqual([]);
+    expect(readdirSync(deployInfoDir(root))).toEqual([]);
+    expect(readState(root)?.lastAttemptAt).toBeUndefined();
+  });
+
+  it('refuses the same way under --check, which writes before any compose command', async () => {
+    const root = installedApp(vps);
+    mkdirSync(deployInfoDir(root), { recursive: true });
+    chmodShouldFailFor = 'deploy-info';
+
+    const error = await update(root, undefined, { check: true }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(DeployInfoError);
+    expect((error as Error).message).toMatch(/sudo chown -R \d+:\d+ .*deploy-info/);
+    expect(vps.seen).toEqual([]);
+  });
+
+  it('--check still records the remote through a 0700 directory it repairs', async () => {
+    const root = installedApp(vps);
+    mkdirSync(deployInfoDir(root), { recursive: true });
+    chmodSyncFs(deployInfoDir(root), 0o700);
+
+    await update(root, undefined, { check: true });
+
+    expect(statSync(deployInfoDir(root)).mode & 0o777).toBe(0o755);
+    expect(readDeployInfo(root)).toMatchObject({ remote: { sha: NEW_SHA, commitsBehind: 2 } });
+    expect(built()).toBe(false);
   });
 
   it('migrates a pre-#120 .env to the app root and pins DEPLOY_ROOT', async () => {
