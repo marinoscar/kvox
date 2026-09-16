@@ -1658,7 +1658,14 @@ describe('NotePage — Suggest a title', () => {
       expect(
         await screen.findByRole('heading', { name: 'AI: Q3 decisions and owners', level: 1 }),
       ).toBeInTheDocument();
-      expect(screen.getByText('Title updated.')).toBeInTheDocument();
+      // ⚠ `findByText`, not `getByText`. The notice is set by the watch's exit
+      // effect, which runs AFTER the render that brought the new title in — so
+      // it lands one flush later than the heading, not in the same one. A
+      // synchronous read here passed only because some other hook on this page
+      // happened to schedule an extra render in between; #192 removed one
+      // (`useNoteSourceName`, now a plain field on the note) and the assertion
+      // started failing without the behaviour changing at all.
+      expect(await screen.findByText('Title updated.')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

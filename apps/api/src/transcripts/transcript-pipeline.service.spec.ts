@@ -5,6 +5,7 @@ import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SearchIndexService } from '../search/indexing/search-index.service';
 import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
 import {
   TRANSCODE_JOB_TYPE,
@@ -67,6 +68,9 @@ describe('TranscriptPipelineService', () => {
         { provide: JobsService, useValue: jobs },
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: NotificationsService, useValue: notifications },
+        // #188: `enqueueSearchIndex` delegates here. It is deliberately NOT
+        // called on a rename — `chunkTranscript` never sees the title.
+        { provide: SearchIndexService, useValue: { enqueue: jest.fn() } },
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('https://app.example.com/') },

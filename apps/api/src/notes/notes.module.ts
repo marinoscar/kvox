@@ -4,6 +4,7 @@ import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { SettingsModule } from '../settings/settings.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
@@ -97,6 +98,12 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     StorageModule,
     StorageProvidersModule,
     SettingsModule,
+    // The semantic index (#188, epic #165). ONE-WAY, exactly as in
+    // `TranscriptsModule`: this module queues a re-index after a note's content
+    // commits and forgets a purged note's rows, while `search/indexing/` reads
+    // `notes` through Prisma directly and imports nothing from here — which is
+    // what keeps both edges out of a `forwardRef`.
+    SearchIndexingModule,
   ],
   // #53's TEN NOTE ROUTES (`/api/notes/*`), #51's ONE
   // (`POST /api/notes/sources/documents`), #50's SEVEN

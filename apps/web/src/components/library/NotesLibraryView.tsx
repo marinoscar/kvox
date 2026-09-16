@@ -60,19 +60,22 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
 import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
+import { SearchResultsView } from '../search/SearchResultsView';
 import { usePermissions } from '../../hooks/usePermissions';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
+import { useSearch } from '../../hooks/useSearch';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
-import { feedCacheKey } from '../../utils/feedCache';
 import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
+import { feedCacheKey } from '../../utils/feedCache';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
+import type { SearchResult, SearchType } from '../../services/search';
 import { noteSourceFallbackLabel, noteSourcePath, noteSourceRef } from '../../utils/noteSource';
 import { formatRelativeTime } from '../../utils/relativeTime';
 import {
@@ -81,8 +84,24 @@ import {
   searchFromQuery,
 } from '../../pages/notesLibraryFilters';
 
-/** The same 300 ms the Transcripts tab waits, and for the same reason. */
-const SEARCH_DEBOUNCE_MS = 300;
+/**
+ * ⚠ THE DEBOUNCE MOVED INTO THE HOOK — issue #176, epic #164.
+ *
+ * The twin of the note `TranscriptsLibraryView` carries in the same place, for
+ * the same reason: this box now feeds `useSearch`, which debounces internally
+ * and aborts the superseded request, so a second timer here would debounce a
+ * debounce and make the box feel broken.
+ */
+
+/**
+ * What this view asks `GET /api/search` for — its own type and nothing else.
+ *
+ * Module-level so its identity is stable: `useSearch` derives its effect's
+ * dependency from the list, and a fresh array every render would re-issue the
+ * search on every unrelated re-render. `TranscriptsLibraryView` carries the
+ * same constant with `['transcript']`.
+ */
+const SEARCH_TYPES: SearchType[] = ['note'];
 
 /**
  * "from *Q3 planning*" — the row's provenance line.
@@ -216,21 +235,17 @@ export function NotesLibraryView() {
    * for. The decision, and the rejected full two-way sync, are recorded once in
    * `transcriptsLibraryFilters.ts`.
    *
-   * ⚠ `debouncedSearch` IS SEEDED TOO. Seeding only the box would make the
-   * view's first request an unfiltered one, rendered and then replaced 300 ms
-   * later by the filtered list the link asked for.
+   * ⚠ `?q=` NOW SEEDS A SEARCH, not a list filter (#176), and there is no
+   * second `debouncedSearch` state to seed alongside it — the flash that state
+   * prevented cannot happen through this path any more, because a non-empty box
+   * puts the view in search mode on the FIRST render and `useSearch` raises its
+   * loading flag synchronously. `TranscriptsLibraryView` carries the long form.
    */
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchFromQuery(searchParams));
-  const [debouncedSearch, setDebouncedSearch] = useState(() => searchFromQuery(searchParams));
   const [status, setStatus] = useState<NoteStatus | 'all'>(() =>
     noteStatusFromQuery(searchParams),
   );
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   /**
    * Where this feed's loaded pages and its scroll offset live across a
@@ -247,10 +262,26 @@ export function NotesLibraryView() {
    * pointless cost and a good way to push the entry the user is coming back to
    * out of a bounded cache.
    */
-  const cacheKey = useMemo(
-    () => feedCacheKey('notes', [debouncedSearch, status]),
-    [debouncedSearch, status],
-  );
+  /**
+   * IS THE BOX ASKING A SEARCH QUESTION? — issue #176, the twin of the switch
+   * `TranscriptsLibraryView` makes, whose comment carries the full argument:
+   * the RAW value (so the switch is immediate), and `.length > 0` rather than
+   * `.trim().length > 0` (so an all-whitespace box reaches "Type to search"
+   * rather than falling back to an unfiltered list).
+   */
+  const searchMode = search.length > 0;
+
+  /**
+   * ⚠ THE LIST IS NEVER ASKED A TEXT FILTER ANY MORE (#176).
+   *
+   * `GET /api/notes?q=` is untouched; this view simply stops calling it with a
+   * term, because a term now goes to the search endpoint. The list renders only
+   * when the box is empty, so the request it issues is the one an empty box
+   * issued before this issue — and the cache key (#168) drops its search
+   * component for the same reason, still carrying every filter that can vary
+   * while this list is on screen.
+   */
+  const cacheKey = useMemo(() => feedCacheKey('notes', [status]), [status]);
 
   // The other half of the drill-down, and the reason this page reuses the hook
   // the settings hub already uses rather than growing a second implementation:
@@ -262,12 +293,24 @@ export function NotesLibraryView() {
   useScrollRestoration(cacheKey);
 
   const { notes, total, isLoading, error, nextCursor, isLoadingMore, loadMore } = useNotes({
-    q: debouncedSearch,
     status: status === 'all' ? undefined : status,
     cacheKey,
   });
 
+  /**
+   * The other source this view can show — issue #176.
+   *
+   * Called UNCONDITIONALLY and outside any branch, per the rules of hooks, and
+   * inert while the box is empty: `useSearch` treats a blank query as NO SEARCH
+   * rather than as a search for nothing, and issues no request at all.
+   */
+  const searchState = useSearch({ q: search, types: SEARCH_TYPES });
   const canCreate = hasPermission('notes:write');
+
+  // The status filter is now the ONLY thing that can filter this list — a
+  // search term takes the reader to `SearchResultsView` and its own two empty
+  // states instead of to this one.
+  const isFiltered = status !== 'all';
 
   /**
    * The offered filter's own LABEL for an active `?status=`, or `null`.
@@ -295,22 +338,16 @@ export function NotesLibraryView() {
   }, [searchParams, setSearchParams]);
 
   /**
+   * The feed cut into date groups — issue #190.
+   *
    * `new Date()` is read HERE and passed down, rather than inside the grouper —
    * one clock reading per render, so every row in one paint is bucketed against
    * the same instant. `TranscriptsLibraryView` carries the long form.
    */
   const dateGroups = useMemo(() => groupFeedByDate(notes, new Date()), [notes]);
 
-  const isFiltered = useMemo(
-    () => debouncedSearch.trim().length > 0 || status !== 'all',
-    [debouncedSearch, status],
-  );
-
   return (
     <Box>
-      {/* ONE SEARCH BOX — see `TranscriptsLibraryView`, which carries the
-          argument (#193). The twinning is the point: two library surfaces with
-          two different filter bars would make one product feel like two. */}
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
         <TextField
           size="small"
@@ -321,100 +358,109 @@ export function NotesLibraryView() {
         />
       </Stack>
 
+      {/* ONE SEARCH BOX — see `TranscriptsLibraryView`, which carries the
+          argument (#193). The twinning is the point: two library surfaces with
+          two different filter bars would make one product feel like two. */}
       {activeStatusLabel && (
         <ActiveStatusFilterChip label={activeStatusLabel} onClear={clearStatusFilter} />
       )}
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Rendered unconditionally — see `FeedCountLine` for why a live region
-          must exist before it has anything to say. Empty while the first page
-          is in flight, so it never announces "No notes yet" at a reader who is
-          simply waiting. */}
-      <FeedCountLine
-        label={
-          isLoading
-            ? ''
-            : feedCountLabel(total, { one: 'note', many: 'notes' }, debouncedSearch)
-        }
-      />
-
-      {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress aria-label="Loading notes" />
-        </Box>
-      ) : notes.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-          {/* TWO EMPTY STATES, for the reason the Transcripts tab gives: a
-              filter that matched nothing is fixed by changing the filter, and
-              telling a user with two hundred notes to "make your first note"
-              because they searched for "zzz" is nonsense. */}
-          {isFiltered ? (
-            <>
-              <Typography variant="h6" component="h2" gutterBottom>
-                No notes match those filters
-              </Typography>
-              <Typography color="text.secondary">
-                {/* The wording tracks the controls that actually exist
-                    (#193). "Set the status filter back to Any" named a
-                    <Select> that is gone; the status filter now arrives in the
-                    URL and is cleared from the chip above the feed. */}
-                Try a different search term{activeStatusLabel ? ', or clear the status filter above' : ''}.
-              </Typography>
-            </>
-          ) : (
-            <>
-              <Typography variant="h6" component="h2" gutterBottom>
-                No notes yet
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                Turn a transcript, another note or a document into a written note —
-                minutes, a summary, a brief — using a template you control. It runs on
-                your own AI key.
-              </Typography>
-              {canCreate && (
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => navigate('/notes/new')}
-                >
-                  New note
-                </Button>
-              )}
-            </>
-          )}
-        </Paper>
+      {searchMode ? (
+        <SearchResultsView
+          type="note"
+          query={search}
+          search={searchState}
+          dense={!isPhone}
+          onOpen={(result: SearchResult) => navigate(`/notes/${result.id}`)}
+          unappliedStatusFilter={status !== 'all'}
+        />
       ) : (
-        <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
-          {/* ONE flat list with separators among the rows — not a list per
-              group. See `FeedDateSeparator` for why nesting would change what a
-              screen reader announces for every row in the feed. */}
-          {dateGroups.map((group) => (
-            <Fragment key={group.key}>
-              <FeedDateSeparator label={group.label} />
-              {group.items.map((note) => (
-                <NoteRow
-                  key={note.id}
-                  note={note}
-                  dense={!isPhone}
-                  onOpen={() => navigate(`/notes/${note.id}`)}
-                />
-              ))}
-            </Fragment>
-          ))}
-        </Stack>
-      )}
+        <>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-      {nextCursor && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Button onClick={() => void loadMore()} disabled={isLoadingMore}>
-            {isLoadingMore ? 'Loading…' : 'Load more'}
-          </Button>
-        </Box>
+        {/* Rendered unconditionally — see `FeedCountLine` for why a live region
+            must exist before it has anything to say. No search term is passed,
+            and there never can be one here: this branch only renders when the
+            box is EMPTY (#176 sends a term to `SearchResultsView`, which
+            reports its own match count). */}
+        <FeedCountLine
+          label={isLoading ? '' : feedCountLabel(total, { one: 'note', many: 'notes' })}
+        />
+
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+            <CircularProgress aria-label="Loading notes" />
+          </Box>
+        ) : notes.length === 0 ? (
+          <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+            {/* TWO EMPTY STATES, for the reason the Transcripts tab gives: a
+                filter that matched nothing is fixed by changing the filter, and
+                telling a user with two hundred notes to "make your first note"
+                because they searched for "zzz" is nonsense. */}
+            {isFiltered ? (
+              <>
+                <Typography variant="h6" component="h2" gutterBottom>
+                  No notes match those filters
+                </Typography>
+                <Typography color="text.secondary">
+                  Clear the status filter above to see everything.
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Typography variant="h6" component="h2" gutterBottom>
+                  No notes yet
+                </Typography>
+                <Typography color="text.secondary" sx={{ mb: 3 }}>
+                  Turn a transcript, another note or a document into a written note —
+                  minutes, a summary, a brief — using a template you control. It runs on
+                  your own AI key.
+                </Typography>
+                {canCreate && (
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => navigate('/notes/new')}
+                  >
+                    New note
+                  </Button>
+                )}
+              </>
+            )}
+          </Paper>
+        ) : (
+          <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
+            {/* ONE flat list with separators among the rows — not a list per
+                group. See `FeedDateSeparator` for why nesting would change what
+                a screen reader announces for every row in the feed. */}
+            {dateGroups.map((group) => (
+              <Fragment key={group.key}>
+                <FeedDateSeparator label={group.label} />
+                {group.items.map((note) => (
+                  <NoteRow
+                    key={note.id}
+                    note={note}
+                    dense={!isPhone}
+                    onOpen={() => navigate(`/notes/${note.id}`)}
+                  />
+                ))}
+              </Fragment>
+            ))}
+          </Stack>
+        )}
+
+        {nextCursor && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Button onClick={() => void loadMore()} disabled={isLoadingMore}>
+              {isLoadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          </Box>
+        )}
+        </>
       )}
     </Box>
   );
