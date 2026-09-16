@@ -123,8 +123,13 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
       requests: null as never, // not on the exercised path
       sources: null as never, // not on the exercised path
       jobs: jobs as never, // `remove` enqueues `note.purge` through this
-      // #188's semantic indexer. `remove` enqueues a re-index, so unlike the
-      // stand-ins above this collaborator IS on the exercised path.
+      // #188's semantic indexer — but note `NotesService.remove` does NOT
+      // reach it: `indexAfterCommit`/`.enqueue()` is only called from `update`
+      // and `restore` (a rename or a body edit moves what search should match),
+      // neither of which this file's `remove()` call exercises. This mock is a
+      // stand-in like the four above it, not a reached collaborator; it stays a
+      // harmless no-op mock rather than `null as never` only because nothing
+      // here depends on distinguishing the two.
       searchIndex: { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
     });
 
