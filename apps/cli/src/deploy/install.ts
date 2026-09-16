@@ -353,6 +353,9 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           runCommand: context.runCommand,
           repoUrl: target.url,
           cwd: context.options.deployRoot,
+          // Rule 5 of executor.ts: wherever `hooks` are wired, the redactor
+          // travels with them, or the terminal shows what the log masks.
+          redact: context.journal.redact,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
         context.journal.line(
@@ -373,6 +376,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         const checkout = await ensureCheckout(target, {
           deployRoot: context.options.deployRoot,
           runCommand: context.runCommand,
+          redact: context.journal.redact,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           ...(context.options.force === undefined ? {} : { force: context.options.force }),
         });
@@ -632,6 +636,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           runCommand: context.runCommand,
           proxyContainer,
           email,
+          redact: context.journal.redact,
           ...(context.options.staging === undefined ? {} : { staging: context.options.staging }),
           ...(context.options.fetch === undefined ? {} : { fetch: context.options.fetch }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),

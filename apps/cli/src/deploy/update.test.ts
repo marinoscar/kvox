@@ -368,6 +368,34 @@ describe('runUpdate against a fake VPS', () => {
 
   const built = () => vps.seen.some((argv) => argv[1] === 'compose' && argv.includes('build'));
 
+  // Issue #156, the update side of install.test.ts's guard: every streamed
+  // command carries the run journal's redactor, so `onLog` - which
+  // `commands/deploy.ts` writes straight to stderr - cannot show an operator
+  // what `logs/*.log` masks.
+  it('never wires onLine without a redactor', async () => {
+    const root = installedApp(vps);
+    const streamed: RunCommandOptions[] = [];
+
+    const watching = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      if (options.onLine !== undefined) streamed.push(options);
+      return await vps.runCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    await runUpdate({
+      deployRoot: root,
+      runCommand: watching,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+      hooks: { onLog: () => undefined },
+    });
+
+    expect(streamed.length).toBeGreaterThan(0);
+    expect(streamed.filter((options) => options.redact === undefined)).toEqual([]);
+  });
+
   it('leaves lastDeployedAt alone when the pipeline fails, and records the attempt', async () => {
     const root = installedApp(vps);
     vps.failWhen((argv) => argv[1] === 'compose' && argv.includes('build'), 'build exploded');

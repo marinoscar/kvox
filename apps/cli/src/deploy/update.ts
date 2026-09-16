@@ -20,7 +20,7 @@ import { runEnvWizard } from './env-wizard.js';
 import { runCommand as defaultRunCommand } from './executor.js';
 import { collectHealth, isHealthy, waitForHealthy } from './health.js';
 import type { DeployHooks } from './hooks.js';
-import { openJournal, type Journal } from './journal.js';
+import { openJournal, type Journal, type Redactor } from './journal.js';
 import { DEFAULT_PROXY_ROOT, projectNameFor } from './layout.js';
 import {
   certificateExpiry,
@@ -219,6 +219,8 @@ export interface UpdateCheckOptions {
   ref?: string | undefined;
   cwd?: string | undefined;
   hooks?: DeployHooks | undefined;
+  /** The run journal's redactor. See `CheckoutOptions.redact` (issue #156). */
+  redact?: Redactor | undefined;
   /** Bounds the fetch; `status` gives it ten seconds, a deploy does not. */
   fetchTimeoutMs?: number | undefined;
   /** Refuse to clone; `status` must not create a checkout to answer. */
@@ -247,6 +249,7 @@ export async function checkForUpdate(options: UpdateCheckOptions): Promise<Updat
   const fetched = await fetchRemote(target, {
     deployRoot: options.deployRoot,
     runCommand: options.runCommand,
+    ...(options.redact === undefined ? {} : { redact: options.redact }),
     ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
     ...(options.fetchTimeoutMs === undefined ? {} : { fetchTimeoutMs: options.fetchTimeoutMs }),
     ...(options.requireExisting === undefined ? {} : { requireExisting: options.requireExisting }),
@@ -428,6 +431,9 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           runCommand: context.runCommand,
           repoUrl: context.state.repoUrl,
           cwd: context.options.deployRoot,
+          // Rule 5 of executor.ts: wherever `hooks` are wired, the redactor
+          // travels with them, or the terminal shows what the log masks.
+          redact: context.journal.redact,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
         if (auth !== undefined) {
@@ -445,6 +451,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           deployRoot: context.options.deployRoot,
           state: context.state,
           runCommand: context.runCommand,
+          redact: context.journal.redact,
           ...(context.options.ref === undefined ? {} : { ref: context.options.ref }),
           ...(context.options.cwd === undefined ? {} : { cwd: context.options.cwd }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
@@ -470,6 +477,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         const checkout = await ensureCheckout(target, {
           deployRoot: context.options.deployRoot,
           runCommand: context.runCommand,
+          redact: context.journal.redact,
           fetched,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           ...(context.options.force === undefined ? {} : { force: context.options.force }),
@@ -712,6 +720,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
               runCommand: context.runCommand,
               proxyContainer,
               email,
+              redact: context.journal.redact,
               ...(context.options.fetch === undefined ? {} : { fetch: context.options.fetch }),
               ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
             });
@@ -725,6 +734,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
             proxyContainer,
             runCommand: context.runCommand,
             certName: target.domain,
+            redact: context.journal.redact,
             ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           });
         }
