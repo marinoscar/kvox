@@ -85,7 +85,7 @@ describe('TranscriptEditingService', () => {
   let prisma: Record<string, never> & Record<string, unknown>;
   let versionCreate: jest.Mock;
   let access: { require: jest.Mock };
-  let pipeline: { enqueueSnapshot: jest.Mock };
+  let pipeline: { enqueueSnapshot: jest.Mock; enqueueSearchIndex: jest.Mock };
   let transcript: { id: string; currentVersion: number };
 
   beforeEach(async () => {
@@ -137,7 +137,12 @@ describe('TranscriptEditingService', () => {
       })),
     };
 
-    pipeline = { enqueueSnapshot: jest.fn().mockResolvedValue(true) };
+    pipeline = {
+      enqueueSnapshot: jest.fn().mockResolvedValue(true),
+      // #188: every committed op batch and every restore re-indexes —
+      // unconditionally, unlike the rationed snapshot above.
+      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module = await Test.createTestingModule({
       providers: [

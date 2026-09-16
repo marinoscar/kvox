@@ -573,6 +573,11 @@ export class TranscriptEditingService {
     // user is most likely to return to.
     await this.pipeline.enqueueSnapshot(transcript.id, nextVersion);
 
+    // A restore REPLACES the live segments with an older version's, so the text
+    // a search should match changed exactly as much as an ordinary edit changed
+    // it (#188). The job sorts out how much of it actually moved.
+    await this.pipeline.enqueueSearchIndex(transcript.id);
+
     await this.audit(user.id, 'transcript.version_restored', transcript.id, {
       restoredFromVersion: version,
       version: nextVersion,
@@ -837,6 +842,21 @@ export class TranscriptEditingService {
     });
 
     if (wanted) await this.pipeline.enqueueSnapshot(transcriptId, saved.version);
+
+    // ⚠ ON EVERY COMMITTED BATCH, AND UNCONDITIONALLY (#188, epic #165), unlike
+    // the snapshot above which is rationed by `shouldSnapshot`. The two look
+    // like they should share a gate and must not: a snapshot is a COMPACTION of
+    // replay work, so skipping one costs only a slower rebuild later, while
+    // skipping an index leaves the transcript findable only by the text it used
+    // to contain — a wrong answer rather than a slow one.
+    //
+    // It costs almost nothing to be unconditional, which is the other half of
+    // the argument. `search.index` dedups against any run still pending, so ten
+    // corrections in ten seconds are one job; that job compares one fingerprint
+    // and returns if nothing moved; and if something did move it re-embeds only
+    // the chunks whose `content_hash` changed — one or two lines out of a
+    // three-hour transcript, not the whole thing.
+    await this.pipeline.enqueueSearchIndex(transcriptId);
 
     // AUDITED: a merge and a find & replace are the two corrections that change
     // many lines from one click, and therefore the two a reader of the audit log

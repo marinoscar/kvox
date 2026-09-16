@@ -116,6 +116,9 @@ describeWithDb('Note list paging (real Postgres)', () => {
       null as never,
       null as never,
       null as never,
+      // #188's semantic indexer — `null` like the rest, for the same reason the
+      // ⚠ above gives: `list` never reaches it.
+      null as never,
     );
   });
 

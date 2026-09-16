@@ -4,6 +4,7 @@ import type { Note } from '@prisma/client';
 
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { JobsService } from '../jobs/jobs.service';
+import { SearchIndexService } from '../search/indexing/search-index.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
@@ -88,6 +89,7 @@ describe('NotesService', () => {
   let requests: { resolveSource: jest.Mock; resolveModel: jest.Mock; assertPromptFits: jest.Mock };
   let sources: { resolve: jest.Mock };
   let jobs: { enqueue: jest.Mock; enqueueWithin: jest.Mock };
+  let searchIndex: { enqueue: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
@@ -146,6 +148,12 @@ describe('NotesService', () => {
       enqueueWithin: jest.fn().mockResolvedValue({ id: 'job-1' }),
     };
 
+    // #188: every committed content change queues a semantic re-index —
+    // including a RENAME, because a note's title is prefixed onto every one of
+    // its chunks. (A transcript rename deliberately does not; see
+    // `TranscriptPipelineService.enqueueSearchIndex`.)
+    searchIndex = { enqueue: jest.fn().mockResolvedValue(undefined) };
+
     const module = await Test.createTestingModule({
       providers: [
         NotesService,
@@ -155,6 +163,7 @@ describe('NotesService', () => {
         { provide: NoteGenerationRequestService, useValue: requests },
         { provide: NoteSourceService, useValue: sources },
         { provide: JobsService, useValue: jobs },
+        { provide: SearchIndexService, useValue: searchIndex },
       ],
     }).compile();
 

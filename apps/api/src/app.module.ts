@@ -30,6 +30,7 @@ import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
 import { NotesModule } from './notes/notes.module';
+import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
@@ -212,6 +213,19 @@ import configuration from './config/configuration';
     // note is generated from the transcript AS THE USER CORRECTED IT, never
     // from the AI's original result.
     NotesModule,
+
+    // Semantic search, indexing half (#188, epic #165): the `search.index` job
+    // and the enqueue/forget surface its callers use. Listed explicitly even
+    // though TranscriptsModule, NotesModule and UserDataModule each import it —
+    // a module reached only transitively is one whose handler registration
+    // depends on somebody else's import list, which is exactly the kind of
+    // action-at-a-distance this file exists to make visible.
+    //
+    // It imports AiModule (registry, policy, the per-user credential service),
+    // JobsModule and PrismaModule, and NEITHER TranscriptsModule NOR
+    // NotesModule — it reads both documents' rows through Prisma directly, so
+    // the dependency edge runs one way and no `forwardRef` is needed anywhere.
+    SearchIndexingModule,
 
     // The Danger Zone (#80): a user deleting their own data in bulk. LAST of
     // the feature modules because it imports several of them and is imported by

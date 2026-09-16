@@ -173,6 +173,10 @@ describeWithDb('Transcript exports (real Postgres)', () => {
 
     editing = new TranscriptEditingService(service, access, materialize, {
       enqueueSnapshot: jest.fn().mockResolvedValue(true),
+      // #188's semantic re-index, stubbed. `TranscriptEditingService` AWAITS
+      // it after every committed op batch and after a restore, so a missing
+      // member is a TypeError that fails the suite, not a silent no-op.
+      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
     } as unknown as TranscriptPipelineService);
 
     const account = await prisma.user.create({

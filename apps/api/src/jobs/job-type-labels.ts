@@ -134,6 +134,13 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // do, and the label should say so in the words the user was shown, not in
   // the module's internal noun.
   'user.data.purge': 'Account data deletion',
+  // Semantic search (#188, epic #165). "Semantic indexing" rather than
+  // "Search index": layer 1 of search is the generated `tsvector` columns,
+  // which are maintained by Postgres itself and never appear in this list at
+  // all — so an operator meeting this row needs the word that distinguishes
+  // the EMBEDDING pass, which costs a document owner money, from the
+  // full-text one, which costs nothing and has no job.
+  'search.index': 'Semantic indexing',
 };
 
 /**

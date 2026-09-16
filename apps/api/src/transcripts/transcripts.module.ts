@@ -4,6 +4,7 @@ import { CredentialsModule } from '../credentials/credentials.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptionModule } from '../transcription/transcription.module';
@@ -107,6 +108,12 @@ import { TranscriptsService } from './transcripts.service';
     StorageModule,
     StorageProvidersModule,
     NotificationsModule,
+    // The semantic index (#188, epic #165). ONE-WAY: this module reaches into
+    // `SearchIndexService` to queue a re-index after content commits and to
+    // forget a purged transcript's rows; nothing in `search/indexing/` imports
+    // anything from here — the handler reads `transcripts` through Prisma
+    // directly, precisely so this import needs no `forwardRef`.
+    SearchIndexingModule,
   ],
   controllers: [TranscriptsController],
   providers: [
