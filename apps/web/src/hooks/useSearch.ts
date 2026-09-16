@@ -63,7 +63,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../services/api';
 import { isStaleCursorError, search } from '../services/search';
-import type { SearchResult, SearchResponse, SearchType } from '../services/search';
+import type {
+  SearchResult,
+  SearchResponse,
+  SearchType,
+  SemanticReason,
+} from '../services/search';
 import { useIsMounted } from './useIsMounted';
 
 /**
@@ -116,6 +121,16 @@ interface SearchState {
    * every user for the moment before their first result arrives.
    */
   searchedTypes: SearchType[] | null;
+  /**
+   * Whether the semantic arm ran — `null` until a response has landed, for the
+   * same reason `searchedTypes` is: before an answer, nobody has told us.
+   *
+   * The SERVER's field is a required boolean (#189), so `null` here is this
+   * hook's own "no answer yet" and never a report about the wire.
+   */
+  semantic: boolean | null;
+  semanticReason: SemanticReason | null;
+  unindexedCount: number;
 }
 
 const EMPTY_STATE: SearchState = {
@@ -125,6 +140,9 @@ const EMPTY_STATE: SearchState = {
   truncated: false,
   degraded: null,
   searchedTypes: null,
+  semantic: null,
+  semanticReason: null,
+  unindexedCount: 0,
 };
 
 function adopt(response: SearchResponse): SearchState {
@@ -135,6 +153,9 @@ function adopt(response: SearchResponse): SearchState {
     truncated: response.truncated,
     degraded: response.degraded,
     searchedTypes: response.searchedTypes,
+    semantic: response.semantic,
+    semanticReason: response.semanticReason,
+    unindexedCount: response.unindexedCount,
   };
 }
 
@@ -165,6 +186,17 @@ export interface UseSearchResult {
   degraded: 'stopwords' | null;
   /** `null` until an answer lands. See {@link SearchState.searchedTypes}. */
   searchedTypes: SearchType[] | null;
+  /**
+   * `false` when the answer was keyword-only; `null` until one lands.
+   *
+   * ⚠ A view must branch on `=== false`, not on falsiness: `null` is "no answer
+   * yet" and must render nothing, exactly as `searchedTypes === null` does.
+   */
+  semantic: boolean | null;
+  /** Why it was keyword-only. `null` when it was not, and before an answer. */
+  semanticReason: SemanticReason | null;
+  /** The caller's own documents missing from the semantic index. `0` is good. */
+  unindexedCount: number;
   /** True when the box is empty (or all whitespace): no search is running. */
   isIdle: boolean;
   loadMore: () => Promise<void>;
@@ -302,6 +334,9 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
           truncated: response.truncated,
           degraded: response.degraded,
           searchedTypes: response.searchedTypes,
+          semantic: response.semantic,
+          semanticReason: response.semanticReason,
+          unindexedCount: response.unindexedCount,
         };
       });
       setError(null);
@@ -332,6 +367,9 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
     truncated: state.truncated,
     degraded: state.degraded,
     searchedTypes: state.searchedTypes,
+    semantic: state.semantic,
+    semanticReason: state.semanticReason,
+    unindexedCount: state.unindexedCount,
     isIdle: q.trim().length === 0,
     loadMore,
   };

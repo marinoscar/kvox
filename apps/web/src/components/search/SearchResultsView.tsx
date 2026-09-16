@@ -55,6 +55,7 @@ import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
 
 import { SearchSnippet } from './SearchSnippet';
+import { SemanticSearchNotice } from './SemanticSearchNotice';
 import type { UseSearchResult } from '../../hooks/useSearch';
 import type { SearchResult, SearchType } from '../../services/search';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -146,6 +147,9 @@ export function SearchResultsView({
     truncated,
     degraded,
     searchedTypes,
+    semantic,
+    semanticReason,
+    unindexedCount,
     isIdle,
     loadMore,
   } = search;
@@ -186,6 +190,25 @@ export function SearchResultsView({
           Your account cannot search {nouns.plural}, so none were included in these results.
         </Alert>
       )}
+
+      {/* "These results are keyword-only" (#191, re-pointed at `GET /api/search`
+          where the fields actually live). It sits with its SIBLING BANNERS,
+          above the count line and above the rows, and it is never an error and
+          never an empty state: a keyword-only answer still answered the
+          question, and a feed with zero rows still renders its own "no matches"
+          panel below. The component's own `semantic === false` test keeps it
+          quiet while `null` — no answer yet — so the debounce of a first
+          keystroke does not flash it.
+
+          The dismissal is keyed by TYPE: dismissing it on Recordings must not
+          silently hide it on Notes, which are two independently indexable sets
+          of documents. */}
+      <SemanticSearchNotice
+        semantic={semantic}
+        semanticReason={semanticReason}
+        unindexedCount={unindexedCount}
+        storageKey={`semantic-search-notice:${type}`}
+      />
 
       {/* A QUIET LINE, not an alert and not a toast: nothing went wrong, the
           answer is simply a narrower kind of answer than usual and the reader

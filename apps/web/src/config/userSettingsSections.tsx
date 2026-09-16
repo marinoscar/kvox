@@ -25,6 +25,7 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DescriptionIcon from '@mui/icons-material/Description';
+import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import type { SettingsSectionDef } from './adminSections';
 
@@ -101,6 +102,31 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Connect your own AI provider key. AI features run on your account, and the usage is billed to you.',
         Icon: AutoAwesomeIcon,
         path: '/settings/ai',
+      },
+      {
+        // Issue #191, epic #165. NO `permission`, like every card here, and
+        // here the API's own shape is the argument rather than a convention
+        // this file follows: `search-index.controller.ts` gates
+        // `GET /api/search/index-status` and `POST /api/search/index` on
+        // `@Auth()` with NO permission string, because the resource is the
+        // caller's OWN content and the caller's OWN vendor account, scoped by
+        // `ownerId` in the query itself — the identical posture
+        // `ai-credentials.controller.ts` and `/api/user-data` take. Gating on
+        // `transcripts:read` + `notes:read` was the near miss: `PermissionsGuard`
+        // requires ALL declared permissions, so a user narrowed to one document
+        // type would be hidden from the page reporting the state of the other.
+        //
+        // Under `Account`, directly after `AI Provider`, because that is the
+        // order the setup actually happens in: indexing spends the key that
+        // page collects, and this page's primary action is disabled with a link
+        // back to it until one is saved. A PER-USER card and never an admin one
+        // — the key is the user's, the content is the user's, and the bill is
+        // the user's, so there is nobody else who could press this button.
+        title: 'Search Indexing',
+        description:
+          'See what of your library can be found by meaning rather than keyword, and index the rest. Runs on your own AI provider account.',
+        Icon: ManageSearchIcon,
+        path: '/settings/search-index',
       },
       {
         // Issue #56, epic #45. NO `permission`, like every card here:
