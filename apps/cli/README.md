@@ -179,14 +179,18 @@ requirement — just these four.
 3. Builds the CLI workspace: `npm install --workspace=cli` then
    `npm run build --workspace=cli`, from that temp checkout.
 4. Deploys the standalone app: copies `apps/cli/dist`, `package.json` and
-   `README.md` into `~/.kvox/app` (replacing any previous install), then
+   `README.md` into `$KVOX_HOME/app` (replacing any previous install), then
    runs `npm install --omit=dev` there to pull in just the runtime
    dependencies (commander, ink, ink-select-input, ink-spinner,
-   ink-text-input, react).
-5. Writes the `kvox` shim to `~/.local/bin/kvox` — a small script that
-   `exec`s `node ~/.kvox/app/dist/cli.js "$@"` — and makes it executable.
+   ink-text-input, react). `KVOX_HOME` defaults to `~/.kvox` — or to
+   `/usr/local/lib/kvox` when the installer is run as root, see below.
+5. Writes the `kvox` shim to `$KVOX_BIN_DIR/kvox` — a small script that
+   `exec`s `node $KVOX_HOME/app/dist/cli.js "$@"` — and makes it executable.
+   `KVOX_BIN_DIR` defaults to `~/.local/bin`, or to `/usr/local/bin` as root.
 6. Checks whether the shim's directory is on `$PATH` and, if not, prints the
-   `export` line to add to your shell config (see below).
+   `export` line to add to your shell config (see below). Running as a
+   non-root user also prints an advisory here if `sudo` is present, since a
+   user-scope install is invisible to it — see Troubleshooting below.
 7. Verifies the install by running the new shim's `--version` and printing
    an install summary (version, install size, paths).
 
@@ -209,13 +213,27 @@ Set these before running the installer to override its defaults:
 | --- | --- | --- |
 | `KVOX_REPO` | `https://github.com/marinoscar/kvox.git` | Git clone URL |
 | `KVOX_REF` | `main` | Branch/tag/commit to install |
-| `KVOX_HOME` | `$HOME/.kvox` | App install root (same directory the CLI stores `config.json` in) |
-| `KVOX_BIN_DIR` | `$HOME/.local/bin` | Directory for the `kvox` shim |
+| `KVOX_HOME` | `$HOME/.kvox` (root: `/usr/local/lib/kvox`) | Where the CLI's code is unpacked — not where `config.json` lives, see below |
+| `KVOX_BIN_DIR` | `$HOME/.local/bin` (root: `/usr/local/bin`) | Directory for the `kvox` shim |
 | `GITHUB_TOKEN` | (unset) | Optional GitHub PAT, for cloning a private repo |
 | `KVOX_SRC` | (unset) | Local directory to install from instead of cloning |
 
 `NO_COLOR` and the installer's own `--no-color` flag both disable ANSI
 colour in its output.
+
+`KVOX_HOME` and `KVOX_BIN_DIR` pick a different default when the installer
+detects it's running as root (`id -u` = 0), and an explicit value for either
+still wins over both branches. This isn't cosmetic: `sudo` replaces `$PATH`
+with `secure_path` from `/etc/sudoers`, which never contains a home
+directory, so a user-scope install left `sudo kvox` answering `command not
+found` even though every `kvox deploy` command in
+[`docs/deployment/vps.md`](../../docs/deployment/vps.md) assumes a root
+shell. `/usr/local/lib/kvox` is world-readable, so one root install serves
+both `kvox` and `sudo kvox`; keeping the app tree under `/root/.kvox` instead
+would only turn `command not found` into `permission denied`. This moves no
+credentials — the CLI's config directory is derived at runtime from the
+*running* user's home (`configDirPath()` in `apps/cli/src/config.ts`), so
+tokens stay per-user regardless of where the code was unpacked.
 
 ### Troubleshooting the install
 
@@ -223,6 +241,21 @@ colour in its output.
   Add the `export PATH="$PATH:$HOME/.local/bin"` line above (substituting
   your `KVOX_BIN_DIR` if you set one) to your shell config and reload the
   shell (`source ~/.bashrc` or `source ~/.zshrc`).
+- **`sudo kvox: command not found`, while plain `kvox` works fine** — the
+  install is user-scoped (shim under `~/.local/bin`), and `sudo` replaces
+  `$PATH` with `secure_path` from `/etc/sudoers`, which never contains a
+  home directory — no `export PATH=` line in your shell config changes that,
+  since `sudo` doesn't read it. Install system-wide instead, which lands the
+  shim on `secure_path`:
+  ```bash
+  sudo bash install.sh
+  ```
+  (or `sudo KVOX_SRC="..." bash install.sh` from a local checkout). Running
+  the installer as root defaults `KVOX_BIN_DIR` to `/usr/local/bin` and
+  `KVOX_HOME` to `/usr/local/lib/kvox` for exactly this reason — every `kvox
+  deploy` command in `docs/deployment/vps.md` assumes a root shell. A
+  non-root install prints this same advice right after installing, when
+  `sudo` is present on the machine.
 - **Node too old, or missing** — the installer checks `node >= 20` before
   doing anything else and exits with `Node.js >= 20 is required (found:
   ...)` if it's too old, or `node is required but not found.` if it's
