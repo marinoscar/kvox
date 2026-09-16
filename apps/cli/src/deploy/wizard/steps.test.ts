@@ -10,6 +10,7 @@ import { parseEnvExample } from '../env-spec.js';
 import { unknownServerFacts } from '../server-facts.js';
 import {
   DOMAIN_FIELD,
+  GOOGLE_OAUTH_CHECK_ID,
   INSTALL_WIZARD_STEPS,
   STORAGE_CHECK_ID,
   essentialFields,
@@ -307,5 +308,108 @@ describe('essentialFields', () => {
     const ssl = essentialFields(SPECS).find((field) => field.key === 'POSTGRES_SSL');
 
     expect(ssl?.help).toContain('true or false');
+  });
+});
+
+// =============================================================================
+// The oauth step's onLeave — googleOauthVerified  (issue #231)
+// =============================================================================
+//
+// Driven through `INSTALL_WIZARD_STEPS.find((s) => s.id === 'oauth').onLeave`
+// rather than an export of the function itself: that also pins the wiring
+// (the oauth step really does call this probe on leave), exactly as the task
+// asked. `fetchImpl` is a fake matching only the shape this probe reads
+// (`.json()`) — the real Google response is never awaited on anything else.
+// =============================================================================
+
+function fakeFetch(payload: unknown): typeof fetch {
+  return (async () => ({ json: async () => payload })) as unknown as typeof fetch;
+}
+
+const THROWING_FETCH: typeof fetch = (async () => {
+  throw new Error('getaddrinfo ENOTFOUND oauth2.googleapis.com');
+}) as unknown as typeof fetch;
+
+describe("the oauth step's onLeave (googleOauthVerified)", () => {
+  const oauth = INSTALL_WIZARD_STEPS.find((step) => step.id === 'oauth');
+  const WELL_FORMED_ID = '123456-abc.apps.googleusercontent.com';
+
+  it('fails a client id that does not end .apps.googleusercontent.com, without ever calling fetch', async () => {
+    let called = false;
+    const results = await oauth?.onLeave?.(
+      checkContext({
+        answers: new Map([
+          ['GOOGLE_CLIENT_ID', 'not-a-real-client-id'],
+          ['GOOGLE_CLIENT_SECRET', 'super-secret'],
+        ]),
+        fetchImpl: (async () => {
+          called = true;
+          return { json: async () => ({}) } as unknown as Response;
+        }) as unknown as typeof fetch,
+      }),
+    );
+
+    expect(results?.[0]).toMatchObject({ id: GOOGLE_OAUTH_CHECK_ID, status: 'fail' });
+    expect(called).toBe(false);
+  });
+
+  it('emits nothing for an empty client id — required-ness is the field validator\'s job', async () => {
+    const results = await oauth?.onLeave?.(checkContext({ answers: new Map() }));
+
+    expect(results).toEqual([]);
+  });
+
+  it('warns, never fails, for a well-formed id with no secret typed yet', async () => {
+    const results = await oauth?.onLeave?.(
+      checkContext({ answers: new Map([['GOOGLE_CLIENT_ID', WELL_FORMED_ID]]) }),
+    );
+
+    expect(results?.[0]?.status).toBe('warn');
+  });
+
+  it('fails when Google reports invalid_client — the pair is not real', async () => {
+    const results = await oauth?.onLeave?.(
+      checkContext({
+        answers: new Map([
+          ['GOOGLE_CLIENT_ID', WELL_FORMED_ID],
+          ['GOOGLE_CLIENT_SECRET', 'wrong-project-secret'],
+        ]),
+        fetchImpl: fakeFetch({ error: 'invalid_client' }),
+      }),
+    );
+
+    expect(results?.[0]?.status).toBe('fail');
+  });
+
+  it('passes when Google reports invalid_grant — the counter-intuitive case: the pair IS real', async () => {
+    const results = await oauth?.onLeave?.(
+      checkContext({
+        domain: 'app.example.test',
+        answers: new Map([
+          ['GOOGLE_CLIENT_ID', WELL_FORMED_ID],
+          ['GOOGLE_CLIENT_SECRET', 'a-real-secret'],
+        ]),
+        fetchImpl: fakeFetch({ error: 'invalid_grant' }),
+      }),
+    );
+
+    expect(results?.[0]?.status).toBe('pass');
+    // Says plainly what it does NOT claim: redirect-URI registration was
+    // never checked.
+    expect(results?.[0]?.detail).toContain('redirect URI registration cannot be checked');
+  });
+
+  it('warns, never fails, when fetch rejects — an operator on a restricted network must still install', async () => {
+    const results = await oauth?.onLeave?.(
+      checkContext({
+        answers: new Map([
+          ['GOOGLE_CLIENT_ID', WELL_FORMED_ID],
+          ['GOOGLE_CLIENT_SECRET', 'a-real-secret'],
+        ]),
+        fetchImpl: THROWING_FETCH,
+      }),
+    );
+
+    expect(results?.[0]?.status).toBe('warn');
   });
 });
