@@ -334,7 +334,7 @@ describe("the oauth step's onLeave (googleOauthVerified)", () => {
   const oauth = INSTALL_WIZARD_STEPS.find((step) => step.id === 'oauth');
   const WELL_FORMED_ID = '123456-abc.apps.googleusercontent.com';
 
-  it('fails a client id that does not end .apps.googleusercontent.com, without ever calling fetch', async () => {
+  it('fails a client id that does not contain .apps.googleusercontent., without ever calling fetch', async () => {
     let called = false;
     const results = await oauth?.onLeave?.(
       checkContext({
@@ -351,6 +351,47 @@ describe("the oauth step's onLeave (googleOauthVerified)", () => {
 
     expect(results?.[0]).toMatchObject({ id: GOOGLE_OAUTH_CHECK_ID, status: 'fail' });
     expect(called).toBe(false);
+  });
+
+  // The exact value .github/e2e/answers.env supplies for GOOGLE_CLIENT_ID: a
+  // well-formed id (it contains .apps.googleusercontent.) on the RFC 2606
+  // reserved TLD `.invalid`, chosen so an unattended-install fixture can never
+  // look like a real credential. This is the literal input that caused the
+  // Deploy end-to-end job to fail before this commit — env-wizard.ts runs
+  // onLeave in --non-interactive mode too, and a `fail` result there aborts
+  // the install before the .env is ever written.
+  const E2E_FIXTURE_CLIENT_ID = 'e2e-oauth-client-id.apps.googleusercontent.invalid';
+
+  it('does not fail on the exact GOOGLE_CLIENT_ID .github/e2e/answers.env supplies — the CI regression', async () => {
+    const results = await oauth?.onLeave?.(
+      checkContext({
+        answers: new Map([
+          ['GOOGLE_CLIENT_ID', E2E_FIXTURE_CLIENT_ID],
+          ['GOOGLE_CLIENT_SECRET', 'e2e-placeholder-google-oauth-client-secret'],
+        ]),
+      }),
+    );
+
+    expect(results?.every((result) => result.status !== 'fail')).toBe(true);
+  });
+
+  it('warns for that same fixture value and never calls fetch — a credential that cannot be real has nothing to verify', async () => {
+    let calls = 0;
+    const results = await oauth?.onLeave?.(
+      checkContext({
+        answers: new Map([
+          ['GOOGLE_CLIENT_ID', E2E_FIXTURE_CLIENT_ID],
+          ['GOOGLE_CLIENT_SECRET', 'e2e-placeholder-google-oauth-client-secret'],
+        ]),
+        fetchImpl: (async () => {
+          calls += 1;
+          throw new Error('fetch must not be called for a client id on a reserved TLD');
+        }) as unknown as typeof fetch,
+      }),
+    );
+
+    expect(results?.[0]).toMatchObject({ id: GOOGLE_OAUTH_CHECK_ID, status: 'warn' });
+    expect(calls).toBe(0);
   });
 
   it('emits nothing for an empty client id — required-ness is the field validator\'s job', async () => {
