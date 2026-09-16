@@ -646,7 +646,24 @@ from the server** — the first free port from 3535 that no other app under
 `--apps-root` has recorded, `min(4, cpus − 1)`, and a limit sized to the
 RAM — and each suggestion is shown with its reason and can be edited. The
 OAuth step prints the exact redirect URI to register before asking for the
-client id.
+client id. The id is checked locally before anything reaches Google: one
+that doesn't contain `.apps.googleusercontent.` is certainly the wrong field
+(a project id, an API key) and hard-fails on the spot; one that does but
+doesn't end `.apps.googleusercontent.com` — a well-formed placeholder on a
+reserved TLD such as RFC 2606 `.invalid` or `.test` — only warns and skips
+the probe entirely, since it can't be a client Google knows about and
+probing it would send a credential to a third party for a value that isn't
+real. A step's `onLeave` checks run in `--non-interactive` mode too
+(`env-wizard.ts`), which is why that distinction matters for an unattended
+install and not just an interactive one. Only an id actually ending
+`.apps.googleusercontent.com` is verified against Google's own token
+endpoint: a deliberately bogus authorization code gets `invalid_client` back
+when the pair isn't real (a hard failure) or `invalid_grant` when it is (the
+pass). That proves the credentials are a real pair, not that login will
+work — a client secret can't be fully exercised without a browser round-trip,
+and whether the redirect URI is actually registered isn't checkable from
+here. Google being unreachable is a warning, not a failure — an operator on
+a restricted network must still be able to install.
 
 `--answer KEY=VALUE` (repeatable) and `--answers-file <path>` (a `.env`-format
 file; the file first, then the flags) seed values without a prompt. The
@@ -742,12 +759,18 @@ repository URL and ref are read from your own checkout's git remote (a fork
 using `master` or `develop` as its default branch works with no `--ref`
 needed — nothing here assumes `main`), and the environment wizard's
 questions are parsed structurally from *your fork's own*
-`infra/compose/.env.example`, not a list of field names hardcoded into the
-CLI. Rename the app, add a new secret to your `.env.example`, remove a
-feature block: `kvox deploy install` follows all of it with no flag
-changes, for the same reason `api <method> <path>` (above) doesn't go stale
-as endpoints change — nothing about a specific repository's shape is baked
-into the tool.
+`infra/compose/.env.example` — not a list of field names hardcoded into the
+CLI. The interactive wizard reads that file straight from the remote
+repository at the resolved ref (`gh api`, the same credential the checkout
+step clones with), *before* anything is cloned, so a first install on a bare
+server still asks your fork's real questions with nothing on disk yet; it
+falls back to a local checkout only when the remote read fails (a non-GitHub
+remote, a logged-out `gh`, a repo the token can't see, a timeout) — never a
+sibling app's checkout, and never a reason to fail the install. Rename the
+app, add a new secret to your `.env.example`, remove a feature block: `kvox
+deploy install` follows all of it with no flag changes, for the same reason
+`api <method> <path>` (above) doesn't go stale as endpoints change — nothing
+about a specific repository's shape is baked into the tool.
 
 ### Updating
 
