@@ -8,7 +8,6 @@ import 'vitest-axe/extend-expect';
 import { server } from '../mocks/server';
 import { render, mockAdminUser } from '../utils/test-utils';
 import NotesPage from '../../pages/NotesPage';
-import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
 import type { NoteListItem } from '../../services/notes';
 
 /**
@@ -48,6 +47,7 @@ function noteItem(overrides: Partial<NoteListItem> = {}): NoteListItem {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
+    sourceName: null,
     currentGenerationId: 'gen-1',
     failureReason: null,
     createdAt: new Date().toISOString(),
@@ -59,6 +59,23 @@ function noteItem(overrides: Partial<NoteListItem> = {}): NoteListItem {
 /** Record every `GET /api/notes`, so the filter wiring can be asserted. */
 let noteRequests: URL[] = [];
 
+/**
+ * Every request this file's renders produce, as pathnames.
+ *
+ * ⚠ THIS IS THE FILE'S ONE AND ONLY REQUEST OBSERVER, and it is attached to MSW
+ * itself rather than to one handler — which is the whole point. `noteRequests`
+ * below only records `GET /notes`, so an assertion about requests to OTHER
+ * endpoints (the per-source lookups #192 deleted) would pass vacuously against
+ * it whether or not those requests happened.
+ *
+ * A test must NEVER call `server.events.removeAllListeners()`: that tears this
+ * listener down for the rest of the file and every later assertion over it goes
+ * quietly empty. Reset it in `beforeEach` instead, as this file does.
+ */
+const observedRequests: string[] = [];
+server.events.on('request:start', ({ request }) => {
+  observedRequests.push(new URL(request.url).pathname);
+});
 /**
  * And every `GET /api/search`, separately — issue #176, epic #164.
  *
@@ -89,6 +106,7 @@ function respondWithSearch(results: unknown[] = []) {
   );
 }
 
+
 function respondWithNotes(
   items: NoteListItem[],
   nextCursor: string | null = null,
@@ -97,7 +115,6 @@ function respondWithNotes(
   // over a feed with more pages behind it — passes the real figure.
   total: number = items.length,
 ) {
-
   server.use(
     http.get(`${API_BASE}/notes`, ({ request }) => {
       noteRequests.push(new URL(request.url));
@@ -119,12 +136,8 @@ beforeEach(() => {
   // explicitly rather than relying on declaration order.
   localStorage.setItem('theme_mode', 'light');
   noteRequests = [];
+  observedRequests.length = 0;
   searchRequests = [];
-  // The source-name cache is module-level and lives for the tab, deliberately
-  // (see `useNoteSourceNames`) — which in a test file means it lives for the
-  // whole FILE unless cleared, and one suite's fixture would silently satisfy
-  // the next suite's assertion.
-  clearNoteSourceNameCache();
   respondWithNotes([noteItem()]);
   respondWithSearch();
 });
@@ -146,6 +159,12 @@ describe('NotesPage', () => {
     // The epic's own premise rendered: a note is DERIVED, and a row that only
     // said "from a transcript" would have thrown away the fact that makes it
     // trustworthy.
+    //
+    // ⚠ NO SOURCE ENDPOINT IS STUBBED, and that IS the assertion since #192.
+    // The name arrives on the row as `sourceName`; this test used to need a
+    // `GET /transcripts/:id` handler because the client fetched every distinct
+    // source itself. If one is ever needed here again, the N+1 is back.
+    respondWithNotes([noteItem({ sourceName: 'Q3 planning' })]);
     renderNotes();
     await screen.findByText('Q3 planning — decisions');
 
@@ -154,14 +173,40 @@ describe('NotesPage', () => {
   });
 
   it('falls back to the category noun when the source cannot be named', async () => {
-    // A source the caller can no longer read answers 404 — permanently, for
-    // this user. The row must stay readable rather than show a uuid or an error.
-    server.use(
-      http.get(`${API_BASE}/transcripts/:id`, () => new HttpResponse(null, { status: 404 })),
-    );
+    // `sourceName: null` is what the API answers for a source that is gone OR
+    // that this caller may no longer read — an unshared transcript. The row
+    // must stay readable rather than show a uuid or an error, and no title may
+    // leak for something the caller cannot open.
+    respondWithNotes([noteItem({ sourceName: null })]);
     renderNotes();
 
     expect(await screen.findByText('a transcript')).toBeInTheDocument();
+  });
+
+  it('issues NO per-row source request for a page of notes (#192)', async () => {
+    // The acceptance criterion of #192, asserted by counting fetches rather
+    // than by reading the code: twenty notes from twenty different transcripts
+    // used to cost twenty extra round trips for link labels.
+    const many = Array.from({ length: 20 }, (_, i) =>
+      noteItem({
+        id: `n${i}`,
+        title: `Note ${i}`,
+        sourceTranscriptId: `t${i}`,
+        sourceName: `Transcript ${i}`,
+      }),
+    );
+    respondWithNotes(many);
+    renderNotes();
+    await screen.findByText('Note 19');
+
+    // Observed at MSW, not at this file's `/notes` handler — that handler
+    // cannot see a request to a different endpoint, so asserting over it would
+    // pass whether or not the N+1 was there.
+    expect(observedRequests.filter((path) => path.includes('/transcripts/'))).toHaveLength(0);
+    expect(observedRequests.filter((path) => path.includes('/storage/objects/'))).toHaveLength(0);
+    // Sanity: the observer IS collecting, so the two assertions above are not
+    // passing against an empty array.
+    expect(observedRequests.some((path) => path.endsWith('/notes'))).toBe(true);
   });
 
   it('shows progress for a note that is still being generated', async () => {

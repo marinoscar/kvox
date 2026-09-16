@@ -24,7 +24,6 @@ import { server } from '../../mocks/server';
 import { render, mockAdminUser } from '../../utils/test-utils';
 import TranscriptsLibraryView from '../../../components/library/TranscriptsLibraryView';
 import NotesLibraryView from '../../../components/library/NotesLibraryView';
-import { clearNoteSourceNameCache } from '../../../hooks/useNoteSourceNames';
 import type { SearchResponse, SearchResult } from '../../../services/search';
 import type { NoteListItem } from '../../../services/notes';
 import type { TranscriptListItem } from '../../../services/transcripts';
@@ -126,7 +125,6 @@ beforeEach(() => {
   localStorage.setItem('theme_mode', 'light');
   mockNavigate.mockReset();
   searchRequests = [];
-  clearNoteSourceNameCache();
   server.use(
     http.get(`${API_BASE}/transcripts`, () =>
       HttpResponse.json({ data: { items: [transcriptItem()], nextCursor: null } }),

@@ -21,7 +21,6 @@ import { useUploadManager } from '../../hooks/useUploadManager';
 import type { NoteSummary } from '../../services/notes';
 import type { TranscriptSummary } from '../../services/transcripts';
 import type { TranscriptionConfig } from '../../services/transcription';
-import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
 import {
   AXE_OPTIONS,
   TRANSCRIPTION_AVAILABLE,
@@ -117,24 +116,21 @@ server.events.on('request:start', ({ request }) => {
  * these already returned, so this list growing is the review question, not an
  * incidental detail of whichever test noticed.
  *
- * ⚠ EVERY TEST THAT COMPARES `observedRequests` AGAINST THIS CONSTANT MUST KEEP
- * `notes.recent` EITHER EMPTY OR MADE OF SOURCE-LESS ROWS. `RecentNotes` hands
- * `notes.recent` straight to `useNoteSourceNames` (issue #57/#107, its own
- * header has the full story) — a real, documented, ASYNC lookup that fires its
- * OWN `GET /api/transcripts/:id` or `GET /api/notes/:id` per distinct,
- * uncached source a recent note names. That is a genuine fourth request this
- * list does not include because none of these tests are pinning it, not
- * because it cannot happen. A fixture here whose `notes.recent` contains a
- * `note()` with its default `sourceTranscriptId: 't1'` WILL intermittently add
- * `/api/transcripts/t1` to `observedRequests`, exactly as it did in PR #205
- * (`HomePage — needs attention` › `fires NO additional request when the page
- * loads`) — passing locally and on most CI shards because the lookup usually
- * had not started before the assertion ran, and failing once it had. The
- * `it('fires NO...')`/`it('adds no request...')` tests in the `New note` hero
- * action, counts strip, and search entry point blocks below share this exact
- * hazard (they just happen to already keep `notes.recent` empty); if one of
- * them starts failing the same way, fix ITS fixture the way that comment
- * does — never loosen this array.
+ * ⚠ THE HAZARD THIS PARAGRAPH USED TO DESCRIBE IS GONE — issue #192, and the
+ * history is worth keeping because it explains why this constant is policed so
+ * hard. `RecentNotes` used to hand `notes.recent` straight to
+ * `useNoteSourceNames`, an ASYNC lookup firing its OWN `GET
+ * /api/transcripts/:id` per distinct source a recent note named. That was a
+ * genuine fourth request, and it was INTERMITTENT: it passed locally and on
+ * most CI shards because the lookup usually had not started before the
+ * assertion ran, and failed once it had — exactly as it did in PR #205.
+ *
+ * #192 denormalises `sourceName` onto every note row, so the lookup and its
+ * hook are deleted and no fixture's `notes.recent` can add a request here any
+ * more. The rule this paragraph replaces is therefore no longer a constraint on
+ * fixtures; the rule that REMAINS is the one above: this list growing is a
+ * review question, and it is never to be loosened to accommodate a page that
+ * started fetching more.
  */
 const EXPECTED_REQUESTS = [
   '/api/notes/summary',
@@ -188,7 +184,6 @@ beforeEach(() => {
   mockUseUploadManager.mockReturnValue(manager());
   // Module-level and shared by every mount, so it would otherwise leak resolved
   // source names (and resolved negatives) between the suites below.
-  clearNoteSourceNameCache();
   // `respondWith` resets `observedRequests.length = 0` (among the other
   // counters) and runs before every test in every `describe` block below,
   // because this is the file's OUTER `beforeEach` — Vitest runs it ahead of
@@ -1176,20 +1171,21 @@ describe('HomePage — recent notes', () => {
     expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
   });
 
-  it('resolves a shared source name with ONE request, not one per note', async () => {
-    // Pins `useNoteSourceNames` (issue #57/#107) itself, which is otherwise
-    // invisible in this suite — that invisibility is exactly how it could
-    // ambush an unrelated `EXPECTED_REQUESTS` assertion elsewhere in this file
-    // (see the comment on that constant, and PR #205). The two notes from this
-    // block's `beforeEach` both default to `sourceTranscriptId: 't1'`, so this
-    // test asserts BOTH halves of the hook's contract at once: the lookup
-    // really does fire a `GET` for a note's source, and a second note naming
-    // the SAME source causes no second request — the hook's module-level
-    // cache and in-flight dedup.
-    // ⚠ An exact path, never `/transcripts/:id`: both notes share `t1`, but a
-    // param route would also match `/transcripts/summary` — the same
-    // `summary`-is-a-legal-id trap `respondWith` warns about — and shadow the
-    // `beforeEach`'s summary handler because `server.use` here registers last.
+  it('names a note\u2019s source with NO request at all (#192)', async () => {
+    // The strengthened form of the test this replaces. That one pinned
+    // `useNoteSourceNames` — an async lookup firing one `GET` per distinct
+    // source, deduped by a module-level cache — and asserted the dedup: ONE
+    // request for two notes sharing a transcript.
+    //
+    // #192 denormalises `sourceName` onto the row, so the claim is now the
+    // stronger one: ZERO. That also retires the intermittency this suite's
+    // `EXPECTED_REQUESTS` comment describes at length — an async lookup that
+    // had usually not started before an assertion ran.
+    //
+    // ⚠ An exact path, never `/transcripts/:id`: a param route would also match
+    // `/transcripts/summary`, the `summary`-is-a-legal-id trap `respondWith`
+    // warns about, and would shadow the `beforeEach`'s summary handler because
+    // `server.use` here registers last.
     let transcriptRequests = 0;
     server.use(
       http.get(`${API_BASE}/transcripts/t1`, () => {
@@ -1202,10 +1198,10 @@ describe('HomePage — recent notes', () => {
     renderHome();
     await screen.findByRole('heading', { name: 'Recent notes' });
 
-    // Both cards resolve the name once the one request lands.
+    // Both cards name the source, straight off the row the summary returned.
     expect(await screen.findAllByRole('link', { name: 'Weekly sync recording' })).toHaveLength(2);
-    expect(transcriptRequests).toBe(1);
-    expect(observedRequests.filter((path) => path === '/api/transcripts/t1')).toHaveLength(1);
+    expect(transcriptRequests).toBe(0);
+    expect(observedRequests.filter((path) => path === '/api/transcripts/t1')).toHaveLength(0);
   });
 
   it('has no accessibility violations', async () => {

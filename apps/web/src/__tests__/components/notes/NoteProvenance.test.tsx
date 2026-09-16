@@ -34,6 +34,7 @@ function note(overrides: Partial<Note> = {}): Note {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Executive summary',
+    sourceName: null,
     contextText: null,
     currentGenerationId: 'gen-1',
     failureReason: null,
