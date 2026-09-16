@@ -31,6 +31,7 @@ import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
 import { NotesModule } from './notes/notes.module';
 import { UserDataModule } from './user-data/user-data.module';
+import { SearchModule } from './search/search.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
 import { AboutModule } from './about/about.module';
@@ -219,6 +220,14 @@ import configuration from './config/configuration';
     // `UserAiCredentialsService` rather than reimplementing any of the per-item
     // deletion machinery those already own.
     UserDataModule,
+
+    // Cross-module search (#175, epic #164): `GET /api/search`, ranked
+    // full-text over transcript and note content. Registered AFTER both
+    // feature modules for readability, but it imports NEITHER — it reads their
+    // tables through raw `SELECT`s and depends only on `PrismaModule`. See
+    // `SearchModule`'s own header for why that independence is deliberate
+    // rather than an oversight.
+    SearchModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
