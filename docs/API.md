@@ -4757,6 +4757,123 @@ data: {"status":"succeeded","offset":812,"currentVersion":1}
 
 ---
 
+### Search
+
+Ranked full-text search over the **content** of your transcripts and notes —
+issue #175 (issue #177 documents it), epic #164. Full design (the ranking
+model, the index, the cursor, visibility, snippets, degradation) is
+[`docs/specs/search.md`](specs/search.md).
+
+#### GET /search
+
+Searches transcript segments/titles and note titles/bodies, scores matches
+with `ts_rank_cd` (cover-density ranking, which rewards query terms
+appearing close together rather than simply often), and rolls each document
+up to the score of its **best** matching passage — never the sum of all its
+passages, so a short recording that is *about* a term outranks a long one
+that mentions it thirty times in passing.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `q` | string | Yes | 1–256 characters. |
+| `types` | string (CSV) | No | `transcript`, `note`, or both, comma-separated. Defaults to both. An **empty or unrecognised** value is a 400, never silently widened to "both". |
+| `limit` | integer | No | 1–50, default 20. |
+| `cursor` | string | No | Opaque, from a previous response's `nextCursor`. Tied to the exact `q`, `types` actually searched, caller and ranking model that produced it — see below. |
+
+**Requires:** `transcripts:read` for transcript results, `notes:read` for
+note results. **The route itself declares neither permission** —
+`PermissionsGuard` requires *all* declared permissions, and this endpoint's
+real requirement is *either* one, which no permission decorator can
+express. A caller holding only one of the two permissions and requesting
+both types is answered with the type they hold — **not a 403** —and
+`searchedTypes` in the response names what was actually searched. A caller
+holding **neither** permission gets a 403. Notes have no sharing and no
+`notes:read_any`; transcripts have no `transcripts:read_any` either — this
+endpoint can only ever surface your own notes and transcripts you own or
+hold a share on, the same as reading them directly.
+
+**Response:**
+```json
+{
+  "data": {
+    "results": [
+      {
+        "type": "transcript",
+        "id": "uuid",
+        "title": "Q3 Pricing Review",
+        "score": 0.607927,
+        "updatedAt": "2024-01-01T00:00:00.000Z",
+        "status": "ready",
+        "snippets": [
+          {
+            "html": "...quarterly <mark>pricing</mark> <mark>review</mark> is scheduled for...",
+            "startMs": 184200,
+            "field": "segment"
+          }
+        ]
+      },
+      {
+        "type": "note",
+        "id": "uuid",
+        "title": "Pricing decisions",
+        "score": 0.243819,
+        "updatedAt": "2024-01-02T00:00:00.000Z",
+        "status": "ready",
+        "snippets": [
+          { "html": "We agreed the new <mark>pricing</mark> takes effect...", "startMs": null, "field": "body" }
+        ]
+      }
+    ],
+    "matchedDocuments": 2,
+    "truncated": false,
+    "nextCursor": null,
+    "degraded": null,
+    "searchedTypes": ["transcript", "note"]
+  }
+}
+```
+
+**Response fields:**
+
+- `results[].score` — comparable **within this one response only**; it is a
+  raw `ts_rank_cd` value with no absolute scale, so it is meaningless
+  compared across two different searches.
+- `results[].snippets[].html` — **pre-escaped HTML.** The only markup in it
+  is balanced `<mark>...</mark>` around the matched terms; every character
+  the source text contributed that would otherwise be markup (`&`, `<`,
+  `>`, `"`, `'`) is HTML-entity-escaped first. A client renders this
+  directly and must **not** re-escape it or otherwise treat it as plain
+  text, and must not attempt anything beyond locating `<mark>` boundaries in
+  it — it is not a template.
+- `results[].snippets[].startMs` — milliseconds into the recording, for a
+  client to seek to. `null` for a note, and for a transcript **title**
+  match (a title has no position in the audio).
+- `matchedDocuments` / `truncated` — the candidate window holds at most 200
+  documents. `matchedDocuments` counts how many are in it (never more than
+  200); `truncated: true` means the window filled up, so
+  `matchedDocuments` is a floor, not an exact count. **There is
+  deliberately no `total`** — with a bounded window, a `total` field would
+  report the cap rather than a real count for any corpus larger than it.
+- `nextCursor` — `null` when this page reached the end of the candidate
+  window; otherwise an opaque cursor for the next page.
+- `degraded` — `"stopwords"` when `q` parsed to an empty full-text query
+  (e.g. `"the and of"`) and the endpoint fell back to the same
+  case-insensitive **title** substring match `GET /transcripts?q=` and
+  `GET /notes?q=` already use, ordered newest-first with no `score`.
+  `null` on the normal ranked path. A client should say "showing title
+  matches" rather than presenting a degraded result as a ranked one.
+- `searchedTypes` — the types actually searched, i.e. `types` narrowed to
+  what the caller's permissions allow. This is how a partial answer
+  announces itself; see the permissions note above.
+
+**Error Cases:**
+- 400 Bad Request - Missing/empty/oversized `q`, an unrecognised `types` value, `limit` out of range, or a `cursor` from a **different** search (different query text, different type filter, a different caller, or produced under an earlier ranking model version). Refused rather than silently restarted — see `docs/specs/search.md` §5 for why a relevance cursor cannot forgive the way the transcript/note list cursors do
+- 403 Forbidden - The caller holds neither `transcripts:read` nor `notes:read`
+
+---
+
 ### User Data
 
 The "Danger Zone" — an authenticated user asking this deployment to forget

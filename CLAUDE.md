@@ -788,6 +788,19 @@ and [`docs/API.md`](docs/API.md#user-data).
 - `GET /api/user-data/summary` - Per-category row counts and bytes (`bytes` a decimal string, same convention as the database backup's), plus the caller's own deletion already in flight, if any
 - `POST /api/user-data/deletions` - Queue a `user.data.purge` job for one `scope` (`transcripts`/`notes`/`files`/`content`/`everything`). **202**; 400 if `confirmation` isn't exactly the scope uppercased, 409 if a deletion is already pending/running for this caller. ⚠ **`confirmation` IS the scope, uppercased** — a word typed for one scope can never authorise another. ⚠ **The bulk path deliberately does not honour the per-item 409 guards** `DELETE /api/notes/{id}` and `DELETE /api/transcripts/{id}` enforce — it clears the `Restrict` foreign keys those guards protect first and deletes anyway
 
+### Search
+Ranked full-text search over transcript and note content (issue #175/#177, epic #164). Reuses
+`transcripts:read`/`notes:read` — no new permission — and the route itself declares neither,
+since `PermissionsGuard` requires ALL declared permissions and this endpoint's requirement is
+EITHER; see [`docs/specs/search.md`](docs/specs/search.md).
+- `GET /api/search?q&types&limit&cursor` - Documents scored by `ts_rank_cd`, rolled up per
+  document by `max` (never `sum`). `matchedDocuments`/`truncated` describe a bounded 200-document
+  candidate window; there is deliberately no `total`. A caller holding only one of the two read
+  permissions gets a partial answer (`searchedTypes` says which), not a 403 — the one 403 is
+  holding neither. `degraded: "stopwords"` falls back to the list endpoints' own title `ILIKE`
+  when `q` is all stopwords. A cursor from a different query/type-filter/caller/ranking-model
+  version is refused with **400**, never silently restarted (see `docs/specs/search.md` §5)
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -931,7 +944,15 @@ and [`docs/API.md`](docs/API.md#user-data).
   storage cleanup. See `docs/specs/transcription.md` §3.1 and the block comment above the
   `Transcript` model for the full reasoning, including the honestly-stated gap between a raw
   cascading user delete (removes SQL rows only) and `transcript.purge` (also removes the
-  storage/provider data).
+  storage/provider data). `title_search_vector` (issue #174, epic #164) is a `GENERATED ALWAYS
+  AS (to_tsvector('english', coalesce(title, ''))) STORED` column with its own GIN index — a
+  transcript's title must be full-text searchable even when no child segment matches at all, so
+  it needs its own vector rather than folding into the segment vector below. Generated, not
+  trigger-maintained: a trigger does not fire under `pg_restore`'s `session_replication_role =
+  replica`, so a restored database would come back with a silently empty search index. Hand-written
+  in `migration.sql` only — Prisma has no DSL for a generated column's expression — the same
+  intentional schema drift as `jobs`/`database_backup_runs`/`transcript_speakers`. See
+  `docs/specs/search.md` §2.
 - `transcript_speakers` - One row per diarized voice in a transcript. `label` is nullable —
   the provider's own diarization letter (`"A"`) for an AI-detected speaker, `NULL` for one a
   user created directly. Unique per transcript **among labelled rows only**, via the same
@@ -949,7 +970,11 @@ and [`docs/API.md`](docs/API.md#user-data).
   a dense integer sequence, so inserting a segment only needs the midpoint between its two
   neighbours rather than renumbering every later row on every split. `wordsAlignment`
   (`exact`/`interpolated`/`none`) records how much of the per-word timing survived the last
-  text edit — a token-level LCS diff, not a heuristic re-run on every read.
+  text edit — a token-level LCS diff, not a heuristic re-run on every read. `search_vector`
+  (issue #174, epic #164) is a `GENERATED ALWAYS AS (to_tsvector('english', coalesce(text, '')))
+  STORED` column, GIN-indexed, unweighted — a segment has no title of its own to weight against,
+  unlike `notes.search_vector` below. Same generated-column-not-trigger reasoning as
+  `transcripts.title_search_vector` above; see `docs/specs/search.md` §2.
 - `transcript_versions` - The append-only correction history `materialize()` replays
   (`docs/specs/transcription.md` §4.4): `ops` holds the **concrete** edits this version
   applied (never the abstract `find_replace` call itself — §4.2 — so replaying history stays
@@ -991,7 +1016,13 @@ and [`docs/API.md`](docs/API.md#user-data).
   copy of the `note_versions` row at `currentVersion` — kept in the same transaction that
   appends a version — so `GET /api/notes/:id` answers "what does this note say right now"
   with a single-row read. See `docs/specs/notes.md` §4.1 and the block comment above the
-  `Note` model.
+  `Note` model. `search_vector` (issue #174, epic #164) is a single `GENERATED ALWAYS AS (...)
+  STORED` column, GIN-indexed, combining `setweight(to_tsvector(title), 'A') ||
+  setweight(to_tsvector(body), 'B')` — weighted, unlike `transcript_segments.search_vector`,
+  because a hit in the user's own title is stronger evidence than a hit in the AI-generated body,
+  and `ts_rank_cd` can reflect that asymmetry when it is computed over one combined vector. Same
+  generated-column-not-trigger reasoning as the transcript columns above; see
+  `docs/specs/search.md` §2.
 - `note_templates` - The reusable "recipe" (instructions, output format, structure, tone,
   length, an optional per-template model) a note is generated from (issue #48, epic #45).
   `ownerId IS NULL` means **built-in**: seeded, readable by every user, and immutable through
