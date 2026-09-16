@@ -119,8 +119,40 @@ detect_shell_rc() {
 # ---------------------------------------------------------------------------
 KVOX_REPO="${KVOX_REPO:-https://github.com/marinoscar/kvox.git}"
 KVOX_REF="${KVOX_REF:-main}"
-KVOX_HOME="${KVOX_HOME:-$HOME/.kvox}"
-KVOX_BIN_DIR="${KVOX_BIN_DIR:-$HOME/.local/bin}"
+
+# ---------------------------------------------------------------------------
+# Where the install lands, and why root gets a different answer (#226)
+# ---------------------------------------------------------------------------
+# `sudo` does not carry the invoking user's PATH. It replaces it with
+# `secure_path` from /etc/sudoers, which never contains anyone's
+# $HOME/.local/bin — so a shim installed under a home directory is invisible
+# to `sudo kvox`, while every `kvox deploy` command in docs/deployment/vps.md
+# is written for a root shell. That combination produced `sudo: kvox: command
+# not found` in the middle of a deploy, which reads like a broken install.
+#
+# Installing AS root therefore defaults to the system locations: the shim to
+# /usr/local/bin (on secure_path on Debian and Ubuntu) and the app tree to
+# /usr/local/lib/kvox, which is world-readable — so ONE install serves `kvox`
+# and `sudo kvox` alike. Keeping the app under /root/.kvox would only move the
+# failure rather than fix it: reachable by root, permission-denied for every
+# other user on the box.
+#
+# This moves no credentials. The CLI derives its own config directory at
+# runtime from the RUNNING user's home — `configDirPath()` in
+# apps/cli/src/config.ts joins `os.homedir()` with CONFIG_DIR_NAME — so tokens
+# stay per-user no matter where the code was unpacked. KVOX_HOME decides where
+# the CODE lives, nothing else.
+#
+# An explicit KVOX_HOME / KVOX_BIN_DIR still wins over both branches, so
+# bootstrap-vps.sh (which sets KVOX_BIN_DIR=/usr/local/bin) is unaffected.
+if [[ "$(id -u)" -eq 0 ]]; then
+  KVOX_HOME="${KVOX_HOME:-/usr/local/lib/kvox}"
+  KVOX_BIN_DIR="${KVOX_BIN_DIR:-/usr/local/bin}"
+else
+  KVOX_HOME="${KVOX_HOME:-$HOME/.kvox}"
+  KVOX_BIN_DIR="${KVOX_BIN_DIR:-$HOME/.local/bin}"
+fi
+
 KVOX_SRC="${KVOX_SRC:-}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
@@ -617,6 +649,28 @@ if [[ "$BIN_ON_PATH" != "1" ]] && ! is_wsl; then
   printf '    %s\n' "export PATH=\"\$PATH:$KVOX_BIN_DIR\""
   printf '\n'
   info "Then reload: source ~/.bashrc  (or source ~/.zshrc)"
+  printf '\n'
+fi
+
+# A user-scope install is invisible to `sudo`, which replaces PATH with
+# secure_path from /etc/sudoers — a list that never contains a home directory.
+# Say so HERE rather than letting it surface later as `sudo: kvox: command not
+# found` partway through a deploy, where it reads like a broken install (#226).
+# Only worth saying when there is a sudo to be confused by.
+if [[ "$(id -u)" -ne 0 && "$KVOX_BIN_DIR" == "$HOME"/* ]] && command -v sudo >/dev/null 2>&1; then
+  warn "Installed for this user only — \`sudo kvox\` will NOT find it"
+  printf '\n'
+  info "sudo replaces PATH with secure_path from /etc/sudoers, which never"
+  info "contains a home directory. This matters on a server: every"
+  info "\`kvox deploy\` command in docs/deployment/vps.md assumes a root shell."
+  printf '\n'
+  info "To install system-wide as well (shim in /usr/local/bin):"
+  printf '\n'
+  if [[ -n "$KVOX_SRC" ]]; then
+    printf '    %s\n' "sudo KVOX_SRC=\"$KVOX_SRC\" bash install.sh"
+  else
+    printf '    %s\n' "sudo bash install.sh"
+  fi
   printf '\n'
 fi
 
