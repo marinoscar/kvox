@@ -63,6 +63,20 @@ function item(overrides: Partial<TranscriptListItem> = {}): TranscriptListItem {
 /** Record every list request, so the tab/filter wiring can be asserted. */
 let requests: URL[] = [];
 
+/**
+ * And every `GET /api/search`, separately — issue #176, epic #164.
+ *
+ * ⚠ THE SEARCH BOX NO LONGER FILTERS THE LIST. A non-empty box renders
+ * `GET /api/search` instead of the list, so a term is observable HERE and never
+ * as a `q=` on `/transcripts`. The list's own `?q=` filter is untouched and
+ * still works; this page simply stopped being the thing that calls it with a
+ * term. The behaviour of the switch itself is covered in
+ * `components/library/LibrarySearch.test.tsx`; what these assertions keep is
+ * the property they always had — that a typed word becomes ONE request, and
+ * that a `?q=` deep link filters the FIRST one.
+ */
+let searchRequests: URL[] = [];
+
 function respondWith(
   items: TranscriptListItem[],
   nextCursor: string | null = null,
@@ -79,6 +93,24 @@ function respondWith(
   );
 }
 
+function respondWithSearch(results: unknown[] = []) {
+  server.use(
+    http.get(`${API_BASE}/search`, ({ request }) => {
+      searchRequests.push(new URL(request.url));
+      return HttpResponse.json({
+        data: {
+          results,
+          matchedDocuments: results.length,
+          truncated: false,
+          nextCursor: null,
+          degraded: null,
+          searchedTypes: ['transcript', 'note'],
+        },
+      });
+    }),
+  );
+}
+
 beforeEach(() => {
   // ⚠ `localStorage` IS NOT CLEARED BETWEEN TESTS by the global setup, and
   // `ThemeContextProvider` seeds itself from this key — so a dark-theme axe
@@ -86,7 +118,9 @@ beforeEach(() => {
   // explicitly rather than relying on declaration order.
   localStorage.setItem('theme_mode', 'light');
   requests = [];
+  searchRequests = [];
   respondWith([item()]);
+  respondWithSearch();
 });
 
 describe('TranscriptsPage — scope tabs', () => {
@@ -176,23 +210,25 @@ describe('TranscriptsPage — rows', () => {
 });
 
 describe('TranscriptsPage — search and filter', () => {
-  it('debounces the search box into a single q= query', async () => {
+  it('debounces the search box into a single q= query — now against /search (#176)', async () => {
     const user = userEvent.setup();
     render(<TranscriptsPage />, {
       wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
     });
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
-    const before = requests.length;
+    const listBefore = requests.length;
 
-    await user.type(screen.getByLabelText('Search titles'), 'budget');
+    await user.type(screen.getByLabelText('Search transcripts'), 'budget');
 
     await waitFor(
-      () => expect(requests.some((url) => url.searchParams.get('q') === 'budget')).toBe(true),
+      () =>
+        expect(searchRequests.some((url) => url.searchParams.get('q') === 'budget')).toBe(true),
       { timeout: 3000 },
     );
-    // Six keystrokes must not be six queries against a `LIKE` on the column the
-    // list is also ordered by.
-    expect(requests.length - before).toBeLessThan(6);
+    // Six keystrokes must not be six ranked full-text queries.
+    expect(searchRequests.length).toBeLessThan(6);
+    // …and the list is not re-queried at all while the box is driving a search.
+    expect(requests.length).toBe(listBefore);
   });
 
   it('translates the "Any status" sentinel into an OMITTED parameter', async () => {
@@ -241,7 +277,13 @@ describe('TranscriptsPage — empty states', () => {
 
   it('offers a DIFFERENT empty state when a filter matched nothing', async () => {
     // "Upload a recording" is nonsense advice for a library that is full and a
-    // search term that matched none of it.
+    // filter that matched none of it.
+    //
+    // ⚠ DRIVEN BY THE STATUS FILTER since #176, not by the search box: a term
+    // in the box renders `SearchResultsView` and ITS "No matches for …" panel
+    // instead of this one. That is the distinction the issue exists to draw —
+    // see `components/library/LibrarySearch.test.tsx`, which asserts the two
+    // panels are never confused for one another.
     const user = userEvent.setup();
     respondWith([]);
     render(<TranscriptsPage />, {
@@ -249,7 +291,8 @@ describe('TranscriptsPage — empty states', () => {
     });
     await screen.findByText('No transcripts yet');
 
-    await user.type(screen.getByLabelText('Search titles'), 'zzz');
+    await user.click(screen.getByLabelText('Status'));
+    await user.click(await screen.findByRole('option', { name: 'Failed' }));
 
     expect(
       await screen.findByText('No transcripts match those filters', undefined, {
@@ -541,15 +584,21 @@ describe('TranscriptsPage — seeded from the URL', () => {
     expect(requests[0].searchParams.get('status')).toBeNull();
   });
 
-  it('fills the search box from ?q and filters the FIRST request with it', async () => {
+  it('fills the search box from ?q and filters the FIRST SEARCH request with it', async () => {
     render(<TranscriptsPage />, {
       wrapperOptions: { user: mockAdminUser, route: '/transcripts?q=budget' },
     });
 
-    expect(screen.getByLabelText('Search titles')).toHaveValue('budget');
-    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
-    // ⚠ Not "eventually" — the first one. See this block's header.
-    expect(requests[0].searchParams.get('q')).toBe('budget');
+    expect(screen.getByLabelText('Search transcripts')).toHaveValue('budget');
+    // ⚠ Not "eventually" — the first one. See this block's header. Since #176
+    // the request a term lands on is `/search`, and the flash that assertion
+    // guards against is prevented differently: the view is in search mode on
+    // its FIRST render, showing a spinner, so there is no unfiltered answer to
+    // render and replace.
+    await waitFor(() => expect(searchRequests.length).toBeGreaterThan(0));
+    expect(searchRequests[0].searchParams.get('q')).toBe('budget');
+    expect(searchRequests[0].searchParams.get('types')).toBe('transcript');
+    expect(requests.every((url) => url.searchParams.get('q') === null)).toBe(true);
   });
 
   it('reads all three at once', async () => {
@@ -563,7 +612,9 @@ describe('TranscriptsPage — seeded from the URL', () => {
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
     expect(requests[0].searchParams.get('scope')).toBe('shared');
     expect(requests[0].searchParams.get('status')).toBe('failed');
-    expect(requests[0].searchParams.get('q')).toBe('budget');
+    // `q` went to the search endpoint instead — see the test above.
+    await waitFor(() => expect(searchRequests.length).toBeGreaterThan(0));
+    expect(searchRequests[0].searchParams.get('q')).toBe('budget');
   });
 
   it('starts unfiltered when the URL carries nothing', async () => {

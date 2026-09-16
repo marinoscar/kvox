@@ -70,14 +70,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { TranscriptRowActions } from './TranscriptRowActions';
+import { SearchResultsView } from '../search/SearchResultsView';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
 import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
 import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useSearch } from '../../hooks/useSearch';
 import { useTranscripts } from '../../hooks/useTranscripts';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
-import { feedCacheKey } from '../../utils/feedCache';
 import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
+import { feedCacheKey } from '../../utils/feedCache';
+import type { SearchResult, SearchType } from '../../services/search';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
 import { formatDuration } from '../../utils/playbackIntervals';
 import { formatRelativeTime } from '../../utils/relativeTime';
@@ -97,15 +100,32 @@ import type { TranscriptScopeFilter } from '../../pages/transcriptsLibraryFilter
 type ScopeTab = TranscriptScopeFilter;
 
 /**
- * How long the search box waits before asking the API.
+ * ⚠ THE DEBOUNCE MOVED INTO THE HOOK — issue #176, epic #164.
  *
- * The list is cursor-paginated over a text filter, so every keystroke is a
- * query against a `LIKE` on a column the database is also ordering by. 300 ms
- * is the usual "finished typing a word" threshold; the hook additionally drops
- * out-of-order responses, so a slow request for a prefix cannot overwrite a
- * fast one for the full term.
+ * This view used to hold a `debouncedSearch` state and a 300 ms timer, because
+ * the box fed `GET /api/transcripts?q=`, whose hook takes an already-settled
+ * term. The box now feeds `useSearch`, which debounces internally AND aborts
+ * the superseded request — see its header for why those are two separate jobs.
+ *
+ * Keeping a second timer here would debounce a debounce: 300 ms of nothing,
+ * then 300 ms more before the request, and a box that felt broken on a slow
+ * connection. So there is deliberately no timer in this file any more, and
+ * `search` — the raw box value — is what everything below reads.
  */
-const SEARCH_DEBOUNCE_MS = 300;
+
+/**
+ * What this view asks `GET /api/search` for — issue #176, epic #164.
+ *
+ * ONE type, its own. The endpoint can search both, and the Notes library passes
+ * `['note']` from its own copy of this constant; neither page borrows the
+ * other's rows, because a page titled "Transcripts" that returned notes would
+ * be answering a question nobody asked it.
+ *
+ * Module-level rather than inline so its identity is stable: `useSearch`
+ * derives its effect's dependency from the list, and a fresh array on every
+ * render would re-issue the search on every keystroke in any other control.
+ */
+const SEARCH_TYPES: SearchType[] = ['transcript'];
 
 function TranscriptRow({
   transcript,
@@ -223,28 +243,23 @@ export function TranscriptsLibraryView() {
    * and never again. A subsequent tab click, filter change or keystroke updates
    * component state alone.
    *
-   * Full two-way sync was considered and rejected; the argument, including why
-   * the 300 ms debounce is the part that makes it wrong rather than merely
-   * unnecessary, is in `transcriptsLibraryFilters.ts` beside the parsers.
+   * Full two-way sync was considered and rejected; the argument is in
+   * `transcriptsLibraryFilters.ts` beside the parsers.
    *
-   * ⚠ `debouncedSearch` IS SEEDED TOO, from the same value. Seeding only the
-   * box would make the view's first request an UNFILTERED one, answered and
-   * rendered, and then replaced 300 ms later by the filtered one the link
-   * actually asked for — a visible flash of the wrong list, and a wasted query
-   * on the column the list is ordering by.
+   * ⚠ `?q=` NOW SEEDS A SEARCH, not a list filter (#176), and there is no
+   * second `debouncedSearch` state to seed alongside it. The flash that state
+   * existed to prevent — an unfiltered list rendered and then replaced 300 ms
+   * later — cannot happen through this path any more: a non-empty box puts the
+   * view in search mode on the FIRST render, and `useSearch` raises its loading
+   * flag synchronously, so the 300 ms before the request is a spinner rather
+   * than an answer to a question the link did not ask.
    */
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<ScopeTab>(() => transcriptScopeFromQuery(searchParams));
   const [search, setSearch] = useState(() => searchFromQuery(searchParams));
-  const [debouncedSearch, setDebouncedSearch] = useState(() => searchFromQuery(searchParams));
   const [status, setStatus] = useState<TranscriptStatus | 'all'>(() =>
     transcriptStatusFromQuery(searchParams),
   );
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   /**
    * Where this feed's loaded pages and its scroll offset live across a
@@ -262,9 +277,46 @@ export function TranscriptsLibraryView() {
    * pointless cost and a good way to push the entry the user is coming back to
    * out of a bounded cache.
    */
+  /**
+   * IS THE BOX ASKING A SEARCH QUESTION? — issue #176, epic #164.
+   *
+   * A non-empty box renders `GET /api/search` — relevance-ordered, with
+   * snippets saying WHY each result matched — instead of the newest-first list
+   * filtered by a title substring. An empty box renders the list exactly as it
+   * did before this issue.
+   *
+   * ⚠ Deliberately `.length > 0` rather than `.trim().length > 0`. A box
+   * holding only spaces IS a search question the user has begun to ask — it is
+   * just not one that can be answered yet — and `SearchResultsView` renders
+   * "Type to search" for it. Trimming here would drop that user back onto an
+   * unfiltered list, which says nothing about what they typed and looks like
+   * the app ignoring them.
+   *
+   * ⚠ THE RAW VALUE, not a debounced one. The switch has to be immediate: the
+   * moment the box has content, what is on screen must be about the search, and
+   * `useSearch` is already loading. A debounced switch would leave the
+   * PREVIOUS source rendered for 300 ms after every change — including the
+   * unfiltered list sitting under a just-cleared box's last query.
+   */
+  const searchMode = search.length > 0;
+
+  /**
+   * ⚠ THE LIST IS NEVER ASKED A TEXT FILTER ANY MORE (#176).
+   *
+   * `GET /api/transcripts?q=` is untouched and still does exactly what it did;
+   * this view simply stops being the thing that calls it with a term, because a
+   * term now goes to the search endpoint instead. Since the list is rendered
+   * ONLY when the box is empty, the request it issues is the one it issued for
+   * an empty box before this issue — so the empty-box path is unchanged, and
+   * search mode no longer pays for a filtered query nobody reads.
+   *
+   * The cache key (#168) loses its search component for the same reason: it
+   * still carries every filter that can actually vary while this list is on
+   * screen, which is now the scope tab and the status.
+   */
   const cacheKey = useMemo(
-    () => feedCacheKey('transcripts', [tab, debouncedSearch, status]),
-    [debouncedSearch, status, tab],
+    () => feedCacheKey('transcripts', [tab, status]),
+    [status, tab],
   );
 
   // The other half of the drill-down, and the reason this page reuses the hook
@@ -278,10 +330,20 @@ export function TranscriptsLibraryView() {
 
   const { transcripts, total, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
     useTranscripts(tab, {
-      q: debouncedSearch,
       status: status === 'all' ? undefined : status,
       cacheKey,
     });
+
+  /**
+   * The other source this view can show — issue #176.
+   *
+   * Called UNCONDITIONALLY and outside any branch, per the rules of hooks. It
+   * is inert while the box is empty: `useSearch` treats a blank query as NO
+   * SEARCH rather than as a search for nothing, and issues no request at all.
+   * The debounce and the abort-on-keystroke both live inside it, which is why
+   * it is handed the raw box value rather than the debounced one.
+   */
+  const searchState = useSearch({ q: search, types: SEARCH_TYPES });
 
   /**
    * ONE audio element for the whole list — see the hook for why that is a
@@ -306,6 +368,19 @@ export function TranscriptsLibraryView() {
     if (transcripts.some((item) => item.id === preview.activeId)) return;
     preview.stop();
   }, [isLoading, preview, transcripts]);
+
+  /**
+   * Entering search mode stops playback, for the reason the effect above exists.
+   *
+   * The Play/Pause control lives on a LIST row, and the list is not rendered
+   * while results are — so a recording started from the list and left playing
+   * would keep playing with no control anywhere on screen to stop it. The
+   * effect above cannot catch this: the rows it checks are still loaded and
+   * still contain the playing transcript; they are simply not on screen.
+   */
+  useEffect(() => {
+    if (searchMode && preview.activeId) preview.stop();
+  }, [preview, searchMode]);
 
   /**
    * What the list's one live region says — playback state AND failures.
@@ -347,20 +422,21 @@ export function TranscriptsLibraryView() {
 
   const canCreate = hasPermission('transcripts:write');
 
+  // The status filter is now the ONLY thing that can filter this list — a
+  // search term takes the reader to `SearchResultsView` and its own two empty
+  // states instead of to this one.
+  const isFiltered = status !== 'all';
+
   /**
-   * `new Date()` is read HERE and passed down, rather than inside the grouper.
+   * The feed cut into date groups — issue #190.
    *
+   * `new Date()` is read HERE and passed down, rather than inside the grouper.
    * One clock reading per render means every row in one paint is bucketed
-   * against the same instant — a grouper calling `Date.now()` per row could put
+   * against the same instant; a grouper calling `Date.now()` per row could put
    * two rows a microsecond apart in different groups across a midnight, which
    * is a heading that appears for one row and a bug nobody would reproduce.
    */
   const dateGroups = useMemo(() => groupFeedByDate(transcripts, new Date()), [transcripts]);
-
-  const isFiltered = useMemo(
-    () => debouncedSearch.trim().length > 0 || status !== 'all',
-    [debouncedSearch, status],
-  );
 
   return (
     <Box>
@@ -375,14 +451,23 @@ export function TranscriptsLibraryView() {
       </Tabs>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mb: 2 }}>
+        {/* THE LABEL CHANGED WITH THE BEHAVIOUR (#176). It read "Search
+            titles" while this box filtered the list by a title substring; it
+            now runs a full-text search over the recordings themselves, and a
+            label still promising titles would be describing the old feature. */}
         <TextField
           size="small"
-          label="Search titles"
+          label="Search transcripts"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           sx={{ flexGrow: 1 }}
         />
-        <FormControl size="small" sx={{ minWidth: 180 }}>
+        {/* DISABLED WHILE SEARCHING, because `GET /api/search` has no status
+            parameter. Filtering the ranked page client-side instead would make
+            the count above it disagree with the rows below it — twenty fetched,
+            four shown, "the top 200 matches" over them — and a control that
+            silently does nothing is worse than one that visibly cannot. */}
+        <FormControl size="small" sx={{ minWidth: 180 }} disabled={searchMode}>
           <InputLabel id="transcript-status-filter">Status</InputLabel>
           <Select
             labelId="transcript-status-filter"
@@ -399,110 +484,125 @@ export function TranscriptsLibraryView() {
         </FormControl>
       </Stack>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Rendered unconditionally — see `FeedCountLine` for why a live region
-          must exist before it has anything to say. Empty while the first page
-          is in flight, so it never announces "No transcripts yet" at a reader
-          who is simply waiting. */}
-      <FeedCountLine
-        label={
-          isLoading
-            ? ''
-            : feedCountLabel(total, { one: 'transcript', many: 'transcripts' }, debouncedSearch)
-        }
-      />
-
-      {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress aria-label="Loading transcripts" />
-        </Box>
-      ) : transcripts.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
-          {/* TWO EMPTY STATES, because they need different things from the
-              reader. A filter that matched nothing is fixed by changing the
-              filter; an empty library is fixed by making a transcript, and
-              offering "clear your filters" there would be nonsense. */}
-          {isFiltered ? (
-            <>
-              <Typography variant="h6" component="h2" gutterBottom>
-                No transcripts match those filters
-              </Typography>
-              <Typography color="text.secondary">
-                Try a different search term, or set the status filter back to Any.
-              </Typography>
-            </>
-          ) : tab === 'shared' ? (
-            <>
-              <Typography variant="h6" component="h2" gutterBottom>
-                Nothing has been shared with you yet
-              </Typography>
-              <Typography color="text.secondary">
-                Transcripts other people share with you will appear here.
-              </Typography>
-            </>
-          ) : (
-            <>
-              <Typography variant="h6" component="h2" gutterBottom>
-                No transcripts yet
-              </Typography>
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                Upload a recording and we will transcribe it, work out who is
-                speaking, and let you read and correct it.
-              </Typography>
-              {canCreate && (
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => navigate('/transcripts/new')}
-                >
-                  New transcript
-                </Button>
-              )}
-            </>
-          )}
-        </Paper>
+      {searchMode ? (
+        <SearchResultsView
+          type="transcript"
+          query={search}
+          search={searchState}
+          dense={!isPhone}
+          onOpen={(result: SearchResult) => openTranscript(result.id)}
+          unappliedStatusFilter={status !== 'all'}
+        />
       ) : (
-        <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
-          {/* ONE flat list with separators among the rows — not a list per
-              group. See `FeedDateSeparator` for why nesting would change what a
-              screen reader announces for all 300 rows. */}
-          {dateGroups.map((group) => (
-            <Fragment key={group.key}>
-              <FeedDateSeparator label={group.label} />
-              {group.items.map((transcript) => (
-                <TranscriptRow
-                  key={transcript.id}
-                  transcript={transcript}
-                  dense={!isPhone}
-                  onOpen={() => openTranscript(transcript.id)}
-                  previewState={
-                    preview.activeId === transcript.id ? preview.status : 'idle'
-                  }
-                  previewError={
-                    preview.error?.transcriptId === transcript.id
-                      ? preview.error.message
-                      : null
-                  }
-                  onTogglePreview={() => preview.toggle(transcript.id)}
-                  onChanged={() => void refresh()}
-                />
-              ))}
-            </Fragment>
-          ))}
-        </Stack>
-      )}
+        <>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-      {nextCursor && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Button onClick={() => void loadMore()} disabled={isLoadingMore}>
-            {isLoadingMore ? 'Loading…' : 'Load more'}
-          </Button>
-        </Box>
+        {/* Rendered unconditionally — see `FeedCountLine` for why a live region
+            must exist before it has anything to say. Empty while the first page
+            is in flight, so it never announces at a reader who is simply
+            waiting.
+
+            No search term is passed, and there never can be one here: this
+            branch only renders when the box is EMPTY (#176 sends a term to
+            `SearchResultsView`, which reports its own match count). */}
+        <FeedCountLine
+          label={
+            isLoading ? '' : feedCountLabel(total, { one: 'transcript', many: 'transcripts' })
+          }
+        />
+
+        {isLoading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+            <CircularProgress aria-label="Loading transcripts" />
+          </Box>
+        ) : transcripts.length === 0 ? (
+          <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+            {/* TWO EMPTY STATES, because they need different things from the
+                reader. A filter that matched nothing is fixed by changing the
+                filter; an empty library is fixed by making a transcript, and
+                offering "clear your filters" there would be nonsense. */}
+            {isFiltered ? (
+              <>
+                <Typography variant="h6" component="h2" gutterBottom>
+                  No transcripts match those filters
+                </Typography>
+                <Typography color="text.secondary">
+                  Set the status filter back to Any to see everything.
+                </Typography>
+              </>
+            ) : tab === 'shared' ? (
+              <>
+                <Typography variant="h6" component="h2" gutterBottom>
+                  Nothing has been shared with you yet
+                </Typography>
+                <Typography color="text.secondary">
+                  Transcripts other people share with you will appear here.
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Typography variant="h6" component="h2" gutterBottom>
+                  No transcripts yet
+                </Typography>
+                <Typography color="text.secondary" sx={{ mb: 3 }}>
+                  Upload a recording and we will transcribe it, work out who is
+                  speaking, and let you read and correct it.
+                </Typography>
+                {canCreate && (
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => navigate('/transcripts/new')}
+                  >
+                    New transcript
+                  </Button>
+                )}
+              </>
+            )}
+          </Paper>
+        ) : (
+          <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
+            {/* ONE flat list with separators among the rows — not a list per
+                group. See `FeedDateSeparator` for why nesting would change what
+                a screen reader announces for all 300 rows. */}
+            {dateGroups.map((group) => (
+              <Fragment key={group.key}>
+                <FeedDateSeparator label={group.label} />
+                {group.items.map((transcript) => (
+              <TranscriptRow
+                key={transcript.id}
+                transcript={transcript}
+                dense={!isPhone}
+                onOpen={() => openTranscript(transcript.id)}
+                previewState={
+                  preview.activeId === transcript.id ? preview.status : 'idle'
+                }
+                previewError={
+                  preview.error?.transcriptId === transcript.id
+                    ? preview.error.message
+                    : null
+                }
+                onTogglePreview={() => preview.toggle(transcript.id)}
+                onChanged={() => void refresh()}
+              />
+                ))}
+              </Fragment>
+            ))}
+          </Stack>
+        )}
+
+        {nextCursor && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Button onClick={() => void loadMore()} disabled={isLoadingMore}>
+              {isLoadingMore ? 'Loading…' : 'Load more'}
+            </Button>
+          </Box>
+        )}
+        </>
       )}
 
       {/* ONE live region for the whole list rather than one per row: the
