@@ -41,8 +41,12 @@ function feed(ids: string[], nextCursor: string | null = null): FeedState<Row> {
   return {
     items: ids.map((id) => ({ id, updatedAt: '2026-01-01T00:00:00.000Z' })),
     nextCursor,
+    total: ids.length,
   };
 }
+
+/** What an absent or never-written key answers. */
+const EMPTY: FeedState<Row> = { items: [], nextCursor: null, total: 0 };
 
 const ids = (state: FeedState<Row>) => state.items.map((row) => row.id);
 
@@ -80,7 +84,7 @@ describe('the store', () => {
   });
 
   it('answers an empty feed for a key it has never seen', () => {
-    expect(readFeedCache<Row>('nothing-here')).toEqual({ items: [], nextCursor: null });
+    expect(readFeedCache<Row>('nothing-here')).toEqual(EMPTY);
   });
 
   it('treats an ABSENT key as caching-disabled, never as a shared entry', () => {
@@ -89,7 +93,7 @@ describe('the store', () => {
     // one transcript would hand its rows to the notes library.
     writeFeedCache(undefined, feed(['a']));
 
-    expect(readFeedCache<Row>(undefined)).toEqual({ items: [], nextCursor: null });
+    expect(readFeedCache<Row>(undefined)).toEqual(EMPTY);
   });
 
   it('hands out a fresh empty feed each time, so a caller cannot poison the blank', () => {
@@ -140,7 +144,7 @@ describe('useCachedFeedState', () => {
   it('starts empty when there is nothing cached', () => {
     const { result } = renderHook(() => useCachedFeedState<Row>('k'));
 
-    expect(result.current[0]).toEqual({ items: [], nextCursor: null });
+    expect(result.current[0]).toEqual(EMPTY);
   });
 
   it('writes through, so unmounting and remounting restores the feed', () => {
@@ -200,7 +204,7 @@ describe('useCachedFeedState', () => {
 
     rerender({ key: 'q=budget' });
 
-    expect(result.current[0]).toEqual({ items: [], nextCursor: null });
+    expect(result.current[0]).toEqual(EMPTY);
   });
 
   it('files a late update under the key its STATE belongs to, not the current one', () => {

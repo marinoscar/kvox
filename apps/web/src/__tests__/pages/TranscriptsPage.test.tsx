@@ -77,11 +77,18 @@ let requests: URL[] = [];
  */
 let searchRequests: URL[] = [];
 
-function respondWith(items: TranscriptListItem[], nextCursor: string | null = null) {
+function respondWith(
+  items: TranscriptListItem[],
+  nextCursor: string | null = null,
+  // `total` defaults to the page's own length, which is right for every test
+  // that is not about paging. A test that IS — one asserting the count line
+  // over a feed with more pages behind it — passes the real figure.
+  total: number = items.length,
+) {
   server.use(
     http.get(`${API_BASE}/transcripts`, ({ request }) => {
       requests.push(new URL(request.url));
-      return HttpResponse.json({ data: { items, nextCursor } });
+      return HttpResponse.json({ data: { items, total, nextCursor } });
     }),
   );
 }
@@ -359,6 +366,90 @@ describe('TranscriptsPage — paging', () => {
     await screen.findByText('Weekly standup');
 
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * =============================================================================
+ * THE RESULT COUNT LINE AND THE DATE SEPARATORS — issue #190
+ * =============================================================================
+ *
+ * Epic #162 reduces the filter bar to one search box, which makes this line the
+ * only feedback a search gives beyond the rows themselves — so its wording, its
+ * live region, and the fact that it counts MATCHES rather than LOADED ROWS are
+ * all load-bearing rather than decorative.
+ *
+ * The separators are asserted through the axe pass as much as through their
+ * text: they are `role="presentation"` `<li>`s inside the feed's one `<ul>`, and
+ * the thing that would break is the list semantics for all 300 rows, not the
+ * heading itself.
+ */
+describe('TranscriptsPage — result count and date groups', () => {
+  it('says how many MATCH, not how many are on screen', async () => {
+    // One page of one row out of 300. A count derived from the rows would say
+    // "1 transcript" under a list the user can page through 15 more times.
+    respondWith([item()], 'cursor-2', 300);
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+
+    expect(await screen.findByText('300 transcripts')).toBeInTheDocument();
+  });
+
+  it('uses the singular for one', async () => {
+    respondWith([item()], null, 1);
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+
+    expect(await screen.findByText('1 transcript')).toBeInTheDocument();
+  });
+
+  it('announces the count politely, so a search result is not silent', async () => {
+    respondWith([item()], null, 7);
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+    const line = await screen.findByText('7 transcripts');
+
+    expect(line.closest('[role="status"]')).not.toBeNull();
+    expect(line.closest('[aria-live="polite"]')).not.toBeNull();
+  });
+
+  it('renders a date separator above the rows', async () => {
+    respondWith([item({ updatedAt: new Date().toISOString() })], null, 1);
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+    await screen.findByText('Weekly standup');
+
+    expect(screen.getByText('Today')).toBeInTheDocument();
+  });
+
+  it('keeps the separators OUT of the list semantics', async () => {
+    // `role="presentation"` on the separator `<li>` is what stops a screen
+    // reader announcing "list, 300 items" when 30 of those are headings, and
+    // what avoids a heading level between the page `h1` and each row `h2`.
+    respondWith([item({ updatedAt: new Date().toISOString() })], null, 1);
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+    const separator = await screen.findByText('Today');
+
+    const li = separator.closest('li');
+    expect(li).not.toBeNull();
+    expect(li).toHaveAttribute('role', 'presentation');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('has no axe violations with a separator present', async () => {
+    respondWith([item({ updatedAt: new Date().toISOString() })], null, 1);
+    const { container } = render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+    await screen.findByText('Weekly standup');
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
 

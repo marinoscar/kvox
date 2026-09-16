@@ -283,34 +283,55 @@ export class NotesService {
 
   /** `GET /api/notes` — cursor-paginated, `updatedAt` descending. */
   async list(query: NoteListQueryDto, userId: string) {
-    const where = this.listWhere(query, userId);
+    // TWO PREDICATES, NOT ONE MUTATED IN PLACE. `filterWhere` is the question
+    // the caller asked; `pageWhere` is that question plus the keyset clause
+    // bounding this one page. `total` counts the first, which is what makes it
+    // identical on page one and on every `loadMore` — a count over `pageWhere`
+    // would shrink as the user paged, and a client showing "42 notes" would
+    // watch the number fall to 22 for pressing a button.
+    const filterWhere = this.listWhere(query, userId);
     const cursor = decodeCursor(query.cursor);
 
-    if (cursor) {
-      // KEYSET, NOT OFFSET. See the file header.
-      where.AND = [
-        {
-          OR: [
-            { updatedAt: { lt: cursor.updatedAt } },
-            { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
+    const pageWhere: Prisma.NoteWhereInput = cursor
+      ? {
+          ...filterWhere,
+          // KEYSET, NOT OFFSET. See the file header.
+          AND: [
+            {
+              OR: [
+                { updatedAt: { lt: cursor.updatedAt } },
+                { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
+              ],
+            },
           ],
-        },
-      ];
-    }
+        }
+      : filterWhere;
 
-    const rows = await this.prisma.note.findMany({
-      where,
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      include: { template: { select: { name: true } } },
-      // One more than asked for: the extra row answers "is there a next page?"
-      // without a second `count` over the same predicate.
-      take: query.limit + 1,
-    });
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.note.findMany({
+        where: pageWhere,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        include: { template: { select: { name: true } } },
+        // One more than asked for: the extra row answers "is there a next
+        // page?" without a second `count` over the same predicate. That is
+        // still true — `total` below answers a DIFFERENT question ("how many
+        // match at all"), and the two are deliberately not derived from each
+        // other.
+        take: query.limit + 1,
+      }),
+      // COUNTED, NOT ESTIMATED. This predicate is owner-scoped and covered by
+      // `(owner_id, updated_at desc)`, so the count is a cheap index scan over
+      // one user's rows; an approximation would be a worse answer for no gain.
+      // Read in the SAME transaction as the page so the count and the rows
+      // cannot describe two different states of the table.
+      this.prisma.note.count({ where: filterWhere }),
+    ]);
 
     const page = rows.slice(0, query.limit);
 
     return {
       items: page.map((row) => listShape(row)),
+      total,
       nextCursor:
         rows.length > query.limit && page.length > 0
           ? encodeCursor(page[page.length - 1])

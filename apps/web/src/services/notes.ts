@@ -128,6 +128,15 @@ export type NoteListItem = Omit<Note, 'body' | 'contextText'> & { excerpt: strin
 
 export interface NoteListResponse {
   items: NoteListItem[];
+  /**
+   * How many rows match the current filters, ignoring paging.
+   *
+   * THE FILTERS, NOT THE TABLE, and not "how many are left". Identical on page
+   * one and on every `loadMore` for an unchanged filter set, so the result
+   * count line can be rendered once and does not fall as the user pages.
+   */
+  total: number;
+
   /** Opaque cursor for the next page, or null at the end. */
   nextCursor: string | null;
 }

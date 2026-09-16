@@ -116,10 +116,27 @@ function withNotifications(events: { id: string; eventKey: string }[]) {
   } as unknown as ReturnType<typeof useNotifications>);
 }
 
+
+/**
+ * One page as the API returns it, `total` included (#190).
+ *
+ * `total` defaults to the page's own length, which is right for every test that
+ * is not about paging. The three-page fixtures below pass the real figure,
+ * because the whole point of `total` is that it does NOT shrink as a client
+ * pages — a count derived from the page would make that untestable here.
+ */
+function listResponse(
+  items: TranscriptListItem[],
+  nextCursor: string | null,
+  total: number = items.length,
+) {
+  return { items, total, nextCursor };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   noNotifications();
-  mockGetTranscripts.mockResolvedValue({ items: [], nextCursor: null });
+  mockGetTranscripts.mockResolvedValue(listResponse([], null));
   mockGetTranscript.mockResolvedValue({ status: 'ok', data: detail(), etag: 'W/"v1"' });
   mockGetTranscriptSegments.mockResolvedValue({
     status: 'ok',
@@ -134,7 +151,7 @@ afterEach(() => {
 
 describe('useTranscripts — the list', () => {
   it('queries the scope it was given and reports the page', async () => {
-    mockGetTranscripts.mockResolvedValue({ items: [listItem('a')], nextCursor: 'cursor-2' });
+    mockGetTranscripts.mockResolvedValue(listResponse([listItem('a')], 'cursor-2'));
 
     const { result } = renderHook(() => useTranscripts('shared', { pollIntervalMs: 0 }));
 
@@ -148,8 +165,8 @@ describe('useTranscripts — the list', () => {
 
   it('APPENDS on loadMore rather than replacing', async () => {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: [listItem('a')], nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: [listItem('b')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('a')], 'c2'))
+      .mockResolvedValueOnce(listResponse([listItem('b')], null));
 
     const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
     await waitFor(() => expect(result.current.transcripts).toHaveLength(1));
@@ -167,8 +184,8 @@ describe('useTranscripts — the list', () => {
     // whose `updatedAt` moves between requests legitimately appears twice, and
     // React would warn about the duplicate key while rendering it twice.
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: [listItem('a'), listItem('b')], nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: [listItem('b'), listItem('c')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('a'), listItem('b')], 'c2'))
+      .mockResolvedValueOnce(listResponse([listItem('b'), listItem('c')], null));
 
     const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
     await waitFor(() => expect(result.current.transcripts).toHaveLength(2));
@@ -192,7 +209,7 @@ describe('useTranscripts — the list', () => {
             resolveSlow = resolve;
           }),
       )
-      .mockResolvedValueOnce({ items: [listItem('fast')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('fast')], null));
 
     const { result, rerender } = renderHook(
       ({ q }: { q: string }) => useTranscripts('owned', { q, pollIntervalMs: 0 }),
@@ -203,7 +220,7 @@ describe('useTranscripts — the list', () => {
     await waitFor(() => expect(result.current.transcripts.map((t) => t.id)).toEqual(['fast']));
 
     await act(async () => {
-      resolveSlow({ items: [listItem('slow')], nextCursor: null });
+      resolveSlow(listResponse([listItem('slow')], null));
     });
 
     expect(result.current.transcripts.map((t) => t.id)).toEqual(['fast']);
@@ -273,9 +290,9 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
   /** Three pages: 20 rows, then 20 more, then 20 more. */
   function threePages() {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60));
   }
 
   async function loadThreePages() {
@@ -293,7 +310,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
 
   it('leaves 60 rows after the 20-second POLL fires', async () => {
     threePages();
-    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetTranscripts.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages();
 
@@ -318,10 +335,10 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
 
   it('leaves 60 rows when the interval actually elapses', async () => {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = renderHook(() =>
       useTranscripts('owned', { pollIntervalMs: TRANSCRIPT_IDLE_POLL_MS }),
@@ -354,10 +371,10 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
     // visible. That fetch is page one, and before #167 it was the fastest way
     // to lose a loaded feed: switch tabs and come straight back.
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = renderHook(() =>
       useTranscripts('owned', { pollIntervalMs: TRANSCRIPT_IDLE_POLL_MS }),
@@ -386,10 +403,10 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
 
   it('leaves 60 rows after a transcripts.* NOTIFICATION', async () => {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result, rerender } = renderHook(() =>
       useTranscripts('owned', { pollIntervalMs: 0 }),
@@ -413,7 +430,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
 
   it('leaves 60 rows after refresh() following a row action', async () => {
     threePages();
-    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetTranscripts.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages();
 
@@ -426,7 +443,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
 
   it('keeps the CURSOR where loadMore left it, so paging does not rewind', async () => {
     threePages();
-    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetTranscripts.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = await loadThreePages();
     expect(result.current.nextCursor).toBe('c4');
@@ -497,9 +514,9 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
     // `load`'s identity changes exactly when the query does, and reconciling
     // there splices rows matching the OLD filter into the answer to a new one.
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValue({ items: [listItem('match')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2'))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3'))
+      .mockResolvedValue(listResponse([listItem('match')], null));
 
     const { result, rerender } = renderHook(
       ({ q }: { q: string }) => useTranscripts('owned', { q, pollIntervalMs: 0 }),
@@ -519,8 +536,8 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
 
   it('RESETS on a scope change too', async () => {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValue({ items: [listItem('shared-1')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2'))
+      .mockResolvedValue(listResponse([listItem('shared-1')], null));
 
     const { result, rerender } = renderHook(
       ({ scope }: { scope: 'owned' | 'shared' }) =>
@@ -540,7 +557,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
     // A spinner every twenty seconds over data that is already correct is the
     // fastest way to make a live list unusable — and it would also throw away
     // the scroll position the rows are holding.
-    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetTranscripts.mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
     expect(result.current.isLoading).toBe(true);
@@ -563,7 +580,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
     // an out-of-date page one into the current list.
     let resolveSlow: (value: { items: TranscriptListItem[]; nextCursor: string | null }) => void =
       () => {};
-    mockGetTranscripts.mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' });
+    mockGetTranscripts.mockResolvedValueOnce(listResponse(page(0), 'c2'));
 
     const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
     await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
@@ -575,7 +592,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
             resolveSlow = resolve;
           }),
       )
-      .mockResolvedValueOnce({ items: [listItem('newest')], nextCursor: null });
+      .mockResolvedValueOnce(listResponse([listItem('newest')], null));
 
     let slow: Promise<void> = Promise.resolve();
     await act(async () => {
@@ -585,7 +602,7 @@ describe('useTranscripts — a background read REVALIDATES, it does not truncate
     expect(result.current.transcripts.map((t) => t.id)).toEqual(['newest']);
 
     await act(async () => {
-      resolveSlow({ items: page(20), nextCursor: 'c3' });
+      resolveSlow(listResponse(page(20), 'c3'));
       await slow;
     });
 
@@ -617,10 +634,10 @@ describe('useTranscripts — a cached feed survives the drill-down', () => {
 
   async function loadSixtyRows(cacheKey: string) {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValueOnce({ items: page(40), nextCursor: 'c4' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValueOnce(listResponse(page(40), 'c4', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const rendered = renderHook(() =>
       useTranscripts('owned', { pollIntervalMs: 0, cacheKey }),
@@ -682,7 +699,7 @@ describe('useTranscripts — a cached feed survives the drill-down', () => {
     const { unmount } = await loadSixtyRows('transcripts|owned||');
     unmount();
 
-    mockGetTranscripts.mockResolvedValue({ items: [listItem('shared-1')], nextCursor: null });
+    mockGetTranscripts.mockResolvedValue(listResponse([listItem('shared-1')], null));
 
     const { result } = renderHook(() =>
       useTranscripts('shared', { pollIntervalMs: 0, cacheKey: 'transcripts|shared||' }),
@@ -698,14 +715,14 @@ describe('useTranscripts — a cached feed survives the drill-down', () => {
   it('keeps each filter\'s own feed, so switching back restores it', async () => {
     await loadSixtyRows('transcripts|owned||').then((r) => r.unmount());
 
-    mockGetTranscripts.mockResolvedValue({ items: [listItem('shared-1')], nextCursor: null });
+    mockGetTranscripts.mockResolvedValue(listResponse([listItem('shared-1')], null));
     const shared = renderHook(() =>
       useTranscripts('shared', { pollIntervalMs: 0, cacheKey: 'transcripts|shared||' }),
     );
     await waitFor(() => expect(shared.result.current.transcripts).toHaveLength(1));
     shared.unmount();
 
-    mockGetTranscripts.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+    mockGetTranscripts.mockResolvedValue(listResponse(page(0), 'c2', 60));
     const { result } = renderHook(() =>
       useTranscripts('owned', { pollIntervalMs: 0, cacheKey: 'transcripts|owned||' }),
     );
@@ -715,9 +732,9 @@ describe('useTranscripts — a cached feed survives the drill-down', () => {
 
   it('caches NOTHING without a cacheKey — the option is opt-in', async () => {
     mockGetTranscripts
-      .mockResolvedValueOnce({ items: page(0), nextCursor: 'c2' })
-      .mockResolvedValueOnce({ items: page(20), nextCursor: 'c3' })
-      .mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+      .mockResolvedValueOnce(listResponse(page(0), 'c2'))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3'))
+      .mockResolvedValue(listResponse(page(0), 'c2', 60));
 
     const first = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
     await waitFor(() => expect(first.result.current.transcripts).toHaveLength(20));
@@ -730,6 +747,75 @@ describe('useTranscripts — a cached feed survives the drill-down', () => {
     const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
 
     expect(result.current.transcripts).toHaveLength(0);
+    expect(result.current.isLoading).toBe(true);
+  });
+});
+
+/**
+ * =============================================================================
+ * `total` — HOW MANY MATCH, NOT HOW MANY ARE LOADED (issue #190)
+ * =============================================================================
+ *
+ * The number this exposes is the one the result-count line renders, and its
+ * whole value is that it does NOT move as the user pages. So the tests that
+ * matter are the ones where it would be tempting to derive it from the rows:
+ * a 20-row page out of 60, and a `loadMore` that leaves it alone.
+ */
+describe('useTranscripts — total', () => {
+  it('reports how many MATCH, not how many are loaded', async () => {
+    mockGetTranscripts.mockResolvedValue(listResponse(page(0), 'c2', 300));
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+
+    expect(result.current.total).toBe(300);
+  });
+
+  it('does not change as the user pages', async () => {
+    mockGetTranscripts
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60));
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.total).toBe(60));
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(result.current.transcripts).toHaveLength(40);
+    expect(result.current.total).toBe(60);
+  });
+
+  it('takes the PAGE\'s count on a revalidation, even while keeping its own cursor', async () => {
+    // The count answers a question about the FILTERS, so the freshest answer
+    // wins — unlike `nextCursor`, which describes where the client's own list
+    // stops and is deliberately kept. The two are not symmetric and a
+    // "simplification" that made them so would freeze the count.
+    mockGetTranscripts
+      .mockResolvedValueOnce(listResponse(page(0), 'c2', 60))
+      .mockResolvedValueOnce(listResponse(page(20), 'c3', 60))
+      .mockResolvedValue(listResponse(page(0), 'c2', 61));
+
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+    await waitFor(() => expect(result.current.transcripts).toHaveLength(20));
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.total).toBe(61);
+    expect(result.current.nextCursor).toBe('c3');
+    expect(result.current.transcripts).toHaveLength(40);
+  });
+
+  it('starts at 0 before the first page lands', async () => {
+    const { result } = renderHook(() => useTranscripts('owned', { pollIntervalMs: 0 }));
+
+    expect(result.current.total).toBe(0);
     expect(result.current.isLoading).toBe(true);
   });
 });

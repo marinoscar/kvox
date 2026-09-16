@@ -64,9 +64,11 @@ import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import visuallyHidden from '@mui/utils/visuallyHidden';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { FeedCountLine } from './FeedCountLine';
+import { FeedDateSeparator } from './FeedDateSeparator';
 import { TranscriptRowActions } from './TranscriptRowActions';
 import { SearchResultsView } from '../search/SearchResultsView';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
@@ -76,6 +78,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useSearch } from '../../hooks/useSearch';
 import { useTranscripts } from '../../hooks/useTranscripts';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
+import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
 import { feedCacheKey } from '../../utils/feedCache';
 import type { SearchResult, SearchType } from '../../services/search';
 import type { TranscriptListItem, TranscriptStatus } from '../../services/transcripts';
@@ -325,7 +328,7 @@ export function TranscriptsLibraryView() {
   // key and restores the new tab's — which is exactly the behaviour you want.
   useScrollRestoration(cacheKey);
 
-  const { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
+  const { transcripts, total, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh } =
     useTranscripts(tab, {
       status: status === 'all' ? undefined : status,
       cacheKey,
@@ -424,6 +427,17 @@ export function TranscriptsLibraryView() {
   // states instead of to this one.
   const isFiltered = status !== 'all';
 
+  /**
+   * The feed cut into date groups — issue #190.
+   *
+   * `new Date()` is read HERE and passed down, rather than inside the grouper.
+   * One clock reading per render means every row in one paint is bucketed
+   * against the same instant; a grouper calling `Date.now()` per row could put
+   * two rows a microsecond apart in different groups across a midnight, which
+   * is a heading that appears for one row and a bug nobody would reproduce.
+   */
+  const dateGroups = useMemo(() => groupFeedByDate(transcripts, new Date()), [transcripts]);
+
   return (
     <Box>
       <Tabs
@@ -487,6 +501,20 @@ export function TranscriptsLibraryView() {
           </Alert>
         )}
 
+        {/* Rendered unconditionally — see `FeedCountLine` for why a live region
+            must exist before it has anything to say. Empty while the first page
+            is in flight, so it never announces at a reader who is simply
+            waiting.
+
+            No search term is passed, and there never can be one here: this
+            branch only renders when the box is EMPTY (#176 sends a term to
+            `SearchResultsView`, which reports its own match count). */}
+        <FeedCountLine
+          label={
+            isLoading ? '' : feedCountLabel(total, { one: 'transcript', many: 'transcripts' })
+          }
+        />
+
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress aria-label="Loading transcripts" />
@@ -538,7 +566,13 @@ export function TranscriptsLibraryView() {
           </Paper>
         ) : (
           <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
-            {transcripts.map((transcript) => (
+            {/* ONE flat list with separators among the rows — not a list per
+                group. See `FeedDateSeparator` for why nesting would change what
+                a screen reader announces for all 300 rows. */}
+            {dateGroups.map((group) => (
+              <Fragment key={group.key}>
+                <FeedDateSeparator label={group.label} />
+                {group.items.map((transcript) => (
               <TranscriptRow
                 key={transcript.id}
                 transcript={transcript}
@@ -555,6 +589,8 @@ export function TranscriptsLibraryView() {
                 onTogglePreview={() => preview.toggle(transcript.id)}
                 onChanged={() => void refresh()}
               />
+                ))}
+              </Fragment>
             ))}
           </Stack>
         )}
