@@ -213,7 +213,7 @@ Set these before running the installer to override its defaults:
 | --- | --- | --- |
 | `KVOX_REPO` | `https://github.com/marinoscar/kvox.git` | Git clone URL |
 | `KVOX_REF` | `main` | Branch/tag/commit to install |
-| `KVOX_HOME` | `$HOME/.kvox` (root: `/usr/local/lib/kvox`) | App install root (same directory the CLI stores `config.json` in) |
+| `KVOX_HOME` | `$HOME/.kvox` (root: `/usr/local/lib/kvox`) | Where the CLI's code is unpacked — not where `config.json` lives, see below |
 | `KVOX_BIN_DIR` | `$HOME/.local/bin` (root: `/usr/local/bin`) | Directory for the `kvox` shim |
 | `GITHUB_TOKEN` | (unset) | Optional GitHub PAT, for cloning a private repo |
 | `KVOX_SRC` | (unset) | Local directory to install from instead of cloning |
