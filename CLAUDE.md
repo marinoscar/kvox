@@ -640,7 +640,7 @@ learning. There is deliberately no admin read-any. See
 here.
 - `POST /api/transcripts` - Create the transcript **and** its resumable upload in one call (`transcripts:write`). 409 when transcription is not configured (the deployment is not ready — not the caller's fault), 400 over the active provider's size ceiling. The upload object is created `managed_by: 'transcripts'`, which a client cannot ask for
 - `GET /api/transcripts` - List, cursor-paginated over `(updatedAt, id)` — every pipeline transition rewrites `updatedAt`, so offset paging would skip and repeat rows (`transcripts:read`)
-- `GET /api/transcripts/summary` - Three lists and four counts for the home page, in one round trip (`transcripts:read`)
+- `GET /api/transcripts/summary` - Four lists and four counts for the home page, in one round trip (`transcripts:read`). The fourth list is `failed` — the caller's **own** failed transcripts, owner-scoped (retry is owner-only) and capped at eight, while `counts.failed` stays the true total
 - `GET /api/transcripts/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with **no body** on a match
 - `GET /api/transcripts/{id}/segments` - Compact, **no word timings** (the largest thing in this schema); same ETag
 - `GET /api/transcripts/{id}/words?fromMs&toMs` - Word timings for one window, selected by **overlap** not containment; capped at 30 minutes and silently narrowed rather than refused
@@ -733,6 +733,8 @@ all three roles; **404, never 403**, for a note the caller cannot see. See
 - `GET /api/notes/{id}/versions/{version}` - One full-body version snapshot (`notes:read`)
 - `PATCH /api/notes/{id}` - Rename and/or edit the body. A body edit requires `baseVersion`; a stale one is a **409** naming `details.currentVersion` (`notes:write`)
 - `POST /api/notes/{id}/regenerate` - The only retry path (`note.generate` is `maxAttempts: 1`). Appends a new version; history is kept (`notes:write`)
+- `POST /api/notes/{id}/retitle` - Queue `note.retitle` for one note — the "Suggest a title" action. **202**, 409 while `generating`. ⚠ The **only** path that renames a `titleSource: user` note: asking for a suggestion about a note in front of you is an explicit choice (`notes:write`)
+- `POST /api/notes/retitle` - The bulk sweep: queue `note.retitle` for a capped page (100) of the caller's own `ready` notes still on `titleSource: template`, oldest first, returning `{ queued, remaining }`. Deduplicated, so calling it twice never queues a note twice; a success writes `titleSource: ai` and the note leaves the selection, which is what makes `remaining` reach zero (`notes:write`)
 - `POST /api/notes/{id}/versions/{version}/restore` - Appends a `restore` version; `baseVersion` must equal `currentVersion` (`notes:write`)
 - `DELETE /api/notes/{id}` - Owner only. Soft-deletes to `deleting` and queues `note.purge`; 409 while generating or while another note names this one as its source (`notes:write`)
 - `POST /api/notes/{id}/exports` - Render one version into `markdown`/`pdf`/`docx` as a queue job. 202 when queued, 200 when an identical unexpired export is reused (`notes:write`)
@@ -1634,14 +1636,18 @@ Audio Transcription section above sets.
    `name`. `user_ai_credentials.userId` **cascades**, which is the entire
    point of the table: the key is the user's, so its lifetime is the user's.
 
-The five job types (`notes/job-types.ts`, all labelled in
+The six job types (`notes/job-types.ts`, all labelled in
 `job-type-labels.ts`): `note.generate` (server-only permanently — no vendor
 here offers a job-scoped sub-key the way PostgreSQL does for
 `db.backup.run`, so there is nothing a `nodeSecretBroker` could broker),
 `note.source.extract` (node-eligible), `note.export` (server-only — the
 renderers live in the API, the same scope line `transcript.export` draws),
-`note.purge` and `notes.housekeeping` (the sweep that hard-deletes expired
-template previews and expired exports).
+`note.purge`, `notes.housekeeping` (the sweep that hard-deletes expired
+template previews and expired exports), and `note.retitle` (#184, epic #163 —
+retroactive titling of the existing library, one job per note, `maxAttempts:
+1` and server-only for `note.generate`'s reasons exactly. ⚠ **A job and
+deliberately not a migration**: titling spends the note owner's own vendor key,
+which `migrate deploy` must never do on their behalf).
 
 ### Deleting Your Own Data
 

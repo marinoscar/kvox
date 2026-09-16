@@ -74,9 +74,11 @@ import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
+import { HOUSEKEEPING_PRIORITY } from '../jobs/housekeeping.enqueue';
 import {
   EXCERPT_CHARS,
   NOTE_CONFLICT_REASONS,
+  RETITLE_SWEEP_LIMIT,
   type CreateNoteDto,
   type NoteListItem,
   type NoteListQueryDto,
@@ -96,6 +98,7 @@ import { assemblePrompt, parseTemplateStructure } from './generation/prompt';
 import {
   NOTE_GENERATE_JOB_TYPE,
   NOTE_PURGE_JOB_TYPE,
+  NOTE_RETITLE_JOB_TYPE,
   NOTE_SUBJECT_TYPE,
 } from './job-types';
 
@@ -104,6 +107,36 @@ export const SUMMARY_LIST_SIZE = 8;
 
 /** The statuses a note may be deleted from. `generating` is deliberately absent. */
 export const DELETABLE_STATUSES = ['draft', 'ready', 'failed'] as const;
+
+/**
+ * The queue priority a bulk retitle job takes (issue #184, epic #163).
+ *
+ * ⚠ ASCENDING IS MORE URGENT, so this is the opposite end of the spectrum from
+ * `NOTE_EXPORT_JOB_PRIORITY = -10`: nobody is watching a spinner for a sweep
+ * over a library, and a hundred titling jobs must never be claimed ahead of the
+ * note somebody is generating right now. It is `HOUSEKEEPING_PRIORITY` itself
+ * rather than a new literal `100`, for the reason that constant states about
+ * its own reuse — a second copy is a second chance for one of them to become
+ * `-100` and starve the queue behind a batch of renames.
+ *
+ * ⚠ THE SINGLE-NOTE ROUTE DOES NOT USE IT. `POST /api/notes/{id}/retitle` takes
+ * the column default (`0`), because a person pressed a button and is waiting
+ * for the answer; queueing that behind a sweep they started an hour ago would
+ * make the button look broken.
+ */
+export const NOTE_RETITLE_JOB_PRIORITY = HOUSEKEEPING_PRIORITY;
+
+/** What `POST /api/notes/{id}/retitle` queued. */
+export interface QueuedRetitle {
+  noteId: string;
+  jobId: string;
+}
+
+/** What `POST /api/notes/retitle` queued, and what it left behind. */
+export interface RetitleSweep {
+  queued: number;
+  remaining: number;
+}
 
 /** What one create or regenerate produced. */
 export interface QueuedGeneration {
@@ -751,6 +784,160 @@ export class NotesService {
     });
 
     await this.enqueuePurge(note.id);
+  }
+
+  // ===========================================================================
+  // Retitle (issue #184, epic #163)
+  // ===========================================================================
+
+  /**
+   * `POST /api/notes/{id}/retitle` — name ONE note from what it says.
+   *
+   * The action behind "Suggest a title". Returns as soon as the job is queued;
+   * the title changes when it settles.
+   *
+   * ⚠ `force: true`, AND THIS IS THE ONE PLACE IT IS EVER PASSED. The bulk
+   * sweep below must never rename a title a person chose, because it renames
+   * notes nobody is looking at and there is no undo. A person pressing this
+   * button on a note they named themselves has asked, explicitly and about this
+   * one note, for a suggestion — refusing them on the strength of a column they
+   * never saw would be the application overruling the user to protect them from
+   * a choice they just made. See `NoteTitleService`'s header for the same
+   * argument stated where the guard lives.
+   *
+   * ⚠ `skipDedup: true`, UNLIKE THE SWEEP, and for a reason that is specific
+   * rather than stylistic: a sweep may already have a `note.retitle` job
+   * pending for this note carrying `force: false`, and dedup would collapse
+   * this request into it — returning 202 with a job id for a job that will read
+   * `force: false`, skip the note, and leave the user pressing a button that
+   * does nothing. Two retitles of one note are idempotent (the second re-reads
+   * the row), so the cost of not deduplicating is one extra small request and
+   * the cost of deduplicating is a silently broken button.
+   */
+  async retitle(id: string, user: RequestUser): Promise<QueuedRetitle> {
+    const { note } = await this.access.require(user.id, id, 'edit', user.permissions);
+
+    if (note.status === 'generating') {
+      // A generation names the note itself the moment it commits (#182, spec
+      // §3.4). A retitle running alongside it would be two passes racing for
+      // one title, and the loser's tokens are spent either way.
+      throw new ConflictException({
+        message:
+          'This note is being generated right now, and the generation will name it when it ' +
+          'finishes. Wait for it, then ask for a new title if you want a different one.',
+        details: { reason: NOTE_CONFLICT_REASONS.GENERATING },
+      });
+    }
+
+    const job = await this.jobs.enqueue({
+      type: NOTE_RETITLE_JOB_TYPE,
+      // The enum has no "a user asked for this" member, and `upload` would
+      // claim the job descends from an upload, which a rename plainly does not.
+      reason: 'rerun',
+      subjectType: NOTE_SUBJECT_TYPE,
+      subjectId: note.id,
+      payload: { noteId: note.id, force: true } satisfies Prisma.InputJsonObject,
+      // No `priority`: the column default (`0`) outranks the sweep by
+      // construction. See `NOTE_RETITLE_JOB_PRIORITY`.
+      skipDedup: true,
+    });
+
+    await this.audit(user.id, 'note:retitle', note.id, {
+      titleSource: note.titleSource,
+      jobId: job.id,
+    });
+
+    return { noteId: note.id, jobId: job.id };
+  }
+
+  /**
+   * `POST /api/notes/retitle` — the bulk sweep, one capped page at a time.
+   *
+   * ⚠ THE SELECTION IS `titleSource: 'template'`, WHICH IS NARROWER THAN
+   * "NOT `user`", AND THE NARROWING IS WHAT MAKES THE SWEEP TERMINATE.
+   * `title_source` has three values. `user` is a name a person chose and is
+   * never touched here. `ai` is a note this exact pass has ALREADY named from
+   * its own content — re-running it spends the owner's money to re-derive an
+   * answer they already have. `template` is precisely the problem this endpoint
+   * exists for: a note called whatever its template was called. Selecting
+   * "everything that is not `user`" would re-include every note the sweep had
+   * just finished with, so `remaining` could never reach zero and a caller
+   * following the resumption protocol would loop forever, billing themselves
+   * each lap. A successful rename writes `titleSource: 'ai'` and the note
+   * leaves the selection; that is the whole convergence argument.
+   *
+   * ⚠ OLDEST `updatedAt` FIRST, and the direction is load-bearing too. A rename
+   * touches the row, so `@updatedAt` moves a titled note to the BACK of this
+   * ordering — the next call's page is the next hundred that still need it,
+   * with no cursor for the caller to carry and no page to lose. Newest-first
+   * would hand back the same hundred every time. It also picks the right notes
+   * first: the ones untouched for longest are the ones least likely to be
+   * renamed by their owner in the next minute.
+   *
+   * ⚠ NO `skipDedup`, DELIBERATELY, AND IT IS THE OPPOSITE CHOICE FROM
+   * `retitle` ABOVE. `type` + `note` + id is the active dedup key, so a note
+   * that already has a `note.retitle` job pending or running collapses into it:
+   * pressing the button twice cannot queue one note twice, and an impatient
+   * caller cannot bill themselves twice for one library.
+   *
+   * `remaining` is counted at request time, so it does not yet reflect the jobs
+   * this call just queued. Call again once they settle; `0` means done.
+   */
+  async retitleAll(user: RequestUser): Promise<RetitleSweep> {
+    const where: Prisma.NoteWhereInput = {
+      ownerId: user.id,
+      deletedAt: null,
+      // Only a `ready` note has a settled body to name it from. A `draft` or
+      // `generating` note is about to be named by its own generation; a
+      // `failed` one has no content at all.
+      status: 'ready',
+      titleSource: 'template',
+    };
+
+    const total = await this.prisma.note.count({ where });
+
+    const notes = await this.prisma.note.findMany({
+      where,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: RETITLE_SWEEP_LIMIT,
+      select: { id: true },
+    });
+
+    for (const note of notes) {
+      await this.jobs.enqueue({
+        type: NOTE_RETITLE_JOB_TYPE,
+        // Scheduled work over rows that already exist — the same reading
+        // `enqueueHousekeepingJob` gives its own sweeps.
+        reason: 'backfill',
+        subjectType: NOTE_SUBJECT_TYPE,
+        subjectId: note.id,
+        // ⚠ NO `force`. A sweep renames notes nobody is watching; see
+        // `retitle` above for why only that route may set it.
+        payload: { noteId: note.id } satisfies Prisma.InputJsonObject,
+        priority: NOTE_RETITLE_JOB_PRIORITY,
+      });
+    }
+
+    // ⚠ WRITTEN INLINE RATHER THAN THROUGH `audit()`, which hardcodes
+    // `targetType: 'note'`. This action has no single note as its target — the
+    // target is the caller's own library — and filing it under a note id that
+    // happened to be in the page would make the audit trail claim something
+    // that is not true about that note.
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: user.id,
+        action: 'note:retitle-sweep',
+        targetType: 'user',
+        targetId: user.id,
+        meta: { queued: notes.length, total } satisfies Prisma.InputJsonObject,
+      },
+    });
+
+    this.logger.log(
+      `Queued ${notes.length} retitle job(s) for user ${user.id}; ${Math.max(total - notes.length, 0)} remain`,
+    );
+
+    return { queued: notes.length, remaining: Math.max(total - notes.length, 0) };
   }
 
   /**
