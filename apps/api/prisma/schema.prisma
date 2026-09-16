@@ -86,6 +86,12 @@ model User {
   // `credentials` instead.
   aiCredentials          UserAiCredential[] @relation("UserAiCredentials")
 
+  // Semantic search index state (issue #181, epic #165). ONE relation, and
+  // it CASCADES — an index-state row for a document owned by nobody means
+  // nothing, the identical reasoning `transcripts`/`notes` already apply to
+  // their own `ownerId`. See the block comment above `SearchIndexState`.
+  searchIndexStates SearchIndexState[] @relation("SearchIndexStateOwner")
+
   @@map("users")
 }
 
@@ -3378,4 +3384,204 @@ model UserAiCredential {
   // replacing a key is an upsert on this pair, never a second row.
   @@unique([userId, provider])
   @@map("user_ai_credentials")
+}
+
+// =============================================================================
+// Semantic search: pgvector storage (issue #181, epic #165)
+// =============================================================================
+//
+// Layer 2 of search, sitting beside layer 1's generated `tsvector` columns
+// (`20260915120000_add_search_vectors`): MEANING-based retrieval over the
+// same transcript/note content, via vectors an AI embedding model produces.
+// This is storage only — no embedding call, no chunking pipeline, lives in
+// this schema; that is later issues in epic #165. The full argument for
+// every decision below (the `vector(1536)` width contract, why
+// `document_id` carries no foreign key, HNSW vs. IVFFlat, the
+// `vector_cosine_ops` opclass, why embeddings are not a column on the
+// document row, content addressing via `content_hash`, and why `status` is
+// a Prisma enum while `document_type`/`reason` stay plain text) is in the
+// header of `20260915130000_add_search_embeddings/migration.sql` — read that
+// first; this comment only orients the three models against each other.
+// =============================================================================
+
+enum SearchIndexStatus {
+  pending
+  indexing
+  indexed
+  failed
+  skipped
+}
+
+// One row per chunk of a document's text (issue #181). `documentType` +
+// `documentId` is a polymorphic reference with NO foreign key in either
+// direction — the same precedent `Job.subjectType`/`subjectId` sets (see the
+// block comment above `model Job`) and for the identical reason: the set of
+// searchable document types is open-ended and code-owned. See the migration
+// header's point 2 for the cost of that choice (an orphan row is possible)
+// and who owes the sweep (the deleting document's own `transcript.purge` /
+// `note.purge` handler, wired by a later issue).
+model SearchChunk {
+  id String @id @default(uuid()) @db.Uuid
+
+  documentType String @map("document_type")
+  documentId   String @map("document_id") @db.Uuid
+
+  // Position among this document's chunks. Together with
+  // (documentType, documentId) this is the natural key — see the unique
+  // index below.
+  ordinal Int
+
+  text String
+
+  // sha256 of this chunk's FINAL text — the content-addressing key. See the
+  // migration header's point 6: re-indexing an edited document only needs to
+  // re-embed the chunks whose hash actually changed, and the bill for that
+  // is the document owner's own vendor account.
+  contentHash String @map("content_hash")
+
+  // Character offsets into the document's source text, so a search result's
+  // snippet can be built directly from this row without re-locating the
+  // chunk inside the document. See the migration header's point 5 for why
+  // this lives on its own row rather than as a column on the document.
+  charStart Int @map("char_start")
+  charEnd   Int @map("char_end")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  embeddings SearchEmbedding[]
+
+  // One chunk per position per document — the natural key a re-chunk
+  // upserts against.
+  @@unique([documentType, documentId, ordinal])
+  // The lookup every read of "this document's chunks" uses.
+  @@index([documentType, documentId])
+  // The content-addressing lookup the migration header's point 6 argues for.
+  @@index([contentHash])
+  @@map("search_chunks")
+}
+
+// One (chunk, model) embedding vector (issue #181). `chunkId` IS a real
+// foreign key — unlike `SearchChunk.documentId` above, it points INSIDE this
+// same module's own table, not sideways into another module's — and
+// CASCADES: an embedding with no chunk left to belong to means nothing.
+//
+// ⚠ `embedding` is `Unsupported("vector(1536)")`, and it is REQUIRED, not
+// optional — unlike the FTS `tsvector` columns in the sibling migration,
+// which are database-GENERATED and so Prisma must never attempt to write
+// them. This column is the opposite: application code writes it, on every
+// insert, with no database-side generation at all. A REQUIRED `Unsupported`
+// field makes `prisma.searchEmbedding.create(...)` (and every other
+// generated-client write) UNCREATABLE for this model — the generated client
+// has no way to construct a value for an unsupported type, so every write to
+// this table MUST go through raw SQL (`$queryRaw`/`$executeRaw`, building the
+// vector literal by hand). That is correct and intended, not a limitation to
+// route around: a `vector` literal has to be assembled as raw SQL regardless
+// of what the client layer offers, because there is no TypeScript
+// representation of a pgvector value the generated client could accept in
+// the first place. See the migration header's points 1, 3, 4 and 6 for the
+// width contract, the HNSW index choice, the `vector_cosine_ops` opclass,
+// and why `UNIQUE (chunkId, model)` is what makes a repeat embed cheap.
+model SearchEmbedding {
+  id String @id @default(uuid()) @db.Uuid
+
+  chunkId String @map("chunk_id") @db.Uuid
+
+  // Which embedding model produced this vector — a plain string, open-ended,
+  // exactly like `Job.type` and `Transcript.provider` elsewhere in this
+  // schema, so a new or changed model costs this table zero migrations.
+  model String
+
+  // Recorded fact about the row, kept even though the column type already
+  // enforces the real width constraint. See the migration header's point 1
+  // for why this is not redundant: it is what lets a future width migration
+  // tell old rows from new ones without re-deriving the width from the
+  // vector itself.
+  dimensions Int
+
+  // `vector(1536)` — see the block comment above the model for the whole
+  // "why Unsupported, why required, why raw SQL" argument, and the migration
+  // header's point 1 for why 1536 specifically is a CONTRACT with
+  // `AiProvider`'s `EMBEDDING_DIMENSIONS`, not a default.
+  embedding Unsupported("vector(1536)")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // ⚠ Cascade — this row has no meaning once its chunk is gone. See the
+  // header above the model.
+  chunk SearchChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  // One vector per chunk per model — the natural key a re-embed upserts
+  // against, and the index the migration header's point 6 argues makes a
+  // repeat-embed check a single indexed lookup rather than a scan.
+  @@unique([chunkId, model])
+  // HAND-WRITTEN in migration.sql only — Prisma has no DSL for `USING hnsw`
+  // or for an index's operator class. See the migration header's
+  // "INTENTIONAL SCHEMA DRIFT" section (occurrence 5 of 5: `jobs`,
+  // `database_backup_runs`, `transcript_speakers`, this migration's own
+  // sibling's generated tsvector columns, and this). Do not "fix" this by
+  // inventing a Prisma-expressible substitute — there isn't one, and
+  // `prisma migrate dev`/`diff` must never be asked to reconcile this index
+  // away.
+  @@map("search_embeddings")
+}
+
+// One row per DOCUMENT (not chunk) — the legibility surface an owner or
+// admin reads to answer "is this document semantically searchable, and if
+// not, why not" (issue #181). `documentType`/`documentId` mirror
+// `SearchChunk`'s polymorphic reference exactly, and for the identical
+// reason (no foreign key, open-ended document types). `ownerId` IS a real
+// foreign key into `users` and CASCADES: an index-state row for a document
+// whose owner no longer exists means nothing, the same reasoning
+// `Transcript.ownerId`/`Note.ownerId` already establish in this schema.
+model SearchIndexState {
+  id String @id @default(uuid()) @db.Uuid
+
+  documentType String @map("document_type")
+  documentId   String @map("document_id") @db.Uuid
+
+  ownerId String @map("owner_id") @db.Uuid
+
+  // A CLOSED set this application owns end to end — every value is written
+  // by code inside this repository, nothing external ever proposes a new
+  // one — so, unlike documentType/reason beside it, this IS a Prisma enum.
+  // See the migration header's "STATUS" section for the full three-way
+  // argument.
+  status SearchIndexStatus @default(pending)
+
+  // WHY this document is not (yet, or ever) semantically searchable —
+  // `ai_key_missing`, `ai_not_configured`, `dimension_mismatch`, … Plain
+  // TEXT and deliberately not an enum: it is a diagnostic string for a human
+  // debugging a stuck document, and it will grow new values as new failure
+  // modes are discovered. NULL outside of `failed`/`skipped` is itself
+  // informative.
+  reason String?
+
+  chunkCount Int @default(0) @map("chunk_count")
+
+  // Which embedding model produced the current chunk set, so a later change
+  // to the deployment's active model can be detected against rows indexed
+  // under an earlier one.
+  model String?
+
+  // The per-document hash "has this document's content changed since it was
+  // last indexed" is checked against — one comparison, not a full re-chunk,
+  // to decide whether a re-index has anything to do at all.
+  contentFingerprint String? @map("content_fingerprint")
+
+  lastError String? @map("last_error")
+
+  indexedAt DateTime? @map("indexed_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // ⚠ Cascade. See the block comment above the model.
+  owner User @relation("SearchIndexStateOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // One state row per document — the address every read/write of "this
+  // document's indexing status" uses.
+  @@unique([documentType, documentId])
+  // The `unindexedCount` query: "how many of this owner's documents are in
+  // state X".
+  @@index([ownerId, status])
+  @@map("search_index_state")
 }

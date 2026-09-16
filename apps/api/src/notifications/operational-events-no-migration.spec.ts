@@ -79,6 +79,11 @@ const MIGRATIONS_AT_288 = [
   // statements and three indexes — a search index, and equally not about
   // notifications.
   '20260915120000_add_search_vectors',
+  // #181 (epic #165): the pgvector storage for semantic search
+  // (search_chunks, search_embeddings, search_index_state) — the CREATE
+  // EXTENSION and the vector(1536)/HNSW schema that layer 2 of search needs.
+  // A data model for embeddings, and equally not about notifications.
+  '20260915130000_add_search_embeddings',
   // #180 (epic #163): `notes.title_source`, one enum column recording where a
   // note's title came from so an AI titling pass can tell a name a person
   // chose from one it may improve on. A provenance column, and equally not
