@@ -613,14 +613,24 @@ from the server** — the first free port from 3535 that no other app under
 `--apps-root` has recorded, `min(4, cpus − 1)`, and a limit sized to the
 RAM — and each suggestion is shown with its reason and can be edited. The
 OAuth step prints the exact redirect URI to register before asking for the
-client id, then verifies the pair against Google's own token endpoint: a
-deliberately bogus authorization code gets `invalid_client` back when the
-pair isn't real (a hard failure) or `invalid_grant` when it is (the pass).
-That proves the credentials are a real pair, not that login will work — a
-client secret can't be fully exercised without a browser round-trip, and
-whether the redirect URI is actually registered isn't checkable from here.
-Google being unreachable is a warning, not a failure — an operator on a
-restricted network must still be able to install.
+client id. The id is checked locally before anything reaches Google: one
+that doesn't contain `.apps.googleusercontent.` is certainly the wrong field
+(a project id, an API key) and hard-fails on the spot; one that does but
+doesn't end `.apps.googleusercontent.com` — a well-formed placeholder on a
+reserved TLD such as RFC 2606 `.invalid` or `.test` — only warns and skips
+the probe entirely, since it can't be a client Google knows about and
+probing it would send a credential to a third party for a value that isn't
+real. A step's `onLeave` checks run in `--non-interactive` mode too
+(`env-wizard.ts`), which is why that distinction matters for an unattended
+install and not just an interactive one. Only an id actually ending
+`.apps.googleusercontent.com` is verified against Google's own token
+endpoint: a deliberately bogus authorization code gets `invalid_client` back
+when the pair isn't real (a hard failure) or `invalid_grant` when it is (the
+pass). That proves the credentials are a real pair, not that login will
+work — a client secret can't be fully exercised without a browser round-trip,
+and whether the redirect URI is actually registered isn't checkable from
+here. Google being unreachable is a warning, not a failure — an operator on
+a restricted network must still be able to install.
 
 `--answer KEY=VALUE` (repeatable) and `--answers-file <path>` (a `.env`-format
 file; the file first, then the flags) seed values without a prompt. The
