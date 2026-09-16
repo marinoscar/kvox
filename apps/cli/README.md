@@ -760,17 +760,37 @@ using `master` or `develop` as its default branch works with no `--ref`
 needed — nothing here assumes `main`), and the environment wizard's
 questions are parsed structurally from *your fork's own*
 `infra/compose/.env.example` — not a list of field names hardcoded into the
-CLI. The interactive wizard reads that file straight from the remote
-repository at the resolved ref (`gh api`, the same credential the checkout
-step clones with), *before* anything is cloned, so a first install on a bare
-server still asks your fork's real questions with nothing on disk yet; it
-falls back to a local checkout only when the remote read fails (a non-GitHub
-remote, a logged-out `gh`, a repo the token can't see, a timeout) — never a
-sibling app's checkout, and never a reason to fail the install. Rename the
-app, add a new secret to your `.env.example`, remove a feature block: `kvox
-deploy install` follows all of it with no flag changes, for the same reason
-`api <method> <path>` (above) doesn't go stale as endpoints change — nothing
-about a specific repository's shape is baked into the tool.
+CLI.
+
+The wizard tries four sources for that file, in order, and uses the first
+that answers: the repository's own copy read from the remote at the resolved
+ref (`gh api`, the same credential the `checkout` step clones with); a
+checkout already on this server, or the one the CLI is running from; the
+copy `install.sh` saved beside the CLI when it was installed, if that copy
+came from the repository actually being deployed; or, failing all three, a
+refusal to install rather than an offer built from template defaults. Never
+a sibling app's template at any step, and never one repository's file
+answering another's questions — see
+[`docs/specs/vps-deploy.md`](../../docs/specs/vps-deploy.md#61-where-the-template-file-comes-from-and-why-the-order-matters-issues-229-230-234-236)
+for the four sources and why each is weaker than the one before it.
+
+Because `install.sh` bundles the repository's own `.env.example` when it
+builds the CLI, **a first install no longer needs `gh` at all** to ask the
+right questions, as long as the CLI was installed (or last updated) from the
+repository you're deploying now. The remote read is still tried first and is
+the most current — it reflects the exact ref being deployed rather than
+whatever commit the CLI happened to be built from — so it's still worth
+having `gh` logged in. Remember that `gh`'s authentication is **per user**:
+`sudo kvox deploy install` runs as root, and root needs its **own**
+`gh auth login`, separate from whatever account you logged in as yourself. A
+`gh` that can't answer is reported on the Welcome screen (not installed, not
+logged in, no access to the repo, timed out, or an empty file) but never
+fails the install by itself, as long as one of the other two sources can.
+
+Rename the app, add a new secret to your `.env.example`, remove a feature
+block: `kvox deploy install` follows all of it with no flag changes, for the
+same reason `api <method> <path>` (above) doesn't go stale as endpoints
+change — nothing about a specific repository's shape is baked into the tool.
 
 ### Updating
 
