@@ -9,7 +9,9 @@ import 'vitest-axe/extend-expect';
 
 import { server } from '../mocks/server';
 import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
+import { NOTE_ACTIVE_POLL_MS } from '../../hooks/useNotes';
 import { render, mockAdminUser } from '../utils/test-utils';
+import type { MockUser } from '../utils/test-utils';
 import NotePage from '../../pages/NotePage';
 import type { Note } from '../../services/notes';
 import type { NoteGenerationStreamHandlers } from '../../services/noteGenerationStream';
@@ -264,14 +266,48 @@ beforeEach(() => {
   );
 });
 
-function renderNote(route = '/notes/n1') {
+function renderNote(route = '/notes/n1', user: MockUser = mockAdminUser) {
   return render(
     <Routes>
       <Route path="/notes/:id" element={<NotePage />} />
       <Route path="/notes" element={<h1>Library</h1>} />
     </Routes>,
-    { wrapperOptions: { user: mockAdminUser, route } },
+    { wrapperOptions: { user, route } },
   );
+}
+
+/**
+ * `admin` minus `notes:write` — a user who can read this page but holds none
+ * of the write actions on it. Built from `mockAdminUser` rather than a fresh
+ * literal so it stays in lockstep with every OTHER permission the seeded admin
+ * role grants (#367 etc.) instead of silently drifting into a fixture no real
+ * role can produce.
+ */
+const noteReaderOnly: MockUser = {
+  ...mockAdminUser,
+  permissions: mockAdminUser.permissions.filter((p) => p !== 'notes:write'),
+};
+
+/** Open the page's overflow menu (#185) and return it. */
+async function openNoteMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: 'Note actions' }));
+  return screen.findByRole('menu');
+}
+
+/**
+ * The `menuitem` a given `ListItemText` primary belongs to.
+ *
+ * ⚠ NOT `getByRole('menuitem', { name })`. The item's secondary text (the
+ * disabled reason) renders as a sibling node inside the same menuitem and
+ * folds into its accessible name, so a name match would have to know that
+ * reason's exact wording in advance. Finding the primary text and walking up
+ * to its `menuitem` ancestor asserts the one thing this suite actually cares
+ * about — which item — independently of that.
+ */
+function menuItemFor(menu: HTMLElement, primary: string): HTMLElement {
+  const item = within(menu).getByText(primary).closest('[role="menuitem"]');
+  if (!item) throw new Error(`"${primary}" is not inside a menuitem`);
+  return item as HTMLElement;
 }
 
 /** Deliver one `delta` frame through the fake stream the page opened. */
@@ -1456,5 +1492,261 @@ describe('NotePage — the editor’s accessibility', () => {
     await user.click(screen.getByRole('button', { name: 'Preview' }));
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
+// #185 — "Suggest a title"
+// =============================================================================
+
+/**
+ * Mirrors `NotePage.tsx`'s own private `RETITLE_WATCH_MS`. Not imported —
+ * the constant is deliberately not exported, so this is the bound the page
+ * documents in its copy (`RETITLE_WATCH_MS`'s own header) rather than a value
+ * this suite can get out of sync with silently, since a mismatch here would
+ * only ever make the expiry test below fail-safe (advancing too little) or
+ * fail loudly (advancing so far past it that the "still working" copy would
+ * already be showing something else entirely).
+ */
+const RETITLE_WATCH_MS = 90_000;
+
+describe('NotePage — Suggest a title', () => {
+  it('is offered, and enabled, for a ready note when notes:write is held', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    renderNote();
+
+    const menu = await openNoteMenu(user);
+    const item = menuItemFor(menu, 'Suggest a title');
+
+    expect(item).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('has no overflow menu at all without notes:write — not merely a disabled item inside one', async () => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    renderNote('/notes/n1', noteReaderOnly);
+
+    await screen.findByRole('heading', { name: 'Q3 planning — decisions', level: 1 });
+    // Absence of the TRIGGER, not merely of the item — there is nothing here
+    // for a reader-only user to open at all.
+    expect(screen.queryByRole('button', { name: 'Note actions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['draft', 'Available once this note has finished generating'],
+    ['generating', 'Available once this note has finished generating'],
+    ['failed', 'This note has no content to take a title from'],
+    ['deleting', 'This note is being deleted'],
+  ])('disables Suggest a title for a %s note, with its own reason', async (status, reason) => {
+    const user = userEvent.setup();
+    current = note({
+      status: status as Note['status'],
+      failureReason: status === 'failed' ? 'The provider timed out.' : null,
+    });
+    renderNote();
+
+    const menu = await openNoteMenu(user);
+    const item = menuItemFor(menu, 'Suggest a title');
+
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(within(item).getByText(reason)).toBeInTheDocument();
+  });
+
+  it('asks the API exactly once, and closes the menu', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    let retitleCalls = 0;
+    server.use(
+      http.post(`${API_BASE}/notes/:id/retitle`, () => {
+        retitleCalls += 1;
+        return HttpResponse.json({ data: { noteId: 'n1', jobId: 'job-1' } }, { status: 202 });
+      }),
+    );
+    renderNote();
+
+    const menu = await openNoteMenu(user);
+    await user.click(menuItemFor(menu, 'Suggest a title'));
+
+    await waitFor(() => expect(retitleCalls).toBe(1));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    // ⚠ NOT ASSERTED SYNCHRONOUSLY FROM THE POST'S OWN RESPONSE. The 202 names
+    // no title, so the heading must still read the OLD one right after the
+    // request settles — see `retitleNote`'s own header.
+    expect(screen.getByRole('heading', { name: 'Q3 planning — decisions', level: 1 })).toBeInTheDocument();
+  });
+
+  it('cannot be pressed again while a suggestion is already in flight', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    let retitleCalls = 0;
+    let releaseRetitle: (() => void) | undefined;
+    server.use(
+      http.post(`${API_BASE}/notes/:id/retitle`, async () => {
+        retitleCalls += 1;
+        // Held open so the page is still "in flight" when the second attempt
+        // below happens.
+        await new Promise<void>((resolve) => {
+          releaseRetitle = resolve;
+        });
+        return HttpResponse.json({ data: { noteId: 'n1', jobId: 'job-1' } }, { status: 202 });
+      }),
+    );
+    renderNote();
+
+    const menu = await openNoteMenu(user);
+    await user.click(menuItemFor(menu, 'Suggest a title'));
+    await waitFor(() => expect(retitleCalls).toBe(1));
+
+    // Reopening the menu WHILE the first request is still in flight shows the
+    // item disabled with its own reason, and pressing it is a no-op.
+    const secondMenu = await openNoteMenu(user);
+    const item = menuItemFor(secondMenu, 'Suggest a title');
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(within(item).getByText('A title is already on its way')).toBeInTheDocument();
+
+    await user.click(item);
+
+    // Nothing new was sent — the guard in `suggestTitle` itself refused it,
+    // the same way the disabled `aria-disabled` item told the user it would.
+    expect(retitleCalls).toBe(1);
+
+    // Let the first request settle so nothing leaks into a later test — this
+    // note's title never changes, so there is nothing further to wait for.
+    await act(async () => {
+      releaseRetitle?.();
+      await Promise.resolve();
+    });
+    expect(retitleCalls).toBe(1);
+  });
+
+  it('lets the new title arrive from a later poll — never from the POST itself — and announces it', async () => {
+    // ⚠ THE TEST THAT PROVES THE WATCH ACTUALLY TERMINATES. Fake timers are
+    // installed BEFORE the page mounts: `useVisiblePolling`'s interval is
+    // created with whatever `setInterval` is live at that moment, and
+    // installing fake timers afterwards would leave an already-running
+    // interval on the real clock, unreachable by `advanceTimersByTimeAsync`.
+    // `shouldAdvanceTime` is what keeps every ordinary `findBy`/`waitFor` in
+    // this test working exactly as it does under real timers (the same
+    // reasoning `UserDangerZonePage.test.tsx`'s polling suite documents);
+    // the explicit advance below is only for the 5s poll period itself, so
+    // this test does not cost 5 real seconds to run.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+      let retitleCalls = 0;
+      server.use(
+        http.post(`${API_BASE}/notes/:id/retitle`, () => {
+          retitleCalls += 1;
+          return HttpResponse.json({ data: { noteId: 'n1', jobId: 'job-1' } }, { status: 202 });
+        }),
+      );
+      const user = userEvent.setup();
+      renderNote();
+
+      const menu = await openNoteMenu(user);
+      await user.click(menuItemFor(menu, 'Suggest a title'));
+      await waitFor(() => expect(retitleCalls).toBe(1));
+
+      // Still the OLD title — the 202 carried none.
+      expect(
+        screen.getByRole('heading', { name: 'Q3 planning — decisions', level: 1 }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Suggesting a title/i)).toBeInTheDocument();
+
+      // The row itself changes, exactly as `note.retitle` settling would leave
+      // it — with nobody re-reading it by hand.
+      current = { ...current, title: 'AI: Q3 decisions and owners' };
+
+      await vi.advanceTimersByTimeAsync(NOTE_ACTIVE_POLL_MS);
+
+      expect(
+        await screen.findByRole('heading', { name: 'AI: Q3 decisions and owners', level: 1 }),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Title updated.')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says so, rather than falling silent or polling forever, once the bounded watch expires', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+      server.use(
+        http.post(`${API_BASE}/notes/:id/retitle`, () =>
+          HttpResponse.json({ data: { noteId: 'n1', jobId: 'job-1' } }, { status: 202 }),
+        ),
+      );
+      const user = userEvent.setup();
+      renderNote();
+
+      const menu = await openNoteMenu(user);
+      await user.click(menuItemFor(menu, 'Suggest a title'));
+      await screen.findByText(/Suggesting a title/i);
+
+      // The title NEVER changes — a job that failed, or decided the existing
+      // title was already right, look identical from here.
+      await vi.advanceTimersByTimeAsync(RETITLE_WATCH_MS);
+
+      expect(
+        await screen.findByText(
+          'Still working on a title. It will appear here, or the next time you open this note.',
+        ),
+      ).toBeInTheDocument();
+      // The old title is still on screen — nothing was invented in its place.
+      expect(
+        screen.getByRole('heading', { name: 'Q3 planning — decisions', level: 1 }),
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reads a 409 as the note being generated right now, not as a raw error', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    server.use(
+      http.post(`${API_BASE}/notes/:id/retitle`, () =>
+        HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'This note is generating.',
+            details: { reason: 'generating' },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderNote();
+
+    const menu = await openNoteMenu(user);
+    await user.click(menuItemFor(menu, 'Suggest a title'));
+
+    expect(
+      await screen.findByText(
+        'This note is being generated right now — the generation will name it when it finishes.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('surfaces a generic failure through the page’s own error alert', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    server.use(
+      http.post(`${API_BASE}/notes/:id/retitle`, () =>
+        HttpResponse.json(
+          { statusCode: 500, code: 'INTERNAL', message: 'The server had a problem.' },
+          { status: 500 },
+        ),
+      ),
+    );
+    renderNote();
+
+    const menu = await openNoteMenu(user);
+    await user.click(menuItemFor(menu, 'Suggest a title'));
+
+    expect(await screen.findByText('The server had a problem.')).toBeInTheDocument();
   });
 });

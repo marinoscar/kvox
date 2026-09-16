@@ -68,6 +68,21 @@
  * still saves and still exports. A key is needed to spend money at a provider;
  * it is not needed to read text this user already owns. A page that gated
  * everything on it would be holding a user's own work hostage to a credential.
+ *
+ * =============================================================================
+ * ⚠ "SUGGEST A TITLE" IS QUEUE WORK, AND THE PAGE NEVER PRETENDS OTHERWISE (#185)
+ * =============================================================================
+ *
+ * `POST /api/notes/{id}/retitle` answers **202** with a job id and no title.
+ * So the menu item does not wait, does not block, and does not write a name of
+ * its own: it records the title the note had, starts `useNote`'s existing poll
+ * by handing it an interval, and lets the row itself bring the new name back.
+ * That poll is bounded (`RETITLE_WATCH_MS`) because a `ready` note polls for
+ * nothing otherwise, and a job that failed would leave it running forever.
+ *
+ * The action stays offered for a note the user renamed themselves. That is the
+ * API's own rule, not an oversight — this is the one route that overrides a
+ * chosen name, because pressing the item IS the explicit request.
  */
 
 import Alert from '@mui/material/Alert';
@@ -83,6 +98,9 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
+import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
@@ -93,6 +111,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import HistoryIcon from '@mui/icons-material/History';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import { useCallback, useEffect, useState } from 'react';
@@ -111,7 +130,8 @@ import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNot
 import { useAiConfig } from '../hooks/useAiConfig';
 import { useNoteSourceName } from '../hooks/useNoteSourceNames';
 import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
-import { isNoteInFlight, useNote } from '../hooks/useNotes';
+import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../hooks/useNotes';
+import { usePermissions } from '../hooks/usePermissions';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { ApiError } from '../services/api';
 import { connectNoteStream, describeStreamError } from '../services/noteGenerationStream';
@@ -121,14 +141,100 @@ import {
   noteConflictCurrentVersion,
   noteConflictReason,
   regenerateNote,
+  retitleNote,
   updateNote,
 } from '../services/notes';
-import type { RegenerateNoteInput } from '../services/notes';
+import type { NoteStatus, RegenerateNoteInput } from '../services/notes';
+
+const SUGGEST_TITLE_LABEL = 'Suggest a title';
+
+/**
+ * How long this page keeps polling for a title it asked for.
+ *
+ * ⚠ A BOUND, NOT A DEADLINE THE JOB KNOWS ABOUT. `note.retitle` is queue work
+ * and will finish whenever it finishes; this number only decides how long the
+ * page keeps ASKING. Without it a `ready` note — which `useNote` does not poll
+ * at all — would poll every five seconds forever the moment a retitle job
+ * failed, because the title it is waiting for is never going to change. When it
+ * expires the page says so rather than falling silent.
+ */
+const RETITLE_WATCH_MS = 90_000;
+
+/**
+ * Why "Suggest a title" cannot be pressed right now, or `undefined`.
+ *
+ * Returned as PROSE because it is rendered as the menu item's own secondary
+ * text — see the item for why a tooltip would not do. `undefined` is the only
+ * value that means "pressable", so the item and its reason can never disagree.
+ */
+function suggestTitleBlockedReason(
+  status: NoteStatus,
+  pending: boolean,
+): string | undefined {
+  if (pending) return 'A title is already on its way';
+
+  switch (status) {
+    case 'draft':
+    case 'generating':
+      // The generation names the note itself when it commits, and the API
+      // answers this route a 409 until it does.
+      return 'Available once this note has finished generating';
+    case 'failed':
+      return 'This note has no content to take a title from';
+    case 'deleting':
+      return 'This note is being deleted';
+    default:
+      return undefined;
+  }
+}
 
 export function NotePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { note, isLoading, error, refresh, setNote } = useNote(id);
+  const { hasPermission } = usePermissions();
+  /**
+   * `notes:write` — the exact string `notes.controller.ts` enforces on
+   * `POST /api/notes/{id}/retitle`, read the same way `TranscriptPage` and
+   * `HomePage` read theirs. A control a role can never use is noise, so with
+   * the permission absent the whole overflow menu is absent rather than being
+   * an affordance that 403s.
+   */
+  const canWriteNotes = hasPermission('notes:write');
+
+  // --- "Suggest a title" (#185, epic #163) ---------------------------------
+  /** The POST itself is in flight. Seconds, not the wait for the title. */
+  const [isSuggestingTitle, setIsSuggestingTitle] = useState(false);
+  /**
+   * The title this page had when the job was queued, or `null` when it is not
+   * waiting for one.
+   *
+   * ⚠ THE OLD TITLE IS THE WHOLE STATE MACHINE. The 202 carries a job id and no
+   * title (see `retitleNote`), so "has it landed?" can only be answered by
+   * comparing what the note says now against what it said when we asked. A
+   * boolean would have nothing to compare against and would have to guess.
+   */
+  const [retitleWatch, setRetitleWatch] = useState<string | null>(null);
+  const [retitleNotice, setRetitleNotice] = useState<string | null>(null);
+  const [retitleError, setRetitleError] = useState<string | null>(null);
+  const [pageMenuAnchor, setPageMenuAnchor] = useState<HTMLElement | null>(null);
+
+  const retitlePending = isSuggestingTitle || retitleWatch !== null;
+
+  /**
+   * ⚠ THE POLL OVERRIDE IS THE REFRESH MECHANISM, AND IT IS THE PAGE'S OWN.
+   *
+   * `useNote` already polls, but only while the note is `draft`/`generating` —
+   * a `ready` note changes for nobody, so the interval it derives is `0`. A
+   * retitle is the one thing that changes a ready note with nobody touching it,
+   * so this hands the hook the same `NOTE_ACTIVE_POLL_MS` it would have derived
+   * for itself, for exactly as long as there is something to wait for. Nothing
+   * new was invented: the override parameter and the visibility-aware interval
+   * behind it are the ones `useNote` has always exposed.
+   */
+  const { note, isLoading, error, refresh, setNote } = useNote(
+    id,
+    retitleWatch !== null ? NOTE_ACTIVE_POLL_MS : undefined,
+  );
   const { config: aiConfig, keyConfigured, isLoading: isAiLoading } = useAiConfig();
   const sourceName = useNoteSourceName(note);
   /**
@@ -197,7 +303,51 @@ export function NotePage() {
     setSaveError(null);
     setTitleDraft(null);
     setConflict(null);
+    setPageMenuAnchor(null);
+    setRetitleWatch(null);
+    setRetitleNotice(null);
+    setRetitleError(null);
   }, [id]);
+
+  /**
+   * The suggested title has landed.
+   *
+   * ⚠ IT IS DETECTED, NOT DELIVERED. `note.retitle` settles in the queue with
+   * nobody watching, so the only signal this page gets is the poll above
+   * bringing back a row whose title is not the one we asked about. Clearing the
+   * watch is what stops that poll — this effect is the loop's exit condition,
+   * not a nicety.
+   */
+  useEffect(() => {
+    if (retitleWatch === null || !note) return;
+    if (note.title === retitleWatch) return;
+
+    setRetitleWatch(null);
+    setRetitleNotice('Title updated.');
+  }, [note, retitleWatch]);
+
+  /**
+   * Stop waiting eventually, and SAY SO.
+   *
+   * The deadline is reset only when a new watch begins — `retitleWatch` holds a
+   * title, so it does not change while the wait is running. A job that failed,
+   * or one that decided the note was already best named what it was, both look
+   * identical from here: the title never changes. Falling silent would leave a
+   * spinner up forever; this replaces it with a sentence that is true either
+   * way.
+   */
+  useEffect(() => {
+    if (retitleWatch === null) return;
+
+    const timer = window.setTimeout(() => {
+      setRetitleWatch(null);
+      setRetitleNotice(
+        'Still working on a title. It will appear here, or the next time you open this note.',
+      );
+    }, RETITLE_WATCH_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [retitleWatch]);
 
   useEffect(() => {
     if (!id || !inFlight || !watching) return;
@@ -363,6 +513,56 @@ export function NotePage() {
     }
   }, [id, note, setNote, titleDraft]);
 
+  /**
+   * Ask the API to name this note from what it actually says (#185).
+   *
+   * ⚠ NOTHING IS WAITED ON. `POST /api/notes/{id}/retitle` is a **202**: it
+   * queues `note.retitle` and returns, so the title on screen is still the old
+   * one when this resolves. Blocking the menu — or the page — until a new title
+   * appeared would be holding the UI open across a provider round trip that is
+   * explicitly designed not to need one.
+   *
+   * ⚠ IT IS OFFERED FOR A NOTE THE USER NAMED THEMSELVES, on purpose. This is
+   * the one route that overrides a `titleSource: 'user'` title, because pressing
+   * this button IS the explicit request about this note; the bulk sweep is the
+   * one that leaves a chosen name alone. See `retitleNote`'s own header.
+   */
+  const suggestTitle = useCallback(async () => {
+    if (!id || !note || retitlePending) return;
+
+    const previousTitle = note.title;
+
+    setPageMenuAnchor(null);
+    setIsSuggestingTitle(true);
+    setRetitleError(null);
+    setRetitleNotice(null);
+
+    try {
+      await retitleNote(id);
+
+      // Only NOW does the wait begin — and the title it is measured against is
+      // the one read a moment ago, before any poll could have moved it.
+      setRetitleWatch(previousTitle);
+      setRetitleNotice('Suggesting a title… you can keep working, or close this page.');
+    } catch (err) {
+      // A 409 here is not a failure of anything the user did: the generation
+      // that is running names the note itself when it commits.
+      if (noteConflictReason(err) === 'generating') {
+        setRetitleError(
+          'This note is being generated right now — the generation will name it when it finishes.',
+        );
+
+        return;
+      }
+
+      setRetitleError(
+        err instanceof ApiError ? err.message : 'A title could not be suggested',
+      );
+    } finally {
+      setIsSuggestingTitle(false);
+    }
+  }, [id, note, retitlePending]);
+
   // ---------------------------------------------------------------------------
   // Regeneration
   // ---------------------------------------------------------------------------
@@ -451,6 +651,10 @@ export function NotePage() {
   // Never both, and never the buffer once the row has the real thing.
   const body = inFlight && streamed ? streamed : note.body;
   const canEdit = !inFlight && note.status !== 'deleting';
+
+  // `undefined` means pressable — see `suggestTitleBlockedReason`.
+  const suggestTitleReason = suggestTitleBlockedReason(note.status, retitlePending);
+  const canSuggestTitle = suggestTitleReason === undefined;
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto' }}>
@@ -546,8 +750,75 @@ export function NotePage() {
           >
             History
           </Button>
+          {/* ⚠ THE WHOLE MENU IS GATED, not just the item inside it — with
+              `notes:write` absent there is nothing in it to open. */}
+          {canWriteNotes && (
+            <IconButton
+              size="small"
+              aria-label="Note actions"
+              onClick={(event) => setPageMenuAnchor(event.currentTarget)}
+            >
+              <MoreVertIcon fontSize="inherit" />
+            </IconButton>
+          )}
         </Stack>
       </Stack>
+
+      {canWriteNotes && (
+        <Menu
+          anchorEl={pageMenuAnchor}
+          open={Boolean(pageMenuAnchor)}
+          onClose={() => setPageMenuAnchor(null)}
+        >
+          <MenuItem
+            // `aria-disabled`, not `disabled`, the same choice `TranscriptPage`
+            // makes and for the same reason: a `disabled` MenuItem is skipped
+            // by the menu's own keyboard navigation, so the reason underneath
+            // it would be unreachable for the user most likely to need it read
+            // out. The click handler is what actually refuses.
+            aria-disabled={!canSuggestTitle || undefined}
+            onClick={() => {
+              if (!canSuggestTitle) return;
+              void suggestTitle();
+            }}
+          >
+            <ListItemText
+              primary={SUGGEST_TITLE_LABEL}
+              // The reason rides in the item's own accessible name rather than
+              // a tooltip: a tooltip inside an open menu is announced by almost
+              // nothing.
+              secondary={suggestTitleReason}
+              slotProps={
+                canSuggestTitle ? undefined : { primary: { color: 'text.disabled' } }
+              }
+            />
+          </MenuItem>
+        </Menu>
+      )}
+
+      {/* ⚠ A LIVE REGION THAT IS ALWAYS MOUNTED. The queued state has to be
+          ANNOUNCED, not merely shown — the title changes minutes later, with no
+          other signal — and a `role="status"` inserted at the same moment as
+          its text is frequently not announced at all. Empty, it costs no
+          height. `polite`, never `assertive`: this must not talk over the note
+          somebody is reading. Same shape as `SaveIndicator`. */}
+      <Box
+        role="status"
+        aria-live="polite"
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.75,
+          mb: retitleNotice || retitlePending ? 1 : 0,
+        }}
+      >
+        {retitlePending && <CircularProgress size={12} aria-hidden />}
+        {retitleNotice && (
+          <Typography variant="caption" color="text.secondary">
+            {retitleNotice}
+          </Typography>
+        )}
+      </Box>
 
       {/* ⚠ ON SCREEN, NOT IN A MENU. The epic's trust-and-provenance premise
           made concrete — see `NoteProvenance`'s own header. */}
@@ -645,6 +916,12 @@ export function NotePage() {
       {saveError && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {saveError}
+        </Alert>
+      )}
+
+      {retitleError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {retitleError}
         </Alert>
       )}
 
