@@ -45,10 +45,32 @@ export interface NewNoteDraft {
   objectId: string;
   templateId: string;
   contextText: string;
+  /** The user's own name for the note, if they typed one (#187). Optional. */
+  title: string;
 }
 
 export function emptyNewNoteDraft(): NewNoteDraft {
-  return { kind: 'transcript', transcriptId: '', noteId: '', objectId: '', templateId: '', contextText: '' };
+  return {
+    kind: 'transcript',
+    transcriptId: '',
+    noteId: '',
+    objectId: '',
+    templateId: '',
+    contextText: '',
+    title: '',
+  };
+}
+
+/**
+ * The `title` member of a `POST /api/notes` body, or `undefined` (#187).
+ *
+ * ⚠ BLANK MEANS ABSENT, NOT EMPTY. The API's `title` is
+ * `z.string().trim().min(1)`, so `''` is a **400** rather than a fallback to the
+ * generated name — and a field holding only spaces is a field the user left
+ * blank, which is why the trim happens here rather than at the API's edge.
+ */
+export function buildNoteTitle(draft: NewNoteDraft): string | undefined {
+  return draft.title.trim() || undefined;
 }
 
 /**

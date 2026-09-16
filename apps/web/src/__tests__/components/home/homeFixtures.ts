@@ -92,6 +92,7 @@ export function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
   return {
     id: 'n1',
     title: 'Standup minutes',
+    titleSource: 'ai',
     status: 'ready',
     currentVersion: 1,
     provider: 'openai',
