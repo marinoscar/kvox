@@ -10,6 +10,7 @@ import { server } from '../mocks/server';
 import { render, mockAdminUser } from '../utils/test-utils';
 import { setViewportWidth } from '../setup';
 import NewNotePage from '../../pages/NewNotePage';
+import { MAX_TITLE_CHARS } from '../../services/notes';
 
 /**
  * `/notes/new`, over the REAL services and MSW.
@@ -374,6 +375,90 @@ describe('NewNotePage — the three source pickers', () => {
     // No `?transcriptId=`, nothing picked: the form is complete in every other
     // respect and still cannot be submitted.
     expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+  });
+});
+
+// =============================================================================
+// #187 — the optional title
+// =============================================================================
+
+describe('NewNotePage — the optional title', () => {
+  it('offers the field, labelled optional, capped at MAX_TITLE_CHARS', async () => {
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    const field = screen.getByLabelText('Title (optional)');
+    expect(field).toBeInTheDocument();
+    expect(field).toHaveAttribute('maxlength', String(MAX_TITLE_CHARS));
+  });
+
+  it('sends the typed title, trimmed, when Generate is pressed', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.type(screen.getByLabelText('Title (optional)'), '  Follow-up notes  ');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0].title).toBe('Follow-up notes');
+  });
+
+  it('omits `title` from the request entirely when left blank', async () => {
+    // ⚠ THE WHOLE POINT OF THE CHANGE. The API's `title` is
+    // `z.string().trim().min(1)`, so an empty string is a 400, not a fallback
+    // to the generated name — `not.toHaveProperty` catches a `title: ''` or
+    // `title: undefined` bug that `toBeUndefined()` would let through, because
+    // both differ from an omitted key once the body has been through JSON.
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0]).not.toHaveProperty('title');
+  });
+
+  it('omits `title` when the field holds only whitespace', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    await user.type(screen.getByLabelText('Title (optional)'), '   ');
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    expect(createdBodies[0]).not.toHaveProperty('title');
+  });
+
+  it('tells the user a typed title survives regeneration', async () => {
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    expect(
+      screen.getByText(/named for you once it has been generated/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/kept.*regenerating never changes it/i),
+    ).toBeInTheDocument();
+  });
+
+  it('does not become required: Generate stays enabled and works with the title untouched', async () => {
+    const user = userEvent.setup();
+    renderPage('/notes/new?transcriptId=t1');
+    await waitForForm();
+
+    // The title field is never touched — the same "ready" gate that already
+    // requires a source and a template must not also start requiring this.
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => expect(createdBodies).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByTestId('pathname')).toHaveTextContent('/notes/new-note-id'),
+    );
   });
 });
 

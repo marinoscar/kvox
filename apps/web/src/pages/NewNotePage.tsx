@@ -79,6 +79,7 @@ import { useIsMounted } from '../hooks/useIsMounted';
 import { useNoteTemplates } from '../hooks/useNoteTemplates';
 import { ApiError } from '../services/api';
 import {
+  MAX_TITLE_CHARS,
   NOTE_DOCUMENT_ACCEPT,
   NOTE_DOCUMENT_ACCEPT_LABEL,
   createNote,
@@ -93,6 +94,7 @@ import type { TranscriptListItem } from '../services/transcripts';
 import {
   NOTE_SOURCE_KINDS,
   buildNoteSource,
+  buildNoteTitle,
   emptyNewNoteDraft,
   isNewNoteReady,
 } from './newNote';
@@ -328,6 +330,10 @@ export function NewNotePage() {
       const result = await createNote({
         templateId: draft.templateId,
         source,
+        // Omitted when blank, never sent as `''` — see `buildNoteTitle`. A title
+        // that IS sent is recorded as the user's (#197) and is then sticky: no
+        // titling pass, and no regeneration, ever renames it.
+        title: buildNoteTitle(draft),
         // Omitted rather than sent empty: the API treats an absent context as
         // "none", and a blank string would be an empty paragraph in the prompt.
         contextText: draft.contextText.trim() || undefined,
@@ -594,23 +600,58 @@ export function NewNotePage() {
     </Stack>
   );
 
+  /**
+   * The two optional inputs, in the step the form's last card holds (#187).
+   *
+   * The title sits BESIDE the context rather than at the top of the form, and
+   * the step keeps its name, because both fields are the same kind of thing:
+   * something a user may say and usually does not, on a screen whose three
+   * required answers are the source, the template and nothing else. Putting a
+   * "Title" box first would ask every user to name a note before they have seen
+   * a word of it — which is precisely the question this field exists to let them
+   * skip.
+   */
   const contextStep = (
-    <TextField
-      label="Context (optional)"
-      multiline
-      minRows={3}
-      fullWidth
-      value={draft.contextText}
-      onChange={(event) =>
-        setDraft((current) => ({ ...current, contextText: event.target.value }))
-      }
-      // The placeholder is the explanation. An unexplained free-text box at the
-      // end of a form is a box nobody fills in, and the thing it is for — what
-      // an outsider writing this up would need to know — is not guessable from
-      // the word "Context".
-      placeholder="Who was there, why this happened, and what matters most — anything someone writing this up from the outside would need to know."
-      helperText="Placed ahead of the source in the prompt, for this note and every regeneration of it."
-    />
+    <Stack spacing={2}>
+      <TextField
+        label="Title (optional)"
+        fullWidth
+        value={draft.title}
+        onChange={(event) =>
+          setDraft((current) => ({ ...current, title: event.target.value }))
+        }
+        // The API's own ceiling, mirrored once in `services/notes.ts` — a longer
+        // title is a 400, and a field that lets one be typed is a form that
+        // collects a refusal it could have prevented.
+        slotProps={{ htmlInput: { maxLength: MAX_TITLE_CHARS } }}
+        // ⚠ "NAMED FOR YOU", NOT "NAMED BY THE AI". Titling reads the generated
+        // content when it can, falls back to the body's own first heading, and
+        // falls back again to the template's name — and a deployment whose
+        // provider cannot be reached at all lands on that last rank. All three
+        // are "the note arrives with a name"; only the first is the AI, so only
+        // the first would be a promise this sentence cannot keep.
+        helperText={
+          'Leave this blank and the note is named for you once it has been generated. ' +
+          'A title you type here is kept — regenerating never changes it.'
+        }
+      />
+      <TextField
+        label="Context (optional)"
+        multiline
+        minRows={3}
+        fullWidth
+        value={draft.contextText}
+        onChange={(event) =>
+          setDraft((current) => ({ ...current, contextText: event.target.value }))
+        }
+        // The placeholder is the explanation. An unexplained free-text box at the
+        // end of a form is a box nobody fills in, and the thing it is for — what
+        // an outsider writing this up would need to know — is not guessable from
+        // the word "Context".
+        placeholder="Who was there, why this happened, and what matters most — anything someone writing this up from the outside would need to know."
+        helperText="Placed ahead of the source in the prompt, for this note and every regeneration of it."
+      />
+    </Stack>
   );
 
   const steps = [

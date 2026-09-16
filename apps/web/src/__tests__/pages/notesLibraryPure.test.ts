@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   NOTE_SOURCE_KINDS,
   buildNoteSource,
+  buildNoteTitle,
   emptyNewNoteDraft,
   isNewNoteReady,
 } from '../../pages/newNote';
@@ -109,6 +110,32 @@ describe('newNote — the body the form produces', () => {
   it('requires a template', () => {
     const draft = { ...emptyNewNoteDraft(), transcriptId: 't1' };
     expect(isNewNoteReady(draft, true)).toBe(false);
+  });
+});
+
+describe('buildNoteTitle — #187', () => {
+  it('trims a typed title', () => {
+    const draft = { ...emptyNewNoteDraft(), title: '  Q3 planning  ' };
+    expect(buildNoteTitle(draft)).toBe('Q3 planning');
+  });
+
+  it('preserves internal spaces, trimming only the ends', () => {
+    const draft = { ...emptyNewNoteDraft(), title: '  Q3   planning notes  ' };
+    expect(buildNoteTitle(draft)).toBe('Q3   planning notes');
+  });
+
+  it('turns an untouched (empty) title into undefined', () => {
+    expect(buildNoteTitle(emptyNewNoteDraft())).toBeUndefined();
+  });
+
+  it('turns whitespace-only input into undefined', () => {
+    // ⚠ THE CASE THIS FUNCTION EXISTS FOR: the API's `title` is
+    // `z.string().trim().min(1)`, so a value that trims to nothing must never
+    // cross the wire — it would be a 400, not a fallback to the generated name.
+    expect(buildNoteTitle({ ...emptyNewNoteDraft(), title: '   ' })).toBeUndefined();
+    expect(buildNoteTitle({ ...emptyNewNoteDraft(), title: '\t' })).toBeUndefined();
+    expect(buildNoteTitle({ ...emptyNewNoteDraft(), title: '\n' })).toBeUndefined();
+    expect(buildNoteTitle({ ...emptyNewNoteDraft(), title: ' \t\n ' })).toBeUndefined();
   });
 });
 

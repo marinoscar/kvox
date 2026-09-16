@@ -72,6 +72,7 @@ function listItem(id: string, overrides: Partial<NoteListItem> = {}): NoteListIt
   return {
     id,
     title: `Note ${id}`,
+    titleSource: 'ai',
     status: 'ready',
     currentVersion: 1,
     provider: 'openai',

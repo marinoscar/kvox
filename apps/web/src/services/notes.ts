@@ -79,10 +79,22 @@ export type NoteConflictReason =
   | 'derived_notes_exist'
   | 'deleting';
 
+/**
+ * Where a note's title came from — mirrors `noteTitleSourceSchema` (#197).
+ *
+ * ⚠ `user` IS STICKY. A person typed it, on create or in a later rename, and no
+ * titling pass overwrites it: the guard lives in the API's own `WHERE` clause,
+ * not in a client check. `ai` — a titling pass read it off the generated
+ * content; `template` — nobody named it, so it inherited the template's name.
+ */
+export type NoteTitleSource = 'ai' | 'user' | 'template';
+
 /** One note, as `GET /api/notes/{id}` returns it. */
 export interface Note {
   id: string;
   title: string;
+  /** Provenance of {@link Note.title}. See {@link NoteTitleSource}. */
+  titleSource: NoteTitleSource;
   /** The live markdown body — by invariant, the version at `currentVersion`. */
   body: string;
   status: NoteStatus;
@@ -141,6 +153,16 @@ export type NoteSource =
   | { type: 'document'; objectId: string };
 
 /**
+ * Characters a note title may hold.
+ *
+ * MIRRORS `MAX_TITLE_CHARS` in `apps/api/src/notes/dto/note.dto.ts`, and lives
+ * here — beside the types that mirror the rest of that DTO — rather than as a
+ * literal in whichever form happens to accept a title, so the create form and
+ * every rename surface cannot drift apart from each other or from the API.
+ */
+export const MAX_TITLE_CHARS = 200;
+
+/**
  * `POST /api/notes` — creates the note AND queues its generation.
  *
  * ⚠ THERE IS NO `body` FIELD AND THERE NEVER MAY BE ONE. A note's first version
@@ -149,6 +171,14 @@ export type NoteSource =
  * in. Editing is `PATCH`'s job and records an `edit` version with an author.
  */
 export interface CreateNoteInput {
+  /**
+   * The user's own name for the note, when they supplied one (#187).
+   *
+   * ⚠ OMIT IT OR SEND A NON-EMPTY STRING — never `''` and never `null`. The
+   * API's `title` is `z.string().trim().min(1)`, so an empty string is a **400**
+   * rather than a fallback to the generated name. Supplying one records
+   * `titleSource: 'user'`, which is sticky for the life of the note.
+   */
   title?: string;
   templateId: string;
   source: NoteSource;
