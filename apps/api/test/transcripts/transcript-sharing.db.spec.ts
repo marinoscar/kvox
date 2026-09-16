@@ -121,10 +121,6 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
       enqueueSubmit: jest.fn().mockResolvedValue(true),
       enqueueFirstPoll: jest.fn().mockResolvedValue(true),
-      // `enqueueSearchIndex` (issue #188): every committed correction queues a
-      // semantic re-index. Stubbed here because this suite is about the
-      // correction itself; a real one would need the whole AI provider graph.
-      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
     } as unknown as TranscriptPipelineService;
 
     transcripts = new TranscriptsService(

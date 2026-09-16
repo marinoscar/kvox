@@ -196,34 +196,3 @@ export function hasPendingIndexing(status: SearchIndexStatus | null): boolean {
 
   return status.types.some((entry) => entry.pending > 0);
 }
-
-// =============================================================================
-// The library feed's half of this issue
-// =============================================================================
-
-/**
- * The semantic-quality fields a search response MAY carry.
- *
- * ⚠ EVERY FIELD IS OPTIONAL, AND THAT IS NOT DEFENSIVENESS — IT IS THE BUILD
- * ORDER. `semantic`, `semanticReason` and `unindexedCount` are added to the
- * search response by the HYBRID-RANKING issue of this epic, which lands
- * separately from this one. Until it does, no response carries them, every
- * consumer here reads `undefined`, and `SemanticSearchNotice` renders nothing
- * at all.
- *
- * So this type is deliberately NOT a re-declaration of the server's DTO and
- * must not become one: it is the narrowest possible statement of "if these
- * arrive, here is what they mean", written so that the feed half of issue #191
- * works the day the fields appear without a second change here. Nothing in this
- * repository's web code may treat their absence as an error state — a feed that
- * showed "semantic search unavailable" because a field had not shipped yet
- * would be worse than saying nothing.
- */
-export interface SemanticSearchQuality {
-  /** `false` when the answer was keyword-only. `undefined` means "not reported". */
-  semantic?: boolean;
-  /** Why it was keyword-only, as one of the same reason tokens above. */
-  semanticReason?: string | null;
-  /** How many matching documents are not semantically searchable yet. */
-  unindexedCount?: number;
-}

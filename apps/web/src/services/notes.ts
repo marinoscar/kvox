@@ -51,7 +51,6 @@
  */
 
 import { api, ApiError } from './api';
-import type { SemanticSearchQuality } from './searchIndex';
 
 // =============================================================================
 // The shapes (mirrors of `dto/note.dto.ts`)
@@ -127,13 +126,7 @@ export interface Note {
  */
 export type NoteListItem = Omit<Note, 'body' | 'contextText'> & { excerpt: string };
 
-/**
- * ⚠ EXTENDS `SemanticSearchQuality` — every field of it OPTIONAL and absent
- * today. See `services/transcripts.ts`'s identical declaration for why (issue
- * #191, epic #165): the fields arrive with this epic's hybrid-ranking issue,
- * and until then every consumer reads `undefined` and renders nothing.
- */
-export interface NoteListResponse extends SemanticSearchQuality {
+export interface NoteListResponse {
   items: NoteListItem[];
   /**
    * How many rows match the current filters, ignoring paging.

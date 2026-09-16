@@ -68,6 +68,11 @@ function respondWithSearch(overrides: Partial<SearchResponse> = {}) {
     nextCursor: null,
     degraded: null,
     searchedTypes: ['transcript', 'note'],
+    // The healthy default: the semantic arm ran, so `SemanticSearchNotice`
+    // stays silent and every suite below is about something else.
+    semantic: true,
+    semanticReason: null,
+    unindexedCount: 0,
     ...overrides,
   };
   server.use(
@@ -124,6 +129,9 @@ function noteItem(overrides: Partial<NoteListItem> = {}): NoteListItem {
 
 beforeEach(() => {
   localStorage.setItem('theme_mode', 'light');
+  // The keyword-only notice remembers its dismissal here; a leak between tests
+  // would make one suite's dismissal silence another's assertion.
+  sessionStorage.clear();
   mockNavigate.mockReset();
   searchRequests = [];
   clearNoteSourceNameCache();
@@ -289,6 +297,103 @@ describe('TranscriptsLibraryView — what the answer says about itself', () => {
     await user.type(screen.getByLabelText('Search transcripts'), 'budget');
 
     expect(await screen.findByText(/cannot search transcripts/)).toBeInTheDocument();
+  });
+});
+
+describe('SearchResultsView — the keyword-only notice (#191)', () => {
+  it('says the results are keyword-only when the semantic arm did not run', async () => {
+    respondWithSearch({ semantic: false, semanticReason: 'ai_key_missing', unindexedCount: 0 });
+    const user = userEvent.setup();
+    renderTranscripts();
+    await screen.findByText('Weekly standup');
+
+    await user.type(screen.getByLabelText('Search transcripts'), 'budget');
+
+    expect(await screen.findByText(/keyword-only/i)).toBeInTheDocument();
+    // ABOVE the results, never instead of them.
+    expect(screen.getByText('Pricing review')).toBeInTheDocument();
+    // An INFO line. A keyword answer is still a correct answer.
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-colorInfo');
+    expect(alert.className).not.toMatch(/colorError|colorWarning/);
+    // And it names the reason the server actually reported.
+    expect(screen.getByText(/no AI provider key was saved/i)).toBeInTheDocument();
+  });
+
+  it('says NOTHING when the answer was semantic', async () => {
+    respondWithSearch({ semantic: true, semanticReason: null, unindexedCount: 12 });
+    const user = userEvent.setup();
+    renderTranscripts();
+    await screen.findByText('Weekly standup');
+
+    await user.type(screen.getByLabelText('Search transcripts'), 'budget');
+    await screen.findByText('Pricing review');
+
+    expect(screen.queryByText(/keyword-only/i)).not.toBeInTheDocument();
+    // ⚠ Not even the count — `unindexedCount` is a fact ABOUT the degradation,
+    // and there is no degradation to explain here.
+    expect(screen.queryByText(/of your documents/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the unindexed count only when it is non-zero', async () => {
+    respondWithSearch({ semantic: false, semanticReason: 'no_indexed_content', unindexedCount: 7 });
+    const user = userEvent.setup();
+    const first = renderTranscripts();
+    await screen.findByText('Weekly standup');
+
+    await user.type(screen.getByLabelText('Search transcripts'), 'budget');
+    expect(await screen.findByText(/7 of your documents/i)).toBeInTheDocument();
+
+    first.unmount();
+    sessionStorage.clear();
+
+    respondWithSearch({ semantic: false, semanticReason: 'no_indexed_content', unindexedCount: 0 });
+    renderTranscripts();
+    await screen.findByText('Weekly standup');
+
+    await user.type(screen.getByLabelText('Search transcripts'), 'budget');
+    expect(await screen.findByText(/keyword-only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/of your documents/i)).not.toBeInTheDocument();
+  });
+
+  it('never replaces the "no matches" empty state', async () => {
+    respondWithSearch({
+      results: [],
+      matchedDocuments: 0,
+      semantic: false,
+      semanticReason: 'ai_key_missing',
+      unindexedCount: 3,
+    });
+    const user = userEvent.setup();
+    renderTranscripts();
+    await screen.findByText('Weekly standup');
+
+    await user.type(screen.getByLabelText('Search transcripts'), 'zzz');
+
+    // Both sentences are true at once and both are on screen.
+    expect(await screen.findByText(/No matches for/)).toBeInTheDocument();
+    expect(screen.getByText(/keyword-only/i)).toBeInTheDocument();
+  });
+
+  it('keeps each feed\'s dismissal separate', async () => {
+    respondWithSearch({ semantic: false, semanticReason: 'ai_key_missing', unindexedCount: 0 });
+    const user = userEvent.setup();
+    const first = renderTranscripts();
+    await screen.findByText('Weekly standup');
+
+    await user.type(screen.getByLabelText('Search transcripts'), 'budget');
+    await screen.findByText(/keyword-only/i);
+    await user.click(screen.getByRole('button', { name: /close/i }));
+    expect(screen.queryByText(/keyword-only/i)).not.toBeInTheDocument();
+
+    first.unmount();
+
+    // Notes is a second, independently indexable library.
+    renderNotes();
+    await screen.findByText('Q3 planning — decisions');
+    await user.type(screen.getByLabelText('Search notes'), 'budget');
+
+    expect(await screen.findByText(/keyword-only/i)).toBeInTheDocument();
   });
 });
 

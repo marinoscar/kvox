@@ -24,20 +24,22 @@
  *     are keyword-only" are different sentences and both may be true.
  *
  * =============================================================================
- * ⚠ THE FIELDS IT READS MAY NOT EXIST YET — AND THAT IS THE NORMAL CASE TODAY
+ * IT READS THE SEARCH RESPONSE, AND ONLY THE SEARCH RESPONSE
  * =============================================================================
  *
- * `semantic`, `semanticReason` and `unindexedCount` are added to the search
- * response by the HYBRID-RANKING issue of this epic, which lands separately
- * from this one. Until it does, nothing on the wire carries them, every prop
- * here is `undefined`, and this component RENDERS NOTHING.
+ * `semantic`, `semanticReason` and `unindexedCount` are fields of
+ * `GET /api/search` (`apps/api/src/search/dto/search.dto.ts`) and of nothing
+ * else. They were briefly wired to the LIST endpoints as a placeholder, before
+ * `services/search.ts` existed; that guess is corrected here. The list feeds
+ * never carried these fields and never will — a list is not a ranking, so
+ * there is no semantic arm for it to have skipped.
  *
- * That is deliberate and must stay that way. `semantic === undefined` means
- * "this build's server does not report it", which is not the same fact as
- * `semantic === false` ("it reported, and the answer was keyword-only") — and a
- * feed that showed a degradation notice because a field had not shipped yet
- * would be worse than one that said nothing. The test for this component pins
- * the undefined case for exactly that reason.
+ * ⚠ THE FIELDS ARE REQUIRED ON THE WIRE, so the props below are required too
+ * (they were shaped around the optional-field world and are tightened here).
+ * The one value that is still absent is `semantic: null`, which is `useSearch`
+ * saying NO ANSWER HAS LANDED YET — not a claim about the server. Hence the
+ * `=== false` test below rather than `!semantic`: a notice that appeared during
+ * the debounce of every first keystroke would be worse than no notice.
  */
 
 import { useState } from 'react';
@@ -45,9 +47,39 @@ import { Alert, Link, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { describeIndexReason } from '../../services/searchIndex';
-import type { SemanticSearchQuality } from '../../services/searchIndex';
+import type { SemanticReason } from '../../services/search';
 
-export interface SemanticSearchNoticeProps extends SemanticSearchQuality {
+/**
+ * The two reasons `GET /api/search` can report that INDEXING never can, so
+ * `describeIndexReason` — which is about one document's failed index attempt —
+ * has no sentence for them and would render the raw token.
+ *
+ * Kept here rather than added to that lookup because they are not indexing
+ * outcomes: nothing failed to index, there is simply nothing to compare a query
+ * vector against, or the query's OWN embedding call did not come back.
+ */
+const SEARCH_ONLY_REASON_TEXT: Partial<Record<SemanticReason, string>> = {
+  no_indexed_content:
+    'Nothing in your library has been indexed for semantic search yet, so there was nothing to compare your search against.',
+  embedding_failed:
+    'Your AI provider could not turn this search into an embedding just now, so these results fall back to keyword matching. Trying again may work.',
+};
+
+/** One `semanticReason`, in a sentence. */
+function describeSemanticReason(reason: SemanticReason): string {
+  return SEARCH_ONLY_REASON_TEXT[reason] ?? describeIndexReason(reason);
+}
+
+export interface SemanticSearchNoticeProps {
+  /**
+   * Whether the semantic arm ran. `null` is `useSearch`'s "no answer yet" and
+   * renders nothing — see the file header.
+   */
+  semantic: boolean | null;
+  /** Why it did not. `null` when it did, and before an answer lands. */
+  semanticReason: SemanticReason | null;
+  /** The caller's own documents missing from the semantic index. */
+  unindexedCount: number;
   /**
    * Distinguishes one feed's dismissal from another's, so dismissing it on
    * Recordings does not silently hide it on Notes — two feeds, two libraries,
@@ -94,10 +126,10 @@ export function SemanticSearchNotice({
 }: SemanticSearchNoticeProps) {
   const [dismissed, setDismissed] = useState(() => readDismissed(storageKey));
 
-  // ⚠ `=== false`, NOT `!semantic`. `undefined` is "the server did not report
-  // it" — see the file header — and must render nothing at all.
+  // ⚠ `=== false`, NOT `!semantic`. `null` is "no answer has landed yet" — see
+  // the file header — and must render nothing at all.
   const isKeywordOnly = semantic === false;
-  const hasUnindexed = typeof unindexedCount === 'number' && unindexedCount > 0;
+  const hasUnindexed = unindexedCount > 0;
 
   if (!isKeywordOnly || dismissed) return null;
 
@@ -126,7 +158,7 @@ export function SemanticSearchNotice({
       </Typography>
       {semanticReason && (
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-          {describeIndexReason(semanticReason)}
+          {describeSemanticReason(semanticReason)}
         </Typography>
       )}
     </Alert>
