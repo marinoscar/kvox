@@ -348,6 +348,11 @@ function harness(world: World) {
       // #182's titling pass, stubbed. `null` is its "I changed nothing"
       // answer, so the note keeps the title these assertions already expect.
       { titleNote: jest.fn().mockResolvedValue(null) } as never,
+      // #188's semantic indexer, stubbed. Enqueueing is fire-and-forget at the
+      // end of `commit()`, so these assertions never observe it — but the
+      // constructor argument is required, and a real one here would queue a
+      // `search.index` job against a database these suites do not own.
+      { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
     ),
     sources,
     new ProviderThrottleService({ get: () => undefined } as never),

@@ -351,6 +351,16 @@ export class TranscriptionIngestHandler implements JobHandler, OnModuleInit {
       }
     }
 
+    // ⚠ AFTER THE INGEST TRANSACTION, NOT INSIDE IT (#188, epic #165). The
+    // segments this job just wrote are what `search.index` will chunk, so the
+    // enqueue has to see them committed — and a queue insert must never be able
+    // to roll back a transcript the user can already read. This is the FIRST of
+    // the four content events that index a transcript; the other three are an
+    // op batch committing, a version restored, and nothing else. See
+    // `TranscriptPipelineService.enqueueSearchIndex` for why a rename is not
+    // one of them.
+    await this.pipeline.enqueueSearchIndex(transcript.id);
+
     const fresh = await this.prisma.transcript.findUnique({
       where: { id: transcript.id },
       select: {

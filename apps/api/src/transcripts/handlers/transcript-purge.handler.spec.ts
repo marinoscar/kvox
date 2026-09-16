@@ -4,6 +4,7 @@ import type { Job } from '@prisma/client';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptionRuntimeService } from '../transcription-runtime.service';
 import { createFakeProvider, type FakeProvider } from './__fixtures__/fake-provider';
@@ -74,6 +75,10 @@ describe('TranscriptPurgeHandler', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: TranscriptObjectsService, useValue: objects },
         { provide: TranscriptionRuntimeService, useValue: runtime },
+        // #188: the purge is one of the three owners of the semantic index
+        // sweep — `search_chunks.document_id` has no foreign key, so no
+        // cascade and no housekeeping cron is ever coming for those rows.
+        { provide: SearchIndexService, useValue: { forget: jest.fn() } },
       ],
     }).compile();
 

@@ -221,6 +221,11 @@ function harness(db: Db) {
     // so the note keeps the title these assertions already expect — the real
     // service's own three ranks are a unit concern, not this spec's.
     { titleNote: jest.fn().mockResolvedValue(null) } as never,
+    // #188's semantic indexer, stubbed. Enqueueing is fire-and-forget at the
+    // end of `commit()`, so these assertions never observe it — but the
+    // constructor argument is required, and a real one here would queue a
+    // `search.index` job these suites have nothing to run it with.
+    { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
   );
 
   const providers = new AiProviderRegistry();
