@@ -738,6 +738,39 @@ describe('runInstall against a fake VPS', () => {
     });
   }
 
+  // ===========================================================================
+  // Issue #156: the live stream is redacted, not only the journal
+  // ===========================================================================
+  //
+  // The structural half of the fix. `executor.ts` masks a line as it is
+  // assembled, which only helps if the redactor REACHES `runCommand` - so the
+  // guard is stated the way the invariant is: no call may wire `onLine`
+  // without also passing `redact`. A future step that forwards `onLog` and
+  // forgets the redactor fails here rather than leaking on somebody's screen.
+  it('never wires onLine without a redactor, and the redactor is this run\'s', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    const streamed: RunCommandOptions[] = [];
+
+    const watching = (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      if (options.onLine !== undefined) streamed.push(options);
+      return await vps.runCommand(argv, options);
+    }) as typeof import('./executor.js').runCommand;
+
+    // Hooks, or `onLine` is never wired at all and the assertion is vacuous.
+    await install(root, { runCommand: watching, hooks: { onLog: () => undefined } });
+
+    expect(streamed.length).toBeGreaterThan(0);
+    expect(streamed.filter((options) => options.redact === undefined)).toEqual([]);
+
+    // And it is the JOURNAL's redactor, seeded with the secrets this install
+    // generated - not an identity function that satisfies the check above.
+    const password = /^POSTGRES_PASSWORD=(.+)$/m.exec(readFileSync(envFilePath(root), 'utf8'))?.[1];
+    expect(password).toBeTruthy();
+    for (const options of streamed) {
+      expect(options.redact?.(`psql://u:${password as string}@db`)).not.toContain(password);
+    }
+  });
+
   it('writes .env at the app root, 0600, and links it into the clone', async () => {
     const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
 

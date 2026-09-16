@@ -8,6 +8,7 @@ import { CERTBOT_IMAGE } from './checks/host.js';
 import { readNotAfter } from './checks/tls.js';
 import type { runCommand } from './executor.js';
 import type { DeployHooks } from './hooks.js';
+import type { Redactor } from './journal.js';
 
 // =============================================================================
 // Publishing the app through the shared proxy  (issue #181, epic #168;
@@ -71,6 +72,22 @@ export const PROXY_MOUNTS = {
 export interface ProxyOptions {
   runCommand: typeof runCommand;
   hooks?: DeployHooks | undefined;
+  /**
+   * The run journal's redactor (issue #156).
+   *
+   * Wherever `onLog` is wired, this must be too: `executor.ts` rule 5 masks
+   * an output line as it is assembled, so a `runCommand` given no redactor
+   * streams raw text to the terminal while the log file on disk is masked.
+   * certbot is the least likely of this CLI's subprocesses to echo an
+   * application secret - it is handed a domain and an email, not the `.env` -
+   * but "unlikely to" is not the guarantee this module is supposed to make,
+   * and `install`/`update` have the redactor in hand at every call site.
+   *
+   * Optional because `kvox deploy certs` runs with no journal open (nothing
+   * collected this deployment's secret VALUES, so a redactor built there
+   * would be the identity function).
+   */
+  redact?: Redactor | undefined;
   /**
    * The container the shared proxy runs in. REQUIRED: `nginx -t` and the
    * reload run inside it, and there is no host nginx to fall back to.
@@ -423,6 +440,7 @@ export async function issueCertificate(
     await options.runCommand(argv, {
       cwd: target.proxyRoot,
       timeoutMs: 5 * 60_000,
+      ...(options.redact === undefined ? {} : { redact: options.redact }),
       ...(options.hooks?.onLog === undefined
         ? {}
         : { onLine: (line: string) => options.hooks?.onLog?.(line) }),
@@ -448,6 +466,8 @@ export interface RenewOptions {
   proxyContainer: string;
   runCommand: typeof runCommand;
   hooks?: DeployHooks | undefined;
+  /** The run journal's redactor. See `ProxyOptions.redact` (issue #156). */
+  redact?: Redactor | undefined;
   /** Only this certificate; every one under the proxy when absent. */
   certName?: string | undefined;
   /** certbot's own `--dry-run`: a rehearsal against staging, nothing written. */
@@ -505,6 +525,7 @@ export async function renewCertificates(options: RenewOptions): Promise<RenewRes
   const result = await options.runCommand(argv, {
     cwd: options.proxyRoot,
     timeoutMs: 10 * 60_000,
+    ...(options.redact === undefined ? {} : { redact: options.redact }),
     ...(options.hooks?.onLog === undefined
       ? {}
       : { onLine: (line: string) => options.hooks?.onLog?.(line) }),

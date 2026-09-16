@@ -1,8 +1,8 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CLI_NAME } from '../branding.js';
 import { CLI_VERSION } from '../package-info.js';
@@ -10,6 +10,7 @@ import {
   DeployInfoError,
   buildDeployInfo,
   deployInfoDir,
+  ensureDeployInfoDir,
   deployInfoPath,
   isUtcTimestamp,
   readDeployInfo,
@@ -21,6 +22,43 @@ import {
 } from './deploy-info.js';
 import type { ServerFacts } from './server-facts.js';
 import { DEPLOY_STATE_VERSION, type DeployState } from './state.js';
+
+// =============================================================================
+// One mocked call, for one test (#159)
+// =============================================================================
+//
+// `chmodSync` is what makes this module's 0755 claim true, so the interesting
+// failure is `chmodSync` refusing: a `deploy-info` the Docker daemon created
+// as root:root, which a non-root `update` can neither chmod nor write into.
+// That cannot be staged for real - the suite runs as whatever user CI gives it
+// (the `deploy-e2e` job runs as an unprivileged one, which is how this class
+// became visible at all), and a test that needed two uids would be skipped
+// everywhere it mattered. So the seam is mocked, and ONLY for the paths the
+// test names: every other call in this file passes straight through to the
+// real implementation via `importOriginal`.
+// =============================================================================
+
+let chmodShouldFailFor: string | undefined;
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    chmodSync: (...args: Parameters<typeof actual.chmodSync>) => {
+      const target = String(args[0]);
+      if (chmodShouldFailFor !== undefined && target.endsWith(chmodShouldFailFor)) {
+        throw Object.assign(new Error(`EPERM: operation not permitted, chmod '${target}'`), {
+          code: 'EPERM',
+        });
+      }
+      return actual.chmodSync(...args);
+    },
+  };
+});
+
+afterEach(() => {
+  chmodShouldFailFor = undefined;
+});
 
 function makeRoot(): string {
   return mkdtempSync(join(tmpdir(), 'appctl-info-'));
@@ -157,6 +195,43 @@ describe('writeDeployInfo / readDeployInfo', () => {
     expect(statSync(deployInfoDir(root)).mode & 0o777).toBe(0o755);
   });
 
+  it('forces an existing 0700 deploy-info back to 0755 (issue #159)', () => {
+    // `mkdirSync(…, { recursive: true, mode })` IS A NO-OP on a directory
+    // that already exists, so before #159 a deploy-info left at 0700 stayed
+    // 0700 and the api container's unprivileged user could not traverse it to
+    // read info.json - the exact failure the mode was claimed to prevent. The
+    // test above cannot catch that: it always creates the directory fresh.
+    const root = makeRoot();
+    const dir = deployInfoDir(root);
+    mkdirSync(dir, { recursive: true });
+    chmodSync(dir, 0o700);
+    expect(statSync(dir).mode & 0o777).toBe(0o700);
+
+    const path = writeDeployInfo(root, sampleState(root), FACTS);
+
+    expect(statSync(dir).mode & 0o777).toBe(0o755);
+    expect(statSync(path).mode & 0o777).toBe(0o644);
+    expect(readDeployInfo(root)?.lastCommand).toBe('install');
+  });
+
+  it('ignores the operator umask for the directory and the file alike', () => {
+    // `mode:` on mkdirSync and writeFileSync is umask-masked, so an operator
+    // running with `umask 077` got 0700/0600 out of a FRESH write too.
+    // `chmodSync` is not masked, which is why it is what makes both claims
+    // true. Hermetic: vitest runs each file in its own process, and the umask
+    // is restored either way.
+    const root = makeRoot();
+    const previous = process.umask(0o077);
+    try {
+      const path = writeDeployInfo(root, sampleState(root), FACTS);
+
+      expect(statSync(deployInfoDir(root)).mode & 0o777).toBe(0o755);
+      expect(statSync(path).mode & 0o777).toBe(0o644);
+    } finally {
+      process.umask(previous);
+    }
+  });
+
   it('keeps the mode on rewrite and leaves no temporary file behind', () => {
     const root = makeRoot();
     writeDeployInfo(root, sampleState(root), FACTS);
@@ -229,6 +304,67 @@ describe('writeDeployInfo / readDeployInfo', () => {
 
     writeFileSync(deployInfoPath(root), JSON.stringify({ schema: 2 }));
     expect(() => readDeployInfo(root)).toThrow(/schema 2, expected 1/);
+  });
+});
+
+describe('ensureDeployInfoDir', () => {
+  it('creates the directory 0755 and returns it', () => {
+    const root = makeRoot();
+
+    const dir = ensureDeployInfoDir(root);
+
+    expect(dir).toBe(deployInfoDir(root));
+    expect(statSync(dir).mode & 0o777).toBe(0o755);
+  });
+
+  it('is idempotent, and repairs a directory somebody else left at 0700', () => {
+    const root = makeRoot();
+    ensureDeployInfoDir(root);
+    chmodSync(deployInfoDir(root), 0o700);
+
+    ensureDeployInfoDir(root);
+
+    expect(statSync(deployInfoDir(root)).mode & 0o777).toBe(0o755);
+  });
+
+  it('refuses a directory it cannot fix, naming the chown to paste (issue #159)', () => {
+    // The root:root deploy-info the Docker daemon leaves behind when it
+    // creates a missing bind source. The CLI does not take ownership of it
+    // silently; it says whose it has to be and stops.
+    const root = makeRoot();
+    mkdirSync(deployInfoDir(root), { recursive: true });
+    chmodShouldFailFor = join('deploy-info');
+
+    const error = (() => {
+      try {
+        ensureDeployInfoDir(root);
+        return undefined;
+      } catch (caught: unknown) {
+        return caught;
+      }
+    })();
+
+    expect(error).toBeInstanceOf(DeployInfoError);
+    const message = (error as Error).message;
+    const { uid, gid } = userInfo();
+    expect(message).toContain(`Cannot prepare ${deployInfoDir(root)}`);
+    expect(message).toContain(`sudo chown -R ${uid}:${gid} ${deployInfoDir(root)}`);
+    expect(message).toContain(`sudo chmod 755 ${deployInfoDir(root)}`);
+    // Not the raw EACCES on the temp file that #159 is about, and nothing
+    // half-written: the refusal happens before any document is produced.
+    expect(message).not.toContain('.tmp');
+    expect(readdirSync(deployInfoDir(root))).toEqual([]);
+  });
+
+  it('is the gate writeDeployInfo goes through, so a write refuses the same way', () => {
+    const root = makeRoot();
+    mkdirSync(deployInfoDir(root), { recursive: true });
+    chmodShouldFailFor = join('deploy-info');
+
+    expect(() => writeDeployInfo(root, sampleState(root), FACTS)).toThrow(
+      /sudo chown -R \d+:\d+ .*deploy-info/,
+    );
+    expect(readdirSync(deployInfoDir(root))).toEqual([]);
   });
 });
 

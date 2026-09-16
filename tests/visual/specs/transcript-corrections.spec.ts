@@ -37,7 +37,15 @@ test.describe('Transcript editor', () => {
 
     await expect(page.getByRole('region', { name: 'Transcript' })).toBeVisible();
     await page.getByRole('button', { name: 'Actions for the line at 0:00' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Change speaker' })).toBeVisible();
+    // ⚠ TWO EXPLICITLY SCOPED ITEMS, NOT ONE AMBIGUOUS "Change speaker" — the
+    // split #222 made, and the thing this baseline now exists to hold: the
+    // all-lines rename comes first and names the speaker, the this-line-only
+    // move second. Waiting on both is what keeps a future "simplification"
+    // back to a single item from landing as nothing but a pixel diff.
+    await expect(page.getByRole('menuitem', { name: 'Rename Ana Ruiz' })).toBeVisible();
+    await expect(
+      page.getByRole('menuitem', { name: 'Move this line to another speaker' }),
+    ).toBeVisible();
 
     await expect(page).toHaveScreenshot('transcript-segment-sheet-phone-390.png');
   });

@@ -15,7 +15,7 @@ import { CliError, EXIT, type ExitCode } from '../errors.js';
 // deploy step is the opposite: the exit code IS the result, and the output is
 // the only evidence when it goes wrong.
 //
-// Four rules this file exists to enforce:
+// Five rules this file exists to enforce:
 //
 //   1. ARGV, NEVER A SHELL STRING. No `shell: true`, no interpolation into a
 //      command line. A domain or a password reaching a shell is an injection,
@@ -28,6 +28,25 @@ import { CliError, EXIT, type ExitCode } from '../errors.js';
 //      that starts mid-colour-run leaks that colour into the rest of the frame.
 //   4. NOTHING IS UNBOUNDED. Retained output is capped, because a runaway
 //      build must not exhaust memory on a small VPS.
+//   5. REDACTION HAPPENS ONCE, HERE, ON EVERY PATH OUT (issue #156). A line
+//      leaves this module exactly one way - through `LineAssembler.emit`, the
+//      moment after ANSI is stripped - and the redactor is applied there. So
+//      the retained `lines`, `CommandResult.stdout`/`stderr`, the failure
+//      message's stderr tail and the LIVE `onLine` callback all see the same
+//      masked text, and a new consumer cannot reintroduce the gap by
+//      forgetting. Before this, `onLine` was handed the raw line while the
+//      result was masked: the journal on disk was safe and the terminal an
+//      operator was watching was not - same bytes, two guarantees.
+//
+//      The one thing `emit` cannot cover is `argv`, which never passes
+//      through a line assembler, so the constructed failure and ENOENT
+//      messages are redacted a second time where they interpolate it. Double
+//      redaction is harmless: the marker a redactor leaves behind contains no
+//      secret for a second pass to match.
+//
+//      `src/node/` (the worker-node runner) does NOT share this hole: it never
+//      calls `runCommand`, and its own log path is structurally redacted by
+//      `node/logger.ts`'s `redact`/`redactString` (#275, #352).
 // =============================================================================
 
 /** Lines of stdout and stderr each kept in memory for `CommandResult`. */
@@ -75,11 +94,14 @@ export interface RunCommandOptions {
   /** Aborts the run; the TUI passes its screen's controller. */
   signal?: AbortSignal | undefined;
   /**
-   * Applied to every string that reaches a message or a result.
+   * Applied to every string that leaves this module - see rule 5.
    *
-   * The journal supplies its redactor here so a secret in an argv - a `psql`
-   * connection string, most obviously - cannot reach a thrown error. Defaults
-   * to identity so the module is usable without one.
+   * The journal supplies its redactor here. It masks each output line as it
+   * is assembled, so the live `onLine` stream, the retained text and the
+   * thrown error are masked by the same pass; and it is applied again to the
+   * constructed messages, which interpolate an `argv` no line assembler ever
+   * saw - a `psql` connection string, most obviously. Defaults to identity so
+   * the module is usable without one.
    */
   redact?: ((value: string) => string) | undefined;
 }
@@ -113,7 +135,7 @@ export class CommandFailedError extends CliError {
   }
 }
 
-/** Turns a chunked byte stream into whole, ANSI-free lines. */
+/** Turns a chunked byte stream into whole, ANSI-free, REDACTED lines. */
 class LineAssembler {
   private pending = '';
   private readonly lines: string[] = [];
@@ -124,6 +146,8 @@ class LineAssembler {
     private readonly onLine:
       | ((line: string, stream: OutputStream) => void)
       | undefined,
+    /** Rule 5. Every line is masked here, which is the only place it can be. */
+    private readonly redact: (value: string) => string,
   ) {}
 
   push(chunk: string): void {
@@ -160,7 +184,9 @@ class LineAssembler {
   }
 
   private emit(raw: string): void {
-    const line = stripAnsi(raw);
+    // Redact AFTER stripping ANSI: a colour run spliced into the middle of a
+    // secret would otherwise hide it from a literal match and let it through.
+    const line = this.redact(stripAnsi(raw));
     this.lines.push(line);
     if (this.lines.length > MAX_RETAINED_LINES) {
       this.lines.shift();
@@ -189,8 +215,8 @@ export async function runCommand(
   const redact = options.redact ?? ((value: string) => value);
   const startedAt = Date.now();
 
-  const stdout = new LineAssembler('stdout', options.onLine);
-  const stderr = new LineAssembler('stderr', options.onLine);
+  const stdout = new LineAssembler('stdout', options.onLine, redact);
+  const stderr = new LineAssembler('stderr', options.onLine, redact);
 
   return await new Promise<CommandResult>((resolve, reject) => {
     const child = spawn(command, args, {
@@ -245,12 +271,15 @@ export async function runCommand(
           : `${command}: ${error.message}`;
 
       reject(
+        // `detail` interpolates `command`, which comes from `argv` and never
+        // passed through a line assembler, so it is redacted here. The two
+        // `text()` calls are NOT: rule 5 masked every line on the way in.
         new CommandFailedError(redact(detail), {
           argv: [...argv],
           cwd: options.cwd,
           exitCode: -1,
-          stdout: redact(stdout.text()),
-          stderr: redact(stderr.text()),
+          stdout: stdout.text(),
+          stderr: stderr.text(),
           durationMs: Date.now() - startedAt,
           timedOut: false,
         }),
@@ -265,11 +294,13 @@ export async function runCommand(
       stderr.finish();
 
       const result: CommandResult = {
+        // Already masked line by line in `LineAssembler.emit` (rule 5);
+        // re-wrapping them in `redact` here would be redundant.
         argv: [...argv],
         cwd: options.cwd,
         exitCode: code ?? -1,
-        stdout: redact(stdout.text()),
-        stderr: redact(stderr.text()),
+        stdout: stdout.text(),
+        stderr: stderr.text(),
         durationMs: Date.now() - startedAt,
         timedOut,
       };
@@ -281,6 +312,10 @@ export async function runCommand(
       }
 
       reject(
+        // Redacted even though `stderr.tail()` already is: `describeFailure`
+        // renders `result.argv`, the one string in this module that no line
+        // assembler ever touched. A second pass over already-masked text is a
+        // no-op - the marker it left behind holds no secret to match.
         new CommandFailedError(
           redact(describeFailure(result, stderr.tail(ERROR_TAIL_LINES))),
           result,

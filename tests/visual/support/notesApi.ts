@@ -47,6 +47,14 @@ function noteRow(
     sourceTranscriptId: 't1',
     sourceNoteId: null,
     sourceObjectId: null,
+    // ⚠ DENORMALISED ONTO THE ROW — issue #192. Until then the library and the
+    // detail page each resolved this with a second request per distinct source
+    // (`GET /api/transcripts/:id`), which is why this fixture used to answer
+    // that route and carry no `sourceName` at all. #192 deleted that N+1 and
+    // made the name a field the API returns; a fixture that omits it renders
+    // `noteSourceFallbackLabel()` ("a transcript") forever, which is exactly
+    // how issue #153's "link never appears" failures presented.
+    sourceName: 'Weekly engineering standup',
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
     currentGenerationId: 'gen-1',
@@ -270,18 +278,45 @@ export async function installNotesApi(
       return json(route, { items: TEMPLATES, total: TEMPLATES.length });
     }
 
+    // ⚠ THE NOTE PAGE READS ITS TEMPLATE BY ID — issue #109's "How this note
+    // was generated" panel (`components/notes/NoteGenerationContext.tsx`),
+    // mounted on every `/notes/:id`, via `useNoteTemplateDetail(note.templateId)`.
+    //
+    // Left unanswered, this fell through to the catch-all `{}` at the bottom of
+    // this file, and that empty object is NOT an inert placeholder here: the
+    // panel reads `template.structure.length`, so `{}` threw
+    // `Cannot read properties of undefined (reading 'length')` and the app's
+    // `ErrorBoundary` replaced the whole page with "Something went wrong". That
+    // one missing route is issue #153's root cause — it is why every
+    // `/notes/:id` baseline failed to find its table, its "Writing your note…"
+    // panel and its Regenerate button, and why clicking Edit/Export timed out
+    // with "element was detached from the DOM": the button really was there,
+    // for the frame or two before this request resolved and tore the tree down.
+    if (/^\/note-templates\/[^/]+$/.test(path)) {
+      const id = path.split('/').pop();
+      return json(route, TEMPLATES.find((entry) => entry.id === id) ?? TEMPLATES[0]);
+    }
+
     if (path === '/transcripts') {
       return json(route, { items: TRANSCRIPTS, nextCursor: null });
     }
 
-    // The library's source-name resolver reads the transcript by id, which is
-    // what turns "from a transcript" into "from *Weekly engineering standup*".
+    // Kept, but no longer load-bearing: since #192 the source's name is
+    // denormalised onto the note row itself (see `noteRow`'s `sourceName`), so
+    // nothing on these screens resolves a source with a second request any
+    // more. This stays so a stray read answers a real transcript rather than
+    // the catch-all's empty object.
     if (/^\/transcripts\/[^/]+$/.test(path)) {
       return json(route, TRANSCRIPTS[0]);
     }
 
     if (path === '/notes') {
-      return json(route, { items: options.empty ? [] : LIST_ITEMS, nextCursor: null });
+      const items = options.empty ? [] : LIST_ITEMS;
+      // ⚠ `total` IS REQUIRED — issue #190 added the result-count line above
+      // the feed, and it renders the API's `total`, never `items.length`
+      // (`components/library/FeedCountLine.tsx`). Omitting it put the literal
+      // string "undefined notes" in the library baselines.
+      return json(route, { items, total: items.length, nextCursor: null });
     }
 
     // ⚠ The SSE stream. Served COMPLETE and then ended — see the file header
