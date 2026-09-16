@@ -246,6 +246,31 @@ Example:
 ### Golden Rule (MANDATORY)
 If the diff feels “big,” you waited too long. **Split the work and commit sooner.**
 
+## MANDATORY: CLI Version Bump on Improvement
+
+Every improvement or set of improvements to the CLI (`apps/cli`, and the
+`install.sh`/`apps/cli/bootstrap-vps.sh` scripts that install it) MUST bump
+the version in `apps/cli/package.json` — the only place it lives;
+`apps/cli/src/package-info.ts` reads it from there at runtime and exports
+`CLI_VERSION` (see that file's own header for why it is never hardcoded or
+imported directly elsewhere). The version is not cosmetic: `CLI_VERSION` is
+recorded into a deployment's state file as `appctlVersion`, into
+`deploy-info/info.json` as `deployedBy.version`, and sent as the User-Agent on
+every API request — so a stale version makes two different installs
+indistinguishable in a deployment record, which is the failure this rule
+prevents.
+
+- **Default to a PATCH bump** (SemVer's third field) — e.g. `1.0.0` ->
+  `1.0.1` — for a CLI improvement, or a set of them shipped together.
+- **A genuinely new user-facing capability** (a new command or subcommand)
+  takes a **MINOR** bump instead — e.g. `1.0.0` -> `1.1.0`.
+- **One bump per PR, not per commit.** A set of improvements shipped
+  together in one PR gets a single version bump.
+- Bumping `apps/cli/package.json` also requires regenerating
+  `package-lock.json` — its `apps/cli` workspace entry carries the version
+  too — with `npm install --package-lock-only`. Easy to forget; the bump is
+  incomplete without it.
+
 ## MANDATORY: Settings UI Pattern
 
 Every settings surface in this app — admin or per-user — is a **registry-driven
