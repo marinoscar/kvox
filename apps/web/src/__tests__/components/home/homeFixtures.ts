@@ -91,6 +91,7 @@ export function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
+    sourceName: null,
     currentGenerationId: null,
     failureReason: null,
     excerpt: 'The team agreed to ship the export dialog before the end of the month.',

@@ -460,6 +460,75 @@ describe('Notes API (#53)', () => {
       expect(prismaMock.$transaction).toHaveBeenCalled();
     });
 
+    // ========================================================================
+    // `sourceName` — issue #192, epic #162
+    // ========================================================================
+
+    it('denormalises `sourceName` onto every row', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([
+        noteRow({ ownerId: user.id, sourceType: 'transcript', sourceTranscriptId: 't1' }),
+      ]);
+      prismaMock.note.count.mockResolvedValue(1);
+      prismaMock.transcript.findMany.mockResolvedValue([{ id: 't1', title: 'Q3 planning' }]);
+
+      const response = await request(context.app.getHttpServer())
+        .get(NOTES)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.items[0].sourceName).toBe('Q3 planning');
+    });
+
+    it('answers `sourceName: null` for a source the caller may not read', async () => {
+      // ⚠ NOT an error and NOT an omitted field. A transcript shared with this
+      // user and later unshared leaves the note pointing at it forever; the
+      // scoped predicate returns no row, and the client renders the category
+      // noun. No title leaks.
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([
+        noteRow({ ownerId: user.id, sourceType: 'transcript', sourceTranscriptId: 't1' }),
+      ]);
+      prismaMock.note.count.mockResolvedValue(1);
+      prismaMock.transcript.findMany.mockResolvedValue([]);
+
+      const response = await request(context.app.getHttpServer())
+        .get(NOTES)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.items[0]).toHaveProperty('sourceName', null);
+    });
+
+    it('resolves a whole page with ONE source query, not one per row', async () => {
+      // The acceptance criterion of #192 on the server side: moving an N+1 from
+      // the client to the API would have been no fix at all.
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue(
+        Array.from({ length: 20 }, (_, i) =>
+          noteRow({
+            ownerId: user.id,
+            id: `note-${i}`,
+            sourceType: 'transcript',
+            sourceTranscriptId: `t${i}`,
+          }),
+        ),
+      );
+      prismaMock.note.count.mockResolvedValue(20);
+      prismaMock.transcript.findMany.mockResolvedValue([]);
+
+      await request(context.app.getHttpServer())
+        .get(NOTES)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(prismaMock.transcript.findMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.transcript.findMany.mock.calls[0][0].where.id.in).toHaveLength(20);
+    });
+
     it('orders by (updatedAt, id) and pages by KEYSET, never offset', async () => {
       const user = await createMockTestUser(context);
 

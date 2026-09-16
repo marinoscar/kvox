@@ -9,6 +9,7 @@ import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { NoteAccessService } from './access/note-access.service';
+import { NoteSourceNameService } from './note-source-name.service';
 import { NoteGenerationAccessService } from './access/note-generation-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import {
@@ -126,6 +127,10 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // rather than replace — see its header.
     NoteAccessService,
     NoteGenerationRequestService,
+    // Resolving "from *Q3 planning*" for a whole page in a bounded number of
+    // queries, scoped to what the caller may read (#192). It replaces a
+    // per-source request the web client used to issue.
+    NoteSourceNameService,
     NotesService,
     // `note.purge` and `notes.housekeeping`, plus the ten-minute `@Cron` that
     // only ENQUEUES the latter (CLAUDE.md rule 1).

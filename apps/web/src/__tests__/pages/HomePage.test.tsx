@@ -21,7 +21,6 @@ import { useUploadManager } from '../../hooks/useUploadManager';
 import type { NoteSummary } from '../../services/notes';
 import type { TranscriptSummary } from '../../services/transcripts';
 import type { TranscriptionConfig } from '../../services/transcription';
-import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
 import {
   AXE_OPTIONS,
   TRANSCRIPTION_AVAILABLE,
@@ -154,7 +153,6 @@ beforeEach(() => {
   mockUseUploadManager.mockReturnValue(manager());
   // Module-level and shared by every mount, so it would otherwise leak resolved
   // source names (and resolved negatives) between the suites below.
-  clearNoteSourceNameCache();
   // `respondWith` resets `observedRequests.length = 0` (among the other
   // counters) and runs before every test in every `describe` block below,
   // because this is the file's OUTER `beforeEach` — Vitest runs it ahead of

@@ -73,6 +73,7 @@ import type { RequestUser } from '../auth/interfaces/authenticated-user.interfac
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
+import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import {
   EXCERPT_CHARS,
@@ -121,6 +122,7 @@ export class NotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: NoteAccessService,
+    private readonly sourceNames: NoteSourceNameService,
     private readonly templates: NoteTemplateAccessService,
     private readonly requests: NoteGenerationRequestService,
     private readonly sources: NoteSourceService,
@@ -293,8 +295,15 @@ export class NotesService {
 
     const page = rows.slice(0, query.limit);
 
+    // ONE resolve for the whole page — at most three queries whatever the page
+    // holds. See `NoteSourceNameService`; the alternative is the per-row lookup
+    // the web client used to do, which #192 exists to delete.
+    const names = await this.sourceNames.resolve(page, userId);
+
     return {
-      items: page.map((row) => listShape(row)),
+      items: page.map((row) =>
+        listShape(row, names.get(noteSourceNameKey(row.sourceType, sourceIdOf(row))) ?? null),
+      ),
       total,
       nextCursor:
         rows.length > query.limit && page.length > 0
@@ -341,10 +350,19 @@ export class NotesService {
       this.prisma.note.count({ where: { ...visible, status: 'failed' } }),
     ]);
 
+    // The three lists overlap heavily (a generating note is in `inProgress` AND
+    // `recent`), so they are resolved TOGETHER rather than three times.
+    const names = await this.sourceNames.resolve(
+      [...inProgress, ...recent, ...failed],
+      userId,
+    );
+    const named = (row: Note & { template?: { name: string } | null }) =>
+      listShape(row, names.get(noteSourceNameKey(row.sourceType, sourceIdOf(row))) ?? null);
+
     return {
-      inProgress: inProgress.map((row) => listShape(row)),
-      recent: recent.map((row) => listShape(row)),
-      failed: failed.map((row) => listShape(row)),
+      inProgress: inProgress.map(named),
+      recent: recent.map(named),
+      failed: failed.map(named),
       counts: {
         total,
         ready,
@@ -1056,14 +1074,22 @@ export class NotesService {
 
   /** The detail projection. One definition, used by every route that returns a note. */
   private async shape(note: Note): Promise<NoteResponse> {
-    const template = note.templateId
-      ? await this.prisma.noteTemplate.findUnique({
-          where: { id: note.templateId },
-          select: { name: true },
-        })
-      : null;
+    // Both reads in parallel: they are independent, and the detail route is the
+    // one a user waits on with a spinner.
+    const [template, sourceName] = await Promise.all([
+      note.templateId
+        ? this.prisma.noteTemplate.findUnique({
+            where: { id: note.templateId },
+            select: { name: true },
+          })
+        : null,
+      // `ownerId` rather than a passed-in caller: notes are owner-only in this
+      // epic, so the only caller who reaches a shaped note IS its owner —
+      // `NoteAccessService.require` has already answered 404 to anyone else.
+      this.sourceNames.resolveOne(note, note.ownerId),
+    ]);
 
-    return detailShape(note, template?.name ?? null);
+    return detailShape(note, template?.name ?? null, sourceName);
   }
 
   /** One audit row. `targetType: 'note'`, matching the subject naming. */
@@ -1086,7 +1112,11 @@ export class NotesService {
 }
 
 /** The note detail projection. Exported for the shapes' own spec. */
-export function detailShape(note: Note, templateName: string | null): NoteResponse {
+export function detailShape(
+  note: Note,
+  templateName: string | null,
+  sourceName: string | null = null,
+): NoteResponse {
   return {
     id: note.id,
     title: note.title,
@@ -1102,6 +1132,7 @@ export function detailShape(note: Note, templateName: string | null): NoteRespon
     sourceObjectId: note.sourceObjectId,
     templateId: note.templateId,
     templateName,
+    sourceName,
     contextText: note.contextText,
     currentGenerationId: note.currentGenerationId,
     failureReason: note.failureReason,
@@ -1113,8 +1144,16 @@ export function detailShape(note: Note, templateName: string | null): NoteRespon
 /** The list-row projection: everything the detail carries, with an excerpt for a body. */
 export function listShape(
   note: Note & { template?: { name: string } | null },
+  // Resolved for the WHOLE PAGE by `NoteSourceNameService` and passed in, never
+  // looked up here: a shape function that could read a row is a shape function
+  // called once per row, which is the N+1 this field exists to remove.
+  sourceName: string | null = null,
 ): NoteListItem {
-  const { body, contextText, ...rest } = detailShape(note, note.template?.name ?? null);
+  const { body, contextText, ...rest } = detailShape(
+    note,
+    note.template?.name ?? null,
+    sourceName,
+  );
 
   void body;
   void contextText;
@@ -1150,6 +1189,22 @@ export function versionShape(
     restoredFromVersion: row.restoredFromVersion,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/**
+ * The id a row's `sourceType` points at, as an always-string for map lookups.
+ *
+ * A row whose discriminant and id columns disagree (which the schema permits
+ * and nothing should produce) yields `''`, which matches no key and resolves to
+ * `null` — the same answer an unreadable source gets.
+ */
+function sourceIdOf(
+  note: Pick<Note, 'sourceType' | 'sourceTranscriptId' | 'sourceNoteId' | 'sourceObjectId'>,
+): string {
+  if (note.sourceType === 'transcript') return note.sourceTranscriptId ?? '';
+  if (note.sourceType === 'note') return note.sourceNoteId ?? '';
+  if (note.sourceType === 'document') return note.sourceObjectId ?? '';
+  return '';
 }
 
 /** The first {@link EXCERPT_CHARS} characters of a body, on a whitespace boundary. */

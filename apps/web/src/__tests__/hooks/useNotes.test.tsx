@@ -82,6 +82,7 @@ function listItem(id: string, overrides: Partial<NoteListItem> = {}): NoteListIt
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting summary',
+    sourceName: null,
     currentGenerationId: null,
     failureReason: null,
     excerpt: 'An excerpt.',

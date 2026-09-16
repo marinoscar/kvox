@@ -13,7 +13,6 @@ vi.mock('react-router-dom', async () => {
 import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
 import { RecentNotes } from '../../../components/home/RecentNotes';
-import { clearNoteSourceNameCache } from '../../../hooks/useNoteSourceNames';
 import { AXE_OPTIONS, note } from './homeFixtures';
 
 /**
@@ -22,7 +21,8 @@ import { AXE_OPTIONS, note } from './homeFixtures';
  * `useNoteSourceNames` is NOT mocked: it is the one piece of behaviour this
  * component adds beyond laying cards out in a grid, its cache is module-level
  * and would leak between suites, and MSW already answers the lookups it makes.
- * `clearNoteSourceNameCache` runs before each test for exactly that reason.
+ * Since #192 the name is on the row (`sourceName`), so there is no client-side
+ * cache to reset and no per-source request to observe.
  *
  * The responsive behaviour is deliberately not asserted and cannot be: it is
  * pure CSS (`Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}`) and jsdom performs
@@ -40,7 +40,6 @@ const SIX = Array.from({ length: 6 }, (_, index) =>
 beforeEach(() => {
   mockNavigate.mockClear();
   localStorage.removeItem(THEME_STORAGE_KEY);
-  clearNoteSourceNameCache();
   server.resetHandlers();
 });
 

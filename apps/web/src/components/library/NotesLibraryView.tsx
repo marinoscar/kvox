@@ -20,10 +20,11 @@
  * "from *Q3 planning*", linked to the transcript. A note is DERIVED — that is
  * the whole premise of the epic — and a list of twenty notes with no indication
  * of what each was made from would have discarded the fact that makes them
- * trustworthy. The name itself is resolved by `useNoteSourceNames`, which
- * explains at length why the client has to fetch it and what should replace
- * that; a row whose source cannot be named falls back to the category noun and
- * stays perfectly readable.
+ * trustworthy. The name arrives ON THE ROW as `sourceName` since #192 — the
+ * client used to resolve it with one request per distinct source on the page,
+ * which is up to sixty extra round trips after three "Load more" presses. A row
+ * whose source cannot be named (deleted, or no longer readable by this caller)
+ * falls back to the category noun and stays perfectly readable.
  *
  * =============================================================================
  * A GENERATING NOTE SHOWS PROGRESS, NOT A PLACEHOLDER
@@ -67,7 +68,6 @@ import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { usePermissions } from '../../hooks/usePermissions';
-import { useNoteSourceNames, noteSourceKey } from '../../hooks/useNoteSourceNames';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
 import { feedCacheKey } from '../../utils/feedCache';
@@ -104,10 +104,14 @@ const SEARCH_DEBOUNCE_MS = 300;
  * apart, and the copy that got it wrong would fail axe on a page whose own
  * suite never rendered this component.
  */
-export function SourceLine({ note, name }: { note: NoteListItem; name: string | undefined }) {
+export function SourceLine({ note }: { note: NoteListItem }) {
   const ref = noteSourceRef(note);
   const path = noteSourcePath(note);
-  const label = name ?? (ref ? noteSourceFallbackLabel(ref.type) : 'an unknown source');
+  // `note.sourceName` comes straight off the list row since #192. It is `null`
+  // when the source is gone OR when the caller may no longer read it — both of
+  // which render the category noun, which is what a reader should see either
+  // way and what the client's own 404 path used to produce.
+  const label = note.sourceName ?? (ref ? noteSourceFallbackLabel(ref.type) : 'an unknown source');
 
   return (
     <Typography variant="caption" color="text.secondary" component="p">
@@ -127,12 +131,10 @@ export function SourceLine({ note, name }: { note: NoteListItem; name: string | 
 
 function NoteRow({
   note,
-  sourceName,
   dense,
   onOpen,
 }: {
   note: NoteListItem;
-  sourceName: string | undefined;
   dense: boolean;
   onOpen: () => void;
 }) {
@@ -193,7 +195,7 @@ function NoteRow({
       {/* The provenance footer. See `SourceLine` for why it is here and not in
           the action area above. */}
       <Box sx={{ px: dense ? 1.25 : 2, pb: dense ? 1 : 1.5, pt: 0 }}>
-        <SourceLine note={note} name={sourceName} />
+        <SourceLine note={note} />
       </Box>
     </Card>
   );
@@ -265,7 +267,6 @@ export function NotesLibraryView() {
     cacheKey,
   });
 
-  const sourceNames = useNoteSourceNames(notes);
   const canCreate = hasPermission('notes:write');
 
   /**
@@ -395,18 +396,14 @@ export function NotesLibraryView() {
           {dateGroups.map((group) => (
             <Fragment key={group.key}>
               <FeedDateSeparator label={group.label} />
-              {group.items.map((note) => {
-                const ref = noteSourceRef(note);
-                return (
-                  <NoteRow
-                    key={note.id}
-                    note={note}
-                    sourceName={ref ? sourceNames[noteSourceKey(ref)] : undefined}
-                    dense={!isPhone}
-                    onOpen={() => navigate(`/notes/${note.id}`)}
-                  />
-                );
-              })}
+              {group.items.map((note) => (
+                <NoteRow
+                  key={note.id}
+                  note={note}
+                  dense={!isPhone}
+                  onOpen={() => navigate(`/notes/${note.id}`)}
+                />
+              ))}
             </Fragment>
           ))}
         </Stack>

@@ -8,7 +8,6 @@ import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
 import { server } from '../mocks/server';
-import { clearNoteSourceNameCache } from '../../hooks/useNoteSourceNames';
 import { render, mockAdminUser } from '../utils/test-utils';
 import NotePage from '../../pages/NotePage';
 import type { Note } from '../../services/notes';
@@ -74,6 +73,7 @@ function note(overrides: Partial<Note> = {}): Note {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
+    sourceName: null,
     contextText: null,
     currentGenerationId: 'gen-1',
     failureReason: null,
@@ -189,7 +189,6 @@ beforeEach(() => {
   // (see `useNoteSourceNames`' header), including its resolved negatives — so a
   // test that does not clear it inherits whichever answer an earlier test's
   // handlers produced.
-  clearNoteSourceNameCache();
   streams.length = 0;
   regenerateCalls = 0;
   current = note();
@@ -890,12 +889,16 @@ describe('NotePage — leaving with unsaved changes', () => {
 
 describe('NotePage — provenance', () => {
   it('names the transcript it was generated from, and links to it', async () => {
-    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
-    server.use(
-      http.get(`${API_BASE}/transcripts/:id`, () =>
-        HttpResponse.json({ data: { id: 't1', title: 'Q3 planning call', currentVersion: 1 } }),
-      ),
-    );
+    // ⚠ NO SOURCE ENDPOINT IS STUBBED, and that IS the assertion since #192:
+    // the name arrives ON the note as `sourceName`, resolved server-side. This
+    // test used to need a `GET /transcripts/:id` handler because the client
+    // fetched the title itself; if one is ever needed again, the N+1 is back.
+    current = note({
+      status: 'ready',
+      body: 'Done.',
+      currentVersion: 1,
+      sourceName: 'Q3 planning call',
+    });
     renderNote();
 
     const link = await screen.findByRole('link', { name: 'Q3 planning call' });
@@ -914,12 +917,8 @@ describe('NotePage — provenance', () => {
       sourceType: 'note',
       sourceTranscriptId: null,
       sourceNoteId: 'n0',
+      sourceName: 'Earlier note',
     });
-    server.use(
-      http.get(`${API_BASE}/notes/n0`, () =>
-        HttpResponse.json({ data: note({ id: 'n0', title: 'Earlier note' }) }),
-      ),
-    );
     renderNote();
 
     expect(await screen.findByRole('link', { name: 'Earlier note' })).toHaveAttribute(
@@ -939,12 +938,8 @@ describe('NotePage — provenance', () => {
       sourceType: 'document',
       sourceTranscriptId: null,
       sourceObjectId: 'obj-1',
+      sourceName: 'board-pack.pdf',
     });
-    server.use(
-      http.get(`${API_BASE}/storage/objects/:id`, () =>
-        HttpResponse.json({ data: { id: 'obj-1', name: 'board-pack.pdf', metadata: null } }),
-      ),
-    );
     renderNote();
 
     expect(await screen.findByText('board-pack.pdf')).toBeInTheDocument();

@@ -109,7 +109,6 @@ import { NoteProvenance } from '../components/notes/NoteProvenance';
 import { NoteStatusChip } from '../components/notes/NoteStatusChip';
 import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNoteDialogContainer';
 import { useAiConfig } from '../hooks/useAiConfig';
-import { useNoteSourceName } from '../hooks/useNoteSourceNames';
 import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
 import { isNoteInFlight, useNote } from '../hooks/useNotes';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
@@ -130,7 +129,11 @@ export function NotePage() {
   const navigate = useNavigate();
   const { note, isLoading, error, refresh, setNote } = useNote(id);
   const { config: aiConfig, keyConfigured, isLoading: isAiLoading } = useAiConfig();
-  const sourceName = useNoteSourceName(note);
+  // Straight off the note since #192 — the API denormalises the source's name
+  // onto the detail shape, so the page no longer resolves it with a second
+  // request. `null` covers both "gone" and "no longer readable by you", which
+  // both render the category noun.
+  const sourceName = note?.sourceName ?? null;
   /**
    * The template this note was generated from, for the context panel (#109).
    *

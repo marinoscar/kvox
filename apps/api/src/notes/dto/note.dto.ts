@@ -415,6 +415,30 @@ export const noteResponseSchema = z.object({
       'The template\'s name as it stands now, or `null` if the template is gone. The generation ' +
         'row keeps its own permanent `templateNameSnapshot` regardless.',
     ),
+  /**
+   * The SOURCE's name — issue #192, epic #162.
+   *
+   * Denormalised here beside `templateName`, and for the same reason: a client
+   * that wants to render "from *Q3 planning*" rather than "from a transcript"
+   * otherwise has to go and fetch it, which on a list is one request per
+   * distinct source on the page. `apps/web/src/hooks/useNoteSourceNames.ts` was
+   * that stand-in and said so in its own header; this field is what deletes it.
+   *
+   * ⚠ `null` MEANS "NO NAME AVAILABLE", NEVER "NO SOURCE". A deleted source, a
+   * soft-deleted one, and — the case that matters — one the CALLER MAY NO
+   * LONGER READ all answer the same way: a transcript shared with someone and
+   * later unshared leaves the note pointing at it forever, and this field must
+   * not become the leak that publishes its title. Clients render the category
+   * noun ("a transcript") for `null`, which is what they already did before the
+   * lookup landed.
+   */
+  sourceName: z
+    .string()
+    .nullable()
+    .describe(
+      'The name of the transcript, note or document this note was generated from, or `null` ' +
+        'when it no longer exists or the caller may no longer read it. Never a bare id.',
+    ),
   contextText: z.string().nullable().describe('The free-text context carried into every generation.'),
   currentGenerationId: z
     .string()

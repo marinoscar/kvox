@@ -5,6 +5,7 @@ import type { RequestUser } from '../auth/interfaces/authenticated-user.interfac
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
+import { NoteSourceNameService } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import { noteResponseSchema } from './dto/note.dto';
 import { NoteGenerationRequestService } from './generation/note-generation-request.service';
@@ -148,6 +149,18 @@ describe('NotesService', () => {
         NotesService,
         { provide: PrismaService, useValue: prisma },
         { provide: NoteAccessService, useValue: access },
+        // #192. Stubbed rather than real: this suite is about title
+        // provenance, and a resolver reading three tables through the same
+        // `prisma` stub would make every assertion here depend on fixtures for
+        // a question it is not asking. `null` is a real production answer (a
+        // deleted or unreadable source), so the shapes stay valid.
+        {
+          provide: NoteSourceNameService,
+          useValue: {
+            resolve: jest.fn().mockResolvedValue(new Map<string, string>()),
+            resolveOne: jest.fn().mockResolvedValue(null),
+          },
+        },
         { provide: NoteTemplateAccessService, useValue: templates },
         { provide: NoteGenerationRequestService, useValue: requests },
         { provide: NoteSourceService, useValue: sources },
