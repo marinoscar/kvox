@@ -13,7 +13,7 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { deployInfoDir, writeDeployInfo } from './deploy-info.js';
+import { ensureDeployInfoDir, writeDeployInfo } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -353,6 +353,9 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           runCommand: context.runCommand,
           repoUrl: target.url,
           cwd: context.options.deployRoot,
+          // Rule 5 of executor.ts: wherever `hooks` are wired, the redactor
+          // travels with them, or the terminal shows what the log masks.
+          redact: context.journal.redact,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
         context.journal.line(
@@ -373,6 +376,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         const checkout = await ensureCheckout(target, {
           deployRoot: context.options.deployRoot,
           runCommand: context.runCommand,
+          redact: context.journal.redact,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           ...(context.options.force === undefined ? {} : { force: context.options.force }),
         });
@@ -632,6 +636,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           runCommand: context.runCommand,
           proxyContainer,
           email,
+          redact: context.journal.redact,
           ...(context.options.staging === undefined ? {} : { staging: context.options.staging }),
           ...(context.options.fetch === undefined ? {} : { fetch: context.options.fetch }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
@@ -762,10 +767,14 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   // write its temp file there unless the operator is root. On a VPS `install`
   // runs as root and it never shows; in CI it failed the epilogue with EACCES
   // on `deploy-info/info.json.<pid>.tmp` with all thirteen steps green. The
-  // directory is the CLI's to write, so the CLI creates it first. Mode
-  // mirrors deploy-info.ts: the api container's unprivileged user has to
-  // traverse it, and nothing in it is secret.
-  mkdirSync(deployInfoDir(options.deployRoot), { recursive: true, mode: 0o755 });
+  // directory is the CLI's to write, so the CLI creates it first.
+  //
+  // Through `ensureDeployInfoDir` rather than a bare `mkdirSync(…, { mode })`
+  // (#159): that mode is umask-masked and is a no-op on a directory that
+  // already exists, so a `--reinstall` over a root-owned or 0700 deploy-info
+  // silently kept it unreadable. The helper chmods unconditionally and, when
+  // it cannot, refuses with the `chown` an operator can paste.
+  ensureDeployInfoDir(options.deployRoot);
 
   const journal = openJournal({
     deployRoot: options.deployRoot,

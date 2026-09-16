@@ -12,7 +12,12 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { updateDeployInfoRemote, writeDeployInfo, type DeployRemote } from './deploy-info.js';
+import {
+  ensureDeployInfoDir,
+  updateDeployInfoRemote,
+  writeDeployInfo,
+  type DeployRemote,
+} from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { metadataFor } from './env-metadata.js';
@@ -20,7 +25,7 @@ import { runEnvWizard } from './env-wizard.js';
 import { runCommand as defaultRunCommand } from './executor.js';
 import { collectHealth, isHealthy, waitForHealthy } from './health.js';
 import type { DeployHooks } from './hooks.js';
-import { openJournal, type Journal } from './journal.js';
+import { openJournal, type Journal, type Redactor } from './journal.js';
 import { DEFAULT_PROXY_ROOT, projectNameFor } from './layout.js';
 import {
   certificateExpiry,
@@ -219,6 +224,8 @@ export interface UpdateCheckOptions {
   ref?: string | undefined;
   cwd?: string | undefined;
   hooks?: DeployHooks | undefined;
+  /** The run journal's redactor. See `CheckoutOptions.redact` (issue #156). */
+  redact?: Redactor | undefined;
   /** Bounds the fetch; `status` gives it ten seconds, a deploy does not. */
   fetchTimeoutMs?: number | undefined;
   /** Refuse to clone; `status` must not create a checkout to answer. */
@@ -247,6 +254,7 @@ export async function checkForUpdate(options: UpdateCheckOptions): Promise<Updat
   const fetched = await fetchRemote(target, {
     deployRoot: options.deployRoot,
     runCommand: options.runCommand,
+    ...(options.redact === undefined ? {} : { redact: options.redact }),
     ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
     ...(options.fetchTimeoutMs === undefined ? {} : { fetchTimeoutMs: options.fetchTimeoutMs }),
     ...(options.requireExisting === undefined ? {} : { requireExisting: options.requireExisting }),
@@ -428,6 +436,9 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           runCommand: context.runCommand,
           repoUrl: context.state.repoUrl,
           cwd: context.options.deployRoot,
+          // Rule 5 of executor.ts: wherever `hooks` are wired, the redactor
+          // travels with them, or the terminal shows what the log masks.
+          redact: context.journal.redact,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
         });
         if (auth !== undefined) {
@@ -445,6 +456,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           deployRoot: context.options.deployRoot,
           state: context.state,
           runCommand: context.runCommand,
+          redact: context.journal.redact,
           ...(context.options.ref === undefined ? {} : { ref: context.options.ref }),
           ...(context.options.cwd === undefined ? {} : { cwd: context.options.cwd }),
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
@@ -470,6 +482,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         const checkout = await ensureCheckout(target, {
           deployRoot: context.options.deployRoot,
           runCommand: context.runCommand,
+          redact: context.journal.redact,
           fetched,
           ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           ...(context.options.force === undefined ? {} : { force: context.options.force }),
@@ -712,6 +725,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
               runCommand: context.runCommand,
               proxyContainer,
               email,
+              redact: context.journal.redact,
               ...(context.options.fetch === undefined ? {} : { fetch: context.options.fetch }),
               ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
             });
@@ -725,6 +739,7 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
             proxyContainer,
             runCommand: context.runCommand,
             certName: target.domain,
+            redact: context.journal.redact,
             ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
           });
         }
@@ -795,6 +810,25 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
   // The precondition install does not have, and the reason this is its own
   // command: nothing to update is a different situation from nothing installed.
   const state = requireState(options.deployRoot);
+
+  // BEFORE the pipeline, and that ordering is the whole point (#159).
+  //
+  // `update` used to pre-create nothing: the first thing to touch deploy-info
+  // was `refreshDeployInfo` at the very END of a successful run, long after
+  // `restart` had run the `compose up` that makes the Docker daemon create the
+  // missing bind source as root:root. A deployment first installed by a CLI
+  // from before #155 already has that root-owned directory, so a non-root
+  // update spent a full build, migrate, restart and health check only to die
+  // on `EACCES … deploy-info/info.json.<pid>.tmp` with every step green.
+  //
+  // Creating it here fixes both halves: the directory exists before any
+  // compose command, so Docker never gets to invent it, and a directory this
+  // CLI cannot make right is refused NOW with the `chown` to paste - not after
+  // the deployment has already been applied. `--check` reaches
+  // `recordUpdateCheck` before any compose command and so was already safe by
+  // accident; it is safe on purpose from here.
+  ensureDeployInfoDir(options.deployRoot);
+
   const startedAt = Date.now();
 
   // Read through `readEnvFile` rather than a fixed path: a deployment from

@@ -6,6 +6,7 @@ import { PreconditionError, UsageError } from '../errors.js';
 import { GITHUB_HOST, parseGithubRepo } from './checks/github.js';
 import type { DeployHooks } from './hooks.js';
 import type { runCommand } from './executor.js';
+import type { Redactor } from './journal.js';
 import type { DeployState } from './state.js';
 
 // =============================================================================
@@ -214,6 +215,17 @@ export interface GitHubAuthOptions {
   /** Where `gh` runs; any existing directory, it reads nothing from it. */
   cwd: string;
   hooks?: DeployHooks | undefined;
+  /**
+   * The run journal's redactor (issue #156).
+   *
+   * Required wherever `onLog` is wired, and this file wires it: `executor.ts`
+   * rule 5 masks a line the moment it is assembled, so the redactor has to
+   * reach `runCommand` or the operator's terminal sees output the log file
+   * does not. Optional only because `status` and the tests drive these
+   * functions with no journal open, where there is no secret set to mask
+   * against and the redactor would be the identity function anyway.
+   */
+  redact?: Redactor | undefined;
 }
 
 /**
@@ -244,6 +256,7 @@ export async function ensureGitHubAuth(
     options.runCommand(argv, {
       cwd: options.cwd,
       timeoutMs: 60_000,
+      ...(options.redact === undefined ? {} : { redact: options.redact }),
       ...(options.hooks?.onLog === undefined
         ? {}
         : { onLine: (line: string) => options.hooks?.onLog?.(line) }),
@@ -278,6 +291,8 @@ export interface CheckoutOptions {
   deployRoot: string;
   runCommand: typeof runCommand;
   hooks?: DeployHooks | undefined;
+  /** The run journal's redactor. See `GitHubAuthOptions.redact` (issue #156). */
+  redact?: Redactor | undefined;
   /** Discard uncommitted local modifications instead of refusing. */
   force?: boolean | undefined;
   /** How long a clone or fetch may take; `status` bounds it, a deploy does not. */
@@ -464,6 +479,7 @@ async function runGit(
     const result = await options.runCommand(['git', ...args], {
       cwd,
       timeoutMs: options.fetchTimeoutMs ?? 15 * 60_000,
+      ...(options.redact === undefined ? {} : { redact: options.redact }),
       ...(options.hooks?.onLog === undefined
         ? {}
         : { onLine: (line: string) => options.hooks?.onLog?.(line) }),
