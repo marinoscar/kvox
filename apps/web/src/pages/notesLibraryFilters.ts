@@ -1,5 +1,10 @@
 /**
- * The Notes tab's status filter options — issue #57, epic #45.
+ * The Notes view's status filter options — issue #57, epic #45; the URL seeds
+ * are #170, epic #166.
+ *
+ * ⚠ THIS LIST NO LONGER FEEDS A `<Select>` — #193 removed it. It survives as
+ * the allowlist `noteStatusFromQuery` validates against and as the source of
+ * the chip's label; see `transcriptsLibraryFilters.ts` for the full argument.
  *
  * A SEPARATE MODULE from the view, exactly like `transcriptsLibraryFilters.ts`,
  * so a test can assert the list without mounting anything and so the "Any"
@@ -57,11 +62,16 @@ export const NOTE_STATUS_FILTERS: readonly NoteStatusFilterOption[] = [
  * `?status=<value>` → the status filter, VALIDATED AGAINST THE OFFERED LIST.
  *
  * Membership of `NOTE_STATUS_FILTERS` is the check, not membership of
- * `NoteStatus`, for the reason its transcript twin states: the list is what the
- * `<Select>` can display, and `draft` is a real `NoteStatus` this page
- * deliberately does not offer. `?status=draft` therefore answers `'all'` rather
- * than seeding a filter whose value matches no `<MenuItem>` and renders the
- * control blank.
+ * `NoteStatus`, for the reason its transcript twin states: the list is what
+ * this page can NAME, and `draft` is a real `NoteStatus` this page deliberately
+ * does not offer. `?status=draft` therefore answers `'all'` rather than
+ * silently filtering the feed by something the reader cannot see.
+ *
+ * ⚠ Since #193 the thing that names it is the chip above the feed, not a
+ * `<Select>` — the filter bar is one search box. The failure this guard
+ * prevents got WORSE rather than better with that change: an unnamed status
+ * used to render a blank dropdown, and would now render no chip at all,
+ * leaving a filtered feed with no visible way out of it.
  *
  * Absent, unknown, empty and `all` all answer `'all'`, which the view already
  * translates into omitting `status` from the request.

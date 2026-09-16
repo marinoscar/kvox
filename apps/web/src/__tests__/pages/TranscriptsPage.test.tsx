@@ -242,18 +242,88 @@ describe('TranscriptsPage — search and filter', () => {
     expect(requests[0].searchParams.has('status')).toBe(false);
   });
 
-  it('sends the chosen status', async () => {
-    const user = userEvent.setup();
+  it('offers ONE filter control — the search box (#193)', async () => {
+    // The `Status` <Select> is gone. It read "Any status" essentially always,
+    // and a status is a property of a row that the row's own chip states.
     render(<TranscriptsPage />, {
       wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
     });
-    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    await screen.findByText('Weekly standup');
 
-    await user.click(screen.getByLabelText('Status'));
-    await user.click(await screen.findByRole('option', { name: 'Failed' }));
+    expect(screen.queryByLabelText('Status')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    // "Search transcripts", not "Search titles" — #176 relabelled it when the
+    // box stopped filtering by title substring and started a full-text search.
+    expect(screen.getByLabelText('Search transcripts')).toBeInTheDocument();
+  });
+});
 
+/**
+ * =============================================================================
+ * THE STATUS FILTER MOVED TO THE URL — issue #193
+ * =============================================================================
+ *
+ * #193 removed the dropdown, not the capability. `?status=failed` is still a
+ * real filtered view — the home counts strip (#170) links straight into it —
+ * and a chip above the feed is what says so and offers the way out.
+ *
+ * The dismissal test is the one that matters: `?status=` SEEDS this view, and
+ * since #168 the feed survives a drill-down and remounts routinely, so a chip
+ * that cleared state alone would be silently undone by the next remount.
+ */
+describe('TranscriptsPage — the URL status filter and its chip', () => {
+  it('names an active ?status= in a chip', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=failed' },
+    });
+
+    expect(await screen.findByText('Status: Failed')).toBeInTheDocument();
+  });
+
+  it('shows NO chip when no status filter is active', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+    });
+    await screen.findByText('Weekly standup');
+
+    expect(screen.queryByText(/^Status:/)).toBeNull();
+  });
+
+  it('shows no chip for an unknown status, which never reaches the query either', async () => {
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=banana' },
+    });
+    await screen.findByText('Weekly standup');
+
+    expect(screen.queryByText(/^Status:/)).toBeNull();
+    expect(requests.every((url) => url.searchParams.get('status') === null)).toBe(true);
+  });
+
+  it('has no axe violations with the chip present', async () => {
+    // The chip's delete affordance is a real `IconButton` with a name, not
+    // MUI's bare unnamed SVG — this is the pass that would catch a regression
+    // back to the bare icon.
+    const { container } = render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=failed' },
+    });
+    await screen.findByText('Status: Failed');
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('clearing the chip drops the filter AND the URL parameter', async () => {
+    const user = userEvent.setup();
+    render(<TranscriptsPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=failed' },
+    });
+    await screen.findByText('Status: Failed');
+
+    await user.click(screen.getByRole('button', { name: /Status: Failed — clear this filter/i }));
+
+    await waitFor(() => expect(screen.queryByText('Status: Failed')).toBeNull());
+    // The request that follows carries no status — the state cleared.
     await waitFor(() =>
-      expect(requests.some((url) => url.searchParams.get('status') === 'failed')).toBe(true),
+      expect(requests[requests.length - 1].searchParams.get('status')).toBeNull(),
     );
   });
 });
@@ -284,15 +354,14 @@ describe('TranscriptsPage — empty states', () => {
     // instead of this one. That is the distinction the issue exists to draw —
     // see `components/library/LibrarySearch.test.tsx`, which asserts the two
     // panels are never confused for one another.
-    const user = userEvent.setup();
+    // ⚠ SEEDED FROM THE URL since #193: the status `<Select>` this test used to
+    // drive is gone, and a status now reaches the library only as `?status=`
+    // (which the home counts strip links into). The panel under test is
+    // unchanged.
     respondWith([]);
     render(<TranscriptsPage />, {
-      wrapperOptions: { user: mockAdminUser, route: '/transcripts' },
+      wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=failed' },
     });
-    await screen.findByText('No transcripts yet');
-
-    await user.click(screen.getByLabelText('Status'));
-    await user.click(await screen.findByRole('option', { name: 'Failed' }));
 
     expect(
       await screen.findByText('No transcripts match those filters', undefined, {
@@ -569,7 +638,10 @@ describe('TranscriptsPage — seeded from the URL', () => {
       wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=failed' },
     });
 
-    expect(screen.getByLabelText('Status')).toHaveTextContent('Failed');
+    // Since #193 the filter is named by the chip above the feed, not by a
+    // `<Select>`. The assertion that matters is unchanged: the FIRST request
+    // already carries it, so the deep link is honoured before any refetch.
+    expect(await screen.findByText('Status: Failed')).toBeInTheDocument();
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
     expect(requests[0].searchParams.get('status')).toBe('failed');
   });
@@ -579,7 +651,7 @@ describe('TranscriptsPage — seeded from the URL', () => {
       wrapperOptions: { user: mockAdminUser, route: '/transcripts?status=bogus' },
     });
 
-    expect(screen.getByLabelText('Status')).toHaveTextContent('Any status');
+    expect(screen.queryByText(/^Status:/)).toBeNull();
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
     expect(requests[0].searchParams.get('status')).toBeNull();
   });

@@ -50,11 +50,7 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CircularProgress from '@mui/material/CircularProgress';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
@@ -67,6 +63,7 @@ import visuallyHidden from '@mui/utils/visuallyHidden';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
 import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { TranscriptRowActions } from './TranscriptRowActions';
@@ -254,7 +251,7 @@ export function TranscriptsLibraryView() {
    * flag synchronously, so the 300 ms before the request is a spinner rather
    * than an answer to a question the link did not ask.
    */
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<ScopeTab>(() => transcriptScopeFromQuery(searchParams));
   const [search, setSearch] = useState(() => searchFromQuery(searchParams));
   const [status, setStatus] = useState<TranscriptStatus | 'all'>(() =>
@@ -428,6 +425,37 @@ export function TranscriptsLibraryView() {
   const isFiltered = status !== 'all';
 
   /**
+   * The offered filter's own LABEL for an active `?status=`, or `null`.
+   *
+   * Read from `TRANSCRIPT_STATUS_FILTERS` rather than title-casing the raw API
+   * value, so the chip says "Failed" and the wording stays in the one place
+   * that already owns it — the same list `transcriptStatusFromQuery` validates
+   * against, so a status this page does not offer can never reach the chip.
+   */
+  const activeStatusLabel = useMemo(() => {
+    if (status === 'all') return null;
+    return TRANSCRIPT_STATUS_FILTERS.find((option) => option.value === status)?.label ?? null;
+  }, [status]);
+
+  /**
+   * Clearing has to clear the URL too, not only the state.
+   *
+   * `?status=` SEEDS this view's initial state (see
+   * `pages/transcriptsLibraryFilters.ts`), so a handler that only reset the
+   * state would be undone by the next remount — and #168 makes remounts
+   * routine, since the feed now survives a drill-down and comes back here.
+   *
+   * `replace: true`: removing an entry point is not a step in the user's
+   * history, and a push would make Back reapply the filter they just dismissed.
+   */
+  const clearStatusFilter = useCallback(() => {
+    setStatus('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  /**
    * The feed cut into date groups — issue #190.
    *
    * `new Date()` is read HERE and passed down, rather than inside the grouper.
@@ -462,27 +490,23 @@ export function TranscriptsLibraryView() {
           onChange={(event) => setSearch(event.target.value)}
           sx={{ flexGrow: 1 }}
         />
-        {/* DISABLED WHILE SEARCHING, because `GET /api/search` has no status
-            parameter. Filtering the ranked page client-side instead would make
-            the count above it disagree with the rows below it — twenty fetched,
-            four shown, "the top 200 matches" over them — and a control that
-            silently does nothing is worse than one that visibly cannot. */}
-        <FormControl size="small" sx={{ minWidth: 180 }} disabled={searchMode}>
-          <InputLabel id="transcript-status-filter">Status</InputLabel>
-          <Select
-            labelId="transcript-status-filter"
-            label="Status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as TranscriptStatus | 'all')}
-          >
-            {TRANSCRIPT_STATUS_FILTERS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
       </Stack>
+
+      {/* ONE SEARCH BOX. The `Status` <Select> that used to sit beside it is
+          gone (#193) — it read "Any status" essentially always, and a status is
+          a property of a row that the row's own chip already states. The
+          capability moved to the URL rather than being deleted; see
+          `ActiveStatusFilterChip`.
+
+          ⚠ This also retires a control #176 had to DISABLE while searching,
+          because `GET /api/search` takes no status parameter. The chip is the
+          better answer to that same problem: it does not pretend to offer a
+          control that cannot work here, and `SearchResultsView`'s own
+          `unappliedStatusFilter` notice still says the filter is not being
+          honoured by the ranked results. */}
+      {activeStatusLabel && (
+        <ActiveStatusFilterChip label={activeStatusLabel} onClear={clearStatusFilter} />
+      )}
 
       {searchMode ? (
         <SearchResultsView
@@ -531,7 +555,7 @@ export function TranscriptsLibraryView() {
                   No transcripts match those filters
                 </Typography>
                 <Typography color="text.secondary">
-                  Set the status filter back to Any to see everything.
+                  Clear the status filter above to see everything.
                 </Typography>
               </>
             ) : tab === 'shared' ? (

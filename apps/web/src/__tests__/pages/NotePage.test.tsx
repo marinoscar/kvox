@@ -65,7 +65,6 @@ function note(overrides: Partial<Note> = {}): Note {
   return {
     id: 'n1',
     title: 'Q3 planning — decisions',
-    titleSource: 'ai',
     body: '',
     status: 'generating',
     currentVersion: 0,
