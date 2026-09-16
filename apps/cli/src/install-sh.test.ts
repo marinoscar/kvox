@@ -1,5 +1,13 @@
-import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -189,5 +197,271 @@ describe('install.sh root-aware KVOX_HOME / KVOX_BIN_DIR defaults (#226, commit 
 
     const userResult = runDefaultsBlock(1000, '/home/oscar', { KVOX_HOME: '/custom/user/home' });
     expect(userResult.home).toBe('/custom/user/home');
+  });
+});
+
+// =============================================================================
+// install.sh bundles the environment template beside the CLI (issue #236)
+// =============================================================================
+//
+// Same extraction technique as the defaults block above: the block between
+// `TEMPLATE_SRC="$TMP_DIR/infra/compose/.env.example"` and its closing,
+// UNINDENTED `fi` is pulled straight out of the real, current install.sh at
+// test time (never a hand-copied duplicate), and run under bash with `err`/
+// `warn`/`ok` stubbed to plain stdout lines and $TMP_DIR/$APP_DIR pointed at
+// real temp directories. The inner `if [[ -n "$KVOX_SRC" ]]; then ... fi` is
+// indented two spaces, so it is NOT what the `\nfi\n` search finds — only the
+// outer, column-0 `fi` closes the extraction, which is asserted implicitly by
+// every scenario below actually exercising the KVOX_SRC branch inside it.
+//
+// REAL GIT, not a mock: what `git remote get-url origin` and `git rev-parse
+// --abbrev-ref HEAD` report for a given repository state is exactly the
+// behaviour this block leans on, and a stub would only prove the stub was
+// called the way the test expected.
+// =============================================================================
+
+const TEMPLATE_START_MARKER = 'TEMPLATE_SRC="$TMP_DIR/infra/compose/.env.example"';
+
+function extractTemplateBlock(): string {
+  const source = readFileSync(INSTALL_SH, 'utf8');
+  const start = source.indexOf(TEMPLATE_START_MARKER);
+  if (start === -1) {
+    throw new Error(
+      `install.sh no longer contains the expected "${TEMPLATE_START_MARKER}" line — ` +
+        'the template-bundling block this test pins may have moved or been removed.',
+    );
+  }
+  const closeMarker = '\nfi\n';
+  const closeIdx = source.indexOf(closeMarker, start);
+  if (closeIdx === -1) {
+    throw new Error(
+      'install.sh: could not find the closing (unindented) "fi" for the template-bundling block.',
+    );
+  }
+  const end = closeIdx + closeMarker.length;
+  return source.slice(start, end);
+}
+
+function git(cwd: string, ...args: string[]): string {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: 'Test',
+      GIT_AUTHOR_EMAIL: 'test@example.test',
+      GIT_COMMITTER_NAME: 'Test',
+      GIT_COMMITTER_EMAIL: 'test@example.test',
+    },
+  }).trim();
+}
+
+/** A real git repository at a fresh temp directory, with one commit. */
+function makeRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'install-sh-tmpdir-'));
+  createdDirs.push(dir);
+  git(dir, 'init', '--quiet', '--initial-branch=main');
+  writeFileSync(join(dir, 'README.md'), 'hello\n');
+  git(dir, 'add', '.');
+  git(dir, 'commit', '--quiet', '-m', 'first');
+  return dir;
+}
+
+function writeEnvExample(repoDir: string, contents = 'DATABASE_URL=postgres://placeholder\n'): void {
+  const dir = join(repoDir, 'infra', 'compose');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, '.env.example'), contents);
+}
+
+const createdDirs: string[] = [];
+
+afterEach(() => {
+  while (createdDirs.length > 0) {
+    const dir = createdDirs.pop();
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+interface TemplateBlockEnv {
+  tmpDir: string;
+  appDir: string;
+  kvoxRepo: string;
+  kvoxRef: string;
+  kvoxSrc?: string;
+}
+
+interface TemplateBlockRun {
+  stdout: string;
+  status: number | null;
+}
+
+function runTemplateBlock(vars: TemplateBlockEnv): TemplateBlockRun {
+  const workDir = mkdtempSync(join(tmpdir(), 'install-sh-template-run-'));
+  createdDirs.push(workDir);
+
+  const block = extractTemplateBlock();
+  const script = [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    'err()  { printf "ERR: %s\\n" "$1"; }',
+    'warn() { printf "WARN: %s\\n" "$1"; }',
+    'ok()   { printf "OK: %s\\n" "$1"; }',
+    block,
+  ].join('\n');
+  const scriptPath = join(workDir, 'run.sh');
+  writeFileSync(scriptPath, script);
+  chmodSync(scriptPath, 0o755);
+
+  const env: NodeJS.ProcessEnv = {
+    PATH: process.env['PATH'] ?? '/usr/bin:/bin',
+    TMP_DIR: vars.tmpDir,
+    APP_DIR: vars.appDir,
+    KVOX_REPO: vars.kvoxRepo,
+    KVOX_REF: vars.kvoxRef,
+    KVOX_SRC: vars.kvoxSrc ?? '',
+  };
+
+  const result = spawnSync('bash', [scriptPath], {
+    encoding: 'utf8',
+    env,
+    cwd: workDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  return { stdout: result.stdout, status: result.status };
+}
+
+function readSourceJson(appDir: string): { repoUrl: string; ref: string } {
+  return JSON.parse(readFileSync(join(appDir, 'template', 'source.json'), 'utf8')) as {
+    repoUrl: string;
+    ref: string;
+  };
+}
+
+describe('install.sh bundles infra/compose/.env.example into $APP_DIR/template (#236)', () => {
+  it('copies the template and records $KVOX_REPO/$KVOX_REF for an ordinary clone (no KVOX_SRC)', () => {
+    const tmpDir = makeRepo();
+    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/example-owner/example-repo.git');
+    writeEnvExample(tmpDir, 'KEY=value\n');
+    const appDir = mkdtempSync(join(tmpdir(), 'install-sh-appdir-'));
+    createdDirs.push(appDir);
+
+    const { stdout, status } = runTemplateBlock({
+      tmpDir,
+      appDir,
+      kvoxRepo: 'https://github.com/example-owner/example-repo.git',
+      kvoxRef: 'v2.0.0',
+    });
+
+    expect(status).toBe(0);
+    expect(readFileSync(join(appDir, 'template', '.env.example'), 'utf8')).toBe('KEY=value\n');
+    expect(readSourceJson(appDir)).toEqual({
+      repoUrl: 'https://github.com/example-owner/example-repo.git',
+      ref: 'v2.0.0',
+    });
+    expect(stdout).toContain(
+      'OK: Bundled the environment template from https://github.com/example-owner/example-repo.git',
+    );
+  });
+
+  it('a KVOX_SRC install records the REAL origin URL, not the temp directory it was copied through', () => {
+    // Simulates `KVOX_SRC=/path/to/checkout bash install.sh`: install.sh
+    // copies KVOX_SRC into $TMP_DIR before this block runs, so $TMP_DIR is a
+    // real git checkout whose origin is the operator's actual fork — never
+    // the throwaway temp path. Recording that path instead would make the
+    // bundled template useless to `bundledTemplateMatches` on every future
+    // run, since the temp directory is deleted before install.sh exits.
+    const tmpDir = makeRepo();
+    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+    git(tmpDir, 'checkout', '--quiet', '-b', 'feature-x');
+    writeEnvExample(tmpDir);
+    const appDir = mkdtempSync(join(tmpdir(), 'install-sh-appdir-'));
+    createdDirs.push(appDir);
+
+    runTemplateBlock({
+      tmpDir,
+      appDir,
+      // Deliberately a DIFFERENT repo than the real origin above: if this
+      // value leaked into source.json instead of the real origin, this
+      // assertion would catch it immediately.
+      kvoxRepo: 'https://github.com/should-not-be-used/anything.git',
+      kvoxRef: 'main',
+      kvoxSrc: '/some/local/checkout',
+    });
+
+    expect(readSourceJson(appDir)).toEqual({
+      repoUrl: 'https://github.com/acme/widgets.git',
+      ref: 'feature-x',
+    });
+  });
+
+  it('falls back to $KVOX_REPO when the source tree is not a git checkout at all', () => {
+    // `git -C "$TMP_DIR" remote get-url origin` fails outright (no .git),
+    // guarded by `|| true`, so SRC_REPO_URL stays empty and the explicit
+    // fallback (`[[ -n "$SRC_REPO_URL" ]] || SRC_REPO_URL="$KVOX_REPO"`) is
+    // what the recorded value actually comes from.
+    const tmpDir = mkdtempSync(join(tmpdir(), 'install-sh-plain-src-'));
+    createdDirs.push(tmpDir);
+    writeEnvExample(tmpDir);
+    const appDir = mkdtempSync(join(tmpdir(), 'install-sh-appdir-'));
+    createdDirs.push(appDir);
+
+    runTemplateBlock({
+      tmpDir,
+      appDir,
+      kvoxRepo: 'https://github.com/fallback-owner/fallback-repo.git',
+      kvoxRef: 'main',
+      kvoxSrc: '/some/local/checkout',
+    });
+
+    expect(readSourceJson(appDir)).toEqual({
+      repoUrl: 'https://github.com/fallback-owner/fallback-repo.git',
+      ref: '',
+    });
+  });
+
+  it('records an empty ref for a KVOX_SRC checkout in detached HEAD, never the literal "HEAD"', () => {
+    const tmpDir = makeRepo();
+    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/acme/widgets.git');
+    const sha = git(tmpDir, 'rev-parse', 'HEAD');
+    git(tmpDir, 'checkout', '--quiet', '--detach', sha);
+    writeEnvExample(tmpDir);
+    const appDir = mkdtempSync(join(tmpdir(), 'install-sh-appdir-'));
+    createdDirs.push(appDir);
+
+    runTemplateBlock({
+      tmpDir,
+      appDir,
+      kvoxRepo: 'https://github.com/acme/widgets.git',
+      kvoxRef: 'main',
+      kvoxSrc: '/some/local/checkout',
+    });
+
+    expect(readSourceJson(appDir).ref).toBe('');
+  });
+
+  it('warns rather than failing when the source has no infra/compose/.env.example, and creates no template/ dir', () => {
+    const tmpDir = makeRepo();
+    git(tmpDir, 'remote', 'add', 'origin', 'https://github.com/example-owner/example-repo.git');
+    // Deliberately no writeEnvExample() call: the source tree has no template.
+    const appDir = mkdtempSync(join(tmpdir(), 'install-sh-appdir-'));
+    createdDirs.push(appDir);
+
+    const { stdout, status } = runTemplateBlock({
+      tmpDir,
+      appDir,
+      kvoxRepo: 'https://github.com/example-owner/example-repo.git',
+      kvoxRef: 'main',
+    });
+
+    expect(status).toBe(0);
+    expect(stdout).toContain(
+      'WARN: No infra/compose/.env.example in the source; the wizard will read it from the remote',
+    );
+    expect(existsSync(join(appDir, 'template'))).toBe(false);
   });
 });
