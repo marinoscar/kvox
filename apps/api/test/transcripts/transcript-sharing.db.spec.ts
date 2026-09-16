@@ -115,6 +115,10 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
     const pipeline = {
       enqueuePurge: jest.fn().mockResolvedValue(true),
       enqueueSnapshot: jest.fn().mockResolvedValue(true),
+      // #188's semantic re-index, stubbed. `TranscriptEditingService` AWAITS
+      // it after every committed op batch and after a restore, so a missing
+      // member is a TypeError that fails the suite, not a silent no-op.
+      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
       enqueueSubmit: jest.fn().mockResolvedValue(true),
       enqueueFirstPoll: jest.fn().mockResolvedValue(true),
     } as unknown as TranscriptPipelineService;

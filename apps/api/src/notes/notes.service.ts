@@ -72,6 +72,8 @@ import type { Note, NoteGeneration, NoteVersion } from '@prisma/client';
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
+import { SearchIndexService } from '../search/indexing/search-index.service';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import { HOUSEKEEPING_PRIORITY } from '../jobs/housekeeping.enqueue';
@@ -158,6 +160,7 @@ export class NotesService {
     private readonly requests: NoteGenerationRequestService,
     private readonly sources: NoteSourceService,
     private readonly jobs: JobsService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   // ===========================================================================
@@ -483,6 +486,25 @@ export class NotesService {
         data: { title: dto.title!.trim(), titleSource: 'user' },
       });
 
+      // ⚠ YES, A RENAME RE-INDEXES A NOTE — AND THIS IS THE ONE PLACE THE TWO
+      // DOCUMENT KINDS DIVERGE (#188, epic #165). `noteChunkPrefix(title)` is
+      // prefixed onto EVERY chunk of a note, so the title is part of what the
+      // model embeds and part of what `content_hash` covers: renaming a note
+      // genuinely moves its fingerprint, and every one of its vectors now
+      // describes text the note no longer has. A transcript is the opposite —
+      // `chunkTranscript` never sees a title — which is why
+      // `PATCH /api/transcripts/:id` deliberately does NOT enqueue (see
+      // `TranscriptPipelineService.enqueueSearchIndex`). Same rule, "index when
+      // the fingerprint would move", opposite answers.
+      //
+      // The honest cost: a rename re-embeds the whole note, because the prefix
+      // is in every chunk. That is the price of the chunker's decision to carry
+      // the title, not a decision this call site is free to make — skipping the
+      // enqueue would leave `search_index_state` claiming `indexed` for content
+      // it does not describe, which is the exact legibility that table exists
+      // for, and the next real edit would re-embed everything anyway.
+      await this.indexAfterCommit(note.id);
+
       return this.shape(updated);
     }
 
@@ -530,6 +552,8 @@ export class NotesService {
       summary: dto.summary?.trim() || null,
       clientBatchId: dto.clientBatchId ?? null,
     });
+
+    await this.indexAfterCommit(note.id);
 
     await this.audit(user.id, 'note:edit', note.id, {
       version: updated.currentVersion,
@@ -598,6 +622,11 @@ export class NotesService {
       restoredFromVersion: version,
       clientBatchId: null,
     });
+
+    // A restore replaces the live body with an older version's, so the text a
+    // search should match changed exactly as much as an ordinary edit changed
+    // it. The job works out how much of it actually moved (#188).
+    await this.indexAfterCommit(note.id);
 
     await this.audit(user.id, 'note:version_restored', note.id, {
       restoredFromVersion: version,
@@ -971,6 +1000,38 @@ export class NotesService {
    * random, with a 500. Here the loser sees `count === 0` and is told, in the
    * words every other stale writer is told, what the note is actually at.
    */
+  /**
+   * Queue a semantic re-index after a committed content change (#188, epic
+   * #165).
+   *
+   * ⚠ CALLED AT CONTENT EVENTS ONLY, never on a timer — `search/indexing/
+   * job-types.ts`'s header carries the argument: every chunk the job embeds is
+   * billed to the note owner's OWN vendor account, so a sweep that decides for
+   * itself that a corpus looks stale spends a person's money on a schedule they
+   * never agreed to.
+   *
+   * ⚠ REGENERATION IS DELIBERATELY NOT A CALL SITE. It queues a fresh
+   * `note.generate`, and indexing at the moment the button is pressed would
+   * index the note as it was BEFORE the regeneration and then never again.
+   * Every AI-written body reaches the index from `NoteGenerationService.commit`
+   * instead, after the title is settled.
+   *
+   * Never throws into its caller: the version is already committed and durable,
+   * and failing an edit the user has just made because a queue insert lost a
+   * race would be an absurd trade. The note stays at whatever the index last
+   * knew until the next content event.
+   */
+  private async indexAfterCommit(noteId: string): Promise<void> {
+    try {
+      await this.searchIndex.enqueue(SEARCH_DOC_NOTE, noteId);
+    } catch (error) {
+      this.logger.error(
+        `Could not queue a semantic re-index of note ${noteId}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   private async commitVersion(input: {
     note: Note;
     body: string;
