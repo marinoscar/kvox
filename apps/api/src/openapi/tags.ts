@@ -227,6 +227,29 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    name: 'Search',
+    tags: [
+      {
+        name: 'Search',
+        description:
+          'Ranked full-text search across the **content** of your transcripts and notes — a ' +
+          'word spoken once in the middle of a long recording finds that recording, and a ' +
+          'term that appears only in a note body finds that note. Its own group rather than a ' +
+          'route inside `Transcripts` or `Notes`, because it is the one surface in this API ' +
+          'that spans both and belongs to neither.\n\n' +
+          'Results are scored by cover density and rolled up to whole documents by their ' +
+          '**best** passage, come with pre-escaped `<mark>`-highlighted snippets, and page ' +
+          'through a bounded candidate window with a cursor that is tied to the exact search ' +
+          'that produced it. A query made entirely of stopwords degrades to the title match ' +
+          'the list endpoints already offer rather than returning nothing, and says so.\n\n' +
+          'Gated per document type on the permission that type\'s own controller enforces ' +
+          '(`transcripts:read`, `notes:read`), both seeded to every role. Holding only one ' +
+          'returns the half you may have rather than a 403; `searchedTypes` reports what was ' +
+          'actually searched.',
+      },
+    ],
+  },
+  {
     name: 'Storage',
     tags: [
       {
