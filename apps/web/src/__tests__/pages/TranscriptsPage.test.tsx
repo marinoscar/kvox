@@ -105,6 +105,11 @@ function respondWithSearch(results: unknown[] = []) {
           nextCursor: null,
           degraded: null,
           searchedTypes: ['transcript', 'note'],
+          // The healthy default, so the keyword-only notice (#191) stays
+          // silent and these suites stay about the page they are testing.
+          semantic: true,
+          semanticReason: null,
+          unindexedCount: 0,
         },
       });
     }),

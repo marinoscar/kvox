@@ -3,6 +3,8 @@ import { Module } from '@nestjs/common';
 import { AiModule } from '../../ai/ai.module';
 import { JobsModule } from '../../jobs/jobs.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { SearchIndexController } from './search-index.controller';
+import { SearchIndexStatusService } from './search-index-status.service';
 import { SearchIndexHandler } from './search-index.handler';
 import { SearchIndexService } from './search-index.service';
 
@@ -49,7 +51,14 @@ import { SearchIndexService } from './search-index.service';
 
 @Module({
   imports: [PrismaModule, JobsModule, AiModule],
-  providers: [SearchIndexHandler, SearchIndexService],
+  // ⚠ THE CONTROLLER LIVES HERE, NOT IN `SearchModule` (issue #191). Its two
+  // routes are an INDEXING surface — they read the AI policy, the caller's
+  // credential and the job queue — while `SearchModule` is a query surface that
+  // deliberately imports nothing but `PrismaModule`. See the controller's own
+  // header; the path prefix they share (`/api/search`) is a client-facing
+  // grouping, not a module boundary.
+  controllers: [SearchIndexController],
+  providers: [SearchIndexHandler, SearchIndexService, SearchIndexStatusService],
   // Only the service. `SearchIndexHandler` is reached by the worker through
   // `JobHandlerRegistry`, never by injection, so exporting it would advertise a
   // seam nobody may use — and would let a caller invoke `process` directly,

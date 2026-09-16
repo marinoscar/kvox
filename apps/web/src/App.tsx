@@ -72,6 +72,11 @@ const UserAiPage = lazy(() => import('./pages/UserAiPage'));
 // renders `AiKeyRequired` and nothing else until `UserAiPage` above has been
 // used, so the two are ordered here the way the setup actually happens.
 const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage'));
+// Issue #191, epic #165 — what of the user's own library is semantically
+// searchable, and the one explicit action that changes the answer. Indexing
+// spends the USER'S own AI provider account, which is why this is a per-user
+// destination and why there is no admin equivalent and no backfill cron.
+const UserSearchIndexPage = lazy(() => import('./pages/UserSearchIndexPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -415,6 +420,16 @@ function AppRoutes() {
                       `keyConfigured`, which is a capability rather than an
                       authorization and is therefore checked in the page. */}
                   <Route path="/settings/note-templates" element={<UserNoteTemplatesPage />} />
+                  {/* Issue #191, epic #165. Ungated like every `/settings/*`
+                      sibling, and with the same reason `/settings/ai` carries:
+                      `search-index.controller.ts` gates both of its routes on
+                      `@Auth()` and NO permission, because the resource is the
+                      caller's own content and the caller's own vendor account,
+                      scoped by `ownerId` in the query itself. The page's real
+                      gate is a CAPABILITY — does this deployment embed, and has
+                      this user saved a key — which is checked in the page and
+                      is not an authorization. */}
+                  <Route path="/settings/search-index" element={<UserSearchIndexPage />} />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
                   {/* Issue #80. Ungated like every `/settings/*` sibling, and
                       with the same reason `/settings/ai` carries:

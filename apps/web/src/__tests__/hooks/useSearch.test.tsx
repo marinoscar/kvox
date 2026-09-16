@@ -54,6 +54,9 @@ function response(overrides: Partial<SearchResponse> = {}): SearchResponse {
     nextCursor: null,
     degraded: null,
     searchedTypes: ['transcript'],
+    semantic: true,
+    semanticReason: null,
+    unindexedCount: 0,
     ...overrides,
   };
 }
@@ -302,6 +305,31 @@ describe('useSearch — what the answer says about itself', () => {
     // Asked for transcripts, told only notes were searched — the caller lacks
     // `transcripts:read`, and the view says so rather than showing nothing.
     expect(hook.current.searchedTypes).toEqual(['note']);
+  });
+
+  it('reports `semantic`, `semanticReason` and `unindexedCount` as the server sent them', async () => {
+    mockSearch.mockResolvedValue(
+      response({ semantic: false, semanticReason: 'ai_key_missing', unindexedCount: 9 }),
+    );
+
+    const { result: hook } = renderHook(() =>
+      useSearch({ q: 'budget', types: TYPES, debounceMs: 0 }),
+    );
+
+    await waitFor(() => expect(hook.current.semantic).toBe(false));
+    expect(hook.current.semanticReason).toBe('ai_key_missing');
+    expect(hook.current.unindexedCount).toBe(9);
+  });
+
+  it('reports `semantic: null` before any answer has landed', () => {
+    // ⚠ `null`, NOT `false`. "Nobody has asked yet" is not "the answer was
+    // keyword-only", and a view that conflated them would flash the
+    // degradation notice during every first keystroke's debounce.
+    const { result: hook } = renderHook(() => useSearch({ q: '', types: TYPES, debounceMs: 0 }));
+
+    expect(hook.current.semantic).toBeNull();
+    expect(hook.current.semanticReason).toBeNull();
+    expect(hook.current.unindexedCount).toBe(0);
   });
 
   it('shows no rows under an error, rather than the previous query\'s rows', async () => {

@@ -50,6 +50,20 @@ export type SearchType = 'transcript' | 'note';
 /** Which field a snippet came out of. */
 export type SearchSnippetField = 'title' | 'body' | 'segment';
 
+/**
+ * Why the semantic arm did not run. Mirrors `SEMANTIC_REASONS` in
+ * `apps/api/src/search/search-semantic.ts`, which states in its own header that
+ * these strings are a published contract — so this list is exhaustive on
+ * purpose and a new server value is a deliberate, compiler-visible change here
+ * rather than something that silently widens.
+ */
+export type SemanticReason =
+  | 'ai_not_configured'
+  | 'embedding_unsupported'
+  | 'ai_key_missing'
+  | 'no_indexed_content'
+  | 'embedding_failed';
+
 export interface SearchSnippet {
   /**
    * `ts_headline` output, **already HTML-escaped at the server**, with
@@ -105,6 +119,37 @@ export interface SearchResponse {
    * `transcripts:read`, and should say so rather than render an empty list.
    */
   searchedTypes: SearchType[];
+  /**
+   * Whether the SEMANTIC (embedding) arm ran and was fused into this ranking.
+   *
+   * ⚠ REQUIRED, NOT OPTIONAL. The server always sends it (#189), so there is
+   * no third "the server did not say" state for a client to reason about —
+   * `false` means the full-text arm answered alone, which is a correct HTTP 200
+   * answer with the same rows in the same order the pre-#189 ranking produced.
+   * Typing it optional would re-create exactly the "did the server tell us?"
+   * ambiguity this field exists to remove.
+   */
+  semantic: boolean;
+  /**
+   * Why {@link SearchResponse.semantic} is `false`, and `null` when it is true.
+   *
+   * The union is `SEMANTIC_REASONS` in `apps/api/src/search/search-semantic.ts`
+   * verbatim — that file calls these strings a contract, so this mirror must be
+   * the real list rather than a widened `string`. Two of them name something
+   * the reader can act on themselves (`ai_key_missing`, `no_indexed_content`);
+   * the rest are an administrator's or a vendor's problem.
+   */
+  semanticReason: SemanticReason | null;
+  /**
+   * How many of the caller's OWN documents, among the types actually searched,
+   * are absent from the semantic index.
+   *
+   * ⚠ REQUIRED, and ⚠ OWN rather than visible-to-you: a document somebody
+   * shared with this caller is indexed on ITS OWNER's key, so counting it would
+   * report a number the reader has no way to move. `0` is the good case, not a
+   * missing value.
+   */
+  unindexedCount: number;
 }
 
 export interface SearchParams {
