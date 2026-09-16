@@ -26,7 +26,8 @@ import {
   siblingBindPorts,
 } from '../../../deploy/layout.js';
 import { DEFAULT_PROXY_CONTAINER } from '../../../deploy/checks/index.js';
-import { resolveRepoTarget } from '../../../deploy/repo.js';
+import { displayRepoUrl, resolveRepoTarget } from '../../../deploy/repo.js';
+import { fetchRemoteTemplate, type TemplateSource } from '../../../deploy/remote-template.js';
 import { collectServerFacts, unknownServerFacts, type ServerFacts } from '../../../deploy/server-facts.js';
 import { DOMAIN_FIELD } from '../../../deploy/wizard/steps.js';
 import { formatError } from '../../../errors.js';
@@ -182,7 +183,18 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   // one app that is not a near miss — it is a different product's variable
   // list, so the wizard asks another application's questions and silently
   // drops the steps this one needs.
-  const specs = useMemo(() => loadTemplateSpecs(roots.apps, name), [roots.apps, name]);
+  const localSpecs = useMemo(() => loadTemplateSpecs(roots.apps, name), [roots.apps, name]);
+
+  // The repository's OWN template, fetched from the remote at the resolved ref
+  // (#230). This is what makes the questions right on a FIRST install, where
+  // there is no clone on this server yet and the local fallback can only offer
+  // the checkout the CLI happens to be running from — which need not be the
+  // repository being deployed at all.
+  const [remoteSpecs, setRemoteSpecs] = useState<EnvVarSpec[] | undefined>(undefined);
+
+  const specs = remoteSpecs ?? localSpecs;
+  const templateSource: TemplateSource =
+    remoteSpecs !== undefined ? 'remote' : localSpecs.length > 0 ? 'local' : 'none';
 
   // Memoised on the two answers that can CHANGE the step list, never on the
   // whole `answers` object. A step list rebuilt on every keystroke hands every
@@ -242,6 +254,42 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       cancelled = true;
     };
   }, [isMounted, roots.apps]);
+
+  // ---------------------------------------------------------------------------
+  // The repository's own environment template (#230)
+  // ---------------------------------------------------------------------------
+  //
+  // Keyed on the repo/ref the operator can still edit on Welcome, so changing
+  // either re-fetches. Deliberately NOT gated on `ready`: the doctor waits for
+  // the name to settle because its checks probe paths derived from it, while
+  // this needs only the repository, and the questions are wanted sooner.
+  //
+  // A failure is silent by design — `fetchRemoteTemplate` answers `undefined`
+  // for a non-GitHub remote, a logged-out gh, a private repo the token cannot
+  // see or a timeout, and `specs` falls back to the local template. An install
+  // must not be blocked by a file that is an optimisation of correctness.
+  const repoAnswer = answerOf(answers, REPO_FIELD);
+  const refAnswer = answerOf(answers, REF_FIELD);
+
+  useEffect(() => {
+    if (repoAnswer === '' || refAnswer === '') return;
+    let cancelled = false;
+
+    void (async () => {
+      const contents = await fetchRemoteTemplate({ repoUrl: repoAnswer, ref: refAnswer });
+      if (cancelled || !isMounted() || contents === undefined) return;
+      try {
+        const parsed = parseEnvExample(contents);
+        if (parsed.length > 0) setRemoteSpecs(parsed);
+      } catch {
+        /* Unparseable: keep whatever the local template offered. */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repoAnswer, refAnswer, isMounted]);
 
   // ---------------------------------------------------------------------------
   // The doctor, live on Welcome
@@ -660,7 +708,9 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   }
 
   const context = stepContextFor(answers, facts);
-  const intro = step.data?.intro(context) ?? welcomeIntro(deployRoot);
+  const intro =
+    step.data?.intro(context) ??
+    welcomeIntro({ deployRoot, name, repoUrl: repoAnswer, ref: refAnswer, templateSource });
   const fields = formFieldsFor(step, { specs, answers, suggestions });
   const reviewing = step.id === REVIEW_STEP_ID;
 
@@ -800,12 +850,55 @@ function hintsFor(step: InstallStep, reviewing: boolean): string[] {
   return base;
 }
 
-function welcomeIntro(deployRoot: string): string[] {
+/**
+ * What Welcome tells the operator about WHERE this is going (#232).
+ *
+ * The deploy root is not cosmetic: `<name>` is also the docker compose PROJECT
+ * name, so it is what keeps two apps on one host from replacing each other's
+ * containers. Printing a path the install will not actually use is therefore
+ * worse than printing none — which is what happened while the name was still
+ * `FALLBACK_APP_NAME`, because a repository had not resolved yet and there was
+ * nothing on screen saying so.
+ */
+function welcomeIntro(input: {
+  deployRoot: string;
+  name: string;
+  repoUrl: string;
+  ref: string;
+  templateSource: TemplateSource;
+}): string[] {
+  const resolved = input.name !== FALLBACK_APP_NAME || input.repoUrl !== '';
+
+  const location = resolved
+    ? [
+        'This installs the application on THIS server, under',
+        '',
+        `    ${input.deployRoot}`,
+        '',
+        `That folder name is also the docker compose project (${input.name}-api-1, …),`,
+        'which is what keeps two apps on one host apart.',
+      ]
+    : [
+        'This installs the application on THIS server.',
+        '',
+        '    The repository has not resolved yet, so the target folder is not',
+        '    settled. Fill in Repository below, or run this from inside a',
+        `    checkout — until then ${input.deployRoot} is a placeholder, not`,
+        '    the answer.',
+      ];
+
+  const provenance =
+    input.templateSource === 'remote'
+      ? [`Questions read from ${displayRepoUrl(input.repoUrl)} at ${input.ref}.`]
+      : input.templateSource === 'local'
+        ? ['Questions read from a local checkout; the remote could not be read.']
+        : [];
+
   return [
-    'This installs the application on THIS server, under',
+    ...location,
     '',
-    `    ${deployRoot}`,
-    '',
+    ...provenance,
+    ...(provenance.length > 0 ? [''] : []),
     'The prerequisites are being checked below as you read. Nothing is written',
     'to this server until the review at the end is confirmed.',
   ];
