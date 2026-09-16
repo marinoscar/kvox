@@ -207,6 +207,24 @@ function renderPage() {
   return render(<TranscriptPage />, { wrapperOptions: { user: mockAdminUser } });
 }
 
+/**
+ * The `menuitem` a given `ListItemText` PRIMARY belongs to.
+ *
+ * ⚠ NOT `getByRole('menuitem', { name })` for the segment menu's two speaker
+ * items (#220): their secondary line ("Applies to all N lines they speak" /
+ * "This line only") is a sibling node inside the same menuitem and folds
+ * into its accessible name, so a name match would have to know that scope
+ * sentence's exact wording in advance. Finding the primary text and walking
+ * up to its `menuitem` ancestor asserts the one thing these tests care about
+ * — which item — independently of that. Same helper `NotePage.test.tsx` uses
+ * for the identical reason.
+ */
+function menuItemFor(primary: string): HTMLElement {
+  const item = screen.getByText(primary).closest('[role="menuitem"]');
+  if (!item) throw new Error(`"${primary}" is not inside a menuitem`);
+  return item as HTMLElement;
+}
+
 describe('TranscriptPage — a viewer sees no editing controls', () => {
   beforeEach(() => {
     mockGetTranscript.mockResolvedValue({
@@ -325,22 +343,43 @@ describe('TranscriptPage — editing a segment', () => {
     expect(screen.getAllByText('edited')).toHaveLength(1);
   });
 
-  it('offers the five segment actions from the overflow menu', async () => {
+  it('offers six segment actions from the overflow menu, all-lines rename first (#220)', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('region', { name: 'Transcript' });
 
     await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
+    await screen.findByRole('menu', { name: 'Segment actions' });
 
-    for (const label of [
-      'Change speaker',
-      'Split here',
-      'Join with next',
-      'Play from here',
-      'Delete segment',
-    ]) {
-      expect(await screen.findByRole('menuitem', { name: label })).toBeInTheDocument();
+    expect(menuItemFor('Rename Ana')).toBeInTheDocument();
+    expect(menuItemFor('Move this line to another speaker')).toBeInTheDocument();
+    for (const label of ['Split here', 'Join with next', 'Play from here', 'Delete segment']) {
+      expect(screen.getByRole('menuitem', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('renames a speaker from a SEGMENT’s menu using the all-lines op — the #220 regression', async () => {
+    // This is the defect issue #220 fixed, asserted end to end: before the
+    // fix, naming a voice from a line's own menu created a NEW speaker
+    // (`speaker.create`) and repointed only THAT line (`segment.set_speaker`),
+    // silently leaving every other `Speaker A` line behind. The only
+    // acceptable op here is the all-lines `speaker.rename`, keyed on the
+    // SPEAKER's id — s0's speaker is Ana (`sp1`), not the segment's own id.
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByRole('region', { name: 'Transcript' });
+
+    await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
+    await user.click(menuItemFor('Rename Ana'));
+    const field = await screen.findByRole('combobox', { name: 'Speaker name' });
+    await user.clear(field);
+    await user.type(field, 'Justin');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(mockApply).toHaveBeenCalled());
+    expect(mockApply.mock.calls[0][1].ops).toEqual([
+      { op: 'speaker.rename', speakerId: 'sp1', rev: 1, displayName: 'Justin' },
+    ]);
   });
 
   it('joins with the next segment, sending both ids and both revs', async () => {
@@ -357,13 +396,13 @@ describe('TranscriptPage — editing a segment', () => {
     ]);
   });
 
-  it('changes the speaker from the menu’s second view', async () => {
+  it('moves just this line to another speaker from the per-line picker (mechanism unchanged by #220)', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByRole('region', { name: 'Transcript' });
 
     await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Change speaker' }));
+    await user.click(menuItemFor('Move this line to another speaker'));
     await user.click(await screen.findByRole('menuitem', { name: 'Speaker 3' }));
 
     await waitFor(() => expect(mockApply).toHaveBeenCalled());
@@ -404,7 +443,7 @@ describe('TranscriptPage — editing a segment', () => {
     await screen.findByRole('region', { name: 'Transcript' });
 
     await user.click(screen.getByRole('button', { name: 'Actions for the line at 0:00' }));
-    await screen.findByRole('menuitem', { name: 'Change speaker' });
+    await screen.findByRole('menu', { name: 'Segment actions' });
 
     expect(await axe(document.body, AXE_PORTAL_OPTIONS)).toHaveNoViolations();
   });

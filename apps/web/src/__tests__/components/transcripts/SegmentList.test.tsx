@@ -416,3 +416,61 @@ describe('SegmentList — per-line playback (#108)', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+describe('SegmentList — the speaker name control (#220)', () => {
+  it('renders the speaker name as a button stating the all-lines scope, when editable with a handler', () => {
+    // A two-row fixture, one speaker each, so each speaker's button is the
+    // only one of its name on screen.
+    renderList({ editable: true, onOpenSpeakerActions: vi.fn() }, makeSegments(2));
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Rename Ana or merge, applies to every line they speak',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('opens speaker actions for THIS ROW’s speaker id, not the segment id', async () => {
+    const user = userEvent.setup();
+    const onOpenSpeakerActions = vi.fn();
+    renderList({ editable: true, onOpenSpeakerActions }, makeSegments(2));
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Rename Ben or merge, applies to every line they speak',
+      }),
+    );
+
+    expect(onOpenSpeakerActions).toHaveBeenCalledTimes(1);
+    const [speakerId, anchor] = onOpenSpeakerActions.mock.calls[0];
+    // s1 is Ben's line (odd index) — asserting the SPEAKER id here, not the
+    // segment id, is the whole point: the #220 defect was exactly this scope
+    // getting confused one layer up, in `SegmentActions`.
+    expect(speakerId).toBe('sp2');
+    expect(anchor).toBeInstanceOf(HTMLElement);
+  });
+
+  it('renders the speaker name as plain text — no button, nothing in the tab order — for the read-only preview', () => {
+    // Neither prop given: the viewer path, and the history page's read-only
+    // preview, must render exactly what #30 shipped.
+    renderList();
+
+    expect(
+      screen.queryByRole('button', { name: /Rename Ana or merge/ }),
+    ).not.toBeInTheDocument();
+    const name = screen.getAllByText('Ana')[0];
+    expect(name).not.toHaveAttribute('role', 'button');
+    expect(name).not.toHaveAttribute('tabindex');
+  });
+
+  it('stays plain text when editable but no handler is given', () => {
+    // The button is gated on BOTH `editable` AND `onOpenSpeakerActions` —
+    // `editable` alone (e.g. a page mid-transition) must not mount a control
+    // with nothing to call.
+    renderList({ editable: true }, makeSegments(2));
+
+    expect(
+      screen.queryByRole('button', { name: /Rename Ana or merge/ }),
+    ).not.toBeInTheDocument();
+  });
+});
