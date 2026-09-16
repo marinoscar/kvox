@@ -18,22 +18,34 @@
 //     as text spliced into the statement;
 //   - the visibility predicate is INSIDE the candidate query's `LIMIT`, which
 //     is the one thing here that is catastrophic to get wrong and produces no
-//     error when it is;
-//   - the roll-up is `max`, and the ranking function is `ts_rank_cd`.
+//     error when it is - and since #189 that is TWO candidate queries, with the
+//     vector one being where the rule is most tempting to break;
+//   - the roll-up is `max`, and the ranking function is `ts_rank_cd`;
+//   - the semantic arm DEGRADES rather than failing, in every way it can fail,
+//     and says which way in `semanticReason`.
 // =============================================================================
 
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { EMBEDDING_DIMENSIONS } from '../ai/providers/ai-provider.interface';
 import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import type { PrismaService } from '../prisma/prisma.service';
 import { MAX_CANDIDATE_DOCUMENTS, type SearchQueryDto } from './dto/search.dto';
-import { encodeSearchCursor } from './search-cursor';
+import { encodeSearchCursor, RANKING_MODEL_VERSION } from './search-cursor';
+import { RRF_K } from './search-fusion';
+import type { SearchQueryEmbedder } from './search-query-embedder.service';
+import type { SemanticQueryPlan, SemanticReason } from './search-semantic';
 import { SNIPPET_START, SNIPPET_STOP } from './search-snippet';
 import { SearchService } from './search.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
+
+/** A plausible query vector: right width, every component finite. */
+const QUERY_VECTOR = Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i % 7) / 10);
+
+const EMBEDDING_MODEL = 'text-embedding-3-small';
 
 function user(permissions: string[] = [PERMISSIONS.TRANSCRIPTS_READ, PERMISSIONS.NOTES_READ]) {
   return {
@@ -70,10 +82,55 @@ function candidate(index: number, overrides: Partial<RawCandidate> = {}): RawCan
   };
 }
 
+/**
+ * A stub {@link SearchQueryEmbedder}.
+ *
+ * ⚠ THE REAL ONE NEVER THROWS - every failure is a reason string - so a stub
+ * that could throw would be testing a contract the service does not have. Both
+ * shapes below return, and `embedCalls` is what proves the service did not
+ * spend a vendor call it had no business spending.
+ */
+function stubEmbedder(
+  plan: SemanticQueryPlan | SemanticReason = 'ai_not_configured',
+): SearchQueryEmbedder & { embedCalls: string[] } {
+  const embedCalls: string[] = [];
+
+  const resolve = async () => {
+    if (typeof plan === 'string') return { ok: false as const, reason: plan };
+
+    if (!plan.ok && plan.reason !== 'embedding_failed') return plan;
+
+    return {
+      ok: true as const,
+      embed: async (text: string) => {
+        embedCalls.push(text);
+
+        return plan;
+      },
+    };
+  };
+
+  return { resolve, embedCalls } as unknown as SearchQueryEmbedder & { embedCalls: string[] };
+}
+
+/** A successful plan, with a vector the SQL builder will accept. */
+const embedded: SemanticQueryPlan = {
+  ok: true,
+  provider: 'openai',
+  model: EMBEDDING_MODEL,
+  vector: QUERY_VECTOR,
+};
+
 function makeHarness(
   options: {
     nodes?: number;
     candidates?: RawCandidate[];
+    /** The semantic arm's rows. Only reached when the plan succeeds. */
+    vectorCandidates?: RawCandidate[];
+    /** `false` makes the embeddings-present probe answer "nothing indexed". */
+    anyEmbeddings?: boolean;
+    unindexed?: number;
+    embedder?: SearchQueryEmbedder & { embedCalls: string[] };
     snippets?: Array<{
       type: 'transcript' | 'note';
       doc_id: string;
@@ -92,15 +149,28 @@ function makeHarness(
     rawCalls.push(sql);
 
     if (sql.sql.includes('numnode(')) return [{ nodes: options.nodes ?? 3 }];
+    if (sql.sql.includes('AS present')) return [{ present: options.anyEmbeddings ?? true }];
+    if (sql.sql.includes('coalesce(sum(x.n)')) return [{ n: options.unindexed ?? 0 }];
     if (sql.sql.includes('y.rn')) return options.snippets ?? [];
+    if (sql.sql.includes('<=>')) return options.vectorCandidates ?? [];
 
     return options.candidates ?? [];
   });
 
   const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
+  const embedder = options.embedder ?? stubEmbedder();
 
-  return { service: new SearchService(prisma), queryRaw, rawCalls };
+  return { service: new SearchService(prisma, embedder), queryRaw, rawCalls, embedder };
 }
+
+/** The candidate statement (there are two once the semantic arm runs). */
+const lexicalSql = (calls: Prisma.Sql[]) =>
+  calls.find(
+    (sql) =>
+      sql.sql.includes('LIMIT') && !sql.sql.includes('<=>') && !sql.sql.includes('AS present'),
+  )!;
+const vectorSql = (calls: Prisma.Sql[]) => calls.find((sql) => sql.sql.includes('<=>'));
+const presenceSql = (calls: Prisma.Sql[]) => calls.find((sql) => sql.sql.includes('AS present'));
 
 describe('SearchService', () => {
   // ==========================================================================
@@ -352,7 +422,7 @@ describe('SearchService', () => {
       const { service } = makeHarness({ candidates: [] });
 
       const stale = encodeSearchCursor(
-        { q: 'annual budget', types: ['transcript', 'note'], userId: USER_ID },
+        { q: 'annual budget', types: ['transcript', 'note'], userId: USER_ID, semantic: null },
         20,
       );
 
@@ -369,6 +439,7 @@ describe('SearchService', () => {
           q: 'pricing model',
           types: ['transcript', 'note'],
           userId: '22222222-2222-4222-8222-222222222222',
+          semantic: null,
         },
         20,
       );
@@ -472,8 +543,11 @@ describe('SearchService', () => {
 
       await service.search(query({ q: 'the' }), user());
 
-      // Probe + candidates, and nothing else: the titles are already in hand.
-      expect(rawCalls).toHaveLength(2);
+      // The titles are already in hand, so nothing headlines anything. Asserted
+      // on the STATEMENTS rather than on a count: #189 added the unindexed
+      // count to every request, and a bare `toHaveLength` would have failed for
+      // a reason that has nothing to do with snippets.
+      expect(rawCalls.some((sql) => sql.sql.includes('ts_headline'))).toBe(false);
     });
 
     it('does not degrade a query with lexemes in it', async () => {
@@ -553,7 +627,506 @@ describe('SearchService', () => {
 
       await service.search(query(), user());
 
-      expect(rawCalls).toHaveLength(2);
+      expect(rawCalls.some((sql) => sql.sql.includes('ts_headline'))).toBe(false);
+    });
+  });
+  // ==========================================================================
+  // The semantic arm (#189) — every way it can be unavailable
+  // ==========================================================================
+
+  describe('degrading to full text', () => {
+    it('answers a caller with no API key exactly as the full-text arm does', async () => {
+      // ⚠ THE CONTRACT THE WHOLE DEGRADATION RESTS ON, asserted on IDS AND
+      // ORDER rather than on "not empty". A searcher who has never pasted an
+      // API key must get the pre-#165 endpoint back, byte for byte in the
+      // things they can see — not a shorter list, not a reordered one, and
+      // certainly not an error.
+      const candidates = [
+        candidate(0),
+        candidate(1, { type: 'note', id: 'note-1' }),
+        candidate(2),
+      ];
+
+      const baseline = await makeHarness({
+        candidates,
+        embedder: stubEmbedder('ai_not_configured'),
+      }).service.search(query(), user());
+
+      const { service, rawCalls } = makeHarness({
+        candidates,
+        embedder: stubEmbedder('ai_key_missing'),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.semantic).toBe(false);
+      expect(result.semanticReason).toBe('ai_key_missing');
+      expect(result.results.map((r) => r.id)).toEqual(['doc-0', 'note-1', 'doc-2']);
+      expect(result.results.map((r) => r.id)).toEqual(baseline.results.map((r) => r.id));
+      expect(result.matchedDocuments).toBe(3);
+      // And it cost nothing: no vector query was issued at all.
+      expect(vectorSql(rawCalls)).toBeUndefined();
+    });
+
+    it('never throws for any reason the semantic arm can have', async () => {
+      // Every branch is a 200. A search box that 500s because a vendor is
+      // having an afternoon is worse than one that ranks by keywords.
+      const reasons: SemanticReason[] = [
+        'ai_not_configured',
+        'embedding_unsupported',
+        'ai_key_missing',
+      ];
+
+      for (const reason of reasons) {
+        const { service } = makeHarness({
+          candidates: [candidate(0)],
+          embedder: stubEmbedder(reason),
+        });
+
+        await expect(service.search(query(), user())).resolves.toMatchObject({
+          semantic: false,
+          semanticReason: reason,
+          results: [expect.objectContaining({ id: 'doc-0' })],
+        });
+      }
+    });
+
+    it('scopes the "is anything indexed" probe to what this caller can see', async () => {
+      // ⚠ CALLER-SCOPED, NOT DEPLOYMENT-WIDE. A deployment-wide probe would
+      // tell a brand-new user on a busy installation that the semantic arm was
+      // available, charge their own key for a query vector, and hand back an
+      // empty vector list every time - because none of the corpus is theirs.
+      const { service, rawCalls } = makeHarness({
+        candidates: [],
+        embedder: stubEmbedder(embedded),
+      });
+
+      await service.search(query(), user());
+
+      const text = presenceSql(rawCalls)!.sql;
+
+      expect(text).toContain('transcript_shares');
+      expect(text).toContain('deleted_at IS NULL');
+      expect(presenceSql(rawCalls)!.values).toContain(USER_ID);
+    });
+
+    it('reports no_indexed_content WITHOUT spending an embedding call', async () => {
+      // The order the plan evaluates in is the point: embedding a query for a
+      // deployment that has indexed nothing is a bill for a comparison against
+      // an empty table.
+      const { service, rawCalls, embedder } = makeHarness({
+        candidates: [candidate(0)],
+        anyEmbeddings: false,
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.semantic).toBe(false);
+      expect(result.semanticReason).toBe('no_indexed_content');
+      expect(embedder.embedCalls).toEqual([]);
+      expect(vectorSql(rawCalls)).toBeUndefined();
+      expect(result.results.map((r) => r.id)).toEqual(['doc-0']);
+    });
+
+    it('reports embedding_failed when the provider refuses, and still answers 200', async () => {
+      const { service, rawCalls, embedder } = makeHarness({
+        candidates: [candidate(0), candidate(1)],
+        embedder: stubEmbedder({ ok: false, reason: 'embedding_failed' }),
+      });
+
+      const result = await service.search(query(), user());
+
+      // The call WAS made — this is a vendor failure, not a skipped step.
+      expect(embedder.embedCalls).toEqual(['pricing model']);
+      expect(result.semantic).toBe(false);
+      expect(result.semanticReason).toBe('embedding_failed');
+      expect(result.results.map((r) => r.id)).toEqual(['doc-0', 'doc-1']);
+      expect(vectorSql(rawCalls)).toBeUndefined();
+    });
+
+    it('carries a null reason when the arm did run', async () => {
+      const { service } = makeHarness({
+        candidates: [candidate(0)],
+        vectorCandidates: [candidate(0)],
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.semantic).toBe(true);
+      expect(result.semanticReason).toBeNull();
+    });
+
+    it('embeds the NORMALISED query text, not the raw parameter', async () => {
+      const { service, embedder } = makeHarness({
+        candidates: [],
+        embedder: stubEmbedder(embedded),
+      });
+
+      await service.search(query({ q: '  pricing   model ' }), user());
+
+      // The same text the fingerprint hashes, so a respaced repeat of a search
+      // is one search on both axes.
+      expect(embedder.embedCalls).toEqual(['pricing model']);
+    });
+  });
+
+  // ==========================================================================
+  // The vector arm's SQL — the security boundary, restated for the new arm
+  // ==========================================================================
+
+  describe('the vector arm', () => {
+    const semanticHarness = (over: Parameters<typeof makeHarness>[0] = {}) =>
+      makeHarness({
+        candidates: [candidate(0)],
+        vectorCandidates: [candidate(0)],
+        embedder: stubEmbedder(embedded),
+        ...over,
+      });
+
+    it('applies the visibility predicate INSIDE the vector query, before the LIMIT', async () => {
+      // ⚠ THE MIRROR OF THE ASSERTION THIS FILE ALREADY CARRIES FOR THE
+      // FULL-TEXT ARM, and the arm where breaking it is most tempting: the
+      // shape every pgvector example shows is `ORDER BY embedding <=> $1 LIMIT
+      // k`, which picks the k nearest chunks in the WHOLE CORPUS and only then
+      // asks whose they were. A user who owns 1% of the corpus would get an
+      // empty semantic arm, with no error anywhere.
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query(), user());
+
+      const text = vectorSql(rawCalls)!.sql;
+      const limitAt = text.lastIndexOf('LIMIT');
+
+      expect(limitAt).toBeGreaterThan(-1);
+      expect(text.indexOf('transcript_shares')).toBeGreaterThan(-1);
+      expect(text.indexOf('transcript_shares')).toBeLessThan(limitAt);
+      expect(text.indexOf('deleted_at IS NULL')).toBeLessThan(limitAt);
+      expect(text.indexOf('owner_id')).toBeLessThan(limitAt);
+      // And the ANN-shaped mistake is absent: the only LIMIT is the outer one.
+      expect(text.match(/LIMIT/g)).toHaveLength(1);
+    });
+
+    it('scopes notes to the owner and joins NO share table', async () => {
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query({ types: 'note' }), user());
+
+      const text = vectorSql(rawCalls)!.sql;
+
+      expect(text).toContain('JOIN notes n');
+      expect(text).not.toContain('share');
+    });
+
+    it('uses the cosine operator the HNSW index was built for', async () => {
+      // `vector_cosine_ops` in the migration and `<=>` here are one decision in
+      // two places. `<->` or `<#>` would still return plausible results — the
+      // vectors are normalised — while silently orphaning the index, with only
+      // `EXPLAIN` to say so.
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query(), user());
+
+      const text = vectorSql(rawCalls)!.sql;
+
+      expect(text).toContain('<=>');
+      expect(text).not.toContain('<->');
+      expect(text).not.toContain('<#>');
+    });
+
+    it('rolls a document up by its BEST chunk, never by a sum over chunks', async () => {
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query(), user());
+
+      const text = vectorSql(rawCalls)!.sql;
+
+      expect(text).toContain('max(1 - (e.embedding <=>');
+      expect(text).not.toMatch(/\bsum\s*\(/i);
+      expect(text).not.toMatch(/\bavg\s*\(/i);
+    });
+
+    it('binds the query vector rather than splicing 1536 numbers into the statement', async () => {
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query(), user());
+
+      const sql = vectorSql(rawCalls)!;
+      const literal = `[${QUERY_VECTOR.join(',')}]`;
+
+      expect(sql.sql).not.toContain(literal);
+      expect(sql.sql).toContain('::vector');
+      expect(sql.values).toContain(literal);
+    });
+
+    it('asks the vector arm for one more than the cap, like the full-text arm', async () => {
+      const { service, rawCalls } = semanticHarness();
+
+      await service.search(query(), user());
+
+      expect(vectorSql(rawCalls)!.values).toContain(MAX_CANDIDATE_DOCUMENTS + 1);
+    });
+
+    it('runs on the degraded path too — `degraded` describes the LEXICAL arm only', async () => {
+      const { service, rawCalls } = semanticHarness({ nodes: 0 });
+
+      const result = await service.search(query({ q: 'the and of' }), user());
+
+      expect(result.degraded).toBe('stopwords');
+      expect(result.semantic).toBe(true);
+      expect(vectorSql(rawCalls)).toBeDefined();
+      expect(lexicalSql(rawCalls).sql).toContain('ILIKE');
+    });
+  });
+
+  // ==========================================================================
+  // Fusion, as the service wires it
+  // ==========================================================================
+
+  describe('fusing the two arms', () => {
+    const older = new Date('2026-09-01T00:00:00.000Z');
+
+    it('surfaces a document only the vector arm found', async () => {
+      // THE HEADLINE CRITERION OF THE EPIC, in miniature: a paraphrase finds a
+      // document that shares no stemmed term with the query, so the lexical arm
+      // never saw it.
+      const { service } = makeHarness({
+        candidates: [candidate(0)],
+        vectorCandidates: [candidate(9, { id: 'semantic-only' })],
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.results.map((r) => r.id).sort()).toEqual(['doc-0', 'semantic-only']);
+      expect(result.matchedDocuments).toBe(2);
+    });
+
+    it('ranks a document both arms found above one either arm found alone', async () => {
+      const { service } = makeHarness({
+        candidates: [candidate(0, { id: 'lexical-only' }), candidate(1, { id: 'agreed' })],
+        vectorCandidates: [
+          candidate(2, { id: 'vector-only' }),
+          candidate(3, { id: 'agreed' }),
+        ],
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.results[0].id).toBe('agreed');
+      expect(result.results[0].score).toBeCloseTo(2 / (RRF_K + 2), 12);
+    });
+
+    it('publishes the RRF score, not the arm score the row carried', async () => {
+      const { service } = makeHarness({
+        candidates: [candidate(0)],
+        embedder: stubEmbedder('ai_key_missing'),
+      });
+
+      const result = await service.search(query(), user());
+
+      // `candidate(0)` carries `score: 1`, a `ts_rank_cd` value. What ships is
+      // its fused rank score.
+      expect(result.results[0].score).toBeCloseTo(1 / (RRF_K + 1), 12);
+    });
+
+    it('keeps the full-text ORDER identical when only one arm ran', async () => {
+      // Fusing one list is the identity on order, which is what makes the
+      // no-key path a genuine no-op rather than a second ranking path.
+      const candidates = Array.from({ length: 12 }, (_, i) => candidate(i));
+      const { service } = makeHarness({ candidates, embedder: stubEmbedder('ai_key_missing') });
+
+      const result = await service.search(query({ limit: 12 }), user());
+
+      expect(result.results.map((r) => r.id)).toEqual(candidates.map((c) => c.id));
+    });
+
+    it('breaks a fused tie by updatedAt then id, as the SQL does', async () => {
+      // Both documents are rank 1 in one arm and rank 2 in the other, so their
+      // RRF scores are equal by construction.
+      const { service } = makeHarness({
+        candidates: [
+          candidate(0, { id: 'aaa', updated_at: older }),
+          candidate(1, { id: 'bbb' }),
+        ],
+        vectorCandidates: [
+          candidate(2, { id: 'bbb' }),
+          candidate(3, { id: 'aaa', updated_at: older }),
+        ],
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.results[0].score).toBeCloseTo(result.results[1].score, 12);
+      expect(result.results.map((r) => r.id)).toEqual(['bbb', 'aaa']);
+    });
+
+    it('reports truncated when EITHER arm filled its window', async () => {
+      const { service } = makeHarness({
+        candidates: [candidate(0)],
+        vectorCandidates: Array.from({ length: MAX_CANDIDATE_DOCUMENTS + 1 }, (_, i) =>
+          candidate(i, { id: `vec-${i}` }),
+        ),
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.truncated).toBe(true);
+      expect(result.matchedDocuments).toBe(MAX_CANDIDATE_DOCUMENTS);
+    });
+
+    it('never lets the union exceed the cap', async () => {
+      const { service } = makeHarness({
+        candidates: Array.from({ length: 150 }, (_, i) => candidate(i, { id: `l-${i}` })),
+        vectorCandidates: Array.from({ length: 150 }, (_, i) => candidate(i, { id: `v-${i}` })),
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.matchedDocuments).toBe(MAX_CANDIDATE_DOCUMENTS);
+      expect(result.truncated).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // `unindexedCount`
+  // ==========================================================================
+
+  describe('unindexedCount', () => {
+    it('counts the caller OWN documents that are not `indexed`', async () => {
+      const { service, rawCalls } = makeHarness({ candidates: [], unindexed: 9 });
+
+      const result = await service.search(query(), user());
+
+      expect(result.unindexedCount).toBe(9);
+
+      const text = rawCalls.find((sql) => sql.sql.includes('coalesce(sum(x.n)'))!.sql;
+
+      // Own, not visible-to-you: a shared transcript is indexed on its OWNER's
+      // key, so counting it would report a number the reader cannot move.
+      expect(text).toContain('owner_id = ?::uuid');
+      expect(text).not.toContain('transcript_shares');
+      // "No row at all" and "a row that is not indexed" are one predicate.
+      expect(text).toContain('NOT EXISTS');
+      expect(text).toContain("s.status = 'indexed'");
+    });
+
+    it('is 0 when everything the caller owns is indexed', async () => {
+      const { service } = makeHarness({ candidates: [candidate(0)], unindexed: 0 });
+
+      await expect(service.search(query(), user())).resolves.toMatchObject({
+        unindexedCount: 0,
+      });
+    });
+
+    it('is scoped to the types actually searched', async () => {
+      const { service, rawCalls } = makeHarness({ candidates: [] });
+
+      await service.search(query({ types: 'note' }), user());
+
+      const text = rawCalls.find((sql) => sql.sql.includes('coalesce(sum(x.n)'))!.sql;
+
+      expect(text).toContain('FROM notes n');
+      expect(text).not.toContain('FROM transcripts t');
+    });
+
+    it('is computed even when the semantic arm ran perfectly', async () => {
+      const { service, rawCalls } = makeHarness({
+        candidates: [candidate(0)],
+        vectorCandidates: [candidate(0)],
+        unindexed: 2,
+        embedder: stubEmbedder(embedded),
+      });
+
+      const result = await service.search(query(), user());
+
+      expect(result.semantic).toBe(true);
+      expect(result.unindexedCount).toBe(2);
+      expect(rawCalls.some((sql) => sql.sql.includes('coalesce(sum(x.n)'))).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // The cursor, across the fingerprint change
+  // ==========================================================================
+
+  describe('cursors and the semantic axis', () => {
+    it('refuses a cursor minted before the fingerprint gained the semantic axis', async () => {
+      // ⚠ WHY `RANKING_MODEL_VERSION` HAD TO BE BUMPED AS WELL AS THE AXIS
+      // ADDED. For a keyless caller the axis is `null` both before and after
+      // #189, so a pre-#189 cursor would reproduce today's fingerprint exactly
+      // — and would then index into a window built by reciprocal rank fusion
+      // instead of by raw `ts_rank_cd` ordering. The version constant is what
+      // makes that impossible, and this forges a v1 cursor to prove it.
+      const legacy = require('node:crypto')
+        .createHash('sha256')
+        .update(['1', 'pricing model', 'note,transcript', USER_ID].join('\n'), 'utf8')
+        .digest('hex')
+        .slice(0, 40);
+
+      expect(RANKING_MODEL_VERSION).toBeGreaterThan(1);
+
+      const stale = Buffer.from(JSON.stringify({ f: legacy, o: 20 }), 'utf8').toString(
+        'base64url',
+      );
+
+      const { service } = makeHarness({ candidates: [] });
+
+      await expect(service.search(query({ cursor: stale }), user())).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('refuses a full-text cursor once the caller has a key', async () => {
+      // Nothing about the REQUEST changed — same `q`, same types, same user.
+      // Only the caller's own credential did.
+      const keyless = makeHarness({
+        candidates: Array.from({ length: 25 }, (_, i) => candidate(i)),
+        embedder: stubEmbedder('ai_key_missing'),
+      });
+
+      const first = await keyless.service.search(query({ limit: 20 }), user());
+
+      expect(first.nextCursor).not.toBeNull();
+
+      const withKey = makeHarness({
+        candidates: Array.from({ length: 25 }, (_, i) => candidate(i)),
+        vectorCandidates: [candidate(0)],
+        embedder: stubEmbedder(embedded),
+      });
+
+      await expect(
+        withKey.service.search(query({ limit: 20, cursor: first.nextCursor! }), user()),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('pages a fused window with its own cursor', async () => {
+      const harness = () =>
+        makeHarness({
+          candidates: Array.from({ length: 5 }, (_, i) => candidate(i, { id: `l-${i}` })),
+          vectorCandidates: Array.from({ length: 5 }, (_, i) => candidate(i, { id: `v-${i}` })),
+          embedder: stubEmbedder(embedded),
+        });
+
+      const first = await harness().service.search(query({ limit: 4 }), user());
+
+      expect(first.matchedDocuments).toBe(10);
+      expect(first.nextCursor).not.toBeNull();
+
+      const second = await harness().service.search(
+        query({ limit: 4, cursor: first.nextCursor! }),
+        user(),
+      );
+
+      expect(second.results).toHaveLength(4);
+      expect(first.results.map((r) => r.id)).not.toEqual(
+        expect.arrayContaining(second.results.map((r) => r.id)),
+      );
     });
   });
 });

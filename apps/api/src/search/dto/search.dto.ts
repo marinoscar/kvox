@@ -31,6 +31,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { SEARCH_TYPES } from '../search-query';
+import { SEMANTIC_REASONS } from '../search-semantic';
 
 /** Longest `q` this endpoint accepts. */
 export const MAX_SEARCH_QUERY_LENGTH = 256;
@@ -109,10 +110,21 @@ export const searchResultSchema = z.object({
   id: z.string(),
   title: z.string(),
   /**
-   * The document's relevance, rolled up as the MAXIMUM of its units' scores.
+   * The document's fused relevance - its RECIPROCAL RANK FUSION score across
+   * the arms that ran (#189).
    *
-   * Comparable WITHIN one response and meaningless across two: it is a
-   * `ts_rank_cd` value, which has no absolute scale.
+   * `Σ 1 / (60 + rank_i)`, where `rank_i` is this document's 1-based position
+   * in arm `i`'s own ranking after that arm has been rolled up to documents by
+   * its best unit. An arm the document is absent from contributes nothing; no
+   * rank is imputed for it. See `search-fusion.ts` for why fusing ranks is the
+   * only honest way to combine `ts_rank_cd` with cosine similarity.
+   *
+   * ⚠ IT IS NO LONGER A `ts_rank_cd` VALUE, and it is still not on an absolute
+   * scale - it is bounded above by `2/61 ≈ 0.0328` and says nothing about how
+   * good a match is, only about ordering. Comparable WITHIN one response,
+   * meaningless across two. When only the full-text arm ran (`semantic: false`)
+   * the ORDER is identical to the pre-#189 `ts_rank_cd` ordering; only the
+   * number attached to each row changed.
    */
   score: z.number(),
   updatedAt: z.string(),
@@ -146,6 +158,39 @@ export const searchResponseSchema = z.object({
    * NOT a 403. See `search.controller.ts` for the reasoning.
    */
   searchedTypes: z.array(z.enum(SEARCH_TYPES)),
+  /**
+   * Whether the SEMANTIC (embedding) arm actually ran and was fused into this
+   * ranking (#189).
+   *
+   * `true` means the results are reciprocal-rank fusion over two arms;
+   * `false` means the full-text arm answered alone, exactly as it did before
+   * epic #165 - same rows, same order, HTTP 200. It is never an error and never
+   * an empty list.
+   */
+  semantic: z.boolean(),
+  /**
+   * Why {@link searchResponseSchema.shape.semantic} is `false`, and `null` when
+   * it is `true`.
+   *
+   * Published rather than logged because the two axes a searcher can act on -
+   * "you have not saved an API key" (`ai_key_missing`) and "nothing has been
+   * indexed yet" (`no_indexed_content`) - are invisible from the results
+   * themselves: a keyword-only ranking looks exactly like a fused one that
+   * found nothing else. See `search-semantic.ts` for what each value means and
+   * whose problem it is.
+   */
+  semanticReason: z.enum(SEMANTIC_REASONS).nullable(),
+  /**
+   * How many of the caller's OWN documents, among the types actually searched,
+   * have no `indexed` entry in `search_index_state` - so are absent from the
+   * semantic arm however well they match.
+   *
+   * ⚠ OWN, NOT VISIBLE-TO-YOU. A transcript somebody shared with the caller is
+   * indexed (or not) on ITS OWNER'S key and their pipeline; counting it here
+   * would report a number the reader has no way to move. `0` means everything
+   * this caller owns and can search is in the semantic index.
+   */
+  unindexedCount: z.number().int(),
 });
 
 export type SearchResponse = z.infer<typeof searchResponseSchema>;

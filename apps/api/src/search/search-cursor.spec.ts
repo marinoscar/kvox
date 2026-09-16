@@ -24,6 +24,15 @@ const SCOPE: SearchCursorScope = {
   q: 'quarterly pricing review',
   types: ['transcript', 'note'],
   userId: '11111111-1111-4111-8111-111111111111',
+  // The full-text-only window, which is what a caller with no AI key of their
+  // own always gets. `SEMANTIC_SCOPE` below is the fused one.
+  semantic: null,
+};
+
+/** The same search, answered with the semantic arm fused in (#189). */
+const SEMANTIC_SCOPE: SearchCursorScope = {
+  ...SCOPE,
+  semantic: 'openai:text-embedding-3-small',
 };
 
 const OTHER_USER = '22222222-2222-4222-8222-222222222222';
@@ -99,6 +108,7 @@ describe('refusal', () => {
           SCOPE.q,
           [...SCOPE.types].sort().join(','),
           SCOPE.userId,
+          SCOPE.semantic ?? '',
         ].join('\n'),
         'utf8',
       )
@@ -112,6 +122,47 @@ describe('refusal', () => {
     );
 
     expect(() => decodeSearchCursor(stale, SCOPE)).toThrow(SearchCursorError);
+  });
+
+  // ==========================================================================
+  // The semantic axis (#189)
+  // ==========================================================================
+
+  it('refuses a full-text-only cursor once the semantic arm starts running', () => {
+    // ⚠ THE CASE THE FOUR ORIGINAL INPUTS CANNOT SEE. Whether the vector arm
+    // runs depends on the CALLER'S OWN API KEY and on a vendor being
+    // reachable, neither of which is part of the request - so `q`, the types
+    // and the user are all identical across this pair, and only the axis
+    // differs. A user who pastes a key between page 1 and page 2 must be told
+    // to re-run, not handed an arbitrary slice of a ranking that was rebuilt
+    // underneath them.
+    const ftsOnly = encodeSearchCursor(SCOPE, 20);
+
+    expect(() => decodeSearchCursor(ftsOnly, SEMANTIC_SCOPE)).toThrow(SearchCursorError);
+  });
+
+  it('refuses a fused cursor once the semantic arm stops running', () => {
+    // The same event in the other direction: the vendor started failing, or the
+    // key was revoked, between two pages. `embedding_failed` degrades the
+    // ANSWER to full text; it must not silently degrade the PAGING too.
+    const fused = encodeSearchCursor(SEMANTIC_SCOPE, 20);
+
+    expect(() => decodeSearchCursor(fused, SCOPE)).toThrow(SearchCursorError);
+  });
+
+  it('refuses a cursor minted under a different embedding model', () => {
+    // Two models' vectors are not comparable at all (see
+    // `AiEmbeddingCapability.model`), so switching models re-ranks the whole
+    // corpus. Carrying the model in the axis invalidates every in-flight
+    // cursor for free, with no changelog entry to remember.
+    const cursor = encodeSearchCursor(SEMANTIC_SCOPE, 20);
+    const reEmbedded: SearchCursorScope = { ...SEMANTIC_SCOPE, semantic: 'openai:text-embedding-3-large' };
+
+    expect(() => decodeSearchCursor(cursor, reEmbedded)).toThrow(SearchCursorError);
+  });
+
+  it('round-trips a fused cursor against the identical fused scope', () => {
+    expect(decodeSearchCursor(encodeSearchCursor(SEMANTIC_SCOPE, 40), SEMANTIC_SCOPE)).toBe(40);
   });
 
   it('refuses garbage rather than silently restarting at offset 0', () => {

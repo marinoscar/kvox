@@ -26,7 +26,7 @@
 // -----------------------------------------------------------------------------
 //
 // The cursor carries an OFFSET into a candidate window, so it means nothing
-// except relative to the window that produced it. Four inputs decide that
+// except relative to the window that produced it. FIVE inputs decide that
 // window, and a change to any one of them silently renumbers it:
 //
 //   - THE QUERY TEXT. A different `q` is a different ranking over a different
@@ -44,6 +44,8 @@
 //     their own visibility predicate), but it would return the WRONG ones,
 //     with no error.
 //   - {@link RANKING_MODEL_VERSION}. The scoring itself. See below.
+//   - THE SEMANTIC AXIS. Whether the embedding arm ran for this request, and
+//     under which model. See the section after next.
 //
 // THE VERSION CONSTANT IS THE MECHANISM, NOT A COMMENT
 // -----------------------------------------------------------------------------
@@ -59,12 +61,40 @@
 // changelog entry saying "remember to tell clients" is not the same mechanism
 // and does not survive a deploy nobody read the changelog for.
 //
-// >>> A LATER ISSUE ADDS A SEMANTIC (EMBEDDING) AXIS TO THIS SEARCH. <<<
-// >>> ITS MODEL/INDEX IDENTITY BELONGS IN THE FINGERPRINT, NEXT TO THE   <<<
-// >>> MARKED SLOT IN `fingerprintScope` BELOW - AND SWITCHING EMBEDDING  <<<
-// >>> MODELS THEN INVALIDATES CURSORS FOR FREE, THE SAME WAY BUMPING     <<<
-// >>> THE CONSTANT DOES. Adding the axis WITHOUT touching the            <<<
-// >>> fingerprint is the failure this block exists to make loud.         <<<
+// THE SEMANTIC AXIS - FILLED IN BY ISSUE #189, EPIC #165
+// -----------------------------------------------------------------------------
+//
+// The block that used to stand here reserved a slot for "a later issue adds a
+// semantic (embedding) axis to this search", and warned that adding the axis
+// without touching the fingerprint would be a silent renumbering. That issue is
+// #189, the axis is {@link SearchCursorScope.semantic}, and both halves of what
+// it asked for are done:
+//
+//   - THE AXIS IS IN THE FINGERPRINT. It is `provider:model` when the vector
+//     arm actually ran for this request, and `null` when it did not - so an
+//     FTS-only window and a fused window can never share a fingerprint. That
+//     matters for a reason the four original inputs do not cover: whether the
+//     semantic arm runs depends on THE CALLER'S OWN API KEY and on the
+//     provider being reachable, neither of which is part of the request. A user
+//     who pastes a key between page 1 and page 2 - or a vendor that starts
+//     timing out between them - changes the ranking without changing anything
+//     the client sent. With the axis in the fingerprint, page 2 is a 400 and
+//     the client re-runs; without it, page 2 would be an arbitrary slice of a
+//     ranking that had been rebuilt underneath it. Switching the deployment's
+//     embedding model invalidates every in-flight cursor for free, by the same
+//     mechanism.
+//
+//   - {@link RANKING_MODEL_VERSION} IS BUMPED TO 2, and that is NOT redundant
+//     with the axis. The axis is `null` for an FTS-only request both before and
+//     after #189, so a cursor minted yesterday by a keyless user would
+//     reproduce today's fingerprint exactly - and would then index into a
+//     window that is now built by reciprocal rank fusion over a single list
+//     instead of by raw `ts_rank_cd` ordering. The two mechanisms answer
+//     different questions ("did the RANKING CODE change" versus "did THIS
+//     REQUEST'S retrieval change"), and TOGETHER they make "the ranking changed
+//     and nobody noticed" unrepresentable as a silent re-page: any change to
+//     how results are ordered is either a new constant or a new axis value, and
+//     either one is a 400 a client can act on.
 // =============================================================================
 
 import { createHash } from 'node:crypto';
@@ -75,12 +105,19 @@ import { normalizeQueryText, type SearchType } from './search-query';
  * The scoring model's identity. BUMP THIS whenever the ranking changes.
  *
  * "The ranking" means anything that can reorder the candidate window: the rank
- * function, the roll-up rule, the weighting, the candidate cap, the tie-break.
+ * function, the roll-up rule, the weighting, the candidate cap, the tie-break,
+ * the fusion constant (`RRF_K`) and the semantic arm's similarity floor
+ * (`MIN_SEMANTIC_SIMILARITY` - it decides which documents are REACHABLE at all,
+ * which is the candidate cap's kind of change rather than a scoring tweak).
  * When in doubt, bump it - the cost is that clients re-run their searches
  * once, and the cost of not bumping it is a user paging through a list that
  * renumbered underneath them with no error anywhere.
+ *
+ * Bumped to 2 by #189, which made the window a fusion of two rankings rather
+ * than one `ts_rank_cd` ordering. See the header's semantic-axis section for
+ * why the axis alone would not have covered it.
  */
-export const RANKING_MODEL_VERSION = 1;
+export const RANKING_MODEL_VERSION = 2;
 
 /** Everything that decides which candidate window an offset refers to. */
 export interface SearchCursorScope {
@@ -99,6 +136,15 @@ export interface SearchCursorScope {
   types: readonly SearchType[];
   /** The authenticated caller. Visibility is part of the window. */
   userId: string;
+  /**
+   * The semantic arm's identity for THIS request: `provider:model` when the
+   * vector arm ran, `null` when the ranking was full-text only (#189).
+   *
+   * See the header's semantic-axis section. Produced by `semanticAxis()` in
+   * `search-semantic.ts`, which is the only thing that should ever build this
+   * string.
+   */
+  semantic: string | null;
 }
 
 /** A cursor that does not belong to the search it was presented against. */
@@ -128,12 +174,13 @@ export function fingerprintScope(scope: SearchCursorScope): string {
     normalizeQueryText(scope.q),
     [...scope.types].sort().join(','),
     scope.userId,
-    // >>> SEMANTIC AXIS GOES HERE <<<
-    // A later issue adds embedding-backed retrieval. Append its model/index
-    // identity as one more line - do not replace a line above, and do not add
-    // it anywhere else. Every value this array carries is one the window
-    // depends on; anything that reorders results and is missing from here is
-    // a cursor that survives a change it should not have survived.
+    // THE SEMANTIC AXIS (#189). Appended as one more line rather than folded
+    // into any line above - every value this array carries is one the window
+    // depends on, and anything that reorders results while missing from here is
+    // a cursor that survives a change it should not have survived. `''` for
+    // `null` keeps the delimiter argument below intact: the axis is either a
+    // `provider:model` pair or empty, and neither can contain a newline.
+    scope.semantic ?? '',
   ];
 
   return createHash('sha256').update(inputs.join('\n'), 'utf8').digest('hex').slice(0, 40);
@@ -170,8 +217,8 @@ export function decodeSearchCursor(cursor: string, scope: SearchCursorScope): nu
   if (typeof payload.f !== 'string' || payload.f !== fingerprintScope(scope)) {
     throw new SearchCursorError(
       'This cursor belongs to a different search. Cursors are tied to the query, the type ' +
-        'filter, the caller and the ranking model; re-run the search to page through the new ' +
-        'results.',
+        'filter, the caller, the ranking model and whether semantic ranking was available; ' +
+        're-run the search to page through the new results.',
     );
   }
 
