@@ -92,12 +92,28 @@ export class SearchController {
       'Ranked full-text search over the **content** of your transcripts and notes, not just ' +
       'their titles: a word spoken once in the middle of a three-hour recording finds that ' +
       'recording, and a term that appears only in a note body finds that note.\n\n' +
-      '**Ranking.** Matches are scored with `ts_rank_cd` (cover density), which rewards query ' +
-      'terms appearing close together rather than simply often - "quarterly pricing review" ' +
-      'describes a topic, not three independent words. A transcript is scored by the **best** ' +
-      'passage it contains, never by the sum of its passages, so a short conversation that is ' +
-      '*about* a term outranks a long one that mentions it thirty times in passing. `score` is ' +
+      '**Ranking is hybrid, and there is deliberately no keyword/semantic switch.** Two arms ' +
+      'run and their results are fused: a **full-text** arm scored with `ts_rank_cd` (cover ' +
+      'density, which rewards query terms appearing close together rather than simply often), ' +
+      'and a **semantic** arm that compares an embedding of your query against embeddings of ' +
+      'your content, so a paraphrase finds the recording even when it shares no word with it. ' +
+      'In both arms a document is scored by the **best** passage it contains, never by the sum ' +
+      'of its passages, so a short conversation that is *about* a term outranks a long one that ' +
+      'mentions it thirty times in passing.\n\n' +
+      'The two are combined by **reciprocal rank fusion** - `score` is ' +
+      '`Σ 1/(60 + rank)` over the arms that found the document, so it uses only each arm\'s ' +
+      'ordering and never their raw scores, which live on incomparable scales. A document found ' +
+      'by both arms generally outranks one found strongly by a single arm. `score` is ' +
       'comparable within one response and meaningless across two.\n\n' +
+      '**The semantic arm may be unavailable, and says so rather than failing.** Your content ' +
+      'is embedded with its owner\'s API key when it is indexed; your **query** is embedded ' +
+      'with **your own** key at search time. If you have not saved one, or the provider is ' +
+      'unreachable, or nothing has been indexed yet, this endpoint still answers **200** with ' +
+      'the full-text ranking - unchanged - and sets `semantic: false` plus a `semanticReason` ' +
+      '(`ai_key_missing`, `ai_not_configured`, `embedding_unsupported`, `no_indexed_content`, ' +
+      '`embedding_failed`). `unindexedCount` reports how many of **your own** documents, among ' +
+      'the types searched, are not in the semantic index and so cannot be found by meaning ' +
+      'however well they match.\n\n' +
       '**Snippets.** Each result carries up to three snippets saying why it matched, most ' +
       'relevant first. `html` is **already escaped**: the only markup in it is balanced ' +
       '`<mark>...</mark>` around the hits, and everything else - including any angle bracket ' +
@@ -109,7 +125,8 @@ export class SearchController {
       'whether it filled up, so `truncated: false` makes the count exact and `truncated: true` ' +
       'makes it a floor.\n\n' +
       '⚠ **A cursor is tied to the search that produced it** - the query text, the type ' +
-      'filter, you, and the ranking model. Presented against a different search it is refused ' +
+      'filter, you, the ranking model, and whether the semantic arm ran. Presented against a ' +
+      'different search it is refused ' +
       'with a **400** rather than silently restarting: on a relevance list, page 1 served ' +
       'again is indistinguishable from a real page 2, and a user would scroll the same rows ' +
       'forever believing they were making progress.\n\n' +
