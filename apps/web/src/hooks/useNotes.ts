@@ -28,6 +28,25 @@
  * short-lived SSE connection owned by the page that is watching. This poll is
  * the FLOOR under it: a stream that drops, or was never established, must not
  * leave a note frozen mid-generation with nothing to unstick it.
+ *
+ * =============================================================================
+ * AND BECAUSE IT IS CONDITIONAL, THE EVENT STREAM IS NOT OPTIONAL
+ * =============================================================================
+ *
+ * Issue #169. A conditional poll has a state in which it does not run at all,
+ * and for this list that state is the ordinary one — a settled library, which
+ * is what a user is looking at almost every time they open the page. Something
+ * has to cover it, and that something is the `notes.*` notification stream the
+ * bell already has open (#127): no second connection, no second endpoint, and
+ * the events are already being delivered.
+ *
+ * All THREE hooks in this file wire it up, which they did not until #169 — the
+ * list hook was the one that never got it, so a settled list had no interval
+ * AND no subscription and would not move until the user navigated. That was not
+ * a deliberate omission to avoid a refetch storm; there is no storm to avoid.
+ * Only two `notes.*` events exist and both are terminal, one per note, and a
+ * generation's per-token deltas never reach the notification centre at all. The
+ * long form of that argument is at the list hook's own effect.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -303,6 +322,36 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
   // scroll offset. A spinner every five seconds over data that is already
   // correct is the fastest way to make a live list unusable.
   useVisiblePolling(() => void load('revalidate'), interval);
+
+  // The stream's fast path — issue #169. Same revalidation, no loading flag,
+  // for the same reasons, and the exact wiring `useTranscripts`' list hook has.
+  //
+  // ⚠ THIS IS NOT REDUNDANT WITH THE POLL ABOVE, and it matters more here than
+  // it does on the transcripts side. That interval is CONDITIONAL — `0` once
+  // nothing is in flight — so a SETTLED notes list has no interval at all.
+  // Without this effect it had no event subscription either, which left the one
+  // state the list spends almost all of its time in with nothing whatsoever to
+  // update it: a note finishing in another tab, or a `notes.*` event of any
+  // kind, moved nothing on screen until the user navigated or changed a filter.
+  // `useNoteSummary`'s header has always described the event stream as the
+  // thing that covers exactly that gap; the list hook simply never got the
+  // wiring, and nothing anywhere said so.
+  //
+  // THE REFETCH STORM THIS MIGHT LOOK LIKE IS NOT ONE — the question #169 asks
+  // explicitly, so it is answered here rather than left to be re-derived. Only
+  // two `notes.*` events exist, `notes.note_ready` and `notes.note_failed`
+  // (`notification-events.ts`), and both are TERMINAL: one per note, at the end
+  // of its generation. The per-token deltas of a generation in progress travel
+  // over `connectNoteStream` (`services/noteGenerationStream.ts`) — a separate,
+  // short-lived SSE connection owned by whichever page is watching — and never
+  // reach the notification centre at all. `useLatestNoteEventId` additionally
+  // returns an ID rather than a counter, so the bell re-rendering for reasons
+  // of its own does not retrigger this.
+  const latestEventId = useLatestNoteEventId();
+  useEffect(() => {
+    if (!latestEventId) return;
+    void load('revalidate');
+  }, [latestEventId, load]);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || isLoadingMore) return;

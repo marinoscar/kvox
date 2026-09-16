@@ -16,23 +16,22 @@
  * Read the counterpart file's header for the argument; it is not repeated here.
  *
  * =============================================================================
- * ⚠ ONE TEST IS MISSING HERE, AND THE ASYMMETRY IS TRACKED
+ * THE NOTIFICATION TESTS ARE NEW, AND THEY CLOSE A REAL GAP
  * =============================================================================
  *
- * `useTranscripts.test.tsx` has "leaves 60 rows after a transcripts.*
- * NOTIFICATION". There is no `notes.*` counterpart, because there is nothing to
- * assert: `useNotes.ts` defines `useLatestNoteEventId` but wires it into
- * `useNoteSummary` only — the LIST hook never subscribes.
+ * Until issue #169 this suite had no `notes.*` counterpart to its twin's
+ * notification tests, because there was nothing to assert: `useNotes.ts`
+ * defined `useLatestNoteEventId` and wired it into `useNoteSummary` only, so
+ * the LIST hook never subscribed. #167 deliberately left that alone — wiring up
+ * an event subscription is a behaviour change, not a revalidation bug fix — and
+ * this file carried a note recording the omission so it read as known.
  *
- * That gap is **issue #169**, filed separately and deliberately not fixed as
- * part of #167 (wiring up an event subscription is a behaviour change, not a
- * revalidation bug fix, and it should not ride along inside one). It matters
- * more here than it would on the transcripts side because this hook's poll is
- * CONDITIONAL — `anyInFlight ? NOTE_ACTIVE_POLL_MS : 0` — so a settled notes
- * list has no interval AND no subscription, and updates only when the user
- * navigates or changes a filter.
- *
- * When #169 lands, add the missing test beside the others and delete this note.
+ * #169 fixed it, and the two suites are test-for-test identical again. The gap
+ * mattered more here than it would have on the transcripts side, because this
+ * hook's poll is CONDITIONAL — `anyInFlight ? NOTE_ACTIVE_POLL_MS : 0` — so a
+ * settled notes list had no interval AND no subscription, and would not update
+ * until the user navigated or changed a filter. That combination is what the
+ * "a SETTLED list still reacts" test below pins specifically.
  *
  * =============================================================================
  * WHY EVERY TEST PASSES AN EXPLICIT `pollIntervalMs`
@@ -112,6 +111,28 @@ function page(from: number, n = 20): NoteListItem[] {
 /** Drive `document.hidden`, which is a getter and cannot simply be assigned. */
 function hidden(value: boolean): void {
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+}
+
+/** A centre holding exactly these events, newest first. */
+function withNotifications(events: { id: string; eventKey: string }[]) {
+  mockUseNotifications.mockReturnValue({
+    notifications: events.map((event) => ({
+      id: event.id,
+      eventKey: event.eventKey,
+      title: 't',
+      body: 'b',
+      link: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      readAt: null,
+    })),
+    unreadCount: 0,
+    isLoading: false,
+    error: null,
+    streamState: 'open',
+    refresh: vi.fn(),
+    markRead: vi.fn(),
+    markAllRead: vi.fn(),
+  } as unknown as ReturnType<typeof useNotifications>);
 }
 
 beforeEach(() => {
@@ -220,6 +241,57 @@ describe('useNotes — the list', () => {
 
     await waitFor(() => expect(result.current.error).toBe('Failed to load notes'));
   });
+
+  it('refetches when a notes.* notification arrives on the stream', async () => {
+    const { rerender } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
+    await waitFor(() => expect(mockGetNotes).toHaveBeenCalledTimes(1));
+
+    withNotifications([{ id: 'n1', eventKey: 'notes.note_ready' }]);
+    rerender();
+
+    await waitFor(() => expect(mockGetNotes).toHaveBeenCalledTimes(2));
+  });
+
+  it('reacts on a SETTLED list, which has no poll at all', async () => {
+    // The specific combination #169 was about. `anyInFlight` is false for a
+    // list of `ready` notes, so the derived interval is `0` and
+    // `useVisiblePolling` runs nothing. Before #169 there was no subscription
+    // either, which left the state this list spends almost all its time in with
+    // NOTHING able to update it. `pollIntervalMs` is deliberately not passed
+    // here — the derived interval is the thing under test.
+    mockGetNotes.mockResolvedValue({
+      items: [listItem('a', { status: 'ready' })],
+      nextCursor: null,
+    });
+
+    const { rerender } = renderHook(() => useNotes({}));
+    await waitFor(() => expect(mockGetNotes).toHaveBeenCalledTimes(1));
+
+    withNotifications([{ id: 'n1', eventKey: 'notes.note_ready' }]);
+    rerender();
+
+    await waitFor(() => expect(mockGetNotes).toHaveBeenCalledTimes(2));
+  });
+
+  it('ignores an UNRELATED notification', async () => {
+    // The bell re-renders for reasons of its own (a read receipt, another
+    // event). Refetching on every one of those would turn it into a second,
+    // unthrottled poll — which on this hook would be worse than on its twin,
+    // since a settled notes list is otherwise making no requests at all.
+    withNotifications([{ id: 'n1', eventKey: 'security.role_changed' }]);
+    const { rerender } = renderHook(() => useNotes({ pollIntervalMs: 0 }));
+    await waitFor(() => expect(mockGetNotes).toHaveBeenCalledTimes(1));
+
+    withNotifications([
+      { id: 'n2', eventKey: 'admin.broadcast' },
+      { id: 'n1', eventKey: 'security.role_changed' },
+    ]);
+    rerender();
+
+    // A short settle, so a refetch that WAS going to happen has had its chance.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mockGetNotes).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
@@ -231,10 +303,9 @@ describe('useNotes — the list', () => {
  * always correct in isolation. The defect lived in what happens when a
  * background read of PAGE ONE lands on a list that `loadMore` had grown.
  *
- * Three call sites reach it here — the derived-interval poll, the tab-refocus
- * catch-up fetch, and `refresh()` after a row action. The transcripts twin has
- * a fourth (the notification effect); see this file's header and issue #169 for
- * why that one has no counterpart yet.
+ * Four call sites reach it here, the same four the transcripts twin has — the
+ * derived-interval poll, the tab-refocus catch-up fetch, the notification
+ * effect (#169) and `refresh()` after a row action.
  */
 describe('useNotes — a background read REVALIDATES, it does not truncate', () => {
   function threePages() {
@@ -292,6 +363,21 @@ describe('useNotes — a background read REVALIDATES, it does not truncate', () 
     });
 
     expect(mockGetNotes.mock.calls.length).toBeGreaterThan(before);
+    expect(result.current.notes).toHaveLength(60);
+  });
+
+  it('leaves 60 rows after a notes.* NOTIFICATION', async () => {
+    threePages();
+    mockGetNotes.mockResolvedValue({ items: page(0), nextCursor: 'c2' });
+
+    const { result, rerender } = await loadThreePages();
+
+    withNotifications([{ id: 'n1', eventKey: 'notes.note_ready' }]);
+    await act(async () => {
+      rerender();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
     expect(result.current.notes).toHaveLength(60);
   });
 
