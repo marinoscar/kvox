@@ -38,6 +38,7 @@
  */
 
 import { api, ApiError, API_BASE_URL } from './api';
+import type { SemanticSearchQuality } from './searchIndex';
 
 // =============================================================================
 // The shapes (mirrors of `dto/transcript.dto.ts`)
@@ -160,7 +161,18 @@ export interface TranscriptDetail extends TranscriptListItem {
   sourceSizeBytes: string;
 }
 
-export interface TranscriptListResponse {
+/**
+ * ⚠ EXTENDS `SemanticSearchQuality`, WHOSE EVERY FIELD IS OPTIONAL AND ABSENT
+ * TODAY (issue #191, epic #165).
+ *
+ * `semantic`, `semanticReason` and `unindexedCount` are added to the search
+ * response by this epic's HYBRID-RANKING issue, which lands separately. Until
+ * it does, no response carries them and every consumer reads `undefined` —
+ * which `SemanticSearchNotice` renders as nothing at all. This declaration
+ * exists so the feed half of #191 works the day the fields appear, without a
+ * second change here; it is deliberately NOT a restatement of the server's DTO.
+ */
+export interface TranscriptListResponse extends SemanticSearchQuality {
   items: TranscriptListItem[];
   /**
    * How many rows match the current filters, ignoring paging.
