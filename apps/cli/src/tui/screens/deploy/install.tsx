@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from 'ink';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
@@ -20,6 +20,7 @@ import {
   DEFAULT_APPS_ROOT,
   DEFAULT_BIND_PORT,
   DEFAULT_PROXY_ROOT,
+  FALLBACK_APP_NAME,
   appNameFor,
   appRootFor,
   siblingBindPorts,
@@ -152,8 +153,6 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     [appsRoot, proxyRoot],
   );
 
-  const specs = useMemo(() => loadTemplateSpecs(roots.apps), [roots.apps]);
-
   const [answers, setAnswers] = useState<InstallAnswers>(INTERNAL_DEFAULTS);
   const [phase, setPhase] = useState<Phase>('wizard');
   const [facts, setFacts] = useState<ServerFacts>(() => unknownServerFacts());
@@ -171,6 +170,19 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   const [ready, setReady] = useState(false);
 
   const abortRef = useRef<AbortController | undefined>(undefined);
+
+  const name = answerOf(answers, NAME_FIELD) || FALLBACK_APP_NAME;
+  const deployRoot = appRootFor(roots.apps, name);
+
+  // The questions come from the template of THE APP BEING INSTALLED, keyed on
+  // its name (#229). This memo used to depend on the apps root alone, which
+  // meant two things at once: it could never re-read when the operator typed a
+  // name, and `loadTemplateSpecs` was free to answer with whatever sibling
+  // deployment `readdirSync` happened to list first. On a host with more than
+  // one app that is not a near miss — it is a different product's variable
+  // list, so the wizard asks another application's questions and silently
+  // drops the steps this one needs.
+  const specs = useMemo(() => loadTemplateSpecs(roots.apps, name), [roots.apps, name]);
 
   // Memoised on the two answers that can CHANGE the step list, never on the
   // whole `answers` object. A step list rebuilt on every keystroke hands every
@@ -230,9 +242,6 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       cancelled = true;
     };
   }, [isMounted, roots.apps]);
-
-  const name = answerOf(answers, NAME_FIELD) || 'app';
-  const deployRoot = appRootFor(roots.apps, name);
 
   // ---------------------------------------------------------------------------
   // The doctor, live on Welcome
@@ -818,15 +827,26 @@ function journalPathIn(message: string): string | undefined {
 /**
  * The template the questions come from.
  *
- * Two places, in order: the deployment's own clone (a reinstall or a resume),
+ * Two places, in order: THIS deployment's own clone (a reinstall or a resume),
  * then the checkout this CLI is being run from (the first install, where
  * nothing has been cloned onto the server yet — `bootstrap-vps.sh` leaves the
  * operator in exactly such a checkout). Before either exists the domain
  * question alone is still enough to get started, which is why this returns an
  * empty list rather than throwing.
+ *
+ * ⚠ NEVER A SIBLING DEPLOYMENT'S TEMPLATE (#229). Until this took a `name`
+ * it enumerated every directory under the apps root and answered with the
+ * first `.env.example` that existed, in `readdirSync` order. On a host running
+ * one app that is invisible; on a host running two it hands the wizard another
+ * product's variable list, and the steps whose keys that list lacks are dropped
+ * rather than shown empty (`installSteps`). The reported symptom was an install
+ * asking for a neighbouring app's SQLite `DATABASE_URL` and never asking for
+ * PostgreSQL at all. A sibling's template is not a degraded answer that beats
+ * nothing — it is a wrong answer, and returning `[]` is strictly better, so
+ * there is deliberately no fallback to one.
  */
-export function loadTemplateSpecs(appsRoot: string): EnvVarSpec[] {
-  for (const path of templateCandidates(appsRoot)) {
+export function loadTemplateSpecs(appsRoot: string, name?: string): EnvVarSpec[] {
+  for (const path of templateCandidates(appsRoot, name)) {
     try {
       if (!existsSync(path)) continue;
       return parseEnvExample(readFileSync(path, 'utf8'));
@@ -837,16 +857,13 @@ export function loadTemplateSpecs(appsRoot: string): EnvVarSpec[] {
   return [];
 }
 
-function templateCandidates(appsRoot: string): string[] {
+function templateCandidates(appsRoot: string, name?: string): string[] {
   const relative = join('infra', 'compose', '.env.example');
   const candidates: string[] = [];
 
-  try {
-    for (const entry of readdirNames(appsRoot)) {
-      candidates.push(join(appsRoot, entry, 'repo', relative));
-    }
-  } catch {
-    /* No apps root yet: the first install. */
+  // This app's own clone, and only this app's. No enumeration of the apps root.
+  if (name !== undefined && name !== '') {
+    candidates.push(join(appsRoot, name, 'repo', relative));
   }
 
   let directory = process.cwd();
@@ -858,10 +875,4 @@ function templateCandidates(appsRoot: string): string[] {
   }
 
   return candidates;
-}
-
-function readdirNames(path: string): string[] {
-  return readdirSync(path, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
 }
