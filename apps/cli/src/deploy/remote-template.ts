@@ -49,8 +49,16 @@ export type TemplateSource = 'remote' | 'local' | 'none';
 export interface RemoteTemplateRequest {
   /** The repository URL, as `resolveRepoTarget` produced it. */
   repoUrl: string;
-  /** Branch, tag or sha. */
-  ref: string;
+  /**
+   * Branch, tag or sha — or EMPTY for the repository's default branch.
+   *
+   * Empty is the ordinary case, not a missing value (#234): an operator who
+   * does not pin a ref is deploying the default branch, and the Review screen
+   * renders exactly that as "(default branch)". Treating empty as "cannot
+   * fetch" turned the most common first install into the one case that never
+   * read the template.
+   */
+  ref?: string | undefined;
   runCommand?: typeof defaultRunCommand;
 }
 
@@ -73,9 +81,7 @@ export async function fetchRemoteTemplate(
   // reach for here.
   if (slug === null) return undefined;
 
-  const ref = request.ref.trim();
-  if (ref === '') return undefined;
-
+  const ref = (request.ref ?? '').trim();
   const run = request.runCommand ?? defaultRunCommand;
 
   // The raw media type returns the file's bytes directly, so nothing here has
@@ -86,7 +92,13 @@ export async function fetchRemoteTemplate(
     'api',
     '-H',
     'Accept: application/vnd.github.raw',
-    `repos/${slug}/contents/${TEMPLATE_PATH}?ref=${encodeURIComponent(ref)}`,
+    // No ref: omit the query parameter entirely rather than sending an empty
+    // one. GitHub's contents API then serves the repository's own default
+    // branch, which is precisely what an unpinned deployment means — and it
+    // needs no second call to discover what that branch is called.
+    ref === ''
+      ? `repos/${slug}/contents/${TEMPLATE_PATH}`
+      : `repos/${slug}/contents/${TEMPLATE_PATH}?ref=${encodeURIComponent(ref)}`,
   ];
 
   try {
