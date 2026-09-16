@@ -34,6 +34,16 @@ import { NotInstalledError, readState, type DeployState } from './state.js';
 //                         the one app already installed under <apps-root>
 // =============================================================================
 
+/**
+ * The name used when no repository has been resolved to derive one from.
+ *
+ * Exported rather than inlined so a caller can RECOGNISE it: a deploy root of
+ * `<apps-root>/app` may be a real app called "app", or it may be the CLI
+ * admitting it does not yet know what it is deploying, and the TUI has to tell
+ * an operator which (#232).
+ */
+export const FALLBACK_APP_NAME = 'app';
+
 export const DEFAULT_APPS_ROOT = '/opt/infra/apps';
 export const DEFAULT_PROXY_ROOT = '/opt/infra/proxy';
 export const DEFAULT_BIND_PORT = 3535;
@@ -44,7 +54,7 @@ export const DEFAULT_BIND_PORT = 3535;
  */
 export function appNameFor(repoUrl: string): string {
   const name = basename(repoUrl.trim().replace(/\/+$/, '')).replace(/\.git$/, '');
-  return (name || 'app').toLowerCase();
+  return (name || FALLBACK_APP_NAME).toLowerCase();
 }
 
 export function appRootFor(appsRoot: string, name: string): string {

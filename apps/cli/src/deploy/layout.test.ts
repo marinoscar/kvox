@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { EXIT, UsageError, exitCodeFor } from '../errors.js';
 import {
   DEFAULT_APPS_ROOT,
+  FALLBACK_APP_NAME,
   appNameFor,
   appRootFor,
   listInstalledApps,
@@ -59,6 +60,16 @@ describe('appNameFor', () => {
 
   it('falls back to "app" rather than an empty directory name', () => {
     expect(appNameFor('')).toBe('app');
+  });
+
+  it('falls back to the exported FALLBACK_APP_NAME specifically (issue #232)', () => {
+    // Pinned as its own case, against the export rather than the literal:
+    // the TUI recognises this exact value to tell "an app called app" apart
+    // from "the CLI does not yet know what it is deploying" (install.tsx's
+    // `welcomeIntro`), so the constant and this fallback must never drift
+    // apart from each other.
+    expect(appNameFor('')).toBe(FALLBACK_APP_NAME);
+    expect(appNameFor('   ')).toBe(FALLBACK_APP_NAME);
   });
 });
 
