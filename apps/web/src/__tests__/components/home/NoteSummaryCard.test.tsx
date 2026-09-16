@@ -109,13 +109,13 @@ describe('NoteSummaryCard', () => {
   });
 
   it('names the source when it has been resolved', () => {
-    render(<NoteSummaryCard note={note()} sourceName="Weekly standup" />);
+    render(<NoteSummaryCard note={note({ sourceName: 'Weekly standup' })} />);
 
     expect(screen.getByRole('link', { name: 'Weekly standup' })).toBeInTheDocument();
   });
 
   it('links the source to the transcript it came from', () => {
-    render(<NoteSummaryCard note={note()} sourceName="Weekly standup" />);
+    render(<NoteSummaryCard note={note({ sourceName: 'Weekly standup' })} />);
 
     expect(screen.getByRole('link', { name: 'Weekly standup' })).toHaveAttribute(
       'href',
@@ -126,13 +126,12 @@ describe('NoteSummaryCard', () => {
   it('falls back to the category noun rather than printing a uuid', () => {
     // A uuid where a title should be is worse than the category alone, because
     // it looks like the answer.
-    render(<NoteSummaryCard note={note()} />);
-
-    expect(screen.getByRole('link', { name: 'a transcript' })).toBeInTheDocument();
-  });
-
-  it('treats a null source name exactly as an absent one', () => {
-    render(<NoteSummaryCard note={note()} sourceName={null} />);
+    //
+    // ⚠ `sourceName: null` is not a placeholder state since #192 — it is the
+    // API's PERMANENT answer for a source that has been deleted or that this
+    // caller may no longer read (an unshared transcript). There is no second
+    // request coming that would fill it in.
+    render(<NoteSummaryCard note={note({ sourceName: null })} />);
 
     expect(screen.getByRole('link', { name: 'a transcript' })).toBeInTheDocument();
   });
@@ -144,8 +143,8 @@ describe('NoteSummaryCard', () => {
           sourceType: 'document',
           sourceTranscriptId: null,
           sourceObjectId: 'obj-1',
+          sourceName: 'quarterly.pdf',
         })}
-        sourceName="quarterly.pdf"
       />,
     );
 
@@ -156,7 +155,7 @@ describe('NoteSummaryCard', () => {
   it('keeps the source link OUTSIDE the card’s action area', () => {
     // A link inside a button is nested interactive content: axe fails it, and a
     // keyboard user reaches a control their reader called part of a button.
-    render(<NoteSummaryCard note={note()} sourceName="Weekly standup" />);
+    render(<NoteSummaryCard note={note({ sourceName: 'Weekly standup' })} />);
 
     const link = screen.getByRole('link', { name: 'Weekly standup' });
     expect(link.closest('a[class*="MuiCardActionArea"]')).toBeNull();
@@ -174,7 +173,7 @@ describe('NoteSummaryCard', () => {
 
   it('has no accessibility violations in light mode', async () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'light');
-    const { container } = render(<NoteSummaryCard note={note()} sourceName="Weekly standup" />);
+    const { container } = render(<NoteSummaryCard note={note({ sourceName: 'Weekly standup' })} />);
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
@@ -184,7 +183,7 @@ describe('NoteSummaryCard', () => {
     // one element here that adds a role and a name — is covered in both themes.
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
     const { container } = render(
-      <NoteSummaryCard note={note({ status: 'generating' })} sourceName="Weekly standup" />,
+      <NoteSummaryCard note={note({ status: 'generating', sourceName: 'Weekly standup' })} />,
     );
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();

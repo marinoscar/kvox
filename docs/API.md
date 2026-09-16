@@ -3826,6 +3826,20 @@ user pages. It is **not** "how many are left", and it is **not** `items.length`.
 null`) and creates none; this route reads `notes`. Each row carries an
 `excerpt` (the first 280 characters of the body), never the whole thing.
 
+Every row also carries **`sourceName`** (issue #192): the name of the
+transcript, note or document the note was generated from, denormalised beside
+`templateName` so a client renders "from *Q3 planning*" without a second
+request. It is resolved for the whole page in a bounded number of queries — at
+most one per source kind, never one per row.
+
+⚠ **`sourceName: null` means "no name available", never "no source".** A
+deleted source, a soft-deleted one, and one the **caller may no longer read**
+all answer the same way: a transcript shared with a user and later unshared
+leaves the note pointing at it forever, and every lookup here is scoped to what
+the caller may actually see so that this field can never publish a title they
+cannot otherwise reach. Clients render the category noun ("a transcript") for
+`null`.
+
 ---
 
 #### GET /notes/summary

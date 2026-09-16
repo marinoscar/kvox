@@ -39,6 +39,7 @@ function note(overrides: Partial<Note> = {}): Note {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
+    sourceName: null,
     contextText: 'Ana and Ben were there.',
     currentGenerationId: 'gen-1',
     failureReason: null,

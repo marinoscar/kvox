@@ -108,6 +108,15 @@ export interface Note {
   sourceObjectId: string | null;
   templateId: string | null;
   templateName: string | null;
+  /**
+   * The SOURCE's name — issue #192, denormalised onto every row and the detail.
+   *
+   * ⚠ `null` MEANS "NO NAME AVAILABLE", NEVER "NO SOURCE". A deleted source and
+   * one this caller may no longer read answer identically, and both render the
+   * category noun. It replaced a per-source client lookup; do not reintroduce
+   * one for a `null`.
+   */
+  sourceName: string | null;
   contextText: string | null;
   /** The generation to watch. Never cleared once set. */
   currentGenerationId: string | null;

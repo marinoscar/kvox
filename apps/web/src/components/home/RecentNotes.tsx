@@ -54,9 +54,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useNavigate } from 'react-router-dom';
 
 import { NoteSummaryCard } from './NoteSummaryCard';
-import { useNoteSourceNames, noteSourceKey } from '../../hooks/useNoteSourceNames';
 import type { NoteListItem } from '../../services/notes';
-import { noteSourceRef } from '../../utils/noteSource';
 
 export interface RecentNotesProps {
   /** Already ordered newest-first by the API. */
@@ -104,7 +102,6 @@ export function RecentNotes({ items, total, canCreate, isLoading }: RecentNotesP
   // module-level cache — so opening `/notes` after this renders costs no
   // second lookup for the same sources. See the hook's header for why the
   // client has to resolve these at all and what should replace it.
-  const sourceNames = useNoteSourceNames(items);
 
   if (isLoading) {
     // THIS SECTION'S OWN SKELETON, not the page's. `HomePage` gates its
@@ -178,22 +175,16 @@ export function RecentNotes({ items, total, canCreate, isLoading }: RecentNotesP
       <SectionHeading onViewAll={() => navigate('/notes')} />
 
       <Grid container spacing={1.5} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }}>
-        {items.map((item) => {
-          const ref = noteSourceRef(item);
-          return (
-            <Grid
-              key={item.id}
-              component="li"
-              size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
-              sx={{ display: 'flex' }}
-            >
-              <NoteSummaryCard
-                note={item}
-                sourceName={ref ? sourceNames[noteSourceKey(ref)] : undefined}
-              />
-            </Grid>
-          );
-        })}
+        {items.map((item) => (
+          <Grid
+            key={item.id}
+            component="li"
+            size={{ xs: 12, sm: 6, md: 4, lg: 3 }}
+            sx={{ display: 'flex' }}
+          >
+            <NoteSummaryCard note={item} />
+          </Grid>
+        ))}
       </Grid>
     </Box>
   );

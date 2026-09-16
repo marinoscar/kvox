@@ -610,6 +610,24 @@ export function setupBaseMocks(): void {
     count: Array.isArray(data) ? data.length : 1,
   }));
 
+  // ---------------------------------------------------------------------------
+  // Set-read defaults for the tables a SHAPE function reads (#192)
+  // ---------------------------------------------------------------------------
+  //
+  // `mockDeep` answers `undefined` for a method no test configured, which is
+  // fine for a read whose result a service checks — and a crash for one it
+  // iterates. `NoteSourceNameService` resolves a page's source names by reading
+  // three tables and looping the rows, so every suite that renders a note now
+  // touches these three whether or not it cares about source names.
+  //
+  // Defaulted to EMPTY rather than to fixtures: an empty result is the honest
+  // "this caller cannot name that source", which is a real production state
+  // (a deleted or unshared source) and resolves to `sourceName: null`. A suite
+  // that asserts a NAME overrides these, and one that does not is unaffected.
+  (prismaMock.transcript.findMany as jest.Mock).mockResolvedValue([]);
+  (prismaMock.storageObject.findMany as jest.Mock).mockResolvedValue([]);
+  (prismaMock.note.findMany as jest.Mock).mockResolvedValue([]);
+
   // Mock $connect and $disconnect
   (prismaMock.$connect as jest.Mock).mockResolvedValue(undefined);
   (prismaMock.$disconnect as jest.Mock).mockResolvedValue(undefined);

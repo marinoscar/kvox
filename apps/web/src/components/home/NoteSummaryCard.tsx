@@ -43,18 +43,15 @@ import { formatRelativeTime } from '../../utils/relativeTime';
 
 export interface NoteSummaryCardProps {
   note: NoteListItem;
-  /**
-   * The source's resolved title, from `useNoteSourceNames`.
-   *
-   * `null` and `undefined` mean the same thing here — "not known" — because the
-   * hook returns `undefined` for a name it has not resolved and callers holding
-   * a single note reach for `useNoteSourceName`, which returns `null`. Both
-   * fall through to the category noun rather than rendering a uuid.
-   */
-  sourceName?: string | null;
 }
 
-export function NoteSummaryCard({ note, sourceName }: NoteSummaryCardProps) {
+/**
+ * ⚠ NO `sourceName` PROP SINCE #192. The name is on the row — `note.sourceName`
+ * — resolved server-side for the whole page, so a caller no longer has to
+ * thread a separately-fetched map down to each card. `SourceLine` reads it
+ * directly and falls back to the category noun for `null`.
+ */
+export function NoteSummaryCard({ note }: NoteSummaryCardProps) {
   const navigate = useNavigate();
   const inFlight = isNoteInFlight(note.status);
 
@@ -138,7 +135,7 @@ export function NoteSummaryCard({ note, sourceName }: NoteSummaryCardProps) {
       {/* The provenance footer. See the file header for why it is HERE and not
           in the action area above. */}
       <Box sx={{ px: 2, pb: 1.5 }}>
-        <SourceLine note={note} name={sourceName ?? undefined} />
+        <SourceLine note={note} />
       </Box>
     </Card>
   );

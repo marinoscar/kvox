@@ -103,6 +103,10 @@ export function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
+    // #192: the API resolves this server-side and puts it on the row, so a
+    // fixture that left it `null` would make every home card render the
+    // category noun and would quietly weaken the tests that assert the name.
+    sourceName: 'Weekly sync recording',
     currentGenerationId: null,
     failureReason: null,
     excerpt: 'The team agreed to ship the export dialog before the end of the month.',

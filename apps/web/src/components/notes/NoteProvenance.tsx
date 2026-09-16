@@ -22,12 +22,12 @@
  * WHY THE SOURCE MAY BE A NOUN RATHER THAN A NAME
  * =============================================================================
  *
- * `GET /api/notes/{id}` carries `sourceType` plus one id, and denormalises
- * `templateName` but NOT the source's name (see `useNoteSourceNames`' header
- * for why, and for what should replace it). So the name is resolved with a
- * second request and, until it lands — or forever, for a source the caller can
- * no longer read — this renders the category noun: "a transcript", "another
- * note", "an uploaded document".
+ * `GET /api/notes/{id}` denormalises `sourceName` beside `templateName` since
+ * #192, so the name arrives WITH the note and there is no second request and no
+ * first frame without it. But it is nullable, and permanently so for a source
+ * that has been deleted or that the caller may no longer read — an unshared
+ * transcript, say. In that case this renders the category noun: "a transcript",
+ * "another note", "an uploaded document".
  *
  * A NOUN, NEVER AN ID. A uuid where a title should be is worse than the
  * category alone, because it looks like the answer.
@@ -55,10 +55,12 @@ import { formatShortDate } from '../../utils/relativeTime';
 export interface NoteProvenanceProps {
   note: Note;
   /**
-   * The source's own title, when it has been resolved.
+   * The source's own title — `note.sourceName`, which the caller passes in.
    *
-   * `null` is the ordinary case on the first frame and a permanent one for a
-   * source the caller cannot read; both render the category noun.
+   * ⚠ Still a PROP rather than read off `note` here, because the page that owns
+   * the note is the right place to decide what it means, and this component is
+   * rendered from more than one shape. `null` is a permanent answer for a
+   * source that is gone or no longer readable; it renders the category noun.
    */
   sourceName?: string | null;
 }
