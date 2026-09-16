@@ -72,6 +72,7 @@ describe('TranscriptionIngestHandler', () => {
     loadForJob: jest.Mock;
     markFailed: jest.Mock;
     enqueueSnapshot: jest.Mock;
+    enqueueSearchIndex: jest.Mock;
     notifyReady: jest.Mock;
   };
   let runtime: { resolve: jest.Mock };
@@ -121,6 +122,8 @@ describe('TranscriptionIngestHandler', () => {
       loadForJob: jest.fn().mockResolvedValue(transcriptRow()),
       markFailed: jest.fn().mockResolvedValue(true),
       enqueueSnapshot: jest.fn().mockResolvedValue(false),
+      // #188: the first of the four content events that index a transcript.
+      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
       notifyReady: jest.fn().mockResolvedValue(undefined),
     };
 

@@ -46,6 +46,8 @@ import type { Job } from '@prisma/client';
 import { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SEARCH_DOC_TRANSCRIPT } from '../../search/indexing/job-types';
+import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { TRANSCRIPT_PURGE_JOB_TYPE } from '../job-types';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { readTranscriptId } from '../transcript-pipeline.service';
@@ -62,6 +64,7 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly objects: TranscriptObjectsService,
     private readonly runtime: TranscriptionRuntimeService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   onModuleInit(): void {
@@ -170,6 +173,28 @@ export class TranscriptPurgeHandler implements JobHandler, OnModuleInit {
     // storage rather than correctness. The opposite order is not available, and
     // would trade that for a `Restrict` violation on every purge.
     const sourceObjectId = transcript.sourceObjectId;
+
+    // ------------------------------------------------------------------------
+    // The semantic index (#188, epic #165). BEFORE the row, and not by accident.
+    // ------------------------------------------------------------------------
+    //
+    // ⚠ NOTHING ELSE WILL EVER CLEAN THESE UP. `search_chunks.document_id` and
+    // `search_index_state.document_id` carry NO FOREIGN KEY — the same
+    // polymorphic-reference choice `Job.subjectType`/`subjectId` makes, for the
+    // same reason — so deleting the transcript fires no cascade here, and there
+    // is deliberately no `search.housekeeping` cron to come along later and
+    // notice. The pgvector migration's header names THIS handler as the owner
+    // of the sweep; this call is that promise being kept.
+    //
+    // Before the delete rather than after, because a crash between the two must
+    // not be able to leave chunks of a conversation that no longer exists: the
+    // only way back to them would be a `document_id` nothing in the database
+    // still names. The opposite ordering has no upside — there is no constraint
+    // between the two statements in either direction.
+    //
+    // (`search_embeddings` is not named: it cascades from `search_chunks`,
+    // which IS a real foreign key inside that module's own tables.)
+    await this.searchIndex.forget(SEARCH_DOC_TRANSCRIPT, transcript.id);
 
     await this.prisma.transcript.delete({ where: { id: transcript.id } });
 

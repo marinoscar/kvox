@@ -43,6 +43,8 @@ import { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import { JobsService } from '../jobs/jobs.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SEARCH_DOC_TRANSCRIPT } from '../search/indexing/job-types';
+import { SearchIndexService } from '../search/indexing/search-index.service';
 import { TranscriptionSettingsService } from '../transcription/transcription-settings.service';
 import {
   TRANSCODE_JOB_TYPE,
@@ -97,6 +99,7 @@ export class TranscriptPipelineService {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly transcriptionSettings: TranscriptionSettingsService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -362,6 +365,44 @@ export class TranscriptPipelineService {
     });
 
     return true;
+  }
+
+  /**
+   * Queue a semantic re-index of this transcript (#188, epic #165).
+   *
+   * ⚠ CALLED AT CONTENT EVENTS ONLY — an ingest committing, an op batch
+   * committing, a version restored — and never on a timer. `search/indexing/
+   * job-types.ts`'s header carries the argument in full: every chunk the job
+   * embeds is billed to the OWNER'S own vendor account, so a sweep that decides
+   * for itself that a corpus looks stale spends a person's money on a schedule
+   * they never agreed to.
+   *
+   * ⚠ AND NEVER ON A RENAME. `PATCH /api/transcripts/:id` is deliberately
+   * absent from the call sites, because `chunkTranscript` NEVER SEES THE TITLE:
+   * a transcript chunk carries `Speaker A: ` prefixes and nothing else, so
+   * renaming one changes no chunk's text, no `content_hash` and therefore not
+   * the document fingerprint. The job would load every segment, re-chunk them,
+   * compare one string and return having done nothing. This is the one place
+   * the two document kinds genuinely differ: a NOTE's title is prefixed onto
+   * every one of its chunks (`noteChunkPrefix`), so renaming a note DOES move
+   * its fingerprint and `NotesService.update` re-indexes on both of its
+   * branches. Same rule — "index when the fingerprint would move" — opposite
+   * answers, because the two chunkers read different things.
+   *
+   * Never throws into its caller's path: a transcript that committed is
+   * committed, and failing that write because a queue insert lost a race would
+   * be an absurd trade. The document simply stays at whatever the index last
+   * knew until the next content event.
+   */
+  async enqueueSearchIndex(transcriptId: string): Promise<void> {
+    try {
+      await this.searchIndex.enqueue(SEARCH_DOC_TRANSCRIPT, transcriptId);
+    } catch (error) {
+      this.logger.error(
+        `Could not queue a semantic re-index of transcript ${transcriptId}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /** Queue the purge of a soft-deleted transcript. */

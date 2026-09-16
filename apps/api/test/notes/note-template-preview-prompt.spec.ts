@@ -204,6 +204,11 @@ function harness(generation: Record<string, unknown>, note: Record<string, unkno
     // and must stay unused; that it is never called is itself the assertion
     // this spec's subject cares about.
     { titleNote: jest.fn().mockResolvedValue(null) } as never,
+    // #188's semantic indexer, stubbed. Enqueueing is fire-and-forget at the
+    // end of `commit()`, so these assertions never observe it — but the
+    // constructor argument is required, and a real one here would queue a
+    // `search.index` job these suites have nothing to run it with.
+    { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
   );
 
   const handler = new NoteGenerateHandler(

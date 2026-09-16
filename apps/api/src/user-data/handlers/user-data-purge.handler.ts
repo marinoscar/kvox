@@ -169,6 +169,8 @@ import { NoteTemplatesService } from '../../notes/note-templates.service';
 import { NotesService } from '../../notes/notes.service';
 import { PatService } from '../../pat/pat.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SEARCH_DOC_NOTE, SEARCH_DOC_TRANSCRIPT } from '../../search/indexing/job-types';
+import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { ObjectsService } from '../../storage/objects/objects.service';
 import {
   TRANSCRIPT_PURGE_JOB_TYPE,
@@ -238,6 +240,7 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
     private readonly objects: ObjectsService,
     private readonly pat: PatService,
     private readonly aiCredentials: UserAiCredentialsService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   onModuleInit(): void {
@@ -272,10 +275,12 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
 
     if (scopeIncludes(scope, 'notes')) {
       await this.deleteNotes(userId);
+      await this.forgetFromSearchIndex(userId, SEARCH_DOC_NOTE);
     }
 
     if (scopeIncludes(scope, 'transcripts')) {
       await this.deleteTranscripts(userId);
+      await this.forgetFromSearchIndex(userId, SEARCH_DOC_TRANSCRIPT);
     }
 
     if (scopeIncludes(scope, 'noteTemplates')) {
@@ -290,6 +295,66 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
       `Bulk deletion of scope "${scope}" for user ${userId} has been queued out ` +
         `(job ${job.id})`,
     );
+  }
+
+  // ===========================================================================
+  // The semantic index (#188, epic #165)
+  // ===========================================================================
+
+  /**
+   * Drop every `search_chunks` / `search_index_state` row for one category of
+   * this user's documents.
+   *
+   * ⚠ THIS IS NOT REDUNDANT WITH THE FAN-OUT ABOVE, and the reason is the same
+   * one that makes every other step of this handler belt-and-braces about the
+   * `Restrict` keys. `deleteNotes`/`deleteTranscripts` soft-delete each document
+   * and QUEUE a per-item `note.purge`/`transcript.purge`, and each of those
+   * handlers calls `SearchIndexService.forget` itself — so on the happy path
+   * this call finds nothing left to do. But those jobs run LATER, and a job can
+   * exhaust its attempts. A user who pressed a button that said their
+   * transcripts would be destroyed must not be left with the TEXT of those
+   * transcripts sitting in `search_chunks` because a purge job three hops away
+   * gave up quietly. Every document of this kind owned by this user is on its
+   * way out, so deleting all of their index rows now is the same set reached
+   * sooner, not a guess.
+   *
+   * ⚠ IT DELETES ROWS RATHER THAN FANNING OUT, which is the one place this
+   * handler's usual "never reimplement byte deletion here" rule does not apply:
+   * there are no bytes. A chunk is a row of text and a vector in this database,
+   * with no object storage behind it and no provider copy to revoke — the whole
+   * reason `transcript.purge` may not be shortcut is that it deletes
+   * multi-gigabyte objects whose only remaining reference is the row this
+   * handler would otherwise destroy first. Nothing of that shape exists here.
+   *
+   * ⚠ NOT CALLED FOR THE `files` SCOPE. An uploaded file is not a searchable
+   * document in this epic — only transcripts and notes are chunked — so there
+   * is nothing of its owner's in these tables to remove, and a sweep by owner
+   * alone would delete the index rows of documents the user did NOT ask to
+   * delete.
+   *
+   * Never throws into the purge: the documents are already soft-deleted and
+   * queued, and failing a destructive job part-way because a cleanup read lost
+   * a race would leave the user with a `failed` row and no idea which half ran.
+   * A leftover index row is a storage cost the per-item purge still covers.
+   */
+  private async forgetFromSearchIndex(
+    userId: string,
+    documentType: typeof SEARCH_DOC_NOTE | typeof SEARCH_DOC_TRANSCRIPT,
+  ): Promise<void> {
+    try {
+      const forgotten = await this.searchIndex.forgetOwnerDocuments(userId, documentType);
+
+      if (forgotten > 0) {
+        this.logger.log(
+          `User ${userId}: ${forgotten} ${documentType}(s) removed from the semantic index`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `User ${userId}: could not clear the semantic index for ${documentType}s: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   // ===========================================================================

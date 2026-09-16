@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
+import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NoteObjectsService } from '../note-objects.service';
 import { NotePurgeHandler, readNoteId } from './note-purge.handler';
 
@@ -35,6 +36,7 @@ describe('NotePurgeHandler', () => {
   let prisma: any;
   let objects: { deleteIfPresent: jest.Mock };
   let registry: { register: jest.Mock };
+  let searchIndex: { forget: jest.Mock };
 
   const job = (payload: unknown = { noteId: NOTE_ID }) =>
     ({ id: JOB_ID, payload }) as never;
@@ -59,6 +61,10 @@ describe('NotePurgeHandler', () => {
 
     objects = { deleteIfPresent: jest.fn().mockResolvedValue(true) };
     registry = { register: jest.fn() };
+    // #188: the purge is one of the three owners of the semantic index sweep —
+    // `search_chunks.document_id` has no foreign key, so nothing else ever
+    // removes those rows.
+    searchIndex = { forget: jest.fn().mockResolvedValue(undefined) };
 
     const module = await Test.createTestingModule({
       providers: [
@@ -66,6 +72,7 @@ describe('NotePurgeHandler', () => {
         { provide: JobHandlerRegistry, useValue: registry },
         { provide: PrismaService, useValue: prisma },
         { provide: NoteObjectsService, useValue: objects },
+        { provide: SearchIndexService, useValue: searchIndex },
       ],
     }).compile();
 

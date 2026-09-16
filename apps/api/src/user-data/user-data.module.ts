@@ -4,6 +4,7 @@ import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotesModule } from '../notes/notes.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SearchIndexingModule } from '../search/indexing/search-indexing.module';
 import { StorageModule } from '../storage/storage.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { UserDataPurgeHandler } from './handlers/user-data-purge.handler';
@@ -53,7 +54,19 @@ import { UserDataService } from './user-data.service';
 // =============================================================================
 
 @Module({
-  imports: [PrismaModule, JobsModule, NotesModule, TranscriptsModule, StorageModule, AiModule],
+  imports: [
+    PrismaModule,
+    JobsModule,
+    NotesModule,
+    TranscriptsModule,
+    StorageModule,
+    AiModule,
+    // #188, epic #165 — `SearchIndexService.forgetOwnerDocuments`. A bulk
+    // deletion clears the semantic index for every category it destroys rather
+    // than trusting the per-item purge jobs it queued to get there; see the
+    // handler's `forgetFromSearchIndex`.
+    SearchIndexingModule,
+  ],
   controllers: [UserDataController],
   providers: [UserDataService, UserDataPurgeHandler],
   exports: [UserDataService],

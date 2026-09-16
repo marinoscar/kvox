@@ -95,6 +95,12 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
     const access = new TranscriptAccessService(service);
     const pipeline = {
       enqueueSnapshot,
+      // #188's semantic re-index, stubbed. `TranscriptEditingService` calls it
+      // after every committed op batch and after a restore; the real one queues
+      // a `search.index` job, which this suite has no worker for. It is not
+      // merely unused here — the service AWAITS it, so a missing member is a
+      // TypeError that fails every test in the file rather than a silent no-op.
+      enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
     } as unknown as TranscriptPipelineService;
 
     return {

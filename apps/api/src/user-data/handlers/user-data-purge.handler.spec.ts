@@ -50,6 +50,7 @@ interface Harness {
   objects: { delete: jest.Mock };
   pat: { revokeAllForUser: jest.Mock };
   aiCredentials: { removeAll: jest.Mock };
+  searchIndex: { forget: jest.Mock; forgetOwnerDocuments: jest.Mock };
   registry: JobHandlerRegistry;
 }
 
@@ -77,6 +78,12 @@ function harness(): Harness {
   const objects = { delete: jest.fn().mockResolvedValue(undefined) };
   const pat = { revokeAllForUser: jest.fn().mockResolvedValue(0) };
   const aiCredentials = { removeAll: jest.fn().mockResolvedValue(0) };
+  // #188: a bulk deletion clears the semantic index for every category it
+  // destroys rather than trusting the per-item purge jobs to get there.
+  const searchIndex = {
+    forget: jest.fn().mockResolvedValue(undefined),
+    forgetOwnerDocuments: jest.fn().mockResolvedValue(0),
+  };
   const registry = new JobHandlerRegistry();
 
   const handler = new UserDataPurgeHandler(
@@ -88,9 +95,21 @@ function harness(): Harness {
     objects as never,
     pat as never,
     aiCredentials as never,
+    searchIndex as never,
   );
 
-  return { handler, prisma, notes, templates, pipeline, objects, pat, aiCredentials, registry };
+  return {
+    handler,
+    prisma,
+    notes,
+    templates,
+    pipeline,
+    objects,
+    pat,
+    aiCredentials,
+    searchIndex,
+    registry,
+  };
 }
 
 const job = (scope: UserDataScope, overrides: Record<string, unknown> = {}) =>

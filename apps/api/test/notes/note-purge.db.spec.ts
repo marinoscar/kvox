@@ -118,12 +118,19 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
       null as never,
       null as never,
       jobs as never,
+      // #188's semantic indexer. `remove` enqueues a re-index, so unlike the
+      // nulls above this collaborator IS on the exercised path.
+      { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
     );
 
     purge = new NotePurgeHandler(
       { register: jest.fn() } as never,
       prisma as never,
       objects as never,
+      // #188: the purge FORGETS the note's chunks before deleting the row —
+      // `search_chunks.document_id` has no foreign key, so nothing else would
+      // ever clean them up.
+      { forget: jest.fn().mockResolvedValue(undefined) } as never,
     );
   });
 

@@ -108,15 +108,18 @@ function harness(options: { noteAfterRead?: Record<string, unknown> | null } = {
   const notifications = { notify: jest.fn().mockResolvedValue(undefined) };
   const config = { get: jest.fn().mockReturnValue('https://app.example.com') };
   const titles = { titleNote: jest.fn().mockResolvedValue('AI-proposed title') };
+  // #188: a committed note queues its own semantic re-index, after titling.
+  const searchIndex = { enqueue: jest.fn().mockResolvedValue(undefined) };
 
   const service = new NoteGenerationService(
     prisma as never,
     notifications as never,
     config as never,
     titles as unknown as NoteTitleService,
+    searchIndex as never,
   );
 
-  return { service, prisma, tx, notifications, config, titles };
+  return { service, prisma, tx, notifications, config, titles, searchIndex };
 }
 
 const commitInput = (generation: GenerationWithNote) => ({

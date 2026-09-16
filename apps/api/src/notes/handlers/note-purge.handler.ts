@@ -71,6 +71,8 @@ import type { Job, Prisma } from '@prisma/client';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
+import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NOTE_PURGE_JOB_TYPE } from '../job-types';
 import { NoteObjectsService } from '../note-objects.service';
 import { readExtractedObjectId } from '../source-metadata';
@@ -85,6 +87,7 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
     private readonly objects: NoteObjectsService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   onModuleInit(): void {
@@ -135,6 +138,21 @@ export class NotePurgeHandler implements JobHandler, OnModuleInit {
     // The rows. `Cascade` takes versions, generations and exports with them.
     // ------------------------------------------------------------------------
     const sourceObjectId = note.sourceObjectId;
+
+    // ------------------------------------------------------------------------
+    // The semantic index (#188, epic #165). BEFORE the row, and not by accident.
+    // ------------------------------------------------------------------------
+    //
+    // ⚠ NOTHING ELSE WILL EVER CLEAN THESE UP. `search_chunks.document_id` and
+    // `search_index_state.document_id` carry NO FOREIGN KEY — the same
+    // polymorphic-reference choice `Job.subjectType`/`subjectId` makes — so
+    // deleting the note fires no cascade here, and there is deliberately no
+    // `search.housekeeping` cron to notice later. The pgvector migration's
+    // header names THIS handler as one of the three owners of the sweep.
+    //
+    // Before the delete, so a crash between the two statements cannot leave
+    // chunks of a note nothing in the database still names.
+    await this.searchIndex.forget(SEARCH_DOC_NOTE, note.id);
 
     await this.prisma.note.delete({ where: { id: note.id } });
 

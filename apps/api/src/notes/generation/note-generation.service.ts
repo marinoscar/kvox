@@ -5,6 +5,8 @@ import type { Note, NoteGeneration, Prisma } from '@prisma/client';
 import type { NoteFailedEmailData, NoteReadyEmailData } from '../../email';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
+import { SearchIndexService } from '../../search/indexing/search-index.service';
 import { NoteTitleService } from './note-title.service';
 
 // =============================================================================
@@ -106,6 +108,7 @@ export class NoteGenerationService {
     private readonly notifications: NotificationsService,
     private readonly config: ConfigService,
     private readonly titles: NoteTitleService,
+    private readonly searchIndex: SearchIndexService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -298,6 +301,39 @@ export class NoteGenerationService {
       this.logger.warn(
         `Titling note ${note.id} threw, which \`titleNote\`'s own contract forbids; ` +
           `the note keeps the title it has: ${String(error)}`,
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Semantic index (#188, epic #165). AFTER TITLING, BEFORE NOTIFYING.
+    // -------------------------------------------------------------------------
+    //
+    // The order is not arbitrary, and it is the same argument the titling/
+    // notification order above makes one step earlier. `noteChunkPrefix(title)`
+    // is prefixed onto EVERY chunk of a note, so the title is part of what gets
+    // embedded and part of what gets hashed — indexing before `titleNote` ran
+    // would embed the whole note under the placeholder title and then have to
+    // re-embed all of it the moment the real one landed, on the owner's own
+    // vendor account.
+    //
+    // ⚠ THIS IS ALSO WHY `POST /api/notes/:id/regenerate` HAS NO ENQUEUE OF ITS
+    // OWN. A regeneration queues a fresh `note.generate`, whose body arrives
+    // here; indexing at the moment the button was pressed would index the note
+    // as it was BEFORE the regeneration, and then never again. Every AI-written
+    // body reaches the index through this one line.
+    //
+    // Never throws into the job: `enqueue` is awaited inside a `try` because by
+    // this point the body, the version and `status: 'ready'` are committed and
+    // durable, while `commit()` runs inside `NoteGenerateHandler.generate()`'s
+    // try block — anything escaping here would be classified `'other'`, flip an
+    // already-`ready` note to `failed`, and mail its owner about a note they had
+    // just watched being written. Exactly the reason the titling call above is
+    // wrapped.
+    try {
+      await this.searchIndex.enqueue(SEARCH_DOC_NOTE, note.id);
+    } catch (error) {
+      this.logger.warn(
+        `Could not queue a semantic index of note ${note.id}: ${String(error)}`,
       );
     }
 
