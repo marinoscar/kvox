@@ -61,6 +61,21 @@
  * edit affordance to tab through. `editable` is not a styling flag — it decides
  * whether the interactive elements EXIST, because a disabled control a screen
  * reader still announces is a control a viewer has to be told about.
+ *
+ * THE SPEAKER NAME IN A ROW HEADER FOLLOWS THAT RULE TOO (#220). With
+ * `editable` and `onOpenSpeakerActions` it is a `ButtonBase` opening that
+ * speaker's actions — the same surface the chip rail opens, so "Speaker A is
+ * really Justin" is fixed from the line the user is reading and is fixed on
+ * EVERY line, which is what naming a voice means. Without either prop it is the
+ * plain `Typography` #30 shipped: no `role="button"`, no tab stop, nothing for
+ * a viewer's screen reader to announce. Two renders of the same text, chosen by
+ * mounting rather than by a `disabled` flag, for the reason above.
+ *
+ * Its accessible name states the scope ("applies to every line they speak")
+ * because the visible label cannot: on screen the name is a name, and a user
+ * who cannot see the menu it opens has no other way to learn that activating it
+ * is about a voice rather than about this row. The ROW itself stays plain text
+ * — see the timestamp's own note below for why that is not negotiable.
  */
 
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -188,6 +203,14 @@ interface SegmentListProps {
   /** Where the caret is, so "Split here" can open there. */
   onCaretChange?: (offset: number) => void;
   onOpenActions?: (segmentId: string, anchor: HTMLElement) => void;
+  /**
+   * Open the speaker actions for THIS segment's speaker (#220).
+   *
+   * Same signature as `SpeakerFilter`'s prop of the same name, and wired to the
+   * same `speakerMenu` state on the page, so the rail and the transcript body
+   * open one surface rather than two that have to agree.
+   */
+  onOpenSpeakerActions?: (speakerId: string, anchor: HTMLElement) => void;
 
   // --- Find & replace (#31) -------------------------------------------------
   matchesBySegment?: ReadonlyMap<string, TextRange[]>;
@@ -216,6 +239,7 @@ export function SegmentList({
   onCommitEdit,
   onCaretChange,
   onOpenActions,
+  onOpenSpeakerActions,
   matchesBySegment,
   activeMatch = null,
   scrollToSegmentId = null,
@@ -472,13 +496,39 @@ export function SegmentList({
                       flexWrap: 'wrap',
                     }}
                   >
-                    <Typography
-                      component="span"
-                      variant="subtitle2"
-                      sx={{ color, fontWeight: 700 }}
-                    >
-                      {speakerName}
-                    </Typography>
+                    {/* Mounted only when the page can act on it, the same rule
+                        every other editing affordance in this file follows — a
+                        viewer gets the plain `Typography` below and nothing
+                        extra in their tab order. The padding is the timestamp's
+                        (`px: 0.5`, `borderRadius: 0.5`) so the hit area is
+                        claimed sideways and the name keeps its place on the
+                        group's shared baseline; the row does not grow. */}
+                    {editable && onOpenSpeakerActions ? (
+                      <ButtonBase
+                        onClick={(event) =>
+                          onOpenSpeakerActions(segment.speakerId, event.currentTarget)
+                        }
+                        aria-label={`Rename ${speakerName} or merge, applies to every line they speak`}
+                        sx={{
+                          color,
+                          fontWeight: 700,
+                          fontSize: theme.typography.subtitle2.fontSize,
+                          lineHeight: theme.typography.subtitle2.lineHeight,
+                          borderRadius: 0.5,
+                          px: 0.5,
+                        }}
+                      >
+                        {speakerName}
+                      </ButtonBase>
+                    ) : (
+                      <Typography
+                        component="span"
+                        variant="subtitle2"
+                        sx={{ color, fontWeight: 700 }}
+                      >
+                        {speakerName}
+                      </Typography>
+                    )}
                     <ButtonBase
                       onClick={() => onPlayFrom(segment.startMs)}
                       aria-label={`Play from ${formatTimestamp(segment.startMs)}`}

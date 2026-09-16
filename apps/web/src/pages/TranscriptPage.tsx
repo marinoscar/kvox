@@ -774,6 +774,15 @@ export function TranscriptPage() {
       }}
       onCaretChange={setCaretOffset}
       onOpenActions={(segmentId, anchor) => setSegmentMenu({ segmentId, anchor })}
+      // #220: the speaker name in a row header opens the SAME menu the chip
+      // rail opens, off the same state, so naming a voice from the line you are
+      // reading renames it everywhere. Passed only when `canEdit` — the prop's
+      // presence is what mounts the button at all.
+      onOpenSpeakerActions={
+        canEdit
+          ? (speakerId, anchor) => setSpeakerMenu({ speakerId, anchor })
+          : undefined
+      }
       matchesBySegment={findOpen ? matchesBySegment : undefined}
       activeMatch={findOpen && activeMatch ? activeMatch : null}
       scrollToSegmentId={findOpen ? (activeMatch?.segmentId ?? null) : null}
@@ -804,6 +813,10 @@ export function TranscriptPage() {
         anchorEl={segmentMenu?.anchor ?? null}
         segment={activeSegment}
         speakers={speakers}
+        nameSuggestions={speakers.map((speaker) => speaker.displayName)}
+        speakerSegmentCount={
+          activeSegment ? (segmentCounts.get(activeSegment.speakerId) ?? 0) : 0
+        }
         canJoin={
           activeSegment
             ? segments.findIndex((segment) => segment.id === activeSegment.id) <
@@ -811,6 +824,11 @@ export function TranscriptPage() {
             : false
         }
         onClose={() => setSegmentMenu(null)}
+        // All lines — the same `speaker.rename` op the chip rail issues, so the
+        // two entry points cannot drift apart (#220).
+        onRenameSpeaker={(displayName) => {
+          if (activeSegment) void ops.renameSpeaker(activeSegment.speakerId, displayName);
+        }}
         onSetSpeaker={(speakerId) => {
           if (activeSegment) void ops.setSpeaker(activeSegment.id, speakerId);
         }}
