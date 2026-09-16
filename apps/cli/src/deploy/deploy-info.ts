@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { join } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
@@ -83,6 +84,73 @@ export function deployInfoDir(deployRoot: string): string {
 
 export function deployInfoPath(deployRoot: string): string {
   return join(deployInfoDir(deployRoot), DEPLOY_INFO_FILENAME);
+}
+
+/** The current user, without throwing when there is no passwd entry for it. */
+function currentUser(): { uid: number; gid: number; username: string } {
+  try {
+    const info = userInfo();
+    return { uid: info.uid, gid: info.gid, username: info.username };
+  } catch {
+    const uid = process.getuid?.() ?? -1;
+    const gid = process.getgid?.() ?? -1;
+    return { uid, gid, username: `uid ${uid}` };
+  }
+}
+
+/**
+ * The refusal of issue #159: what is wrong, why it is wrong, and the two
+ * commands that fix it, with the real path and the real uid/gid so an
+ * operator can paste them without translating anything.
+ */
+function deployInfoDirRemedy(dir: string, error: NodeJS.ErrnoException): string {
+  const { uid, gid, username } = currentUser();
+  return [
+    `Cannot prepare ${dir}: ${error.message}`,
+    `That directory has to be writable by the user running ${CLI_NAME} (${username}, uid ${uid}) and world-traversable, so the api container's unprivileged user can read ${DEPLOY_INFO_FILENAME} through the bind mount.`,
+    `A deployment first installed by an older ${CLI_NAME} has a root:root ${DEPLOY_INFO_DIRNAME}, created by the Docker daemon when \`compose up\` found the bind source missing. ${CLI_NAME} does not change ownership on its own; run this once, then re-run the command:`,
+    `  sudo chown -R ${uid}:${gid} ${dir}`,
+    `  sudo chmod 755 ${dir}`,
+  ].join('\n');
+}
+
+/**
+ * Creates `<root>/deploy-info` and FORCES it to 0755, or refuses with the
+ * remedy above. Returns the directory.
+ *
+ * World-readable and world-traversable on purpose: the api container's
+ * unprivileged user reads through this directory, and nothing in it is secret.
+ * Three facts make `mkdirSync` alone unable to promise that, and only the
+ * third is obvious:
+ *
+ *   - `mkdirSync(dir, { recursive: true, mode })` IS A NO-OP ON AN EXISTING
+ *     DIRECTORY, so a `deploy-info` left at 0700 stays 0700 forever and the
+ *     container cannot traverse it - exactly the failure the mode was meant
+ *     to prevent.
+ *   - `mode:` IS UMASK-MASKED, so an operator with `umask 077` gets 0700 out
+ *     of a FRESH mkdir too.
+ *   - `chmodSync` is neither conditional nor masked. It is the call that
+ *     actually makes the claim true, which is why it is unconditional here.
+ *
+ * It is also the call that can fail, and that is the point (#159). Docker
+ * creates a missing bind source as root:root - `vps.compose.yml` binds this
+ * directory into the api container - so a deployment first installed by a CLI
+ * from before #155 has a root-owned `deploy-info` that a non-root `update`
+ * can neither chmod nor write a temp file into. That is REFUSED with a
+ * pasteable `chown` rather than repaired silently: taking ownership of a
+ * directory the operator did not ask about is a decision, not a side effect.
+ */
+export function ensureDeployInfoDir(deployRoot: string): string {
+  const dir = deployInfoDir(deployRoot);
+  try {
+    mkdirSync(dir, { recursive: true, mode: 0o755 });
+    chmodSync(dir, 0o755);
+  } catch (error) {
+    throw new DeployInfoError(deployInfoDirRemedy(dir, error as NodeJS.ErrnoException), {
+      cause: error,
+    });
+  }
+  return dir;
 }
 
 const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
@@ -294,18 +362,17 @@ export function updateDeployInfoRemote(
 
 function writeDeployInfoDocument(deployRoot: string, document: DeployInfo): string {
   const info = validateDeployInfo(document);
-  const dir = deployInfoDir(deployRoot);
   const path = deployInfoPath(deployRoot);
   const temporary = `${path}.${process.pid}.tmp`;
 
-  // World-readable and world-traversable on purpose: the api container's
-  // unprivileged user reads through this directory, and nothing in it is
-  // secret. `recursive` also makes an existing 0700 directory a no-op, so the
-  // mode is set explicitly below rather than trusted.
-  mkdirSync(dir, { recursive: true, mode: 0o755 });
+  ensureDeployInfoDir(deployRoot);
 
   try {
     writeFileSync(temporary, `${JSON.stringify(info, null, 2)}\n`, { mode: 0o644, flag: 'wx' });
+    // `mode:` above is umask-masked, exactly like the directory's was: under
+    // `umask 077` the api container would find an 0600 info.json it cannot
+    // read. `chmodSync` is not masked, so this is what makes 0644 true.
+    chmodSync(temporary, 0o644);
     renameSync(temporary, path);
   } catch (error) {
     rmSync(temporary, { force: true });
