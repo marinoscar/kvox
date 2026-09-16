@@ -59,6 +59,36 @@ function noteItem(overrides: Partial<NoteListItem> = {}): NoteListItem {
 /** Record every `GET /api/notes`, so the filter wiring can be asserted. */
 let noteRequests: URL[] = [];
 
+/**
+ * And every `GET /api/search`, separately — issue #176, epic #164.
+ *
+ * ⚠ THE SEARCH BOX NO LONGER FILTERS THE LIST. A non-empty box renders
+ * `GET /api/search` instead of the list, so a term is observable HERE and never
+ * as a `q=` on `/notes`. The list's own `?q=` filter is untouched; this page
+ * simply stopped being the thing that calls it with a term. The twin change is
+ * in `TranscriptsPage.test.tsx`, and the switch itself is covered in
+ * `components/library/LibrarySearch.test.tsx`.
+ */
+let searchRequests: URL[] = [];
+
+function respondWithSearch(results: unknown[] = []) {
+  server.use(
+    http.get(`${API_BASE}/search`, ({ request }) => {
+      searchRequests.push(new URL(request.url));
+      return HttpResponse.json({
+        data: {
+          results,
+          matchedDocuments: results.length,
+          truncated: false,
+          nextCursor: null,
+          degraded: null,
+          searchedTypes: ['transcript', 'note'],
+        },
+      });
+    }),
+  );
+}
+
 function respondWithNotes(items: NoteListItem[], nextCursor: string | null = null) {
   server.use(
     http.get(`${API_BASE}/notes`, ({ request }) => {
@@ -81,12 +111,14 @@ beforeEach(() => {
   // explicitly rather than relying on declaration order.
   localStorage.setItem('theme_mode', 'light');
   noteRequests = [];
+  searchRequests = [];
   // The source-name cache is module-level and lives for the tab, deliberately
   // (see `useNoteSourceNames`) — which in a test file means it lives for the
   // whole FILE unless cleared, and one suite's fixture would silently satisfy
   // the next suite's assertion.
   clearNoteSourceNameCache();
   respondWithNotes([noteItem()]);
+  respondWithSearch();
 });
 
 describe('NotesPage', () => {
@@ -146,12 +178,17 @@ describe('NotesPage', () => {
   });
 
   it('offers a DIFFERENT empty state when a filter matched nothing', async () => {
+    // ⚠ DRIVEN BY THE STATUS FILTER since #176, not by the search box: a term
+    // in the box renders `SearchResultsView` and ITS "No matches for …" panel
+    // instead of this one, which is exactly the distinction that issue exists
+    // to draw. See `components/library/LibrarySearch.test.tsx`.
     const user = userEvent.setup();
     respondWithNotes([]);
     renderNotes();
     await screen.findByText('No notes yet');
 
-    await user.type(screen.getByLabelText('Search notes'), 'zzz');
+    await user.click(screen.getByLabelText('Status'));
+    await user.click(await screen.findByRole('option', { name: 'Failed' }));
 
     expect(
       await screen.findByText('No notes match those filters', undefined, { timeout: 3000 }),
@@ -180,19 +217,22 @@ describe('NotesPage', () => {
     );
   });
 
-  it('debounces the search box into a single q= query', async () => {
+  it('debounces the search box into a single q= query — now against /search (#176)', async () => {
     const user = userEvent.setup();
     renderNotes();
     await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
-    const before = noteRequests.length;
+    const listBefore = noteRequests.length;
 
     await user.type(screen.getByLabelText('Search notes'), 'budget');
 
     await waitFor(
-      () => expect(noteRequests.some((url) => url.searchParams.get('q') === 'budget')).toBe(true),
+      () =>
+        expect(searchRequests.some((url) => url.searchParams.get('q') === 'budget')).toBe(true),
       { timeout: 3000 },
     );
-    expect(noteRequests.length - before).toBeLessThan(6);
+    expect(searchRequests.length).toBeLessThan(6);
+    // …and the list is not re-queried at all while the box is driving a search.
+    expect(noteRequests.length).toBe(listBefore);
   });
 
   it('offers Load more only while a cursor exists', async () => {
@@ -320,14 +360,18 @@ describe('NotesPage — seeded from the URL', () => {
     expect(noteRequests[0].searchParams.has('status')).toBe(false);
   });
 
-  it('fills the search box from ?q and filters the FIRST request with it', async () => {
+  it('fills the search box from ?q and filters the FIRST SEARCH request with it', async () => {
     renderAt('/notes?q=budget');
 
     expect(screen.getByLabelText('Search notes')).toHaveValue('budget');
-    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
-    // ⚠ Not "eventually". A view that seeded only the box would fire an
-    // unfiltered query first and replace it 300 ms later.
-    expect(noteRequests[0].searchParams.get('q')).toBe('budget');
+    // ⚠ Not "eventually". Since #176 the request a term lands on is `/search`,
+    // and the flash the old assertion guarded against is prevented differently:
+    // the view is in search mode on its FIRST render, showing a spinner, so
+    // there is no unfiltered answer to render and then replace.
+    await waitFor(() => expect(searchRequests.length).toBeGreaterThan(0));
+    expect(searchRequests[0].searchParams.get('q')).toBe('budget');
+    expect(searchRequests[0].searchParams.get('types')).toBe('note');
+    expect(noteRequests.every((url) => url.searchParams.get('q') === null)).toBe(true);
   });
 
   it('ignores ?scope entirely — this library has no scope to select', async () => {
