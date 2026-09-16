@@ -274,7 +274,12 @@ export async function installTranscriptsApi(
       // The Shared tab is genuinely empty in every fixture — it is the
       // library's third empty state and worth a baseline of its own later.
       const items = options.empty || scope === 'shared' ? [] : LIST_ITEMS;
-      return json(route, { items, nextCursor: null });
+      // ⚠ `total` IS REQUIRED — issue #190 added the result-count line above
+      // the feed, and it renders the API's `total`, never `items.length`
+      // (`components/library/FeedCountLine.tsx`). Omitting it put the literal
+      // string "undefined transcripts" in every library baseline, the same
+      // stale-fixture defect issue #153 found on the notes side.
+      return json(route, { items, total: items.length, nextCursor: null });
     }
 
     // -------------------------------------------------------------------------
