@@ -12,7 +12,7 @@
 //
 // That fallback is correct only when the checkout the CLI is running from and
 // the repository being deployed are the same thing. They need not be: `--repo`
-// names any repository, and a `kvox` built from one fork can deploy another.
+// names any repository, and this CLI built from one fork can deploy another.
 // Reading the file from the REMOTE, at the resolved ref, makes the questions
 // right by construction instead of by coincidence.
 //

@@ -64,6 +64,8 @@ export interface StepCheckContext extends WizardStepContext {
   checks: readonly Check[];
   runChecks: typeof defaultRunChecks;
   probeTcp: typeof defaultProbeTcp;
+  /** Injectable so a probe can be driven in a test without a network. */
+  fetchImpl?: typeof fetch | undefined;
   base: StepCheckBase;
 }
 
@@ -91,6 +93,11 @@ export interface WizardStep {
 }
 
 export const STORAGE_CHECK_ID = 'storage-reachable';
+export const GOOGLE_OAUTH_CHECK_ID = 'google-oauth-credentials';
+
+/** The suffix every Google OAuth client id ends with. */
+const GOOGLE_CLIENT_ID_SUFFIX = '.apps.googleusercontent.com';
+const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
 /** Same rule the TUI applied: a bare hostname, nothing else. */
 export function validateDomain(value: string): string | undefined {
@@ -221,6 +228,152 @@ async function storageReachable(context: StepCheckContext): Promise<CompletedChe
 }
 
 /**
+ * Verifies the Google OAuth credentials, and is honest about the half it
+ * cannot verify (issue #231).
+ *
+ * This was the only credential-collecting step in the wizard that tested
+ * nothing, so a typo in the client id or a secret pasted from the wrong Google
+ * Cloud project was accepted in silence and surfaced much later — after the
+ * build, the migration and the certificate — as a failed login on a deployment
+ * that otherwise looked healthy.
+ *
+ * THE DISCRIMINATOR. Presenting the pair to Google's token endpoint with a
+ * deliberately bogus authorization code separates the two answers that matter:
+ *
+ *   - `invalid_client` — the client id/secret pair is not real. Certain.
+ *   - `invalid_grant`  — the pair IS real; Google got far enough to reject the
+ *                        code instead. That is the pass.
+ *
+ * This is the same shape as `POST /api/ai-settings/test`, where a 401 counts
+ * as success because it proves the endpoint exists.
+ *
+ * WHAT IT DOES NOT CLAIM. A client secret cannot be fully exercised without a
+ * browser round-trip through the consent screen, and whether the redirect URI
+ * is registered on the client is not readable through any endpoint available
+ * here. A pass says the credentials are a real pair, not that login will work,
+ * and the detail line says so rather than implying otherwise.
+ *
+ * FAILURE POSTURE. A malformed client id is a hard failure — it is certainly
+ * wrong. Anything that only proves we could not reach Google is a WARNING, for
+ * `storageReachable`'s reason exactly: an operator on a restricted network must
+ * still be able to install, and a check that blocks on a guess is one people
+ * learn to skip.
+ */
+async function googleOauthVerified(context: StepCheckContext): Promise<CompletedCheck[]> {
+  const clientId = (context.answers.get('GOOGLE_CLIENT_ID') ?? '').trim();
+  const clientSecret = (context.answers.get('GOOGLE_CLIENT_SECRET') ?? '').trim();
+  const started = Date.now();
+
+  // Nothing typed yet: required-ness is the field validator's job, not this
+  // probe's, and answering here would double-report the same empty field.
+  if (clientId === '') return [];
+
+  const base = {
+    id: GOOGLE_OAUTH_CHECK_ID,
+    title: 'Google OAuth credentials',
+    severity: 'required' as const,
+  };
+
+  if (!clientId.endsWith(GOOGLE_CLIENT_ID_SUFFIX)) {
+    return [
+      {
+        ...base,
+        status: 'fail',
+        detail: `GOOGLE_CLIENT_ID does not end with ${GOOGLE_CLIENT_ID_SUFFIX}`,
+        remedy: `A Google OAuth client id looks like 1234567890-abc123.apps.googleusercontent.com. Copy it from the client's own page in Google Cloud console, not the project id or the API key.`,
+        durationMs: Date.now() - started,
+      },
+    ];
+  }
+
+  if (clientSecret === '') {
+    return [
+      {
+        ...base,
+        status: 'warn',
+        detail: 'client id looks right; no secret given, so the pair was not verified',
+        remedy: 'Enter GOOGLE_CLIENT_SECRET to have the pair checked against Google.',
+        durationMs: Date.now() - started,
+      },
+    ];
+  }
+
+  const redirectUri = googleRedirectUri(context) ?? '';
+  const doFetch = context.fetchImpl ?? globalThis.fetch;
+
+  let payload: { error?: unknown; error_description?: unknown };
+  try {
+    const response = await doFetch(GOOGLE_TOKEN_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        // Deliberately not a real code: we are asking Google to tell us WHICH
+        // thing it objects to, and it checks the client before the code.
+        code: 'deploy-credential-probe',
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+      }).toString(),
+    });
+    payload = (await response.json()) as typeof payload;
+  } catch (error) {
+    return [
+      {
+        ...base,
+        status: 'warn',
+        detail: `could not reach Google to verify (${formatProbeError(error)})`,
+        remedy:
+          'The credentials were not checked. Egress to oauth2.googleapis.com is blocked or unavailable; the install can continue.',
+        durationMs: Date.now() - started,
+      },
+    ];
+  }
+
+  const code = typeof payload.error === 'string' ? payload.error : '';
+
+  if (code === 'invalid_client') {
+    return [
+      {
+        ...base,
+        status: 'fail',
+        detail: 'Google rejected this client id and secret as a pair (invalid_client)',
+        remedy:
+          'Re-copy both from the same OAuth client in Google Cloud console. A secret from a different client, or a rotated one, fails exactly this way.',
+        durationMs: Date.now() - started,
+      },
+    ];
+  }
+
+  // `invalid_grant` is the expected answer for a real pair and a bogus code.
+  // Anything else unrecognised also got past the client check, so it is
+  // evidence the pair exists - but say which, rather than claiming more.
+  const detail =
+    code === 'invalid_grant'
+      ? 'client id and secret are a real pair'
+      : `client id and secret accepted (Google answered ${code === '' ? 'no error' : code})`;
+
+  return [
+    {
+      ...base,
+      status: 'pass',
+      detail: `${detail}; redirect URI registration cannot be checked from here`,
+      ...(redirectUri === ''
+        ? {}
+        : {
+            remedy: `Confirm ${redirectUri} is registered on this client before the first login.`,
+          }),
+      durationMs: Date.now() - started,
+    },
+  ];
+}
+
+/** The message shape the probe reports for a thrown fetch failure. */
+function formatProbeError(error: unknown): string {
+  return error instanceof Error && error.message !== '' ? error.message : 'unknown error';
+}
+
+/**
  * The install wizard, in order. `review` asks nothing; it is where the
  * renderer shows the summary and asks for confirmation.
  */
@@ -283,6 +436,7 @@ export const INSTALL_WIZARD_STEPS: readonly WizardStep[] = [
       ];
     },
     fields: present(['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_CALLBACK_URL']),
+    onLeave: googleOauthVerified,
   },
   {
     id: 'admin',
