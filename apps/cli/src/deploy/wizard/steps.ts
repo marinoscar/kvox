@@ -95,7 +95,18 @@ export interface WizardStep {
 export const STORAGE_CHECK_ID = 'storage-reachable';
 export const GOOGLE_OAUTH_CHECK_ID = 'google-oauth-credentials';
 
-/** The suffix every Google OAuth client id ends with. */
+/**
+ * What every Google OAuth client id contains, and what a REAL one ends with.
+ *
+ * Two constants, not one, because they answer different questions. The infix
+ * is the discriminator: nobody pastes `apps.googleusercontent` by accident, so
+ * a value without it is certainly the wrong field (a project id, an API key).
+ * The `.com` suffix is what makes it a client id Google could actually know
+ * about — a placeholder on a reserved TLD (RFC 2606 `.invalid`, `.test`) is
+ * well-formed and deliberately not real, which is exactly what an unattended
+ * install fixture wants.
+ */
+const GOOGLE_CLIENT_ID_INFIX = '.apps.googleusercontent.';
 const GOOGLE_CLIENT_ID_SUFFIX = '.apps.googleusercontent.com';
 const GOOGLE_TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
@@ -274,13 +285,32 @@ async function googleOauthVerified(context: StepCheckContext): Promise<Completed
     severity: 'required' as const,
   };
 
-  if (!clientId.endsWith(GOOGLE_CLIENT_ID_SUFFIX)) {
+  if (!clientId.includes(GOOGLE_CLIENT_ID_INFIX)) {
     return [
       {
         ...base,
         status: 'fail',
-        detail: `GOOGLE_CLIENT_ID does not end with ${GOOGLE_CLIENT_ID_SUFFIX}`,
+        detail: `GOOGLE_CLIENT_ID does not contain ${GOOGLE_CLIENT_ID_INFIX}`,
         remedy: `A Google OAuth client id looks like 1234567890-abc123.apps.googleusercontent.com. Copy it from the client's own page in Google Cloud console, not the project id or the API key.`,
+        durationMs: Date.now() - started,
+      },
+    ];
+  }
+
+  // Well formed, but on a reserved TLD: it CANNOT be a client Google knows
+  // about, so there is nothing to verify and asking would mean sending a
+  // credential to a third party for a value that is not real. Warn rather than
+  // fail — this is what an unattended install fixture deliberately looks like
+  // (`.github/e2e/answers.env` uses RFC 2606 `.invalid` on purpose), and
+  // failing it would block every such install on a value nobody got wrong.
+  if (!clientId.endsWith(GOOGLE_CLIENT_ID_SUFFIX)) {
+    return [
+      {
+        ...base,
+        status: 'warn',
+        detail: `client id is well formed but not on ${GOOGLE_CLIENT_ID_SUFFIX}, so nothing was verified against Google`,
+        remedy:
+          'A real Google OAuth client id ends .apps.googleusercontent.com. If this is a deliberate placeholder, no action is needed — Google sign-in will not work in this deployment.',
         durationMs: Date.now() - started,
       },
     ];
