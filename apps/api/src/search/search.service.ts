@@ -1,6 +1,26 @@
 // =============================================================================
-// Ranked full-text search across transcripts and notes (issue #175, epic #164)
+// Ranked hybrid search across transcripts and notes
+// (issue #175, epic #164; the semantic arm and the fusion are issue #189,
+// epic #165)
 // =============================================================================
+//
+// TWO RETRIEVAL ARMS, ONE SEARCH BOX, FUSED BY RECIPROCAL RANK
+// -----------------------------------------------------------------------------
+//
+// The lexical arm is epic #164's and is unchanged below: `ts_rank_cd` over the
+// generated `tsvector` columns, rolled up per document by `max`. The semantic
+// arm is #189's: cosine distance over `search_embeddings`, rolled up the same
+// way. Neither is a mode the user picks. `search-fusion.ts` carries the whole
+// argument for WHY the two are combined by rank rather than by normalised
+// score, and why a "semantic / keyword" toggle was rejected outright; read it
+// before changing how the two lists meet.
+//
+// The one thing to keep in mind while reading this file is that THE SEMANTIC
+// ARM IS OPTIONAL AT RUNTIME AND ITS ABSENCE IS NEVER AN ERROR. Content is
+// embedded at index time with its owner's key; the QUERY is embedded with the
+// SEARCHER'S key, and a searcher who has not saved one gets the lexical
+// ranking, a `200`, and `semantic: false` with a reason. See
+// `search-semantic.ts`.
 //
 // EVERY STATEMENT IN THIS FILE IS A PURE `SELECT`, AND EVERY VALUE IS BOUND
 // -----------------------------------------------------------------------------
@@ -37,14 +57,19 @@
 //     issues - the same assertion `job-insights.service.spec.ts` carries.
 //
 // -----------------------------------------------------------------------------
-// THE FOUR DECISIONS THAT MAKE THIS A RANKING AND NOT A LIST
+// THE FIVE DECISIONS THAT MAKE THIS A RANKING AND NOT A LIST
 // -----------------------------------------------------------------------------
 //
-// 1. VISIBILITY IS INSIDE THE CANDIDATE WINDOW. See the block comment above
-//    {@link transcriptVisibleSql} - this is the one that is catastrophic to
-//    "optimise" and the one that looks most optimisable.
+// 1. VISIBILITY IS INSIDE THE CANDIDATE WINDOW - IN EVERY ARM, INCLUDING THE
+//    VECTOR ONE. See the block comment above {@link transcriptVisibleSql} -
+//    this is the one that is catastrophic to "optimise" and the one that looks
+//    most optimisable, and the semantic arm is where it looks MOST optimisable
+//    of all (see {@link transcriptVectorCandidatesSql}).
 //
-// 2. THE ROLL-UP IS `max`, NEVER `sum`. See {@link transcriptCandidatesSql}.
+// 2. THE ROLL-UP IS `max`, NEVER `sum`. See {@link transcriptCandidatesSql},
+//    and note that the vector arm rolls up by `max(similarity)` for the
+//    identical reason - a document's score is its BEST passage's, in both
+//    arms, so a fused rank never rewards length.
 //
 // 3. `ts_rank_cd`, NOT `ts_rank`. `ts_rank` scores a document on term
 //    frequency alone: a document that says "pricing" thirty times scores
@@ -64,8 +89,14 @@
 //    `truncated` publishable instead of a `total` that is really a cap. See
 //    `dto/search.dto.ts`.
 //
+// 5. THE TWO ARMS ARE FUSED BY RANK, NOT BY BLENDED SCORE, AND EACH ARM IS
+//    RANKED BY THE DATABASE BEFORE FUSION HAPPENS IN TYPESCRIPT. Each arm's
+//    `ORDER BY ... LIMIT` is what assigns its ranks, so the fusion function is
+//    pure and has no idea what a `ts_rank_cd` or a cosine distance is. See
+//    `search-fusion.ts`.
+//
 // -----------------------------------------------------------------------------
-// TWO QUERIES, NOT ONE
+// CANDIDATES AND SNIPPETS ARE SEPARATE QUERIES
 // -----------------------------------------------------------------------------
 //
 // The candidate query returns identifiers, titles and scores for up to
@@ -76,6 +107,17 @@
 // documents' worth of text processing to show twenty. The segment arm bounds
 // it further by picking each transcript's best few segments BEFORE headlining
 // them.
+//
+// ⚠ SNIPPETS ARE STILL RENDERED BY `ts_headline`, EVEN FOR A DOCUMENT THE
+// VECTOR ARM FOUND AND THE LEXICAL ARM DID NOT. That document simply has no
+// snippet - `snippets: []` - rather than a fabricated one, and the DTO already
+// promises an array that may be empty. The alternative would be to render the
+// nearest CHUNK's text as a snippet, which is a real feature and is
+// deliberately not this issue's: a chunk is up to 1,600 characters with
+// speaker labels glued on and no notion of which part of it was near the query,
+// so shipping it as a "snippet" would put a paragraph where a sentence goes.
+// `search_chunks.char_start`/`char_end` exist precisely so that a later issue
+// can do it properly.
 // =============================================================================
 
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
@@ -107,6 +149,9 @@ import {
   SEARCH_TYPES,
   type SearchType,
 } from './search-query';
+import { reciprocalRankFusion } from './search-fusion';
+import { SearchQueryEmbedder } from './search-query-embedder.service';
+import { semanticAxis, type SemanticQueryPlan } from './search-semantic';
 import {
   HEADLINE_OPTIONS,
   MAX_SNIPPETS_PER_RESULT,
@@ -303,6 +348,237 @@ function noteCandidatesSql(q: string, userId: string): Prisma.Sql {
   `;
 }
 
+// ---------------------------------------------------------------------------
+// The semantic arm (#189)
+// ---------------------------------------------------------------------------
+
+/**
+ * A query vector as a pgvector literal, ready to be BOUND and cast.
+ *
+ * The literal is built here and bound as TEXT - `${literal}::vector` - so the
+ * numbers reach the statement as a parameter like everything else in this file,
+ * never as text spliced into it. `SearchQueryEmbedder` has already guaranteed
+ * the width and that every component is finite, which is what makes `join`
+ * safe: a `NaN` or an `undefined` here would render as a word and become a
+ * malformed literal, i.e. a 500 from a `SELECT`.
+ */
+function vectorLiteral(vector: readonly number[]): string {
+  return `[${vector.join(',')}]`;
+}
+
+/**
+ * The cosine similarity a document's best chunk must reach to enter the
+ * semantic candidate list at all.
+ *
+ * ⚠ WITHOUT A FLOOR, "NO RESULTS" STOPS BEING AN ANSWER THIS ENDPOINT CAN GIVE.
+ * The lexical arm is self-limiting - a document either contains a lexeme or it
+ * does not - but nearest-neighbour search has no such boundary: EVERY embedded
+ * document has a distance from the query vector, so an unfloored vector arm
+ * returns the caller's entire indexed corpus on every search, ordered by how
+ * little it has to do with the question. Three things break at once, and none
+ * of them looks like a bug in the fusion: a query about nothing returns 200
+ * documents instead of an empty list; `matchedDocuments` becomes "how much have
+ * you indexed" rather than "how much matched"; and `truncated` is permanently
+ * `true` for anybody with more than {@link MAX_CANDIDATE_DOCUMENTS} documents,
+ * which makes the honest count the DTO exists to publish permanently a floor.
+ *
+ * ⚠ IT IS A CUTOFF, NOT A TUNING KNOB, AND IT IS THE ONE ARBITRARY NUMBER ON
+ * THIS PATH. It does not order anything - RRF does that, from ranks - and
+ * raising or lowering it cannot make a relevant document outrank an irrelevant
+ * one. All it decides is where "related enough to mention" sits. 0.25 is
+ * deliberately permissive: for the normalised embeddings this application
+ * stores, unrelated text pairs sit near zero and anything a person would call
+ * "about the same thing" sits well above it, so the floor removes the long tail
+ * without adjudicating the head. If it is ever tuned, it must be tuned against
+ * measured recall on a real corpus - and it belongs in
+ * `RANKING_MODEL_VERSION`'s list of things a change to invalidates cursors
+ * over, because it changes which documents are reachable at all.
+ */
+export const MIN_SEMANTIC_SIMILARITY = 0.25;
+
+/**
+ * Transcript candidates by MEANING: one row per VISIBLE transcript with at
+ * least one embedded chunk, scored by its nearest chunk.
+ *
+ * ⚠⚠ THE VISIBILITY PREDICATE IS INSIDE THIS ARM, AND THEREFORE INSIDE THE
+ * OUTER `LIMIT`. THIS IS WHERE THAT RULE IS MOST TEMPTING TO BREAK AND MOST
+ * EXPENSIVE TO BREAK.
+ * -----------------------------------------------------------------------------
+ *
+ * The shape every pgvector tutorial shows is
+ * `ORDER BY embedding <=> $1 LIMIT k` - a top-k approximate-nearest-neighbour
+ * scan that the HNSW index answers directly. Written that way, the k nearest
+ * chunks IN THE WHOLE CORPUS are chosen first and this caller's visibility is
+ * applied afterwards, which is exactly the failure the block comment above
+ * {@link transcriptVisibleSql} describes, with the same silence: a user who
+ * owns 1% of the corpus gets an empty semantic arm from a query 200 of their
+ * own documents answer well, with no error, no log line and no flag. It is
+ * invisible on a single-user dev database and total on a real one.
+ *
+ * ⚠ SO THIS QUERY IS DELIBERATELY NOT INDEX-SHAPED, AND THAT IS A TRADE THIS
+ * FILE MAKES ON PURPOSE. Filtering and grouping before the limit means the
+ * planner will generally NOT use `search_embeddings_embedding_hnsw_idx` for the
+ * ordering - it computes distances over the caller's own chunks and sorts them.
+ * That is affordable precisely because the set is the caller's own documents,
+ * not the corpus, and it is CORRECT, which the fast shape is not. Do not
+ * "restore" the index scan by hoisting the `LIMIT`. (pgvector gained iterative
+ * index scans, which can filter and keep recall, in 0.8; this deployment pins
+ * 0.6. Revisiting this is a version upgrade plus a measurement, not an edit.)
+ *
+ * ⚠ `<=>` IS COSINE DISTANCE AND IT MUST MATCH THE INDEX'S `vector_cosine_ops`
+ * OPCLASS - the migration header's point 4 states the consequence of a
+ * mismatch and it is worth repeating because it is silent: an HNSW index whose
+ * opclass differs from the operator a query uses is simply NOT USED, with no
+ * error and no warning, and only `EXPLAIN` says so. Writing `<->` (L2) or `<#>`
+ * (inner product) here would still return plausible-looking results - the
+ * provider's vectors are normalised, so L2 ordering even agrees with cosine
+ * ordering - while permanently orphaning the index. The operator, the opclass
+ * and the provider's normalisation are one decision in three places.
+ *
+ * The roll-up is `max(1 - distance)` - the BEST chunk's similarity - which is
+ * the same `max`-not-`sum` rule {@link transcriptCandidatesSql} argues for, and
+ * `1 - distance` rather than `min(distance)` so both arms rank by a score where
+ * bigger is better and the outer query is one shared `ORDER BY ... DESC`.
+ */
+function transcriptVectorCandidatesSql(vector: string, userId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT
+      'transcript'::text AS type,
+      t.id::text AS id,
+      t.title AS title,
+      t.status::text AS status,
+      t.updated_at AS updated_at,
+      max(1 - (e.embedding <=> ${vector}::vector))::double precision AS score
+    FROM search_embeddings e
+    JOIN search_chunks c ON c.id = e.chunk_id
+    JOIN transcripts t ON t.id = c.document_id
+    WHERE c.document_type = 'transcript'
+      AND ${transcriptVisibleSql('t', userId)}
+    GROUP BY t.id, t.title, t.status, t.updated_at
+    HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${MIN_SEMANTIC_SIMILARITY}
+  `;
+}
+
+/**
+ * Note candidates by meaning.
+ *
+ * Owner-scoped only, with NO share join - see {@link noteVisibleSql}. A
+ * semantic arm that joined `transcript_shares` here "because the transcript arm
+ * does" would be this application's first path to reading somebody else's note,
+ * built by a query that does not even mention notes' own access service.
+ */
+function noteVectorCandidatesSql(vector: string, userId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT
+      'note'::text AS type,
+      n.id::text AS id,
+      n.title AS title,
+      n.status::text AS status,
+      n.updated_at AS updated_at,
+      max(1 - (e.embedding <=> ${vector}::vector))::double precision AS score
+    FROM search_embeddings e
+    JOIN search_chunks c ON c.id = e.chunk_id
+    JOIN notes n ON n.id = c.document_id
+    WHERE c.document_type = 'note'
+      AND ${noteVisibleSql('n', userId)}
+    GROUP BY n.id, n.title, n.status, n.updated_at
+    HAVING max(1 - (e.embedding <=> ${vector}::vector)) >= ${MIN_SEMANTIC_SIMILARITY}
+  `;
+}
+
+/**
+ * Is there an embedded chunk THIS CALLER COULD MATCH, of a type they searched?
+ *
+ * ⚠ CALLER-SCOPED, NOT DEPLOYMENT-WIDE, and the difference is the whole value
+ * of the reason it produces. A deployment-wide "has anybody indexed anything"
+ * probe is cheaper and is wrong in the case that matters most: a brand-new user
+ * on a busy installation would be told the semantic arm was available, would
+ * have their own key charged for a query vector, and would get an empty vector
+ * list back - every time - because none of the corpus is theirs. Scoped this
+ * way, `no_indexed_content` means what a reader takes it to mean: NOTHING YOU
+ * CAN SEARCH BY MEANING HAS BEEN INDEXED YET.
+ *
+ * It reuses the same visibility predicates the vector arm does, deliberately -
+ * a probe that said "yes" about rows the arm would then filter out would be a
+ * probe about a different question. `LIMIT 1` inside each arm plus `EXISTS`
+ * around the union means Postgres stops at the first hit rather than counting.
+ */
+function anyVisibleEmbeddingsSql(userId: string, types: readonly SearchType[]): Prisma.Sql {
+  const arms: Prisma.Sql[] = [];
+
+  // ⚠ EACH ARM IS PARENTHESISED. A bare `... LIMIT 1 UNION ALL SELECT ...` is a
+  // SYNTAX ERROR in Postgres - the `LIMIT` binds to the whole union, not to the
+  // branch - so the parentheses are what make the per-arm `LIMIT` mean "stop at
+  // the first row of THIS arm" rather than failing outright.
+  if (types.includes('transcript')) {
+    arms.push(Prisma.sql`
+      (SELECT 1
+       FROM search_embeddings e
+       JOIN search_chunks c ON c.id = e.chunk_id
+       JOIN transcripts t ON t.id = c.document_id
+       WHERE c.document_type = 'transcript'
+         AND ${transcriptVisibleSql('t', userId)}
+       LIMIT 1)
+    `);
+  }
+
+  if (types.includes('note')) {
+    arms.push(Prisma.sql`
+      (SELECT 1
+       FROM search_embeddings e
+       JOIN search_chunks c ON c.id = e.chunk_id
+       JOIN notes n ON n.id = c.document_id
+       WHERE c.document_type = 'note'
+         AND ${noteVisibleSql('n', userId)}
+       LIMIT 1)
+    `);
+  }
+
+  return Prisma.sql`
+    SELECT EXISTS (${Prisma.join(arms, ' UNION ALL ')}) AS present
+  `;
+}
+
+/**
+ * How many of this caller's OWN transcripts are not in the semantic index.
+ *
+ * "Not indexed" is "no `search_index_state` row, or one whose status is not
+ * `indexed`" - one `NOT EXISTS` expresses both, and the `pending`/`indexing`/
+ * `failed`/`skipped` distinction is deliberately NOT published here: the number
+ * exists to answer "why did my search not find that recording", and every
+ * non-`indexed` status has the same answer.
+ */
+function transcriptUnindexedSql(userId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT count(*)::int AS n
+    FROM transcripts t
+    WHERE t.deleted_at IS NULL
+      AND t.owner_id = ${userId}::uuid
+      AND NOT EXISTS (
+        SELECT 1 FROM search_index_state s
+        WHERE s.document_type = 'transcript'
+          AND s.document_id = t.id
+          AND s.status = 'indexed'::"SearchIndexStatus"
+      )
+  `;
+}
+
+/** How many of this caller's own notes are not in the semantic index. */
+function noteUnindexedSql(userId: string): Prisma.Sql {
+  return Prisma.sql`
+    SELECT count(*)::int AS n
+    FROM notes n
+    WHERE n.deleted_at IS NULL
+      AND n.owner_id = ${userId}::uuid
+      AND NOT EXISTS (
+        SELECT 1 FROM search_index_state s
+        WHERE s.document_type = 'note'
+          AND s.document_id = n.id
+          AND s.status = 'indexed'::"SearchIndexStatus"
+      )
+  `;
+}
+
 /** Degraded (`ILIKE`) transcript candidates. See {@link SearchService.search}. */
 function transcriptTitleLikeSql(pattern: string, userId: string): Prisma.Sql {
   return Prisma.sql`
@@ -358,13 +634,20 @@ interface SnippetRow {
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // ⚠ THE ONLY NON-PRISMA DEPENDENCY THIS SERVICE HAS, and it is a LEAF that
+    // never throws (see its header). Everything it can fail at is a reason
+    // string, so nothing it does can turn a search into an error.
+    private readonly embedder: SearchQueryEmbedder,
+  ) {}
 
   /**
    * `GET /api/search`.
    *
-   * The whole request, in at most three `SELECT`s: the stopword probe, the
-   * candidate window, and the page's snippets.
+   * The whole request, in at most six `SELECT`s: the embeddings-present probe,
+   * the stopword probe, the two candidate windows, the page's snippets and the
+   * unindexed count.
    */
   async search(
     query: SearchQueryDto,
@@ -394,7 +677,31 @@ export class SearchService {
     }
 
     const q = normalizeQueryText(query.q);
-    const scope: SearchCursorScope = { q, types: searchedTypes, userId: user.id };
+
+    // -----------------------------------------------------------------------
+    // The semantic arm is planned FIRST - before the cursor is even decoded
+    // -----------------------------------------------------------------------
+    //
+    // ⚠ THIS ORDERING IS DELIBERATE AND IT COSTS SOMETHING. The plan includes
+    // actually calling the provider, so a request presenting a stale cursor
+    // spends one embedding call on the caller's own key before being refused
+    // with a 400. That is the price of the alternative being wrong: the cursor
+    // fingerprint carries whether the vector arm RAN (see `search-cursor.ts`),
+    // and "ran" is not knowable until the vendor has answered. Fingerprinting
+    // the INTENTION instead - "this caller has a key, so semantic was
+    // available" - would accept a page-2 cursor minted while the provider was
+    // healthy against a page 2 computed after it started failing, which is
+    // precisely the silent renumbering the whole cursor design exists to
+    // prevent. A stale cursor is already an error path; paying one vendor call
+    // on it is the cheap side of this trade.
+    const plan = await this.planSemantic(q, user.id, searchedTypes);
+
+    const scope: SearchCursorScope = {
+      q,
+      types: searchedTypes,
+      userId: user.id,
+      semantic: semanticAxis(plan),
+    };
     const offset = this.resolveOffset(query.cursor, scope);
 
     // -----------------------------------------------------------------------
@@ -414,22 +721,45 @@ export class SearchService {
 
     const degraded = isStopwordOnly(probe?.nodes) ? ('stopwords' as const) : null;
 
-    const candidates = degraded
-      ? await this.degradedCandidates(q, user.id, searchedTypes)
-      : await this.rankedCandidates(q, user.id, searchedTypes);
+    // ⚠ THE VECTOR ARM RUNS ON THE DEGRADED PATH TOO, and that is not an
+    // oversight. `degraded: 'stopwords'` is a statement about the LEXICAL arm
+    // and nothing else: `plainto_tsquery` produced an empty query, so there is
+    // no full-text ranking to be had and the title-substring fallback stands in
+    // for it. The vector arm never consults `plainto_tsquery` at all - it
+    // compares an embedding of the raw text - so there is no reason for
+    // `numnode()` to gate it, and an all-stopword query is exactly where a
+    // second, independent signal is most worth having. It also avoids inventing
+    // a sixth `semanticReason` for a case where the semantic arm is perfectly
+    // healthy.
+    //
+    // Both arms are issued together: they share no state, and somebody is
+    // waiting. The lexical one is issued first so that the statement order this
+    // service emits stays stable for the tests that read it positionally.
+    const [lexical, vector] = await Promise.all([
+      degraded
+        ? this.degradedCandidates(q, user.id, searchedTypes)
+        : this.rankedCandidates(q, user.id, searchedTypes),
+      plan.ok
+        ? this.vectorCandidates(vectorLiteral(plan.vector), user.id, searchedTypes)
+        : Promise.resolve<CandidateRow[]>([]),
+    ]);
 
-    // One more than the cap was requested, so a full window is detectable
-    // without a second `count` over the same predicate - the same trick
-    // `TranscriptsService.list` uses for "is there a next page?".
-    const truncated = candidates.length > MAX_CANDIDATE_DOCUMENTS;
-    const window = candidates.slice(0, MAX_CANDIDATE_DOCUMENTS);
+    const { window, truncated } = fuseCandidates(lexical, vector);
     const matchedDocuments = window.length;
 
     const page = window.slice(offset, offset + query.limit);
 
-    const snippets = degraded
-      ? degradedSnippets(page, q)
-      : await this.rankedSnippets(q, user.id, page);
+    // The unindexed count is computed on EVERY request, including one where the
+    // semantic arm ran perfectly. It is not a diagnostic for the failure cases:
+    // "my search did not find that recording" is asked most often when search
+    // is otherwise working, and the answer - "nine of your documents are not in
+    // the semantic index yet" - is only available here.
+    const [snippets, unindexedCount] = await Promise.all([
+      degraded
+        ? Promise.resolve(degradedSnippets(page, q))
+        : this.rankedSnippets(q, user.id, page),
+      this.countUnindexed(user.id, searchedTypes),
+    ]);
 
     const nextOffset = offset + query.limit;
 
@@ -451,7 +781,40 @@ export class SearchService {
           : null,
       degraded,
       searchedTypes,
+      semantic: plan.ok,
+      semanticReason: plan.ok ? null : plan.reason,
+      unindexedCount,
     };
+  }
+
+  /**
+   * Whether the vector arm can run for this caller, and if so the query vector.
+   *
+   * The evaluation order is the one `search-semantic.ts` lists, and it is
+   * cheapest-first ON PURPOSE: three checks that touch neither the database nor
+   * the vendor, then one `EXISTS` against `search_embeddings`, and only then a
+   * request that spends the caller's own money. Embedding a query for a
+   * deployment that has indexed nothing would be a bill for a comparison
+   * against an empty table.
+   *
+   * ⚠ NEVER THROWS. Every branch returns a reason; see the embedder's header.
+   */
+  private async planSemantic(
+    q: string,
+    userId: string,
+    types: readonly SearchType[],
+  ): Promise<SemanticQueryPlan> {
+    const resolution = await this.embedder.resolve(userId);
+
+    if (!resolution.ok) return resolution;
+
+    const [row] = await this.prisma.$queryRaw<Array<{ present: boolean }>>(
+      anyVisibleEmbeddingsSql(userId, types),
+    );
+
+    if (!row?.present) return { ok: false, reason: 'no_indexed_content' };
+
+    return resolution.embed(q);
   }
 
   /**
@@ -496,6 +859,57 @@ export class SearchService {
       ORDER BY d.score DESC, d.updated_at DESC, d.id ASC
       LIMIT ${MAX_CANDIDATE_DOCUMENTS + 1}
     `);
+  }
+
+  /**
+   * The bounded candidate window, SEMANTIC path (#189).
+   *
+   * Structurally identical to {@link SearchService.rankedCandidates} - per-type
+   * arms, `UNION ALL`, one shared `ORDER BY ... LIMIT` - which is the point:
+   * the outer `LIMIT` is applied to rows that have already passed each arm's
+   * own visibility predicate, in both arms, exactly as the lexical path does.
+   * Its ordering is what assigns this list's ranks; `fuseCandidates` reads
+   * positions and nothing else.
+   */
+  private vectorCandidates(
+    vector: string,
+    userId: string,
+    types: readonly SearchType[],
+  ): Promise<CandidateRow[]> {
+    const arms: Prisma.Sql[] = [];
+
+    if (types.includes('transcript')) arms.push(transcriptVectorCandidatesSql(vector, userId));
+    if (types.includes('note')) arms.push(noteVectorCandidatesSql(vector, userId));
+
+    return this.prisma.$queryRaw<CandidateRow[]>(Prisma.sql`
+      SELECT d.type, d.id, d.title, d.status, d.updated_at, d.score
+      FROM (${Prisma.join(arms, ' UNION ALL ')}) d
+      ORDER BY d.score DESC, d.updated_at DESC, d.id ASC
+      LIMIT ${MAX_CANDIDATE_DOCUMENTS + 1}
+    `);
+  }
+
+  /**
+   * `unindexedCount` - the caller's OWN documents missing from the semantic
+   * index, over the types actually searched.
+   *
+   * Scoped to `searchedTypes` rather than to everything the caller owns, so the
+   * number agrees with the answer beside it: a caller who searched only their
+   * notes is told how many NOTES are unindexed, not a total that includes
+   * recordings this response never looked at.
+   */
+  private async countUnindexed(userId: string, types: readonly SearchType[]): Promise<number> {
+    const arms: Prisma.Sql[] = [];
+
+    if (types.includes('transcript')) arms.push(transcriptUnindexedSql(userId));
+    if (types.includes('note')) arms.push(noteUnindexedSql(userId));
+
+    const [row] = await this.prisma.$queryRaw<Array<{ n: number | null }>>(Prisma.sql`
+      SELECT coalesce(sum(x.n), 0)::int AS n
+      FROM (${Prisma.join(arms, ' UNION ALL ')}) x
+    `);
+
+    return Number(row?.n ?? 0);
   }
 
   /**
@@ -696,6 +1110,79 @@ export class SearchService {
 /** `type:id`, so one map can hold both kinds without their ids colliding. */
 function snippetKey(type: SearchType, id: string): string {
   return `${type}:${id}`;
+}
+
+/**
+ * Fuse the two arms' rankings into the candidate window (#189).
+ *
+ * Each list arrives ALREADY ORDERED by its own database query, so a document's
+ * rank is simply its position - which is what keeps {@link
+ * reciprocalRankFusion} pure and ignorant of `ts_rank_cd` and cosine distance
+ * alike. Both lists are cut to the cap BEFORE ranking, so the one extra row
+ * each query fetches serves only as a "there was more" sentinel and never earns
+ * a rank of its own.
+ *
+ * ⚠ WITH ONLY THE LEXICAL LIST THIS IS THE IDENTITY ON ORDER. RRF over a single
+ * list is `1 / (60 + rank)`, which is strictly decreasing in rank, so sorting
+ * by it reproduces the SQL's ordering exactly - which is what makes
+ * "`semantic: false` answers precisely as the endpoint did before epic #165"
+ * true by construction rather than by two code paths kept in step. Only the
+ * `score` NUMBER differs from the pre-#189 response; the ids and their order do
+ * not.
+ *
+ * The tie-break is the SQL's own (`updated_at DESC, id ASC`), for the case only
+ * fusion can produce: two documents that rank differently in the two arms and
+ * land on the same total.
+ *
+ * `truncated` is true when EITHER arm filled its window or when the union
+ * overflows the cap - all three mean the same thing to a reader
+ * (`matchedDocuments` is a floor), and reporting only the union's overflow
+ * would call a 250-match lexical search "exact" whenever the two arms happened
+ * to agree about which 200 documents mattered.
+ */
+function fuseCandidates(
+  lexical: readonly CandidateRow[],
+  vector: readonly CandidateRow[],
+): { window: CandidateRow[]; truncated: boolean } {
+  const lexicalPage = lexical.slice(0, MAX_CANDIDATE_DOCUMENTS);
+  const vectorPage = vector.slice(0, MAX_CANDIDATE_DOCUMENTS);
+
+  // One row per document, whichever arm saw it first. Both arms select the same
+  // columns from the same parent tables, so "first" is a choice between two
+  // identical rows - except for `score`, which is overwritten below anyway.
+  const rows = new Map<string, CandidateRow>();
+
+  for (const row of [...lexicalPage, ...vectorPage]) {
+    const key = snippetKey(row.type, row.id);
+
+    if (!rows.has(key)) rows.set(key, row);
+  }
+
+  const scores = reciprocalRankFusion(
+    [lexicalPage, vectorPage]
+      .filter((list) => list.length > 0)
+      .map((list) => list.map((row) => snippetKey(row.type, row.id))),
+  );
+
+  const fused = [...rows.entries()].map(([key, row]) => ({
+    ...row,
+    score: scores.get(key) ?? 0,
+  }));
+
+  fused.sort(
+    (a, b) =>
+      b.score - a.score ||
+      b.updated_at.getTime() - a.updated_at.getTime() ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+
+  return {
+    window: fused.slice(0, MAX_CANDIDATE_DOCUMENTS),
+    truncated:
+      lexical.length > MAX_CANDIDATE_DOCUMENTS ||
+      vector.length > MAX_CANDIDATE_DOCUMENTS ||
+      fused.length > MAX_CANDIDATE_DOCUMENTS,
+  };
 }
 
 /**
