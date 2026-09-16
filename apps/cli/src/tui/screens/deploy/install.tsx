@@ -272,7 +272,11 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   const refAnswer = answerOf(answers, REF_FIELD);
 
   useEffect(() => {
-    if (repoAnswer === '' || refAnswer === '') return;
+    // Only the REPOSITORY is required. An empty ref means the default branch
+    // (#234) — the Review screen literally renders it as "(default branch)" —
+    // so gating the fetch on it turned the most common first install, where
+    // nobody pins a ref, into the one case that never read the template.
+    if (repoAnswer === '') return;
     let cancelled = false;
 
     void (async () => {
@@ -760,15 +764,32 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
             })}
           />
           <Box marginTop={1}>
-            <ConfirmDialog
-              message="Install with these values?"
-              detail={['Nothing has been written yet. This is the first change to the server.']}
-              confirmLabel="Yes, install now"
-              onResult={(confirmed) => {
-                if (confirmed) start();
-                else wizard.back();
-              }}
-            />
+            {templateSource === 'none' ? (
+              // REFUSE, rather than offer an install nobody was asked about
+              // (#234). With no template the wizard has no Database, Secrets,
+              // OAuth or Administrator step to show — `installSteps` drops a
+              // step whose fields do not resolve — so the summary above is
+              // confident about a domain and silent about everything the
+              // deployment actually needs. Installing here would take every
+              // essential value from a template default: POSTGRES_HOST
+              // localhost, placeholder secrets, an OAuth client that is not
+              // yours. A wizard that could not read its own question list has
+              // to say so, not present an install-ready screen.
+              <ErrorNotice
+                message="The environment template could not be read, so no configuration questions were asked."
+                hint={`Nothing was collected for the database, secrets, Google OAuth or the administrator, and installing now would take all of them from template defaults. Tried the remote (${displayRepoUrl(repoAnswer) || 'no repository resolved'}) and a local checkout, and neither answered. Check that \`gh auth status\` passes and the repository is visible to it, or run this from inside a checkout of the repository being deployed, then start again.`}
+              />
+            ) : (
+              <ConfirmDialog
+                message="Install with these values?"
+                detail={['Nothing has been written yet. This is the first change to the server.']}
+                confirmLabel="Yes, install now"
+                onResult={(confirmed) => {
+                  if (confirmed) start();
+                  else wizard.back();
+                }}
+              />
+            )}
           </Box>
         </Box>
       ) : (
