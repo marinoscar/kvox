@@ -93,10 +93,20 @@ export interface FeedRow {
   updatedAt: string;
 }
 
-/** One page as the API returns it — `{ items, nextCursor }`, nothing else. */
+/** One page as the API returns it — `{ items, total, nextCursor }`. */
 export interface FeedPage<T> {
   items: T[];
   nextCursor: string | null;
+  /**
+   * How many rows match the current filters, ignoring paging (#190).
+   *
+   * A property of the QUESTION, not of the page, which is why every clause of
+   * the merge below takes it from `page` unconditionally — including the one
+   * that deliberately keeps the client's own `nextCursor`. The page is the only
+   * thing here that has just asked the server, so its count is the freshest
+   * answer available even when its rows are only the top of what is held.
+   */
+  total: number;
 }
 
 /**
@@ -111,6 +121,8 @@ export interface FeedPage<T> {
 export interface FeedState<T> {
   items: T[];
   nextCursor: string | null;
+  /** The most recent answer to "how many match", from whichever page last landed. */
+  total: number;
 }
 
 /**
@@ -154,7 +166,7 @@ export function reconcileFeed<T extends FeedRow>(
   //    hook, and the state after a filter change cleared the list. Adopt the
   //    page wholesale, cursor included.
   if (current.items.length === 0) {
-    return { items: page.items, nextCursor: page.nextCursor };
+    return { items: page.items, nextCursor: page.nextCursor, total: page.total };
   }
 
   // 2. THE SERVER JUST SAID THIS PAGE IS THE WHOLE RESULT SET. A null
@@ -165,7 +177,7 @@ export function reconcileFeed<T extends FeedRow>(
   //    in one page and the accumulated tail is discarded here, wholesale,
   //    rather than row by row.
   if (page.nextCursor === null) {
-    return { items: page.items, nextCursor: null };
+    return { items: page.items, nextCursor: null, total: page.total };
   }
 
   // 3. A FULL PAGE WITH MORE BEHIND IT. The page is authoritative for its own
@@ -182,7 +194,7 @@ export function reconcileFeed<T extends FeedRow>(
   // typed as possibly-undefined and inventing a boundary would be worse than
   // declining to reconcile. Adopt the page and keep paging.
   if (!boundary) {
-    return { items: page.items, nextCursor: current.nextCursor };
+    return { items: page.items, nextCursor: current.nextCursor, total: page.total };
   }
 
   const pageIds = new Set(page.items.map((item) => item.id));
@@ -200,6 +212,9 @@ export function reconcileFeed<T extends FeedRow>(
       compareFeedRows(row, boundary) > 0,
   );
 
-  // The CURRENT cursor, never the page's — see the header's fourth bullet.
-  return { items: [...page.items, ...tail], nextCursor: current.nextCursor };
+  // The CURRENT cursor, never the page's — see the header's fourth bullet. The
+  // PAGE's total, though: the cursor describes where the client's own list
+  // stops, and the count describes the question, which only the server can
+  // answer.
+  return { items: [...page.items, ...tail], nextCursor: current.nextCursor, total: page.total };
 }

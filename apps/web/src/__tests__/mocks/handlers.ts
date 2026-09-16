@@ -266,7 +266,7 @@ export const handlers = [
   // suite's query; a suite that cares about the content overrides it with
   // `server.use(...)`.
   http.get(`${API_BASE}/notes`, () => {
-    return HttpResponse.json({ data: { items: [], nextCursor: null } });
+    return HttpResponse.json({ data: { items: [], total: 0, nextCursor: null } });
   }),
 
   // `GET /api/notes/summary` — the home page's notes half (#107), and a default

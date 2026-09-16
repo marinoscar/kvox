@@ -139,6 +139,16 @@ function useLatestTranscriptEventId(): string | null {
 
 export interface UseTranscriptsResult {
   transcripts: TranscriptListItem[];
+  /**
+   * How many rows match the current filters, ignoring paging (#190).
+   *
+   * NOT `transcripts.length`. The feed holds the pages the user has loaded; this is
+   * how many exist to load, so "42 transcripts" stays 42 while the list under it is
+   * still 20 rows long. `0` until the first page lands, which `isLoading`
+   * covers.
+   */
+  total: number;
+
   isLoading: boolean;
   error: string | null;
   /** The cursor for the next page, or null at the end. */
@@ -244,7 +254,7 @@ export function useTranscripts(
    * the `useState` it replaced.
    */
   const [feed, setFeed] = useCachedFeedState<TranscriptListItem>(cacheKey);
-  const { items: transcripts, nextCursor } = feed;
+  const { items: transcripts, nextCursor, total } = feed;
 
   /**
    * A cache HIT must never flash a spinner over rows that are already painted,
@@ -281,7 +291,11 @@ export function useTranscripts(
         if (!isMounted() || token !== requestToken.current) return;
         if (mode === 'reset') {
           // A new question. Whatever was accumulated answered a different one.
-          setFeed({ items: response.items, nextCursor: response.nextCursor });
+          setFeed({
+            items: response.items,
+            nextCursor: response.nextCursor,
+            total: response.total,
+          });
         } else {
           // The same question. Merge page one back into the accumulated list —
           // items and cursor together, inside one updater, so they cannot
@@ -353,6 +367,9 @@ export function useTranscripts(
           // This page's own cursor, unlike a revalidation's: `loadMore` is the
           // operation that actually advances the window.
           nextCursor: response.nextCursor,
+          // The count answers a question about the FILTERS, so every page's
+          // answer is equally authoritative and the freshest one wins.
+          total: response.total,
         };
       });
       setError(null);
@@ -365,7 +382,7 @@ export function useTranscripts(
 
   const refresh = useCallback(() => load('revalidate'), [load]);
 
-  return { transcripts, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
+  return { transcripts, total, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
 }
 
 // =============================================================================

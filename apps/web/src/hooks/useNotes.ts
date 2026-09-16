@@ -132,6 +132,16 @@ function useLatestNoteEventId(): string | null {
 
 export interface UseNotesResult {
   notes: NoteListItem[];
+  /**
+   * How many rows match the current filters, ignoring paging (#190).
+   *
+   * NOT `notes.length`. The feed holds the pages the user has loaded; this is
+   * how many exist to load, so "42 notes" stays 42 while the list under it is
+   * still 20 rows long. `0` until the first page lands, which `isLoading`
+   * covers.
+   */
+  total: number;
+
   isLoading: boolean;
   error: string | null;
   nextCursor: string | null;
@@ -231,7 +241,7 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
    * the `useState` it replaced. `useTranscripts` carries the same pair.
    */
   const [feed, setFeed] = useCachedFeedState<NoteListItem>(cacheKey);
-  const { items: notes, nextCursor } = feed;
+  const { items: notes, nextCursor, total } = feed;
 
   /**
    * A cache HIT must never flash a spinner over rows that are already painted,
@@ -272,7 +282,11 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
         if (!isMounted() || token !== requestToken.current) return;
         if (mode === 'reset') {
           // A new question. Whatever was accumulated answered a different one.
-          setFeed({ items: response.items, nextCursor: response.nextCursor });
+          setFeed({
+            items: response.items,
+            nextCursor: response.nextCursor,
+            total: response.total,
+          });
         } else {
           // The same question. Merge page one back into the accumulated list —
           // items and cursor together, inside one updater, so they cannot
@@ -376,6 +390,9 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
           // This page's own cursor, unlike a revalidation's: `loadMore` is the
           // operation that actually advances the window.
           nextCursor: response.nextCursor,
+          // The count answers a question about the FILTERS, so every page's
+          // answer is equally authoritative and the freshest one wins.
+          total: response.total,
         };
       });
       setError(null);
@@ -388,7 +405,7 @@ export function useNotes(options: UseNotesOptions = {}): UseNotesResult {
 
   const refresh = useCallback(() => load('revalidate'), [load]);
 
-  return { notes, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
+  return { notes, total, isLoading, error, nextCursor, isLoadingMore, loadMore, refresh };
 }
 
 // =============================================================================

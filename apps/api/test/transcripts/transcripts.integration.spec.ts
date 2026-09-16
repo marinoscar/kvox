@@ -15,6 +15,7 @@ import {
 import { CredentialsService } from '../../src/credentials/credentials.service';
 import { STORAGE_PROVIDER } from '../../src/storage/providers/storage-provider.interface';
 import { DEFAULT_SYSTEM_SETTINGS } from '../../src/common/types/settings.types';
+import { encodeCursor as encodeTranscriptCursor } from '../../src/transcripts/transcripts.service';
 
 // =============================================================================
 // Transcripts integration (issue #25, epic #19)
@@ -282,6 +283,104 @@ describe('Transcripts Integration', () => {
   // ==========================================================================
   // Access
   // ==========================================================================
+
+  // ==========================================================================
+  // GET /api/transcripts — `total`, issue #190, epic #162
+  // ==========================================================================
+  //
+  // The count exists so a 300-row card feed can say how big it is. Its whole
+  // value is that it answers a question about the FILTERS rather than about the
+  // page, so the tests that matter are the ones where deriving it from the page
+  // would look right. `notes.integration.spec.ts` carries the twin block — the
+  // two list endpoints are twins by design and must stay twins.
+
+  describe('GET /api/transcripts', () => {
+    it('answers `total` alongside the page', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
+      // `withAccess` resolves owner display names for the whole page in one
+      // query; without it the shape step has nothing to map.
+      prismaMock.user.findMany.mockResolvedValue([
+        { id: user.id, displayName: 'Owner', providerDisplayName: null, email: user.email },
+      ]);
+      prismaMock.transcript.findMany.mockResolvedValue([transcriptRow({ ownerId: user.id })]);
+      prismaMock.transcript.count.mockResolvedValue(42);
+
+      const response = await request(context.app.getHttpServer())
+        .get(TRANSCRIPTS)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.total).toBe(42);
+      expect(response.body.data.items).toHaveLength(1);
+    });
+
+    it('counts over the FILTERS, never over the keyset-bounded page', async () => {
+      // ⚠ THE ASSERTION THIS BLOCK EXISTS TO MAKE. A count over the page
+      // predicate would shrink as the client pages, so a feed showing
+      // "42 transcripts" would watch the number fall for pressing Load more.
+      const user = await createMockTestUser(context);
+
+      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
+      prismaMock.user.findMany.mockResolvedValue([
+        { id: user.id, displayName: 'Owner', providerDisplayName: null, email: user.email },
+      ]);
+      prismaMock.transcript.findMany.mockResolvedValue([transcriptRow({ ownerId: user.id })]);
+      prismaMock.transcript.count.mockResolvedValue(42);
+
+      // Built with the service's own encoder rather than by hand: a cursor this
+      // endpoint cannot decode restarts the list from the top, which is correct
+      // behaviour and would make this test silently assert nothing.
+      const cursor = encodeTranscriptCursor({ updatedAt: new Date(2026, 0, 1), id: 'tr-9' } as never);
+
+      await request(context.app.getHttpServer())
+        .get(`${TRANSCRIPTS}?cursor=${cursor}`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      const countWhere = prismaMock.transcript.count.mock.calls[0][0].where;
+      const pageWhere = prismaMock.transcript.findMany.mock.calls[0][0].where;
+
+      // The page carries the keyset clause; the count does not.
+      expect(pageWhere.AND).toBeDefined();
+      expect(countWhere.AND).toBeUndefined();
+      expect(countWhere.deletedAt).toBeNull();
+    });
+
+    it('counts under the SAME filters the page is read with', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
+      prismaMock.transcript.findMany.mockResolvedValue([]);
+      prismaMock.transcript.count.mockResolvedValue(0);
+
+      await request(context.app.getHttpServer())
+        .get(`${TRANSCRIPTS}?status=failed`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(prismaMock.transcript.count.mock.calls[0][0].where.status).toBe('failed');
+    });
+
+    it('reads the count and the page in ONE transaction', async () => {
+      // Two separate round trips could describe two different states of the
+      // table — "20 of 19", which is nonsense on screen and unreproducible in a
+      // bug report.
+      const user = await createMockTestUser(context);
+
+      prismaMock.transcriptShare.findMany.mockResolvedValue([]);
+      prismaMock.transcript.findMany.mockResolvedValue([]);
+      prismaMock.transcript.count.mockResolvedValue(0);
+
+      await request(context.app.getHttpServer())
+        .get(TRANSCRIPTS)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(prismaMock.$transaction).toHaveBeenCalled();
+    });
+  });
 
   describe('access', () => {
     it('gives a non-owner with no share a 404, not a 403', async () => {

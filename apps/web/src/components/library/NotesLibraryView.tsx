@@ -63,9 +63,11 @@ import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { FeedCountLine } from './FeedCountLine';
+import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { SearchResultsView } from '../search/SearchResultsView';
 import { usePermissions } from '../../hooks/usePermissions';
@@ -73,6 +75,7 @@ import { useNoteSourceNames, noteSourceKey } from '../../hooks/useNoteSourceName
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
 import { useSearch } from '../../hooks/useSearch';
 import { useScrollRestoration } from '../../hooks/useScrollRestoration';
+import { feedCountLabel, groupFeedByDate } from '../../utils/feedDateGroups';
 import { feedCacheKey } from '../../utils/feedCache';
 import type { NoteListItem, NoteStatus } from '../../services/notes';
 import type { SearchResult, SearchType } from '../../services/search';
@@ -290,7 +293,7 @@ export function NotesLibraryView() {
   // restores the new one's — which is exactly the behaviour you want.
   useScrollRestoration(cacheKey);
 
-  const { notes, isLoading, error, nextCursor, isLoadingMore, loadMore } = useNotes({
+  const { notes, total, isLoading, error, nextCursor, isLoadingMore, loadMore } = useNotes({
     status: status === 'all' ? undefined : status,
     cacheKey,
   });
@@ -311,6 +314,15 @@ export function NotesLibraryView() {
   // search term takes the reader to `SearchResultsView` and its own two empty
   // states instead of to this one.
   const isFiltered = status !== 'all';
+
+  /**
+   * The feed cut into date groups — issue #190.
+   *
+   * `new Date()` is read HERE and passed down, rather than inside the grouper —
+   * one clock reading per render, so every row in one paint is bucketed against
+   * the same instant. `TranscriptsLibraryView` carries the long form.
+   */
+  const dateGroups = useMemo(() => groupFeedByDate(notes, new Date()), [notes]);
 
   return (
     <Box>
@@ -359,6 +371,15 @@ export function NotesLibraryView() {
           </Alert>
         )}
 
+        {/* Rendered unconditionally — see `FeedCountLine` for why a live region
+            must exist before it has anything to say. No search term is passed,
+            and there never can be one here: this branch only renders when the
+            box is EMPTY (#176 sends a term to `SearchResultsView`, which
+            reports its own match count). */}
+        <FeedCountLine
+          label={isLoading ? '' : feedCountLabel(total, { one: 'note', many: 'notes' })}
+        />
+
         {isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
             <CircularProgress aria-label="Loading notes" />
@@ -402,18 +423,26 @@ export function NotesLibraryView() {
           </Paper>
         ) : (
           <Stack component="ul" spacing={1} sx={{ p: 0, m: 0 }}>
-            {notes.map((note) => {
-              const ref = noteSourceRef(note);
-              return (
-                <NoteRow
-                  key={note.id}
-                  note={note}
-                  sourceName={ref ? sourceNames[noteSourceKey(ref)] : undefined}
-                  dense={!isPhone}
-                  onOpen={() => navigate(`/notes/${note.id}`)}
-                />
-              );
-            })}
+            {/* ONE flat list with separators among the rows — not a list per
+                group. See `FeedDateSeparator` for why nesting would change what
+                a screen reader announces for every row in the feed. */}
+            {dateGroups.map((group) => (
+              <Fragment key={group.key}>
+                <FeedDateSeparator label={group.label} />
+                {group.items.map((note) => {
+                  const ref = noteSourceRef(note);
+                  return (
+                    <NoteRow
+                      key={note.id}
+                      note={note}
+                      sourceName={ref ? sourceNames[noteSourceKey(ref)] : undefined}
+                      dense={!isPhone}
+                      onOpen={() => navigate(`/notes/${note.id}`)}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))}
           </Stack>
         )}
 
