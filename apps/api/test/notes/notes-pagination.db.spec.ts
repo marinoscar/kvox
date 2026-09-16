@@ -50,7 +50,8 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { NotesService } from '../../src/notes/notes.service';
+import type { NotesService } from '../../src/notes/notes.service';
+import { buildNotesService } from './notes-service-test-factory';
 
 /**
  * Whether something is actually listening on host:port. Copied verbatim from
@@ -107,19 +108,22 @@ describeWithDb('Note list paging (real Postgres)', () => {
 
     // ⚠ CONSTRUCTED WITH ONLY THE COLLABORATOR THE EXERCISED PATH USES.
     // `NotesService.list` reads `this.prisma` and nothing else; handing it real
-    // stand-ins for five services it never calls would obscure that rather than
-    // prove anything. Every other method is out of scope for this file.
-    notes = new NotesService(
-      prisma as never,
-      null as never,
-      null as never,
-      null as never,
-      null as never,
-      null as never,
+    // stand-ins for the six other services it never calls would obscure that
+    // rather than prove anything. Every other method is out of scope for this
+    // file. Named by role (see `notes-service-test-factory.ts`) so no argument
+    // can land in the wrong slot the way #224's did.
+    notes = buildNotesService({
+      prisma: prisma as never,
+      access: null as never, // `list` never reaches it
+      sourceNames: null as never, // `list` never reaches it
+      templates: null as never, // `list` never reaches it
+      requests: null as never, // `list` never reaches it
+      sources: null as never, // `list` never reaches it
+      jobs: null as never, // `list` never reaches it
       // #188's semantic indexer — `null` like the rest, for the same reason the
       // ⚠ above gives: `list` never reaches it.
-      null as never,
-    );
+      searchIndex: null as never,
+    });
   });
 
   afterAll(async () => {
