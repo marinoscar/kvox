@@ -190,13 +190,13 @@ describe('NotesPage', () => {
     // in the box renders `SearchResultsView` and ITS "No matches for …" panel
     // instead of this one, which is exactly the distinction that issue exists
     // to draw. See `components/library/LibrarySearch.test.tsx`.
-    const user = userEvent.setup();
+    // ⚠ SEEDED FROM THE URL since #193: the status `<Select>` this test used to
+    // drive is gone, and a status now reaches the library only as `?status=`.
+    // The panel under test is unchanged.
     respondWithNotes([]);
-    renderNotes();
-    await screen.findByText('No notes yet');
-
-    await user.click(screen.getByLabelText('Status'));
-    await user.click(await screen.findByRole('option', { name: 'Failed' }));
+    render(<NotesPage />, {
+      wrapperOptions: { user: mockAdminUser, route: '/notes?status=failed' },
+    });
 
     expect(
       await screen.findByText('No notes match those filters', undefined, { timeout: 3000 }),
@@ -210,19 +210,15 @@ describe('NotesPage', () => {
     expect(noteRequests[0].searchParams.has('status')).toBe(false);
   });
 
-  it('sends the chosen status', async () => {
-    const user = userEvent.setup();
+  it('offers ONE filter control — the search box (#193)', async () => {
+    // `TranscriptsLibraryView`'s twin assertion. Two library surfaces with two
+    // different filter bars would make one product feel like two.
     renderNotes();
-    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    await screen.findByText('Q3 planning — decisions');
 
-    await user.click(screen.getByLabelText('Status'));
-    await user.click(await screen.findByRole('option', { name: 'Failed' }));
-
-    await waitFor(() =>
-      expect(noteRequests.some((url) => url.searchParams.get('status') === 'failed')).toBe(
-        true,
-      ),
-    );
+    expect(screen.queryByLabelText('Status')).toBeNull();
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByLabelText('Search notes')).toBeInTheDocument();
   });
 
   it('debounces the search box into a single q= query — now against /search (#176)', async () => {
@@ -400,7 +396,10 @@ describe('NotesPage — seeded from the URL', () => {
   it('applies ?status=failed to the filter AND to the first query', async () => {
     renderAt('/notes?status=failed');
 
-    expect(screen.getByLabelText('Status')).toHaveTextContent('Failed');
+    // Since #193 the filter is named by the chip above the feed, not by a
+    // `<Select>`. The assertion that matters is unchanged: the FIRST request
+    // already carries it, so the deep link is honoured before any refetch.
+    expect(await screen.findByText('Status: Failed')).toBeInTheDocument();
     await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
     expect(noteRequests[0].searchParams.get('status')).toBe('failed');
   });
@@ -408,7 +407,7 @@ describe('NotesPage — seeded from the URL', () => {
   it('falls back to Any status for an unknown ?status, and never sends it on', async () => {
     renderAt('/notes?status=bogus');
 
-    expect(screen.getByLabelText('Status')).toHaveTextContent('Any status');
+    expect(screen.queryByText(/^Status:/)).toBeNull();
     await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
     expect(noteRequests[0].searchParams.has('status')).toBe(false);
   });
@@ -416,7 +415,10 @@ describe('NotesPage — seeded from the URL', () => {
   it('refuses ?status=draft, which is a real status this page does not offer', async () => {
     renderAt('/notes?status=draft');
 
-    expect(screen.getByLabelText('Status')).toHaveTextContent('Any status');
+    // No chip at all, which since #193 is what "not offered" looks like — see
+    // `notesLibraryFilters.ts` on why an unnamed status must never filter the
+    // feed: it would leave no visible way out of it.
+    expect(screen.queryByText(/^Status:/)).toBeNull();
     await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
     expect(noteRequests[0].searchParams.has('status')).toBe(false);
   });
@@ -443,14 +445,18 @@ describe('NotesPage — seeded from the URL', () => {
     expect(screen.queryByRole('tablist')).toBeNull();
   });
 
-  it('SEEDS the state without binding to it — a later change sticks', async () => {
+  it('SEEDS the state without binding to it — clearing the chip sticks', async () => {
+    // ⚠ The chip must clear the URL PARAMETER too, not only the state. Since
+    // #168 the feed survives a drill-down and remounts routinely, and a remount
+    // re-seeds from the URL — so a chip that cleared state alone would be
+    // silently undone the next time the user came back to this page.
     const user = userEvent.setup();
     renderAt('/notes?status=failed');
-    await waitFor(() => expect(noteRequests.length).toBeGreaterThan(0));
+    await screen.findByText('Status: Failed');
 
-    await user.click(screen.getByLabelText('Status'));
-    await user.click(await screen.findByRole('option', { name: 'Any status' }));
+    await user.click(screen.getByRole('button', { name: /Status: Failed — clear this filter/i }));
 
+    await waitFor(() => expect(screen.queryByText('Status: Failed')).toBeNull());
     await waitFor(() =>
       expect(noteRequests[noteRequests.length - 1].searchParams.has('status')).toBe(false),
     );

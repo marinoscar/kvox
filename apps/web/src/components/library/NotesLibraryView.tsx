@@ -50,22 +50,19 @@ import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CircularProgress from '@mui/material/CircularProgress';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
 import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
-import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
-import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { ActiveStatusFilterChip } from './ActiveStatusFilterChip';
 import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
@@ -242,7 +239,7 @@ export function NotesLibraryView() {
    * puts the view in search mode on the FIRST render and `useSearch` raises its
    * loading flag synchronously. `TranscriptsLibraryView` carries the long form.
    */
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchFromQuery(searchParams));
   const [status, setStatus] = useState<NoteStatus | 'all'>(() =>
     noteStatusFromQuery(searchParams),
@@ -316,6 +313,31 @@ export function NotesLibraryView() {
   const isFiltered = status !== 'all';
 
   /**
+   * The offered filter's own LABEL for an active `?status=`, or `null`.
+   *
+   * Read from `NOTE_STATUS_FILTERS` rather than title-casing the raw API value,
+   * so the wording stays in the one place that already owns it — the same list
+   * `noteStatusFromQuery` validates against.
+   */
+  const activeStatusLabel = useMemo(() => {
+    if (status === 'all') return null;
+    return NOTE_STATUS_FILTERS.find((option) => option.value === status)?.label ?? null;
+  }, [status]);
+
+  /**
+   * Clearing has to clear the URL too, not only the state — `?status=` SEEDS
+   * this view, and #168 makes remounts routine. `replace: true` so Back does
+   * not reapply the filter the user just dismissed.
+   * `TranscriptsLibraryView` carries the long form.
+   */
+  const clearStatusFilter = useCallback(() => {
+    setStatus('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  /**
    * The feed cut into date groups — issue #190.
    *
    * `new Date()` is read HERE and passed down, rather than inside the grouper —
@@ -334,25 +356,14 @@ export function NotesLibraryView() {
           onChange={(event) => setSearch(event.target.value)}
           sx={{ flexGrow: 1 }}
         />
-        {/* DISABLED WHILE SEARCHING — `GET /api/search` has no status
-            parameter, and the twin's comment says why filtering the ranked page
-            client-side instead would make the count disagree with the rows. */}
-        <FormControl size="small" sx={{ minWidth: 180 }} disabled={searchMode}>
-          <InputLabel id="note-status-filter">Status</InputLabel>
-          <Select
-            labelId="note-status-filter"
-            label="Status"
-            value={status}
-            onChange={(event) => setStatus(event.target.value as NoteStatus | 'all')}
-          >
-            {NOTE_STATUS_FILTERS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
       </Stack>
+
+      {/* ONE SEARCH BOX — see `TranscriptsLibraryView`, which carries the
+          argument (#193). The twinning is the point: two library surfaces with
+          two different filter bars would make one product feel like two. */}
+      {activeStatusLabel && (
+        <ActiveStatusFilterChip label={activeStatusLabel} onClear={clearStatusFilter} />
+      )}
 
       {searchMode ? (
         <SearchResultsView
@@ -396,7 +407,7 @@ export function NotesLibraryView() {
                   No notes match those filters
                 </Typography>
                 <Typography color="text.secondary">
-                  Set the status filter back to Any to see everything.
+                  Clear the status filter above to see everything.
                 </Typography>
               </>
             ) : (
