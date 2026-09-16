@@ -101,11 +101,36 @@ Every feature or fix MUST be developed in a Git worktree. The main checkout stay
 - One worktree per feature branch (Git enforces this)
 - If the worktree already exists for the requested feature, work inside it (don't recreate)
 
-## MANDATORY: Claude Commit-Only Git Rules
+## MANDATORY: Claude Git Rules — Commit, Then Always Open a PR
 
 Claude: these rules are **MANDATORY**. Follow them exactly.  
-Your job is **only** to create clean, frequent commits while implementing the requested work.  
-Assume the branch already exists and is checked out. Do **not** create branches or PRs.
+Your job is to create clean, frequent commits while implementing the requested
+work, and then to **land that work through a pull request**.  
+Assume the branch already exists and is checked out. Do **not** create branches.
+
+### Every change ships as a PR (MANDATORY)
+
+**Never merge to `main` by pushing to it.** Every change — however small, and
+whether or not the request mentions one — is opened as a pull request against
+`main` and merged from there. Do not wait to be asked for a PR; the ask is
+standing. `main` is only ever written by a merge.
+
+The order is fixed:
+
+1. Commit the work in slices, per the cadence rules below.
+2. Push the branch (`git push -u origin <branch>`).
+3. Open the PR against `main`, filling in
+   [`.github/pull_request_template.md`](.github/pull_request_template.md) and
+   linking its tracking issue (`Fixes #123` / `Relates to #123`).
+4. Merge it once CI is green and nothing is left outstanding on it.
+
+⚠ **Green first, merge second.** A PR is merged when its checks pass and its
+review threads are answered — never before, and never by disabling, skipping or
+quarantining a check to get there. If a check is genuinely red for a reason this
+diff did not cause, say so on the PR rather than merging past it silently.
+
+⚠ **A merged PR is finished.** Follow-up work is a fresh branch off the updated
+`main` and a new PR; never push new commits onto an already-merged branch.
 
 ---
 
