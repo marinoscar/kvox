@@ -27,7 +27,13 @@ import {
 } from '../../../deploy/layout.js';
 import { DEFAULT_PROXY_CONTAINER } from '../../../deploy/checks/index.js';
 import { displayRepoUrl, resolveRepoTarget } from '../../../deploy/repo.js';
-import { fetchRemoteTemplate, type TemplateSource } from '../../../deploy/remote-template.js';
+import {
+  describeRemoteTemplateFailure,
+  fetchRemoteTemplate,
+  type RemoteTemplateResult,
+  type TemplateSource,
+} from '../../../deploy/remote-template.js';
+import { bundledTemplateFor } from '../../../deploy/bundled-template.js';
 import { collectServerFacts, unknownServerFacts, type ServerFacts } from '../../../deploy/server-facts.js';
 import { DOMAIN_FIELD } from '../../../deploy/wizard/steps.js';
 import { formatError } from '../../../errors.js';
@@ -175,6 +181,12 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   const name = answerOf(answers, NAME_FIELD) || FALLBACK_APP_NAME;
   const deployRoot = appRootFor(roots.apps, name);
 
+  // Read here rather than beside the fetch below: three of the four template
+  // sources are keyed on the repository, so it has to be in scope before any
+  // of them.
+  const repoAnswer = answerOf(answers, REPO_FIELD);
+  const refAnswer = answerOf(answers, REF_FIELD);
+
   // The questions come from the template of THE APP BEING INSTALLED, keyed on
   // its name (#229). This memo used to depend on the apps root alone, which
   // meant two things at once: it could never re-read when the operator typed a
@@ -191,10 +203,42 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   // the checkout the CLI happens to be running from — which need not be the
   // repository being deployed at all.
   const [remoteSpecs, setRemoteSpecs] = useState<EnvVarSpec[] | undefined>(undefined);
+  /** Why the remote read did not answer, for the operator rather than a log. */
+  const [remoteFailure, setRemoteFailure] = useState<
+    Extract<RemoteTemplateResult, { ok: false }> | undefined
+  >(undefined);
 
-  const specs = remoteSpecs ?? localSpecs;
+  // The copy the installer saved beside this CLI (#236), gated on the
+  // repository it was taken from. Last in the chain, and the one source that
+  // needs neither the network nor a credential — which is the whole point:
+  // `gh` is authenticated PER USER, the installer supports running as root,
+  // and a root shell whose `gh` is logged out left the wizard with no
+  // questions at all and no way to say why.
+  const bundledSpecs = useMemo(() => {
+    const contents = bundledTemplateFor(repoAnswer);
+    if (contents === undefined) return [];
+    try {
+      return parseEnvExample(contents);
+    } catch {
+      return [];
+    }
+  }, [repoAnswer]);
+
+  // Precedence, most authoritative first: the repository's own file at the
+  // ref being deployed; a clone of it on this server or a checkout we are
+  // standing in; the copy this CLI was installed with. Each later source is
+  // a weaker claim about the same file, and none of them is a sibling
+  // application's template — see `loadTemplateSpecs` for why that matters.
+  const specs =
+    remoteSpecs ?? (localSpecs.length > 0 ? localSpecs : bundledSpecs);
   const templateSource: TemplateSource =
-    remoteSpecs !== undefined ? 'remote' : localSpecs.length > 0 ? 'local' : 'none';
+    remoteSpecs !== undefined
+      ? 'remote'
+      : localSpecs.length > 0
+        ? 'local'
+        : bundledSpecs.length > 0
+          ? 'bundled'
+          : 'none';
 
   // Memoised on the two answers that can CHANGE the step list, never on the
   // whole `answers` object. A step list rebuilt on every keystroke hands every
@@ -268,9 +312,6 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   // for a non-GitHub remote, a logged-out gh, a private repo the token cannot
   // see or a timeout, and `specs` falls back to the local template. An install
   // must not be blocked by a file that is an optimisation of correctness.
-  const repoAnswer = answerOf(answers, REPO_FIELD);
-  const refAnswer = answerOf(answers, REF_FIELD);
-
   useEffect(() => {
     // Only the REPOSITORY is required. An empty ref means the default branch
     // (#234) — the Review screen literally renders it as "(default branch)" —
@@ -280,13 +321,23 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     let cancelled = false;
 
     void (async () => {
-      const contents = await fetchRemoteTemplate({ repoUrl: repoAnswer, ref: refAnswer });
-      if (cancelled || !isMounted() || contents === undefined) return;
+      const result = await fetchRemoteTemplate({ repoUrl: repoAnswer, ref: refAnswer });
+      if (cancelled || !isMounted()) return;
+      if (!result.ok) {
+        setRemoteFailure(result);
+        return;
+      }
       try {
-        const parsed = parseEnvExample(contents);
-        if (parsed.length > 0) setRemoteSpecs(parsed);
+        const parsed = parseEnvExample(result.contents);
+        if (parsed.length > 0) {
+          setRemoteFailure(undefined);
+          setRemoteSpecs(parsed);
+          return;
+        }
+        setRemoteFailure({ ok: false, reason: 'empty' });
       } catch {
-        /* Unparseable: keep whatever the local template offered. */
+        /* Unparseable: keep whatever a local template offered, and say so. */
+        setRemoteFailure({ ok: false, reason: 'empty' });
       }
     })();
 
@@ -711,10 +762,22 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     );
   }
 
+  // One rendered sentence, shared by the Welcome provenance line and the
+  // Review refusal — so the operator is told the same thing in both places.
+  const remoteProblem =
+    remoteFailure === undefined ? undefined : describeRemoteTemplateFailure(remoteFailure);
+
   const context = stepContextFor(answers, facts);
   const intro =
     step.data?.intro(context) ??
-    welcomeIntro({ deployRoot, name, repoUrl: repoAnswer, ref: refAnswer, templateSource });
+    welcomeIntro({
+      deployRoot,
+      name,
+      repoUrl: repoAnswer,
+      ref: refAnswer,
+      templateSource,
+      remoteProblem,
+    });
   const fields = formFieldsFor(step, { specs, answers, suggestions });
   const reviewing = step.id === REVIEW_STEP_ID;
 
@@ -777,7 +840,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
               // to say so, not present an install-ready screen.
               <ErrorNotice
                 message="The environment template could not be read, so no configuration questions were asked."
-                hint={`Nothing was collected for the database, secrets, Google OAuth or the administrator, and installing now would take all of them from template defaults. Tried the remote (${displayRepoUrl(repoAnswer) || 'no repository resolved'}) and a local checkout, and neither answered. Check that \`gh auth status\` passes and the repository is visible to it, or run this from inside a checkout of the repository being deployed, then start again.`}
+                hint={`Nothing was collected for the database, secrets, Google OAuth or the administrator, and installing now would take all of them from template defaults. The remote (${displayRepoUrl(repoAnswer) || 'no repository resolved'}) ${remoteProblem === undefined ? 'was not reached' : `did not answer: ${remoteProblem}`}; no checkout on this server carried one either, and this CLI was installed without a copy. Fix the reason above, or run this from inside a checkout of the repository being deployed, then start again.`}
               />
             ) : (
               <ConfirmDialog
@@ -887,6 +950,7 @@ function welcomeIntro(input: {
   repoUrl: string;
   ref: string;
   templateSource: TemplateSource;
+  remoteProblem?: string | undefined;
 }): string[] {
   const resolved = input.name !== FALLBACK_APP_NAME || input.repoUrl !== '';
 
@@ -908,12 +972,21 @@ function welcomeIntro(input: {
         '    the answer.',
       ];
 
+  // A fallback SAYS WHY (#236). "the remote could not be read" on its own is
+  // the message that made a logged-out `gh`, an uninstalled `gh`, a private
+  // repository and a timeout look identical to everyone involved.
+  const because = input.remoteProblem === undefined ? '' : ` — ${input.remoteProblem}`;
   const provenance =
     input.templateSource === 'remote'
       ? [`Questions read from ${displayRepoUrl(input.repoUrl)} at ${input.ref}.`]
       : input.templateSource === 'local'
-        ? ['Questions read from a local checkout; the remote could not be read.']
-        : [];
+        ? [`Questions read from a local checkout; the remote was not used${because}.`]
+        : input.templateSource === 'bundled'
+          ? [
+              'Questions read from the template saved when this CLI was installed;',
+              `the remote was not used${because}.`,
+            ]
+          : [];
 
   return [
     ...location,

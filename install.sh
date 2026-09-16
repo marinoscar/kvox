@@ -547,7 +547,8 @@ if [[ -d "$APP_DIR" ]]; then
 fi
 mkdir -p "$APP_DIR"
 
-# Copy only the built artifacts + package manifest (not the full repo).
+# Copy the built artifacts, the package manifest and the environment
+# template (issue #236) - not the full repo.
 # Most of apps/cli's runtime deps (commander, ink, react, ...) are ordinary
 # public npm packages. @app/shared is not: it is an internal workspace package
 # (epic #161) that is `private: true` and never published, so the `npm install`
@@ -562,6 +563,54 @@ cp -r "$TMP_DIR/apps/cli/dist"        "$APP_DIR/dist"
 cp    "$TMP_DIR/apps/cli/package.json" "$APP_DIR/package.json"
 if [[ -f "$TMP_DIR/apps/cli/README.md" ]]; then
   cp "$TMP_DIR/apps/cli/README.md" "$APP_DIR/README.md"
+fi
+
+# The repository's environment template, kept beside the CLI (issue #236).
+#
+# The install wizard has to know which variables to ask about BEFORE it clones
+# anything, so on a first install it reads this file from the REMOTE through
+# the GitHub CLI. That credential is per-user, this installer deliberately
+# supports running as root, and root's `gh` is commonly logged out - at which
+# point the wizard had no template, asked no questions about the database, the
+# secrets, the OAuth client or the administrator, and refused to install.
+#
+# We are holding the file right now. Keeping one small text file costs nothing
+# and removes the network and the credential from the ordinary first install.
+#
+# source.json records WHICH repository it came from, and the CLI refuses to use
+# the copy for any other one: a template belongs to the repository that
+# declared it, and handing one repository's variable list to another is the
+# very bug this whole resolution chain exists to avoid.
+TEMPLATE_SRC="$TMP_DIR/infra/compose/.env.example"
+if [[ -f "$TEMPLATE_SRC" ]]; then
+  # The URL git itself would push to, so a local-source install records the
+  # real repository rather than the temp directory it was copied through.
+  SRC_REPO_URL="$(git -C "$TMP_DIR" remote get-url origin 2>/dev/null || true)"
+  [[ -n "$SRC_REPO_URL" ]] || SRC_REPO_URL="$KVOX_REPO"
+  if [[ -n "$KVOX_SRC" ]]; then
+    SRC_REF="$(git -C "$TMP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [[ "$SRC_REF" != "HEAD" ]] || SRC_REF=""
+  else
+    SRC_REF="$KVOX_REF"
+  fi
+
+  mkdir -p "$APP_DIR/template"
+  cp "$TEMPLATE_SRC" "$APP_DIR/template/.env.example"
+  # Written by node rather than a printf so the URL and ref are JSON-escaped
+  # by something that knows the rules, not by hand.
+  node -e '
+    const fs = require("node:fs");
+    fs.writeFileSync(
+      process.argv[1],
+      JSON.stringify({ repoUrl: process.argv[2], ref: process.argv[3] }, null, 2) + "\n",
+    );
+  ' "$APP_DIR/template/source.json" "$SRC_REPO_URL" "$SRC_REF" || {
+    err "Failed to record the bundled template source"
+    exit 1
+  }
+  ok "Bundled the environment template from $SRC_REPO_URL"
+else
+  warn "No infra/compose/.env.example in the source; the wizard will read it from the remote"
 fi
 
 if [[ -d "$TMP_DIR/packages" ]]; then

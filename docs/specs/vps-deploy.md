@@ -332,6 +332,85 @@ forever. `env-wizard.ts` should treat this as a library call into (or a
 copy of the documented technique from) `config.ts`, not a new, weaker
 reimplementation.
 
+### 6.1 Where the template file comes from, and why the order matters (issues #229, #230, #234, #236)
+
+Section 6 above assumes the wizard already has `.env.example`'s text in hand.
+Getting to that text is a separate problem, and an earlier one: the wizard
+has to ask its first question (the domain) before `checkout` (§7) has cloned
+anything, so on a first install there is nothing on this server yet for the
+wizard to read from disk.
+
+Four sources are tried, in order, and each is a strictly weaker claim about
+the same file than the one before it:
+
+1. **The repository's own file, at the resolved ref, read from the remote**
+   (`remote-template.ts`, issue #230): `gh api -H 'Accept:
+   application/vnd.github.raw' repos/<owner>/<repo>/contents/infra/compose/
+   .env.example[?ref=<ref>]` — the exact repository and the exact ref being
+   deployed, which is the only source that cannot be stale or mismatched by
+   construction. `gh`, not a plain HTTPS fetch, because the repository being
+   deployed is usually private and `gh`'s stored token is the credential
+   `checkout` already clones with (§5); reusing it adds no second auth path
+   that could be authorised differently from the clone that follows.
+2. **A checkout already on disk for this app** (`loadTemplateSpecs`/
+   `templateCandidates` in `install.tsx`): this deployment's own clone under
+   `<apps-root>/<name>/repo/...` (a reinstall or a resume), or the checkout
+   the CLI itself is running from, walking up from `process.cwd()`. Weaker
+   than (1) because it can be stale — a clone from before the operator's
+   latest edit to `.env.example` — or, on a first install, simply absent;
+   `bootstrap-vps.sh` leaves the operator standing inside such a checkout,
+   which is what makes this source the common case rather than a theoretical
+   one.
+3. **The copy the installer saved beside the CLI itself**
+   (`bundled-template.ts`, issue #236) — the file `install.sh` was holding
+   while it built the CLI, moments before it deleted the clone
+   (`TEMPLATE_SRC` in `install.sh`). Weaker again: it is fixed at whatever
+   commit the CLI was installed or last updated from, so an edit landed on
+   the default branch since then will not show up here until the CLI is
+   reinstalled.
+4. **Refuse.** With none of the above, `installSteps` drops every step whose
+   fields cannot resolve — Database, Secrets, OAuth, Admin, Storage and
+   Optional all vanish, leaving only Welcome, Domain, Resources and Review —
+   and Review's `ConfirmDialog` is replaced by a refusal
+   (`templateSource === 'none'` in `install.tsx`) rather than an offer to
+   install from template defaults. Installing here would mean
+   `POSTGRES_HOST=localhost`, placeholder secrets and an OAuth client that is
+   not the operator's; a wizard that could not read its own question list has
+   to say so, not present an install-ready screen — the same posture #234
+   established for an unresolved domain.
+
+Sources (2) and (3) are each gated on identity, not merely "a
+`.env.example` exists somewhere" — this is issue #229's fix, applied twice
+over. (2) is keyed on `name`, so it only ever reads *this app's own* clone,
+never `readdirSync`'s first match on a host running several apps — the
+originally reported #229 symptom was an install asking for a neighbouring
+app's SQLite `DATABASE_URL` and never asking for PostgreSQL at all. (3) is
+keyed on the repository: `install.sh` writes a `source.json` beside the saved
+file recording the clone URL and ref it came from, and
+`bundledTemplateMatches` refuses to answer unless that repository and the one
+actually being deployed resolve to the same GitHub slug. Skipping either gate
+would reintroduce the #229 bug — one application's variable list silently
+answering another's questions — in a new place: a CLI built for one fork must
+not configure a deploy of a different repository just because `--repo` named
+it on the same server.
+
+The one thing a failure of (1) must never do is disappear. Before #236,
+`fetchRemoteTemplate` answered a bare `undefined` for a non-GitHub remote, a
+missing `gh`, a `gh` that ran and refused, a timeout, and an empty file
+alike — five different problems an operator and a bug report could not tell
+apart. The sharpest case: `gh`'s authentication is PER USER, and the
+installer deliberately supports running as root (#226), so a root shell whose
+`gh` had never been logged in was indistinguishable from a healthy remote
+that legitimately had nothing to add. `fetchRemoteTemplate` now returns a
+`RemoteTemplateFailure` reason for every path — `not-github`, `gh-missing`,
+`gh-failed`, `timed-out`, `empty` — carrying the command's own first line of
+stderr, and both the Welcome provenance line and the Review refusal
+(`describeRemoteTemplateFailure`) show it. A failed remote read still never
+blocks an install by itself — the fallback chain above exists precisely so it
+doesn't — but the operator now sees *which* of the five problems they have,
+instead of a wizard that silently asked nothing and a Review screen that
+could not say why.
+
 ## 7. Install pipeline
 
 Every step is individually idempotent and safe to re-run — `install`'s
