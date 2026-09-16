@@ -11,6 +11,7 @@ import {
   noteConflictCurrentVersion,
   noteConflictReason,
   restoreNoteVersion,
+  retitleNote,
   updateNote,
   uploadNoteSourceDocument,
 } from '../../services/notes';
@@ -381,5 +382,46 @@ describe('notes service — versions', () => {
     await restoreNoteVersion('n1', 2, 5);
 
     expect(sent).toEqual({ baseVersion: 5 });
+  });
+});
+
+describe('retitleNote — #185', () => {
+  it('POSTs to /notes/{id}/retitle and returns the parsed job, not a title', async () => {
+    let method = '';
+    let path = '';
+    server.use(
+      http.post(`${API_BASE}/notes/:id/retitle`, ({ request, params }) => {
+        method = request.method;
+        path = new URL(request.url).pathname;
+        expect(params.id).toBe('n1');
+        return HttpResponse.json(
+          { data: { noteId: 'n1', jobId: 'job-9' } },
+          { status: 202 },
+        );
+      }),
+    );
+
+    const result = await retitleNote('n1');
+
+    expect(method).toBe('POST');
+    expect(path).toBe('/api/notes/n1/retitle');
+    // ⚠ EXACTLY {noteId, jobId} — the 202 the API answers has no `title` field
+    // at all, and a caller reading one back would be reading a key this
+    // response never carries.
+    expect(result).toEqual({ noteId: 'n1', jobId: 'job-9' });
+  });
+
+  it('sends no body — there is nothing for the caller to configure', async () => {
+    let body: unknown;
+    server.use(
+      http.post(`${API_BASE}/notes/:id/retitle`, async ({ request }) => {
+        body = await request.text();
+        return HttpResponse.json({ data: { noteId: 'n1', jobId: 'job-9' } }, { status: 202 });
+      }),
+    );
+
+    await retitleNote('n1');
+
+    expect(body).toBe('');
   });
 });

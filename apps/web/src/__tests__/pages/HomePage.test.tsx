@@ -74,14 +74,18 @@ let noteSummaryRequests = 0;
 let requestOrder: string[] = [];
 
 /**
- * EVERY request this render made, whatever the route — issue #170, epic #166.
+ * EVERY path this render touched, whoever made the request — issue #170, epic
+ * #166.
  *
- * `summaryRequests` and `noteSummaryRequests` only count the two routes this
- * file installs handlers for, so a section that grew a fetch of its own would
- * be invisible to them: it would hit a default handler in `mocks/handlers.ts`,
- * answer 200, and both counters would still read 1. This listener is attached
- * to MSW itself, so it sees the ACTUAL network the page produces, which is what
- * the page's one-request-per-content-type rule is a claim about.
+ * `summaryRequests` and `noteSummaryRequests` are per endpoint and only count
+ * the two routes this file installs handlers for, so they can only ever say
+ * "the two I know about answered once each": a section that grew a fetch of
+ * its own would be invisible to them — it would hit a default handler in
+ * `mocks/handlers.ts`, answer 200, and both counters would still read 1. This
+ * listener is attached to MSW itself, so it sees the ACTUAL network the page
+ * produces, which is what the page's one-request-per-content-type rule is a
+ * claim about, and it is the only way to assert that a new section added no
+ * fourth call of its own.
  */
 const observedRequests: string[] = [];
 server.events.on('request:start', ({ request }) => {
@@ -89,19 +93,45 @@ server.events.on('request:start', ({ request }) => {
 });
 
 /**
- * ⚠ THIS IS THE FILE'S ONE AND ONLY REQUEST OBSERVER.
+ * ⚠ THIS IS THE FILE'S ONE AND ONLY REQUEST OBSERVER, REGISTERED ONCE AT
+ * MODULE SCOPE AND NEVER TORN DOWN.
  *
- * A test must NEVER call `server.events.removeAllListeners()` — that would
- * tear down the `request:start` listener above for the rest of the file, so
- * `observedRequests` would silently stop collecting anything for every test
- * that runs afterward. The assertion then either passes vacuously against an
- * empty array or fails in a way that looks unrelated to this file. If a test
- * needs a request log of its own, read `observedRequests` (reset every test
- * in `respondWith`, called from `beforeEach` below) instead of registering a
- * second listener.
+ * A test must NEVER declare a second `request:start` listener of its own, and
+ * must NEVER call `server.events.removeAllListeners()`. Two suites here
+ * used to attach their own listener and remove all of them again in a
+ * `finally` — which removes EVERY listener on the shared server, including the
+ * one above, so `observedRequests` silently stops collecting anything for every
+ * test that runs afterward. The assertion then either passes vacuously against
+ * an empty array or fails in a way that looks unrelated to this file. If a test
+ * needs a request log of its own, read `observedRequests` (emptied every test
+ * in `respondWith`, called from the one outer `beforeEach` below) instead of
+ * registering a second listener.
  */
 
-/** The three calls this page is allowed to make, and no fourth. */
+/**
+ * The three calls a home-page load is allowed to make, sorted — and no fourth.
+ *
+ * One summary per CONTENT TYPE plus the one deployment capability probe — the
+ * rule `HomePage`'s header states. Every section on this page renders from what
+ * these already returned, so this list growing is the review question, not an
+ * incidental detail of whichever test noticed.
+ *
+ * ⚠ THE HAZARD THIS PARAGRAPH USED TO DESCRIBE IS GONE — issue #192, and the
+ * history is worth keeping because it explains why this constant is policed so
+ * hard. `RecentNotes` used to hand `notes.recent` straight to
+ * `useNoteSourceNames`, an ASYNC lookup firing its OWN `GET
+ * /api/transcripts/:id` per distinct source a recent note named. That was a
+ * genuine fourth request, and it was INTERMITTENT: it passed locally and on
+ * most CI shards because the lookup usually had not started before the
+ * assertion ran, and failed once it had — exactly as it did in PR #205.
+ *
+ * #192 denormalises `sourceName` onto every note row, so the lookup and its
+ * hook are deleted and no fixture's `notes.recent` can add a request here any
+ * more. The rule this paragraph replaces is therefore no longer a constraint on
+ * fixtures; the rule that REMAINS is the one above: this list growing is a
+ * review question, and it is never to be loosened to accommodate a page that
+ * started fetching more.
+ */
 const EXPECTED_REQUESTS = [
   '/api/notes/summary',
   '/api/transcription/config',
@@ -150,6 +180,7 @@ async function waitForLoaded() {
 
 beforeEach(() => {
   mockNavigate.mockClear();
+  observedRequests.length = 0;
   mockUseUploadManager.mockReturnValue(manager());
   // Module-level and shared by every mount, so it would otherwise leak resolved
   // source names (and resolved negatives) between the suites below.
@@ -758,6 +789,207 @@ describe('HomePage — in progress', () => {
 });
 
 // =============================================================================
+// Needs attention
+// =============================================================================
+
+const FAILED_TRANSCRIPT = transcript({
+  id: 't-failed',
+  title: 'Board meeting',
+  status: 'failed',
+  transcriptionStatus: 'failed',
+  failureReason: 'The provider rejected the audio.',
+});
+
+const FAILED_NOTE = note({
+  id: 'n-failed',
+  title: 'Board minutes',
+  status: 'failed',
+  failureReason: 'Your API key was rejected.',
+});
+
+describe('HomePage — needs attention', () => {
+  beforeEach(() => {
+    respondWith(summary({ recent: [transcript()], failed: [FAILED_TRANSCRIPT] }), {
+      notes: noteSummary({ recent: [note()], failed: [FAILED_NOTE] }),
+    });
+    // The two retry endpoints, answered for real rather than spied on: which
+    // endpoint each button reaches is the thing most likely to be wrong, and a
+    // mocked service function asserts nothing about it.
+    server.use(
+      http.post(`${API_BASE}/transcripts/:id/retry`, () =>
+        HttpResponse.json({ data: { ...FAILED_TRANSCRIPT, status: 'processing' } }),
+      ),
+      http.post(`${API_BASE}/notes/:id/regenerate`, () =>
+        HttpResponse.json({
+          data: {
+            note: { ...FAILED_NOTE, status: 'generating' },
+            generationId: 'gen-1',
+            jobId: 'job-1',
+            providerId: 'openai',
+            model: 'gpt-4o-mini',
+          },
+        }),
+      ),
+    );
+  });
+
+  it('shows the section', async () => {
+    renderHome();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Needs attention' }),
+    ).toBeInTheDocument();
+  });
+
+  it('lists the failed transcript AND the failed note', async () => {
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    const region = screen.getByRole('region', { name: 'Needs attention' });
+    expect(within(region).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(region).getByRole('heading', { name: 'Board meeting' })).toBeInTheDocument();
+    expect(within(region).getByRole('heading', { name: 'Board minutes' })).toBeInTheDocument();
+  });
+
+  it('sits under In progress and above Recent', async () => {
+    // THE ORDERING IS THE DECISION, not an accident of where the JSX landed —
+    // see the comment on the mount in `HomePage`. "What is happening right
+    // now?" keeps the top of the page because its rows stop being actionable
+    // (a live upload's controls exist only in this tab); "what went wrong two
+    // hours ago?" still outranks "what was I working on?", because a failed
+    // recording is not recent work to revisit, it is work that never happened.
+    mockUseUploadManager.mockReturnValue(manager({ uploads: [upload()] }));
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings.indexOf('In progress')).toBeLessThan(headings.indexOf('Needs attention'));
+    expect(headings.indexOf('Needs attention')).toBeLessThan(headings.indexOf('Recent'));
+  });
+
+  it('is ABSENT on a healthy account', async () => {
+    // Not an empty box, not a "nothing needs attention" card. The steady state
+    // of this app is that nothing is broken.
+    respondWith(summary({ recent: [transcript()] }), { notes: noteSummary({ recent: [note()] }) });
+    renderHome();
+    await waitForLoaded();
+
+    expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
+  });
+
+  it('is ABSENT in the first-run journey state', async () => {
+    // Not reachable through the API — `isNewUser` needs `recent` empty and a
+    // failed transcript is in `recent` too — but the section is mounted inside
+    // the non-new-user branch so that it cannot become reachable either.
+    respondWith(
+      summary({
+        failed: [FAILED_TRANSCRIPT],
+        counts: { owned: 0, shared: 0, inProgress: 0, failed: 1 },
+      }),
+    );
+    renderHome();
+    await screen.findByRole('heading', { name: 'Start here' });
+
+    expect(screen.queryByRole('heading', { name: 'Needs attention' })).not.toBeInTheDocument();
+  });
+
+  it('shows no note rows without notes:read', async () => {
+    // The hook is disabled entirely for that user, so the page hands the
+    // section an empty notes list rather than gating a button inside it.
+    renderHome(noNotesUser);
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    expect(screen.queryByRole('heading', { name: 'Board minutes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Regenerate/ })).not.toBeInTheDocument();
+  });
+
+  it('withholds the transcript retry without transcripts:write', async () => {
+    renderHome({
+      ...homeUser,
+      permissions: homeUser.permissions.filter((p) => p !== 'transcripts:write'),
+    });
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    expect(
+      screen.queryByRole('button', { name: 'Retry Board meeting' }),
+    ).not.toBeInTheDocument();
+    // The ROW is still there — the news is not gated, only the action.
+    expect(screen.getByRole('heading', { name: 'Board meeting' })).toBeInTheDocument();
+  });
+
+  it('fires NO additional request when the page loads', async () => {
+    // ⚠ THE EPIC-LEVEL CRITERION. The rows come from the two summaries the page
+    // already makes; a `GET /api/transcripts?status=failed` for one section
+    // would be this page's "one request per content type" rule broken.
+    //
+    // ⚠ ROOT CAUSE OF A REAL CI FAILURE — PR #205, `Web Tests` shard 2/4. Read
+    // this before touching the fixture below. This describe block's own
+    // `beforeEach` puts `note()` — `sourceType: 'transcript'`,
+    // `sourceTranscriptId: 't1'` — in `notes.recent`, and `RecentNotes` hands
+    // that array straight to `useNoteSourceNames` (issue #57/#107): a real,
+    // documented, ASYNC per-source lookup (see that hook's header for why it
+    // exists and why the actual fix belongs in the API, not here) that fires
+    // its OWN `GET /api/transcripts/t1` to resolve "from *Weekly standup*".
+    // That is a genuine, legitimate fourth request whenever a recent note has
+    // a source — it is simply not part of what THIS test is pinning. The old
+    // assertion here passed locally and on 3 of 4 CI shards only because the
+    // lookup usually had not started before the assertion ran, and failed
+    // once CI load let it start in time — an order/timing-dependent failure,
+    // not a flake to retry away. So this test asks for a notes summary whose
+    // `recent` list is EMPTY: no source to resolve, no async request to race,
+    // while `failed: [FAILED_NOTE]` keeps "Needs attention" rendering exactly
+    // as truthfully as the shared fixture did (that section reads
+    // `notes.summary.failed`, never `.recent` — see `HomePage.tsx`).
+    respondWith(summary({ recent: [transcript()], failed: [FAILED_TRANSCRIPT] }), {
+      notes: noteSummary({ failed: [FAILED_NOTE] }),
+    });
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    expect([...observedRequests].sort()).toEqual(EXPECTED_REQUESTS);
+  });
+
+  it('retries a transcript and re-reads the transcript summary', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    await user.click(screen.getByRole('button', { name: 'Retry Board meeting' }));
+
+    // The refreshed summary is what takes the row off the list.
+    await waitFor(() => expect(summaryRequests).toBe(2));
+    expect(
+      observedRequests.filter((path) => path === '/api/transcripts/t-failed/retry'),
+    ).toHaveLength(1);
+    // AND NOT the notes summary: a transcript retry changed nothing about it.
+    expect(noteSummaryRequests).toBe(1);
+  });
+
+  it('regenerates a note and re-reads the notes summary', async () => {
+    const user = userEvent.setup();
+    renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+    await waitFor(() => expect(noteSummaryRequests).toBe(1));
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate Board minutes' }));
+
+    await waitFor(() => expect(noteSummaryRequests).toBe(2));
+    expect(summaryRequests).toBe(1);
+  });
+
+  it('has no accessibility violations', async () => {
+    const { container } = renderHome();
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
 // Recent
 // =============================================================================
 
@@ -937,6 +1169,39 @@ describe('HomePage — recent notes', () => {
     await screen.findByRole('alert');
 
     expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+  });
+
+  it('names a note\u2019s source with NO request at all (#192)', async () => {
+    // The strengthened form of the test this replaces. That one pinned
+    // `useNoteSourceNames` — an async lookup firing one `GET` per distinct
+    // source, deduped by a module-level cache — and asserted the dedup: ONE
+    // request for two notes sharing a transcript.
+    //
+    // #192 denormalises `sourceName` onto the row, so the claim is now the
+    // stronger one: ZERO. That also retires the intermittency this suite's
+    // `EXPECTED_REQUESTS` comment describes at length — an async lookup that
+    // had usually not started before an assertion ran.
+    //
+    // ⚠ An exact path, never `/transcripts/:id`: a param route would also match
+    // `/transcripts/summary`, the `summary`-is-a-legal-id trap `respondWith`
+    // warns about, and would shadow the `beforeEach`'s summary handler because
+    // `server.use` here registers last.
+    let transcriptRequests = 0;
+    server.use(
+      http.get(`${API_BASE}/transcripts/t1`, () => {
+        transcriptRequests += 1;
+        return HttpResponse.json({
+          data: { id: 't1', title: 'Weekly sync recording', currentVersion: 1 },
+        });
+      }),
+    );
+    renderHome();
+    await screen.findByRole('heading', { name: 'Recent notes' });
+
+    // Both cards name the source, straight off the row the summary returned.
+    expect(await screen.findAllByRole('link', { name: 'Weekly sync recording' })).toHaveLength(2);
+    expect(transcriptRequests).toBe(0);
+    expect(observedRequests.filter((path) => path === '/api/transcripts/t1')).toHaveLength(0);
   });
 
   it('has no accessibility violations', async () => {

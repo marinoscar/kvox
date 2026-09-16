@@ -192,6 +192,21 @@ export interface RegenerateNoteInput {
   model?: string;
 }
 
+/**
+ * `POST /api/notes/{id}/retitle` — the job queued, NOT the new title.
+ *
+ * ⚠ THIS IS A 202, AND THE TITLE IS NOT IN IT. Naming a note is a provider
+ * call, so the API queues a `note.retitle` job and answers immediately; the
+ * title changes when that job settles. A caller that treated this result as the
+ * answer would be rendering a name nobody has chosen yet — re-read the note (or
+ * let the page's own poll do it) to see the one that was.
+ */
+export interface RetitleNoteResult {
+  noteId: string;
+  /** The `note.retitle` job. Watchable in the admin job list; nothing else needs it. */
+  jobId: string;
+}
+
 export interface NoteVersion {
   version: number;
   kind: 'ai_generated' | 'edit' | 'restore';
@@ -495,6 +510,28 @@ export async function regenerateNote(
   input: RegenerateNoteInput = {},
 ): Promise<CreateNoteResult> {
   return api.post<CreateNoteResult>(`/notes/${encodeURIComponent(id)}/regenerate`, input);
+}
+
+/**
+ * `POST /api/notes/{id}/retitle` — ask for a title read off the note's own text.
+ *
+ * QUEUE WORK, NOT A RENAME. See {@link RetitleNoteResult}: this resolves as
+ * soon as the job is enqueued, and the note on screen still has its old title
+ * at that moment.
+ *
+ * ⚠ IT WILL RENAME A NOTE THE USER NAMED THEMSELVES, and that is the API's
+ * deliberate choice rather than an oversight — asking for a suggestion about a
+ * note in front of you is an explicit request about that note, unlike the bulk
+ * sweep, which never touches a name a person chose. So no caller should hide or
+ * disable this on a `titleSource: 'user'` note.
+ *
+ * Refuses with a **409** whose reason is `generating` while the note is being
+ * written — that generation names the note itself when it commits, and two
+ * passes racing for one title spend the user's money for one answer. That is a
+ * BRANCH for {@link noteConflictReason}, not an error message to render raw.
+ */
+export async function retitleNote(id: string): Promise<RetitleNoteResult> {
+  return api.post<RetitleNoteResult>(`/notes/${encodeURIComponent(id)}/retitle`);
 }
 
 /**

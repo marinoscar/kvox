@@ -86,7 +86,9 @@ describe('RecentNotes — a populated list', () => {
     // of what each came from throws away the fact that makes them trustworthy.
     render(<RecentNotes items={SIX} total={6} canCreate isLoading={false} />);
 
-    expect(screen.getAllByRole('link', { name: 'a transcript' })).toHaveLength(6);
+    // Named, not the category noun: the fixture carries `sourceName`, which
+    // since #192 the API resolves server-side and puts on every row.
+    expect(screen.getAllByRole('link', { name: 'Weekly sync recording' })).toHaveLength(6);
   });
 
   it('shows a generating note as generating', () => {

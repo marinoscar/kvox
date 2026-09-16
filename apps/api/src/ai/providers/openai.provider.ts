@@ -18,10 +18,14 @@ import {
   aiProvidersSchema,
   type AiProvidersValue,
 } from '../ai-settings.schema';
+import { EMBEDDING_DIMENSIONS } from './ai-provider.interface';
 import type {
   AiConnectionTest,
   AiDelta,
   AiDiscoveredModel,
+  AiEmbedRequest,
+  AiEmbedResult,
+  AiEmbeddingCapability,
   AiFinishReason,
   AiGenerateRequest,
   AiListModelsOptions,
@@ -430,6 +434,28 @@ const CONTEXT_LENGTH_MARKERS = [
   'string_above_max_length',
 ];
 
+/**
+ * One item of `POST /embeddings`, as far as this file reads it (#183).
+ *
+ * ⚠ `index` IS NOT DECORATION AND IS NOT OPTIONAL TO READ. The vendor documents
+ * the response as an array of objects each carrying its own position, which is
+ * the API telling you in as many words that the array order is not the
+ * contract. See {@link OpenAiProvider.embed} for what reading it positionally
+ * would cost, and why the cost is invisible.
+ */
+interface OpenAiEmbeddingEntry {
+  index?: unknown;
+  embedding?: unknown;
+}
+
+/** The `POST /embeddings` envelope (#183). */
+interface OpenAiEmbeddingResponse {
+  data?: unknown;
+  /** The model the vendor says actually ran — a gateway may substitute one. */
+  model?: unknown;
+  usage?: { prompt_tokens?: unknown } | null;
+}
+
 /** One frame of OpenAI's `stream: true` response, as far as this file reads it. */
 interface OpenAiStreamChunk {
   choices?: Array<{
@@ -649,6 +675,52 @@ export class OpenAiProvider
     // dropdown describes the endpoint this deployment actually calls rather
     // than OpenAI's public catalogue.
     modelDiscovery: true,
+  };
+
+  /**
+   * This provider's embedding endpoint (#183, epic #165).
+   *
+   * ⚠ PRESENT, AND `embed` BELOW IS WHAT MAKES THAT LEGAL — the registry
+   * refuses this provider at boot if the two disagree, exactly as it does for
+   * `capabilities.modelDiscovery`/`listModels`.
+   *
+   * ⚠ `text-embedding-3-small` OUTPUTS 1536 DIMENSIONS NATIVELY. That is the
+   * whole reason it is the model named here, and it is not the same fact as
+   * "1536 is obtainable from it". OpenAI also accepts a `dimensions` request
+   * parameter that truncates a wider model's output (Matryoshka representation
+   * learning, which trains a model so that its leading components remain a
+   * usable embedding on their own) — so `text-embedding-3-large` could be asked
+   * for 1536 numbers instead of 3072. THIS FILE DELIBERATELY DOES NOT DO THAT.
+   * Truncation of that kind is a property of how one vendor trained one family
+   * of models; it is not available on other vendors, and an OpenAI-compatible
+   * gateway in front of some other model will either ignore the parameter or
+   * refuse it. Relying on it would make the {@link EMBEDDING_DIMENSIONS}
+   * contract depend on a vendor feature rather than on a declared property of
+   * the model, and the failure mode of "ignored the parameter" is the worst
+   * available one: a 3072-wide vector arriving where 1536 was promised, which
+   * the validation below turns into a loud error only because the width is
+   * asserted rather than assumed. Native width, declared here, refused by the
+   * registry on mismatch.
+   *
+   * ⚠ `maxInputTokens: 8191` IS THE VENDOR'S DOCUMENTED PER-INPUT CEILING —
+   * per input, not per batch: 128 inputs of that length is a legal request.
+   * Re-verify it with the same care as MODELS; see the file header.
+   *
+   * ⚠ `maxBatchSize: 128` IS A DELIBERATELY CONSERVATIVE CHOICE AND IS *NOT* A
+   * VENDOR MAXIMUM. OpenAI accepts considerably larger batches. The number is
+   * picked to bound the blast radius of one failed request: the batch is the
+   * retry unit, so a timeout or a 500 at the end of a batch re-does at most 128
+   * inputs rather than thousands, and a rate-limited indexer backs off in
+   * increments small enough that progress survives. Raising it is a
+   * throughput-versus-rework trade with no correctness component — which is
+   * precisely why it should not be raised by someone assuming it is the
+   * vendor's limit.
+   */
+  readonly embedding: AiEmbeddingCapability = {
+    model: 'text-embedding-3-small',
+    dimensions: EMBEDDING_DIMENSIONS,
+    maxInputTokens: 8191,
+    maxBatchSize: 128,
   };
 
   /**
@@ -1179,6 +1251,190 @@ export class OpenAiProvider
           ),
           completionTokens: this.countTokens(completionText, request.model),
         },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Embeddings (#183)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `POST {baseUrl}/embeddings` — one batch in, one vector per input out.
+   *
+   * ONE HTTP PATH, NOT A SECOND ONE. The base URL, the `authorization` header,
+   * the timeout handling and every error mapping are the SAME `baseUrl`,
+   * `authHeaders`, `AbortSignal.timeout` and `assertOk` the generation and
+   * discovery paths use — including the injected `fetchImpl`, which is what
+   * lets every case below be asserted offline with no vendor account and no
+   * charge to anybody's card. A second fetch path here would mean a revoked key
+   * producing one sentence during generation and a different one during
+   * indexing, and a gateway quirk fixed in one place and not the other.
+   *
+   * ⚠ THE VECTORS ARE PLACED BY THE PROVIDER'S OWN `index`, NEVER BY RESPONSE
+   * POSITION. This is the reason most of the body below exists. The vendor
+   * returns an `index` per item precisely because the array order is not
+   * promised; reading it positionally would pass every test written against a
+   * well-behaved fixture and then, one day, attach every chunk's vector to the
+   * WRONG CHUNK. That corruption raises no error, fails no constraint and is
+   * undetectable after the fact — the widths are right, the counts are right,
+   * the job succeeds, and semantic search confidently returns the wrong
+   * passages for as long as the index lives. Three checks make it
+   * unrepresentable instead: every index must be a position in THIS batch, no
+   * index may arrive twice, and every position must end up filled. Together
+   * those three mean the only response this method accepts is a complete
+   * permutation of the batch it sent — so a short, duplicated or transposed
+   * answer is a thrown error rather than a silent lie.
+   *
+   * ⚠ AN EMPTY OR OVER-LARGE BATCH IS REFUSED HERE, BEFORE ANY REQUEST. Both
+   * are `AiInputError` (terminal — retrying sends the same illegal batch), and
+   * both are things this provider already knows the answer to: spending a round
+   * trip to be told a ceiling we declared ourselves is paying for an answer we
+   * are holding.
+   *
+   * ⚠ `ctx.apiKey` IS THE CALLING USER'S OWN. Nothing in this method logs it,
+   * and nothing in this method logs `ctx`. Indexing runs unattended and at
+   * volume, which makes a temporary log line here the most expensive one in the
+   * module.
+   */
+  async embed(
+    ctx: AiProviderContext<OpenAiSettings>,
+    request: AiEmbedRequest,
+  ): Promise<AiEmbedResult> {
+    const { inputs } = request;
+
+    if (inputs.length === 0) {
+      throw new AiInputError(
+        'An embedding request must carry at least one input; this one carried none. Sending it would spend a request on a batch with no work in it.',
+        undefined,
+        this.id,
+      );
+    }
+
+    if (inputs.length > this.embedding.maxBatchSize) {
+      throw new AiInputError(
+        `An embedding request may carry at most ${this.embedding.maxBatchSize} inputs; this one carried ${inputs.length}. Split the batch — the ceiling is declared on this provider's embedding capability so a caller can size against it rather than discover it from a refusal.`,
+        undefined,
+        this.id,
+      );
+    }
+
+    const response = await this.fetchImpl(
+      `${this.baseUrl(ctx.settings)}/embeddings`,
+      {
+        method: 'POST',
+        headers: {
+          ...this.authHeaders(ctx.apiKey),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.embedding.model,
+          // The batch, in order. What comes back is re-ordered by `index`
+          // below; this array is the only thing that defines what "input 3"
+          // means.
+          input: inputs,
+          // ⚠ EXPLICIT, NOT DEFAULTED. The alternative encoding is base64, and
+          // some gateways make it their default; asking for `float` means the
+          // parser below reads numbers rather than silently receiving a string
+          // where an array was expected.
+          encoding_format: 'float',
+        }),
+        // The same shape `generate` uses: the caller's timeout when it gave
+        // one, none otherwise. Deliberately not the PROBE budget — a full batch
+        // is real work, not a metadata read.
+        signal:
+          request.timeoutMs && request.timeoutMs > 0
+            ? AbortSignal.timeout(request.timeoutMs)
+            : undefined,
+      },
+    );
+
+    await this.assertOk(
+      response,
+      `embed ${inputs.length} input(s) with model "${this.embedding.model}"`,
+    );
+
+    let payload: OpenAiEmbeddingResponse;
+    try {
+      payload = (await response.json()) as OpenAiEmbeddingResponse;
+    } catch {
+      // A 2xx whose body is not JSON is a gateway problem, not a credential
+      // one, and is worth another attempt — so a plain (retryable) Error. The
+      // message carries nothing from the body, for the reason `listModels`
+      // states: an intercepting proxy's HTML error page must not be echoed on.
+      throw new Error(
+        'The provider answered the embedding request with a body this application could not read as JSON. That is usually a proxy or gateway in front of the API rather than the API itself.',
+      );
+    }
+
+    if (!Array.isArray(payload.data)) {
+      throw new Error(
+        'The provider answered the embedding request with a JSON body carrying no `data` array. The response does not match the embeddings API this build calls.',
+      );
+    }
+
+    const entries = payload.data as OpenAiEmbeddingEntry[];
+
+    // Sparse on purpose: a hole here is an input the provider never answered
+    // for, and the completeness check below is what turns that into an error
+    // rather than an `undefined` handed to a caller that will store it.
+    const vectors: Array<number[] | undefined> = new Array<number[] | undefined>(
+      inputs.length,
+    );
+
+    for (const entry of entries) {
+      const index = asFiniteNumber(entry?.index);
+
+      if (index === null || !Number.isInteger(index) || index < 0 || index >= inputs.length) {
+        throw new Error(
+          `The provider returned an embedding whose index (${String(entry?.index)}) is not a position in the ${inputs.length}-input batch this request sent. Placing it by response position instead would attach a vector to the wrong text.`,
+        );
+      }
+
+      if (vectors[index] !== undefined) {
+        throw new Error(
+          `The provider returned two embeddings for index ${index} of a ${inputs.length}-input batch. One of them belongs to an input this response then has no vector for.`,
+        );
+      }
+
+      const vector = entry?.embedding;
+
+      if (!Array.isArray(vector) || vector.length !== this.embedding.dimensions) {
+        throw new Error(
+          `The provider returned an embedding of width ${Array.isArray(vector) ? vector.length : typeof vector} for index ${index}; this application stores vectors of exactly ${this.embedding.dimensions} components and can store nothing else.`,
+        );
+      }
+
+      for (const component of vector) {
+        if (typeof component !== 'number' || !Number.isFinite(component)) {
+          // A NaN or an Infinity poisons every distance computed against this
+          // vector, and does it quietly — a similarity search does not fail on
+          // one, it just stops ranking meaningfully.
+          throw new Error(
+            `The provider returned an embedding for index ${index} containing a value that is not a finite number.`,
+          );
+        }
+      }
+
+      vectors[index] = vector as number[];
+    }
+
+    const missing = vectors.findIndex((vector) => vector === undefined);
+    if (missing !== -1) {
+      throw new Error(
+        `The provider returned no embedding for input ${missing} of ${inputs.length}. A partial batch is refused rather than stored, because the alternative is a gap nothing downstream can tell from a vector.`,
+      );
+    }
+
+    return {
+      vectors: vectors as number[][],
+      // `null` when the provider said nothing — never 0. See the interface: a
+      // zero would read as "this batch was free", the one wrong answer about
+      // somebody's own bill.
+      promptTokens: asFiniteNumber(payload.usage?.prompt_tokens),
+      // What the provider says RAN, falling back to what was asked for only
+      // when it named nothing. A gateway that substituted a model is exactly
+      // the provenance a stored vector needs to record.
+      model: asString(payload.model) ?? this.embedding.model,
     };
   }
 

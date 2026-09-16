@@ -126,13 +126,12 @@ describe('NoteSummaryCard', () => {
   it('falls back to the category noun rather than printing a uuid', () => {
     // A uuid where a title should be is worse than the category alone, because
     // it looks like the answer.
-    render(<NoteSummaryCard note={note()} />);
-
-    expect(screen.getByRole('link', { name: 'a transcript' })).toBeInTheDocument();
-  });
-
-  it('treats a null source name exactly as an absent one', () => {
-    render(<NoteSummaryCard note={note()} sourceName={null} />);
+    //
+    // ⚠ `sourceName: null` is not a placeholder state since #192 — it is the
+    // API's PERMANENT answer for a source that has been deleted or that this
+    // caller may no longer read (an unshared transcript). There is no second
+    // request coming that would fill it in.
+    render(<NoteSummaryCard note={note({ sourceName: null })} />);
 
     expect(screen.getByRole('link', { name: 'a transcript' })).toBeInTheDocument();
   });

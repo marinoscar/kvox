@@ -56,15 +56,26 @@ export function summary(overrides: Partial<TranscriptSummary> = {}): TranscriptS
   const recent = overrides.recent ?? [];
   const shared = overrides.sharedWithMe ?? [];
   const inProgress = overrides.inProgress ?? [];
+  const failed = overrides.failed ?? [];
   return {
     inProgress,
     recent,
     sharedWithMe: shared,
+    failed,
     counts: {
-      owned: recent.length + inProgress.length,
+      // ⚠ `failed` COUNTS TOWARDS `owned`, and it has to. `HomePage` reads
+      // `counts.owned === 0` as part of `isNewUser`, so a fixture handed a
+      // failed transcript while claiming the account owns nothing would render
+      // the first-run walkthrough over the top of the very section under test.
+      // Summed rather than de-duplicated (a real `failed` row is in `recent`
+      // too) because the only consumer compares this number to zero.
+      owned: recent.length + inProgress.length + failed.length,
       shared: shared.length,
       inProgress: inProgress.length,
-      failed: 0,
+      // DERIVED, like the notes fixture's — but overridable, because the API's
+      // `counts.failed` is the TRUE total while `failed` is capped at eight,
+      // and the "Showing 8 of 30" caption only exists to say so.
+      failed: failed.length,
       ...overrides.counts,
     },
   };
@@ -91,7 +102,10 @@ export function note(overrides: Partial<NoteListItem> = {}): NoteListItem {
     sourceObjectId: null,
     templateId: 'tpl-1',
     templateName: 'Meeting minutes',
-    sourceName: null,
+    // #192: the API resolves this server-side and puts it on the row, so a
+    // fixture that left it `null` would make every home card render the
+    // category noun and would quietly weaken the tests that assert the name.
+    sourceName: 'Weekly sync recording',
     currentGenerationId: null,
     failureReason: null,
     excerpt: 'The team agreed to ship the export dialog before the end of the month.',

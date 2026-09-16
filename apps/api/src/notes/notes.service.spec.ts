@@ -1,3 +1,4 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import type { Note } from '@prisma/client';
 
@@ -7,10 +8,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
 import { NoteSourceNameService } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
-import { noteResponseSchema } from './dto/note.dto';
+import { noteResponseSchema, RETITLE_SWEEP_LIMIT } from './dto/note.dto';
 import { NoteGenerationRequestService } from './generation/note-generation-request.service';
 import { NoteSourceService } from './generation/note-source.service';
-import { detailShape, NotesService } from './notes.service';
+import { NOTE_RETITLE_JOB_TYPE, NOTE_SUBJECT_TYPE } from './job-types';
+import { detailShape, NOTE_RETITLE_JOB_PRIORITY, NotesService } from './notes.service';
 
 // =============================================================================
 // NotesService — title provenance (`titleSource`, issue #180, epic #163)
@@ -96,6 +98,7 @@ describe('NotesService', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn().mockResolvedValue(noteRow()),
         findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
       },
       noteVersion: {
         create: jest.fn().mockResolvedValue({}),
@@ -290,6 +293,177 @@ describe('NotesService', () => {
       // And the body IS the restored one — confirms this is the real commit
       // path, not a call that happened to skip both keys for another reason.
       expect(call.data).toEqual(expect.objectContaining({ body: 'An older body.' }));
+    });
+  });
+
+  // ===========================================================================
+  // Retitle (issue #184, epic #163)
+  // ===========================================================================
+
+  describe('retitle — one note, the "Suggest a title" button', () => {
+    it('is a 404 for a note the caller cannot see (whatever NoteAccessService throws)', async () => {
+      access.require.mockRejectedValue(new NotFoundException('No such note, or no access to it.'));
+
+      await expect(service.retitle(NOTE_ID, USER)).rejects.toBeInstanceOf(NotFoundException);
+      expect(jobs.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('is a 409 carrying the GENERATING reason while the note is generating', async () => {
+      access.require.mockResolvedValue({
+        note: noteRow({ status: 'generating' }),
+        role: 'owner',
+      });
+
+      let thrown: ConflictException | undefined;
+
+      try {
+        await service.retitle(NOTE_ID, USER);
+      } catch (error) {
+        thrown = error as ConflictException;
+      }
+
+      expect(thrown).toBeInstanceOf(ConflictException);
+      expect(
+        (thrown?.getResponse() as { details: { reason: string } }).details,
+      ).toEqual({ reason: 'generating' });
+      expect(jobs.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('enqueues note.retitle with force: true, skipDedup: true, no explicit priority, and audits it', async () => {
+      access.require.mockResolvedValue({ note: noteRow(), role: 'owner' });
+
+      const result = await service.retitle(NOTE_ID, USER);
+
+      expect(jobs.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: NOTE_RETITLE_JOB_TYPE,
+          subjectType: NOTE_SUBJECT_TYPE,
+          subjectId: NOTE_ID,
+          payload: { noteId: NOTE_ID, force: true },
+          skipDedup: true,
+        }),
+      );
+
+      // ⚠ NO explicit priority: the column default outranks the bulk sweep,
+      // which is the whole reason `NOTE_RETITLE_JOB_PRIORITY` exists as a
+      // constant the sweep alone passes.
+      const [enqueued] = jobs.enqueue.mock.calls[0];
+
+      expect(enqueued).not.toHaveProperty('priority');
+      expect(enqueued.payload.force).toBe(true);
+
+      expect(result).toEqual({ noteId: NOTE_ID, jobId: 'job-1' });
+      expect(prisma.auditEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'note:retitle',
+            targetType: 'note',
+            targetId: NOTE_ID,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('retitleAll — the bulk sweep', () => {
+    const noteIds = (count: number) => Array.from({ length: count }, (_, i) => ({ id: `note-${i}` }));
+
+    it(
+      'selects `titleSource: "template"` — narrower than "not user", which is what lets the sweep terminate ' +
+        '(a success writes "ai", so "not user" would never shrink)',
+      async () => {
+        prisma.note.count.mockResolvedValue(0);
+        prisma.note.findMany.mockResolvedValue([]);
+
+        await service.retitleAll(USER);
+
+        const expectedWhere = {
+          ownerId: USER.id,
+          deletedAt: null,
+          status: 'ready',
+          titleSource: 'template',
+        };
+
+        expect(prisma.note.count).toHaveBeenCalledWith({ where: expectedWhere });
+        expect(prisma.note.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expectedWhere }),
+        );
+      },
+    );
+
+    it('orders oldest `updatedAt` first, so a titled note falls to the back of the next page', async () => {
+      prisma.note.count.mockResolvedValue(0);
+      prisma.note.findMany.mockResolvedValue([]);
+
+      await service.retitleAll(USER);
+
+      expect(prisma.note.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }] }),
+      );
+    });
+
+    it('caps the page at RETITLE_SWEEP_LIMIT', async () => {
+      prisma.note.count.mockResolvedValue(0);
+      prisma.note.findMany.mockResolvedValue([]);
+
+      await service.retitleAll(USER);
+
+      expect(prisma.note.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: RETITLE_SWEEP_LIMIT }),
+      );
+    });
+
+    it('queues one job per note, none with skipDedup, all at NOTE_RETITLE_JOB_PRIORITY, no force', async () => {
+      prisma.note.count.mockResolvedValue(2);
+      prisma.note.findMany.mockResolvedValue(noteIds(2));
+
+      await service.retitleAll(USER);
+
+      expect(jobs.enqueue).toHaveBeenCalledTimes(2);
+
+      for (const [input] of jobs.enqueue.mock.calls) {
+        expect(input.type).toBe(NOTE_RETITLE_JOB_TYPE);
+        expect(input.priority).toBe(NOTE_RETITLE_JOB_PRIORITY);
+        expect(input).not.toHaveProperty('skipDedup');
+        expect(input.payload).not.toHaveProperty('force');
+      }
+
+      expect(jobs.enqueue).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ subjectId: 'note-0', payload: { noteId: 'note-0' } }),
+      );
+      expect(jobs.enqueue).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ subjectId: 'note-1', payload: { noteId: 'note-1' } }),
+      );
+    });
+
+    it('remaining is 0 when fewer notes match than the cap', async () => {
+      prisma.note.count.mockResolvedValue(2);
+      prisma.note.findMany.mockResolvedValue(noteIds(2));
+
+      const result = await service.retitleAll(USER);
+
+      expect(result).toEqual({ queued: 2, remaining: 0 });
+    });
+
+    it('queued === cap and remaining === total - cap when more notes match than the cap', async () => {
+      prisma.note.count.mockResolvedValue(RETITLE_SWEEP_LIMIT + 50);
+      prisma.note.findMany.mockResolvedValue(noteIds(RETITLE_SWEEP_LIMIT));
+
+      const result = await service.retitleAll(USER);
+
+      expect(result).toEqual({ queued: RETITLE_SWEEP_LIMIT, remaining: 50 });
+    });
+
+    it('an empty library queues nothing and returns { queued: 0, remaining: 0 }', async () => {
+      prisma.note.count.mockResolvedValue(0);
+      prisma.note.findMany.mockResolvedValue([]);
+
+      const result = await service.retitleAll(USER);
+
+      expect(result).toEqual({ queued: 0, remaining: 0 });
+      expect(jobs.enqueue).not.toHaveBeenCalled();
     });
   });
 });
