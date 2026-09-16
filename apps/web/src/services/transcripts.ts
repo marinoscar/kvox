@@ -191,6 +191,16 @@ export interface TranscriptSummary {
   inProgress: TranscriptListItem[];
   recent: TranscriptListItem[];
   sharedWithMe: TranscriptListItem[];
+  /**
+   * The caller's OWN failed transcripts, newest first, capped at eight (#171).
+   *
+   * Owner-scoped where `inProgress` unions the caller's shares, because `POST
+   * /api/transcripts/:id/retry` is owner-only: somebody else's failure is not
+   * an item this user can act on. `counts.failed` below stays the TRUE total
+   * from its own `count()`, so a user with thirty failures reads thirty there
+   * while this list still carries eight — see the API's `summary()` header.
+   */
+  failed: TranscriptListItem[];
   counts: {
     owned: number;
     shared: number;

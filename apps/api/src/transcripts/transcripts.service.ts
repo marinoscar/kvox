@@ -90,6 +90,18 @@ import { TranscriptionRuntimeService } from './transcription-runtime.service';
  */
 const TRANSCRIPT_SOURCE_MIME_TYPES = ['audio/*', 'video/*'];
 
+/**
+ * How many rows each list inside `GET /api/transcripts/summary` carries.
+ *
+ * Named rather than spelled at each call site so the three — soon four — lists
+ * this endpoint returns cannot drift apart by one of them being edited alone.
+ * `GET /api/notes/summary` names the same number the same way, deliberately:
+ * the home page renders both beside each other, and a transcripts list eight
+ * rows deep next to a notes list of ten would be an asymmetry nothing in the
+ * design intended.
+ */
+const SUMMARY_LIST_SIZE = 8;
+
 /** The list-row projection, as every read surface returns it. */
 export interface TranscriptListItem {
   id: string;
@@ -299,15 +311,46 @@ export class TranscriptsService {
   /**
    * `GET /api/transcripts/summary` — the home page's ONE request.
    *
-   * Three lists and four counts in a single round trip, deliberately: the
-   * alternative is a home page that fires four requests and renders in four
+   * Four lists and four counts in a single round trip, deliberately: the
+   * alternative is a home page that fires five requests and renders in five
    * stages, and the queries are cheap enough (all covered by
    * `(owner_id, updated_at desc)`) that combining them costs nothing.
+   *
+   * ---------------------------------------------------------------------------
+   * WHY `failed` IS A LIST AND NOT JUST THE COUNT IT ALREADY HAD (issue #171)
+   * ---------------------------------------------------------------------------
+   *
+   * `counts.failed` shipped first, and on its own it is a dead end: it tells a
+   * person that three of their recordings did not make it and gives them
+   * nowhere to go. A count you cannot act on is not navigation — the user still
+   * has to guess which three, open the full list, and filter it by hand. The
+   * rows are what lets the home page put "Needs attention" in front of them
+   * with a retry a tap away, which is the whole point of epic #166.
+   *
+   * CAPPED AT `SUMMARY_LIST_SIZE`, like its siblings, not unbounded. This is a
+   * summary: a user whose provider account lapsed for a week can have hundreds
+   * of failed rows, and shipping all of them would make the home page's single
+   * request the largest response in the application, to render a section nobody
+   * scrolls past the first few rows of. `counts.failed` stays the TRUE total
+   * from its own `count()` — never `failed.length` — so "8 of 30" is sayable
+   * and the list's cap never masquerades as the number of things wrong.
+   *
+   * IT LIVES HERE RATHER THAN AS A `GET /api/transcripts?status=failed` THE
+   * PAGE FIRES ITSELF. `apps/web/src/pages/HomePage.tsx`'s header states the
+   * rule — one request per content type, all fired in parallel, and no
+   * per-section list fetches (`docs/specs/ux-refresh.md` §2). A second
+   * transcripts request for one section would be that rule broken for the sake
+   * of a query this method is already making the other four of.
+   *
+   * OWNER-SCOPED, unlike `inProgress`, which unions the caller's shares: a
+   * transcript that failed is its owner's problem to retry, and `POST
+   * /api/transcripts/:id/retry` is owner-only. Putting somebody else's failure
+   * in your "needs attention" list would be an item you cannot act on.
    */
   async summary(userId: string) {
     const shareIds = await this.sharedTranscriptIds(userId);
 
-    const [inProgress, recent, shared, owned, failed] = await Promise.all([
+    const [inProgress, recent, shared, failed, owned, failedCount] = await Promise.all([
       this.prisma.transcript.findMany({
         where: {
           deletedAt: null,
@@ -320,12 +363,20 @@ export class TranscriptsService {
       this.prisma.transcript.findMany({
         where: { deletedAt: null, ownerId: userId },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        take: 8,
+        take: SUMMARY_LIST_SIZE,
       }),
       this.prisma.transcript.findMany({
         where: { deletedAt: null, id: { in: shareIds } },
         orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-        take: 8,
+        take: SUMMARY_LIST_SIZE,
+      }),
+      // THE SAME `Promise.all` AS THE LISTS ABOVE, not a fifth query awaited
+      // after them: this method exists to be one round trip, and a query in
+      // series would undo exactly that.
+      this.prisma.transcript.findMany({
+        where: { deletedAt: null, ownerId: userId, status: 'failed' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        take: SUMMARY_LIST_SIZE,
       }),
       this.prisma.transcript.count({ where: { deletedAt: null, ownerId: userId } }),
       this.prisma.transcript.count({
@@ -333,21 +384,26 @@ export class TranscriptsService {
       }),
     ]);
 
-    const [inProgressItems, recentItems, sharedItems] = await Promise.all([
+    const [inProgressItems, recentItems, sharedItems, failedItems] = await Promise.all([
       this.withAccess(inProgress, userId),
       this.withAccess(recent, userId),
       this.withAccess(shared, userId),
+      this.withAccess(failed, userId),
     ]);
 
     return {
       inProgress: inProgressItems,
       recent: recentItems,
       sharedWithMe: sharedItems,
+      failed: failedItems,
       counts: {
         owned,
         shared: shareIds.length,
         inProgress: inProgressItems.length,
-        failed,
+        // ⚠ THE `count()`, NEVER `failedItems.length`. The list is capped at
+        // eight; the count is the truth, and a user with thirty failures must
+        // read thirty here.
+        failed: failedCount,
       },
     };
   }
