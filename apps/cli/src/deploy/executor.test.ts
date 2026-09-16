@@ -8,6 +8,7 @@ import {
   stripAnsi,
   type OutputStream,
 } from './executor.js';
+import { createRedactor } from './journal.js';
 
 // Real child processes, not a mocked `spawn`. Everything worth getting wrong
 // here - chunk boundaries, exit codes, a killed process, ENOENT - is behaviour
@@ -218,6 +219,154 @@ describe('runCommand', () => {
 
   it('rejects an empty argv rather than spawning something ambiguous', async () => {
     await expect(runCommand([], { cwd: CWD })).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+// =============================================================================
+// Redaction reaches the LIVE stream, not only the result  (issue #156)
+// =============================================================================
+//
+// The bug these cover: `LineAssembler.emit` handed `onLine` the raw line while
+// `CommandResult` was wrapped in `redact` at the end. `install.ts` and
+// `update.ts` wire `onLog` straight to stderr, so the same subprocess output
+// was masked in `logs/*.log` and in the clear on the operator's screen.
+//
+// Every test here except the two "no regression" ones FAILS against that
+// version: the assertion is on the string handed to `onLine`, which is the
+// path the old code never redacted.
+// =============================================================================
+describe('runCommand redaction (issue #156)', () => {
+  const SECRET = 'sup3r-secret-value';
+  const mask = (value: string): string => value.split(SECRET).join('***MASKED***');
+
+  it('masks the line handed to onLine, not only the result', async () => {
+    const seen: string[] = [];
+
+    const result = await runCommand(
+      node(`process.stdout.write("connecting with ${SECRET}\\n")`),
+      { cwd: CWD, onLine: (line) => seen.push(line), redact: mask },
+    );
+
+    // THE regression assertion. Without the fix this is
+    // ['connecting with sup3r-secret-value'].
+    expect(seen).toEqual(['connecting with ***MASKED***']);
+    expect(seen.join('\n')).not.toContain(SECRET);
+    // And the result stays masked - no regression from moving the call.
+    expect(result.stdout).toBe('connecting with ***MASKED***');
+  });
+
+  it('masks stderr lines on the live stream too', async () => {
+    const seen: Array<[string, OutputStream]> = [];
+
+    const result = await runCommand(
+      node(`process.stderr.write("psql://user:${SECRET}@host\\n")`),
+      { cwd: CWD, onLine: (line, stream) => seen.push([line, stream]), redact: mask },
+    );
+
+    expect(seen).toEqual([['psql://user:***MASKED***@host', 'stderr']]);
+    expect(result.stderr).not.toContain(SECRET);
+  });
+
+  it('masks a trailing line that has no newline', async () => {
+    // The `finish()` path, which flushes through the same `emit`.
+    const seen: string[] = [];
+
+    await runCommand(node(`process.stdout.write("tail ${SECRET}")`), {
+      cwd: CWD,
+      onLine: (line) => seen.push(line),
+      redact: mask,
+    });
+
+    expect(seen).toEqual(['tail ***MASKED***']);
+  });
+
+  it('redacts AFTER stripping ANSI, so a colour run cannot hide a secret', async () => {
+    // Docker and git colourise mid-line. A redactor applied to the raw bytes
+    // would look for `sup3r-secret-value` and not find it in
+    // `sup3r-\u001b[0msecret-value`, and the secret would reach the screen.
+    const seen: string[] = [];
+    const split = `${SECRET.slice(0, 6)}\\u001b[0m${SECRET.slice(6)}`;
+
+    const result = await runCommand(
+      node(`process.stdout.write("${split}\\n")`),
+      { cwd: CWD, onLine: (line) => seen.push(line), redact: mask },
+    );
+
+    expect(seen).toEqual(['***MASKED***']);
+    expect(result.stdout).toBe('***MASKED***');
+  });
+
+  it('keeps CommandResult.stdout/stderr masked on a failure (no regression)', async () => {
+    const error = await runCommand(
+      node(
+        `process.stdout.write("out ${SECRET}\\n");` +
+          `process.stderr.write("err ${SECRET}\\n");` +
+          'process.exit(4)',
+      ),
+      { cwd: CWD, redact: mask },
+    ).catch((caught: unknown) => caught);
+
+    const failure = error as CommandFailedError;
+    expect(failure.result.stdout).toBe('out ***MASKED***');
+    expect(failure.result.stderr).toBe('err ***MASKED***');
+    expect(failure.message).not.toContain(SECRET);
+  });
+
+  it('still masks a secret that appears ONLY in argv', async () => {
+    // Nothing in this run's OUTPUT carries the secret, so the line assembler
+    // never sees it. `describeFailure` interpolates `result.argv`, which is
+    // why the constructed message keeps its own `redact` call.
+    const seen: string[] = [];
+
+    const error = await runCommand(
+      // A positional argument, so node accepts it and prints nothing: the
+      // only place the secret can surface is the constructed message.
+      [NODE, '-e', 'process.exit(5)', `postgresql://u:${SECRET}@db/appdb`],
+      { cwd: CWD, onLine: (line) => seen.push(line), redact: mask },
+    ).catch((caught: unknown) => caught);
+
+    const failure = error as CommandFailedError;
+    expect(failure.message).toContain('***MASKED***');
+    expect(failure.message).not.toContain(SECRET);
+    expect(seen).toEqual([]);
+  });
+
+  it('still masks a secret in argv reported as "command not found"', async () => {
+    const error = await runCommand([`missing-binary-${SECRET}`], {
+      cwd: CWD,
+      redact: mask,
+    }).catch((caught: unknown) => caught);
+
+    const failure = error as CommandFailedError;
+    expect(failure.message).toContain('command not found');
+    expect(failure.message).not.toContain(SECRET);
+  });
+
+  it('masks the live stream with the journal\'s own redactor', async () => {
+    // The redactor `install.ts`/`update.ts` actually pass, built the way the
+    // journal builds it, rather than a hand-rolled stand-in.
+    const seen: string[] = [];
+    const redact = createRedactor([{ key: 'POSTGRES_PASSWORD', value: SECRET }]);
+
+    const result = await runCommand(
+      node(`process.stdout.write("POSTGRES_PASSWORD=${SECRET}\\n")`),
+      { cwd: CWD, onLine: (line) => seen.push(line), redact },
+    );
+
+    expect(seen).toEqual(['POSTGRES_PASSWORD=***REDACTED:POSTGRES_PASSWORD***']);
+    expect(result.stdout).toBe('POSTGRES_PASSWORD=***REDACTED:POSTGRES_PASSWORD***');
+  });
+
+  it('leaves output untouched when no redactor is supplied', async () => {
+    const seen: string[] = [];
+
+    const result = await runCommand(node('process.stdout.write("plain\\n")'), {
+      cwd: CWD,
+      onLine: (line) => seen.push(line),
+    });
+
+    expect(seen).toEqual(['plain']);
+    expect(result.stdout).toBe('plain');
   });
 });
 
