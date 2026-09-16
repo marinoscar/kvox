@@ -50,7 +50,9 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
-import { NotesService } from '../../src/notes/notes.service';
+import { NoteSourceNameService } from '../../src/notes/note-source-name.service';
+import type { NotesService } from '../../src/notes/notes.service';
+import { buildNotesService } from './notes-service-test-factory';
 
 /**
  * Whether something is actually listening on host:port. Copied verbatim from
@@ -105,21 +107,39 @@ describeWithDb('Note list paging (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
 
-    // ⚠ CONSTRUCTED WITH ONLY THE COLLABORATOR THE EXERCISED PATH USES.
-    // `NotesService.list` reads `this.prisma` and nothing else; handing it real
-    // stand-ins for five services it never calls would obscure that rather than
-    // prove anything. Every other method is out of scope for this file.
-    notes = new NotesService(
-      prisma as never,
-      null as never,
-      null as never,
-      null as never,
-      null as never,
-      null as never,
+    // ⚠ CONSTRUCTED WITH ONLY THE COLLABORATORS THE EXERCISED PATH USES.
+    // `NotesService.list` reads `this.prisma` AND, since issue #192 denormalised
+    // `sourceName` onto the list response, `this.sourceNames` — one
+    // `this.sourceNames.resolve(page, userId)` call per page (see
+    // `notes.service.ts`). `NoteSourceNameService`'s own constructor takes only
+    // `prisma` (no further collaborators of its own to stand in for), and this
+    // file already has a real `PrismaClient`, so a real instance is both
+    // available and the honest choice here: it keeps this real-Postgres spec
+    // exercising the real source-name resolution path — including the
+    // ownership-scoped reads #192's own header calls out — rather than mocking
+    // away the thing #192 added. This premise used to say "`list` reads
+    // `this.prisma` and nothing else"; that was accurate when written and went
+    // stale the moment #192 landed, which is exactly why it is restated here by
+    // naming the actual call rather than by a blanket claim a future change can
+    // silently outdate again.
+    //
+    // The remaining six collaborators are handed `null as never` because `list`
+    // genuinely never reaches them on any path these tests exercise — every
+    // other method (`create`, `update`, `remove`, `retitle`, ...) is out of
+    // scope for this file. Named by role (see `notes-service-test-factory.ts`)
+    // so no argument can land in the wrong slot the way #224's did.
+    notes = buildNotesService({
+      prisma: prisma as never,
+      access: null as never, // `list` never reaches it
+      sourceNames: new NoteSourceNameService(prisma as never), // `list` calls `.resolve()` per page
+      templates: null as never, // `list` never reaches it
+      requests: null as never, // `list` never reaches it
+      sources: null as never, // `list` never reaches it
+      jobs: null as never, // `list` never reaches it
       // #188's semantic indexer — `null` like the rest, for the same reason the
       // ⚠ above gives: `list` never reaches it.
-      null as never,
-    );
+      searchIndex: null as never,
+    });
   });
 
   afterAll(async () => {

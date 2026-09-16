@@ -35,7 +35,8 @@ import { PERMISSIONS } from '../../src/common/constants/roles.constants';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { NotePurgeHandler } from '../../src/notes/handlers/note-purge.handler';
 import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../src/notes/job-types';
-import { NotesService } from '../../src/notes/notes.service';
+import type { NotesService } from '../../src/notes/notes.service';
+import { buildNotesService } from './notes-service-test-factory';
 
 /** Copied verbatim from `note-schema.db.spec.ts`; these files stay self-contained. */
 function isPostgresReachable(host: string, port: number, timeoutMs = 2000): boolean {
@@ -110,18 +111,27 @@ describeWithDb('Note delete and purge (real Postgres)', () => {
     const access = new NoteAccessService(prisma as never);
 
     // Only the collaborators the exercised paths use: `remove` needs access,
-    // prisma and the queue; nothing here creates or regenerates.
-    notes = new NotesService(
-      prisma as never,
+    // prisma and the queue; nothing here creates or regenerates, so
+    // `sourceNames`, `templates`, `requests` and `sources` are all stand-ins.
+    // Named by role (see `notes-service-test-factory.ts`) so no argument can
+    // land in the wrong slot the way #224's did.
+    notes = buildNotesService({
+      prisma: prisma as never,
       access,
-      null as never,
-      null as never,
-      null as never,
-      jobs as never,
-      // #188's semantic indexer. `remove` enqueues a re-index, so unlike the
-      // nulls above this collaborator IS on the exercised path.
-      { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
-    );
+      sourceNames: null as never, // not on the exercised path
+      templates: null as never, // not on the exercised path
+      requests: null as never, // not on the exercised path
+      sources: null as never, // not on the exercised path
+      jobs: jobs as never, // `remove` enqueues `note.purge` through this
+      // #188's semantic indexer — but note `NotesService.remove` does NOT
+      // reach it: `indexAfterCommit`/`.enqueue()` is only called from `update`
+      // and `restore` (a rename or a body edit moves what search should match),
+      // neither of which this file's `remove()` call exercises. This mock is a
+      // stand-in like the four above it, not a reached collaborator; it stays a
+      // harmless no-op mock rather than `null as never` only because nothing
+      // here depends on distinguishing the two.
+      searchIndex: { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
+    });
 
     purge = new NotePurgeHandler(
       { register: jest.fn() } as never,
