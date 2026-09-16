@@ -22,15 +22,27 @@
  * correction is "Speaker 3 is also Ana" — the name is almost always one
  * already on screen, and typing it again by hand is how two spellings of one
  * person end up in the same transcript.
+ *
+ * =============================================================================
+ * RENAME IS ALL-LINES, AND THE FORM SAYS SO OUT LOUD
+ * =============================================================================
+ *
+ * "Rename" here has always meant `speaker.rename` — the whole voice, every line
+ * they hold — because this surface is opened from a speaker, not from a line,
+ * and there is no per-line reading of it available. That was never in doubt
+ * from the chip rail; it became worth stating when issue #220 gave
+ * `SegmentActions` a rename item too, where the SAME words could plausibly have
+ * meant "just this line". So the form is shared rather than copied
+ * (`SpeakerNameForm`), and it carries the scope sentence with it: both entry
+ * points make the same promise, in the same words, because they are the same
+ * component making it.
  */
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import EditIcon from '@mui/icons-material/Edit';
 import MergeIcon from '@mui/icons-material/Merge';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import Drawer from '@mui/material/Drawer';
 import ListItemIcon from '@mui/material/ListItemIcon';
@@ -38,13 +50,13 @@ import ListItemText from '@mui/material/ListItemText';
 import Popover from '@mui/material/Popover';
 import MenuItem from '@mui/material/MenuItem';
 import MenuList from '@mui/material/MenuList';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { useEffect, useState } from 'react';
 
 import type { TranscriptSpeaker } from '../../services/transcripts';
+import { SpeakerNameForm } from './SpeakerNameForm';
 
 export interface SpeakerActionsProps {
   open: boolean;
@@ -77,13 +89,9 @@ export function SpeakerActions({
   const theme = useTheme();
   const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
   const [view, setView] = useState<'root' | 'merge' | 'rename'>('root');
-  const [draftName, setDraftName] = useState('');
 
   useEffect(() => {
-    if (open) {
-      setView('root');
-      setDraftName(speaker?.displayName ?? '');
-    }
+    if (open) setView('root');
   }, [open, speaker]);
 
   if (!speaker) return null;
@@ -150,34 +158,15 @@ export function SpeakerActions({
   );
 
   const renameForm = (
-    <Box sx={{ p: 2, minWidth: 260 }}>
-      <Autocomplete
-        freeSolo
-        openOnFocus
-        options={nameSuggestions.filter((name) => name !== speaker.displayName)}
-        value={draftName}
-        onInputChange={(_event, value) => setDraftName(value)}
-        renderInput={(params) => (
-          <TextField {...params} autoFocus label="Speaker name" size="small" />
-        )}
-      />
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
-        <Button size="small" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          size="small"
-          variant="contained"
-          disabled={!draftName.trim()}
-          onClick={() => {
-            onClose();
-            onRename(draftName.trim());
-          }}
-        >
-          Save
-        </Button>
-      </Box>
-    </Box>
+    <SpeakerNameForm
+      initialName={speaker.displayName}
+      nameSuggestions={nameSuggestions}
+      onCancel={onClose}
+      onSave={(displayName) => {
+        onClose();
+        onRename(displayName);
+      }}
+    />
   );
 
   const body =
