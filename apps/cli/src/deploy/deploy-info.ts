@@ -41,6 +41,21 @@ import type { DeployState } from './state.js';
 
 export const DEPLOY_INFO_DIRNAME = 'deploy-info';
 export const DEPLOY_INFO_FILENAME = 'info.json';
+/**
+ * This document's own version, independent of `DEPLOY_STATE_VERSION`.
+ *
+ * IT IS BUMPED ONLY FOR A BREAKING CHANGE, AND ADDING A FIELD IS NOT ONE.
+ * `schema` is the single field the API's reader treats as STRICT
+ * (`z.literal(1)` in apps/api/src/about/deploy-info.schema.ts); every other
+ * field there is optional, nullable and `.passthrough()`ed. So bumping this
+ * would make every already-deployed API answer `deployInfoStatus: 'invalid'`
+ * for a file written by a newer CLI - exactly the downgrade an added field
+ * exists to avoid - and `validateDeployInfo` below, which also compares for
+ * equality, would make an older CLI refuse to READ the file it must patch
+ * during `update --check`. A field that is optional on both sides breaks
+ * neither direction, which is what makes the bump unnecessary rather than
+ * merely inconvenient.
+ */
 export const DEPLOY_INFO_SCHEMA = 1;
 
 export interface DeployRemote {
@@ -48,6 +63,37 @@ export interface DeployRemote {
   sha: string;
   commitsBehind: number;
   checkedAt: string;
+}
+
+/**
+ * How the run that wrote this document ENDED (issue #283).
+ *
+ * WRITTEN FROM THE `health` STEP ONWARD, ON BOTH ENDINGS. #267 withheld this
+ * whole document from a failed run, arguing that "an install that did not
+ * finish has not deployed what it would claim". That is right for a failure
+ * at `build`, `migrate` or `start` and wrong once `health` has passed: at
+ * that point the application demonstrably IS deployed and IS answering, and
+ * withholding the record makes the About page say "this instance was not
+ * deployed with the deploy CLI" - a worse lie than "deployed, and the run did
+ * not finish". See §22 of docs/specs/vps-deploy.md.
+ *
+ * ABSENT MEANS THE RUN COMPLETED, the same convention `DeployState`'s
+ * `lastOutcome` established and for the same reason: every info.json written
+ * before this field existed was written only after a pipeline finished. A
+ * reader must test for `completed === false` and never for `!== true`, or
+ * every document from an older CLI reads as a failed deploy.
+ */
+export interface DeployRun {
+  /** False when the document was written and a LATER step then failed. */
+  completed: boolean;
+  /** The step id that stopped the run. Present only when `completed` is false. */
+  failedStep?: string | undefined;
+  /**
+   * When that run ended - ISO-8601 UTC. Present only when `completed` is
+   * false: on a completed run `updatedAt` is the same instant, and a second
+   * copy of a value is a second value that can disagree with the first.
+   */
+  attemptedAt?: string | undefined;
 }
 
 export interface DeployInfo {
@@ -71,6 +117,15 @@ export interface DeployInfo {
   host: ServerFacts;
   /** Filled by `update --check` (#123); null until then. */
   remote: DeployRemote | null;
+  /**
+   * How this run ended (#283). Optional on BOTH sides of the contract: a
+   * document written by a CLI from before #283 has none, and the API's reader
+   * must keep answering `ok` for it rather than downgrading the whole page to
+   * `invalid` over a field whose absence already has a meaning.
+   *
+   * `DEPLOY_INFO_SCHEMA` deliberately stays at 1 - see the note above it.
+   */
+  run?: DeployRun | undefined;
 }
 
 /** The file exists but is not a deploy-info document this build understands. */
@@ -238,6 +293,22 @@ export function validateDeployInfo(value: unknown): DeployInfo {
     if (!nullableNumber(host[key])) return fail(`host.${key} is not a number or null`);
   }
 
+  // Optional, and absent means the run completed (#283). Tested for presence
+  // rather than required, so a document from a CLI before #283 - and every
+  // file already on every live server - still validates.
+  const run = value['run'];
+  if (run !== undefined) {
+    if (!isRecord(run) || typeof run['completed'] !== 'boolean') {
+      return fail('run is not { completed, failedStep?, attemptedAt? }');
+    }
+    if (run['failedStep'] !== undefined && typeof run['failedStep'] !== 'string') {
+      return fail('run.failedStep is not a string');
+    }
+    if (run['attemptedAt'] !== undefined && !isUtcTimestamp(run['attemptedAt'])) {
+      return fail('run.attemptedAt is not a UTC timestamp');
+    }
+  }
+
   const remote = value['remote'];
   if (remote !== null) {
     if (
@@ -297,6 +368,12 @@ export interface DeployInfoExtras {
   appVersion?: string | null | undefined;
   /** Defaults to null; `update --check` (#123) supplies it. */
   remote?: DeployRemote | null | undefined;
+  /**
+   * How the run ended (#283). Defaults to a COMPLETED run, so every caller
+   * that does not say otherwise keeps writing what it always wrote, and the
+   * only documents with no `run` at all are the ones older CLIs left behind.
+   */
+  run?: DeployRun | undefined;
 }
 
 /** The document for a state, with the facts read now. Pure. */
@@ -316,11 +393,20 @@ export function buildDeployInfo(
       repoUrl: state.repoUrl,
     },
     installedAt: state.installedAt,
-    // `lastDeployedAt` is optional on the state since #267, for the state a
-    // FAILED install writes so `--resume` can read it back. This document is
-    // written only after a deploy has succeeded - never on that path - so the
-    // fallback is unreachable; it is here because the type cannot say so, and
-    // `installedAt` is what `updatedAt` equals on a first install anyway.
+    // WHEN THE LAST DEPLOY SUCCEEDED, and the fallback is reachable since
+    // #283. `lastDeployedAt` became optional on the state in #267, for the
+    // record a FAILED install writes so `--resume` can read it back; this
+    // document used to be written only after success, so the fallback was
+    // dead code. It is not any more: a first install that fails AFTER `health`
+    // now writes this document with no earlier success to name, and
+    // `installedAt` - which that run set to its own `now` - is the honest
+    // answer, the same instant a first successful install records here.
+    //
+    // A failed UPDATE after `health` takes the other branch and keeps the
+    // PREVIOUS success's instant, which is what this field means. `run`
+    // below is what says the newest commit arrived on a run that did not
+    // finish; stamping a deploy time that did not happen is the lie #120
+    // removed from `update` and this must not reintroduce it.
     updatedAt: state.lastDeployedAt ?? state.installedAt,
     lastCommand: state.lastCommand,
     deployedBy: { cli: CLI_NAME, version: CLI_VERSION },
@@ -328,6 +414,7 @@ export function buildDeployInfo(
     bindPort: state.bindPort,
     host: facts,
     remote: extras.remote ?? null,
+    run: extras.run ?? { completed: true },
   };
 }
 

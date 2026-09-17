@@ -946,6 +946,25 @@ export interface DeployInfoRemote {
   checkedAt?: string | null;
 }
 
+/**
+ * How the deploy run that wrote this record ENDED (issue #283).
+ *
+ * ABSENT MEANS THE RUN COMPLETED — every `deploy-info` written before this
+ * field existed was only ever written after a pipeline finished. Nothing in
+ * this application re-derives that convention: the API publishes
+ * `deployRunComplete` on the response beside `updateAvailable`, and the About
+ * page reads that. This type exists so the passed-through block is named
+ * rather than `unknown`, not so a client can compute from it.
+ */
+export interface DeployInfoRun {
+  /** False when the record was written and a LATER step then failed. */
+  completed?: boolean | null;
+  /** The step id that stopped the run; present only when `completed` is false. */
+  failedStep?: string | null;
+  /** ISO-8601 UTC of that run's ending; present only when `completed` is false. */
+  attemptedAt?: string | null;
+}
+
 export interface DeployInfo {
   /** The only strict field: anything else is not this file. */
   schema: 1;
@@ -961,6 +980,12 @@ export interface DeployInfo {
   host?: DeployInfoHost | null;
   /** Null until the first `update --check`. */
   remote?: DeployInfoRemote | null;
+  /**
+   * How the run that wrote this record ended (#283). Absent from every record
+   * an older CLI wrote — read `AboutResponse.deployRunComplete` instead of
+   * this, which is where that absence has already been interpreted.
+   */
+  run?: DeployInfoRun | null;
 }
 
 /** What only the running API process knows about itself. */
@@ -999,4 +1024,33 @@ export interface AboutResponse {
   updateAvailable: boolean | null;
   /** `remote.checkedAt`, passed through; null when the CLI has never checked. */
   checkedAt: string | null;
+  /**
+   * Did the deploy run that wrote the record run to the end? (issue #283)
+   *
+   * DERIVED BY THE API, exactly as `updateAvailable` is, and read here rather
+   * than recomputed from `deployInfo.run`:
+   *
+   *   * `null`  — there is no record at all (`deployInfoStatus` is not `ok`).
+   *               "No record" is not "a failed run".
+   *   * `true`  — the run completed, OR the record predates the field. An
+   *               older CLI wrote no `run` block and only ever wrote the file
+   *               after a pipeline finished, so absence means completed.
+   *   * `false` — the record was written once the API was already answering,
+   *               and a later step then failed. Every deployment fact beside
+   *               it is still accurate; `deployFailedStep` names the step.
+   *
+   * A client must therefore test `=== false` and NEVER `!== true` — the
+   * inverted form reports every deployment installed by an older CLI as a
+   * failed one, which is the same class of wrongness #283 exists to remove.
+   */
+  deployRunComplete: boolean | null;
+  /** The step that stopped the run; null unless `deployRunComplete` is false. */
+  deployFailedStep: string | null;
+  /**
+   * ISO-8601 UTC of that run's ending; null unless `deployRunComplete` is
+   * false. NOT the same instant as `deployInfo.updatedAt`, which keeps
+   * meaning "the last deploy that SUCCEEDED" — on an update that failed past
+   * its health step the two differ, and the page labels them apart.
+   */
+  deployAttemptedAt: string | null;
 }

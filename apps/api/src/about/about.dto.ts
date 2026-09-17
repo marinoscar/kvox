@@ -30,6 +30,15 @@ import { deployInfoSchema } from './deploy-info.schema';
 // disagree about whether an update exists. Both are null when `remote` is null
 // (no `update --check` has ever run) — "unknown", not "no".
 //
+// `deployRunComplete`, `deployFailedStep` and `deployAttemptedAt` (#283) are
+// derived from `deployInfo.run` for exactly that reason. They are ADDITIONAL
+// to `deployInfoStatus`, not a fifth value of it: the four statuses answer
+// "could the record be read", and an incomplete run is a record that was read
+// perfectly well — `ok`, every field accurate, written after the API had
+// already started answering. Folding "incomplete" into that enum would make a
+// client choose between rendering the deployment facts and reporting the
+// failure, when the whole point of the record is that both are true at once.
+//
 // The API performs no network I/O to answer this. `remote` is whatever the
 // CLI last recorded; the container has neither the git checkout nor a GitHub
 // credential, and an admin page must not make outbound calls on every load.
@@ -86,6 +95,27 @@ export const aboutResponseSchema = z.object({
   updateAvailable: z.boolean().nullable(),
   /** `remote.checkedAt`, passed through; null when the CLI has never checked. */
   checkedAt: z.string().nullable(),
+  /**
+   * Did the deploy run that wrote the record run to the end? (issue #283)
+   *
+   * Derived here from `deployInfo.run` for the same reason `updateAvailable`
+   * is derived from `deployInfo.remote`: the convention that an ABSENT `run`
+   * means a COMPLETED run is written once, on the server, so the web About
+   * card (#126) and the CLI's `deploy about` (#128) cannot disagree about a
+   * deployment installed by a CLI from before #283.
+   *
+   *   * `null`  — there is no record at all (`deployInfoStatus` is not `ok`).
+   *   * `true`  — the record says the run completed, or predates the field.
+   *   * `false` — the run wrote this record and then failed a later step.
+   *               `deployFailedStep` names that step; the rest of the record
+   *               is still accurate, because it was written after the API
+   *               had already answered.
+   */
+  deployRunComplete: z.boolean().nullable(),
+  /** The step that stopped the run; null unless `deployRunComplete` is false. */
+  deployFailedStep: z.string().nullable(),
+  /** ISO-8601 UTC of that run's ending; null unless `deployRunComplete` is false. */
+  deployAttemptedAt: z.string().nullable(),
 });
 
 export type AboutResponse = z.infer<typeof aboutResponseSchema>;
@@ -135,6 +165,7 @@ export const ABOUT_RESPONSE_EXAMPLE = {
         commitsBehind: 2,
         checkedAt: '2026-09-15T06:00:00.000Z',
       },
+      run: { completed: true },
     },
     deployInfoStatus: 'ok',
     detail: null,
@@ -156,6 +187,9 @@ export const ABOUT_RESPONSE_EXAMPLE = {
     databaseError: null,
     updateAvailable: true,
     checkedAt: '2026-09-15T06:00:00.000Z',
+    deployRunComplete: true,
+    deployFailedStep: null,
+    deployAttemptedAt: null,
   },
   meta: { timestamp: '2026-09-15T10:40:00.000Z' },
 } as const;

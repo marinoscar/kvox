@@ -2,10 +2,17 @@
  * Admin → Settings → About (`/admin/settings/about`), issue #126, epic #118.
  *
  * The acceptance criteria are the three sections from a live response, the
- * "not deployed with kvox deploy" alert with Application still shown, every
- * timestamp in UTC, and the update chip appearing only when an update exists —
- * so the assertions below are about exactly those, plus the two affordances a
+ * no-deployment-record alert with Application still shown, every timestamp in
+ * UTC, and the update chip appearing only when an update exists — so the
+ * assertions below are about exactly those, plus the two affordances a
  * read-only page still has (Refresh, and copying the revision).
+ *
+ * ISSUE #283 ADDED A THIRD DEPLOYMENT-RECORD STATE, and it is not a fourth
+ * `deployInfoStatus`: a record whose run did not finish is `ok`, every fact in
+ * it accurate, plus a warning naming the step that stopped the run. The two
+ * things a regression here would reach for are pinned below — branching on the
+ * status instead of on `deployRunComplete === false`, and re-deriving "did it
+ * finish" from `deployInfo.run` instead of reading the field the API derives.
  *
  * The API is driven through msw rather than by mocking `useAbout`, the same
  * choice `MaintenancePage.test.tsx` makes: Refresh and Retry are about whether
@@ -67,6 +74,14 @@ const DEPLOY_INFO: DeployInfo = {
     commitsBehind: 2,
     checkedAt: '2026-09-15T06:00:00.000Z',
   },
+  run: { completed: true },
+};
+
+/** What the CLI records when a step after `health` stopped the run. */
+const INCOMPLETE_RUN = {
+  completed: false,
+  failedStep: 'publish',
+  attemptedAt: '2026-09-15T09:12:00.000Z',
 };
 
 function about(overrides: Partial<AboutResponse> = {}): AboutResponse {
@@ -91,8 +106,26 @@ function about(overrides: Partial<AboutResponse> = {}): AboutResponse {
     databaseError: null,
     updateAvailable: true,
     checkedAt: '2026-09-15T06:00:00.000Z',
+    deployRunComplete: true,
+    deployFailedStep: null,
+    deployAttemptedAt: null,
     ...overrides,
   };
+}
+
+/**
+ * The answer issue #283 was filed about: the CLI cloned, built, migrated,
+ * seeded, started and certificated the stack, and the install then failed at
+ * its very last action — AFTER the API was already answering. The record is
+ * `ok` and every fact in it is accurate; only the run is unfinished.
+ */
+function incompleteRun(): AboutResponse {
+  return about({
+    deployInfo: { ...DEPLOY_INFO, run: INCOMPLETE_RUN },
+    deployRunComplete: false,
+    deployFailedStep: 'publish',
+    deployAttemptedAt: '2026-09-15T09:12:00.000Z',
+  });
 }
 
 /** The dev-stack answer: no file, a 200, and nothing the CLI would have written. */
@@ -103,6 +136,10 @@ function absent(): AboutResponse {
     detail: null,
     updateAvailable: null,
     checkedAt: null,
+    // `null`, not `false`: no record is not a failed run.
+    deployRunComplete: null,
+    deployFailedStep: null,
+    deployAttemptedAt: null,
   });
 }
 
@@ -356,20 +393,49 @@ describe('Admin AboutPage — copying the revision', () => {
   });
 });
 
-describe('Admin AboutPage — a deployment the CLI never touched', () => {
-  it('shows the "not deployed with kvox deploy" alert and STILL renders Application', async () => {
+describe('Admin AboutPage — no deployment record at all', () => {
+  it('says the record was not found, and STILL renders Application', async () => {
     // The dev stack and CI answer exactly this, and the page must be usable in
     // the environment a contributor first opens it in.
     serve(absent());
     renderPage();
 
-    expect(
-      await screen.findByText(/This instance was not deployed with/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('No deployment record was found')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Application' })).toBeInTheDocument();
     expect(factValue('API version')).toHaveTextContent('1.4.0');
     expect(screen.queryByRole('heading', { level: 2, name: 'Deployment' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 2, name: 'Server' })).not.toBeInTheDocument();
+  });
+
+  it('states what is known and never asserts HOW the instance was deployed (#283)', async () => {
+    // THE HALF OF #283 THIS PAGE OWNS. `absent` means "no file at
+    // DEPLOY_INFO_PATH". That is consistent with "deployed some other way" —
+    // and equally with a mis-set path, a bind mount that did not attach, or a
+    // run that stopped before the record was written. The page used to state
+    // the most confident of those as fact, on a server the CLI had in fact
+    // installed, built, migrated and certificated.
+    serve(absent());
+    renderPage();
+
+    await screen.findByText('No deployment record was found');
+
+    // The sentence this issue was filed about is GONE, in any form.
+    expect(screen.queryByText(/was not deployed with/i)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/not deployed/i);
+    // What replaced it names where the API looked, and offers the other
+    // explanations rather than picking one.
+    expect(screen.getByText(/DEPLOY_INFO_PATH/)).toBeInTheDocument();
+    expect(screen.getByText(/bind mount/i)).toBeInTheDocument();
+  });
+
+  it('keeps the no-record alert informational, not a failure', async () => {
+    // An instance genuinely deployed another way is an ordinary state, so the
+    // severity stays `info` — a warning here would cry wolf on every dev stack.
+    serve(absent());
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveClass('MuiAlert-colorInfo');
   });
 
   it('carries the API’s own detail when the file exists but could not be read', async () => {
@@ -380,6 +446,9 @@ describe('Admin AboutPage — a deployment the CLI never touched', () => {
         detail: 'Unexpected end of JSON input',
         updateAvailable: null,
         checkedAt: null,
+        deployRunComplete: null,
+        deployFailedStep: null,
+        deployAttemptedAt: null,
       }),
     );
     renderPage();
@@ -398,6 +467,9 @@ describe('Admin AboutPage — a deployment the CLI never touched', () => {
         detail: 'schema: expected 1',
         updateAvailable: null,
         checkedAt: null,
+        deployRunComplete: null,
+        deployFailedStep: null,
+        deployAttemptedAt: null,
       }),
     );
     renderPage();
@@ -406,6 +478,125 @@ describe('Admin AboutPage — a deployment the CLI never touched', () => {
       await screen.findByText('The deployment record is not in the expected format'),
     ).toBeInTheDocument();
     expect(screen.getByText('schema: expected 1')).toBeInTheDocument();
+  });
+});
+
+describe('Admin AboutPage — a deploy run that did not finish (#283)', () => {
+  // THE REPORTED FAILURE. On a live, CLI-deployed production instance the CLI
+  // had cloned, built, migrated 21 times, seeded, started the stack and issued
+  // the certificate; the install failed only at its very last action, AFTER
+  // the API was already answering. Every deployment fact is therefore true,
+  // and the page must show all of them AND say the run did not finish.
+  //
+  // THE WARNING IS BRANCHED ON `deployRunComplete === false`, NEVER ON THE
+  // STATUS. An incomplete run is `deployInfoStatus: 'ok'` — the record parsed
+  // perfectly — so a status branch would have to choose between rendering the
+  // facts and reporting the failure, which is the choice this whole contract
+  // exists to remove.
+
+  it('renders every deployment fact in full, undegraded, when the run did not finish', async () => {
+    serve(incompleteRun());
+    renderPage();
+
+    await screen.findByRole('heading', { level: 2, name: 'Deployment' });
+    expect(screen.getByRole('heading', { level: 2, name: 'Server' })).toBeInTheDocument();
+    expect(factValue('Version')).toHaveTextContent('1.4.0');
+    expect(factValue('Revision')).toHaveTextContent('3f2a9c1d8e7b');
+    expect(factValue('Ref')).toHaveTextContent('main');
+    expect(factValue('Installed')).toHaveTextContent('2026-08-01 09:15:00 UTC');
+    expect(factValue('Last updated')).toHaveTextContent('2026-09-14 22:41:07 UTC');
+    expect(factValue('Deployed by')).toHaveTextContent('kvox 1.4.0');
+    expect(factValue('Hostname')).toHaveTextContent('vps-01');
+  });
+
+  it('warns, naming the step that stopped the run', async () => {
+    serve(incompleteRun());
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    expect(
+      within(alert).getByText('The deploy run that wrote this record did not finish'),
+    ).toBeInTheDocument();
+    // The step id itself, verbatim — an operator matches it against the
+    // CLI's own output, so the page must not paraphrase it.
+    expect(within(alert).getByText('publish', { selector: 'code' })).toBeInTheDocument();
+    // A warning, unlike the no-record alert: a run that stopped is a real
+    // problem somebody has to finish, not an ordinary state.
+    expect(alert).toHaveClass('MuiAlert-colorWarning');
+  });
+
+  it('labels the run\u2019s ending distinctly from the last deploy that succeeded', async () => {
+    // TWO TIMESTAMPS THAT MEAN DIFFERENT THINGS. On an update that failed past
+    // its health step, `updatedAt` stays at the previous SUCCESS while
+    // `app.commitSha` names the revision now serving. Rendering both under the
+    // same word is how this page would lose an operator\u2019s trust.
+    serve(incompleteRun());
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText(/Run stopped/)).toBeInTheDocument();
+    // The alert carries the attempt; the Deployment row carries the success.
+    const attempted = within(alert).getByText('2026-09-15 09:12:00 UTC');
+    expect(attempted).toBeInTheDocument();
+    expect(alert).not.toHaveTextContent('2026-09-14 22:41:07 UTC');
+    expect(factValue('Last updated')).toHaveTextContent('2026-09-14 22:41:07 UTC');
+    expect(factValue('Last updated')).not.toHaveTextContent('2026-09-15 09:12:00 UTC');
+  });
+
+  it('renders the unfinished-run timestamp in UTC like every other one', async () => {
+    serve(incompleteRun());
+    renderPage();
+
+    const alert = await screen.findByRole('alert');
+    const times = within(alert).getAllByText((_, el) => el?.tagName === 'TIME');
+    expect(times.length).toBeGreaterThan(0);
+    for (const time of times) {
+      expect(time.textContent).toMatch(/ UTC$/);
+      expect(time.getAttribute('dateTime')).toBeTruthy();
+    }
+  });
+
+  it('shows NO warning when the run completed — the page is exactly today\u2019s', async () => {
+    serve(about());
+    renderPage();
+
+    await screen.findByRole('heading', { level: 2, name: 'Server' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/did not finish/i)).not.toBeInTheDocument();
+  });
+
+  it('shows NO warning for a record with no `run` block at all — an older CLI wrote it', async () => {
+    // THE GUARD AGAINST RE-DERIVING THE CONVENTION HERE. Every info.json
+    // already on every live server has no `run`, and each was written only
+    // after a pipeline finished. The API has already interpreted that absence
+    // as `deployRunComplete: true`; a page testing `deployInfo.run?.completed
+    // !== true` instead would report every one of those deployments as a
+    // failed one — the same class of wrongness as the bug being fixed.
+    const { run: _run, ...older } = DEPLOY_INFO;
+    expect(_run).toBeDefined();
+    serve(about({ deployInfo: older, deployRunComplete: true }));
+    renderPage();
+
+    await screen.findByRole('heading', { level: 2, name: 'Server' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(factValue('Version')).toHaveTextContent('1.4.0');
+  });
+
+  it('shows NO run warning when there is no record at all — null is not false', async () => {
+    serve(absent());
+    renderPage();
+
+    await screen.findByText('No deployment record was found');
+    expect(screen.queryByText(/did not finish/i)).not.toBeInTheDocument();
+  });
+
+  it('passes axe with the unfinished-run warning above the two sections', async () => {
+    serve(incompleteRun());
+    const { container } = renderPage();
+
+    await screen.findByRole('heading', { level: 2, name: 'Server' });
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
 
@@ -541,12 +732,12 @@ describe('Admin AboutPage — accessibility', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 
-  it('passes axe with the "not deployed" alert in place of two sections', async () => {
+  it('passes axe with the no-record alert in place of two sections', async () => {
     setViewportWidth(375);
     serve(absent());
     const { container } = renderPage();
 
-    await screen.findByText(/This instance was not deployed with/);
+    await screen.findByText('No deployment record was found');
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });

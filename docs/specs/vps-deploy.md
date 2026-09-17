@@ -1173,6 +1173,17 @@ the API's Zod schema also carries `.passthrough()`, so a newer CLI adding a
 field never makes an older API answer `invalid` — the extra field rides
 through to the client untouched.
 
+**Adding an optional field does not bump it, and #283 is the worked example.**
+`schema` being the one strict field on the read side is exactly what makes a
+bump expensive: `2` would make *every already-deployed API* answer
+`deployInfoStatus: "invalid"` for a file written by a newer CLI — the very
+downgrade the optional-and-nullable rule exists to prevent — and
+`validateDeployInfo` compares for equality too, so an older CLI would refuse
+to **read** the file it has to patch during `update --check`. A field that is
+optional on both sides breaks neither direction by construction. The version
+is therefore reserved for a change that alters what an existing field
+**means**, exactly as `DEPLOY_STATE_VERSION` is (§22.1).
+
 **Shape**, as the CLI's `DeployInfo` interface and the API's
 `deployInfoSchema` both describe it:
 
@@ -1210,8 +1221,36 @@ interface DeployInfo {
     commitsBehind: number;
     checkedAt: string;       // ISO-8601 UTC
   } | null;
+  run?: {                    // #283; ABSENT means the run completed
+    completed: boolean;
+    failedStep?: string;     // present only when `completed` is false
+    attemptedAt?: string;    // ISO-8601 UTC; present only when incomplete
+  };
 }
 ```
+
+**`run` (issue #283).** How the deploy run that wrote this document ended.
+Written from the `health` step onward, on the **failure** path as well as on
+success — §22 below carries the rule and the argument. Three properties are
+load-bearing:
+
+* **Optional, and absent means the run completed.** Every `info.json` already
+  on every live server predates the field and was written only after a
+  pipeline finished, so absence is information, not a gap — the same
+  convention `DeployState.lastOutcome` established (§22.1). A reader must
+  test `completed === false` and never `!== true`, or every deployment
+  installed by an older CLI reads as a failed one.
+* **`failedStep` and `attemptedAt` are present only when `completed` is
+  false.** On a completed run `updatedAt` already *is* that instant, and a
+  second copy of a value is a second value that can disagree with the first.
+* **`updatedAt` still means "the last deploy that SUCCEEDED", untouched.** A
+  failed **update** past `health` keeps the previous success's instant while
+  `app.commitSha` names the revision that is now actually serving; `run` is
+  what reconciles the two. A failed first **install** past `health` has no
+  earlier success, so `updatedAt` falls back to `installedAt` — that run's
+  own `now`, which is what a first successful install records there anyway.
+  Nothing on either path stamps a deploy time that did not happen, which is
+  the rule #120 established and §22.1 restates.
 
 **Write path.** `writeDeployInfo` (install/update, full document) and
 `updateDeployInfoRemote` (`update --check`/`status`, replaces only `remote`,
@@ -1232,7 +1271,17 @@ the temp-then-rename window) is `"unreadable"`; JSON that fails schema
 validation is `"invalid"`; a successful parse is `"ok"`. `updateAvailable` is
 derived from `remote.commitsBehind` (`null` when the CLI has never checked)
 — **never** from a network call the API itself makes; this endpoint performs
-no network I/O, ever (18.2 decision 7's whole reason for existing). Every
+no network I/O, ever (18.2 decision 7's whole reason for existing).
+`deployRunComplete`, `deployFailedStep` and `deployAttemptedAt` (#283) are
+derived from `run` in the same place and for the same reason: the
+"absent means completed" convention is written **once**, on the server, so
+the web About card (#126) and the CLI's `deploy about` (#128) cannot disagree
+about a deployment an older CLI installed. They are **additional** to
+`deployInfoStatus`, not a fifth value of it — the four statuses answer "could
+the record be read", and an incomplete run's record was read perfectly well.
+Folding "incomplete" into that enum would force a client to choose between
+rendering the deployment facts and reporting the failure, when the whole
+point of the record is that both are true at once. Every
 value under a key matching `/password|secret|key|token/i`, at any depth
 `.passthrough()` let through, is stripped before the response is built — a
 defense against a future CLI, or a hand-edited file, putting something
@@ -1808,7 +1857,7 @@ import cycle.
 
 ---
 
-## 22. The state is written on both endings, `deploy-info/` on only one (issue #267)
+## 22. The state is written on both endings, `deploy-info/` from `health` onward (issues #267, #283)
 
 `§13` above, and `§18.1`'s correction to it, describe a state file written
 after a run succeeds. That was the whole of it, and it made `--resume`
@@ -1833,13 +1882,73 @@ second copy would not have had either. The failure record's entire purpose is
 to be the file the next run reads back, so "identical apart from the ending"
 is a correctness property, not tidiness.
 
-**`deploy-info/info.json` is still written on success only**, and the ordering
-comment in `runInstall` ("AFTER the state: deploy-info is derived from it")
-stays true — only the state write gained a second call site. §19's document is
-what the *running application* reports about itself, mounted read-only into
-the `api` container; an install that did not finish has not deployed what that
-file would claim. This is the one place where the two records deliberately
-disagree, and the direction of the disagreement is the point.
+**`deploy-info/info.json` is written from the `health` step onward**, on the
+failure path as well as on success. #267 withheld it from every failed run and
+argued the withholding: §19's document is what the *running application*
+reports about itself, mounted read-only into the `api` container, and an
+install that did not finish has not deployed what that file would claim.
+
+**That argument is right up to `health` and wrong after it (issue #283).** A
+real production install cloned, built, applied 21 migrations, seeded, started
+the stack, passed the health wait and issued the certificate — and then failed
+at its very last action, writing `/etc/cron.d/…` (§265). `/admin/settings/about`
+told the administrator *"This instance was not deployed with the deploy CLI, so
+deployment details are unavailable"*, which is false about a server the CLI had
+plainly deployed and which was serving traffic at that moment. Withholding the
+record produced a **worse lie than writing it**: "not deployed by the CLI"
+rather than "deployed, and the run did not finish".
+
+So the rule is now: **the moment the API responds, the deployment is real.**
+From `health` onward the record is written on both endings, carrying `run`
+(§19) — whether the run completed and, when it did not, which step stopped it.
+#267's actual insight is preserved unchanged: a run that fails **before**
+`health` still writes no deploy-info at all, because nothing is serving and a
+record would describe a deployment that does not exist.
+
+### 22.0 The gate is `health`, not `verify`
+
+`health` **is** the claim this document makes. `waitForHealthy` polls
+`/api/health/ready` until the application answers, so a run past that step has
+a deployment that demonstrably exists and is reachable — which is precisely
+what "what is deployed here" means. `verify` is the **last** step of both
+pipelines, so gating on it would write the record on success and essentially
+nowhere else, leaving the reported failure (a `publish` that sits *between*
+the two) reporting nothing at all — the bug, unfixed.
+
+The test is `result.completed.includes('health')`, read off the pipeline's own
+record rather than re-derived. `health` carries no `skip` guard in either
+pipeline, and a step skipped by a guard is in **neither** list
+(`steps/pipeline.ts`), so this cannot mistake a `--skip-*` for a pass. A
+`--resume` that carried `health` in from a previous run's `completedSteps` is
+the same claim: that run reached a serving API at this root.
+
+The ordering comment in `runInstall` ("AFTER the state: deploy-info is derived
+from it") stays true on both paths — both writes gained a second call site, in
+that order. Neither may fail the run: like the state write, the deploy-info
+write is wrapped and journaled, because a full disk that stops the record
+being kept is a worse second run, not a different first failure.
+
+### 22.0.1 `update`, and the two things it must not do
+
+`update` follows the same gate, with two constraints of its own.
+
+**It must not stamp a deploy time that did not happen.** `update` records
+`lastDeployedAt` only on success (§18.1, #120), and the failure path leaves
+that alone: the state file is not written at all, and the record is derived
+from an in-memory state whose `lastDeployedAt` is the previous success's. So
+`updatedAt` keeps meaning "the last deploy that succeeded" while
+`app.commitSha` names the revision `restart` actually brought up and `health`
+actually answered on.
+
+**It must not rewrite the record backwards on the next run.** After a failure
+past `health` the clone is at the new revision and serving it, while the state
+still names the old one. A plain re-run then takes the "already up to date"
+path, which refreshes deploy-info to pick up moved host facts — and, derived
+from that stale state, would move the record from the revision that *is*
+running to the one that is not, and mark it complete. That path therefore
+takes its commit from the **clone** (`context.commitSha`) and carries the
+existing document's `run` through **unchanged**: a run that deployed nothing
+has nothing to say about how any run ended.
 
 ### 22.1 Three fields, and why each is shaped the way it is
 

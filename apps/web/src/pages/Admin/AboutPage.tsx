@@ -42,6 +42,43 @@
  * missing, with the API's own `detail` when the file exists but could not be
  * read.
  *
+ * =============================================================================
+ * THREE DEPLOYMENT-RECORD STATES, NOT TWO (issue #283)
+ * =============================================================================
+ *
+ * This page once answered one question — is there a record? — and answered it
+ * wrongly in both directions on the deployment that produced #283: a live
+ * server the CLI had cloned, built, migrated, seeded, started and certificated,
+ * whose install failed only at its very last action, AFTER the API was already
+ * answering. The record was withheld, and the page said "this instance was not
+ * deployed with the deploy CLI". Every word of that was false.
+ *
+ * So there are three states here now:
+ *
+ *   1. A record, and the run that wrote it finished — everything below,
+ *      exactly as before.
+ *   2. A record, and the run did NOT finish — THE SAME FULL DETAIL, plus a
+ *      warning naming the step that stopped it. The facts are not degraded and
+ *      not hidden: the CLI writes the record only once `/api/health/ready` has
+ *      answered, so every one of them describes what is actually running. The
+ *      warning is additional context, never a replacement for it.
+ *   3. No record — wording that states what is KNOWN (nothing was found where
+ *      the API looks) instead of asserting how the instance was deployed.
+ *
+ * TWO THINGS HERE ARE EASY TO GET WRONG, AND BOTH ARE THE BUG AGAIN:
+ *
+ *   * The warning branches on `about.deployRunComplete === false`, NEVER on
+ *     `deployInfoStatus`. An incomplete run is `ok` — the record parsed
+ *     perfectly. The four statuses answer "could the record be read"; this is
+ *     a different question, and folding them together forces a choice between
+ *     showing the facts and reporting the failure.
+ *   * "Did it finish" is READ from the API, never re-derived from
+ *     `deployInfo.run`. Every info.json already on every live server predates
+ *     that block, and each was written only after a pipeline finished; the
+ *     API's derivation is `run?.completed === false`, so absence reads as
+ *     completed. A `run?.completed !== true` written here instead would report
+ *     every one of those deployments as a failed deploy.
+ *
  * NO POLL. This page changes only when somebody deploys; see `useAbout`.
  * Refresh is a button.
  */
@@ -435,18 +472,98 @@ function ServerSection({ info }: { info: DeployInfo }) {
 }
 
 /**
+ * The warning that rides ABOVE the full deployment detail when the run that
+ * wrote the record did not finish (issue #283).
+ *
+ * IT ADDS, IT DOES NOT REPLACE. The record is written from the `health` step
+ * onward, so by the time this can render, the application has already answered
+ * a readiness probe on the revision named below. Hiding or degrading those
+ * facts would throw away the only accurate account of what is running, to warn
+ * about a step that came after it.
+ *
+ * THE STEP ID IS RENDERED VERBATIM, in `code`, and never prettified: an
+ * operator matches it against the CLI's own output and its `--resume`
+ * behaviour, and a friendly rewording would break that match for no gain.
+ *
+ * THE TWO TIMESTAMPS ARE LABELLED APART. `deployAttemptedAt` is when the
+ * unfinished run ENDED; the Deployment section's "Last updated" is
+ * `deployInfo.updatedAt`, which keeps meaning THE LAST DEPLOY THAT SUCCEEDED —
+ * on an update that failed past its health step the two genuinely differ,
+ * while `app.commitSha` names the revision now serving. Two timestamps that
+ * mean different things under one word is how this page would stop being
+ * believed.
+ */
+function DeployRunIncomplete({ about, now }: { about: AboutResponse; now: Date }) {
+  const step = about.deployFailedStep;
+
+  return (
+    <Alert severity="warning">
+      <AlertTitle>The deploy run that wrote this record did not finish</AlertTitle>
+      <Typography variant="body2" component="p" sx={{ m: 0 }}>
+        {step ? (
+          <>
+            It stopped at the{' '}
+            <Typography component="code" variant="body2" sx={{ fontFamily: 'monospace' }}>
+              {step}
+            </Typography>{' '}
+            step.{' '}
+          </>
+        ) : (
+          <>It stopped before the end, and did not record which step. </>
+        )}
+        The record was written once the application was already answering, so the
+        deployment details below describe what is running — but whatever that step
+        would have done was not done.
+      </Typography>
+      {about.deployAttemptedAt && (
+        <Typography variant="body2" component="p" sx={{ m: 0, mt: 1 }}>
+          {'Run stopped: '}
+          <Timestamp iso={about.deployAttemptedAt} now={now} />
+          {'. “Last updated” below is a different instant — the last deploy that finished.'}
+        </Typography>
+      )}
+    </Alert>
+  );
+}
+
+/**
  * What stands in for Deployment and Server when the CLI's file is not there
- * to read. `absent` is the ordinary case and says so in plain words; the
- * other two are real problems and carry the API's own `detail`, because "the
- * file was invalid" without the parse message sends the operator to a shell
- * to find out what this page already knew.
+ * to read. `absent` is the ordinary case; the other two are real problems and
+ * carry the API's own `detail`, because "the file was invalid" without the
+ * parse message sends the operator to a shell to find out what this page
+ * already knew.
+ *
+ * THE `absent` COPY STATES WHAT IS KNOWN AND NOTHING MORE (issue #283). All
+ * this status means is that there is no file where the API looks. That is
+ * consistent with an instance deployed some other way — and equally with a
+ * mis-set `DEPLOY_INFO_PATH`, a bind mount that did not attach, or a deploy
+ * that stopped before the record was written. This page used to state the most
+ * confident of those as fact, and was read by an administrator whose server the
+ * CLI had in fact installed and certificated. It names the possibilities now
+ * and asserts none of them.
+ *
+ * THE PATH ITSELF IS NOT PRINTED, because the API does not send it: `detail` is
+ * null for `absent` by design (a missing file is not an error worth a message).
+ * Naming the configuration key the operator would check is what this page can
+ * honestly say; inventing the default path it may not be using is not.
+ *
+ * STILL `severity="info"`. An instance genuinely deployed another way is an
+ * ordinary state, and every dev stack and CI run lands here — a warning would
+ * cry wolf on all of them.
  */
 function DeployInfoUnavailable({ about }: { about: AboutResponse }) {
   if (about.deployInfoStatus === 'absent') {
     return (
       <Alert severity="info">
-        This instance was not deployed with the deploy CLI, so deployment details are
-        unavailable.
+        <AlertTitle>No deployment record was found</AlertTitle>
+        The API found no deployment record where it looks for one (the path in{' '}
+        <Typography component="code" variant="body2" sx={{ fontFamily: 'monospace' }}>
+          DEPLOY_INFO_PATH
+        </Typography>
+        ), so there is nothing to show under Deployment or Server. That is the ordinary
+        state for an instance deployed without the deploy CLI, and also what a mis-set
+        path, a bind mount that did not attach, or a deploy that stopped before the
+        record was written look like from here.
       </Alert>
     );
   }
@@ -558,6 +675,12 @@ export default function AboutPage() {
             <ApplicationSection about={about} now={now} />
             {info ? (
               <>
+                {/* `=== false`, never `!== true` — see the file header. The
+                    warning sits ABOVE the facts it is about, and the facts
+                    below it are not degraded by one word. */}
+                {about.deployRunComplete === false && (
+                  <DeployRunIncomplete about={about} now={now} />
+                )}
                 <DeploymentSection about={about} info={info} now={now} />
                 <ServerSection info={info} />
               </>

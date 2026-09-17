@@ -139,6 +139,10 @@ describe('buildDeployInfo', () => {
       bindPort: 3535,
       host: FACTS,
       remote: null,
+      // Explicit, not absent (#283): a caller that says nothing about how its
+      // run ended is one whose run finished. Absent is reserved for documents
+      // written by a CLI from before the field existed.
+      run: { completed: true },
     } satisfies DeployInfo);
   });
 
@@ -384,8 +388,38 @@ describe('validateDeployInfo', () => {
     expect(validateDeployInfo(info)).toEqual(info);
   });
 
+  // ---------------------------------------------------------------------------
+  // `run`, and both directions of compatibility (issue #283)
+  // ---------------------------------------------------------------------------
+
+  it('defaults to a completed run, so every writer says so explicitly', () => {
+    expect(valid().run).toEqual({ completed: true });
+  });
+
+  it('accepts an incomplete run naming the step that stopped it', () => {
+    const info = buildDeployInfo('/x', sampleState('/x'), FACTS, {
+      appVersion: null,
+      run: { completed: false, failedStep: 'publish', attemptedAt: '2026-09-17T09:00:00.000Z' },
+    });
+    expect(validateDeployInfo(JSON.parse(JSON.stringify(info)))).toEqual(info);
+  });
+
+  it('accepts a document with NO run at all: one written before #283', () => {
+    // The compatibility that matters most. `schema` deliberately stayed at 1,
+    // so this CLI must keep reading - and `update --check` must keep patching
+    // - every info.json already sitting on every live server. A required
+    // field here would make `updateDeployInfoRemote` throw on all of them.
+    const { run: _run, ...older } = valid();
+    expect(_run).toBeDefined();
+    expect(() => validateDeployInfo(older)).not.toThrow();
+    expect(validateDeployInfo(older).run).toBeUndefined();
+  });
+
   it.each([
     ['not an object', 'a string'],
+    ['run', { ...valid(), run: { completed: 'no' } }],
+    ['run.failedStep', { ...valid(), run: { completed: false, failedStep: 7 } }],
+    ['run.attemptedAt', { ...valid(), run: { completed: false, attemptedAt: 'yesterday' } }],
     ['schema', { ...valid(), schema: 0 }],
     ['app.commitSha', { ...valid(), app: { ...valid().app, commitSha: 42 } }],
     ['app.version', { ...valid(), app: { ...valid().app, version: 1 } }],
