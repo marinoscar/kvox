@@ -197,8 +197,12 @@ describe('parseEnvExample against the real template', () => {
     expect(specs.every((spec) => spec.section !== '')).toBe(true);
   });
 
-  it('reads the Microsoft keys as optional', () => {
-    expect(byKey.get('MICROSOFT_CLIENT_ID')?.optional).toBe(true);
+  // Repointed from the Microsoft keys when #241 deleted them. The property
+  // being pinned is parseEnvExample's, not any one key's: a `# KEY=value`
+  // line declares an OPTIONAL variable, which is what lets the template ship
+  // a documented key with no value.
+  it('reads a commented-out key as optional', () => {
+    expect(byKey.get('VAPID_PUBLIC_KEY')?.optional).toBe(true);
   });
 
   it('keeps the long SECRETS_ENCRYPTION_KEY explanation as help', () => {

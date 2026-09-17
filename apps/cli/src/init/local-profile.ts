@@ -169,13 +169,10 @@ const LOCAL_DERIVATIONS: Readonly<
   Record<string, (context: DeriveContext) => string | undefined>
 > = {
   GOOGLE_CALLBACK_URL: ({ answers }) => callbackUrlFor(answers.get('APP_URL'), 'google'),
-  // Only once somebody has actually configured Microsoft. Returning undefined
-  // leaves the key exactly as the template has it - commented out - rather
-  // than writing a callback for a provider this deployment does not use.
-  MICROSOFT_CALLBACK_URL: ({ answers }) =>
-    isBlank(answers.get('MICROSOFT_CLIENT_ID'))
-      ? undefined
-      : callbackUrlFor(answers.get('APP_URL'), 'microsoft'),
+  // There was a MICROSOFT_CALLBACK_URL derivation here until #241. It derived
+  // a callback for a provider this application has never had: no Passport
+  // strategy, no dependency, no route, and `getEnabledProviders` only ever
+  // returns google. The template keys went with it.
 };
 
 /**
