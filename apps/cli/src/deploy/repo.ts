@@ -41,6 +41,15 @@ export interface RepoTarget {
 export interface ResolveRepoOptions {
   repoFlag?: string | undefined;
   refFlag?: string | undefined;
+  /**
+   * The deployment's own record, when the caller has one.
+   *
+   * `update`, `status` and `doctor` pass the state of the deploy root they
+   * already located. `install` had no way to - it derives the deploy root
+   * from the target, so it could not read a state file to produce one - which
+   * is why #266 gave it `locateAppFromCwd`: the deployment cwd is standing in
+   * is identified from the directory, and its state arrives here.
+   */
   state?: Pick<DeployState, 'repoUrl' | 'ref'> | undefined;
   /** Where to start looking for a .git directory. */
   cwd: string;
@@ -144,7 +153,11 @@ async function git(
  *
  * State beats the checkout so that an `update` redeploys WHAT WAS INSTALLED.
  * An install pinned to a tag must not be quietly moved to whatever branch the
- * operator's shell happens to be on.
+ * operator's shell happens to be on. The same ordering is why #266 has
+ * `install` look for a state file beside cwd BEFORE it gets here: a state file
+ * is a record this CLI wrote, a git remote is an inference about what the
+ * operator probably meant, and rank 3's guard (below) exists precisely because
+ * that inference can land on the wrong repository.
  */
 export async function resolveRepoTarget(
   options: ResolveRepoOptions,
@@ -185,6 +198,13 @@ export async function resolveRepoTarget(
   // Only rank 3 is constrained. `--repo` and a saved state never reach here,
   // and a checkout INSIDE the apps root - the ordinary "deploy this clone"
   // case - is not contained by it and passes untouched.
+  //
+  // A DEPLOY ROOT NO LONGER REACHES THIS EITHER (#266). Standing in
+  // `/opt/infra/apps/<app>` used to land here, because the walk went past the
+  // state file in that very directory and found the infra repository above
+  // it. The guard was right and reaching it was the bug; `install` now reads
+  // that state file first and this fires only for a cwd that really does
+  // imply nothing.
   if (root !== undefined && options.appsRoot !== undefined && contains(root, options.appsRoot)) {
     throw new UsageError(
       `Refusing to guess what to deploy: ${options.cwd} sits inside ${root}, which CONTAINS the apps root ${options.appsRoot}. ` +
