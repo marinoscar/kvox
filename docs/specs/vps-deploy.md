@@ -234,6 +234,67 @@ needs to see it happen, not receive a wall of text after the fact) and an
 `AbortSignal` that SIGTERMs the child (the TUI's Esc-to-cancel, section 11,
 depends on this).
 
+### 5.1 The deployment cwd is standing in (issue #266)
+
+What §5 describes is the **weakest** of three ranks, and it was reached in a
+case it had no business answering. On a server whose `/opt/infra` is itself a
+git repository — infrastructure as code, with applications under
+`/opt/infra/apps` — running `install --resume` from inside a deployment
+(`/opt/infra/apps/<app>`) walked up past that directory's own state file,
+found the infra repository, and refused: *"Refusing to guess what to deploy …
+that checkout is this server's infrastructure, not the application"* (#247).
+The refusal is correct; reaching it was the bug. cwd **was** the deployment,
+and the repository, the ref and the name were in a file the operator was
+standing on.
+
+`install` therefore resolves in three ranks, strongest first
+(`resolveInstallLayout`):
+
+1. `--root`/`--name`, and `--repo` for the repository itself.
+2. **A state file at cwd, or at an ancestor below the apps root**
+   (`locateAppFromCwd` in `layout.ts`).
+3. The `origin` of the git checkout around cwd — §5 above.
+
+Rank 2 sits where it does because a state file is **not an inference**: this
+CLI wrote it and it names the deployment outright, where a git remote is a
+guess about what the operator probably meant — and #247 exists precisely
+because that guess can land on the wrong repository. It is fed into
+`resolveRepoTarget`'s own `state` rank rather than turned into a target by
+hand, so `--ref` still overrides the recorded ref in the one place that rule
+is written down, and no `git` process is started at all.
+
+It settles the **deploy root**, not only the target. Deriving the root from
+the state's repository URL would be a second guess on top of a fact: a
+deployment installed with `--name <app>-staging` lives in a directory its
+repository's name does not spell.
+
+Two bounds, both deliberate:
+
+- **The walk stops at the apps root.** Unbounded it leaves the territory this
+  module knows about — `/opt/infra`, `/opt`, `/` — none of which is a
+  deployment, and the apps root is the outermost directory that can contain
+  one. Standing at the apps root itself, or above it, resolves nothing. A
+  deploy root installed *outside* the apps root with `--root` is deliberately
+  not found this way; there is no bound that would find it without walking the
+  whole filesystem, and `--root` is how it was named in the first place.
+- **It is a rank, not a search.** The one deployment cwd implies, or none. The
+  apps root is never listed for candidates — #249 rejected that explicitly,
+  and guessing harder is the wrong answer to a bug caused by guessing. "None"
+  still refuses exactly as it did before, #247's guard included.
+
+`describeLayoutSource` (the #249 refusal's "that directory was …" clause)
+names the state file's path for this rank, rather than reporting it as a
+guess. The wording is unreachable through that refusal by construction —
+finding a state file is what stops the refusal firing — so it is covered by
+its own test.
+
+**`update`, `status` and `about` are not affected**, because they never take
+this path: they resolve the deploy root through `locateInstalledApp`, which
+uses `--name`/`--root` or the single app installed under the apps root, and
+never walks a git checkout. Their own blind spot is a different one — with
+several apps installed and no flags they refuse and list them, even when cwd
+names one unambiguously — and is not this issue.
+
 ## 6. The env wizard: generated from `.env.example`, not hardcoded
 
 This is the property that keeps the wizard correct against a fork's own
