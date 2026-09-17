@@ -15,7 +15,7 @@ procedure (Section 3) still works and is kept as a documented fallback for a
 deployment that has not touched the admin UI — see Section 1.1 for exactly
 how the two interact when both are present.
 
-**As of issue #241, `kvox deploy install`'s environment wizard no longer asks
+**As of issue #241, the `deploy install` environment wizard no longer asks
 about `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` at all — not
 even under `--all`.** This is a change to the *wizard prompt* only, and
 nothing about the four-case precedence in Section 1.1 changed: the three

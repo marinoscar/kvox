@@ -205,6 +205,19 @@ describe('parseEnvExample against the real template', () => {
     expect(byKey.get('VAPID_PUBLIC_KEY')?.optional).toBe(true);
   });
 
+  it('no longer declares the six keys #241 found unread anywhere in the repository', () => {
+    for (const key of [
+      'MICROSOFT_CLIENT_ID',
+      'MICROSOFT_CLIENT_SECRET',
+      'MICROSOFT_CALLBACK_URL',
+      'UPTRACE_DSN',
+      'CLICKHOUSE_USER',
+      'CLICKHOUSE_PASSWORD',
+    ]) {
+      expect(byKey.has(key), key).toBe(false);
+    }
+  });
+
   it('keeps the long SECRETS_ENCRYPTION_KEY explanation as help', () => {
     const help = byKey.get('SECRETS_ENCRYPTION_KEY')?.help ?? '';
     expect(help.length).toBeGreaterThan(100);
