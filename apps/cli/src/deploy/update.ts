@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
+import { adoptDeployment, renderAdoption, type Adoption, type AdoptionNotice } from './adopt.js';
 import {
   ALL_CHECKS,
   DEFAULT_PROXY_CONTAINER,
@@ -12,7 +13,6 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
-import { adoptDeployment, renderAdoption, type Adoption, type AdoptionNotice } from './adopt.js';
 import {
   ensureDeployInfoDir,
   readDeployInfo,
