@@ -18,7 +18,9 @@ import type { CompletedCheck } from '../../../deploy/checks/index.js';
 import {
   CONFIRM_DEFAULT_INDEX,
   MASKED_VALUE,
+  SECRET_MASK,
   confirmChoices,
+  fieldState,
   renderRows,
   wizardReduce,
 } from '../../components/index.js';
@@ -26,6 +28,7 @@ import {
   ABORT_DIALOG,
   ALL_FIELD,
   CATCH_ALL_PAGE_SIZE,
+  ENVIRONMENT_STEP_ID,
   GROUPS_FIELD,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
@@ -37,6 +40,7 @@ import {
   STAGING_FIELD,
   WELCOME_STEP_ID,
   applyOptionMode,
+  applyPrefill,
   applySecretMode,
   checkItems,
   cursorSteps,
@@ -54,13 +58,17 @@ import {
   CATCH_ALL_STEP_ID,
   isCatchAllStep,
   prepareStep,
+  prefillFrom,
   pipelineItems,
   railIndexFor,
   railSteps,
   resolvedAppName,
+  resumeNotice,
+  resumePlan,
   reviewRows,
   scheduleNameRecheck,
   secretModeField,
+  shouldReadDeployment,
   shouldRecheckName,
   stepCheckItems,
   welcomeChecks,
@@ -752,10 +760,14 @@ describe('the abort dialog', () => {
     expect(choices[CONFIRM_DEFAULT_INDEX]?.label).toBe('No, go back');
   });
 
-  it('says what an interrupted install leaves behind, and that re-running resumes', () => {
+  it('says what an interrupted install leaves behind, and that re-running picks up from there', () => {
     expect(ABORT_DIALOG.danger).toBe(true);
     expect(ABORT_DIALOG.detail.join(' ')).toContain('partial deployment');
-    expect(ABORT_DIALOG.detail.join(' ')).toContain('resume');
+    // #288: the claim is now true — an aborted run's completed steps are
+    // written to the state file by `runInstall`'s failure path, and the
+    // wizard passes `resume` when it reads them back.
+    expect(ABORT_DIALOG.detail.join(' ')).toContain('recorded');
+    expect(ABORT_DIALOG.detail.join(' ')).toContain('picks up');
   });
 });
 
@@ -784,6 +796,7 @@ describe('the Done and Failed models', () => {
       message: 'Apply migrations failed: exit 1',
       journalPath: '/opt/infra/apps/demo/logs/install-1.log',
       domain: 'app.example.com',
+      resumable: true,
     });
 
     expect(model.rows.find((row) => row.key === 'Step')?.value).toBe('Apply migrations');
@@ -791,7 +804,20 @@ describe('the Done and Failed models', () => {
       '/opt/infra/apps/demo/logs/install-1.log',
     );
     expect(model.rows.find((row) => row.key === 'Domain')?.value).toBe('app.example.com');
-    expect(model.actionLabel).toBe('Re-run install (resumes)');
+    expect(model.actionLabel).toBe('Re-run install — it resumes at Apply migrations');
+  });
+
+  // #288. The old label said "(resumes)" unconditionally, on a screen that
+  // never passed `resume` at all. Now that it does, the label has to be able
+  // to say the other thing too: a run that fell over in `preflight` recorded
+  // no completed step, so `runInstall` has nothing to skip and a re-run
+  // genuinely starts from the beginning.
+  it('does not claim a resume when the run recorded no completed step', () => {
+    const model = failedModel({ stepId: 'preflight', message: 'boom' });
+
+    expect(model.actionLabel).toBe(
+      'Re-run install — nothing completed, so it starts from the beginning',
+    );
   });
 
   it('says so plainly when the run stopped before a journal existed', () => {
@@ -1167,5 +1193,403 @@ describe('groupsOf', () => {
 
   it('reads the comma-separated list the Welcome step records', () => {
     expect(groupsOf({ [GROUPS_FIELD]: 'storage' })).toEqual(['storage']);
+  });
+});
+
+// =============================================================================
+// Resuming, and remembering what was answered  (issue #288)
+// =============================================================================
+//
+// The pure half. The filesystem half — `readDeployment`, and the flag landing
+// the way `install.ts`'s two opposing guards expect — is `install-resume.test.ts`.
+// =============================================================================
+
+describe('prefillFrom', () => {
+  const env = (entries: Record<string, string>): Map<string, string> =>
+    new Map(Object.entries(entries));
+
+  it('seeds the answers from the values a deployment already has', () => {
+    const seeded = prefillFrom(
+      env({ POSTGRES_HOST: 'db.example.com', POSTGRES_PASSWORD: 'hunter2' }),
+    );
+
+    expect(seeded.get('POSTGRES_HOST')).toBe('db.example.com');
+    expect(seeded.get('POSTGRES_PASSWORD')).toBe('hunter2');
+  });
+
+  it('drops the keys the wizard is not allowed to answer for', () => {
+    const seeded = prefillFrom(
+      env({
+        // fixed: install.ts forces it whatever is asked.
+        NODE_ENV: 'production',
+        // derive: computed from the domain, and an answer would outrank it.
+        GOOGLE_CALLBACK_URL: 'https://app.example.com/api/auth/google/callback',
+        // never: not written at all, by any path (#241).
+        VAPID_PRIVATE_KEY: 'a-private-key',
+        // set by the installer from the resolved layout, not by the operator.
+        COMPOSE_PROJECT_NAME: 'somebody-elses-project',
+        DEPLOY_ROOT: '/opt/infra/apps/somebody-else',
+        // A blank on disk says nothing the blank field does not already say.
+        S3_ENDPOINT: '',
+      }),
+    );
+
+    expect([...seeded.keys()]).toEqual([]);
+  });
+
+  it('recovers the domain from APP_URL, which is the only place it is written', () => {
+    expect(prefillFrom(env({ APP_URL: 'https://app.example.com' })).get(DOMAIN_FIELD)).toBe(
+      'app.example.com',
+    );
+  });
+
+  it('falls back to the domain the state recorded when APP_URL cannot answer', () => {
+    // A template without APP_URL, or a local-style `http://localhost:3535`
+    // that `validateDomain` would refuse: the field must still come up
+    // filled, or `environmentEdited` reads the operator retyping it as a
+    // changed environment and declines every resume.
+    expect(
+      prefillFrom(env({ APP_URL: 'http://localhost:3535' }), { domain: 'app.example.com' }).get(
+        DOMAIN_FIELD,
+      ),
+    ).toBe('app.example.com');
+    expect(prefillFrom(undefined, { domain: 'app.example.com' }).get(DOMAIN_FIELD)).toBe(
+      'app.example.com',
+    );
+  });
+
+  it('never offers a domain the Domain field would then refuse', () => {
+    expect(prefillFrom(env({ APP_URL: 'http://127.0.0.1:3535' })).has(DOMAIN_FIELD)).toBe(false);
+    expect(prefillFrom(undefined, { domain: 'not a hostname' }).has(DOMAIN_FIELD)).toBe(false);
+  });
+});
+
+describe('applyPrefill', () => {
+  const seed = (entries: Record<string, string>): Map<string, string> =>
+    new Map(Object.entries(entries));
+
+  it('fills a blank field and leaves a typed one alone', () => {
+    const answers = applyPrefill(
+      { POSTGRES_USER: 'typed-by-hand', POSTGRES_DB: '' },
+      undefined,
+      seed({ POSTGRES_USER: 'from-disk', POSTGRES_DB: 'from-disk', POSTGRES_HOST: 'from-disk' }),
+    );
+
+    expect(answers['POSTGRES_USER']).toBe('typed-by-hand');
+    expect(answers['POSTGRES_DB']).toBe('from-disk');
+    expect(answers['POSTGRES_HOST']).toBe('from-disk');
+  });
+
+  // The #229 hazard, on this axis: the app name is a field on Welcome, so
+  // walking from `demo` to `demo2` reads `demo`'s .env on the way past.
+  it("takes a previous deployment's values back out again", () => {
+    const first = applyPrefill({}, undefined, seed({ POSTGRES_PASSWORD: 'neighbours' }));
+    const second = applyPrefill(first, seed({ POSTGRES_PASSWORD: 'neighbours' }), seed({}));
+
+    expect(first['POSTGRES_PASSWORD']).toBe('neighbours');
+    expect(second['POSTGRES_PASSWORD']).toBeUndefined();
+  });
+
+  it('keeps a value the operator typed over a previous seed', () => {
+    const seeded = applyPrefill({}, undefined, seed({ POSTGRES_USER: 'neighbours' }));
+    const typed = withAnswer(seeded, 'POSTGRES_USER', 'mine');
+    const moved = applyPrefill(typed, seed({ POSTGRES_USER: 'neighbours' }), seed({}));
+
+    expect(moved['POSTGRES_USER']).toBe('mine');
+  });
+
+  it('returns the same object when nothing changed, so the effect cannot loop', () => {
+    const answers = { POSTGRES_USER: 'app' };
+    const same = applyPrefill(answers, seed({ POSTGRES_USER: 'app' }), seed({ POSTGRES_USER: 'app' }));
+
+    expect(same).toBe(answers);
+  });
+});
+
+describe('environmentEdited, through resumePlan', () => {
+  const completed = ['preflight', 'checkout', ENVIRONMENT_STEP_ID, 'build'];
+  const failedRun = {
+    lastOutcome: 'failure' as const,
+    lastFailedStep: 'migrate',
+    completedSteps: completed,
+  };
+
+  const decide = (answers: InstallAnswers, prefill: Record<string, string>) =>
+    resumePlan({ state: failedRun, answers, prefill: new Map(Object.entries(prefill)) });
+
+  it('resumes when every answer still matches the file the run wrote', () => {
+    expect(decide({ POSTGRES_USER: 'app' }, { POSTGRES_USER: 'app' }).resume).toBe(true);
+  });
+
+  it('declines when an answer was corrected — the fix must not be dropped', () => {
+    expect(decide({ POSTGRES_USER: 'fixed' }, { POSTGRES_USER: 'app' }).reason).toBe(
+      'environment-edited',
+    );
+  });
+
+  it('declines when the domain changed, which rewrites APP_URL and the callback', () => {
+    expect(
+      decide({ [DOMAIN_FIELD]: 'new.example.com' }, { [DOMAIN_FIELD]: 'old.example.com' }).reason,
+    ).toBe('environment-edited');
+  });
+
+  // The same rule `envAnswers` already applies: a blank answer SKIPS the key
+  // rather than writing it empty, so clearing a prefilled field leaves the
+  // .env alone. The two have to agree, or the wizard would decline to resume
+  // over a field it was then going to write nothing for.
+  it('does not count a cleared field as an edit, because nothing would be written', () => {
+    expect(decide({ POSTGRES_USER: '' }, { POSTGRES_USER: 'app' }).resume).toBe(true);
+  });
+
+  it('ignores the wizard-internal fields, which are not the environment', () => {
+    expect(decide({ [ALL_FIELD]: 'true', [NAME_FIELD]: 'demo' }, {}).resume).toBe(true);
+  });
+
+  it('counts a key the file does not carry at all — a variable the template added', () => {
+    expect(decide({ NEW_SINCE_LAST_RUN: 'x' }, {}).reason).toBe('environment-edited');
+  });
+
+  it('does not ask the question at all when the environment step is still to run', () => {
+    // `environment` is not among the completed steps, so a resume re-runs it
+    // and every answer is applied. There is nothing to protect.
+    const plan = resumePlan({
+      state: { ...failedRun, completedSteps: ['preflight', 'checkout'] },
+      answers: { POSTGRES_USER: 'fixed' },
+      prefill: new Map([['POSTGRES_USER', 'app']]),
+    });
+
+    expect(plan.resume).toBe(true);
+  });
+});
+
+describe('resumePlan', () => {
+  const empty = new Map<string, string>();
+
+  it('does not resume a first install, and says why', () => {
+    expect(resumePlan({ state: undefined, answers: {}, prefill: empty })).toEqual({
+      resume: false,
+      completedSteps: [],
+      reason: 'no-state',
+    });
+  });
+
+  // state.ts is explicit: ABSENT MEANS SUCCESS, so a reader must test for
+  // 'failure' and never for !== 'success'. Every state file written before
+  // #267 lacks the field and describes a run that completed.
+  it('treats a state file with no lastOutcome as a success, never as a resume', () => {
+    const plan = resumePlan({
+      state: { completedSteps: ['preflight', 'checkout'], lastDeployedAt: '2026-01-01T00:00:00Z' },
+      answers: {},
+      prefill: empty,
+    });
+
+    expect(plan.resume).toBe(false);
+    expect(plan.reason).toBe('already-deployed');
+  });
+
+  it('never resumes a deployment that completed, whatever it recorded', () => {
+    const plan = resumePlan({
+      state: {
+        lastOutcome: 'success',
+        lastDeployedAt: '2026-01-01T00:00:00Z',
+        completedSteps: PIPELINE_STEPS.map((step) => step.id),
+      },
+      answers: {},
+      prefill: empty,
+    });
+
+    // The flag WAIVES install.ts's "a deployment already exists" refusal, so
+    // passing it here would skip all thirteen recorded steps and report an
+    // install that did nothing at all.
+    expect(plan.resume).toBe(false);
+    expect(plan.reason).toBe('already-deployed');
+  });
+
+  it('does not resume a failure that completed nothing — there is nothing to skip', () => {
+    const plan = resumePlan({
+      state: { lastOutcome: 'failure', lastFailedStep: 'preflight', completedSteps: [] },
+      answers: {},
+      prefill: empty,
+    });
+
+    expect(plan.resume).toBe(false);
+    expect(plan.reason).toBe('no-completed-steps');
+  });
+
+  // A reinstall over a live deployment that itself failed part-way: the state
+  // carries the EARLIER success's lastDeployedAt forward (install.ts says so
+  // outright), so this is the one case where resuming deliberately outranks
+  // the "already exists" refusal — it is the run the failure told the
+  // operator to resume.
+  it('resumes a failed run over a deployment that had previously succeeded', () => {
+    const plan = resumePlan({
+      state: {
+        lastOutcome: 'failure',
+        lastDeployedAt: '2026-01-01T00:00:00Z',
+        lastFailedStep: 'build',
+        completedSteps: ['preflight', 'checkout'],
+      },
+      answers: {},
+      prefill: empty,
+    });
+
+    expect(plan).toMatchObject({ resume: true, reason: 'resume', failedStep: 'build' });
+  });
+
+  it('names the step that writes the environment file as a real pipeline step', () => {
+    // `resumePlan`'s fourth condition turns on this id. A typo would silently
+    // disable it: nothing would match, so no edit would ever block a resume.
+    expect(PIPELINE_STEPS.map((step) => step.id)).toContain(ENVIRONMENT_STEP_ID);
+  });
+});
+
+describe('resumeNotice', () => {
+  it('says how much is being skipped, and where the run re-enters', () => {
+    const lines = resumeNotice({
+      resume: true,
+      completedSteps: ['preflight', 'checkout', ENVIRONMENT_STEP_ID, 'build'],
+      failedStep: 'migrate',
+      reason: 'resume',
+    }).join(' ');
+
+    expect(lines).toContain('4 of 13');
+    expect(lines).toContain('Apply migrations');
+    // The consequence the operator cannot otherwise see: the answers they
+    // just walked through are already on disk and are not rewritten.
+    expect(lines).toContain('environment file');
+  });
+
+  it('says a first install has nothing to explain', () => {
+    expect(
+      resumeNotice({ resume: false, completedSteps: [], reason: 'no-state' }),
+    ).toEqual([]);
+  });
+
+  it('warns before the run that an already-installed deployment will be refused', () => {
+    const lines = resumeNotice({
+      resume: false,
+      completedSteps: [],
+      reason: 'already-deployed',
+    }).join(' ');
+
+    expect(lines).toContain('refuse');
+    expect(lines).toContain('Update');
+  });
+
+  it('explains the rebuild an edited answer costs', () => {
+    const lines = resumeNotice({
+      resume: false,
+      completedSteps: ['preflight', ENVIRONMENT_STEP_ID],
+      failedStep: 'build',
+      reason: 'environment-edited',
+    }).join(' ');
+
+    expect(lines).toContain('differ');
+    expect(lines).toContain('every step runs again');
+  });
+});
+
+describe('a prefilled secret never reaches the terminal', () => {
+  const specs = parseEnvExample(TEMPLATE);
+  const steps = installSteps(specs);
+  const secretStep = steps.find((step) => step.fields.includes('POSTGRES_PASSWORD'));
+  const prefill = new Map([
+    ['POSTGRES_PASSWORD', 'the-real-database-password'],
+    ['JWT_SECRET', 'the-real-jwt-secret-that-is-long-enough'],
+  ]);
+  const answers: InstallAnswers = Object.fromEntries(prefill);
+
+  it('is masked in the field, exactly as a typed one is', () => {
+    const fields = formFieldsFor(secretStep as InstallStep, { specs, answers, prefill });
+    const field = fields.find((entry) => entry.key === 'POSTGRES_PASSWORD');
+
+    expect(field?.kind).toBe('text');
+    expect(field?.kind === 'text' && field.secret).toBe(true);
+
+    // What the terminal actually draws for it.
+    const shown = fieldState(answers['POSTGRES_PASSWORD'] ?? '', {
+      label: 'POSTGRES_PASSWORD',
+      secret: true,
+    }).display;
+    expect(shown).toBe(SECRET_MASK.repeat('the-real-database-password'.length));
+    expect(shown).not.toContain('password');
+  });
+
+  it('is masked in the review table, so a rendered row cannot carry it', () => {
+    const rows = reviewRows({
+      specs,
+      answers,
+      facts: unknownServerFacts(),
+      name: 'demo',
+      deployRoot: '/opt/infra/apps/demo',
+      repoUrl: 'https://example.com/o/demo',
+      ref: 'main',
+      proxyContainer: 'proxy',
+    });
+    const rendered = renderRows(rows, 80).map((row) => row.value).join(' ');
+
+    expect(rendered).toContain(MASKED_VALUE);
+    expect(rendered).not.toContain('the-real-database-password');
+    expect(rendered).not.toContain('the-real-jwt-secret-that-is-long-enough');
+  });
+
+  it('says the masked stars are the value already in use, not a fresh one', () => {
+    const jwtStep = steps.find((step) => step.fields.includes('JWT_SECRET'));
+    const fields = formFieldsFor(jwtStep as InstallStep, { specs, answers, prefill });
+    const value = fields.find((entry) => entry.key === 'JWT_SECRET');
+
+    // Without this the field reads "Generated. Type here to replace it with
+    // your own." over a secret that was NOT generated — and an operator who
+    // cannot tell the two apart has no way to know that pressing on is safe.
+    expect(value?.kind === 'text' && value.help).toContain('already using');
+  });
+});
+
+describe('the review-everything step over a deployment that already has values', () => {
+  const specs = parseEnvExample(TEMPLATE);
+  const step = installSteps(specs, { all: true }).find((entry) =>
+    isCatchAllStep(entry.id),
+  ) as InstallStep;
+
+  it("keeps this deployment's own value rather than resetting it to the template default", () => {
+    const key = step.fields[0] as string;
+    const spec = specs.find((entry) => entry.key === key);
+    const prepared = prepareStep({ [key]: 'what-this-deployment-uses' }, step, specs);
+
+    // `applyOptionMode(…, 'keep')` writes the TEMPLATE's value, which is
+    // right for a key nobody has answered and catastrophic for one seeded
+    // from this deployment's own .env — opening this step would quietly
+    // reset every customised optional variable on the next write.
+    expect(prepared[key]).toBe('what-this-deployment-uses');
+    expect(prepared[key]).not.toBe(spec?.defaultValue);
+    expect(prepared[optionModeField(key)]).toBe('keep');
+  });
+
+  it('still defaults an unanswered key to the template value', () => {
+    const key = step.fields[0] as string;
+    const spec = specs.find((entry) => entry.key === key);
+    const prepared = prepareStep({}, step, specs);
+
+    expect(prepared[key]).toBe(spec?.optional === true ? '' : spec?.defaultValue);
+  });
+});
+
+describe('shouldReadDeployment', () => {
+  // Not an optimisation: the effect that reads the deployment re-runs on
+  // every render (`useIsMounted` hands out a new closure each time), and each
+  // read produces a new Map whose identity would re-render the screen and arm
+  // the next read.
+  it('reads a deployment once, not once per render', () => {
+    expect(shouldReadDeployment({ target: '/apps/demo', lastRead: undefined })).toBe(true);
+    expect(shouldReadDeployment({ target: '/apps/demo', lastRead: '/apps/demo' })).toBe(false);
+  });
+
+  it('reads again when the app name moves the wizard to another folder', () => {
+    expect(shouldReadDeployment({ target: '/apps/demo2', lastRead: '/apps/demo' })).toBe(true);
+  });
+
+  it('runs once more when the name is cleared, so the seed is taken back out', () => {
+    expect(shouldReadDeployment({ target: undefined, lastRead: '/apps/demo' })).toBe(true);
+    expect(shouldReadDeployment({ target: undefined, lastRead: undefined })).toBe(false);
   });
 });
