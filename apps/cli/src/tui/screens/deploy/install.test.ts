@@ -36,6 +36,7 @@ import {
   applyOptionMode,
   applySecretMode,
   checkItems,
+  cursorSteps,
   doneModel,
   ensureGeneratedSecrets,
   envAnswers,
@@ -861,6 +862,116 @@ describe('railSteps and railIndexFor (#240)', () => {
 
     const railIndices = new Set(pageIndices.map(({ index }) => railIndexFor(paginated, index)));
     expect(railIndices.size).toBe(1);
+  });
+});
+
+// =============================================================================
+// cursorSteps vs. railSteps — the #243 regression
+// =============================================================================
+//
+// #240's coverage above tested page CONTENT and the railIndexFor mapping, but
+// nothing asserted that every generated step is REACHABLE by the thing that
+// actually walks the wizard. `useWizard` was built from `railSteps` — which
+// collapses the thirteen generated catch-all pages into one rail entry — so
+// its cursor clamped at the rail's length while `installSteps` kept returning
+// every page. `next()` on the last rail-sized index reduced to `finish`
+// (whose handler is a deliberate no-op on Review), so Enter was silently
+// swallowed on page two of the catch-all with no error and no way forward.
+//
+// `wizardReduce` is driven directly here, not through `useWizard` /
+// `ink-testing-library` (not a dependency of this package — see this file's
+// own header and every other `tui/screens/*.test.ts`), the same "assert the
+// data a screen derives" rule the rest of this file follows.
+// =============================================================================
+
+describe('cursorSteps vs. railSteps (#243)', () => {
+  const realSteps = installSteps(REAL_SPECS, { all: true, groups: REAL_GROUPS });
+
+  it('is 1:1 with the real steps against the real template - never collapsed, same ids in the same order', () => {
+    const cursor = cursorSteps(realSteps);
+
+    expect(cursor).toHaveLength(realSteps.length);
+    expect(cursor.map((step) => step.id)).toEqual(realSteps.map((step) => step.id));
+  });
+
+  it('is strictly shorter than cursorSteps when a multi-page catch-all exists - the asymmetry that made substituting one for the other a bug', () => {
+    // Otherwise this proves nothing: the real template must actually produce
+    // a multi-page catch-all for the asymmetry below to mean anything (the
+    // #240 pagination tests above already pin that it does).
+    const pages = realSteps.filter((step) => isCatchAllStep(step.id));
+    expect(pages.length).toBeGreaterThan(1);
+
+    expect(railSteps(realSteps).length).toBeLessThan(cursorSteps(realSteps).length);
+  });
+
+  it('a full walk over cursorSteps visits every step exactly once, in order, and terminates on Review - never `finish` early', () => {
+    const cursor = cursorSteps(realSteps);
+    const visited: number[] = [];
+    let index = 0;
+
+    for (;;) {
+      visited.push(index);
+      const transition = wizardReduce(index, cursor, { type: 'next' });
+      expect(transition.kind, `index ${String(index)}`).not.toBe('stay');
+      expect(transition.kind, `index ${String(index)}`).not.toBe('cancel');
+      if (transition.kind === 'finish') break;
+      index = transition.index;
+    }
+
+    expect(visited).toEqual(cursor.map((_step, i) => i));
+    expect(visited).toHaveLength(cursor.length);
+    // `finish` fires on `next()` FROM the last index - the walk stops having
+    // just visited it, and that last visited step is Review.
+    expect(visited.at(-1)).toBe(cursor.length - 1);
+    expect(cursor[cursor.length - 1]?.id).toBe(REVIEW_STEP_ID);
+  });
+
+  it('reproduces #243 against railSteps: the identical walk finishes long before the real step count, proving the previous test exercises the right list', () => {
+    const cursor = cursorSteps(realSteps);
+    const rail = railSteps(realSteps);
+    const reviewCursorIndex = cursor.length - 1;
+
+    let index = 0;
+    let stepsTaken = 0;
+    for (;;) {
+      const transition = wizardReduce(index, rail, { type: 'next' });
+      stepsTaken += 1;
+      if (transition.kind === 'finish') break;
+      expect(transition.kind).toBe('move');
+      if (transition.kind === 'move') index = transition.index;
+    }
+
+    // The rail collapses every catch-all page into one entry, so driving the
+    // wizard from it reaches `finish` after only `rail.length` steps - far
+    // short of the REAL number of steps (and specifically short of where
+    // Review actually sits in the list `useWizard` must clamp against). This
+    // is #243 reproduced directly: the walk stops dead well before the
+    // question list is exhausted, exactly as the install wizard did on page
+    // two of the "Everything else" catch-all.
+    expect(stepsTaken).toBe(rail.length);
+    expect(stepsTaken).toBeLessThan(cursor.length);
+    expect(stepsTaken).toBeLessThan(reviewCursorIndex + 1);
+  });
+
+  it('a back walk from the last index returns to 0 without skipping', () => {
+    const cursor = cursorSteps(realSteps);
+    const visited: number[] = [cursor.length - 1];
+    let index = cursor.length - 1;
+
+    while (index > 0) {
+      const transition = wizardReduce(index, cursor, { type: 'back' });
+      expect(transition.kind, `index ${String(index)}`).toBe('move');
+      if (transition.kind !== 'move') break;
+      index = transition.index;
+      visited.push(index);
+    }
+
+    visited.reverse();
+    expect(visited).toEqual(cursor.map((_step, i) => i));
+    expect(index).toBe(0);
+
+    // One further back cancels out of the wizard rather than moving.
+    expect(wizardReduce(0, cursor, { type: 'back' }).kind).toBe('cancel');
   });
 });
 
