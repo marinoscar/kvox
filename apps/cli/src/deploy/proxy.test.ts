@@ -13,6 +13,7 @@ import {
   certbotArgv,
   certificateExpiry,
   certificateStatus,
+  hasRenewalCron,
   installRenewalCron,
   installVhost,
   issueCertificate,
@@ -25,6 +26,7 @@ import {
   renderVhost,
   renewCertificates,
   renewalCronPath,
+  stageRenewalCron,
   validateProxy,
   vhostPath,
   type ProxyTarget,
@@ -904,6 +906,70 @@ describe('installRenewalCron', () => {
 
   it('names the file after the CLI so the renewal check recognises it', () => {
     expect(renewalCronPath('demo')).toBe(`/etc/cron.d/${CLI_NAME}-certs-demo`);
+  });
+});
+
+describe('hasRenewalCron', () => {
+  function cronOptions(cronDir: string, name = 'demo') {
+    return { name, appsRoot: '/opt/infra/apps', kvoxPath: '/usr/local/bin/cli', cronDir };
+  }
+
+  it('answers for THIS deployment, not for the box', () => {
+    const cronDir = mkdtempSync(join(tmpdir(), 'appctl-cron-'));
+    installRenewalCron(cronOptions(cronDir, 'other'));
+
+    // A sibling's entry renews every certificate behind the shared proxy, but
+    // it names the sibling's deploy root and goes when the sibling does (#261).
+    expect(hasRenewalCron('other', cronDir)).toBe(true);
+    expect(hasRenewalCron('demo', cronDir)).toBe(false);
+  });
+
+  it('sees an entry the moment one is written', () => {
+    const cronDir = mkdtempSync(join(tmpdir(), 'appctl-cron-'));
+
+    expect(hasRenewalCron('demo', cronDir)).toBe(false);
+    installRenewalCron(cronOptions(cronDir));
+    expect(hasRenewalCron('demo', cronDir)).toBe(true);
+  });
+
+  it('answers "no entry" for a cron directory it cannot read, never throws', () => {
+    // Which is the safe direction: the install then tries to write one and
+    // reports what happened. Silence is the outcome #265 exists to prevent.
+    expect(hasRenewalCron('demo', join(tmpdir(), 'appctl-cron-does-not-exist'))).toBe(false);
+  });
+});
+
+describe('stageRenewalCron', () => {
+  function cronOptions(cronDir: string) {
+    return { name: 'demo', appsRoot: '/opt/infra/apps', kvoxPath: '/usr/local/bin/cli', cronDir };
+  }
+
+  it('stages the exact bytes installRenewalCron would have written', () => {
+    // Derived from `renderRenewalCron`, never described in prose: an operator
+    // finishing this by hand must end up with the file the CLI would have made.
+    const cronDir = mkdtempSync(join(tmpdir(), 'appctl-cron-'));
+    const stageDir = mkdtempSync(join(tmpdir(), 'appctl-stage-'));
+
+    const staged = stageRenewalCron(cronOptions(cronDir), stageDir);
+
+    expect(readFileSync(staged.path, 'utf8')).toBe(renderRenewalCron(cronOptions(cronDir)));
+    expect(staged.target).toBe(join(cronDir, `${CLI_NAME}-certs-demo`));
+    expect(statSync(staged.path).mode & 0o777).toBe(0o644);
+  });
+
+  it('is a single line that survives being indented, and never suggests sudo <cli>', () => {
+    // The report indents warnings by four. A `sudo tee` heredoc does not
+    // survive that - the body keeps the spaces and an indented EOF does not
+    // terminate it - so the command is one `install` line instead.
+    const cronDir = mkdtempSync(join(tmpdir(), 'appctl-cron-'));
+    const stageDir = mkdtempSync(join(tmpdir(), 'appctl-stage-'));
+
+    const staged = stageRenewalCron(cronOptions(cronDir), stageDir);
+
+    expect(staged.command).toBe(`sudo install -m 644 ${staged.path} ${staged.target}`);
+    expect(staged.command.split('\n')).toHaveLength(1);
+    expect(staged.command).not.toContain('<<');
+    expect(staged.command).not.toContain(`sudo ${CLI_NAME}`);
   });
 });
 
