@@ -136,7 +136,36 @@ export function describeFetchFailure(error: unknown): string {
   if (code?.startsWith('DEPTH_ZERO') === true || code?.includes('CERT') === true) {
     return `TLS failure: ${cause?.message ?? code}`;
   }
-  return cause?.message ?? message;
+
+  // A PROTOCOL ERROR IS NOT A DEAD SERVER (issue #259). Every case above is a
+  // request that never got an answer; this one is an answer this client cannot
+  // READ. Reported as-is, it says `Missing expected LF after header value` -
+  // the parser's disappointment, not the operator's problem - and sends them
+  // to look at a stack that is running perfectly.
+  //
+  // The `HPE_` prefix is llhttp's, which undici surfaces on its
+  // HTTPParserError; matching the prefix rather than one code covers the whole
+  // family (a bad status line, a bad chunk header) with one branch. The
+  // message is checked too, so a future undici that drops `code` still lands
+  // here rather than falling through to the bare parser text.
+  //
+  // Naming curl and the browser is the load-bearing part: both are lenient
+  // about this and will show 200, so an operator checking by hand gets
+  // evidence that looks like it CONTRADICTS the CLI. Saying so up front is
+  // what stops them concluding the CLI is wrong.
+  const parserMessage = cause?.message ?? message;
+  if (
+    code?.startsWith('HPE_') === true ||
+    /does not match the HTTP\/1\.1 protocol/.test(parserMessage)
+  ) {
+    return (
+      `the server replied, but the response is malformed and cannot be parsed (${parserMessage}). ` +
+      'Inspect the response headers - a stray control character inside a header value does this. ' +
+      'A lenient client (curl, a browser) will still report 200 and appear to contradict this.'
+    );
+  }
+
+  return parserMessage;
 }
 
 /** Reads `docker compose ps` as JSON. */
