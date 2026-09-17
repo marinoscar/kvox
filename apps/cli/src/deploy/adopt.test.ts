@@ -111,6 +111,17 @@ function adopt(root: string, extra: Record<string, unknown> = {}) {
 }
 
 describe('the evidence gate', () => {
+  it('is the SAME predicate discovery uses, not a copy of it (#285)', async () => {
+    // One defect at two levels - `requireState` and `listInstalledApps` - so
+    // one predicate. A second one here could drift, and then `update` and a
+    // bare `deploy update` would disagree about what a deployment is.
+    const { deploymentEvidence: shared, hasDeployment: sharedHas } = await import(
+      './deployment-evidence.js'
+    );
+    expect(deploymentEvidence).toBe(shared);
+    expect(hasDeployment).toBe(sharedHas);
+  });
+
   it('needs BOTH a git checkout and a readable .env', () => {
     const both = stageDeployment({ env: FULL_ENV });
     expect(deploymentEvidence(both)).toEqual({ clone: true, env: true });

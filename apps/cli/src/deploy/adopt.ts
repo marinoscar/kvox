@@ -1,10 +1,16 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { CLI_VERSION } from '../package-info.js';
 import { readDeployInfo } from './deploy-info.js';
-import { envFilePath, readEnvFile } from './env-file.js';
+import {
+  deploymentEvidence,
+  envFacts,
+  hasDeployment,
+  type DeploymentEvidence,
+} from './deployment-evidence.js';
+import { envFilePath } from './env-file.js';
 import type { runCommand as defaultRunCommand } from './executor.js';
 import { DEFAULT_BIND_PORT, DEFAULT_PROXY_ROOT } from './layout.js';
 import { displayRepoUrl, normaliseRepoUrl } from './repo.js';
@@ -30,24 +36,11 @@ import {
 // So when there is no state file, this module answers the second question from
 // the disk and rebuilds the first. Two rules shape every line below.
 //
-//   1. THE GATE IS POSITIVE EVIDENCE, NEVER THE ABSENCE OF A REFUSAL. Two
-//      things must BE there - a git checkout at `repo/`, and a readable `.env`
-//      - and a directory that has neither, or only one, still refuses with the
-//      message it always gave. An empty `--root` typo must not be adopted into
-//      a deployment.
-//
-//      Both are required because both are things this CLI itself creates and
-//      the pipeline itself needs: `fetch` fetches and checks out inside
-//      `repo/`, and everything from `build` onward interpolates `.env`.
-//      Neither is inferable from the other, so neither alone is evidence.
-//
-//      RUNNING CONTAINERS ARE DELIBERATELY NOT PART OF THE GATE, although the
-//      issue offers them. A deployment whose containers are stopped, pruned or
-//      wedged is precisely the deployment somebody is trying to update, and a
-//      gate that refused it would refuse the recovery case this exists for. It
-//      would also put a Docker subprocess in a code path that has to work when
-//      the daemon is down - and three lines later the pipeline's own preflight
-//      checks Docker properly, with a proper failure message.
+//   1. THE GATE LIVES IN `deployment-evidence.ts`, NOT HERE, and its argument
+//      is written there. It is shared with `listInstalledApps`, because
+//      discovery keyed on the state file for the same reason `requireState`
+//      did - one defect at two levels, and one predicate for both. A directory
+//      that does not pass it still refuses with the message it always gave.
 //
 //   2. NOTHING IS INVENTED. Every field below is READ from somewhere, and the
 //      two that cannot be read - `installedAt` and `lastDeployedAt` - are left
@@ -57,34 +50,6 @@ import {
 //      instant on the About page is the class of bug #283 fixed. `adoptedAt`
 //      records the one instant that IS true: when the record was rebuilt.
 // =============================================================================
-
-/** What is actually on the disk at a deploy root. */
-export interface DeploymentEvidence {
-  /** `<root>/repo` exists and is a git checkout. */
-  clone: boolean;
-  /** The deployment's `.env` is readable, in either layout. */
-  env: boolean;
-}
-
-/**
- * The two pieces of positive evidence, each answered independently so a
- * refusal can say which one is missing.
- *
- * `.git` is tested with `existsSync` rather than a directory test: it is a
- * directory in an ordinary clone and a FILE in a worktree, the same thing
- * `findGitRoot` accounts for.
- */
-export function deploymentEvidence(deployRoot: string): DeploymentEvidence {
-  return {
-    clone: existsSync(join(deployRoot, 'repo', '.git')),
-    env: readEnvFileQuietly(deployRoot) !== undefined,
-  };
-}
-
-/** True when both pieces of evidence are there. */
-export function hasDeployment(evidence: DeploymentEvidence): boolean {
-  return evidence.clone && evidence.env;
-}
 
 /** What the operator is told, once, when a deployment is adopted. */
 export interface AdoptionNotice {
@@ -134,7 +99,7 @@ export async function adoptDeployment(options: AdoptOptions): Promise<Adoption> 
   }
 
   const repo = join(deployRoot, 'repo');
-  const env = readEnvFileQuietly(deployRoot) ?? new Map<string, string>();
+  const facts = envFacts(deployRoot);
   const detail: string[] = [];
 
   const origin = await git(options, repo, ['remote', 'get-url', 'origin']);
@@ -180,19 +145,21 @@ export async function adoptDeployment(options: AdoptOptions): Promise<Adoption> 
   // The compose project name, which is what keeps two apps on one host apart.
   // Install writes it into the .env, so the .env is the answer; the directory
   // name is what `projectNameFor` would have fallen back to anyway.
-  const name = env.get('COMPOSE_PROJECT_NAME') ?? basename(deployRoot);
+  const name = facts.composeProjectName ?? basename(deployRoot);
   detail.push(
-    `name        ${name}  (${env.has('COMPOSE_PROJECT_NAME') ? '.env COMPOSE_PROJECT_NAME' : 'directory name'})`,
+    `name        ${name}  (${facts.composeProjectName === undefined ? 'directory name' : '.env COMPOSE_PROJECT_NAME'})`,
   );
 
-  const parsedPort = Number(env.get('APP_BIND_PORT'));
-  const bindPort = Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_BIND_PORT;
+  // The default is applied HERE rather than in `envFacts`, which reads and
+  // never decides: this is a record about to be written, so it needs a number,
+  // while `siblingBindPorts` needs the opposite - see that module's rule 2.
+  const bindPort = facts.bindPort ?? DEFAULT_BIND_PORT;
   detail.push(
-    `bind port   ${bindPort}  (${bindPort === parsedPort ? '.env APP_BIND_PORT' : 'default'})`,
+    `bind port   ${bindPort}  (${facts.bindPort === undefined ? 'default' : '.env APP_BIND_PORT'})`,
   );
 
   const proxyRoot = options.proxyRoot ?? DEFAULT_PROXY_ROOT;
-  const fromEnv = domainFromAppUrl(env.get('APP_URL'));
+  const fromEnv = domainFromAppUrl(facts.appUrl);
   const fromVhost = fromEnv === undefined ? findVhostDomain(proxyRoot, bindPort) : undefined;
   const domain = fromEnv ?? fromVhost;
   detail.push(
@@ -247,6 +214,8 @@ export async function adoptDeployment(options: AdoptOptions): Promise<Adoption> 
   };
 }
 
+export { deploymentEvidence, hasDeployment, type DeploymentEvidence };
+
 /** `${headline}` then the detail, indented - the journal's and the terminal's shape. */
 export function renderAdoption(notice: AdoptionNotice): string[] {
   return [notice.headline, ...notice.detail.map((line) => `  ${line}`)];
@@ -278,14 +247,6 @@ function missingEvidenceDetail(deployRoot: string, evidence: DeploymentEvidence)
 function recordedInstalledAt(deployRoot: string): string | undefined {
   try {
     return readDeployInfo(deployRoot)?.installedAt ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readEnvFileQuietly(deployRoot: string): Map<string, string> | undefined {
-  try {
-    return readEnvFile(deployRoot);
   } catch {
     return undefined;
   }
