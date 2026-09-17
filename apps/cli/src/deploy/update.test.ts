@@ -497,7 +497,7 @@ describe('runUpdate against a fake VPS', () => {
       // "never checked", which would be wrong at the one moment it is current.
       remote: { sha: NEW_SHA, commitsBehind: 0 },
     });
-    expect(info?.updatedAt.endsWith('Z')).toBe(true);
+    expect(info?.updatedAt?.endsWith('Z')).toBe(true);
     expect(info?.remote?.checkedAt.endsWith('Z')).toBe(true);
   });
 
