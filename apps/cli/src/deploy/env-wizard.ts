@@ -274,7 +274,12 @@ export async function runEnvWizard(options: WizardOptions): Promise<WizardResult
       const rows: WizardSummaryRow[] = [];
       const stepUnresolved: string[] = [];
 
-      if (!nonInteractive && fields.some((field) => willAsk(run, field, byKey))) {
+      if (
+        !nonInteractive &&
+        fields.some(
+          (field) => willAsk(run, field, byKey) || willAutoAccept(run, field, byKey),
+        )
+      ) {
         printIntro(run, step);
       }
 
@@ -447,7 +452,37 @@ function willAsk(run: Run, field: string, byKey: ReadonlyMap<string, EnvVarSpec>
     return false;
   }
   if (metadata.group !== undefined && !run.groups.includes(metadata.group)) return false;
+  // An auto-accepted key reaches the operator, but not as a question.
+  if (willAutoAccept(run, field, byKey)) return false;
   return shouldAsk(metadata, run.values.get(spec.key), run.all);
+}
+
+/**
+ * Whether a field will be taken from the server instead of asked (#257).
+ *
+ * Deliberately synchronous, so the step header can be decided without running
+ * a port scan. It answers "this key is a candidate", not "a suggestion was
+ * produced" - a candidate whose `suggest` returns undefined falls back to the
+ * question, for which the same header is the right one to have printed.
+ */
+function willAutoAccept(
+  run: Run,
+  field: string,
+  byKey: ReadonlyMap<string, EnvVarSpec>,
+): boolean {
+  if (field === DOMAIN_FIELD) return false;
+  const spec = byKey.get(field);
+  if (spec === undefined) return false;
+  const metadata = run.resolveMetadata(spec.key);
+  if (metadata.autoAccept !== true || metadata.suggest === undefined) return false;
+  if (metadata.never === true || metadata.fixed !== undefined || metadata.derive !== undefined) {
+    return false;
+  }
+  if (metadata.group !== undefined && !run.groups.includes(metadata.group)) return false;
+  // `--all` exists to force every question; nothing may resolve past it.
+  if (run.all) return false;
+  // An explicit --answer, or a value already in the .env, is the operator's.
+  return isBlank(run.values.get(spec.key));
 }
 
 function printIntro(run: Run, step: WizardStep): void {
@@ -551,6 +586,28 @@ async function resolveKey(
 
   if (run.nonInteractive) {
     return resolveUnattended(run, spec, metadata, current, suggestion);
+  }
+
+  // APPLIED, NOT ASKED (#257). The four resource keys are measurements of this
+  // server, and an operator has nothing useful to decide about "4 CPUs
+  // detected". The unattended path has always resolved them this way; this is
+  // the interactive path agreeing with it.
+  //
+  // It is printed here AND carried into the review table with its reason,
+  // because "applied" and "silent" are different things: an operator who never
+  // saw "3536 because 3535 is used by demo" would point a vhost at the wrong
+  // port and never learn why. Reached only when `current` is blank and `--all`
+  // was not passed - both checked above - so nothing the operator stated is
+  // overridden here.
+  if (suggestion !== undefined && metadata.autoAccept === true && !run.all) {
+    values.set(spec.key, suggestion.value);
+    run.output.write(`\n  ${spec.key}: ${suggestion.value} (${suggestion.reason})\n`);
+    return {
+      key: spec.key,
+      display: displayValue(suggestion.value, metadata),
+      source: 'suggested',
+      reason: suggestion.reason,
+    };
   }
 
   const answer = await ask(run, spec, metadata, current, suggestion, ctx);

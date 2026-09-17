@@ -91,6 +91,27 @@ export interface EnvVarMetadata {
    * default stands.
    */
   suggest?: (context: DeriveContext) => Promise<Suggestion | undefined>;
+  /**
+   * A produced `suggest` is TAKEN rather than put to the operator (#257).
+   *
+   * For the four keys that carry it, the server knows the answer better than
+   * the person typing: which ports are free, how many cores there are. The
+   * unattended path already worked this way; this makes the interactive path
+   * agree with it instead of asking a question with one sensible answer.
+   *
+   * FOUR THINGS IT DOES NOT DO, each a separate guard at the call site:
+   *   - it does not hide the value. The row still reaches the Review table as
+   *     `suggested`, with its reason.
+   *   - it does not beat an explicit `--answer`, or a value already in the
+   *     .env. Those are checked first (`isBlank(current)`) and win.
+   *   - it does not survive `--all`, whose entire purpose is to force every
+   *     question. `shouldAsk` returns true for `all` before anything else, and
+   *     this yields to it.
+   *   - it does nothing when no suggestion could be produced - an exhausted
+   *     port scan, an unknown CPU count. There is then nothing to accept, and
+   *     the key falls back to being asked (or reported unresolved).
+   */
+  autoAccept?: boolean;
   /** Extra help shown under the template's own comment when the key is asked. */
   help?: string;
   /** Forced for a VPS deployment. Not offered, not overridable by a prompt. */
@@ -208,9 +229,19 @@ export function validateMemorySize(value: string): string | undefined {
 // -----------------------------------------------------------------------------
 //
 // Each is a pure function of DeriveContext, so the tests hand it a fake
-// server. NONE OF THESE IS APPLIED SILENTLY: the wizard shows every
-// suggestion with its reason, and a value already set (on disk, or given
-// with --answer) is never second-guessed.
+// server.
+//
+// NONE OF THESE IS APPLIED WITHOUT BEING SHOWN. The promise used to be that
+// none was applied without being ASKED; since #257 the four `autoAccept` keys
+// below - the port and the three sizings - resolve without a prompt on every
+// path, because they are facts about the server rather than decisions, and
+// there is nothing useful for an operator to decide about "4 CPUs detected".
+// What did not change is that every one of them still lands in the Review
+// table WITH ITS REASON, so "3536 because 3535 is used by demo" is on screen
+// before anything is written. Applied is not the same as silent.
+//
+// A value already set - on disk, or given with --answer - is still never
+// second-guessed, and `--all` still forces the question.
 
 /** How far past the default port to look before giving up. */
 const PORT_SCAN_LIMIT = 100;
@@ -311,15 +342,27 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
     // .env, and both restate information the operator has already given.
     derive: ({ domain }) => `https://${domain}`,
   },
-  // --- Resources (#127) ----------------------------------------------------
-  // Suggested from the server, never silently: see the functions above.
-  APP_BIND_PORT: { validate: validatePort, suggest: suggestBindPort },
+  // --- Resources (#127, applied rather than asked since #257) --------------
+  // These four, and only these four, carry `autoAccept`: each is a measurement
+  // of the server rather than a decision about the deployment. They are still
+  // shown, with their reason, in the review table - see the block comment
+  // above the suggestion functions.
+  APP_BIND_PORT: { validate: validatePort, suggest: suggestBindPort, autoAccept: true },
   JOBS_WORKER_CONCURRENCY: {
     validate: validatePositiveInteger,
     suggest: suggestWorkerConcurrency,
+    autoAccept: true,
   },
-  API_MEM_LIMIT: { validate: validateMemorySize, suggest: suggestApiMemoryLimit },
-  WEB_MEM_LIMIT: { validate: validateMemorySize, suggest: suggestWebMemoryLimit },
+  API_MEM_LIMIT: {
+    validate: validateMemorySize,
+    suggest: suggestApiMemoryLimit,
+    autoAccept: true,
+  },
+  WEB_MEM_LIMIT: {
+    validate: validateMemorySize,
+    suggest: suggestWebMemoryLimit,
+    autoAccept: true,
+  },
 
   // --- Database ------------------------------------------------------------
   // Asked explicitly rather than defaulted: .env.example says `localhost`
