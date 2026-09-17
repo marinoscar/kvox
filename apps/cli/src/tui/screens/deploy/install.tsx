@@ -711,6 +711,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
             deployRoot: result.deployRoot,
             name: result.name,
             nextStep: result.nextStep,
+            warnings: result.warnings,
           }),
         });
         setPhase('done');
@@ -830,6 +831,18 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
         <Text color="green" bold>
           {outcome.done.title}
         </Text>
+        {outcome.done.warnings.length > 0 && (
+          <Box marginTop={1} flexDirection="column">
+            <Text color="yellow" bold>
+              Action required:
+            </Text>
+            {outcome.done.warnings.map((warning) => (
+              <Text key={warning} color="yellow">
+                {warning}
+              </Text>
+            ))}
+          </Box>
+        )}
         <Box marginTop={1}>
           <KeyValue rows={outcome.done.rows} />
         </Box>
