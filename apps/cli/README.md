@@ -664,10 +664,14 @@ credentials, database and privileges when the database is. A failed check
 re-enters the step with its remedy shown, so a wrong password is corrected
 on the spot. Nothing is pre-filled for the database host. Secrets are
 generated (on every path, including `--non-interactive`); the loopback
-port, the job worker slots and the container memory limits are **suggested
-from the server** — the first free port from 3535 that no other app under
-`--apps-root` has recorded, `min(4, cpus − 1)`, and a limit sized to the
-RAM — and each suggestion is shown with its reason and can be edited. The
+port, the job worker slots and the container memory limits are **measured
+from the server and applied, not asked** (issue #257) — `min(4, cpus − 1)`,
+a limit sized to the RAM, and the first port from 3535 that clears all three
+port sources below. Each is printed as it is taken and appears in the Review
+table with its reason, so nothing is applied without being shown; pass
+`--answer APP_BIND_PORT=3600` to decide one yourself, or `--all` to be asked
+about every one of them. A value already in the `.env` is never
+second-guessed. The
 OAuth step prints the exact redirect URI to register before asking for the
 client id. The id is checked locally before anything reaches Google: one
 that doesn't contain `.apps.googleusercontent.` is certainly the wrong field
@@ -687,6 +691,28 @@ work — a client secret can't be fully exercised without a browser round-trip,
 and whether the redirect URI is actually registered isn't checkable from
 here. Google being unreachable is a warning, not a failure — an operator on
 a restricted network must still be able to install.
+
+The **bind port** is chosen against three sources, because each sees
+something the other two cannot (issue #257): the state files of the apps
+under `--apps-root` (a stopped app this CLI installed), every host port
+Docker has been told to publish — read from `HostConfig.PortBindings`, so a
+**stopped** container this CLI did not install counts too — and a live
+loopback bind probe (a stray process that is no container at all). The
+reason shown beside the chosen port names whichever of the three passed the
+earlier ones over ("3536: 3535 is held by container pgadmin"). Docker is not
+a requirement of the scan: a query that fails, times out or returns nothing
+parseable falls back to the other two sources rather than refusing to
+suggest a port.
+
+The port is then **re-verified immediately before `docker compose up -d`**,
+because the build, migration and seed between choosing it and binding it
+take minutes. If it was taken in that window the install stops and names the
+port and, where Docker can say, the container now holding it. It is
+deliberately not re-picked: an external proxy or a DNS record may already
+point at that port, so the remedy is yours (`--answer APP_BIND_PORT=<n>`).
+This deployment's **own** containers are not a collision — a `--resume`
+after a failed health step finds its own `nginx` still on the port, which
+`up -d` is about to recreate.
 
 When the Database step's own checks fail specifically because the database
 itself does not exist yet, the wizard offers to create it — naming the

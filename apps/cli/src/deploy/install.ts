@@ -13,7 +13,9 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
+import { isLoopbackPortFree } from './checks/types.js';
 import { ensureDeployInfoDir, writeDeployInfo } from './deploy-info.js';
+import { dockerPortClaims, type DockerPortClaim } from './docker-ports.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -145,6 +147,11 @@ export interface InstallOptions {
   /** Injected so the routing self-probe is testable without public DNS. */
   fetch?: FetchLike | undefined;
   /**
+   * The loopback bind probe the pre-`up -d` re-check uses (#257). Injected by
+   * tests; the real one binds 127.0.0.1, which a unit test must not do.
+   */
+  portFree?: ((port: number) => Promise<boolean>) | undefined;
+  /**
    * Values collected elsewhere, merged in ahead of the wizard.
    *
    * The ink screen (#184) needs this: readline cannot ask a question while
@@ -242,6 +249,75 @@ async function compose(
       : { onLine: (line: string) => context.hooks?.onLog?.(line) }),
   });
   context.journal.command(result);
+}
+
+/**
+ * The port was free when it was chosen. Is it still?  (issue #257)
+ *
+ * Between the wizard and this line sit the build, the migration and the seed -
+ * four minutes in a real install, and nothing re-checked in between. A port
+ * taken during that window surfaces today as `up -d` failing with docker's own
+ * message, or worse as a health timeout six steps later, neither of which says
+ * "something else took your port".
+ *
+ * IT DOES NOT RE-PICK. The operator may already have pointed DNS or an external
+ * proxy at that port; a port that changes underneath them is worse than a clear
+ * refusal, so this raises a UsageError naming the port, the container holding
+ * it where docker can say, and the flag that overrides it.
+ *
+ * THE APP'S OWN CONTAINERS ARE NOT A COLLISION. A `--resume` after a failed
+ * health step - or a plain reinstall - finds this deployment's own nginx still
+ * holding the port, which `up -d` is about to recreate. They are told apart by
+ * the compose PROJECT label, which is the app name (`COMPOSE_PROJECT_NAME`),
+ * and they also suppress the bind probe: our own container is listening, and
+ * that is not evidence of anybody else.
+ *
+ * Docker being unreachable answers an empty list, exactly as it does in the
+ * scan, and the bind probe alone decides. This must not become the step that
+ * makes docker a hard requirement of a command whose next line runs docker.
+ */
+async function assertBindPortStillFree(context: InstallContext): Promise<void> {
+  const port = context.options.bindPort;
+  const claims = await dockerPortClaims({
+    cwd: context.options.deployRoot,
+    runCommand: context.runCommand,
+  });
+
+  const onPort = claims.filter((claim) => claim.port === port);
+  const ours = onPort.filter((claim) => claim.project === context.options.name);
+  const foreign = onPort.filter((claim) => claim.project !== context.options.name);
+
+  if (foreign.length > 0) {
+    throw new UsageError(refusal(port, foreign));
+  }
+
+  // Our own container holds it and is about to be recreated on the same port.
+  if (ours.length > 0) {
+    context.journal.line(
+      `Port ${port} is held by this deployment's own container(s) ${ours
+        .map((claim) => claim.name)
+        .join(', ')}; recreating them.`,
+    );
+    return;
+  }
+
+  const portFree = context.options.portFree ?? isLoopbackPortFree;
+  if (!(await portFree(port))) {
+    throw new UsageError(refusal(port, []));
+  }
+}
+
+function refusal(port: number, holders: readonly DockerPortClaim[]): string {
+  const who =
+    holders.length === 0
+      ? 'Something is listening on it that was not there when the port was chosen'
+      : `It is held by container ${holders.map((claim) => claim.name).join(', ')}`;
+  return (
+    `Port ${port} was free when it was chosen and is not free now. ${who}.\n` +
+    `Nothing was started, and the port was NOT changed automatically: an external proxy ` +
+    `or DNS record may already point at it.\n` +
+    `Free the port, or re-run with --answer APP_BIND_PORT=<n> to publish on another one.`
+  );
 }
 
 export function buildInstallSteps(): DeployStep<InstallContext>[] {
@@ -437,6 +513,15 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           root: context.options.deployRoot,
         });
         const siblingPorts = siblingBindPorts(context.options.appsRoot, context.options.deployRoot);
+        // The third source (#257): every host port docker has promised any
+        // container, STOPPED ONES INCLUDED. Neither of the two above can see a
+        // stopped container this CLI did not install. An empty answer - no
+        // docker, no socket, a timeout - is ordinary and costs only what it
+        // was going to catch.
+        const dockerPorts = await dockerPortClaims({
+          cwd: context.options.deployRoot,
+          runCommand: context.runCommand,
+        });
 
         const result = await runEnvWizard({
           specs,
@@ -446,6 +531,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(existing === undefined ? {} : { existing }),
           facts,
           siblingPorts,
+          dockerPorts,
           // The domain and database steps verify their answers before the
           // next question, with the same registry the preflight ran.
           inlineChecks: {
@@ -585,6 +671,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
       id: 'start',
       title: 'Start the stack',
       async run(context) {
+        await assertBindPortStillFree(context);
         await compose(context, ['up', '-d']);
       },
     },

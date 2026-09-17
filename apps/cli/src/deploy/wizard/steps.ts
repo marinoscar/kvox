@@ -500,8 +500,8 @@ export const INSTALL_WIZARD_STEPS: readonly WizardStep[] = [
       const seen = formatFacts(context.facts);
       return [
         'The loopback port the shared proxy forwards to, the job worker slots and the',
-        'container memory limits. Each is suggested from this server with its reason',
-        'and can be edited.',
+        'container memory limits. Each is measured from this server and applied with',
+        'its reason; pass --answer, or --all to review them, to decide one yourself.',
         ...(seen === undefined ? [] : [`This server: ${seen}.`]),
       ];
     },
