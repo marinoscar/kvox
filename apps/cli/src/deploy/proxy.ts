@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, posix, resolve } from 'node:path';
+import { basename, join, posix, resolve } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
@@ -628,6 +628,26 @@ export function listRenewalCrons(cronDir = '/etc/cron.d'): string[] {
 }
 
 /**
+ * Does THIS deployment already have a renewal cron entry?  (issue #265)
+ *
+ * The question `install` has to ask before writing one, and it is deliberately
+ * NOT "did this run issue a certificate". Those two came apart on `--resume`:
+ * `issueCertificate` answers `{ issued: false }` for a certificate that is
+ * already there, so a re-run after a failed cron write skipped the cron block
+ * entirely and reported success - leaving a certificate nothing renews, which
+ * surfaces as an outage 60-90 days later with nothing pointing back at it.
+ *
+ * Through `listRenewalCrons` rather than an `existsSync` of its own, so the
+ * prefix this reads and the prefix `renewalCronPath` writes cannot drift - the
+ * same reason `listRenewalCrons` exists at all. An unreadable cron directory
+ * therefore answers "no entry", and the install tries to write one and reports
+ * what happened; silence is the one outcome this must never produce.
+ */
+export function hasRenewalCron(name: string, cronDir?: string): boolean {
+  return listRenewalCrons(cronDir).includes(name);
+}
+
+/**
  * A minute in 0-59 chosen from the app's name, so every app on a box gets a
  * stable jitter rather than all of them hitting Let's Encrypt at :00 - and so
  * the file is byte-identical on every run, which is what makes it idempotent.
@@ -668,6 +688,47 @@ export function installRenewalCron(options: RenewalCronOptions): RenewalCronResu
   // part of the contract, not a nicety.
   writeFileSync(path, contents, { mode: 0o644 });
   return { path, changed: true, contents };
+}
+
+export interface StagedRenewalCron {
+  /** Where the rendered file was written, ready to be moved into place. */
+  path: string;
+  /** Where it belongs. */
+  target: string;
+  /** The one line an operator pastes to install it. */
+  command: string;
+  contents: string;
+}
+
+/**
+ * Writes the rendered cron somewhere the CLI CAN write, and returns the `sudo`
+ * command that puts it where it belongs.  (issue #265)
+ *
+ * `/etc/cron.d` is root:root and this CLI is deliberately never run as root
+ * (#236: sudo resets HOME, which logs `gh` out), so on a standard server the
+ * write fails and a human has to finish it. What they are given has to be the
+ * EXACT bytes this module would have written, which is why this renders
+ * through `renderRenewalCron` rather than describing the file in prose.
+ *
+ * WHY A STAGED FILE AND A ONE-LINE COMMAND, not a `sudo tee` heredoc of the
+ * contents. The command is printed inside an indented report, and a heredoc
+ * does not survive indentation: the body keeps the leading spaces (they end up
+ * in the cron file) and an indented `EOF` does not terminate the heredoc at
+ * all, so the paste hangs the operator's shell. A single `sudo install` line
+ * is indentation-proof, and `-m 644` carries the mode that is part of the
+ * contract - cron ignores a group- or world-writable file in `cron.d`.
+ */
+export function stageRenewalCron(
+  options: RenewalCronOptions,
+  stageDir: string,
+): StagedRenewalCron {
+  const target = renewalCronPath(options.name, options.cronDir);
+  const path = join(stageDir, basename(target));
+  const contents = renderRenewalCron(options);
+
+  writeFileSync(path, contents, { mode: 0o644 });
+
+  return { path, target, contents, command: `sudo install -m 644 ${path} ${target}` };
 }
 
 export interface InstallVhostResult {

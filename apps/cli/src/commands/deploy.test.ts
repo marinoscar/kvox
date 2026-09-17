@@ -20,6 +20,7 @@ import {
   buildReport,
   describeAge,
   registerDeployCommand,
+  renderInstall,
   renderResult,
   renderSummary,
   type DeployContext,
@@ -1423,5 +1424,46 @@ describe('kvox deploy certs status', () => {
 
     expect(result.error).toBeUndefined();
     expect(result.stderr).toContain(proxyRoot);
+  });
+});
+
+
+describe('renderInstall', () => {
+  const base = {
+    deployRoot: '/opt/infra/apps/demo',
+    name: 'demo',
+    commitSha: 'a'.repeat(40),
+    journalPath: '/opt/infra/apps/demo/logs/install.log',
+    nextStep: 'Log in at https://demo.example.test as admin@example.test to claim the Admin role.',
+  };
+
+  it('says nothing extra on an ordinary install', () => {
+    const output = renderInstall({ ...base, warnings: [] });
+
+    expect(output).toContain('Installed.');
+    expect(output).not.toContain('Action required');
+    expect(output.trimEnd().endsWith(base.nextStep)).toBe(true);
+  });
+
+  it('puts an unscheduled renewal under "Action required" ABOVE the facts (#265)', () => {
+    // An install that completed with no renewal schedule must never be silent:
+    // the only other notice of it is an expired certificate 90 days later.
+    const output = renderInstall({
+      ...base,
+      warnings: ['WARNING: automatic certificate renewal is NOT scheduled.\n\nsudo install -m 644 /a /b'],
+    });
+
+    expect(output).toContain('  Action required:');
+    expect(output.indexOf('Action required')).toBeLessThan(output.indexOf('App        demo'));
+    expect(output).toContain('    sudo install -m 644 /a /b');
+    // nextStep stays the last line: the one thing nobody else can do.
+    expect(output.trimEnd().endsWith(base.nextStep)).toBe(true);
+  });
+
+  it('leaves a blank line blank rather than indenting whitespace into it', () => {
+    const output = renderInstall({ ...base, warnings: ['first\n\nsecond'] });
+
+    expect(output.split('\n')).toContain('');
+    expect(output.split('\n').some((line) => /^\s+$/.test(line))).toBe(false);
   });
 });

@@ -1196,6 +1196,8 @@ export interface DoneInput {
   name: string;
   /** `runInstall`'s own sentence: log in as <admin> to claim the Admin role. */
   nextStep: string;
+  /** Work the run could not finish (#265). Usually empty. */
+  warnings?: readonly string[] | undefined;
 }
 
 export interface DoneModel {
@@ -1203,6 +1205,13 @@ export interface DoneModel {
   rows: KeyValueRow[];
   /** The one thing that still has to happen before anybody is an admin. */
   nextStep: string;
+  /**
+   * Shown above the facts, the same place `renderInstall` puts it (#265). This
+   * screen is a second RENDERER of the install result, never a second set of
+   * rules about it, so an install that could not schedule certificate renewal
+   * has to say so here too.
+   */
+  warnings: readonly string[];
 }
 
 export function doneModel(input: DoneInput): DoneModel {
@@ -1216,6 +1225,7 @@ export function doneModel(input: DoneInput): DoneModel {
       { key: 'Journal', value: input.journalPath },
     ],
     nextStep: input.nextStep,
+    warnings: input.warnings ?? [],
   };
 }
 
