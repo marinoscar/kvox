@@ -61,6 +61,10 @@ export interface FakeVpsOptions {
   appVersion?: string | undefined;
   /** What `git log <a>..<b>` lists between two DIFFERENT revisions, newest first. */
   commits?: readonly { sha: string; subject: string }[] | undefined;
+  /** What `git remote get-url origin` answers, for the adoption path (#285). */
+  originUrl?: string | undefined;
+  /** What `rev-parse --abbrev-ref HEAD` and `origin/HEAD` answer (#285). */
+  branch?: string | undefined;
 }
 
 /** The commits between any two different revisions, unless a test says otherwise. */
@@ -143,6 +147,10 @@ export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
       }
 
       if (argv[0] === 'git') {
+        // What a clone answers about itself, for the adoption path (#285).
+        if (joined === 'git remote get-url origin') return result(`${options.originUrl ?? 'https://example.test/o/demo'}\n`);
+        if (argv[1] === 'rev-parse' && argv[2] === '--abbrev-ref') return result(`${options.branch ?? 'main'}\n`);
+        if (argv[1] === 'symbolic-ref') return result(`origin/${options.branch ?? 'main'}\n`);
         if (argv[1] === 'clone') {
           populateClone(argv[argv.length - 1] as string, options.appVersion);
           return result();

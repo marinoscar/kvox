@@ -82,6 +82,38 @@ describe('writeState / readState', () => {
     expect(readState(root)?.version).toBe(DEPLOY_STATE_VERSION);
   });
 
+  it('round-trips an ADOPTED record: adoptedAt present, installedAt absent (#285)', () => {
+    // The record `update` reconstructs when it finds a live deployment and no
+    // state file. `installedAt` is optional and `adoptedAt` is new, both at
+    // state version 1 - a file written before either still means what it
+    // meant, exactly as #119, #120 and #267 added fields before them.
+    const root = makeRoot();
+    const { installedAt: _dropped, lastDeployedAt: _also, ...rest } = sample(root);
+    const state: DeployState = {
+      ...rest,
+      lastCommand: 'update',
+      adoptedAt: '2026-09-17T12:00:00.000Z',
+    };
+
+    writeState(state);
+
+    expect(readState(root)).toEqual(state);
+    expect(readState(root)?.version).toBe(DEPLOY_STATE_VERSION);
+    // Nothing invented on the way through: the two instants nobody can read
+    // off a disk stay absent rather than coming back as `now`.
+    expect(readState(root)).not.toHaveProperty('installedAt');
+    expect(readState(root)).not.toHaveProperty('lastDeployedAt');
+  });
+
+  it('leaves adoptedAt absent for a record a run of this CLI wrote', () => {
+    // Absent is the ordinary case and means "this CLI installed here", which
+    // is every state file already on every live server.
+    const root = makeRoot();
+    writeState(sample(root));
+
+    expect(readState(root)?.adoptedAt).toBeUndefined();
+  });
+
   it('writes the file 0600', () => {
     const root = makeRoot();
     writeState(sample(root));
