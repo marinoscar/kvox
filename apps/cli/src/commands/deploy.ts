@@ -204,6 +204,7 @@ export function registerDeployCommand(
     .option('--skip-doctor', 'Skip the prerequisite checks')
     .option('--skip-proxy', 'Do not touch the reverse proxy or request a certificate')
     .option('--skip-seed', 'Do not run the database seed')
+    .option('--create-database', 'Create the PostgreSQL database when it does not exist')
     .option('--skip-github', 'Never consult the GitHub CLI, even for a GitHub remote')
     .option('--no-cache', 'Rebuild images without the layer cache')
     .option('--force', 'Discard uncommitted changes in the checkout')
@@ -1003,6 +1004,7 @@ export interface InstallCommandOptions extends LayoutCommandOptions {
   skipDoctor?: boolean | undefined;
   skipProxy?: boolean | undefined;
   skipSeed?: boolean | undefined;
+  createDatabase?: boolean | undefined;
   skipGithub?: boolean | undefined;
   cache: boolean;
   force?: boolean | undefined;
@@ -1058,6 +1060,7 @@ export async function runInstallCommand(
     ...(options.skipDoctor === undefined ? {} : { skipDoctor: options.skipDoctor }),
     ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
     ...(options.skipSeed === undefined ? {} : { skipSeed: options.skipSeed }),
+    ...(options.createDatabase === undefined ? {} : { createDatabase: options.createDatabase }),
     ...(options.skipGithub === undefined ? {} : { skipGithub: options.skipGithub }),
     ...(options.cache === false ? { noCache: true } : {}),
     ...(options.force === undefined ? {} : { force: options.force }),

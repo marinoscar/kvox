@@ -64,7 +64,7 @@ const PSQL_IMAGE = 'postgres:16-alpine';
 
 const CONNECT_TIMEOUT_MS = 5_000;
 
-interface DatabaseSettings {
+export interface DatabaseSettings {
   host: string;
   port: string;
   user: string;
@@ -125,11 +125,17 @@ export async function probeTcp(
 /**
  * Runs one statement as the configured user.
  *
+ * Exported for `database-create.ts` (#238), which issues the one statement in
+ * this CLI that is not a check. It reuses this rather than building a second
+ * psql invocation, so the container, the timeout, the SSL handling and - most
+ * importantly - the rule that PGPASSWORD is passed BY NAME and never appears
+ * in an argv stay in exactly one place.
+ *
  * Uses a one-off psql container rather than adding a Postgres client to this
  * package: docker is already a hard prerequisite, the image is small, and it
  * behaves identically on a host with no psql installed.
  */
-async function psql(
+export async function runPsql(
   context: CheckContext,
   settings: DatabaseSettings,
   database: string,
@@ -216,7 +222,7 @@ const databaseCredentials: Check = {
 
     // Against `postgres`, which every cluster has, so a missing application
     // database cannot be mistaken for a rejected password.
-    const result = await psql(context, settings, 'postgres', 'select 1');
+    const result = await runPsql(context, settings, 'postgres', 'select 1');
     if (result.ok) return { status: 'pass', detail: `${settings.user} authenticated` };
 
     if (/28P01|password authentication failed/i.test(result.stderr)) {
@@ -250,7 +256,7 @@ const databaseExists: Check = {
     const settings = databaseSettings(context.env);
     if (settings === undefined) return NO_ENVIRONMENT;
 
-    const result = await psql(context, settings, settings.database, 'select 1');
+    const result = await runPsql(context, settings, settings.database, 'select 1');
     if (result.ok) return { status: 'pass', detail: settings.database };
 
     if (/3D000|database ".*" does not exist/i.test(result.stderr)) {
@@ -277,7 +283,7 @@ const databasePrivileges: Check = {
     const settings = databaseSettings(context.env);
     if (settings === undefined) return NO_ENVIRONMENT;
 
-    const result = await psql(
+    const result = await runPsql(
       context,
       settings,
       settings.database,
@@ -359,7 +365,7 @@ const databaseVectorExtension: Check = {
 
     // Probe 1. One statement answers both "installed?" and "which version",
     // so the pass can name it rather than just asserting it.
-    const installed = await psql(
+    const installed = await runPsql(
       context,
       settings,
       settings.database,
@@ -374,7 +380,7 @@ const databaseVectorExtension: Check = {
     }
 
     // Probe 2.
-    const available = await psql(
+    const available = await runPsql(
       context,
       settings,
       settings.database,
@@ -397,7 +403,7 @@ const databaseVectorExtension: Check = {
     // pg_roles.rolsuper). Refusing outright would be wrong; saying nothing
     // would be worse, because this is the one remaining way the migration can
     // still abort after this check has passed.
-    const privileged = await psql(
+    const privileged = await runPsql(
       context,
       settings,
       settings.database,
@@ -450,7 +456,7 @@ const databaseSsl: Check = {
       };
     }
 
-    const result = await psql(
+    const result = await runPsql(
       context,
       settings,
       'postgres',
