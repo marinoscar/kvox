@@ -907,20 +907,33 @@ install: the first login" in the runbook linked above.
 ```bash
 kvox deploy uninstall --dry-run          # see exactly what would go
 kvox deploy uninstall --confirm myapp    # then do it
+
+# the data too, each with its own typed confirmation
+kvox deploy uninstall --dry-run --drop-database --purge-storage
+kvox deploy uninstall --confirm myapp \
+    --purge-storage --confirm-bucket my-bucket \
+    --drop-database --confirm-database appdb
 ```
 
+It is also the `Uninstall` destination in `kvox tui` → Deploy, which drives
+this exact command.
+
 ```
-  --confirm <name>          Type the app's own name to authorise the removal
-  --dry-run                 List everything that would be removed; change
-                            nothing
-  --certs                   Also delete the TLS certificate
-  --keep-env                Leave the .env in place (a backup is taken either
-                            way)
-  --non-interactive         Never prompt; --confirm <name> is then required
-  --skip-proxy              Do not touch the shared reverse proxy
-  --proxy-root <path>       Shared reverse proxy directory
-  --proxy-container <name>  Proxy container to reload
-  --json                    Print a machine-readable result on stdout
+  --confirm <name>           Type the app's own name to authorise the removal
+  --drop-database            ALSO drop the database (off by default)
+  --confirm-database <name>  Type the database's own name to authorise it
+  --purge-storage            ALSO empty this app's prefixes in the bucket
+  --confirm-bucket <name>    Type the bucket's own name to authorise it
+  --dry-run                  List everything that would be removed; change
+                             nothing
+  --certs                    Also delete the TLS certificate
+  --keep-env                 Leave the .env in place (a backup is taken either
+                             way)
+  --non-interactive          Never prompt; every --confirm* is then required
+  --skip-proxy               Do not touch the shared reverse proxy
+  --proxy-root <path>        Shared reverse proxy directory
+  --proxy-container <name>   Proxy container to reload
+  --json                     Print a machine-readable result on stdout
 ```
 
 **Removes**, in this order:
@@ -946,15 +959,58 @@ kvox deploy uninstall --confirm myapp    # then do it
   to put it back — naming a real surviving deployment where there is one.
   `--dry-run` prints it too, which is when you actually want to know.
 
+**Removes only if you ask for it by name** (issue #268). Both are off by
+default, and neither is reachable by omission:
+
+- **`--drop-database`** issues `DROP DATABASE "<name>"` against the `postgres`
+  maintenance database, through the same one-off `psql` container every
+  database check uses. It runs **after** the containers are down, so in the
+  ordinary case nothing is connected and **no session is touched at all**. If
+  the drop is refused with `55006` ("is being accessed by other users"), the
+  open sessions are ended — **scoped to this one database**, never a bare
+  terminate-all — and the number ended is reported. If they can't be ended,
+  you get the `pg_stat_activity` query that names exactly what is holding it
+  open, not psql's own sentence.
+- **`--purge-storage`** empties the six prefixes this application writes —
+  `avatars/`, `database-backups/`, `node-outputs/`, `notes/`, `transcripts/`,
+  `uploads/` — and **reports anything else in the bucket without reading into
+  it or deleting it**. There is no per-app key prefix: objects are written at
+  bucket root, so "empty the bucket" and "delete this app's objects" coincide
+  only when the bucket is dedicated. This is complete for a dedicated bucket
+  and safe for a shared one. **The bucket itself is never deleted.** On a
+  **versioned** bucket every version *and* delete marker is removed **by id**,
+  because a plain delete there writes another marker and keeps the bytes and
+  the bill; an unreadable `GetBucketVersioning` is treated as versioned rather
+  than off. The `aws` client is borrowed from a one-off container, like
+  `psql`, so no S3 SDK is added to this package and the credentials from your
+  `.env` are passed by name, never in an argv.
+
+**Each takes its own typed confirmation of that resource's real name.**
+`--confirm-database <database>` and `--confirm-bucket <bucket>`, compared
+against that resource and nothing else — a word typed for one can never
+authorise the other. That is the convention the API already uses (the Danger
+Zone's rule that *the confirmation IS the scope, uppercased*). Under
+`--non-interactive` each must arrive as its flag; there is no combined
+"delete the data too" switch and there will not be one.
+
+**You see the numbers before you are asked.** Both print a full inventory
+first — objects and bytes per prefix, everything in the bucket that is not
+ours, the database's name, host, size and open session count — because you
+cannot consent to a number you were never shown. `--dry-run` prints the same
+inventory and destroys nothing, which is how to look before deciding. A
+resource that could not be *read* is never confirmed and never destroyed; the
+run reports why and removes the deployment anyway.
+
 **Never removes** — each one a deliberate refusal, documented with its
 reasoning in
-[`docs/specs/vps-deploy.md` §21](../../docs/specs/vps-deploy.md#21-removing-a-deployment-and-the-four-things-it-refuses-to-remove-issue-261):
+[`docs/specs/vps-deploy.md` §21](../../docs/specs/vps-deploy.md#21-removing-a-deployment-what-it-refuses-to-remove-and-the-two-extras-that-must-be-asked-for-issues-261-268):
 
-- **Your database.** `deploy` validates it and never manages it; it holds your
-  data and usually lives on another host. The `dropdb` command is **printed**
-  — assembled from the deployment's own `.env`, read before anything is
-  deleted, because afterwards nothing is left that knows the database's name —
-  with no password in it. Run it yourself if you want it gone.
+- **Your database, without `--drop-database`.** `deploy` validates it and
+  never manages it; it holds your data and usually lives on another host. The
+  `dropdb` command is **printed** — assembled from the deployment's own
+  `.env`, read before anything is deleted, because afterwards nothing is left
+  that knows the database's name — with no password in it.
+- **Your object storage, without `--purge-storage`.**
 - **The `devnet` network** and **the shared proxy container**. Both are shared
   with every other app on the server.
 - **TLS certificates**, unless you pass `--certs`. Let's Encrypt allows only
@@ -987,8 +1043,17 @@ compose project can't be torn down at all (compose needs its files), so the
 subprocess. A successful uninstall deletes its own log along with `logs/`; a
 *failed* one keeps it, which is the run you'd want a log for.
 
-Exit `2` covers both "nothing is installed here" and "the confirmation was
-missing or wrong".
+**The order is fixed**: the containers stop, then the storage is purged, then
+the database is dropped, then the deployment is removed. Containers first
+because nothing may write an object or open a connection mid-teardown; storage
+before the database because the deployment's own rows are the only thing that
+could ever reconcile an object the purge missed; the deployment last because
+its `.env` holds the credentials the other two steps authenticate with. A
+failed extra is reported under `Action required:` and does **not** fail the
+uninstall — the deployment was going whatever the bucket said.
+
+Exit `2` covers "nothing is installed here" and any confirmation that was
+missing or wrong — the app's, the bucket's or the database's.
 
 ### Deploying a fork
 

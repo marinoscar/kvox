@@ -25,6 +25,24 @@ import {
   vhostPath,
   type ProxyTarget,
 } from './proxy.js';
+import {
+  databaseFacts,
+  describeDatabase,
+  dropDatabase,
+  droppableDatabase,
+  type DatabaseDropOutcome,
+  type DatabaseFacts,
+} from './database-drop.js';
+import {
+  describeInventory,
+  inventoryStorage,
+  purgeStorage,
+  storageProblem,
+  storageSettings,
+  type PurgeStorageResult,
+  type StorageInventory,
+  type StorageSettings,
+} from './storage-purge.js';
 import { readEnvBytes, backupEnvFile, removeDeployRoot, removePath, type EnvBackup } from './teardown.js';
 import { readState, type DeployState } from './state.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
@@ -82,6 +100,44 @@ import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from 
 // treats "already gone" as an ordinary outcome and says so, because the
 // operator reaching for this command has, more often than not, already tried
 // to do it by hand.
+//
+// -----------------------------------------------------------------------------
+// THE TWO OPT-IN EXTRAS  (issue #268)
+// -----------------------------------------------------------------------------
+//
+// Refusal 1 above is now qualified rather than absolute: `--drop-database` and
+// `--purge-storage` reach OUTSIDE the deployment, at the data, and neither is
+// reachable by omission. Without the flag, refusal 1 stands exactly as #261
+// wrote it and the `dropdb` command is printed instead. The other three
+// refusals are untouched.
+//
+// FOUR RULES GOVERN THEM, AND EACH ANSWERS A SPECIFIC WAY TO GET THIS WRONG:
+//
+//   1. EACH EXTRA HAS ITS OWN TYPED CONFIRMATION OF THAT RESOURCE'S REAL NAME
+//      - the database name for the drop, the bucket name for the purge. A word
+//      typed for one can never authorise the other, which is the API's own
+//      convention (`confirmation: "RESTORE"` / `"ROLLBACK"`, and the Danger
+//      Zone's rule that THE CONFIRMATION IS THE SCOPE, UPPERCASED). One shared
+//      "yes, delete the data too" would be a single keystroke authorising two
+//      unrelated, unrecoverable acts against two different systems.
+//   2. THE INVENTORY IS READ BEFORE ANY CONFIRMATION IS ASKED FOR. Object
+//      count and bytes per prefix, anything in the bucket that is not ours,
+//      the database's name, host, size and open sessions. An operator cannot
+//      consent to a number they were never shown - so the read happens in
+//      `runUninstall`, ahead of every prompt, and `--dry-run` prints the same
+//      thing while confirming nothing.
+//   3. THE ORDER IS FIXED: containers down, then storage, then the database,
+//      then the deployment. Containers first because nothing may write an
+//      object or open a connection mid-teardown. STORAGE BEFORE THE DATABASE
+//      because the deployment's own rows are the only thing that could ever
+//      reconcile an object the purge missed, and once the database is gone
+//      that reconciliation is impossible. THE DEPLOYMENT LAST because its
+//      `.env` holds the credentials the other two steps need - deleting it
+//      first would leave the extras with nothing to authenticate with.
+//   4. A FAILED EXTRA DOES NOT FAIL THE UNINSTALL. It is recorded as a warning
+//      the operator has to act on. The deployment was going whatever the
+//      bucket said, and an abort here would leave an arbitrary amount done
+//      with the containers already stopped.
 // =============================================================================
 
 export interface UninstallOptions {
@@ -98,6 +154,14 @@ export interface UninstallOptions {
   keepEnv?: boolean | undefined;
   /** Never prompt; `--confirm <name>` is then the only authorisation there is. */
   nonInteractive?: boolean | undefined;
+  /** Also `DROP DATABASE`. Off by default; needs `confirmDatabase`. (#268) */
+  dropDatabase?: boolean | undefined;
+  /** The database's own name, typed. `--confirm-database <name>`. */
+  confirmDatabase?: string | undefined;
+  /** Also empty this app's six prefixes in the bucket. Off by default. (#268) */
+  purgeStorage?: boolean | undefined;
+  /** The bucket's own name, typed. `--confirm-bucket <name>`. */
+  confirmBucket?: string | undefined;
   /** Do not touch the shared proxy at all (no vhost removal, no reload). */
   skipProxy?: boolean | undefined;
   proxyRoot?: string | undefined;
@@ -114,7 +178,7 @@ export type ResolvedUninstallOptions = UninstallOptions & ResolvedLayout;
 
 /** One thing removed, or that would be. `kind` is what an operator reads first. */
 export interface RemovedItem {
-  kind: 'compose-project' | 'path' | 'certificate' | 'vhost' | 'cron';
+  kind: 'compose-project' | 'path' | 'certificate' | 'vhost' | 'cron' | 'bucket-prefix' | 'database';
   target: string;
   /** False when it was already gone. Reported, never an error. */
   existed: boolean;
@@ -143,6 +207,50 @@ export interface UninstallResult {
   databaseCommand?: string | undefined;
   /** Anything that could not be done and is now the operator's to finish. */
   warnings: string[];
+  /**
+   * What the object store held, and what was removed from it. Present only
+   * when `--purge-storage` was passed - reading a bucket costs money and time,
+   * so an ordinary uninstall never touches it at all. (#268)
+   */
+  storage?: StorageExtraResult | undefined;
+  /** Likewise for the database, under `--drop-database`. (#268) */
+  database?: DatabaseExtraResult | undefined;
+}
+
+/** The storage extra, whether it ran, was rehearsed, or could not start. */
+export interface StorageExtraResult {
+  /** What was found. Absent when the bucket could not be read at all. */
+  inventory?: StorageInventory | undefined;
+  /** The purge. Absent when it never started. */
+  purge?: PurgeStorageResult | undefined;
+  /** Why nothing happened - no bucket configured, no credentials, unreachable. */
+  problem?: string | undefined;
+}
+
+/** The database extra, same three shapes. */
+export interface DatabaseExtraResult {
+  facts?: DatabaseFacts | undefined;
+  outcome?: DatabaseDropOutcome | undefined;
+  problem?: string | undefined;
+}
+
+/**
+ * Everything the extras need, read ONCE before any confirmation (rule 2).
+ *
+ * Carried into the pipeline rather than re-read there, so the numbers the
+ * operator consented to are the numbers the purge acts on - a second listing
+ * between the prompt and the delete could differ, and consent given to the
+ * first would be silently spent on the second.
+ */
+interface ExtrasPlan {
+  storage?:
+    | { settings: StorageSettings; inventory: StorageInventory }
+    | { problem: string }
+    | undefined;
+  database?:
+    | { settings: import('./checks/database.js').DatabaseSettings; facts: DatabaseFacts }
+    | { problem: string }
+    | undefined;
 }
 
 interface UninstallContext extends StepContext {
@@ -155,6 +263,9 @@ interface UninstallContext extends StepContext {
   warnings: string[];
   backup?: EnvBackup | undefined;
   databaseCommand?: string | undefined;
+  plan: ExtrasPlan;
+  storage?: StorageExtraResult | undefined;
+  database?: DatabaseExtraResult | undefined;
 }
 
 function record(context: UninstallContext, item: RemovedItem): void {
@@ -312,13 +423,30 @@ export function buildUninstallSteps(): DeployStep<UninstallContext>[] {
 
         // Refusals 1-3, recorded here rather than left implicit, so the report
         // says what was NOT touched as clearly as what was.
-        context.kept.push({
-          target: env.get('POSTGRES_DB') ?? 'the external database',
-          reason:
-            context.databaseCommand === undefined
-              ? 'this deployment never manages the database; drop it yourself if you want it gone'
-              : `never removed by ${CLI_NAME}; drop it yourself with: ${context.databaseCommand}`,
-        });
+        //
+        // Refusal 1 is SKIPPED when `--drop-database` was passed and accepted:
+        // the operator has typed the database's own name, so reporting it as
+        // "not removed" in the same run that removes it would be the one thing
+        // worse than not reporting it at all. Every other refusal is
+        // unconditional, exactly as #261 left them.
+        if (context.options.dropDatabase !== true) {
+          context.kept.push({
+            target: env.get('POSTGRES_DB') ?? 'the external database',
+            reason:
+              context.databaseCommand === undefined
+                ? 'this deployment never manages the database; drop it yourself if you want it gone'
+                : `never removed by ${CLI_NAME}; drop it yourself with: ${context.databaseCommand}`,
+          });
+        }
+        if (context.options.purgeStorage !== true) {
+          const bucket = env.get('S3_BUCKET') ?? '';
+          context.kept.push({
+            target: bucket === '' ? 'the object storage bucket' : `${bucket} (object storage)`,
+            reason:
+              'never emptied by default; it holds uploads, transcripts, notes and backups. ' +
+              'Pass --purge-storage to empty this application\'s own prefixes in it.',
+          });
+        }
         context.kept.push({
           target: 'devnet (docker network)',
           reason: 'shared with every other app on this server',
@@ -408,6 +536,145 @@ export function buildUninstallSteps(): DeployStep<UninstallContext>[] {
           target: `compose project ${context.options.name}`,
           existed: true,
         });
+      },
+    },
+    // -------------------------------------------------------------------------
+    // The two opt-in extras (#268), between the containers and the deployment.
+    //
+    // HERE AND NOWHERE ELSE, for the ordering argument in the file header:
+    // AFTER `compose-down`, so nothing of this app's is writing objects or
+    // holding connections; BEFORE `deploy-root`, whose `.env` holds the
+    // credentials both of them authenticate with. Storage first, because the
+    // deployment's own rows are the only thing that could ever reconcile an
+    // object this purge missed, and the drop below destroys them.
+    // -------------------------------------------------------------------------
+    {
+      id: 'purge-storage',
+      title: 'Empty this application\'s prefixes in the object store',
+      skip(context) {
+        if (context.options.purgeStorage !== true) return 'not asked for; pass --purge-storage';
+        return undefined;
+      },
+      async run(context) {
+        const plan = context.plan.storage;
+        if (plan === undefined || 'problem' in plan) {
+          const problem = plan?.problem ?? 'no bucket is configured in this deployment\'s .env';
+          context.storage = { problem };
+          context.warnings.push(
+            `The object store was NOT emptied: ${problem}\n` +
+              'Nothing in the bucket was read or changed. Empty it yourself if you want it gone.',
+          );
+          return;
+        }
+
+        const result = await purgeStorage(context, plan.settings, plan.inventory, {
+          ...(context.options.dryRun === true ? { dryRun: true } : {}),
+          onProgress: (message) => {
+            context.journal.line(message);
+            context.hooks?.onProgress?.(message);
+          },
+        });
+        context.storage = { inventory: plan.inventory, purge: result };
+
+        for (const entry of result.deleted) {
+          record(context, {
+            kind: 'bucket-prefix',
+            target: `s3://${plan.settings.bucket}/${entry.prefix} (${entry.keys} key(s))`,
+            existed: entry.keys > 0,
+          });
+        }
+
+        // Rule 4: a failed prefix is a warning, never a failed uninstall.
+        if (result.failures.length > 0) {
+          context.warnings.push(
+            [
+              `${result.failures.length} prefix(es) of ${plan.settings.bucket} could NOT be emptied:`,
+              ...result.failures.map((failure) => `  ${failure}`),
+              ...(result.versionsRemain === undefined ? [] : ['', result.versionsRemain]),
+              '',
+              'The deployment was removed anyway. Those objects are still there and still billed.',
+            ].join('\n'),
+          );
+        }
+
+        // Said on EVERY successful purge, not only a partial one: "emptied"
+        // means something different on a shared bucket, and the operator who
+        // needs to hear it is the one whose run went perfectly.
+        if (plan.inventory.foreign.length > 0) {
+          context.kept.push({
+            target: `${plan.inventory.foreign.length} other item(s) in ${plan.settings.bucket}`,
+            reason:
+              'not written by this application, so neither inspected nor deleted: ' +
+              plan.inventory.foreign.map((entry) => entry.key).join(', '),
+          });
+        }
+        context.kept.push({
+          target: `the bucket ${plan.settings.bucket} itself`,
+          reason: 'emptied of this application\'s objects, never deleted - the bucket is yours',
+        });
+      },
+    },
+    {
+      id: 'drop-database',
+      title: 'Drop the database',
+      skip(context) {
+        if (context.options.dropDatabase !== true) return 'not asked for; pass --drop-database';
+        return undefined;
+      },
+      async run(context) {
+        const plan = context.plan.database;
+        if (plan === undefined || 'problem' in plan) {
+          const problem = plan?.problem ?? 'no database is named in this deployment\'s .env';
+          context.database = { problem };
+          context.warnings.push(
+            `The database was NOT dropped: ${problem}\n` +
+              (context.databaseCommand === undefined
+                ? 'Nothing was changed on the database server.'
+                : `Nothing was changed on the database server. Drop it yourself with: ${context.databaseCommand}`),
+          );
+          return;
+        }
+
+        if (context.options.dryRun === true) {
+          context.database = { facts: plan.facts };
+          record(context, {
+            kind: 'database',
+            target: `DROP DATABASE "${plan.settings.database}" on ${plan.settings.host}:${plan.settings.port}`,
+            existed: plan.facts.problem === undefined,
+          });
+          return;
+        }
+
+        const outcome = await dropDatabase(context, plan.settings);
+        context.database = { facts: plan.facts, outcome };
+
+        if (outcome.ok) {
+          if (outcome.terminated > 0) {
+            // Reported, always. Ending somebody else's session is defensible
+            // (see database-drop.ts's header) and it is never silent.
+            context.journal.line(
+              `Ended ${outcome.terminated} open session(s) against ${plan.settings.database} to drop it.`,
+            );
+            context.hooks?.onProgress?.(
+              `ended ${outcome.terminated} open session(s) against ${plan.settings.database}`,
+            );
+          }
+          record(context, {
+            kind: 'database',
+            target: `${plan.settings.database} on ${plan.settings.host}:${plan.settings.port}`,
+            existed: !outcome.detail.includes('already gone'),
+          });
+          return;
+        }
+
+        context.warnings.push(
+          [
+            `The database was NOT dropped: ${outcome.detail}`,
+            outcome.remedy,
+            '',
+            'The deployment was removed anyway. The data is still there.',
+          ].join('\n'),
+        );
       },
     },
     {
@@ -661,6 +928,138 @@ export async function requireConfirmation(options: {
   }
 }
 
+/**
+ * The typed confirmation for ONE destructive extra (#268).
+ *
+ * ⚠ THE VALUE IS THAT RESOURCE'S OWN REAL NAME - the database's name for the
+ * drop, the bucket's name for the purge - and it is compared against nothing
+ * else. That is the whole guarantee: `--confirm-bucket my-bucket` reaches only
+ * this function with `expected` set to the bucket name, so it can never
+ * satisfy the database drop, and vice versa. A shared "--yes-delete-data"
+ * would be one keystroke authorising two unrecoverable acts against two
+ * different systems, which is exactly what the API's own convention (the
+ * Danger Zone's "the confirmation IS the scope, uppercased") exists to stop.
+ *
+ * `--dry-run` confirms nothing, for `requireConfirmation`'s reason: making an
+ * operator type a name to be TOLD what would happen teaches them to type it
+ * without reading.
+ */
+export async function requireResourceConfirmation(options: {
+  /** `database` or `bucket` - what the flag is called, for the message. */
+  resource: 'database' | 'bucket';
+  /** The exact name that must be typed. */
+  expected: string;
+  /** What it is and where, so the operator can check they mean this one. */
+  description: string;
+  confirmation?: string | undefined;
+  dryRun?: boolean | undefined;
+  nonInteractive?: boolean | undefined;
+  promptContext?: PromptContext | undefined;
+}): Promise<void> {
+  if (options.dryRun === true) return;
+  const flag = options.resource === 'database' ? '--confirm-database' : '--confirm-bucket';
+
+  if (options.confirmation !== undefined) {
+    if (options.confirmation.trim() === options.expected) return;
+    throw new UsageError(
+      `${flag} ${JSON.stringify(options.confirmation)} does not name the ${options.resource} being destroyed ` +
+        `(${options.description}).\n` +
+        `Type its own name to authorise this: ${flag} ${options.expected}`,
+    );
+  }
+
+  if (options.nonInteractive === true || !canPrompt(options.promptContext)) {
+    throw new UsageError(
+      `Destroying ${options.description} is irreversible and needs the ${options.resource}'s own name typed to authorise it.\n` +
+        `There is no terminal to ask on, so pass it as a flag: ${flag} ${options.expected}\n` +
+        `Or see exactly what would be destroyed first, which needs no confirmation: \`${CLI_NAME} deploy uninstall --dry-run\``,
+    );
+  }
+
+  const typed = await prompt(
+    `Type ${options.expected} to destroy ${options.description}: `,
+    options.promptContext,
+  );
+  if (typed.trim() !== options.expected) {
+    throw new UsageError(`That is not ${options.expected}. Nothing was removed.`);
+  }
+}
+
+/**
+ * Reads what the extras would destroy, BEFORE any confirmation (rule 2).
+ *
+ * ⚠ EVERY CALL ON THIS PATH IS READ-ONLY. `inventoryStorage` lists; `database
+ * Facts` runs two SELECTs. Nothing here deletes, drops, creates or terminates
+ * - it runs under `--dry-run` and it runs before the operator has decided.
+ *
+ * A failure to READ is never a failure to run: a bucket this key may not list
+ * and a database this role may not size are both recorded as a `problem` the
+ * step reports as a warning. Refusing to uninstall a deployment because its
+ * bucket could not be inspected would be the same mistake `readEnvQuietly`
+ * already avoids about a `.env` that will not parse.
+ */
+async function planExtras(
+  options: ResolvedUninstallOptions,
+  env: ReadonlyMap<string, string>,
+  runCommand: typeof defaultRunCommand,
+): Promise<ExtrasPlan> {
+  const plan: ExtrasPlan = {};
+
+  if (options.purgeStorage === true) {
+    const settings = storageSettings(env);
+    if (settings === undefined) {
+      plan.storage = { problem: 'S3_BUCKET is not set in this deployment\'s .env' };
+    } else {
+      const problem = storageProblem(settings);
+      if (problem !== undefined) {
+        plan.storage = { problem };
+      } else {
+        try {
+          plan.storage = { settings, inventory: await inventoryStorage({ runCommand }, settings) };
+        } catch (error) {
+          plan.storage = {
+            problem: error instanceof Error ? error.message : String(error),
+          };
+        }
+      }
+    }
+  }
+
+  if (options.dropDatabase === true) {
+    const target = droppableDatabase(env);
+    if (target === undefined) {
+      plan.database = { problem: 'POSTGRES_DB is not set in this deployment\'s .env' };
+    } else {
+      const facts = await databaseFacts({ runCommand }, target.settings);
+      plan.database = { settings: target.settings, facts };
+    }
+  }
+
+  return plan;
+}
+
+/** The inventory, as the operator sees it before being asked to consent. */
+export function describeExtras(plan: ExtrasPlan): string[] {
+  const lines: string[] = [];
+  if (plan.storage !== undefined) {
+    lines.push('', 'Object storage');
+    lines.push(
+      ...('problem' in plan.storage
+        ? [`Could not be read: ${plan.storage.problem}`, 'Nothing in it will be touched.']
+        : describeInventory(plan.storage.inventory)),
+    );
+  }
+  if (plan.database !== undefined) {
+    lines.push('', 'Database');
+    lines.push(
+      ...('problem' in plan.database
+        ? [`Could not be read: ${plan.database.problem}`, 'Nothing on the server will be touched.']
+        : describeDatabase(plan.database.facts)),
+    );
+  }
+  return lines;
+}
+
 export async function runUninstall(input: UninstallOptions): Promise<UninstallResult> {
   const runCommand = input.runCommand ?? defaultRunCommand;
   const appsRoot = input.appsRoot ?? DEFAULT_APPS_ROOT;
@@ -682,6 +1081,18 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
   const options: ResolvedUninstallOptions = { ...input, ...layout };
   const dryRun = options.dryRun === true;
 
+  // RULE 2, AND IT IS THE REASON THIS RUNS HERE RATHER THAN IN A STEP: the
+  // inventory has to exist before the FIRST confirmation is asked for, and the
+  // pipeline does not start until the last one is answered. Read-only, and
+  // skipped entirely when neither extra was asked for - an ordinary uninstall
+  // never lists a bucket or connects to a database.
+  const env = readEnvQuietly(options.deployRoot);
+  const plan = await planExtras(options, env, runCommand);
+  const inventory = describeExtras(plan);
+  if (inventory.length > 0) {
+    for (const line of inventory) options.hooks?.onProgress?.(line);
+  }
+
   await requireConfirmation({
     name: options.name,
     deployRoot: options.deployRoot,
@@ -690,6 +1101,40 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
     ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
     ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
   });
+
+  // THEN one confirmation per extra, in the order they will run. Asked after
+  // the app name because that one gates the uninstall itself: there is no
+  // point consenting to a bucket being emptied by a command that is about to
+  // refuse. Asked SEPARATELY because rule 1 says a word typed for one resource
+  // may never authorise the other.
+  //
+  // A resource that could not be READ is not confirmed at all - there is no
+  // real name to type, and the step will report the problem as a warning
+  // rather than destroying something it could not describe.
+  if (plan.storage !== undefined && !('problem' in plan.storage)) {
+    await requireResourceConfirmation({
+      resource: 'bucket',
+      expected: plan.storage.settings.bucket,
+      description:
+        `every object under ${plan.storage.inventory.prefixes.length} prefix(es) of ` +
+        `${plan.storage.settings.bucket} (${plan.storage.inventory.objects} object(s))`,
+      ...(options.confirmBucket === undefined ? {} : { confirmation: options.confirmBucket }),
+      ...(dryRun ? { dryRun: true } : {}),
+      ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
+      ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
+    });
+  }
+  if (plan.database !== undefined && !('problem' in plan.database)) {
+    await requireResourceConfirmation({
+      resource: 'database',
+      expected: plan.database.settings.database,
+      description: `the database ${plan.database.settings.database} on ${plan.database.settings.host}:${plan.database.settings.port}`,
+      ...(options.confirmDatabase === undefined ? {} : { confirmation: options.confirmDatabase }),
+      ...(dryRun ? { dryRun: true } : {}),
+      ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
+      ...(options.promptContext === undefined ? {} : { promptContext: options.promptContext }),
+    });
+  }
 
   // An unreadable state file must not stop a removal: `readState` throws on a
   // foreign version or broken JSON, and that is precisely the deployment
@@ -718,6 +1163,7 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
     removed: [],
     kept: [],
     warnings: [],
+    plan,
     hooks: options.hooks,
     completed: new Set<string>(),
   };
@@ -753,5 +1199,7 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
     ...(journal.path !== '' && existsSync(journal.path) ? { journalPath: journal.path } : {}),
     ...(context.databaseCommand === undefined ? {} : { databaseCommand: context.databaseCommand }),
     warnings: context.warnings,
+    ...(context.storage === undefined ? {} : { storage: context.storage }),
+    ...(context.database === undefined ? {} : { database: context.database }),
   };
 }
