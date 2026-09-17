@@ -24,7 +24,8 @@ import {
   type HealthReport,
   type ProbeResult,
 } from '../deploy/health.js';
-import { readState, type DeployState } from '../deploy/state.js';
+import { collectInventory, renderInventory } from '../deploy/inventory.js';
+import { NotInstalledError, readState, type DeployState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
 import { runInstall, type InstallOptions, type InstallResult } from '../deploy/install.js';
 import { describeDatabase } from '../deploy/database-drop.js';
@@ -502,6 +503,38 @@ export function registerDeployCommand(
     )
     .action(async (options: AboutCommandOptions) => {
       await runAboutCommand(options, ctx);
+    });
+
+  deploy
+    .command('list')
+    .description('List every app deployed under the apps root')
+    .option('--apps-root <dir>', 'Directory that holds one folder per app', DEFAULT_APPS_ROOT)
+    .option('--json', 'Print the inventory on stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        `  ${CLI_NAME} deploy list`,
+        `  ${CLI_NAME} deploy list --json | jq -r '.apps[].name'`,
+        '',
+        'Exit codes:',
+        '  0  at least one app is installed',
+        '  2  nothing is installed under --apps-root',
+        '',
+        'Read from the filesystem alone - each app\'s own state file, or its',
+        '.env when it has no state file. No container, no network and no git',
+        'process is consulted, so it answers the same way when Docker is down.',
+        'An app with no state file therefore reports no revision; a',
+        `\`${CLI_NAME} deploy update\` on it rebuilds the record, after which it`,
+        'reports like any other.',
+        '',
+        'There is deliberately no --name/--root here: this is the inventory,',
+        'and both flags name one app.',
+      ].join('\n'),
+    )
+    .action(async (options: ListCommandOptions) => {
+      await runListCommand(options, ctx);
     });
 
   const certs = deploy
@@ -1040,6 +1073,46 @@ export async function runAboutCommand(
     stdout.write(`${JSON.stringify(report)}\n`);
   } else {
     stderr.write(renderAbout(report));
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// `kvox deploy list`  (issue #290)
+// ---------------------------------------------------------------------------
+
+export interface ListCommandOptions {
+  appsRoot: string;
+  json?: boolean | undefined;
+}
+
+/**
+ * The inventory, read from the distributed registry the apps root already is.
+ *
+ * "Nothing installed" is a usage-level fact, not an empty success, the same
+ * standing `certs status` gives "no certificates under the proxy": a script
+ * written as `deploy list && ...` should not proceed on a host where this CLI
+ * has deployed nothing.
+ */
+export async function runListCommand(
+  options: ListCommandOptions,
+  ctx?: DeployContext,
+): Promise<void> {
+  const stdout = ctx?.stdout ?? process.stdout;
+  const stderr = ctx?.stderr ?? process.stderr;
+
+  const report = collectInventory(options.appsRoot);
+
+  if (options.json === true) {
+    stdout.write(`${JSON.stringify(report)}\n`);
+  } else {
+    stderr.write(renderInventory(report));
+  }
+
+  if (report.apps.length === 0) {
+    throw new NotInstalledError(
+      `Nothing is installed under ${options.appsRoot}. Run \`${CLI_NAME} deploy install\` first, or pass --apps-root if the apps live somewhere else.`,
+    );
   }
 }
 

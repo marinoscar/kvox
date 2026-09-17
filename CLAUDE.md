@@ -497,7 +497,7 @@ do not restate it here.
 
 VPS deployment (epic #168, corrected against a real server by epic #118)
 lives entirely in this CLI as `kvox deploy
-doctor|install|uninstall|update|status|about|certs` — there is no separate
+doctor|install|uninstall|update|status|about|list|certs` — there is no separate
 deploy script or Ansible playbook anywhere in this repo, and there shouldn't
 be.
 The design (why it runs on the VPS with no SSH client in the CLI, why TLS is

@@ -3,7 +3,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { UsageError } from '../errors.js';
-import { envFacts, isDeployment } from './deployment-evidence.js';
+import { envFacts, envWrittenByThisCli, isDeployment } from './deployment-evidence.js';
 import { contains } from './repo.js';
 import { NotInstalledError, readState, type DeployState } from './state.js';
 
@@ -32,9 +32,10 @@ import { NotInstalledError, readState, type DeployState } from './state.js';
 //
 //   --root <dir>          the full path, verbatim - the escape hatch
 //   --name <app>          <apps-root>/<name>
-//   (nothing)             install: the deployment cwd is standing in (#266),
-//                         else the repository's own name; everything else:
-//                         the one app already installed under <apps-root>
+//   (nothing)             the deployment cwd is standing in (#266, generalised
+//                         to every command by #290), then: install, the
+//                         repository's own name; everything else, the one app
+//                         already installed under <apps-root>
 // =============================================================================
 
 /**
@@ -99,17 +100,13 @@ export interface InstalledApp {
 }
 
 /**
- * Every app deployed under `appsRoot`: each direct subdirectory that is a
- * deployment. A missing apps root means nothing is installed, not an error.
+ * Every app deployed under `appsRoot`: each direct subdirectory that is one
+ * of this CLI's deployments. A missing apps root means nothing is installed,
+ * not an error.
  *
- * A SUBDIRECTORY IS A DEPLOYMENT IF IT HOLDS A STATE FILE **OR** PASSES THE
- * EVIDENCE GATE (#285). It used to be the state file alone, which is the same
- * defect `requireState` had one level down: a server whose bookkeeping was
- * lost was invisible here, so a bare `deploy update` with no `--name`/`--root`
- * answered "Nothing is installed under <apps-root>" and never reached the
- * adoption path that exists to recover exactly that. The gate is the one in `deployment-evidence.ts`,
- * shared with `adopt.ts` rather than restated, so discovery and adoption can
- * never disagree about what a deployment is.
+ * WHAT COUNTS IS `recogniseDeployment` BELOW, and it is the same predicate the
+ * cwd rank walks with, so discovery-by-enumeration and discovery-by-cwd cannot
+ * disagree about what is here (#290).
  *
  * AMBIGUITY IS NOT RESOLVED HERE AND IS NOT RESOLVED DIFFERENTLY. This returns
  * everything it finds, in directory order; `locateApp` below refuses when
@@ -132,37 +129,64 @@ export function listInstalledApps(appsRoot: string): InstalledApp[] {
 
   const apps: InstalledApp[] = [];
   for (const name of entries) {
-    const deployRoot = join(appsRoot, name);
-    // An unreadable or foreign-version state file is reported by whichever
-    // command then acts on it; a listing must not refuse to answer because
-    // of a neighbouring app. It is also NOT then treated as an unrecorded
-    // deployment: the file is there and this build cannot interpret it, which
-    // is a different problem from there being no file, and the command that
-    // acts on it raises the difference properly.
-    let state: DeployState | undefined;
-    let unreadable = false;
-    try {
-      state = readState(deployRoot);
-    } catch {
-      unreadable = true;
-    }
-    if (unreadable) continue;
-
-    if (state !== undefined) {
-      apps.push({ name: state.name ?? name, deployRoot, state, bindPort: state.bindPort });
-      continue;
-    }
-
-    // No record, but the deployment may still be here (#285).
-    if (!isDeployment(deployRoot)) continue;
-    const facts = envFacts(deployRoot);
-    apps.push({
-      name: facts.composeProjectName ?? name,
-      deployRoot,
-      ...(facts.bindPort === undefined ? {} : { bindPort: facts.bindPort }),
-    });
+    const app = recogniseDeployment(join(appsRoot, name));
+    if (app !== undefined) apps.push(app);
   }
   return apps;
+}
+
+/**
+ * The one deployment at `deployRoot`, or undefined - THE predicate discovery
+ * uses, wherever discovery happens (#290).
+ *
+ * A DIRECTORY IS ONE OF THIS CLI'S DEPLOYMENTS IF IT HOLDS A STATE FILE, **OR**
+ * PASSES THE EVIDENCE GATE AND ITS `.env` WAS WRITTEN BY THIS CLI. The first
+ * half is #285's: keying on the state file alone is the same defect
+ * `requireState` had one level down, so a server whose bookkeeping was lost was
+ * invisible here and a bare `deploy update` answered "Nothing is installed"
+ * rather than reaching the adoption path that exists to recover exactly that.
+ *
+ * The second half is #290's, and it is a NARROWING of the evidence half only.
+ * The gate in `deployment-evidence.ts` is shared with `adopt.ts` so discovery
+ * and adoption can never disagree about what a deployment IS; but enumeration
+ * asks a further question that adoption never has to - "is this one of mine?" -
+ * because it reads directories nobody named. On a host running several
+ * applications under one apps root, a stranger's `repo/` + `.env` passes the
+ * gate and gets named in an ambiguity refusal about this CLI's deployments.
+ * `envWrittenByThisCli` is that second, explicitly separate predicate; the
+ * shared gate is untouched, and `--root`/`--name`/adoption do not consult it.
+ *
+ * AN UNREADABLE OR FOREIGN-VERSION STATE FILE ANSWERS UNDEFINED, and is NOT
+ * then treated as an unrecorded deployment: the file is there and this build
+ * cannot interpret it, which is a different problem from there being no file,
+ * and the command that acts on the deployment raises the difference properly.
+ * A listing must also not refuse to answer because of a neighbouring app.
+ */
+export function recogniseDeployment(deployRoot: string): InstalledApp | undefined {
+  let state: DeployState | undefined;
+  try {
+    state = readState(deployRoot);
+  } catch {
+    return undefined;
+  }
+
+  if (state !== undefined) {
+    return {
+      name: projectNameFor(state, deployRoot),
+      deployRoot,
+      state,
+      bindPort: state.bindPort,
+    };
+  }
+
+  if (!isDeployment(deployRoot) || !envWrittenByThisCli(deployRoot)) return undefined;
+
+  const facts = envFacts(deployRoot);
+  return {
+    name: facts.composeProjectName ?? basename(deployRoot),
+    deployRoot,
+    ...(facts.bindPort === undefined ? {} : { bindPort: facts.bindPort }),
+  };
 }
 
 export interface DeploymentAtCwd {
@@ -203,25 +227,68 @@ export function locateAppFromCwd(options: {
   appsRoot: string;
   cwd: string;
 }): DeploymentAtCwd | undefined {
+  return walkFromCwd(options, (current) => {
+    const state = readStateQuietly(current);
+    if (state === undefined) return undefined;
+    return {
+      layout: {
+        name: projectNameFor(state, current),
+        appsRoot: options.appsRoot,
+        deployRoot: current,
+      },
+      state,
+    };
+  });
+}
+
+/**
+ * The deployment cwd is standing in, recognised the way DISCOVERY recognises
+ * one  (issue #290).
+ *
+ * The same walk and the same bounds as `locateAppFromCwd` above, over
+ * `recogniseDeployment` instead of a state file - which is what makes it
+ * answer about a deployment whose bookkeeping was lost (#285), the case that
+ * sent the operator here in the first place, and what keeps it agreeing with
+ * `listInstalledApps` about what is out there.
+ *
+ * WHY IT IS A SECOND FUNCTION AND `locateAppFromCwd` WAS NOT WIDENED.
+ * `install` reads the state file this rank finds - it needs the repository,
+ * the ref and the name off a record this CLI wrote, and feeds it through
+ * `resolveRepoTarget`'s own `state` rank. A deployment with no record has
+ * none of that to give, so widening install's rank would change what install
+ * DEPLOYS, which is a different question from which deployment a command is
+ * being pointed at (`docs/specs/vps-deploy.md` §23.7 says so outright).
+ * Install therefore keeps the stricter rank, and a directory that is a
+ * deployment with no state file falls through it exactly as it did before.
+ */
+export function deploymentAtCwd(options: {
+  appsRoot: string;
+  cwd: string;
+}): InstalledApp | undefined {
+  return walkFromCwd(options, recogniseDeployment);
+}
+
+/**
+ * The walk both ranks above share: from `cwd` up to - but never including -
+ * the apps root, asking `recognise` about each directory on the way.
+ *
+ * One implementation so the bound, the nearest-wins order and the
+ * stop-at-the-root rule cannot drift between the two callers.
+ */
+function walkFromCwd<T>(
+  options: { appsRoot: string; cwd: string },
+  recognise: (directory: string) => T | undefined,
+): T | undefined {
   const appsRoot = resolve(options.appsRoot);
   let current = resolve(options.cwd);
 
   for (;;) {
-    // The apps root itself is the bound, not a candidate: it holds no state
-    // file of its own, and anything above it is not ours to interpret.
+    // The apps root itself is the bound, not a candidate: it holds no
+    // deployment of its own, and anything above it is not ours to interpret.
     if (current === appsRoot || !contains(appsRoot, current)) return undefined;
 
-    const state = readStateQuietly(current);
-    if (state !== undefined) {
-      return {
-        layout: {
-          name: projectNameFor(state, current),
-          appsRoot: options.appsRoot,
-          deployRoot: current,
-        },
-        state,
-      };
-    }
+    const found = recognise(current);
+    if (found !== undefined) return found;
 
     const parent = dirname(current);
     if (parent === current) return undefined;
@@ -263,6 +330,13 @@ export interface LocateOptions {
   name?: string | undefined;
   /** Explicit full path; wins over everything else. */
   root?: string | undefined;
+  /**
+   * Where the operator is standing; `process.cwd()` when not given (#290).
+   *
+   * A parameter rather than a read buried in the rank, so a test - and a
+   * caller with a cwd of its own - can say where "here" is.
+   */
+  cwd?: string | undefined;
 }
 
 export interface ResolvedLayout {
@@ -278,8 +352,21 @@ export interface ResolvedLayout {
  * whether that is an error (`update`) or the ordinary pre-install case
  * (`doctor`).
  *
- * With several apps installed and no `--name`, this refuses and names them:
- * guessing would mean updating, or reporting on, the wrong one.
+ * FOUR RANKS, MOST EXPLICIT FIRST (#290):
+ *
+ *   1. `--root` - a path, verbatim.
+ *   2. `--name` - a name under the apps root. It still outranks cwd, so
+ *      `--name vault` from inside another app's directory means vault.
+ *   3. THE DEPLOYMENT cwd IS STANDING IN. #266 made this a rank for
+ *      `install` alone; every other command funnels through here and could
+ *      not see cwd, so an operator standing in `<apps-root>/<app>` on a host
+ *      with several apps was asked which app they meant. It lands BEFORE the
+ *      refusal below, which is the whole point.
+ *   4. The one app installed under the apps root.
+ *
+ * With several apps installed, none named, and cwd standing in none of them,
+ * this still refuses and names them: guessing would mean updating, or
+ * reporting on, the wrong one.
  */
 export function locateApp(options: LocateOptions): ResolvedLayout | undefined {
   if (options.root !== undefined) {
@@ -295,13 +382,22 @@ export function locateApp(options: LocateOptions): ResolvedLayout | undefined {
     };
   }
 
+  // Rank 3. Before the listing, not after: it is the answer that makes the
+  // refusal below unnecessary, and it is also the cheaper read - one walk up
+  // a handful of directories rather than a `readdirSync` of the apps root.
+  const cwd = options.cwd ?? currentDirectory();
+  const here = cwd === undefined ? undefined : deploymentAtCwd({ appsRoot: options.appsRoot, cwd });
+  if (here !== undefined) {
+    return { name: here.name, appsRoot: options.appsRoot, deployRoot: here.deployRoot };
+  }
+
   const installed = listInstalledApps(options.appsRoot);
   if (installed.length === 0) return undefined;
   if (installed.length > 1) {
     throw new UsageError(
       `Several apps are installed under ${options.appsRoot}: ${installed
         .map((app) => app.name)
-        .join(', ')}. Pass --name <app> to say which one.`,
+        .join(', ')}. Pass --name <app> to say which one, or run this from inside that app's own directory.`,
     );
   }
 
@@ -323,6 +419,24 @@ export function locateInstalledApp(options: LocateOptions): ResolvedLayout {
 function readStateQuietly(deployRoot: string): DeployState | undefined {
   try {
     return readState(deployRoot);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `process.cwd()`, or undefined when there is none to read.
+ *
+ * It throws when the directory the process was started in has since been
+ * removed - `deploy uninstall` leaves exactly that state behind for a shell
+ * still sitting in the deleted deploy root - and a rank that is only ever a
+ * hint must not be what turns that into a crash. Undefined simply skips the
+ * rank, so the ranks below answer exactly as they did before this one
+ * existed.
+ */
+function currentDirectory(): string | undefined {
+  try {
+    return process.cwd();
   } catch {
     return undefined;
   }
