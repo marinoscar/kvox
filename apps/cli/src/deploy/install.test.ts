@@ -1735,17 +1735,24 @@ describe('runInstall against a fake VPS', () => {
       expect(readDeployInfo(root)?.app.commitSha).toBe('c'.repeat(40));
     });
 
-    it('does not write deploy-info on failure: it is what the running app claims about itself', async () => {
+    // REGRESSION GUARD FOR #267's INSIGHT, WHICH #283 NARROWS RATHER THAN
+    // REVERSES. A run that dies at `build` has started nothing: no container
+    // is up, /api/health/ready has never answered, and a deploy-info here
+    // would describe a deployment that does not exist. #283 only changes what
+    // happens AFTER `health` - if this ever goes green with a document on
+    // disk, that change has been over-applied.
+    it('writes NO deploy-info when the run fails BEFORE health (#267, preserved by #283)', async () => {
       const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
       failCompose('build', 'build exploded');
 
       const error = await install(root).catch((caught: unknown) => caught);
 
       expect((error as Error).message).toContain('build exploded');
-      // The state is now written on this path - deploy-info deliberately is
-      // not. The ordering ("deploy-info is derived from the state") is what
-      // makes that a one-sided move rather than a contradiction.
+      // The state is written on this path - deploy-info deliberately is not.
+      // The ordering ("deploy-info is derived from the state") is what makes
+      // that a one-sided move rather than a contradiction.
       expect(readState(root)).toBeDefined();
+      expect(readState(root)?.completedSteps).not.toContain('health');
       expect(readDeployInfo(root)).toBeUndefined();
     });
 
@@ -1886,9 +1893,105 @@ describe('runInstall against a fake VPS', () => {
       // ambient checkout --name would otherwise have left it guessing.
       const clone = vps.seen.find((argv) => argv[0] === 'git' && argv[1] === 'clone');
       expect(clone?.[3]).toBe('https://example.test/o/elsewhere');
-      expect(readState(join(appsRoot, 'named'))?.repoUrl).toBe(
+       expect(readState(join(appsRoot, 'named'))?.repoUrl).toBe(
         'https://example.test/o/elsewhere',
       );
+    });
+  });
+
+  // ===========================================================================
+  // Issue #283: once `health` has passed, the deployment is real
+  // ===========================================================================
+  //
+  // The reported state, verbatim: the CLI cloned, built, migrated, seeded,
+  // started the stack and issued the certificate; the API was answering; the
+  // run then failed at its very last action - and `/admin/settings/about`
+  // said "This instance was not deployed with the deploy CLI, so deployment
+  // details are unavailable."
+  //
+  // #267 withheld deploy-info from every failed run. That is right for a
+  // failure at `build`/`migrate`/`start` (the guard above pins it) and wrong
+  // once the application is answering: the record is then the only thing that
+  // can tell an administrator what is running on their own server.
+  //
+  // `install()` passes `skipProxy`, so `verify` is the one step after
+  // `health`. Failing the FRONTEND probe fails it while leaving
+  // /api/health/ready answering - which is not a contrivance but #169's real
+  // nginx-upstream bug, and precisely the shape this issue is about: the API
+  // is up, the run is not finished.
+  describe('a run that fails after health still publishes what is deployed (#283)', () => {
+    /** 200 for the API's own probes, 502 for everything else. */
+    function apiUpFrontendDown(): typeof globalThis.fetch {
+      return (async (input: RequestInfo | URL) =>
+        ({
+          status: String(input).includes('/api/health/') ? 200 : 502,
+        }) as Response) as typeof globalThis.fetch;
+    }
+
+    it('writes deploy-info, marked incomplete and naming the step, when verify fails', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      const error = await install(root).catch((caught: unknown) => caught);
+
+      // The run genuinely failed, and it failed after the API answered.
+      expect((error as Error).message).toContain('not healthy');
+      expect(readState(root)?.lastFailedStep).toBe('verify');
+      expect(readState(root)?.completedSteps).toContain('health');
+
+      // The whole point: About has a record to render instead of asserting
+      // that this instance was never deployed by the CLI.
+      const info = readDeployInfo(root);
+      expect(info).toBeDefined();
+      expect(info?.app.commitSha).toBe('c'.repeat(40));
+      expect(info?.app.name).toBe('demo');
+      expect(info?.deployedBy).toEqual({ cli: CLI_NAME, version: CLI_VERSION });
+      // And it says, in the record itself, that the run did not finish.
+      expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
+      expect(info?.run?.attemptedAt).toBe(readState(root)?.lastAttemptAt);
+    });
+
+    it('records no deploy time it cannot back up: updatedAt is this run, not an invented one', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      await install(root).catch(() => undefined);
+
+      const state = readState(root) as DeployState;
+      const info = readDeployInfo(root);
+      // #120's rule is untouched: the STATE claims no successful deploy.
+      expect(state.lastDeployedAt).toBeUndefined();
+      // The document's `updatedAt` therefore falls back to `installedAt` -
+      // the instant this very run began recording, which is what a first
+      // install records there anyway. Nothing is stamped that did not happen.
+      expect(info?.updatedAt).toBe(state.installedAt);
+      expect(info?.installedAt).toBe(state.installedAt);
+    });
+
+    it('marks the record complete when the run finishes, exactly as before', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+
+      await install(root);
+
+      const info = readDeployInfo(root);
+      expect(info?.run).toEqual({ completed: true });
+      expect(info?.updatedAt).toBe(readState(root)?.lastDeployedAt);
+      expect(readState(root)?.lastOutcome).toBe('success');
+    });
+
+    it('replaces an incomplete record with a complete one when the retry succeeds', async () => {
+      // The other half of the rule: an incomplete record must not outlive the
+      // run that fixes it, or About keeps warning about a step that has since
+      // passed.
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+      await install(root).catch(() => undefined);
+      expect(readDeployInfo(root)?.run?.completed).toBe(false);
+
+      vi.stubGlobal('fetch', healthyFetch());
+      await install(root, { resume: true });
+
+      expect(readDeployInfo(root)?.run).toEqual({ completed: true });
     });
   });
 });
