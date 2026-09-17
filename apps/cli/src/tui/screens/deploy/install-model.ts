@@ -371,7 +371,26 @@ function catchAllPages(
 }
 
 /**
- * The `WizardStep` pairs `WizardFrame` draws its rail from.
+ * The steps the CURSOR walks - one entry per real step, never collapsed.
+ *
+ * ⚠ `useWizard` MUST be built from this and never from `railSteps` (#243).
+ * It clamps its index to the array's length and `wizardReduce` decides
+ * `move` vs `finish` from the same array, so handing it the collapsed rail
+ * caps the cursor at the number of RAIL ENTRIES. With thirteen catch-all
+ * pages that stopped the wizard dead on page two with no error and no way
+ * forward: `next()` reduced to `finish`, and `onFinish` is a deliberate
+ * no-op because Review's own dialog starts the run.
+ *
+ * Before #240 `railSteps` was this function, so the two were interchangeable
+ * by coincidence. They are not any more, which is why they have different
+ * names and this note.
+ */
+export function cursorSteps(steps: readonly InstallStep[]): WizardStep[] {
+  return steps.map((step) => ({ id: step.id, title: step.title }));
+}
+
+/**
+ * The `WizardStep` pairs `WizardFrame` DRAWS ITS RAIL from - display only.
  *
  * Adjacent steps with the SAME TITLE collapse into one entry (#240). The
  * catch-all is several steps so the terminal can draw it, but it is one
