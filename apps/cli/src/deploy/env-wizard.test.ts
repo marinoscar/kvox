@@ -536,7 +536,7 @@ describe('runEnvWizard v2: POSTGRES_SSL', () => {
       'appdb',
       '', // POSTGRES_SSL: Enter keeps false
       'y', // JWT_SECRET: generate
-      '', '', '', // the three resource suggestions
+      // The three resource keys are applied, not asked (#257).
       'y', // review
     ]);
 
@@ -562,7 +562,7 @@ describe('runEnvWizard v2: POSTGRES_SSL', () => {
       'yes', // rejected
       'true',
       'y', // JWT_SECRET
-      '', '', '', // the three resource suggestions
+      // The three resource keys are applied, not asked (#257).
       'y', // review
     ]);
 
@@ -593,7 +593,7 @@ describe('runEnvWizard v2: POSTGRES_SSL', () => {
 });
 
 describe('runEnvWizard v2: server-derived suggestions', () => {
-  it('shows each suggestion with its reason and takes it on Enter', async () => {
+  it('applies each suggestion interactively, showing it with its reason (#257)', async () => {
     const { ctx, output, remaining } = terminal([
       'db.example.test',
       'appuser',
@@ -601,9 +601,7 @@ describe('runEnvWizard v2: server-derived suggestions', () => {
       'appdb',
       '', // POSTGRES_SSL
       'y', // JWT_SECRET
-      '', // APP_BIND_PORT: accept the suggestion
-      '', // JOBS_WORKER_CONCURRENCY
-      '', // API_MEM_LIMIT
+      // No answer for the three resource keys: they are not asked any more.
       'y', // review
     ]);
 
@@ -616,13 +614,19 @@ describe('runEnvWizard v2: server-derived suggestions', () => {
       ctx,
     });
 
+    // Every scripted answer was consumed and none was left over, so the three
+    // resource keys put no question to the operator.
     expect(remaining()).toBe(0);
-    expect(output.text()).toContain('Suggested: 3536 (3535 is used by demo)');
-    expect(output.text()).toContain('Suggested: 3 (4 CPUs detected)');
-    expect(output.text()).toContain('Suggested: 2g (8 GiB RAM detected)');
     expect(values.get('APP_BIND_PORT')).toBe('3536');
     expect(values.get('JOBS_WORKER_CONCURRENCY')).toBe('3');
     expect(values.get('API_MEM_LIMIT')).toBe('2g');
+
+    // Applied is not silent: each is announced as it is taken...
+    expect(output.text()).toContain('APP_BIND_PORT: 3536 (3535 is used by demo)');
+    expect(output.text()).toContain('JOBS_WORKER_CONCURRENCY: 3 (4 CPUs detected)');
+    expect(output.text()).toContain('API_MEM_LIMIT: 2g (8 GiB RAM detected)');
+    // ...and nothing was PROMPTED for.
+    expect(output.text()).not.toContain('APP_BIND_PORT [');
 
     const port = summary.find((row) => row.key === 'APP_BIND_PORT');
     expect(port?.source).toBe('suggested');
@@ -631,30 +635,82 @@ describe('runEnvWizard v2: server-derived suggestions', () => {
     expect(output.text()).toContain('3536  (suggested: 3535 is used by demo)');
   });
 
-  it('lets the operator overrule a suggestion', async () => {
-    const { ctx } = terminal([
-      'db.example.test',
-      'appuser',
-      'pw-that-is-fine',
-      'appdb',
-      '',
-      'y',
-      '4000', // APP_BIND_PORT: typed instead
-      '',
-      '',
-      'y',
+  it('yields to --all, which exists to force every question (#257)', async () => {
+    // --all is the escape hatch from autoAccept: the suggestion is offered the
+    // way it always was, and Enter or a typed value both still work.
+    const { ctx, output } = terminal([
+      'app.example.test', // domain is asked under --all too
+      ...Array.from({ length: 40 }, () => ''), // Enter through everything else
     ]);
 
     const { values, summary } = await runEnvWizard({
       specs: V2_SPECS,
       domain: 'app.example.test',
+      all: true,
+      existing: new Map([...V2_DATABASE, ['JWT_SECRET', 'a'.repeat(40)]]),
       facts: facts(),
+      siblingPorts: [{ name: 'demo', port: 3535 }],
       portFree: async () => true,
       ctx,
     });
 
+    // The prompt was printed with the suggestion as its default...
+    expect(output.text()).toContain('Suggested: 3536 (3535 is used by demo)');
+    expect(output.text()).toContain('APP_BIND_PORT [3536]');
+    // ...rather than the "applied" line the auto-accept path writes.
+    expect(output.text()).not.toContain('APP_BIND_PORT: 3536 (');
+    // Enter took the suggestion, as it always did under --all.
+    expect(values.get('APP_BIND_PORT')).toBe('3536');
+    expect(summary.find((row) => row.key === 'APP_BIND_PORT')?.source).toBe('suggested');
+  });
+
+  it('lets an explicit answer overrule a suggestion, even auto-accepted (#257)', async () => {
+    // `--answer APP_BIND_PORT=4000` arrives as an existing value, and an
+    // operator's own statement is never second-guessed by the server.
+    const { values, summary } = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      nonInteractive: true,
+      existing: new Map([...V2_DATABASE, ['APP_BIND_PORT', '4000']]),
+      facts: facts(),
+      siblingPorts: [{ name: 'demo', port: 3535 }],
+      portFree: async () => true,
+    });
+
     expect(values.get('APP_BIND_PORT')).toBe('4000');
+    expect(summary.find((row) => row.key === 'APP_BIND_PORT')?.source).toBe('existing');
+  });
+
+  it('falls back to asking when an autoAccept key has no suggestion to accept (#257)', async () => {
+    // Every port in the scan window is taken, so `suggestBindPort` answers
+    // undefined. There is then nothing to apply, and the operator is asked -
+    // never an auto-accepted value that does not exist.
+    const { ctx, output, remaining } = terminal([
+      'db.example.test',
+      'appuser',
+      'pw-that-is-fine',
+      'appdb',
+      '', // POSTGRES_SSL
+      'y', // JWT_SECRET
+      '4100', // APP_BIND_PORT: asked, because nothing could be suggested
+      'y', // review
+    ]);
+
+    const { values, summary } = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      // The other two still auto-accept: only the port lost its suggestion.
+      facts: facts(),
+      portFree: async () => false,
+      ctx,
+    });
+
+    expect(remaining()).toBe(0);
+    expect(output.text()).toContain('APP_BIND_PORT');
+    expect(values.get('APP_BIND_PORT')).toBe('4100');
     expect(summary.find((row) => row.key === 'APP_BIND_PORT')?.source).toBe('asked');
+    // The keys that COULD be suggested were still applied without a prompt.
+    expect(summary.find((row) => row.key === 'API_MEM_LIMIT')?.source).toBe('suggested');
   });
 
   it('never second-guesses a value already set', async () => {
@@ -728,9 +784,7 @@ describe('runEnvWizard v2: inline checks', () => {
       '', // db: kept
       '', // SSL: kept
       'y', // JWT_SECRET
-      '', // APP_BIND_PORT
-      '', // JOBS_WORKER_CONCURRENCY
-      '', // API_MEM_LIMIT
+      // The three resource keys are applied, not asked (#257).
       'y', // review
     ]);
 
@@ -790,7 +844,8 @@ describe('runEnvWizard v2: inline checks', () => {
     ]);
     const { ctx, output, remaining } = terminal([
       'db.example.test', 'appuser', 'pw-that-is-fine', 'appdb', '',
-      'y', '', '', '', 'y',
+      // JWT_SECRET, then review; the resource keys are applied, not asked (#257).
+      'y', 'y',
     ]);
 
     await runEnvWizard({
@@ -1071,7 +1126,7 @@ describe('runEnvWizard v2: offerDatabaseCreation', () => {
       'y', // "Create the database appdb now?" - accepted
       '', '', '', '', '', // re-entry of the database step, all kept as-is
       'y', // JWT_SECRET: generate
-      '', '', '', // the three resource suggestions
+      // The three resource keys are applied, not asked (#257).
       'y', // review
     ]);
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  ENV_METADATA,
   metadataFor,
   suggestApiMemoryLimit,
   suggestBindPort,
@@ -80,12 +81,109 @@ describe('APP_BIND_PORT suggestion', () => {
     );
   });
 
+  // --- the third source (#257) ---------------------------------------------
+
+  it('skips a port a STOPPED container holds, and says which container', async () => {
+    // The case neither existing source covers: no state file (this CLI did not
+    // install it) and nothing listening (it is stopped), so the port looks free
+    // to both - and the other application breaks the next time it is started.
+    const suggestion = await suggestBindPort(
+      context({}, { dockerPorts: [{ name: 'pgadmin', port: 3535 }] }),
+    );
+
+    expect(suggestion?.value).toBe('3536');
+    expect(suggestion?.reason).toBe('3535 is held by container pgadmin');
+  });
+
+  it('falls back to the other two sources when docker said nothing', async () => {
+    // A failed, timed-out or unparseable docker query answers an empty list.
+    // Docker must never become a hard requirement of installing.
+    for (const dockerPorts of [[], undefined]) {
+      const suggestion = await suggestBindPort(
+        context(
+          {},
+          {
+            ...(dockerPorts === undefined ? {} : { dockerPorts }),
+            siblingPorts: [{ name: 'alpha', port: 3535 }],
+            portFree: async (port) => port !== 3536,
+          },
+        ),
+      );
+
+      expect(suggestion?.value).toBe('3537');
+      expect(suggestion?.reason).toBe(
+        '3535 is used by alpha, 3536 is in use on this server',
+      );
+    }
+  });
+
+  it('composes all three sources, naming each in the reason', async () => {
+    const suggestion = await suggestBindPort(
+      context(
+        {},
+        {
+          siblingPorts: [{ name: 'alpha', port: 3535 }],
+          dockerPorts: [{ name: 'pgadmin', port: 3536, project: 'tools' }],
+          portFree: async (port) => port !== 3537,
+        },
+      ),
+    );
+
+    expect(suggestion?.value).toBe('3538');
+    expect(suggestion?.reason).toBe(
+      '3535 is used by alpha, ' +
+        '3536 is held by container pgadmin, ' +
+        '3537 is in use on this server',
+    );
+  });
+
+  it('gives up when the three sources between them take every port', async () => {
+    expect(
+      await suggestBindPort(
+        context({}, { dockerPorts: [{ name: 'hog', port: 3535 }], portFree: async () => false }),
+      ),
+    ).toBeUndefined();
+  });
+
   it('gives up rather than scanning forever when every port is taken', async () => {
     expect(await suggestBindPort(context({}, { portFree: async () => false }))).toBeUndefined();
   });
 
   it('is wired to the APP_BIND_PORT key', () => {
     expect(metadataFor('APP_BIND_PORT').suggest).toBe(suggestBindPort);
+  });
+});
+
+describe('autoAccept (#257)', () => {
+  const AUTO_ACCEPTED = [
+    'APP_BIND_PORT',
+    'JOBS_WORKER_CONCURRENCY',
+    'API_MEM_LIMIT',
+    'WEB_MEM_LIMIT',
+  ] as const;
+
+  it('is set on exactly the four server-measured resource keys', () => {
+    for (const key of AUTO_ACCEPTED) {
+      expect(metadataFor(key).autoAccept).toBe(true);
+    }
+
+    // And on nothing else. A key applied without being asked has to be a
+    // measurement of the server, not a decision about the deployment.
+    const accepted = Object.entries(ENV_METADATA)
+      .filter(([, metadata]) => metadata.autoAccept === true)
+      .map(([key]) => key)
+      .sort();
+    expect(accepted).toEqual([...AUTO_ACCEPTED].sort());
+  });
+
+  it('never carries autoAccept without a suggestion to accept', () => {
+    // The flag says "take the suggestion"; a key with no `suggest` has none,
+    // and the flag on it would mean nothing at all.
+    for (const [key, metadata] of Object.entries(ENV_METADATA)) {
+      if (metadata.autoAccept === true) {
+        expect(metadata.suggest, key).toBeTypeOf('function');
+      }
+    }
   });
 });
 

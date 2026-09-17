@@ -414,6 +414,160 @@ describe('the network step', () => {
   });
 });
 
+describe('the start step (#257)', () => {
+  function startStep() {
+    const step = buildInstallSteps().find((candidate) => candidate.id === 'start');
+    if (step === undefined) throw new Error('no start step');
+    return step;
+  }
+
+  /**
+   * A command table answering the docker port query, plus the compose call the
+   * step makes afterwards. `inspect` is what decides the outcome; `up -d` is
+   * recorded so a test can prove the stack was NOT started.
+   */
+  function startContext(options: {
+    inspect: string;
+    dockerFails?: boolean;
+    portFree?: boolean;
+    name?: string;
+  }) {
+    const seen: string[][] = [];
+    const lines: string[] = [];
+    const runCommand = (async (
+      argv: readonly string[],
+      runOptions: RunCommandOptions,
+    ): Promise<CommandResult> => {
+      seen.push([...argv]);
+      const line = argv.join(' ');
+      const result: CommandResult = {
+        argv: [...argv],
+        cwd: runOptions.cwd,
+        exitCode: 0,
+        stdout: line.startsWith('docker ps')
+          ? 'aaaaaaaaaaaa\n'
+          : line.startsWith('docker inspect')
+            ? options.inspect
+            : '',
+        stderr: '',
+        durationMs: 1,
+        timedOut: false,
+      };
+      if (options.dockerFails === true && line.startsWith('docker ps')) {
+        throw new CommandFailedError('Cannot connect to the Docker daemon', {
+          ...result,
+          exitCode: 1,
+        });
+      }
+      return result;
+    }) as typeof import('./executor.js').runCommand;
+
+    return {
+      context: {
+        options: {
+          deployRoot: '/tmp/x',
+          name: options.name ?? 'demo',
+          appsRoot: '/tmp',
+          bindPort: 3535,
+          proxyRoot: '/tmp/proxy',
+          portFree: async () => options.portFree ?? true,
+        },
+        runCommand,
+        journal: {
+          line: (line: string) => void lines.push(line),
+          command: () => undefined,
+          redact: (value: string) => value,
+        },
+        completed: new Set<string>(),
+      } as never,
+      seen,
+      lines,
+    };
+  }
+
+  function started(seen: readonly (readonly string[])[]): boolean {
+    return seen.some((argv) => argv.includes('up') && argv.includes('-d'));
+  }
+
+  it('starts the stack when the port is still free', async () => {
+    const { context, seen } = startContext({ inspect: '/unrelated||9000\n' });
+
+    await startStep().run(context);
+
+    expect(started(seen)).toBe(true);
+  });
+
+  it('refuses when a foreign container took the port during the build, naming it', async () => {
+    // The four-minute window this whole check exists for: free when chosen,
+    // taken by the time it is used.
+    const { context, seen } = startContext({ inspect: '/pgadmin|tools|3535\n' });
+
+    const error = await startStep()
+      .run(context)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('3535');
+    expect((error as Error).message).toContain('pgadmin');
+    // The remedy, not a silently different port: DNS may already point here.
+    expect((error as Error).message).toContain('--answer APP_BIND_PORT=');
+    expect(started(seen)).toBe(false);
+  });
+
+  it('refuses for a STOPPED foreign container too, which `up -d` would have taken', async () => {
+    // `up -d` would succeed against a stopped container's port and break that
+    // application the next time somebody started it. This is the whole issue.
+    const { context, seen } = startContext({
+      inspect: '/pgadmin|tools|3535\n',
+      portFree: true,
+    });
+
+    await expect(startStep().run(context)).rejects.toBeInstanceOf(UsageError);
+    expect(started(seen)).toBe(false);
+  });
+
+  it("PROCEEDS when this deployment's own container holds the port: the --resume case", async () => {
+    // A `--resume` after a failed health step finds this deployment's own nginx
+    // still bound to the port, which `up -d` is about to recreate. Refusing
+    // here would make the resume path impossible, which is the regression
+    // this check is most likely to cause.
+    const { context, seen, lines } = startContext({
+      inspect: '/demo-nginx-1|demo|3535\n',
+      // Our own container IS listening, so the bind probe says "not free" -
+      // and must not be consulted once we know the holder is ours.
+      portFree: false,
+      name: 'demo',
+    });
+
+    await startStep().run(context);
+
+    expect(started(seen)).toBe(true);
+    expect(lines.join('\n')).toContain('demo-nginx-1');
+  });
+
+  it('refuses when something that is not a container is listening', async () => {
+    const { context, seen } = startContext({ inspect: '/unrelated||9000\n', portFree: false });
+
+    const error = await startStep()
+      .run(context)
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('3535');
+    expect(started(seen)).toBe(false);
+  });
+
+  it('starts anyway when docker cannot be asked', async () => {
+    // The next line runs docker; this check must not be what makes docker a
+    // hard requirement of a step that already needs it.
+    const { context, seen } = startContext({ inspect: '', dockerFails: true });
+
+    await startStep().run(context);
+
+    expect(started(seen)).toBe(true);
+  });
+});
+
 describe('the publish step', () => {
   function publishStep() {
     const step = buildInstallSteps().find((candidate) => candidate.id === 'publish');

@@ -1050,15 +1050,35 @@ every place a decision governs.
    *Rules out* a dedicated `about:read` permission that every existing
    deployment's seed would need re-running to grant before anyone could open
    the card. (`apps/api/src/about/about.controller.ts`)
-9. **A server-derived suggestion (port, worker slots, memory limit) is
-   always shown with its reason, and is always editable.** *Rules out*
-   silently applying a suggested value with no explanation and no way to
-   override it before it is written. (`apps/cli/src/tui/components/field-state.ts`, `Suggestion.reason`)
+9. **A server-derived value (port, worker slots, memory limit) is always
+   shown with its reason, and is always overridable.** Since issue #257 the
+   four keys carrying `autoAccept` are *applied* rather than asked — they are
+   measurements of the server, not decisions about the deployment — but the
+   guarantee that changed is "never applied without being ASKED", not "never
+   applied without being SHOWN": each is printed as it is taken and carries
+   its reason into the Review table, an explicit `--answer` or an existing
+   `.env` value still wins, and `--all` still forces the question. *Rules out*
+   silently applying a value with no explanation and no way to override it
+   before it is written. (`apps/cli/src/deploy/env-metadata.ts`, `EnvVarMetadata.autoAccept`;
+   `apps/cli/src/tui/components/field-state.ts`, `Suggestion.reason`)
 10. **The TUI validates every field exactly as the plain command would.**
     There is no TUI-only relaxation or extra check. *Rules out* the two
     surfaces drifting into accepting or rejecting different values for the
     same key — the same "one sequence, two renderers" discipline §11 already
     states for `DeployHooks`. (`apps/cli/src/tui/screens/deploy/doctor-model.ts`)
+11. **The bind port is chosen against three sources, and re-verified before
+    `up -d`.** State files see a stopped app this CLI installed; Docker's
+    `HostConfig.PortBindings` sees a stopped container it did not; a loopback
+    bind probe sees a process that is no container at all. *Rules out* the
+    #257 failure — taking the published port of a stopped, unrelated
+    container, so that the *other* application breaks days later with nothing
+    linking it back to this install — and the narrower one where a port free
+    when it was chosen is taken during the four-minute build and surfaces as a
+    health timeout instead of as a port collision. A failed Docker query falls
+    back to the other two sources rather than making Docker a requirement of
+    installing, and the re-check refuses rather than re-picking, because an
+    external proxy may already point at the port.
+    (`apps/cli/src/deploy/docker-ports.ts`; `apps/cli/src/deploy/install.ts`, `assertBindPortStillFree`)
 
 ## 19. The `deploy-info/info.json` schema
 
