@@ -1365,6 +1365,115 @@ Nothing is said when this app had no entry at all (installed with
 lose, and a warning about a loss that did not happen is how operators learn to
 skip warnings.
 
+#### 21.1.2 Writing that cron is best effort, and must never fail an install (issue #265)
+
+§21.1.1 is about removing the entry. This is about writing it, and it is the
+same file seen from the other end of the deployment's life.
+
+**The failure.** A non-root install reached its last step and died there:
+
+```
+✖ kvox: Publish over HTTPS failed: EACCES: permission denied, open '/etc/cron.d/kvox-certs-kvox'
+```
+
+`publish` issues the certificate, installs the vhost, then writes the cron.
+The first two had **succeeded** — the certificate existed, the site was serving
+HTTPS — and the third threw, taking the step and the whole install down with it.
+
+**The contradiction it exposed.** `/etc/cron.d` is `root:root`, and this CLI is
+deliberately *not* run as root: §18 records that `sudo kvox` breaks `gh`
+authentication (sudo resets `HOME`, and `gh` credentials are per-user), and
+#245's remedy is `sudo install -d -o $USER …` on the deploy root precisely so
+the tool never needs to be elevated. So one step of the pipeline requires root
+inside a design that requires not-root. That contradiction is real and cannot
+be argued away; the only question is which way it resolves.
+
+**The decision: the cron write is best effort.** The failure is caught,
+recorded as a warning, and the install completes.
+
+*Why not fail the install, which is the conservative-looking choice?* Because
+it is not conservative, it is inaccurate. What "failed" describes is a state
+that does not exist: the deployment **is** complete when the write throws —
+certificate issued, vhost written and validated, proxy reloaded, stack healthy.
+Only the scheduling of a renewal 60–90 days out is missing. Reporting that as
+a failed install means:
+
+- The operator is told to fix a deployment that is already serving traffic.
+- The obvious remedy is `--resume`, which re-enters `publish` and asks certbot
+  again — against a rate limit of **five duplicate certificates per week**. A
+  design that makes the retry the dangerous action has chosen wrongly.
+- The thing actually needed is one `sudo` command, which the tool knows exactly
+  and was throwing an errno instead of printing.
+
+**Best effort is not silent.** These four are what separate "best effort" from
+"swallowed", and all four are load-bearing:
+
+1. **Every errno, not just `EACCES`.** `EROFS`, `ENOTDIR` and `EPERM` leave the
+   same deployment behind — complete, serving, unscheduled. Special-casing one
+   errno would fail a successful install for all the others.
+2. **The error is reported as it came.** Not flattened into "could not write the
+   cron"; an operator diagnosing a read-only `/etc` needs the errno.
+3. **The remedy is derived, never described.** The rendered file is staged into
+   the deploy root and the warning carries `sudo install -m 644 <staged>
+   <target>`, so what the operator installs is byte-identical to what the CLI
+   would have written. Prose describing the file could drift from
+   `renderRenewalCron`; a copy of its output cannot.
+4. **It surfaces at the END of the run.** `InstallResult.warnings`, printed
+   under `Action required:` — the same channel and the same renderer shape
+   §21.1.1's warning uses, for the same reason. An install that completed
+   without a renewal schedule must never be silent; the only other notice of it
+   is an expired certificate three months later.
+
+The pasteable form is one `sudo install` line rather than a `sudo tee`
+heredoc of the contents, and that is a decision, not a preference: the report
+indents warnings by four, and a heredoc does not survive indentation — the
+body keeps the leading spaces and carries them into the cron file, and an
+indented `EOF` does not terminate the heredoc at all, so the paste hangs the
+operator's shell. A single `install -m 644` line is indentation-proof and
+carries the mode, which is part of the contract (cron ignores a group- or
+world-writable file in `cron.d`).
+
+**The quieter defect, and why the gate had to change.** The cron was gated on
+
+```ts
+if (context.options.installCron ?? certificate.issued) {
+```
+
+and `issueCertificate` answers `{ issued: false }` for a certificate that
+already exists. So the `--resume` an operator reaches for after this failure
+skipped the cron block **entirely**, reported success, and left a deployment
+holding a certificate nothing renews — no error, no warning, nothing in the
+journal. A loud failure had become a silent one, which is strictly worse.
+
+The gate is therefore *"does this deployment have a renewal entry?"*, answered
+by `hasRenewalCron` over `listRenewalCrons` — §21.1.1's reader, so this and
+`renewalCronPath` share one prefix constant rather than two that can drift. An
+existing certificate with no entry is exactly the state that needs one.
+`--install-cron` still forces the write; `--no-install-cron` still declines it.
+Nothing about the rate-limit posture changes: `issueCertificate` consults
+`certificateStatus` before invoking certbot, so a re-run over an existing
+certificate never re-requests it.
+
+**Doctor gets the matching check, and it is `recommended`.** `cron-dir-writable`
+probes the deepest existing ancestor of `/etc/cron.d`, the same way
+`deploy-root-writable` probes the deploy root's — #245's finding ("doctor is
+complete about somebody else's directory and silent about its own") applied to
+the *second* directory this CLI writes outside the deploy root. `recommended`
+rather than `required` follows directly from the decision above: the install
+does not treat this as fatal, so doctor must not either. A root-owned
+`/etc/cron.d` is the ordinary state of a standard Linux server, not a broken
+one, and failing on it would refuse a machine this CLI installs on perfectly
+well — and teach the operator to pass `--force`, which is how the *required*
+checks stop being enforced too. Its remedy names the `sudo install` command and
+explicitly says not to re-run the CLI under sudo, which would trade this for a
+logged-out `gh` at the `checkout` step.
+
+**Rejected:** *run just this step under `sudo` from inside the CLI.* It would
+work, and it would make the tool one that sometimes elevates itself — the
+property §18 spent an issue removing. An operator who can read the command and
+decide to run it is a better arrangement than a tool that decides for them, and
+the gap it leaves is one printed line.
+
 ### 21.2 The four refusals, and why each is a decision rather than an omission
 
 **The external database.** Decision 4 of §1 is that deploy *validates* the

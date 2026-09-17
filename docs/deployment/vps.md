@@ -469,14 +469,46 @@ kvox deploy certs renew --install-cron
 Writes `/etc/cron.d/kvox-certs-<name>` — `root`, twice daily at a minute
 derived from the app's name (so several apps on one box don't all fire
 together), running `certs renew --all` so one cron entry serves every app
-behind the shared proxy. `install` writes this same file automatically the
-first time it issues a certificate; `doctor`'s `certificate-renewal` check
-recognizes it (or `certbot.timer`, or any cron line mentioning `certbot`/
-`renew`) as evidence something is renewing certificates on this box.
+behind the shared proxy. `install` writes this same file automatically
+whenever this deployment doesn't already have one — the gate is whether the
+entry exists, not whether that run issued a certificate, so a re-run over an
+existing certificate installs the missing schedule rather than skipping it.
+`doctor`'s `certificate-renewal` check recognizes it (or `certbot.timer`, or
+any cron line mentioning `certbot`/`renew`) as evidence something is renewing
+certificates on this box.
 
-**Verify:** `crontab -l` inside `/etc/cron.d/kvox-certs-<name>` shows the
-entry, and `kvox deploy doctor --domain <domain>`'s `certificate-renewal`
-check passes.
+### This is the one step that may need your `sudo`
+
+`/etc/cron.d` is `root:root`, and the CLI runs as an ordinary user on purpose
+— `sudo kvox` resets `HOME` and logs `gh` out, which is why section 2 has you
+create the deploy root with `sudo install -d -o $USER` rather than run the
+tool as root. So on a standard server this one write fails, and it is
+deliberately **not** fatal: the certificate has been issued, the vhost is
+live, the site is serving HTTPS, and only the *future* renewal is unscheduled.
+
+The install finishes and ends with an `Action required:` block naming the
+error and the one line that completes it:
+
+```bash
+sudo install -m 644 /opt/infra/apps/<name>/kvox-certs-<name> /etc/cron.d/kvox-certs-<name>
+```
+
+The staged file is the exact one the CLI would have written — `cat` it first
+if you like. Do **not** re-run the install under `sudo` to avoid this; that
+trades one manual step for a logged-out `gh` much earlier in the run.
+
+**Verify:**
+
+```bash
+ls /etc/cron.d/kvox-certs-*          # this app's entry should be listed
+cat /etc/cron.d/kvox-certs-<name>    # root, 0644, `certs renew --all`
+```
+
+and `kvox deploy doctor --domain <domain>`'s `certificate-renewal` check
+passes. `doctor`'s `cron-dir-writable` check tells you *before* installing
+whether this step will be needed; it is `recommended`, never `required`,
+because a root-owned `/etc/cron.d` is the ordinary case rather than a broken
+server.
 
 ## 8. Using Let's Encrypt staging while you work out the setup
 
@@ -737,7 +769,7 @@ own environment variables, automatically.
 - [ ] Logged in at `https://<domain>` as `INITIAL_ADMIN_EMAIL` — this, not the seed, is what creates the admin account
 - [ ] Additional users added to the allowlist from the admin panel
 - [ ] `kvox deploy status` reports healthy and current; `kvox deploy about` shows the expected revision
-- [ ] Renewal cron installed (`kvox deploy certs renew --install-cron`, or it was written automatically on first issuance) and `doctor`'s `certificate-renewal` check passes
+- [ ] Renewal cron installed — `ls /etc/cron.d/kvox-certs-*` lists this app. `install` writes it automatically when there isn't one; if it reported `Action required:` instead, run the `sudo install -m 644 …` line it printed (section 7). `doctor`'s `certificate-renewal` check passes
 - [ ] `kvox deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
 - [ ] `<deployRoot>/logs/` reviewed for anything unexpected if any step above didn't go as described
 - [ ] If you need to start over: `kvox deploy install --fresh` (local state only), or `kvox deploy uninstall --dry-run` then `--confirm <name>` (the whole deployment) — never a hand-rolled `rm -rf`, which leaves the `.env`, the volumes, the vhost and the cron behind (section 11)

@@ -39,6 +39,55 @@ import {
   type FakeVps,
 } from './testing/fake-vps.js';
 
+// =============================================================================
+// One mocked call, for the cron tests (#265)
+// =============================================================================
+//
+// The reported failure is an EACCES writing `/etc/cron.d/<cli>-certs-<app>`,
+// and it cannot be staged for real: the suite runs as whatever user CI gives
+// it, and as root no directory mode produces EACCES at all - a test that
+// needed two uids would be skipped exactly where it matters. So the WRITE is
+// failed at the seam, and only for the ONE path the test names; every other
+// `writeFileSync` in this file (fixtures, and the staged copy of the very cron
+// file that could not be written) passes straight through to the real
+// implementation via `importOriginal`. The same shape deploy-info.test.ts uses
+// for `chmodSync` (#159).
+//
+// Matched on the exact path rather than on the basename, deliberately: the
+// staged copy shares that basename, and failing it too would test a fallback
+// instead of the case being reproduced.
+// =============================================================================
+
+let writeShouldFailFor: { path: string; error: NodeJS.ErrnoException } | undefined;
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
+      const target = String(args[0]);
+      if (writeShouldFailFor !== undefined && target === writeShouldFailFor.path) {
+        throw writeShouldFailFor.error;
+      }
+      return actual.writeFileSync(...args);
+    },
+  };
+});
+
+afterEach(() => {
+  writeShouldFailFor = undefined;
+});
+
+/** The error Node raises writing into a root-owned `/etc/cron.d` as a user. */
+function eaccesOn(path: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(`EACCES: permission denied, open '${path}'`), {
+    code: 'EACCES',
+    errno: -13,
+    syscall: 'open',
+    path,
+  });
+}
+
 function installedRoot(root = mkdtempSync(join(tmpdir(), 'appctl-install-'))): string {
   const state: DeployState = {
     version: DEPLOY_STATE_VERSION,
@@ -609,10 +658,14 @@ describe('the publish step', () => {
     }) as typeof import('./executor.js').runCommand;
 
     const cronDir = mkdtempSync(join(tmpdir(), 'appctl-publish-cron-'));
+    // A real directory: the renewal-cron fallback stages the rendered file
+    // here when it cannot write cron.d, and the warning names where it went.
+    const deployRoot = mkdtempSync(join(tmpdir(), 'appctl-publish-root-'));
+    const warnings: string[] = [];
     return {
       context: {
         options: {
-          deployRoot: '/tmp/x',
+          deployRoot,
           name: 'demo',
           appsRoot: '/tmp',
           bindPort: 3535,
@@ -627,12 +680,22 @@ describe('the publish step', () => {
         runCommand,
         journal: { line: (line: string) => void lines.push(line) },
         completed: new Set<string>(),
+        warnings,
         ...context,
       } as never,
       seen,
       lines,
       cronDir,
+      deployRoot,
+      warnings,
     };
+  }
+
+  /** An existing renewal entry, written the way the CLI writes one. */
+  function writeCron(cronDir: string, name = 'demo'): string {
+    const path = join(cronDir, `${CLI_NAME}-certs-${name}`);
+    writeFileSync(path, 'already here\n', { mode: 0o644 });
+    return path;
   }
 
   it('issues through docker certbot, then validates and reloads through docker exec on the detected container', async () => {
@@ -713,20 +776,78 @@ describe('the publish step', () => {
     expect(cron).toContain('/usr/local/bin/cli deploy certs renew --all --apps-root /tmp --name demo');
   });
 
-  it('leaves the cron alone when the certificate already existed, unless --install-cron', async () => {
-    const existing = proxyRoot();
-    writeCertificate(existing);
-    const kept = contextFor(existing, {});
-    await publishStep().run(kept.context);
-    // No certbot run either: the certificate was already there.
-    expect(kept.seen.some((argv) => argv.includes('certbot/certbot'))).toBe(false);
-    expect(readdirSync(kept.cronDir)).toEqual([]);
+  // ---------------------------------------------------------------------------
+  // The renewal cron (#265)
+  //
+  // A PREVIOUS TEST HERE ASSERTED THE BUG: it pinned "leaves the cron alone
+  // when the certificate already existed", which is the `--resume` skip this
+  // issue is about, so it was replaced rather than left to contradict the fix.
+  // ---------------------------------------------------------------------------
 
-    const forced = proxyRoot();
-    writeCertificate(forced);
-    const written = contextFor(forced, { installCron: true });
-    await publishStep().run(written.context);
-    expect(readdirSync(written.cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+  it('installs the renewal cron when this deployment has none yet', async () => {
+    const root = proxyRoot();
+    const { context, cronDir } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+    const cron = readFileSync(join(cronDir, `${CLI_NAME}-certs-demo`), 'utf8');
+    expect(cron).toContain('/usr/local/bin/cli deploy certs renew --all --apps-root /tmp --name demo');
+  });
+
+  it('installs the cron on a --resume over an existing certificate that has none — the silent time bomb', async () => {
+    // THE WORST DEFECT IN #265. The gate used to be `certificate.issued`, and
+    // `issueCertificate` answers false for a certificate that already exists.
+    // So the run that followed a failed cron write skipped the cron block
+    // entirely and reported success, leaving a certificate nothing renews and
+    // saying nothing at all - an outage 90 days later with no trace back here.
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir, warnings } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('does not re-request the certificate on that resume', async () => {
+    // The retry path must stay free of Let's Encrypt's rate limit: five
+    // duplicate certificates a week, and a failed last step is exactly when an
+    // operator re-runs. `issueCertificate` returns early on an existing one.
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, seen } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(seen.some((argv) => argv.includes('certbot/certbot'))).toBe(false);
+    expect(seen.some((argv) => argv.includes('certonly'))).toBe(false);
+  });
+
+  it('writes nothing when the cron is already there', async () => {
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir } = contextFor(root, {});
+    const path = writeCron(cronDir);
+
+    await publishStep().run(context);
+
+    // Byte-for-byte untouched: the gate asked whether an entry exists, and one
+    // does, so nothing was rendered over it.
+    expect(readFileSync(path, 'utf8')).toBe('already here\n');
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+  });
+
+  it('forces the write with --install-cron even when an entry is already there', async () => {
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir } = contextFor(root, { installCron: true });
+    const path = writeCron(cronDir);
+
+    await publishStep().run(context);
+
+    expect(readFileSync(path, 'utf8')).toContain('deploy certs renew --all');
   });
 
   it('honours --no-install-cron even when it issued a certificate', async () => {
@@ -735,6 +856,80 @@ describe('the publish step', () => {
     await publishStep().run(context);
 
     expect(readdirSync(cronDir)).toEqual([]);
+  });
+
+  it("does not fail the install on EACCES: permission denied, open '/etc/cron.d/<cli>-certs-<app>'", async () => {
+    // The reported failure, verbatim. `/etc/cron.d` is root:root and this CLI
+    // is deliberately never run under sudo (#236), so the write fails on every
+    // standard server - after the certificate has been issued and the site is
+    // already serving HTTPS.
+    const root = proxyRoot();
+    const { context, cronDir, warnings, deployRoot } = contextFor(root, {});
+    const target = join(cronDir, `${CLI_NAME}-certs-demo`);
+    writeShouldFailFor = { path: target, error: eaccesOn(target) };
+
+    // The step SUCCEEDS. It used to reject here and take the whole run down.
+    await expect(publishStep().run(context)).resolves.toBeUndefined();
+
+    expect(warnings).toHaveLength(1);
+    const warning = warnings[0] ?? '';
+    expect(warning).toContain('renewal is NOT scheduled');
+    expect(warning).toContain("EACCES: permission denied, open '");
+    expect(warning).toContain(target);
+    // A pasteable command, and one that survives being indented by a
+    // renderer - which a `sudo tee` heredoc would not.
+    expect(warning).toContain(`sudo install -m 644 ${join(deployRoot, `${CLI_NAME}-certs-demo`)} ${target}`);
+    expect(warning).not.toContain(`sudo ${CLI_NAME}`);
+    expect(warning).toContain(`ls ${cronDir}/${CLI_NAME}-certs-*`);
+  });
+
+  it('still issued the certificate and installed the vhost in that run', async () => {
+    // The catch must not short-circuit the work that already succeeded: the
+    // deployment is COMPLETE when the cron write throws, which is the whole
+    // reason it is not fatal.
+    const root = proxyRoot();
+    const { context, seen, cronDir } = contextFor(root, {}, { proxyContainer: 'edge-proxy' });
+    const target = join(cronDir, `${CLI_NAME}-certs-demo`);
+    writeShouldFailFor = { path: target, error: eaccesOn(target) };
+
+    await publishStep().run(context);
+
+    expect(seen.map((argv) => argv.slice(0, 3).join(' '))).toEqual([
+      'docker run --rm',
+      'docker exec edge-proxy',
+      'docker exec edge-proxy',
+    ]);
+    expect(seen[0]).toContain('certbot/certbot');
+    expect(seen[2]?.slice(3)).toEqual(['nginx', '-s', 'reload']);
+    expect(existsSync(join(root, 'nginx', 'conf.d', 'app.example.test.conf'))).toBe(true);
+  });
+
+  it('is equally non-fatal, and equally loud, when the failure is not EACCES', async () => {
+    // Naming one errno would make every other one fail an install that
+    // succeeded: EROFS, ENOTDIR and EPERM all leave the same deployment
+    // behind - complete, serving, unscheduled.
+    const root = proxyRoot();
+    const { context, warnings, cronDir } = contextFor(root, {});
+    writeShouldFailFor = {
+      path: join(cronDir, `${CLI_NAME}-certs-demo`),
+      error: Object.assign(new Error('EROFS: read-only file system, open'), { code: 'EROFS' }),
+    };
+
+    await expect(publishStep().run(context)).resolves.toBeUndefined();
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('EROFS: read-only file system');
+    expect(warnings[0]).toContain('sudo install -m 644');
+  });
+
+  it('records the failure in the journal as well as in the warning', async () => {
+    const { context, lines, cronDir } = contextFor(proxyRoot(), {});
+    const target = join(cronDir, `${CLI_NAME}-certs-demo`);
+    writeShouldFailFor = { path: target, error: eaccesOn(target) };
+
+    await publishStep().run(context);
+
+    expect(lines.some((line) => line.startsWith('Could not write '))).toBe(true);
   });
 });
 

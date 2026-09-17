@@ -26,7 +26,7 @@ import {
 } from '../deploy/health.js';
 import { readState, type DeployState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
-import { runInstall, type InstallOptions } from '../deploy/install.js';
+import { runInstall, type InstallOptions, type InstallResult } from '../deploy/install.js';
 import { runUninstall, type UninstallOptions, type UninstallResult } from '../deploy/uninstall.js';
 import {
   DEFAULT_APPS_ROOT,
@@ -1307,19 +1307,45 @@ export async function runInstallCommand(
     return;
   }
 
-  stderr.write(
-    [
-      '',
-      '  Installed.',
-      '',
-      `  App        ${result.name} at ${result.deployRoot}`,
-      `  Revision   ${result.commitSha.slice(0, 12)}`,
-      `  Log        ${result.journalPath}`,
-      '',
-      `  ${result.nextStep}`,
-      '',
-    ].join('\n'),
+  stderr.write(renderInstall(result));
+}
+
+/**
+ * The install report. Exported so its wording is pinned by a test.
+ *
+ * `Action required:` comes FIRST, the shape `renderUninstall` established and
+ * for the same reason (#261, #265): a warning is something the operator has to
+ * act on, and everything under it is a record of what happened. The one that
+ * lands here today is a renewal cron the CLI could not write - an install that
+ * completed without a renewal schedule must never be silent, because the only
+ * other notice of it is an expired certificate 60-90 days later.
+ *
+ * `nextStep` stays LAST and stays one line: it is the thing nobody else can do
+ * (log in and claim the Admin role), not a list of leftovers.
+ */
+export function renderInstall(result: InstallResult): string {
+  const lines: string[] = ['', '  Installed.', ''];
+
+  if (result.warnings.length > 0) {
+    lines.push('  Action required:');
+    for (const warning of result.warnings) {
+      // An empty line stays empty: indenting it leaves trailing whitespace
+      // that shows up in a diff, a paste and `cat -A`.
+      for (const line of warning.split('\n')) lines.push(line === '' ? '' : `    ${line}`);
+      lines.push('');
+    }
+  }
+
+  lines.push(
+    `  App        ${result.name} at ${result.deployRoot}`,
+    `  Revision   ${result.commitSha.slice(0, 12)}`,
+    `  Log        ${result.journalPath}`,
+    '',
+    `  ${result.nextStep}`,
+    '',
   );
+
+  return lines.join('\n');
 }
 
 

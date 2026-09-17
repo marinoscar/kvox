@@ -469,6 +469,72 @@ const deployRootWritable: Check = {
   },
 };
 
+/** Where the certificate-renewal cron lives on every standard Linux box. */
+export const RENEWAL_CRON_DIR = '/etc/cron.d';
+
+/**
+ * Can this user write the certificate-renewal cron?  (issue #265)
+ *
+ * #245's lesson, applied to the SECOND directory this CLI writes outside the
+ * deploy root. `/etc/cron.d` is root:root and the CLI is deliberately run as
+ * an ordinary user (#236: sudo resets HOME, which logs `gh` out), so on a
+ * standard server this write fails - and it used to fail the whole install on
+ * its last step, after the certificate had been issued and the site was
+ * already serving HTTPS.
+ *
+ * `recommended`, NOT `required`, and that is the point of the pair: the
+ * install no longer treats this as fatal, so doctor must not either. Failing
+ * here would refuse a server this CLI can install on perfectly well, and
+ * teach the operator to reach for --force - which is how the REQUIRED checks
+ * stop being enforced too (contract rule 3).
+ *
+ * `deepestExisting` for the same reason `deploy-root-writable` uses it:
+ * `installRenewalCron` calls `mkdirSync(..., { recursive: true })`, which needs
+ * write permission on the deepest existing ancestor rather than on a path that
+ * may not be there yet.
+ *
+ * The remedy deliberately does NOT say "run under sudo". That trades this for
+ * a logged-out `gh` at the `checkout` step (#236) - a worse failure, earlier in
+ * the run.
+ */
+const renewalCronWritable: Check = {
+  id: 'cron-dir-writable',
+  title: 'Renewal cron directory writable',
+  severity: 'recommended',
+  async run(context) {
+    // No certificate under --skip-proxy, so nothing to renew and nothing to
+    // schedule.
+    const skip = skippedByProxyFlag(context);
+    if (skip !== undefined) return skip;
+
+    const fs = contextFs(context);
+    const cronDir = context.cronDir ?? RENEWAL_CRON_DIR;
+    const existing = deepestExisting(fs, cronDir);
+
+    const remedy =
+      `Nothing to do before installing: the install writes what it can and prints a ` +
+      `\`sudo install -m 644 <file> ${cronDir}/${CLI_NAME}-certs-<app>\` command for the rest. ` +
+      `Do not re-run this CLI under sudo - that resets HOME and logs \`gh\` out.`;
+
+    if (existing === undefined) {
+      return { status: 'warn', detail: `no part of ${cronDir} exists`, remedy };
+    }
+
+    if (fs.isWritable(existing)) {
+      return {
+        status: 'pass',
+        detail: existing === cronDir ? cronDir : `${existing} (will create ${cronDir})`,
+      };
+    }
+
+    return {
+      status: 'warn',
+      detail: `${existing} is not writable by this user; certificate renewal will need one manual step`,
+      remedy,
+    };
+  },
+};
+
 const proxyRoot: Check = {
   id: 'proxy-root',
   title: 'Shared proxy directory',
@@ -797,6 +863,7 @@ export const HOST_CHECKS: readonly Check[] = [
   memory,
   bindPortFree,
   deployRootWritable,
+  renewalCronWritable,
   proxyRoot,
   proxyConfWritable,
   acmeWebroot,

@@ -764,9 +764,34 @@ fails. The container is `--proxy-container`, else whatever `doctor` found
 publishing `:443`, else `proxy-nginx`, and is recorded in the state so
 `update` reuses it. `--no-ipv6` renders the vhost without `[::]` listeners
 for a host with IPv6 disabled (the reload, not `nginx -t`, is what fails
-there). When a certificate was issued, a renewal cron is written to
+there). When this deployment has no renewal entry yet, one is written to
 `/etc/cron.d/kvox-certs-<name>` (see [Certificates](#certificates) below);
-`--install-cron` writes it regardless, `--no-install-cron` never does.
+`--install-cron` writes it regardless, `--no-install-cron` never does. The
+gate is whether an entry exists, not whether this run issued a certificate,
+so a re-run over an existing certificate installs the missing schedule
+instead of silently leaving it out.
+
+**`/etc/cron.d` is root-owned, so this one step may need you.** The CLI runs
+as an ordinary user on purpose — running it under `sudo` resets `HOME` and
+logs `gh` out — so on a standard server it cannot write that file. That does
+**not** fail the install: the certificate is issued, the vhost is live, the
+site serves HTTPS, and the run finishes with an `Action required:` block
+carrying the error and one line to paste, e.g.
+
+```bash
+sudo install -m 644 /opt/infra/apps/<name>/kvox-certs-<name> /etc/cron.d/kvox-certs-<name>
+```
+
+The file named there is the exact one the CLI would have written; it is
+staged in the deploy root so you can read it first. Verify afterwards with:
+
+```bash
+ls /etc/cron.d/kvox-certs-*
+```
+
+`doctor`'s `cron-dir-writable` check tells you in advance whether this step
+will be needed. It is `recommended`, never `required` — a root-owned
+`/etc/cron.d` is the ordinary case, not a broken server.
 
 Other flags, from `kvox deploy install --help`:
 
@@ -806,8 +831,8 @@ Options:
                        finding one
   --no-ipv6            Render the vhost without [::] listeners (a host with
                        IPv6 disabled)
-  --install-cron       Write the certificate renewal cron even if no
-                       certificate was issued
+  --install-cron       Write the certificate renewal cron even when this
+                       deployment already has one
   --no-install-cron    Never write the renewal cron
   --fresh              Discard this app's prior .env, state file and
                        deploy-info first, and install clean
@@ -1180,8 +1205,15 @@ daily at 03:xx and 15:xx with a minute derived from the app's name so
 several apps on one box don't all fire together — calling
 `kvox deploy certs renew --all --apps-root <…> --name <…>` and logging to
 `/var/log/kvox-certs-<name>.log`. It is idempotent: a second run rewrites
-nothing. `install` writes the same file when it issues a certificate.
-`doctor`'s `certificate-renewal` check recognises it.
+nothing. `install` writes the same file whenever this deployment does not
+already have one. `doctor`'s `certificate-renewal` check recognises it, and
+its `cron-dir-writable` check says in advance whether the write will succeed.
+
+Writing into `/etc/cron.d` needs root and this CLI is deliberately never run
+under `sudo`, so on a standard server the write fails. `install` treats that
+as non-fatal and prints a `sudo install -m 644 …` line to finish it by hand
+(see [Installing](#installing) above); `certs renew --install-cron`,
+where you asked for the cron explicitly, still reports the failure as one.
 
 `status` lists every certificate under the proxy with its expiry; exits `0`
 while all are valid, `1` when one has expired, `2` when there are none.
