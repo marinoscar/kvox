@@ -749,6 +749,30 @@ the step that failed rather than re-running everything before it.
 discards uncommitted changes in the checkout it manages; `--skip-doctor`,
 `--skip-proxy` and `--skip-seed` each skip exactly the one stage they name.
 
+**Which deployment `install` acts on** is decided before anything is read or
+written, in three ranks (issue #266):
+
+1. `--root <dir>` or `--name <app>`, and `--repo <url>` for the repository
+   itself.
+2. **The deployment you are standing in.** From a deploy root under
+   `--apps-root` — or any directory inside one, such as
+   `<root>/repo/infra/compose` — the state file there names the repository,
+   the ref and the app, and that is what is used. This is what makes
+   `cd /opt/infra/apps/<app> && kvox deploy install --resume` work, which is
+   where the on-screen instruction after a failed install leaves you standing.
+   The walk upward stops at the apps root: standing at the apps root itself,
+   or above it, resolves nothing this way.
+3. The `origin` of the git checkout around the current directory.
+
+Rank 2 exists because rank 3 answered a question it could not answer: on a
+server whose `/opt/infra` is itself a git repository — infrastructure as code,
+with the apps underneath it — the walk went past the deploy root's own state
+file and derived the app from the infrastructure repository. That is refused
+outright (a checkout containing the apps root is never treated as the
+application), and the refusal still stands for a directory that really does
+imply nothing. Nothing is ever scanned for candidates: exactly one deployment
+is implied by a directory, or none.
+
 The `publish` step talks to the shared proxy **container** only — there is
 no host `nginx` or `certbot` on the server. Before spending any Let's
 Encrypt rate-limit budget it writes a nonce under the proxy's ACME webroot

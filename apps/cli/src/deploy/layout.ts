@@ -1,8 +1,9 @@
 import { readdirSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { UsageError } from '../errors.js';
+import { contains } from './repo.js';
 import { NotInstalledError, readState, type DeployState } from './state.js';
 
 // =============================================================================
@@ -30,7 +31,8 @@ import { NotInstalledError, readState, type DeployState } from './state.js';
 //
 //   --root <dir>          the full path, verbatim - the escape hatch
 //   --name <app>          <apps-root>/<name>
-//   (nothing)             install: the repository's own name; everything else:
+//   (nothing)             install: the deployment cwd is standing in (#266),
+//                         else the repository's own name; everything else:
 //                         the one app already installed under <apps-root>
 // =============================================================================
 
@@ -111,6 +113,70 @@ export function listInstalledApps(appsRoot: string): InstalledApp[] {
     if (state !== undefined) apps.push({ name: state.name ?? name, deployRoot, state });
   }
   return apps;
+}
+
+export interface DeploymentAtCwd {
+  layout: ResolvedLayout;
+  /** The state file that identified it; the caller reads the repo off this. */
+  state: DeployState;
+}
+
+/**
+ * The deployment the current directory is standing in  (issue #266).
+ *
+ * Walks up from `cwd` looking for a state file, and stops at the apps root.
+ * `<apps-root>/<app>` and `<apps-root>/<app>/repo/infra/compose` both answer
+ * that deployment; the apps root itself, and anything above it, answer
+ * nothing.
+ *
+ * THIS IS A RANK, NOT A SEARCH. It reads the one deployment cwd implies, and
+ * never `readdirSync`s the apps root for candidates - #249 rejected that
+ * explicitly, and guessing harder is the wrong answer to a bug caused by
+ * guessing. Exactly one deployment is implied by a directory, or none, and
+ * none still refuses exactly as it did before.
+ *
+ * WHY IT STOPS AT THE APPS ROOT. Without a bound the walk leaves the
+ * territory this module knows about: `/opt/infra`, `/opt`, `/`, each of them
+ * somebody else's directory, none of them a deployment. The apps root is the
+ * outermost directory that can contain one, so it is where the walk ends -
+ * and a deploy root installed OUTSIDE the apps root with `--root` is
+ * deliberately not found this way, because there is no bound that would find
+ * it without also walking the whole filesystem.
+ *
+ * A state file that cannot be read (hand-edited, or written by a newer CLI)
+ * is skipped rather than raised, the same posture `listInstalledApps` and
+ * `locateApp` already take: a listing must not refuse because of one
+ * unreadable file, and the command that goes on to act on the deployment
+ * reports it properly.
+ */
+export function locateAppFromCwd(options: {
+  appsRoot: string;
+  cwd: string;
+}): DeploymentAtCwd | undefined {
+  const appsRoot = resolve(options.appsRoot);
+  let current = resolve(options.cwd);
+
+  for (;;) {
+    // The apps root itself is the bound, not a candidate: it holds no state
+    // file of its own, and anything above it is not ours to interpret.
+    if (current === appsRoot || !contains(appsRoot, current)) return undefined;
+
+    const state = readStateQuietly(current);
+    if (state !== undefined) {
+      return {
+        layout: {
+          name: projectNameFor(state, current),
+          appsRoot: options.appsRoot,
+          deployRoot: current,
+        },
+        state,
+      };
+    }
+
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
 }
 
 /** A port another app under the apps root has recorded as its own. */

@@ -29,6 +29,7 @@ import {
   appNameFor,
   appRootFor,
   locateApp,
+  locateAppFromCwd,
   siblingBindPorts,
   type ResolvedLayout,
 } from './layout.js';
@@ -53,7 +54,7 @@ import {
   type RepoTarget,
 } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
-import { readState, writeState, type DeployState } from './state.js';
+import { deployStatePath, readState, writeState, type DeployState } from './state.js';
 import { discardLocalState } from './teardown.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
@@ -949,12 +950,36 @@ export interface InstallResult {
  * the name is the repository's. `resolveRepoTarget` only reads git config, so
  * running it here rather than in the `checkout` step costs nothing; the target
  * it returns is kept so that step does not ask twice.
+ *
+ * Three ranks, strongest first:
+ *
+ *   1. `--root`/`--name`, and `--repo` for the repository itself.
+ *   2. THE DEPLOYMENT cwd IS STANDING IN (#266) - a state file at cwd or at an
+ *      ancestor below the apps root.
+ *   3. The git checkout around cwd.
+ *
+ * RANK 2 EXISTS BECAUSE RANK 3 ANSWERED A QUESTION IT COULD NOT ANSWER. Run
+ * from `/opt/infra/apps/<app>` - a deploy root, with a state file naming the
+ * repository, the ref and the name - the walk went straight past it into the
+ * server's own infrastructure repository at `/opt/infra` and tripped #247's
+ * guard, telling the operator to re-supply with `--repo` what was already on
+ * disk one directory away. That is the circularity #249 documented and did
+ * not fix: the deploy root is derived before any state is read, so the most
+ * natural place to run `--resume` was the one place it could not work.
+ *
+ * A state file is not an inference. This CLI wrote it, and it names the
+ * deployment outright - which is why it outranks a git remote, and why it
+ * settles the deploy root as well as the target. Deriving the root from the
+ * state's repository URL instead would be a second guess on top of a fact: a
+ * deployment installed with `--name <app>-staging` lives in a directory its
+ * repository's name does not spell.
  */
 async function resolveInstallLayout(
   options: InstallOptions,
   runCommand: typeof defaultRunCommand,
 ): Promise<{ layout: ResolvedLayout; target?: RepoTarget | undefined }> {
   const appsRoot = options.appsRoot ?? DEFAULT_APPS_ROOT;
+  const cwd = options.cwd ?? process.cwd();
 
   if (options.deployRoot !== undefined || options.name !== undefined) {
     const layout = locateApp({ appsRoot, name: options.name, root: options.deployRoot });
@@ -965,8 +990,29 @@ async function resolveInstallLayout(
     return { layout };
   }
 
+  // `--repo` names a repository the operator may be standing nowhere near, and
+  // it has always decided the deploy root through `appNameFor`. It keeps that:
+  // rank 2 is what happens when NOTHING was named.
+  if (options.repo === undefined) {
+    const here = locateAppFromCwd({ appsRoot, cwd });
+    if (here !== undefined) {
+      // Through `resolveRepoTarget`'s own `state` rank rather than by building
+      // a target by hand, so `--ref` still overrides the recorded ref in the
+      // one place that rule is written down. It runs no command: a state file
+      // answers before git is consulted.
+      const target = await resolveRepoTarget({
+        cwd,
+        appsRoot,
+        runCommand,
+        state: here.state,
+        ...(options.ref === undefined ? {} : { refFlag: options.ref }),
+      });
+      return { layout: here.layout, target };
+    }
+  }
+
   const target = await resolveRepoTarget({
-    cwd: options.cwd ?? process.cwd(),
+    cwd,
     appsRoot,
     runCommand,
     ...(options.repo === undefined ? {} : { repoFlag: options.repo }),
@@ -977,14 +1023,26 @@ async function resolveInstallLayout(
   return { layout: { name, appsRoot, deployRoot: appRootFor(appsRoot, name) }, target };
 }
 
-/** How the deployment directory was decided, for the resume refusal (#249). */
-function describeLayoutSource(target: RepoTarget | undefined): string {
+/**
+ * How the deployment directory was decided, for the resume refusal (#249).
+ *
+ * Exported for its own test: three of the four wordings are reachable through
+ * `runInstall`, and the fourth - the state file - deliberately is not, because
+ * finding one is exactly what stops that refusal from firing. It is still
+ * rendered honestly rather than left to fall through to the guess, and it
+ * names the file, since "an existing deployment state" and a path an operator
+ * can `cat` are not the same answer.
+ */
+export function describeLayoutSource(
+  target: RepoTarget | undefined,
+  deployRoot: string,
+): string {
   if (target === undefined) return 'taken from --name/--root';
   switch (target.source) {
     case 'flag':
       return 'derived from --repo';
     case 'state':
-      return 'taken from an existing deployment state';
+      return `taken from the deployment state at ${deployStatePath(deployRoot)}`;
     case 'git-remote':
       return 'GUESSED from the git checkout around the current directory';
   }
@@ -1035,7 +1093,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   if (options.resume === true && existingState === undefined) {
     throw new UsageError(
       `Nothing to resume: no deployment state at ${options.deployRoot}.\n` +
-        `That directory was ${describeLayoutSource(target)}, and the state file is looked for inside it — ` +
+        `That directory was ${describeLayoutSource(target, options.deployRoot)}, and the state file is looked for inside it — ` +
         `so a resume can only find the run you mean once that run's deployment is named.\n` +
         `Name it with --name <app> (or --root <dir>, or --repo <url>), or drop --resume to start a new install.`,
     );
