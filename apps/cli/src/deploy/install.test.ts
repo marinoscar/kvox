@@ -778,6 +778,10 @@ describe('the publish step', () => {
 
   // ---------------------------------------------------------------------------
   // The renewal cron (#265)
+  //
+  // A PREVIOUS TEST HERE ASSERTED THE BUG: it pinned "leaves the cron alone
+  // when the certificate already existed", which is the `--resume` skip this
+  // issue is about, so it was replaced rather than left to contradict the fix.
   // ---------------------------------------------------------------------------
 
   it('installs the renewal cron when this deployment has none yet', async () => {
@@ -789,6 +793,22 @@ describe('the publish step', () => {
     expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
     const cron = readFileSync(join(cronDir, `${CLI_NAME}-certs-demo`), 'utf8');
     expect(cron).toContain('/usr/local/bin/cli deploy certs renew --all --apps-root /tmp --name demo');
+  });
+
+  it('installs the cron on a --resume over an existing certificate that has none — the silent time bomb', async () => {
+    // THE WORST DEFECT IN #265. The gate used to be `certificate.issued`, and
+    // `issueCertificate` answers false for a certificate that already exists.
+    // So the run that followed a failed cron write skipped the cron block
+    // entirely and reported success, leaving a certificate nothing renews and
+    // saying nothing at all - an outage 90 days later with no trace back here.
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir, warnings } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+    expect(warnings).toEqual([]);
   });
 
   it('does not re-request the certificate on that resume', async () => {

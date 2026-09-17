@@ -34,6 +34,7 @@ import {
 } from './layout.js';
 import {
   defaultCliPath,
+  hasRenewalCron,
   installRenewalCron,
   installVhost,
   issueCertificate,
@@ -150,10 +151,12 @@ export interface InstallOptions {
   /** `--no-ipv6`: render the vhost without `[::]` listeners. */
   ipv6?: boolean | undefined;
   /**
-   * `--install-cron` / `--no-install-cron`. Undefined means "when a
-   * certificate was issued by this run": a fresh certificate with nobody to
-   * renew it is a 90-day timer on an outage, while an existing one is
-   * presumably already somebody's job.
+   * `--install-cron` / `--no-install-cron`. Undefined means "when this
+   * deployment has no renewal entry yet" (#265) - NOT "when this run issued a
+   * certificate", which is what it used to mean and which made `--resume`
+   * after a failed cron write report success over a certificate nothing
+   * renews. An existing certificate with no entry is precisely the state that
+   * needs one; `--install-cron` still forces the write either way.
    */
   installCron?: boolean | undefined;
   /** The command the renewal cron runs; defaults to this binary. */
@@ -785,9 +788,13 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(context.options.cronDir === undefined ? {} : { cronDir: context.options.cronDir }),
         };
 
-        if (context.options.installCron ?? certificate.issued) {
-          ensureRenewalCron(context, cronOptions);
-        }
+        // "Does this deployment have a renewal schedule?", not "did this run
+        // issue a certificate?" (#265). `--install-cron` still forces it.
+        const wanted =
+          context.options.installCron ??
+          !hasRenewalCron(context.options.name, context.options.cronDir);
+
+        if (wanted) ensureRenewalCron(context, cronOptions);
       },
     },
     {
