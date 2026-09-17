@@ -14,9 +14,11 @@ import {
 } from './checks/index.js';
 import {
   ensureDeployInfoDir,
+  readDeployInfo,
   updateDeployInfoRemote,
   writeDeployInfo,
   type DeployRemote,
+  type DeployRun,
 } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
@@ -854,6 +856,58 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
   const result = await runPipeline(stepsFor(options), context);
 
   if (result.failed !== undefined) {
+    // ==========================================================================
+    // `deploy-info` IS REFRESHED ONCE `health` HAS PASSED, ON THIS PATH TOO.
+    // ==========================================================================
+    // (issue #283, the update half of the rule install.ts states in full)
+    //
+    // An update that fails after `health` has ALREADY deployed the new
+    // revision: `restart` brought the stack up on it and the API answered on
+    // it. Leaving the last successful deploy's document in place would then
+    // name the OLD commit as what is running, and a deployment that never had
+    // one - a pre-#120 install, or the run that first created this root -
+    // would keep reporting nothing at all.
+    //
+    // NOTHING HERE STAMPS A DEPLOY TIME THAT DID NOT HAPPEN. The state is not
+    // written (this command writes it at `fetch` and on success, and #120's
+    // rule that `lastDeployedAt` belongs only to a run that finished is
+    // untouched), and the record below is derived from an in-memory state
+    // whose `lastDeployedAt` is carried forward from the previous success -
+    // so `updatedAt` still means "when the last deploy succeeded" while
+    // `app.commitSha` says which revision is actually serving, and `run` says
+    // the run that put it there did not finish.
+    if (result.completed.includes('health')) {
+      // ONE INSTANT for both fields, the same rule `runInstall`'s epilogue
+      // follows: two `new Date()` calls can land a millisecond apart and the
+      // record would carry two answers to one question.
+      const attemptedAt = new Date().toISOString();
+      try {
+        await refreshDeployInfo(
+          context,
+          {
+            ...state,
+            ref: context.target?.ref ?? state.ref,
+            commitSha: context.commitSha ?? state.commitSha,
+            ...(context.previousSha === undefined ? {} : { previousSha: context.previousSha }),
+            ...((context.proxyContainer ?? state.proxyContainer) === undefined
+              ? {}
+              : { proxyContainer: context.proxyContainer ?? state.proxyContainer }),
+            envPath: envFilePath(options.deployRoot),
+            lastAttemptAt: attemptedAt,
+            lastCommand: 'update',
+            appctlVersion: CLI_VERSION,
+          } as DeployState,
+          { completed: false, failedStep: result.failed.id, attemptedAt },
+        );
+      } catch (error) {
+        // Never in place of the operator's actual problem, which is the
+        // pipeline's own error three lines below.
+        journal.line(
+          `Could not refresh deploy-info: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     const previous = context.previousSha ?? state.commitSha;
 
@@ -886,7 +940,21 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     // refreshed from it: the host facts may have moved (a kernel upgrade), and
     // a deployment from before #120 gets its first info.json here rather than
     // only once the remote moves.
-    await refreshDeployInfo(context, state);
+    //
+    // TWO THINGS COME FROM THE CLONE AND THE EXISTING RECORD, NOT THE STATE
+    // (#283). A run that failed AFTER `health` left the new revision checked
+    // out and serving while the state still names the old one - `update`
+    // records a commit only on success - so this run's "already up to date"
+    // would otherwise rewrite the document backwards, from the revision that
+    // is actually running to the one that is not, and mark it complete. It
+    // deployed nothing, so it has nothing to say about how any run ended:
+    // the previous document's `run` is carried through unchanged rather than
+    // replaced with a completion this run did not observe.
+    await refreshDeployInfo(
+      context,
+      { ...state, commitSha: context.commitSha ?? state.commitSha } as DeployState,
+      existingDeployRun(context),
+    );
     journal.finish('success', 'already up to date');
     return {
       changed: false,
@@ -937,7 +1005,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
  * dropped to null - an About page that said "never checked" right after an
  * update would be wrong about the one moment it is certainly current.
  */
-async function refreshDeployInfo(context: UpdateContext, state: DeployState): Promise<void> {
+async function refreshDeployInfo(
+  context: UpdateContext,
+  state: DeployState,
+  run?: DeployRun,
+): Promise<void> {
   const remote: DeployRemote | null =
     context.check === undefined
       ? null
@@ -946,9 +1018,30 @@ async function refreshDeployInfo(context: UpdateContext, state: DeployState): Pr
     context.options.deployRoot,
     state,
     await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
-    { remote },
+    { remote, ...(run === undefined ? {} : { run }) },
   );
-  context.journal.line(`Wrote ${path}`);
+  context.journal.line(
+    run === undefined || run.completed
+      ? `Wrote ${path}`
+      : `Wrote ${path}; the record is marked incomplete at ${run.failedStep}.`,
+  );
+}
+
+/**
+ * The `run` block already on disk, for a refresh that deployed nothing (#283).
+ *
+ * Undefined when there is no document or it cannot be read - `writeDeployInfo`
+ * then defaults to a completed run, which is what a deployment with no record
+ * at all has always been assumed to be. Never allowed to throw: refusing to
+ * refresh host facts because an unrelated field is unreadable would make a
+ * corrupt document permanent.
+ */
+function existingDeployRun(context: UpdateContext): DeployRun | undefined {
+  try {
+    return readDeployInfo(context.options.deployRoot)?.run;
+  } catch {
+    return undefined;
+  }
 }
 
 export { RENEW_WITHIN_DAYS };
