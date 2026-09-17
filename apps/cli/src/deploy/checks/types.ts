@@ -129,9 +129,16 @@ export interface CheckContext {
   deployRoot: string;
   /**
    * The compose project name (#119), so a check can tell the app's OWN
-   * containers (`<name>-nginx-1`) from somebody else's. Absent before a first
-   * install when no name has been chosen yet, in which case there is nothing
-   * of the app's to recognise.
+   * containers from somebody else's by their `com.docker.compose.project`
+   * label.
+   *
+   * UNDEFINED MEANS "NOT KNOWN YET", AND NEVER A PLACEHOLDER. A check whose
+   * answer depends on this must report `skip` rather than judge the server
+   * against a guess: the install wizard runs the doctor on mount, before the
+   * App name field on the same screen has been answered, and a required
+   * check gated on the fallback name refused to reinstall an app over its own
+   * running containers (#262). Callers pass a name only once one is settled -
+   * from state, from `--name`, or from what the operator typed.
    */
   name?: string | undefined;
   /** Loopback port the shared proxy forwards to. */
