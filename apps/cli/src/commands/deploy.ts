@@ -293,7 +293,7 @@ export function registerDeployCommand(
     .option('--dry-run', 'List everything that would be removed; change nothing')
     .option('--certs', "Also delete the TLS certificate (see the rate limit below)")
     .option('--keep-env', 'Leave the .env in place; a backup is taken either way')
-    .option('--non-interactive', 'Never prompt; --confirm <name> is then required')
+    .option('--non-interactive', 'Never prompt; every --confirm* the run needs is then required')
     .option('--skip-proxy', 'Do not touch the shared reverse proxy')
     .option('--proxy-root <path>', `Shared reverse proxy directory (default: the app's, else ${DEFAULT_PROXY_ROOT})`)
     .option('--proxy-container <name>', `Proxy container to reload (default: the app's, else ${DEFAULT_PROXY_CONTAINER})`)
@@ -314,7 +314,8 @@ export function registerDeployCommand(
         '',
         'Exit codes:',
         '  0  removed (or, with --dry-run, listed)',
-        '  2  nothing is installed, or the confirmation was missing or wrong',
+        '  2  nothing is installed, or a confirmation was missing or wrong',
+        '     (the app\'s, the bucket\'s or the database\'s)',
         '',
         'Removes: the compose project (containers, project networks and named',
         'volumes, via `down -v --remove-orphans`), the deploy root (repo/, .env,',
@@ -352,7 +353,14 @@ export function registerDeployCommand(
         '',
         'The app\'s name must be typed to authorise this - it is not a y/N - and',
         'under --non-interactive it must be supplied as --confirm <name>, because',
-        'a destructive default reachable by omission is not a default.',
+        'a destructive default reachable by omission is not a default. The same',
+        'rule applies to each extra above, against its OWN resource\'s name.',
+        '',
+        'The order is fixed: the containers stop, then the storage is purged,',
+        'then the database is dropped, then the deployment is removed. The',
+        'deployment goes last because its .env holds the credentials the two',
+        'steps before it authenticate with. A failed extra is reported under',
+        '"Action required:" and does NOT fail the uninstall.',
         '',
         'The .env is copied to <apps-root>/<name>.env.<timestamp>.bak (0600)',
         'before it is deleted, outside the directory being removed: it holds',
