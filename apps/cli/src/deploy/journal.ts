@@ -258,3 +258,28 @@ export function pruneOldRuns(logsDir: string, retain: number): void {
     }
   }
 }
+
+/**
+ * A journal that records nothing (issue #261).
+ *
+ * `openJournal` above CREATES `<deployRoot>/logs/` and two files in it before
+ * the first line is written. That is right for a run that changes the server
+ * and wrong for `uninstall --dry-run`, whose whole promise is that it writes
+ * nothing at all - a dry run that leaves two fresh log files behind has
+ * already broken it, and on a deployment whose root no longer exists it would
+ * recreate the very directory it was asked only to describe.
+ *
+ * `redact` is the identity function on purpose: nothing is written, so there
+ * is nothing to mask, and a dry run never collects secret values to seed a
+ * redactor with in the first place.
+ */
+export function nullJournal(): Journal {
+  return {
+    path: '',
+    redact: (value: string) => value,
+    step: () => {},
+    line: () => {},
+    command: () => {},
+    finish: () => {},
+  };
+}
