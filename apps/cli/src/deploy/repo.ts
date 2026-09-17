@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
@@ -44,6 +44,13 @@ export interface ResolveRepoOptions {
   state?: Pick<DeployState, 'repoUrl' | 'ref'> | undefined;
   /** Where to start looking for a .git directory. */
   cwd: string;
+  /**
+   * The apps root, when the caller knows it (#247).
+   *
+   * Only ever used to REFUSE an ambient resolution, never to produce one:
+   * see the guard in `resolveRepoTarget`.
+   */
+  appsRoot?: string | undefined;
   runCommand: typeof runCommand;
 }
 
@@ -91,6 +98,13 @@ export function hasEmbeddedCredentials(url: string): boolean {
 /** Redacts credentials for display. */
 export function displayRepoUrl(url: string): string {
   return url.replace(/^(https?:\/\/)[^@/]+@/, '$1***@');
+}
+
+/** True when `child` is `parent` or sits underneath it. */
+export function contains(parent: string, child: string): boolean {
+  const from = resolve(parent);
+  const to = resolve(child);
+  return to === from || to.startsWith(from.endsWith(sep) ? from : from + sep);
 }
 
 /** Walks up from `cwd` looking for a .git directory or file. */
@@ -152,6 +166,33 @@ export async function resolveRepoTarget(
   }
 
   const root = findGitRoot(options.cwd);
+
+  // A checkout that CONTAINS the apps root is the surrounding
+  // infrastructure, not the application being deployed (#247).
+  //
+  // `/opt/infra` is commonly a git repository - infrastructure as code is
+  // the ordinary shape - and the runbook puts applications under
+  // `/opt/infra/apps`. So running this from the apps root, the most natural
+  // place to run a deploy command, walked up into the infra repo and
+  // derived the app name from IT: an operator deploying one repository was
+  // silently pointed at another.
+  //
+  // That was reported as a permission error only because the apps root
+  // happened to be root-owned. With a writable one it would have cloned and
+  // deployed the wrong repository without a word, which is the failure this
+  // guard exists to make impossible.
+  //
+  // Only rank 3 is constrained. `--repo` and a saved state never reach here,
+  // and a checkout INSIDE the apps root - the ordinary "deploy this clone"
+  // case - is not contained by it and passes untouched.
+  if (root !== undefined && options.appsRoot !== undefined && contains(root, options.appsRoot)) {
+    throw new UsageError(
+      `Refusing to guess what to deploy: ${options.cwd} sits inside ${root}, which CONTAINS the apps root ${options.appsRoot}. ` +
+        `That checkout is this server's infrastructure, not the application. ` +
+        `Name the repository explicitly with --repo <url>, or run this from inside a checkout of the application itself.`,
+    );
+  }
+
   if (root === undefined) {
     throw new UsageError(
       `Not inside a git checkout, so there is no repository to deploy. Pass --repo <url> (and --ref if you need a branch or tag other than the default).`,
