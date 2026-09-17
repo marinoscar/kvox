@@ -28,8 +28,10 @@ Source of truth for every claim below:
   and as the required-only preflight of `install`/`update`.
 - `apps/cli/src/deploy/wizard/steps.ts` — the install wizard's steps, in the
   order the CLI and the TUI both render them.
-- `apps/cli/src/deploy/install.ts` / `update.ts` — the install and update
-  pipelines.
+- `apps/cli/src/deploy/install.ts` / `update.ts` / `uninstall.ts` — the
+  install, update and removal pipelines; `teardown.ts` holds the two helpers
+  `uninstall` and `install --fresh` share (backing up the `.env`, discarding
+  the local state).
 - `apps/cli/src/deploy/proxy.ts` — the shared, containerized reverse proxy:
   vhost rendering, `docker run certbot/certbot` issuance, `docker exec`
   validate/reload, and the ACME self-probe.
@@ -545,8 +547,8 @@ so re-running costs nothing once staging already worked.
 
 ## 10. Logs
 
-Every `doctor`, `install`, `update`, and `certs renew` run writes two files
-under `<deployRoot>/logs/`: a timestamped human-readable `.log` and a
+Every `doctor`, `install`, `update`, `uninstall` and `certs renew` run writes
+two files under `<deployRoot>/logs/`: a timestamped human-readable `.log` and a
 matching machine-readable `.jsonl` (one JSON object per executed subprocess:
 `argv`, `cwd`, `exitCode`, `durationMs`, captured `stdout`/`stderr`,
 `startedAt`). Both are written mode `0600`, and only the newest ten runs are
@@ -564,7 +566,134 @@ secret and won't be redacted. If you add a new secret-shaped variable to a
 fork, add a `secret: true` entry for it in `env-metadata.ts` so both masking
 and log redaction pick it up.
 
-## 11. Deploying a fork
+## 11. Starting over, and removing a deployment
+
+There are two commands here and they are **not** the same size. Pick the
+smaller one unless you really mean the larger.
+
+### 11.1 "The install went wrong, let me start clean" — `install --fresh`
+
+```bash
+kvox deploy install --domain app.example.com --fresh
+```
+
+This is almost always the one you want. It discards **this app's local state
+only** — the `.env`, `.appctl-deploy.json` and `deploy-info/` — copies the old
+`.env` to `/opt/infra/apps/<name>.env.<timestamp>.bak` (mode `0600`) first, and
+then installs normally. It implies `--reinstall`, so you don't need both.
+
+It does **not** touch the containers, the proxy vhost, the TLS certificate or
+the database, which is exactly why it's safe to reach for while iterating.
+
+**Why this flag exists at all**, and why it matters more than it sounds:
+`.env` deliberately lives at `<deployRoot>/.env`, *outside* `repo/` (section
+9), so that a re-clone can't take your secrets with it. That's right for a
+re-clone and wrong for a start-over — and nothing distinguished the two until
+this flag. It's how a corrupt `.env` silently survived three consecutive
+install attempts and produced a failure at "Wait for health" on a deployment
+that was, in fact, serving correctly (issue #259). If an install is behaving as
+though it's reading something you thought you'd replaced, `--fresh` is the
+answer.
+
+### 11.2 "Remove this deployment from this server" — `uninstall`
+
+**Look first. It costs nothing:**
+
+```bash
+kvox deploy uninstall --dry-run
+```
+
+`--dry-run` lists every path and container it would remove, needs no
+confirmation, starts no subprocess, and writes nothing at all — not even a run
+log. Read the list, then:
+
+```bash
+kvox deploy uninstall --confirm <name>
+```
+
+The confirmation is **the app's own name, typed** — not a `y/N`. That's the
+same convention this application's own destructive API actions use
+(`confirmation: "RESTORE"`, `"ROLLBACK"`, `"REMOVE"`), and typing the name
+proves you're removing the deployment you think you are, not a neighbour on the
+same box. Unattended, it must be given as `--confirm <name>`; there is no way
+to reach the destructive path by leaving a flag off.
+
+**What it removes:**
+
+| | |
+|---|---|
+| The compose project | Containers, project networks and **named volumes** (`down -v --remove-orphans`) |
+| The deploy root | `repo/`, `.env`, `logs/`, `data/`, `deploy-info/`, `.appctl-deploy.json` |
+| The vhost | `<proxyRoot>/nginx/conf.d/<domain>.conf`, then the proxy is **reloaded** |
+| The renewal cron | `/etc/cron.d/kvox-certs-<name>` — see the warning below |
+
+**What it never removes, and why:**
+
+| | |
+|---|---|
+| **Your database** | `deploy` validates it; it never creates or manages it (section 3.2's `CREATE DATABASE` is the one narrow exception, and it has no counterpart here). It holds your data and usually lives on another host. The `dropdb` command is **printed** for you — run it yourself if you want the database gone. |
+| **The `devnet` network** | Shared with every other app on this server. |
+| **The shared proxy container** | Likewise. Its vhost for *this* app is removed and the proxy reloaded; the container is never stopped, restarted or removed, because that takes every other site on the box down with it. |
+| **TLS certificates** | Kept by default. Let's Encrypt allows only **5 duplicate certificates per week** for the same hostname set, and a reinstall re-requests one — so destroying and re-requesting on each attempt at a broken install locks you out of issuing for **your own domain** for a week. Pass `--certs` when you genuinely mean it. |
+
+**If this was the last renewal cron entry on the box, read the warning.**
+Every `/etc/cron.d/kvox-certs-*` entry runs `certs renew --all` — one entry
+renews *every* certificate behind the shared proxy, not only its own app's. So
+removing the last one stops automatic renewal for **every app on this server**,
+and you'd find out 60–90 days later when they all expire at once. `uninstall`
+removes it anyway (leaving it behind means a cron entry pointing at a deploy
+root that no longer exists, failing silently twice a day), but it prints an
+`Action required:` block at the **top** of its output, before the inventory,
+with the one command that puts renewal back:
+
+```bash
+kvox deploy certs renew --install-cron --apps-root /opt/infra/apps --name <an-app-that-is-staying>
+```
+
+It fills in a real surviving deployment's name for you when there is one.
+`--dry-run` prints the same warning, which is the point — you want to know
+before you decide, not after. Nothing is said when this app had no entry to
+begin with (installed with `--no-install-cron`, or it never issued a
+certificate): there was no coverage to lose.
+
+**Your `.env` is backed up before it is deleted**, to
+`/opt/infra/apps/<name>.env.<timestamp>.bak`, mode `0600` — outside the
+directory being removed, or it wouldn't be a backup. It holds secrets the
+wizard generated that exist nowhere else. `--keep-env` additionally leaves the
+original in place (the deploy root then survives with just that one file in
+it); the copy is taken either way.
+
+**Verify:**
+
+```bash
+ls -la /opt/infra/apps/                     # the app folder gone, the .bak there
+docker ps -a --filter label=com.docker.compose.project=<name>   # empty
+ls /opt/infra/proxy/nginx/conf.d/           # this app's .conf gone, others intact
+docker exec <proxy-container> nginx -t      # still valid for every other site
+ls /etc/cron.d/kvox-certs-*                 # at least one entry should remain
+```
+
+### 11.3 If you already took it apart by hand
+
+`uninstall` is built for this. A missing clone, a missing deploy root, a state
+file this build can't parse — each is reported and the run continues rather
+than stopping on the first thing that isn't there. The one case it can't finish
+for you is a **missing clone with containers still running**: compose needs its
+files, so it prints the `docker rm -f` and `docker volume rm` commands that
+work without them, and you run those.
+
+If you'd already deleted the deploy root before reading this, the leftovers to
+check for by hand are exactly the four rows of the "what it removes" table
+above minus the deploy root itself — most easily:
+
+```bash
+docker ps -a  --filter label=com.docker.compose.project=<name>
+docker volume ls --filter label=com.docker.compose.project=<name>
+ls /opt/infra/proxy/nginx/conf.d/<domain>.conf
+ls /etc/cron.d/kvox-certs-<name>
+```
+
+## 12. Deploying a fork
 
 You don't need to change anything in this CLI to deploy a fork. The
 repository URL and ref are read from your own checkout's git remote (a fork
@@ -576,7 +705,7 @@ hardcoded into the CLI. In practice: clone your fork on the VPS, build
 deploys your fork, at your fork's default branch, asking about your fork's
 own environment variables, automatically.
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
@@ -611,3 +740,4 @@ own environment variables, automatically.
 - [ ] Renewal cron installed (`kvox deploy certs renew --install-cron`, or it was written automatically on first issuance) and `doctor`'s `certificate-renewal` check passes
 - [ ] `kvox deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
 - [ ] `<deployRoot>/logs/` reviewed for anything unexpected if any step above didn't go as described
+- [ ] If you need to start over: `kvox deploy install --fresh` (local state only), or `kvox deploy uninstall --dry-run` then `--confirm <name>` (the whole deployment) — never a hand-rolled `rm -rf`, which leaves the `.env`, the volumes, the vhost and the cron behind (section 11)
