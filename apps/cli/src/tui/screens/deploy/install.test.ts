@@ -451,6 +451,14 @@ describe('the live doctor on Welcome', () => {
     expect(welcomeChecks().every((check) => check.severity === 'required')).toBe(true);
   });
 
+  it('includes deploy-root-writable, so an unwritable deploy root is caught on Welcome, not after Review', () => {
+    // Issue #245: this was the first WRITE of the whole install, discovered
+    // only after every wizard step had been answered and confirmed.
+    const ids = welcomeChecks().map((check) => check.id);
+
+    expect(ids).toContain('deploy-root-writable');
+  });
+
   it('lists every check from the first frame, with one in flight and the rest pending', () => {
     const checks = welcomeChecks().slice(0, 3);
     const results: CompletedCheck[] = [
