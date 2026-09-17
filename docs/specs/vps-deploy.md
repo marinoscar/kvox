@@ -240,7 +240,7 @@ This is the property that keeps the wizard correct against a fork's own
 edits, for the same reason `commands/api.ts` is one generic command instead
 of one hand-written subcommand per resource: a wizard with its own list of
 34 field names goes stale the day a fork adds `STRIPE_SECRET_KEY` or removes
-the Microsoft OAuth block. Instead:
+a block of its own. Instead:
 
 **`env-spec.ts`** parses `infra/compose/.env.example` structurally, not with
 a hardcoded key list:
@@ -251,9 +251,9 @@ a hardcoded key list:
   help text (this is exactly the prose already in the file — e.g. the whole
   `SECRETS_ENCRYPTION_KEY` block explaining when it's optional).
 - An active `KEY=value` line is a required-shape entry; a commented-out
-  `# KEY=value` line (the Microsoft OAuth block) is an **optional** entry —
-  present in the parsed spec, but not written to the generated `.env` unless
-  the operator opts in.
+  `# KEY=value` line (the Web Push block, `VAPID_PUBLIC_KEY` and friends) is
+  an **optional** entry — present in the parsed spec, but not written to the
+  generated `.env` unless the operator opts in.
 - A trailing inline comment on the value (`MAX_FILE_SIZE=10737418240  # 10GB
   in bytes`) is stripped from the value and folded into the help text.
   Compose's own `.env` parser does not strip these — a `.env` written
@@ -271,7 +271,7 @@ and it is deliberately small — annotations for keys that need behavior
 
 | Kind | Applies to | Behavior |
 |---|---|---|
-| `secret: true` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `POSTGRES_PASSWORD`, `AWS_SECRET_ACCESS_KEY`, the `UPTRACE_*`/`CLICKHOUSE_PASSWORD` credentials | Masked input when typed (see `promptSecret` below); the value feeds `journal.ts`'s redaction list (section 7) unconditionally, whether the operator typed it or the wizard generated it. |
+| `secret: true` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `GOOGLE_CLIENT_SECRET`, `POSTGRES_PASSWORD`, `AWS_SECRET_ACCESS_KEY`, the `UPTRACE_*` credentials (`UPTRACE_PROJECT1_TOKEN`, `UPTRACE_SECRET_KEY`, `UPTRACE_ADMIN_PASSWORD`, `UPTRACE_PGPASSWORD`, `UPTRACE_REDIS_PASSWORD`, `UPTRACE_CH_PASSWORD`) | Masked input when typed (see `promptSecret` below); the value feeds `journal.ts`'s redaction list (section 7) unconditionally, whether the operator typed it or the wizard generated it. |
 | `generate: 'base64-32'` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY` | The wizard offers "generate one" as the default action, using `node:crypto`'s `randomBytes(32).toString('base64')` **in-process** — not a shell-out to `openssl`, even though the `.env.example` comment tells a *human* to run `openssl rand -base64 32`. Shelling out would make `openssl` a new precondition this doctor check would have to verify on every VPS; Node already has the primitive. |
 | `validate: minLength(32)` | `JWT_SECRET`, `COOKIE_SECRET` | Matches the API's own documented minimum. |
 | `validate: base64Decodes32Bytes` | `SECRETS_ENCRYPTION_KEY` | Must decode to exactly 32 bytes — this is the AES-256 key `secret-cipher.ts` expects (see `rotate-secrets-encryption-key.md` for the cipher this key feeds). A key that merely looks base64 but decodes to the wrong length must be rejected here, before it becomes a boot-time failure the operator sees an hour later. |
@@ -410,6 +410,53 @@ blocks an install by itself — the fallback chain above exists precisely so it
 doesn't — but the operator now sees *which* of the five problems they have,
 instead of a wizard that silently asked nothing and a Review screen that
 could not say why.
+
+### 6.2 Paginating the catch-all step (issue #240)
+
+`--all` walks every remaining key `INSTALL_WIZARD_STEPS` doesn't already
+claim into one step, `optional` (`CATCH_ALL_STEP_ID` in
+`tui/screens/deploy/install-model.ts`). The ink TUI's `Form` renders every
+field it is handed, and a catch-all key costs two rows — its keep/edit/skip
+list, then its value — so handing it the whole remainder produced roughly 37
+keys as 74 rows in one frame: the focused field scrolled out of the visible
+window, so the cursor was invisible and every keystroke looked like it did
+nothing. This was not merely awkward; the step could not be completed at
+all.
+
+The fix (`catchAllPages`) splits that one step into several, one page per
+run of consecutive keys sharing the same `.env.example` **section banner**
+(`EnvSpec.section`, from §6's structural parse) — `Web Push`,
+`Observability`, and so on — each capped at `CATCH_ALL_PAGE_SIZE` keys (6, so
+12 rows: room for the intro, the rail, the hints and a check line inside a
+conventional 24-row terminal). Each page draws its section name and a
+`page N of M` marker above the fields.
+
+**Sections, not a running count, and deliberately so.** Chunking every six
+keys regardless of origin would have been less code, and would also have cut
+a coherent section — Observability, at roughly a dozen keys — in half across
+two pages with no relationship to anything the operator recognises. Splitting
+on the template's own banners instead means each page corresponds to a block
+the operator has already seen once, in `.env.example` itself, in the same
+order that file lists them. The cap still applies **within** a section,
+because nothing stops a fork from putting thirty keys under one banner, and
+that must not bring back the frame this feature exists to prevent.
+
+**The rail still reads as ten steps.** `railSteps` collapses adjacent pages
+sharing the same title into one rail entry, since a catch-all with seven
+pages is several *steps* to the renderer but one *thing* to the operator — a
+rail that counted pages would report sixteen or more steps for a wizard that
+otherwise asks about ten questions.
+
+One more, smaller fix travelled with the pagination work:
+`optionModeChoicesFor` gives a key with no template value (commented out, or
+an empty default) the label "Leave unset" in place of "Keep" — the mode is
+still `keep` and still writes nothing, but "Keep" over a blank value row was
+asking the operator to keep something the screen never showed them.
+
+This step is a TUI-only concern. `env-wizard.ts`'s readline fallback (used by
+a real terminal without the ink TUI, and by every `--non-interactive` run)
+already asks one key at a time and has no "everything on screen" frame to
+overflow, so it is unaffected and needs no pagination of its own.
 
 ## 7. Install pipeline
 

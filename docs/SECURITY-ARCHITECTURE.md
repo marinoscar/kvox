@@ -1391,12 +1391,13 @@ SECRETS_ENCRYPTION_KEY=
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_CALLBACK_URL=http://localhost:3535/api/auth/google/callback
-
-# Microsoft OAuth (Optional)
-MICROSOFT_CLIENT_ID=your-microsoft-client-id
-MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
-MICROSOFT_CALLBACK_URL=http://localhost:3535/api/auth/microsoft/callback
 ```
+
+Google is the only OAuth provider this application implements today — there
+is no Microsoft (or other) Passport strategy, dependency, or route, and
+`getEnabledProviders` only ever returns `google`. A Microsoft block was
+removed from here in issue #241 for exactly this reason: it documented
+configuration the application could not act on.
 
 **Database:**
 ```bash

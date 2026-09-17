@@ -1,12 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { buildInstallSteps } from '../../../deploy/install.js';
 import { metadataFor, type Suggestion } from '../../../deploy/env-metadata.js';
-import { parseEnvExample } from '../../../deploy/env-spec.js';
+import { parseEnvExample, type EnvVarSpec } from '../../../deploy/env-spec.js';
 import { unknownServerFacts } from '../../../deploy/server-facts.js';
 import {
   DOMAIN_FIELD,
   INSTALL_WIZARD_STEPS,
+  resolveSteps,
 } from '../../../deploy/wizard/steps.js';
 import type { CompletedCheck } from '../../../deploy/checks/index.js';
 import {
@@ -19,6 +24,7 @@ import {
 import {
   ABORT_DIALOG,
   ALL_FIELD,
+  CATCH_ALL_PAGE_SIZE,
   GROUPS_FIELD,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
@@ -39,9 +45,13 @@ import {
   formatDuration,
   groupsOf,
   installSteps,
+  optionModeChoicesFor,
   optionModeField,
+  CATCH_ALL_STEP_ID,
+  isCatchAllStep,
   prepareStep,
   pipelineItems,
+  railIndexFor,
   railSteps,
   reviewRows,
   secretModeField,
@@ -139,6 +149,20 @@ function stepsFor(options: Parameters<typeof installSteps>[1] = {}): InstallStep
 
 const FULL = stepsFor({ all: true, groups: ['storage'] });
 
+/**
+ * The REAL template (#240, #241) — not the small fixture above.
+ *
+ * A fixture cannot regress when someone adds twenty keys to .env.example, so
+ * the pagination properties below (no page over CATCH_ALL_PAGE_SIZE, a
+ * section splitting into several pages, VAPID never being asked) are pinned
+ * against the file the wizard actually reads, the same way
+ * deploy/wizard/steps.test.ts and deploy/env-spec.test.ts already do.
+ */
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REAL_TEMPLATE_PATH = join(HERE, '..', '..', '..', '..', '..', '..', 'infra', 'compose', '.env.example');
+const REAL_SPECS = parseEnvExample(readFileSync(REAL_TEMPLATE_PATH, 'utf8'));
+const REAL_GROUPS = ['observability', 'storage'] as const;
+
 function stepById(id: string, steps: readonly InstallStep[] = FULL): InstallStep {
   const found = steps.find((step) => step.id === id);
   if (found === undefined) throw new Error(`no step ${id}`);
@@ -162,7 +186,12 @@ function fail(id: string, overrides: Partial<CompletedCheck> = {}): CompletedChe
 
 describe('installSteps', () => {
   it('walks Welcome and then steps.ts, in steps.ts order, ending on Review', () => {
-    expect(FULL.map((step) => step.id)).toEqual([
+    // Catch-all pages (#240) collapse back to the one step they came from:
+    // this pins the ORDER of the wizard against steps.ts, and how many pages
+    // the terminal needed for the last one is a separate question.
+    const ids = FULL.map((step) => (isCatchAllStep(step.id) ? CATCH_ALL_STEP_ID : step.id));
+
+    expect([...new Set(ids)]).toEqual([
       WELCOME_STEP_ID,
       ...INSTALL_WIZARD_STEPS.map((step) => step.id),
     ]);
@@ -170,8 +199,8 @@ describe('installSteps', () => {
   });
 
   it('keeps the catch-all step only when the operator asked to review everything', () => {
-    expect(stepsFor().map((step) => step.id)).not.toContain('optional');
-    expect(stepsFor({ all: true }).map((step) => step.id)).toContain('optional');
+    expect(stepsFor().some((step) => isCatchAllStep(step.id))).toBe(false);
+    expect(stepsFor({ all: true }).some((step) => isCatchAllStep(step.id))).toBe(true);
   });
 
   it('drops the storage step when the group was not opted into', () => {
@@ -645,7 +674,11 @@ describe('the Done and Failed models', () => {
 });
 
 describe('the catch-all step', () => {
-  const step = stepById('optional');
+  // The catch-all is now SEVERAL steps, one per template section (#240), so
+  // this reaches for the first page rather than a step called `optional`.
+  // `PORT` is in the first section, which is why these cases still find it.
+  const step = FULL.find((candidate) => isCatchAllStep(candidate.id));
+  if (step === undefined) throw new Error('no catch-all page');
 
   it('offers keep, edit or skip per key, defaulting to keep', () => {
     const fields = formFieldsFor(step, { specs: SPECS, answers: {} });
@@ -678,6 +711,213 @@ describe('the catch-all step', () => {
     const prepared = prepareStep({}, stepById('database'), SPECS);
 
     expect(prepared[optionModeField('POSTGRES_HOST')]).toBeUndefined();
+  });
+});
+
+// =============================================================================
+// Catch-all pagination against the REAL template (#240)
+// =============================================================================
+//
+// `installSteps({ all: true, ... })` is the wizard's own resolution path, so
+// these run it against infra/compose/.env.example rather than a fixture -
+// exactly the reason a real multi-page section (Background Job Queue, with
+// eleven keys no earlier step claims) exists to exercise here without being
+// invented for the test.
+// =============================================================================
+
+/** What `metadataFor` says an unpaginated catch-all would have asked - the
+ *  same `never`/`fixed`/`derive` exclusions `installSteps` applies before
+ *  handing a step's fields to `catchAllPages`. Recomputed independently here
+ *  (rather than importing the private `isAsked`) so this test is a genuine
+ *  second opinion, not a restatement of the same line of code. */
+function isAskedForTest(metadata: ReturnType<typeof metadataFor>): boolean {
+  return metadata.never !== true && metadata.fixed === undefined && metadata.derive === undefined;
+}
+
+describe('catch-all pagination against the real template (#240)', () => {
+  const paginated = installSteps(REAL_SPECS, { all: true, groups: REAL_GROUPS });
+  const pages = paginated.filter((step) => isCatchAllStep(step.id));
+  const byKey = new Map(REAL_SPECS.map((spec) => [spec.key, spec]));
+
+  const resolvedCatchAll = resolveSteps(INSTALL_WIZARD_STEPS, REAL_SPECS, { groups: [...REAL_GROUPS] }).find(
+    (entry) => entry.step.id === CATCH_ALL_STEP_ID,
+  );
+  if (resolvedCatchAll === undefined) throw new Error('steps.ts has no catch-all step');
+  const expectedFields = resolvedCatchAll.fields.filter((ref) => isAskedForTest(metadataFor(ref)));
+
+  it('produces more than one page against the real template, so these cases prove something', () => {
+    expect(pages.length).toBeGreaterThan(1);
+  });
+
+  it('never exceeds CATCH_ALL_PAGE_SIZE fields on any generated page', () => {
+    for (const page of pages) {
+      expect(page.fields.length, page.id).toBeLessThanOrEqual(CATCH_ALL_PAGE_SIZE);
+    }
+  });
+
+  it('never mixes two sections on one page', () => {
+    for (const page of pages) {
+      const sections = new Set(page.fields.map((key) => byKey.get(key)?.section));
+      expect(sections.size, page.id).toBe(1);
+      expect([...sections][0], page.id).toBe(page.page?.section);
+    }
+  });
+
+  it('splits a section with more than CATCH_ALL_PAGE_SIZE keys into several pages, all naming that section', () => {
+    const bySection = new Map<string, string[]>();
+    for (const key of expectedFields) {
+      const section = byKey.get(key)?.section ?? '';
+      bySection.set(section, [...(bySection.get(section) ?? []), key]);
+    }
+    const overflowing = [...bySection.entries()].filter(([, keys]) => keys.length > CATCH_ALL_PAGE_SIZE);
+    // Guards against a future template edit quietly removing the one section
+    // big enough to exercise this - Background Job Queue, at the time of
+    // writing, but named nowhere above so this does not pin that name.
+    expect(overflowing.length).toBeGreaterThan(0);
+
+    for (const [section] of overflowing) {
+      const sectionPages = pages.filter((page) => page.page?.section === section);
+      expect(sectionPages.length, section).toBeGreaterThan(1);
+    }
+  });
+
+  it('numbers every page 1..total, and every page reports the SAME total', () => {
+    expect(pages.map((page) => page.page?.total)).toEqual(pages.map(() => pages.length));
+    expect(pages.map((page) => page.page?.index)).toEqual(pages.map((_, index) => index + 1));
+  });
+
+  it('gives every page a unique, catch-all id, with optional: true surviving onto it', () => {
+    const ids = pages.map((page) => page.id);
+    expect(new Set(ids).size).toBe(ids.length);
+
+    for (const page of pages) {
+      expect(isCatchAllStep(page.id)).toBe(true);
+      expect(page.optional).toBe(true);
+    }
+  });
+
+  it('the union of every page, in order, is exactly what the unpaginated catch-all would have asked', () => {
+    const union = pages.flatMap((page) => page.fields);
+
+    expect(union).toEqual(expectedFields);
+    // Nothing duplicated across pages, stated separately from the ordered
+    // equality above so a future refactor cannot pass this by accident.
+    expect(new Set(union).size).toBe(union.length);
+  });
+
+  it('generates no catch-all page at all with all: false', () => {
+    const essentialOnly = installSteps(REAL_SPECS, { all: false, groups: REAL_GROUPS });
+
+    expect(essentialOnly.some((step) => isCatchAllStep(step.id))).toBe(false);
+  });
+
+  it('are never asked: the three VAPID_* keys never appear as a field on any generated step (#241)', () => {
+    // Through installSteps - the wizard's own step-resolution path - rather
+    // than by reading ENV_METADATA back, so this proves the wizard actually
+    // stops asking rather than merely that the registry says it should.
+    const asked = new Set(paginated.flatMap((step) => step.fields));
+
+    for (const key of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) {
+      expect(asked.has(key), key).toBe(false);
+    }
+  });
+});
+
+function fakeRailStep(id: string, title: string): InstallStep {
+  return { id, title, fields: [] };
+}
+
+describe('railSteps and railIndexFor (#240)', () => {
+  it('collapses only ADJACENT steps with the same title', () => {
+    const steps: InstallStep[] = [
+      fakeRailStep('a1', 'Alpha'),
+      fakeRailStep('a2', 'Alpha'),
+      fakeRailStep('b1', 'Beta'),
+      // Alpha again, but not adjacent to a1/a2 - must NOT collapse with them.
+      fakeRailStep('a3', 'Alpha'),
+    ];
+
+    const rail = railSteps(steps);
+
+    expect(rail.map((entry) => entry.id)).toEqual(['a1', 'b1', 'a3']);
+    // The number of distinct adjacent titles: Alpha, Beta, Alpha-again.
+    expect(rail).toHaveLength(3);
+  });
+
+  it('maps every step index to its rail entry - the first, the last, and every page of a multi-page catch-all alike', () => {
+    const paginated = installSteps(REAL_SPECS, { all: true, groups: REAL_GROUPS });
+    const rail = railSteps(paginated);
+
+    expect(railIndexFor(paginated, 0)).toBe(0);
+    expect(railIndexFor(paginated, paginated.length - 1)).toBe(rail.length - 1);
+
+    const pageIndices = paginated
+      .map((step, index) => ({ id: step.id, index }))
+      .filter(({ id }) => isCatchAllStep(id));
+    // Otherwise this proves nothing: the real template needs more than one
+    // catch-all page for "every page maps to the same rail index" to mean
+    // anything.
+    expect(pageIndices.length).toBeGreaterThan(1);
+
+    const railIndices = new Set(pageIndices.map(({ index }) => railIndexFor(paginated, index)));
+    expect(railIndices.size).toBe(1);
+  });
+});
+
+describe('optionModeChoicesFor (#240)', () => {
+  const withTemplateValue: EnvVarSpec = {
+    key: 'PORT',
+    section: 'Application',
+    defaultValue: '3000',
+    help: '',
+    optional: false,
+    line: 1,
+  };
+  const optionalNoDefault: EnvVarSpec = {
+    key: 'S3_ENDPOINT',
+    section: 'Storage',
+    defaultValue: '',
+    help: '',
+    optional: true,
+    line: 1,
+  };
+  const requiredButBlank: EnvVarSpec = {
+    key: 'SECRETS_ENCRYPTION_KEY',
+    section: 'JWT / Session',
+    defaultValue: '',
+    help: '',
+    optional: false,
+    line: 1,
+  };
+
+  it('labels Keep / Edit / Skip for a key the template ships with a real value', () => {
+    expect(optionModeChoicesFor(withTemplateValue).map((choice) => choice.label)).toEqual([
+      'Keep',
+      'Edit',
+      'Skip',
+    ]);
+  });
+
+  it('labels Leave unset / Set a value / Skip for a key marked optional', () => {
+    expect(optionModeChoicesFor(optionalNoDefault).map((choice) => choice.label)).toEqual([
+      'Leave unset',
+      'Set a value',
+      'Skip',
+    ]);
+  });
+
+  it('labels Leave unset / Set a value / Skip for a required key the template ships with no value', () => {
+    expect(optionModeChoicesFor(requiredButBlank).map((choice) => choice.label)).toEqual([
+      'Leave unset',
+      'Set a value',
+      'Skip',
+    ]);
+  });
+
+  it('keeps the values exactly keep/edit/skip in every case - the mode is the contract, the label is only the wording', () => {
+    for (const spec of [withTemplateValue, optionalNoDefault, requiredButBlank, undefined]) {
+      expect(optionModeChoicesFor(spec).map((choice) => choice.value)).toEqual(['keep', 'edit', 'skip']);
+    }
   });
 });
 

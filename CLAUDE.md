@@ -1248,7 +1248,6 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 **Observability:**
 - `OTEL_ENABLED` - Enable OpenTelemetry (default: true)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` - OTEL Collector endpoint
-- `UPTRACE_DSN` - Uptrace connection string
 
 ## Common Patterns
 

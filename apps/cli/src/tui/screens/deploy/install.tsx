@@ -87,6 +87,7 @@ import {
   isTrue,
   pipelineItems,
   railSteps,
+  railIndexFor,
   requiredFailures,
   stepCheckItems,
   reviewRows,
@@ -715,7 +716,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       <WizardFrame
         title={`Install — running (${formatDuration(elapsed)})`}
         steps={railSteps(steps)}
-        current={steps.length - 1}
+        current={railSteps(steps).length - 1}
         hints={confirming ? ['enter select'] : ['esc stop', '↑↓ scroll the log']}
       >
         {confirming ? (
@@ -754,7 +755,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       <WizardFrame
         title="Install — done"
         steps={railSteps(steps)}
-        current={steps.length - 1}
+        current={railSteps(steps).length - 1}
         hints={['enter return to the menu']}
       >
         <Text color="green" bold>
@@ -776,7 +777,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       <WizardFrame
         title="Install — failed"
         steps={railSteps(steps)}
-        current={steps.length - 1}
+        current={railSteps(steps).length - 1}
         hints={['enter return to the menu']}
       >
         <ErrorNotice
@@ -797,7 +798,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       <WizardFrame
         title="Install — stopped"
         steps={railSteps(steps)}
-        current={steps.length - 1}
+        current={railSteps(steps).length - 1}
         hints={['enter return to the menu']}
       >
         <Text color="yellow" bold>
@@ -845,10 +846,16 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     <WizardFrame
       title="Install"
       steps={railSteps(steps)}
-      current={wizard.index}
+      current={railIndexFor(steps, wizard.index)}
       hints={hintsFor(step, reviewing)}
     >
       <Box flexDirection="column">
+        {step.page === undefined ? null : (
+          <Text color="cyan">
+            {step.page.section === '' ? 'Other variables' : step.page.section}
+            {` — page ${String(step.page.index)} of ${String(step.page.total)}`}
+          </Text>
+        )}
         {intro.map((line, index) => (
           <Text key={`${index}:${line}`} dimColor>
             {line === '' ? ' ' : line}

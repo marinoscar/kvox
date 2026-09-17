@@ -64,6 +64,13 @@ services:
       - UPTRACE_ADMIN_PASSWORD=${UPTRACE_ADMIN_PASSWORD:-admin}
       - UPTRACE_ADMIN_EMAIL=${UPTRACE_ADMIN_EMAIL:-admin@localhost}
       - UPTRACE_SITE_URL=${UPTRACE_SITE_URL:-http://localhost:14318}
+      # Read by infra/otel/uptrace.yml, and until #241 never passed in here -
+      # so setting them in .env did nothing and the inline defaults always
+      # won. The defaults below reproduce exactly what those inline ones
+      # resolved to, so wiring them changes no running deployment.
+      - UPTRACE_CH_USER=${UPTRACE_CH_USER:-default}
+      - UPTRACE_CH_PASSWORD=${UPTRACE_CH_PASSWORD:-}
+      - UPTRACE_REDIS_PASSWORD=${UPTRACE_REDIS_PASSWORD:-}
     depends_on:
       clickhouse:
         condition: service_healthy

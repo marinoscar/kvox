@@ -70,6 +70,26 @@ export const REVIEW_STEP_ID = 'review';
 /** The step every key no earlier step claimed lands in (`steps.ts`). */
 export const CATCH_ALL_STEP_ID = 'optional';
 
+/**
+ * Keys on one page of the catch-all step (#240).
+ *
+ * `Form` renders EVERY field it is given, and a catch-all key costs two rows
+ * (its keep/edit/skip list, then its value). Handing it the whole remainder
+ * produced a seventy-four row frame: the focused field scrolled out of view,
+ * so the cursor was invisible and every keystroke looked like it did nothing.
+ * The step was not slow or awkward, it was impossible to finish.
+ *
+ * Six keys is twelve rows, which leaves the intro, the rail, the hints and a
+ * check line inside a conventional 24-row terminal with room to spare. It is
+ * a ceiling rather than a target: a section with two keys stays one page.
+ */
+export const CATCH_ALL_PAGE_SIZE = 6;
+
+/** True for the catch-all step and every page generated from it. */
+export function isCatchAllStep(id: string): boolean {
+  return id === CATCH_ALL_STEP_ID || id.startsWith(`${CATCH_ALL_STEP_ID}:`);
+}
+
 /** Answers that are wizard state rather than environment variables. */
 export const INTERNAL_PREFIX = '__';
 export const NAME_FIELD = '__name';
@@ -110,6 +130,32 @@ export const OPTION_MODE_CHOICES: ReadonlyArray<SelectChoice<OptionMode>> = [
   { value: 'edit', label: 'Edit', hint: 'Type a value in the field below.' },
   { value: 'skip', label: 'Skip', hint: 'Leave the key out of the environment file.' },
 ];
+
+/**
+ * The same three answers, worded for what this key actually offers (#240).
+ *
+ * A key the template ships commented out, or with an empty value, has
+ * nothing to keep - and "Keep" over a blank value row asks the operator to
+ * keep something they cannot see. The first choice still WRITES nothing and
+ * is still `keep`; only the words change, to say that the application's own
+ * default applies. The mode is the contract, the label is the explanation,
+ * and conflating the two is what made this read as a broken field.
+ */
+export function optionModeChoicesFor(
+  spec: EnvVarSpec | undefined,
+): ReadonlyArray<SelectChoice<OptionMode>> {
+  const hasValue = (spec?.defaultValue ?? '') !== '' && spec?.optional !== true;
+  if (hasValue) return OPTION_MODE_CHOICES;
+  return [
+    {
+      value: 'keep',
+      label: 'Leave unset',
+      hint: "The template ships no value; the application's own default applies.",
+    },
+    { value: 'edit', label: 'Set a value', hint: 'Type a value in the field below.' },
+    { value: 'skip', label: 'Skip', hint: 'Leave the key out of the environment file.' },
+  ];
+}
 
 export const SECRET_MODE_CHOICES: ReadonlyArray<SelectChoice<SecretMode>> = [
   {
@@ -180,6 +226,12 @@ export function groupsOf(answers: InstallAnswers): EnvGroup[] {
 export interface InstallStep extends WizardStep {
   /** The field refs this step puts on screen, in order. */
   fields: readonly string[];
+  /**
+   * Set on a generated catch-all page (#240): which template section it
+   * covers, and where it sits among the pages. Drawn above the fields, and
+   * the reason a wall of variables reads as progress rather than as a wall.
+   */
+  page?: { section: string; index: number; total: number } | undefined;
   /** The `steps.ts` step this renders, when it renders one. */
   data?: DataStep | undefined;
   /** Every field may be left blank. */
@@ -250,6 +302,11 @@ export function installSteps(
     const all = [...asked, ...(EXTRA_FIELDS[step.id] ?? [])];
     if (step.id !== REVIEW_STEP_ID && all.length === 0) continue;
 
+    if (isCatchAllStep(step.id)) {
+      steps.push(...catchAllPages(step, all, specs));
+      continue;
+    }
+
     steps.push({
       id: step.id,
       title: step.title,
@@ -262,9 +319,87 @@ export function installSteps(
   return steps;
 }
 
-/** The `WizardStep` pairs `WizardFrame` draws its rail from. */
+/**
+ * The catch-all, split into pages the terminal can actually draw.
+ *
+ * Split on the TEMPLATE'S OWN SECTION BANNERS rather than on a running count.
+ * `parseEnvExample` already records the banner each key appeared under, so
+ * the pages come out as `Web Push`, `Device Authorization Flow`,
+ * `Observability` — groups an operator recognises, in the order the file
+ * they were copied from lists them. Chunking by six alone would have been
+ * fewer lines of code and would have split Observability down the middle.
+ *
+ * The cap still applies WITHIN a section, because a fork is free to put
+ * thirty keys under one banner and that must not bring back the frame this
+ * function exists to prevent.
+ */
+function catchAllPages(
+  step: DataStep,
+  fields: readonly string[],
+  specs: readonly EnvVarSpec[],
+): InstallStep[] {
+  if (fields.length === 0) return [];
+
+  const byKey = new Map(specs.map((spec) => [spec.key, spec]));
+  const chunks: Array<{ section: string; fields: string[] }> = [];
+
+  for (const ref of fields) {
+    const section = byKey.get(ref)?.section ?? '';
+    const open = chunks[chunks.length - 1];
+    if (open !== undefined && open.section === section && open.fields.length < CATCH_ALL_PAGE_SIZE) {
+      open.fields.push(ref);
+      continue;
+    }
+    chunks.push({ section, fields: [ref] });
+  }
+
+  return chunks.map((chunk, index) => ({
+    // A distinct id per page: `useWizard` and `Form` both key on it, and two
+    // pages sharing one id would make the second reuse the first's field
+    // cursor. `isCatchAllStep` is what keeps every catch-all behaviour
+    // attached to them.
+    id: `${CATCH_ALL_STEP_ID}:${String(index)}`,
+    // Deliberately identical across pages: `railSteps` collapses equal
+    // adjacent titles into ONE rail entry, so seven pages do not turn a
+    // ten-entry rail into a sixteen-entry one that wraps.
+    title: step.title,
+    fields: chunk.fields,
+    data: step,
+    page: { section: chunk.section, index: index + 1, total: chunks.length },
+    ...(step.optional === undefined ? {} : { optional: step.optional }),
+  }));
+}
+
+/**
+ * The `WizardStep` pairs `WizardFrame` draws its rail from.
+ *
+ * Adjacent steps with the SAME TITLE collapse into one entry (#240). The
+ * catch-all is several steps so the terminal can draw it, but it is one
+ * thing to an operator, and a rail that counted its pages would report
+ * sixteen steps for a wizard that asks ten questions.
+ */
 export function railSteps(steps: readonly InstallStep[]): WizardStep[] {
-  return steps.map((step) => ({ id: step.id, title: step.title }));
+  const rail: WizardStep[] = [];
+  for (const step of steps) {
+    if (rail[rail.length - 1]?.title === step.title) continue;
+    rail.push({ id: step.id, title: step.title });
+  }
+  return rail;
+}
+
+/** Which rail entry `index` (a step index) is drawn under. */
+export function railIndexFor(steps: readonly InstallStep[], index: number): number {
+  let rail = -1;
+  let previous: string | undefined;
+  for (let position = 0; position < steps.length; position += 1) {
+    const title = steps[position]?.title;
+    if (title !== previous) {
+      rail += 1;
+      previous = title;
+    }
+    if (position === index) return Math.max(0, rail);
+  }
+  return Math.max(0, rail);
 }
 
 // -----------------------------------------------------------------------------
@@ -443,12 +578,12 @@ export function formFieldsFor(step: InstallStep, input: FormInput): FormFieldSpe
     // template. "Keep it" is the common case there and must not require
     // retyping the value, so the three outcomes are a list rather than a
     // convention about what a blank line means.
-    if (step.id === CATCH_ALL_STEP_ID) {
+    if (isCatchAllStep(step.id)) {
       fields.push({
         kind: 'select',
         key: optionModeField(ref),
         label: ref,
-        choices: OPTION_MODE_CHOICES,
+        choices: optionModeChoicesFor(spec),
         ...(helpFor(spec, metadata) === '' ? {} : { help: helpFor(spec, metadata) }),
       });
       fields.push({
@@ -576,7 +711,7 @@ export function ensureOptionModes(
   step: InstallStep,
   specs: readonly EnvVarSpec[],
 ): InstallAnswers {
-  if (step.id !== CATCH_ALL_STEP_ID) return answers;
+  if (!isCatchAllStep(step.id)) return answers;
 
   const byKey = new Map(specs.map((spec) => [spec.key, spec]));
   let next = answers;

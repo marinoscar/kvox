@@ -22,7 +22,7 @@ import type { ServerFacts } from './server-facts.js';
 // =============================================================================
 
 /** Groups an operator opts into. Their keys are skipped otherwise. */
-export type EnvGroup = 'observability' | 'storage' | 'microsoft-oauth';
+export type EnvGroup = 'observability' | 'storage';
 
 export interface DeriveContext {
   /** The public hostname the deployment is being published under. */
@@ -347,12 +347,18 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
   GOOGLE_CALLBACK_URL: {
     derive: ({ domain }) => `https://${domain}/api/auth/google/callback`,
   },
-  MICROSOFT_CLIENT_ID: { group: 'microsoft-oauth' },
-  MICROSOFT_CLIENT_SECRET: { group: 'microsoft-oauth', secret: true },
-  MICROSOFT_CALLBACK_URL: {
-    group: 'microsoft-oauth',
-    derive: ({ domain }) => `https://${domain}/api/auth/microsoft/callback`,
-  },
+
+  // --- Web Push ------------------------------------------------------------
+  // NEVER asked, but deliberately still READ (#241). `/admin/settings/push`
+  // generates, rotates and enables these live since #355, and that is the
+  // path an operator should use. `PushConfigService.resolveFromEnv` remains
+  // case 1 of four - with no stored configuration at all these are the
+  // fallback - so they stay in the template and stay documented; the wizard
+  // simply stops pointing a first-time install at the wrong mechanism. An
+  // operator who wants the env path writes them into .env by hand.
+  VAPID_PUBLIC_KEY: { never: true },
+  VAPID_PRIVATE_KEY: { never: true, secret: true },
+  VAPID_SUBJECT: { never: true },
 
   // --- Admin bootstrap -----------------------------------------------------
   // Without it nobody can become an admin: the seed writes the allowlist row,
@@ -379,10 +385,7 @@ export const ENV_METADATA: Readonly<Record<string, EnvVarMetadata>> = {
   UPTRACE_SITE_URL: { group: 'observability' },
   UPTRACE_REDIS_PASSWORD: { group: 'observability', secret: true },
   UPTRACE_CH_PASSWORD: { group: 'observability', secret: true },
-  UPTRACE_DSN: { group: 'observability', secret: true },
   UPTRACE_CH_USER: { group: 'observability' },
-  CLICKHOUSE_USER: { group: 'observability' },
-  CLICKHOUSE_PASSWORD: { group: 'observability', secret: true },
 
   // --- Storage -------------------------------------------------------------
   S3_BUCKET: { group: 'storage' },

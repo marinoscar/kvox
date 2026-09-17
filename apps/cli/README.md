@@ -634,6 +634,29 @@ that server. `--non-interactive` skips every prompt and fails, listing
 what's unresolved, rather than asking; pair it with `--all` to review every
 environment variable instead of only the essential dozen.
 
+With `--all`, the interactive (ink) wizard's remaining "Everything else" step
+is **paginated, one page per `.env.example` section banner** (issue #240),
+capped at six keys a page. Rendering all ~37 leftover keys at once (74 rows —
+each key costs a keep/edit/skip row plus a value row) pushed the focused
+field off-screen, so the step could not be completed at all; splitting on the
+template's own section headings (`Web Push`, `Observability`, …) instead of a
+running count keeps a section's keys together and lets each page carry the
+section name and a `page N of M` marker the operator can match against the
+file they copied from. The rail still shows one entry for the whole step —
+adjacent pages collapse into it — so the wizard still reads as ten steps no
+matter how many pages the catch-all splits into. A key the template ships
+with no value (commented out, or blank) now offers "Leave unset" in place of
+"Keep", since there is nothing behind a blank field to keep.
+
+The wizard also no longer asks about Web Push (`VAPID_PUBLIC_KEY` /
+`VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`), even under `--all` (issue #241): the
+admin UI at `/admin/settings/push` generates, rotates and enables these live,
+with no restart, and is the intended path. The three variables are still
+read — `PushConfigService.resolveActiveVapidConfig()` falls back to them when
+no configuration has been saved through that page — so an operator who wants
+the environment-variable path can still set them by hand in `.env`; see
+[`docs/runbooks/vapid-keys.md`](../../docs/runbooks/vapid-keys.md).
+
 The environment is collected in **steps** — domain, database, secrets,
 Google OAuth, admin, resources — and each is verified before the next
 question: the DNS record when the domain is typed, the connection,
