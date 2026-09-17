@@ -477,6 +477,19 @@ export function buildUninstallSteps(): DeployStep<UninstallContext>[] {
         // repo/, .env, logs/, data/, deploy-info/ and the state file - named
         // one by one so `--dry-run` prints a list rather than a promise, and
         // so `--keep-env` can spare exactly one of them.
+        // THE JOURNAL LIVES AT `<deployRoot>/logs/`, which this step is about
+        // to delete. Its last useful line is written here, while its files
+        // still exist, and it is then stood down - otherwise every removal
+        // below would append to a file that is gone and trip journal.ts's
+        // degraded-mode warning on an otherwise perfectly clean run.
+        //
+        // So an uninstall's journal survives only a FAILED uninstall, which
+        // is exactly the run somebody wants a log of. A successful one
+        // deletes its own log along with everything else, by design: `logs/`
+        // is part of the deployment being removed.
+        context.journal.line(`Removing ${context.options.deployRoot}`);
+        context.journal = nullJournal();
+
         const keep = context.options.keepEnv === true ? [ENV_FILENAME] : [];
         const result = removeDeployRoot({
           deployRoot: context.options.deployRoot,
@@ -596,10 +609,14 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
     state = undefined;
   }
 
-  // A dry run writes NOTHING, the journal included - see `nullJournal`.
-  const journal = dryRun
-    ? nullJournal()
-    : openJournal({ deployRoot: options.deployRoot, command: 'uninstall' });
+  // A dry run writes NOTHING, the journal included - see `nullJournal`. Nor
+  // does a deployment whose root is already gone: `openJournal` creates
+  // `<deployRoot>/logs/`, which would resurrect the very directory this run
+  // exists to remove, only to delete it again three steps later.
+  const journal =
+    dryRun || !existsSync(options.deployRoot)
+      ? nullJournal()
+      : openJournal({ deployRoot: options.deployRoot, command: 'uninstall' });
 
   const context: UninstallContext = {
     options,
@@ -616,7 +633,7 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
   const result = await runPipeline(buildUninstallSteps(), context);
 
   if (result.failed !== undefined) {
-    journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
+    context.journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     throw pipelineFailure(
       result,
       `${result.failed.title} failed: ${result.failed.detail ?? 'unknown error'}\n` +
@@ -625,10 +642,12 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
     );
   }
 
-  // The journal lives at `<deployRoot>/logs/`, which the `deploy-root` step
-  // has just deleted. Finishing it is a no-op on a path that no longer
-  // exists, and degrades to one warning if it is not - journal.ts's own rule.
-  journal.finish('success');
+  // Through `context.journal`, NOT the `journal` const above: the
+  // `deploy-root` step stood the real one down before deleting `logs/`, so
+  // this is a no-op on the success path. Finishing the deleted journal
+  // instead would append to a file that is gone and print journal.ts's
+  // degraded-mode warning at the end of every clean uninstall.
+  context.journal.finish('success');
 
   return {
     name: options.name,
@@ -637,7 +656,9 @@ export async function runUninstall(input: UninstallOptions): Promise<UninstallRe
     removed: context.removed,
     kept: context.kept,
     ...(context.backup === undefined ? {} : { envBackupPath: context.backup.path }),
-    ...(journal.path === '' ? {} : { journalPath: journal.path }),
+    // Reported only when it is still there to read: a successful uninstall
+    // deletes `logs/` along with the rest of the deploy root.
+    ...(journal.path !== '' && existsSync(journal.path) ? { journalPath: journal.path } : {}),
     ...(context.databaseCommand === undefined ? {} : { databaseCommand: context.databaseCommand }),
     warnings: context.warnings,
   };
