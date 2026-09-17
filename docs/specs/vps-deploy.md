@@ -80,7 +80,7 @@ at once.
 | **Runs on the VPS** | The operator SSHes in with their own credentials, then runs `kvox deploy install`. The CLI never dials out over SSH itself. | An SSH client or library (`ssh2`) in the CLI; a laptop-driven orchestrator; managing the operator's SSH keys. |
 | **Code delivery is git + build** | `git clone`/`git fetch` + `docker compose build` on the server, every time. No image registry in the loop. | Pulling pre-built images from GHCR (see the rejected-alternatives table — the workflow that pushes them exists, but nothing downstream of it does). |
 | **TLS via a shared host proxy** | A single nginx + certbot stack at `/opt/infra/proxy`, outside this repository, terminates TLS for every app on the box. The app stack binds `127.0.0.1` only. | Each app owning its own port 443, its own certbot timer, its own nginx process. |
-| **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. |
+| **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. Amended narrowly by §20 (issue #238): when the database itself is the one thing missing, the install wizard may run `CREATE DATABASE` on explicit request — nothing else about this decision changes. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. Roles, extensions, tuning, backups and anything destructive stay entirely out of scope, §20 included. |
 
 The git-clone-on-server model is also the answer to "how does this stay safe
 for a fork of the template": nothing about repo URL or ref is hardcoded
@@ -1112,3 +1112,85 @@ every admin.
 **Test fixture.** `apps/api/src/about/__fixtures__/deploy-info.json` is the
 shared vector both sides are tested against, so the writer and the reader
 cannot drift without one of the two suites noticing.
+
+## 20. Creating the database, on request only (issue #238)
+
+Decision 4 of section 1 says the operator supplies `POSTGRES_*` for a
+database that already exists, and that deploy validates it rather than
+managing it. That decision holds. What issue #238 adds is one narrow,
+explicit exception to it, not a reversal of it.
+
+**The exception, and its exact bounds.** When the install wizard's Database
+step fails `database-exists` — and only that check, and only with PostgreSQL's
+own `3D000` (`invalid_catalog_name`) — it now offers to run one statement,
+`CREATE DATABASE <name>`, against the `postgres` maintenance database, using
+the very credentials the operator just typed. Everything else about decision 4
+is unchanged: no role is created or altered, no extension is installed, no
+table is touched, nothing is ever dropped. `database-privileges` and
+`database-vector-extension` — both of which `requires: ['database-exists']`
+and so reported `skip` up to this point — then run for the first time against
+a real database, exactly as they would have if the database had existed
+before the wizard started.
+
+**Why offering this is not "managing" the database, in the sense decision 4
+rules out.** By the moment this is offered, `database-credentials` has
+already passed: the supplied user has already authenticated against this
+cluster, over this network path, with this password. Nothing about the offer
+grants a capability the operator did not already demonstrate they hold —
+it spends one more round trip on a statement they were otherwise being told
+to go type by hand, in another terminal, before re-entering this same step.
+Declining leaves today's behaviour exactly as it was: `database-exists` fails,
+its remedy prints the `createdb` command, and the operator runs it themselves.
+
+**Why the read-only guarantee that makes `doctor` safe against production is
+unchanged.** Section 9's rule 4 (`checks/types.ts`'s own header) is that a
+check never writes. `database-create.ts` is deliberately not a check, is not
+in `DATABASE_CHECKS`, and `doctor` never imports or calls it — grep the
+registry and it is not there. `database-exists` keeps reporting a plain
+`fail`, unchanged, whoever calls it. The creation is a *separate* action the
+install wizard's step loop offers **after** the check registry has already
+reported, gated on an explicit `yes` (or, unattended, on an explicit
+`--create-database`) that only the wizard's caller can give — never on a
+check's own result. Running `kvox deploy doctor` against a production server
+at 3 a.m. still creates nothing, exactly as before, because `doctor` is the
+one caller that never reaches this code at all.
+
+**Under `--non-interactive`.** There is nobody to ask, so `--create-database`
+is the entire authorisation, not a default. Without it, an unattended run that
+finds the database missing reports the failure and stops, exactly as it did
+before this issue — the flag existing does not change what happens when it is
+absent. With a terminal, the flag only changes the confirmation prompt's
+*default* answer; the operator is still asked by name, naming the database,
+host, port and user, every time.
+
+**Why the name is validated, not only quoted.** `POSTGRES_DB` is operator
+input, and `CREATE DATABASE` takes no bind parameters, so the name has to be
+interpolated into the SQL text somehow. Quoting it correctly is not enough on
+its own — correct-looking quoting is exactly the kind of thing that decays
+once someone later builds a second statement beside it — so the name is first
+required to look like an ordinary identifier (a letter or underscore, then
+letters, digits, underscores or `$`) before anything is built. A name that
+does not pass is refused with the same `createdb` remedy `database-exists`
+already prints, never escaped and sent anyway.
+
+**Rejected:**
+
+- **Creating the database inside `database-exists` itself**, so the check
+  passes on retry with nothing else needed. This is the alternative decision
+  4 exists to rule out: a check that writes when it does not like what it
+  finds is a check an operator can no longer reason about as a whole, only
+  check by check, remembering which ones they hope are harmless. Once one
+  check writes, "run `doctor` against production, any time" stops being true
+  of the registry, not just of that one check.
+- **Creating roles or extensions along the way**, since the wizard is already
+  connected and it would save the operator the pgvector step too. Rejected for
+  the same reason decision 4 rejects it generally: a role or an extension is a
+  capability grant, not a database that simply does not exist yet, and
+  `database-vector-extension` already has its own preflight-and-remedy design
+  (§9.1) that assumes it is being asked, never assumed on the operator's
+  behalf.
+- **Anything destructive** — a `DROP DATABASE` to "start clean," a `CREATE OR
+  REPLACE`-shaped operation. There is no drop here and there never will be:
+  an empty database created in error is recoverable by deleting it by hand;
+  the inverse is not, and this design does not put that outcome one
+  mis-clicked confirmation away.
