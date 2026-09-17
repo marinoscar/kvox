@@ -446,6 +446,76 @@ describe('useUserSettings', () => {
   });
 
   describe('Version Conflict Handling (409 errors)', () => {
+    // =========================================================================
+    // THE RETRY, AND WHY IT NEEDED ITS OWN CASES (#276, epic #271)
+    // =========================================================================
+    //
+    // The three cases below this block all mock `api.patch` with
+    // `mockRejectedValue`, so it 409s FOREVER. They therefore pass identically
+    // whether the hook retries or merely re-reads and gives up — which is how
+    // "refetches and retries once" was believed to be implemented while only
+    // the refetch existed. A conflict that the hook could have resolved was
+    // being handed back to the user as "please try again".
+    //
+    // These two cases are the ones that can tell the difference: the first
+    // proves a SECOND PATCH is sent and carries the version the re-read
+    // returned, the second proves it stops after one.
+    it('re-reads and retries once, sending the version the re-read returned', async () => {
+      const fresh = { ...mockUserSettings, version: 9 };
+      const saved = { ...fresh, theme: 'light' as const, version: 10 };
+
+      vi.mocked(api.get).mockResolvedValue(mockUserSettings);
+
+      const { result } = renderHook(() => useUserSettings());
+
+      await waitFor(() => {
+        expect(result.current.settings).not.toBeNull();
+      });
+
+      // The re-read returns a DIFFERENT version from the one the hook closed
+      // over, which is the whole situation: a retry that resent the captured
+      // value would 409 again.
+      vi.mocked(api.get).mockResolvedValue(fresh);
+      vi.mocked(api.patch)
+        .mockRejectedValueOnce(new ApiError('Version conflict', 409))
+        .mockResolvedValueOnce(saved);
+
+      await act(async () => {
+        await result.current.updateSettings({ theme: 'light' });
+      });
+
+      const calls = vi.mocked(api.patch).mock.calls;
+      expect(calls).toHaveLength(2);
+      // Same body both times — the caller's intent is unchanged, only the
+      // precondition moves.
+      expect(calls[1][1]).toEqual({ theme: 'light' });
+      expect(calls[1][2]).toMatchObject({ headers: { 'If-Match': '9' } });
+      // And the retry's result is adopted, so the next write is not stale.
+      expect(result.current.settings?.version).toBe(10);
+    });
+
+    it('retries once and no further, so a continuous writer is not hidden', async () => {
+      vi.mocked(api.get).mockResolvedValue(mockUserSettings);
+
+      const { result } = renderHook(() => useUserSettings());
+
+      await waitFor(() => {
+        expect(result.current.settings).not.toBeNull();
+      });
+
+      vi.mocked(api.patch).mockRejectedValue(new ApiError('Version conflict', 409));
+
+      await expect(async () => {
+        await act(async () => {
+          await result.current.updateSettings({ theme: 'light' });
+        });
+      }).rejects.toThrow('Settings were updated elsewhere. Please try again.');
+
+      // Exactly two: the original and one retry. A loop would keep going and
+      // leave the user watching a spinner over a conflict nobody reported.
+      expect(vi.mocked(api.patch).mock.calls).toHaveLength(2);
+    });
+
     it('should handle 409 conflict error', async () => {
       vi.mocked(api.get).mockResolvedValue(mockUserSettings);
 
