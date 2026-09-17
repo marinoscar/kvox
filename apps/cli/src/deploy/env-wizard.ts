@@ -607,6 +607,25 @@ function resolveUnattended(
     return { key: spec.key, display: MASK, source: 'generated' };
   }
 
+  // An OPTIONAL key with nothing usable is OMITTED, not reported (#255). The
+  // template commented it out, which is `parseEnvExample`'s way of saying the
+  // key need not be written at all - `S3_ENDPOINT` empty IS the answer "real
+  // AWS S3, not MinIO". Without this, "need not be written" and "required and
+  // nobody supplied it" collapse onto the blank check below and every
+  // commented-out key fails a production install, advising a re-run without
+  // --non-interactive that the operator cannot follow: the install TUI collects
+  // answers and then runs the pipeline unattended. This mirrors the interactive
+  // path's `source: 'skipped'` exactly.
+  //
+  // ESSENTIAL WINS. No key is both today, but a fork that comments out
+  // POSTGRES_PASSWORD in its own .env.example must not get a silent skip where
+  // it used to get a refusal - `essential` exists precisely to say "ask, never
+  // assume", and an omission is an assumption.
+  if (isBlank(candidate) && spec.optional === true && metadata.essential !== true) {
+    values.delete(spec.key);
+    return { key: spec.key, display: '(skipped)', source: 'skipped' };
+  }
+
   const invalid =
     isBlank(candidate) || metadata.validate?.(candidate as string) !== undefined;
   if (invalid) return 'unresolved';

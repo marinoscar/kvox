@@ -9,6 +9,7 @@ import {
   type CommandResult,
   type RunCommandOptions,
 } from './executor.js';
+import { generateBase64Key } from './env-metadata.js';
 import { parseEnvExample } from './env-spec.js';
 import { runEnvWizard, type WizardCheckOptions } from './env-wizard.js';
 import { unknownServerFacts, type ServerFacts } from './server-facts.js';
@@ -1145,5 +1146,129 @@ describe('runEnvWizard v2: the catch-all step', () => {
     expect(remaining()).toBe(0);
     expect(values.has('OTEL_DEBUG')).toBe(false);
     expect(summary.find((row) => row.key === 'OTEL_DEBUG')?.source).toBe('skipped');
+  });
+});
+
+// =============================================================================
+// Optional and blank-by-design keys, unattended  (issue #255)
+// =============================================================================
+//
+// The install TUI collects answers and then runs the pipeline UNATTENDED, so
+// `resolveUnattended` is the only path a real `kvox deploy install` takes for
+// these keys. Its old `candidate` expression collapsed "need not be written at
+// all" and "required and nobody supplied it" onto one `isBlank` branch, and
+// every commented-out template key failed a production install with advice
+// ("re-run without --non-interactive") the operator could not follow.
+//
+// The three secret-shaped cases below are the reason the blank rule exists at
+// all, and they are asserted here so relaxing it generally fails loudly.
+
+/** An optional key, three empty-default keys, and one that allows blanks. */
+const BLANKS_TEMPLATE = [
+  'NODE_ENV=development',
+  'APP_URL=http://localhost:3535',
+  'POSTGRES_HOST=localhost',
+  'POSTGRES_USER=postgres',
+  'POSTGRES_PASSWORD=postgres',
+  'POSTGRES_DB=appdb',
+  'JWT_SECRET=your-super-secret-key-min-32-characters-long',
+  'PORT=3000',
+  '# Commented out, so parseEnvExample declares it optional.',
+  '# MAINTENANCE_MODE=false',
+  'SECRETS_ENCRYPTION_KEY=',
+  'AWS_ACCESS_KEY_ID=',
+  'AWS_SECRET_ACCESS_KEY=',
+  'STORAGE_CSP_ORIGIN=',
+].join('\n');
+
+const BLANKS_SPECS = parseEnvExample(BLANKS_TEMPLATE);
+
+/** Everything an unattended run needs except the keys under test. */
+const BLANKS_DATABASE = new Map([
+  ['POSTGRES_HOST', 'db.example.test'],
+  ['POSTGRES_USER', 'appuser'],
+  ['POSTGRES_PASSWORD', 'pw-that-is-fine'],
+  ['POSTGRES_DB', 'appdb'],
+  ['JWT_SECRET', 'a-perfectly-long-replacement-secret-value'],
+]);
+
+/** `all` and `storage` so nothing under test is filtered out before it is asked. */
+function blanksRun(
+  existing: ReadonlyMap<string, string>,
+  options: { generateMissing?: boolean } = {},
+) {
+  return runEnvWizard({
+    specs: BLANKS_SPECS,
+    domain: 'app.example.test',
+    all: true,
+    nonInteractive: true,
+    groups: ['storage'],
+    existing: new Map(existing),
+    facts: facts(),
+    portFree: async () => true,
+    ...options,
+  });
+}
+
+/** Every key the run needs that is not the one a given test is about. */
+const BLANKS_COMPLETE = new Map([
+  ...BLANKS_DATABASE,
+  ['SECRETS_ENCRYPTION_KEY', generateBase64Key()],
+  ['AWS_ACCESS_KEY_ID', 'AKIAEXAMPLE'],
+  ['AWS_SECRET_ACCESS_KEY', 'secret-access-key'],
+]);
+
+describe('runEnvWizard --non-interactive: optional and blank-by-design keys', () => {
+  it('omits an optional key nobody supplied instead of failing the install', async () => {
+    const { values, summary } = await blanksRun(BLANKS_COMPLETE);
+
+    // Absent from the file, not written empty: a commented-out template key
+    // has no value the operator declined to give.
+    expect(values.has('MAINTENANCE_MODE')).toBe(false);
+    expect(summary.find((row) => row.key === 'MAINTENANCE_MODE')?.source).toBe('skipped');
+  });
+
+  it('still refuses a blank SECRETS_ENCRYPTION_KEY when generation is off', async () => {
+    const error = await blanksRun(
+      new Map([
+        ...BLANKS_DATABASE,
+        ['AWS_ACCESS_KEY_ID', 'AKIAEXAMPLE'],
+        ['AWS_SECRET_ACCESS_KEY', 'secret-access-key'],
+      ]),
+      // Generation off, so the blank check itself is what is under test rather
+      // than the `generate` branch that normally answers this key.
+      { generateMissing: false },
+    ).catch((caught: unknown) => caught);
+
+    // Writing an empty credential into a production .env without a word is
+    // exactly what the blank rule exists to prevent.
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('SECRETS_ENCRYPTION_KEY');
+  });
+
+  it('still refuses blank AWS credentials', async () => {
+    const error = await blanksRun(
+      new Map([...BLANKS_DATABASE, ['SECRETS_ENCRYPTION_KEY', generateBase64Key()]]),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('AWS_ACCESS_KEY_ID');
+    expect((error as Error).message).toContain('AWS_SECRET_ACCESS_KEY');
+  });
+
+  it('still takes the template default for a required key that has a real one', async () => {
+    const { values, summary } = await blanksRun(BLANKS_COMPLETE);
+
+    expect(values.get('PORT')).toBe('3000');
+    expect(summary.find((row) => row.key === 'PORT')?.source).toBe('default');
+  });
+
+  it('writes an allowBlank key as empty rather than reporting it', async () => {
+    const { values, summary } = await blanksRun(BLANKS_COMPLETE);
+
+    // An empty CSP origin is a real answer ("no extra origin"), so the key is
+    // present and empty - the opposite of the optional case above.
+    expect(values.get('STORAGE_CSP_ORIGIN')).toBe('');
+    expect(summary.find((row) => row.key === 'STORAGE_CSP_ORIGIN')?.source).toBe('default');
   });
 });

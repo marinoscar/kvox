@@ -195,3 +195,21 @@ describe('the resource validators', () => {
     expect(validateMemorySize('')).toBeDefined();
   });
 });
+
+describe('STORAGE_CSP_ORIGIN metadata (issue #255)', () => {
+  it('allows a blank, because an empty CSP origin is a real answer', () => {
+    // A data fix, not a logic one: relaxing the wizard's blank rule instead
+    // would have let the three empty-default credentials through with it.
+    expect(metadataFor('STORAGE_CSP_ORIGIN').allowBlank).toBe(true);
+  });
+
+  it('leaves the empty-default credentials failing closed', () => {
+    for (const key of [
+      'SECRETS_ENCRYPTION_KEY',
+      'AWS_ACCESS_KEY_ID',
+      'AWS_SECRET_ACCESS_KEY',
+    ]) {
+      expect(metadataFor(key).allowBlank).toBeUndefined();
+    }
+  });
+});
