@@ -362,9 +362,14 @@ describe('docker-network-devnet', () => {
     expect(result.status).toBe('pass');
   });
 
-  it('fails with the exact create command when it does not', async () => {
+  it('warns rather than failing when it does not exist, because install creates it (issue #251)', async () => {
     // base.compose.yml declares it external, so `up -d` on a box without it
-    // fails naming the network but not the command; the remedy is the command.
+    // fails naming the network but not the command. This is deliberately a
+    // `warn`, not a `fail`: install's own `network` step runs an idempotent
+    // `docker network create`, so a missing network here is not the
+    // operator's job to fix. The remedy still names the command, for an
+    // operator who wants to create it ahead of time. Do NOT "restore" this to
+    // `fail` thinking it was a regression - see the check's header comment.
     const result = await find('docker-network-devnet').run(
       context({
         runCommand: fakeRunCommand((argv) =>
@@ -375,14 +380,41 @@ describe('docker-network-devnet', () => {
       }),
     );
 
-    expect(result.status).toBe('fail');
+    expect(result.status).toBe('warn');
+    expect(result.remedy).toContain('install creates it');
     expect(result.remedy).toContain('docker network create devnet');
   });
 
-  it('is required and waits for the daemon', () => {
+  it('is recommended, not required, but still waits for the daemon (issue #251)', () => {
+    // Severity dropped from `required` to `recommended` on purpose: install
+    // creates this network itself, so failing a healthy host over its
+    // absence told the operator to run by hand a command the very next step
+    // runs for them. See the check's header comment for the full reasoning -
+    // this is not a typo to "fix" back to `required`.
     const check = find('docker-network-devnet');
-    expect(check.severity).toBe('required');
+    expect(check.severity).toBe('recommended');
     expect(check.requires).toContain('docker-daemon');
+  });
+
+  it('does not fail the overall run when only the network is missing (issue #251)', async () => {
+    // This is the property that was actually broken: standalone `doctor`
+    // exited non-zero on an otherwise healthy host because this one check
+    // was `required`/`fail`. `checksPassed` ignores warnings, so a host
+    // missing only this network must still read as passed.
+    const results = await runChecks(
+      HOST_CHECKS,
+      context({
+        runCommand: fakeRunCommand((argv) =>
+          argv.join(' ').startsWith('docker network inspect')
+            ? { exitCode: 1, stderr: 'Error: No such network: devnet' }
+            : HEALTHY(argv),
+        ),
+      }),
+    );
+
+    const devnetResult = results.find((result) => result.id === 'docker-network-devnet');
+    expect(devnetResult?.status).toBe('warn');
+    expect(checksPassed(results)).toBe(true);
   });
 });
 
