@@ -82,6 +82,17 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     name: 'Account & Settings',
     tags: [
       {
+        name: 'Onboarding',
+        description:
+          'First-run checklists: what this deployment still has to be configured with, and what ' +
+          'the calling account still has to do. Two routes on two prefixes — `GET /api/onboarding` ' +
+          'is the caller\'s own and carries no permission string (ownership-scoped, readable by a ' +
+          'Viewer), `GET /api/admin/onboarding` is the deployment\'s and is gated on ' +
+          '`system_settings:read`. Every status is derived on each read and nothing about ' +
+          'completion is stored, so a rotated credential flips its step back rather than leaving a ' +
+          'green tick over a deployment that no longer works.',
+      },
+      {
         name: 'Users',
         description:
           'User administration: listing, inspecting, activating and deactivating accounts, and ' +
