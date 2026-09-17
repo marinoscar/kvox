@@ -1302,11 +1302,9 @@ by a second implementation that could drift from it:
    `conf.d/`, and only when the file still carries the `# Managed by appctl
    deploy` marker. The proxy is then **reloaded, never restarted**, for §10's
    own reason: a restart drops every other site's connections.
-4. **This app's certificate renewal cron**, `/etc/cron.d/<cli>-certs-<name>`.
-   Named after this app, so removing it cannot disturb another app's renewals —
-   each app this CLI installs writes its own entry. The honest gap, stated
-   rather than hidden: each entry passes `--all`, so on a box where *this* app's
-   entry was the only one, renewals for the whole proxy stop with it.
+4. **This app's certificate renewal cron**, `/etc/cron.d/<cli>-certs-<name>`,
+   **conditionally, and never silently** — see §21.1.1, which is a rule, not a
+   caveat.
 5. **The `.env`, after copying it** to `<appsRoot>/<name>.env.<timestamp>.bak`,
    0600, with the same atomic temp-file-then-rename discipline `writeEnvFile`
    uses. The copy lands in the **apps root** — a sibling of the folder being
@@ -1314,6 +1312,58 @@ by a second implementation that could drift from it:
    backup. It is taken even with `--keep-env`: keeping the file and copying it
    are not alternatives, and a few kilobytes is the whole cost of not losing
    generated secrets that exist nowhere else.
+
+#### 21.1.1 The renewal cron is shared infrastructure wearing a per-app filename
+
+The filename is `<cli>-certs-<name>`, which reads as "this app's entry". The
+*contents* are not per-app at all. `renderRenewalCron` emits `deploy certs renew
+**--all**`, and its own comment says why: *"`--all` on purpose: the proxy is
+shared, and one entry renewing every lineage under it serves every app this CLI
+manages."*
+
+So the entries are **not independent**. The last one standing is renewing every
+other app's certificates too, and removing it stops automatic renewal for the
+entire shared proxy. On a server running eight or ten apps — the ordinary case
+this design is for — that surfaces 60–90 days later as every certificate on the
+box expiring at once, with nothing connecting the outage to the uninstall that
+caused it. That is the *same* "shared with every other app" property §21.2 uses
+to refuse `devnet`, the proxy container and the certificates themselves, so it
+gets the same treatment rather than a footnote.
+
+**The rule:**
+
+1. Enumerate the sibling entries first, through `listRenewalCrons(cronDir)` —
+   which shares the `<cli>-certs-` prefix constant with `renewalCronPath`, so
+   the reader and the writer cannot drift. A second hand-rolled glob would stop
+   matching the moment the naming changed, and would fail *silently* at exactly
+   the question it was consulted about.
+2. **At least one other entry survives** → remove this app's and say nothing.
+   Renewal is still covered, by a line that was always renewing everything.
+3. **This was the last entry** → remove it anyway, and raise a first-class
+   warning.
+
+Removing it in case 3 is deliberate and is the lesser evil. The line names
+`--apps-root <root> --name <name>` pointing at a deploy root this very run
+deletes, so leaving it behind means a cron entry that is present, broken, and
+failing silently twice a day — which is not renewal coverage, it is the
+appearance of it.
+
+**The warning is treated as output, not as documentation.** It goes into
+`UninstallResult.warnings`, the non-JSON renderer prints it **above** the
+inventory under `Action required:` (a notice at the foot of a twelve-path list
+is a notice nobody reads), and it is produced under `--dry-run` too — deciding
+*whether* to uninstall is precisely when this has to be known. It states three
+things in order: that renewal has stopped, that this affects **every** app
+behind the proxy and not only the one being removed, and the exact command that
+puts it back. That command names a **real surviving deployment**, found with
+`listInstalledApps(appsRoot)` minus this one, so it can be pasted rather than
+filled in; when this was the only app on the box there is nothing to point at
+and the message says so instead of printing a placeholder that cannot work.
+
+Nothing is said when this app had no entry at all (installed with
+`--no-install-cron`, or it never issued a certificate): there was no coverage to
+lose, and a warning about a loss that did not happen is how operators learn to
+skip warnings.
 
 ### 21.2 The four refusals, and why each is a decision rather than an omission
 
@@ -1430,6 +1480,16 @@ import cycle.
   `removeVhost` removes one exact path and refuses a file this CLI did not
   write. The proxy directory is shared, and a glob there is a bug waiting for
   a second app with a similar domain.
+- **Leaving the renewal cron in place when it is the last one**, so renewal
+  keeps running for the other apps. Rejected: the line names the deploy root
+  being deleted, so it would fail on every run — the operator would be left
+  with a broken entry, no warning, and the same expiry 60–90 days later, minus
+  the chance to act on it. §21.1.1.
+- **Rewriting the last entry to name a surviving deployment automatically.**
+  Rejected: this command's job is to remove *its own* deployment, and silently
+  editing a cron entry on another app's behalf is a write to shared
+  infrastructure — the very thing §21.2 refuses. Printing the one-line command
+  leaves the decision where it belongs.
 - **Deleting the deployment's storage bucket or its uploaded objects.** Out of
   scope and refused for the database's reason: object storage is supplied by
   the operator (§6's `STORAGE_*` variables), is frequently shared, and this CLI

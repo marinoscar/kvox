@@ -625,7 +625,7 @@ to reach the destructive path by leaving a flag off.
 | The compose project | Containers, project networks and **named volumes** (`down -v --remove-orphans`) |
 | The deploy root | `repo/`, `.env`, `logs/`, `data/`, `deploy-info/`, `.appctl-deploy.json` |
 | The vhost | `<proxyRoot>/nginx/conf.d/<domain>.conf`, then the proxy is **reloaded** |
-| The renewal cron | `/etc/cron.d/kvox-certs-<name>` |
+| The renewal cron | `/etc/cron.d/kvox-certs-<name>` — see the warning below |
 
 **What it never removes, and why:**
 
@@ -635,6 +635,26 @@ to reach the destructive path by leaving a flag off.
 | **The `devnet` network** | Shared with every other app on this server. |
 | **The shared proxy container** | Likewise. Its vhost for *this* app is removed and the proxy reloaded; the container is never stopped, restarted or removed, because that takes every other site on the box down with it. |
 | **TLS certificates** | Kept by default. Let's Encrypt allows only **5 duplicate certificates per week** for the same hostname set, and a reinstall re-requests one — so destroying and re-requesting on each attempt at a broken install locks you out of issuing for **your own domain** for a week. Pass `--certs` when you genuinely mean it. |
+
+**If this was the last renewal cron entry on the box, read the warning.**
+Every `/etc/cron.d/kvox-certs-*` entry runs `certs renew --all` — one entry
+renews *every* certificate behind the shared proxy, not only its own app's. So
+removing the last one stops automatic renewal for **every app on this server**,
+and you'd find out 60–90 days later when they all expire at once. `uninstall`
+removes it anyway (leaving it behind means a cron entry pointing at a deploy
+root that no longer exists, failing silently twice a day), but it prints an
+`Action required:` block at the **top** of its output, before the inventory,
+with the one command that puts renewal back:
+
+```bash
+kvox deploy certs renew --install-cron --apps-root /opt/infra/apps --name <an-app-that-is-staying>
+```
+
+It fills in a real surviving deployment's name for you when there is one.
+`--dry-run` prints the same warning, which is the point — you want to know
+before you decide, not after. Nothing is said when this app had no entry to
+begin with (installed with `--no-install-cron`, or it never issued a
+certificate): there was no coverage to lose.
 
 **Your `.env` is backed up before it is deleted**, to
 `/opt/infra/apps/<name>.env.<timestamp>.bak`, mode `0600` — outside the
@@ -650,6 +670,7 @@ ls -la /opt/infra/apps/                     # the app folder gone, the .bak ther
 docker ps -a --filter label=com.docker.compose.project=<name>   # empty
 ls /opt/infra/proxy/nginx/conf.d/           # this app's .conf gone, others intact
 docker exec <proxy-container> nginx -t      # still valid for every other site
+ls /etc/cron.d/kvox-certs-*                 # at least one entry should remain
 ```
 
 ### 11.3 If you already took it apart by hand

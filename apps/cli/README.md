@@ -866,7 +866,17 @@ kvox deploy uninstall --confirm myapp    # then do it
 - **this app's vhost** in the shared proxy, by its exact path and only when it
   still carries the `# Managed by appctl deploy` marker, then **reloads** the
   proxy (never restarts it — that would drop every other site's connections).
-- **this app's certificate renewal cron**, `/etc/cron.d/kvox-certs-<name>`.
+- **this app's certificate renewal cron**, `/etc/cron.d/kvox-certs-<name>` —
+  but **only quietly when another entry survives**. Every such entry runs
+  `certs renew --all`, so one entry renews *every* certificate behind the
+  shared proxy, not just its own app's. If this was the **last** one, it is
+  still removed (leaving it means a cron pointing at a deploy root that no
+  longer exists, failing silently twice a day) and the run prints an
+  `Action required:` block above everything else, saying that automatic
+  renewal has stopped **for every app on the server** and giving the exact
+  `kvox deploy certs renew --install-cron --apps-root <dir> --name <surviving-app>`
+  to put it back — naming a real surviving deployment where there is one.
+  `--dry-run` prints it too, which is when you actually want to know.
 
 **Never removes** — each one a deliberate refusal, documented with its
 reasoning in

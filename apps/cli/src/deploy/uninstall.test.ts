@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -266,6 +267,120 @@ describe('the four deliberate refusals', () => {
     expect(
       result.kept.find((item) => item.target.includes('certificate'))?.reason,
     ).toMatch(/5 duplicate certificates per week/);
+  });
+});
+
+// =============================================================================
+// The renewal cron: shared infrastructure wearing a per-app filename (#261)
+// =============================================================================
+//
+// `renderRenewalCron` emits `deploy certs renew --all` on purpose, so the LAST
+// surviving entry is renewing every other app's certificates too. These three
+// tests are the difference between removing one of several and removing the
+// only one.
+// =============================================================================
+
+describe('the certificate renewal cron', () => {
+  it('removes this app\'s entry with no warning while another entry still renews the proxy', async () => {
+    const fixture = deployment();
+    // A neighbouring app's entry. Its line carries `--all`, so it is already
+    // renewing this proxy's whole set - nothing stops when ours goes.
+    writeFileSync(renewalCronPath('other-app', fixture.cronDir), '# cron\n', { mode: 0o644 });
+
+    const result = await uninstall(fixture);
+
+    expect(existsSync(renewalCronPath(APP, fixture.cronDir))).toBe(false);
+    expect(existsSync(renewalCronPath('other-app', fixture.cronDir))).toBe(true);
+    expect(result.removed.some((item) => item.kind === 'cron' && item.existed)).toBe(true);
+    expect(result.warnings.join('\n')).not.toMatch(/renewal/i);
+  });
+
+  it('warns loudly when it removes the LAST entry, because renewal then stops for EVERY app on the box', async () => {
+    // The failure this prevents: an operator running 8-10 apps on one server
+    // uninstalls one, and 60-90 days later every certificate behind the shared
+    // proxy expires at once with nothing connecting it to that uninstall.
+    const fixture = deployment();
+    // A second installed app, so there is a real deployment to suggest - but
+    // NO second cron entry, which is exactly the dangerous shape: coverage for
+    // that app depends on the entry being removed here.
+    const survivor = join(fixture.appsRoot, 'keeper');
+    mkdirSync(survivor, { recursive: true });
+    writeState({
+      version: DEPLOY_STATE_VERSION,
+      repoUrl: 'https://example.test/o/keeper.git',
+      ref: 'main',
+      commitSha: 'b'.repeat(40),
+      bindPort: 3600,
+      deployRoot: survivor,
+      name: 'keeper',
+      appsRoot: fixture.appsRoot,
+      installedAt: '2026-01-01T00:00:00.000Z',
+      lastDeployedAt: '2026-01-01T00:00:00.000Z',
+      lastCommand: 'install',
+      appctlVersion: '1.3.1',
+    });
+
+    const result = await uninstall(fixture);
+
+    // Removed, not left: the line names a deploy root this run just deleted,
+    // so leaving it would mean a cron that fails on every run from now on.
+    expect(existsSync(renewalCronPath(APP, fixture.cronDir))).toBe(false);
+
+    const warning = result.warnings.join('\n');
+    // Reflowed before matching: the message is hard-wrapped for a terminal, and
+    // a test that pins the wrap POINTS would break every time a word changes
+    // length while saying nothing about whether the meaning survived.
+    const prose = warning.replace(/\s+/g, ' ');
+    // It says renewal STOPPED...
+    expect(prose).toMatch(/automatic certificate renewal has STOPPED/);
+    // ...that it is not limited to the app just removed...
+    expect(prose).toContain('EVERY certificate behind the shared proxy');
+    // ...and hands over a command naming a REAL surviving deployment, so it
+    // can be pasted rather than filled in.
+    expect(prose).toContain(
+      `${CLI_NAME} deploy certs renew --install-cron --apps-root ${fixture.appsRoot} --name keeper`,
+    );
+    // Never the app being removed - that deploy root is gone.
+    expect(prose).not.toContain(`--name ${APP}`);
+  });
+
+  it('says there is nothing to reinstate from when this was the only app', async () => {
+    const fixture = deployment();
+
+    const result = await uninstall(fixture);
+
+    const prose = result.warnings.join('\n').replace(/\s+/g, ' ');
+    expect(prose).toMatch(/automatic certificate renewal has STOPPED/);
+    // No placeholder command that cannot work: there is no surviving
+    // deployment to point `--name` at.
+    expect(prose).not.toContain('certs renew --install-cron');
+    expect(prose).toContain('--install-cron');
+    expect(prose).toContain('There is no other deployment under');
+  });
+
+  it('warns under --dry-run too, before the operator has committed to anything', async () => {
+    const fixture = deployment();
+    const before = snapshot(fixture);
+
+    const result = await uninstall(fixture, { dryRun: true });
+
+    // Still untouched, still no subprocess - the warning costs nothing.
+    expect(fixture.seen).toEqual([]);
+    expect(snapshot(fixture)).toEqual(before);
+    expect(existsSync(renewalCronPath(APP, fixture.cronDir))).toBe(true);
+    // Deciding WHETHER to uninstall is exactly when this needs to be known.
+    expect(result.warnings.join('\n')).toMatch(/automatic certificate renewal has STOPPED/);
+  });
+
+  it('says nothing when this app never had an entry, because nothing stopped', async () => {
+    const fixture = deployment();
+    rmSync(renewalCronPath(APP, fixture.cronDir));
+
+    const result = await uninstall(fixture);
+
+    // An app installed with --no-install-cron, or one that never issued a
+    // certificate. There was no coverage to lose.
+    expect(result.warnings.join('\n')).not.toMatch(/renewal/i);
   });
 });
 

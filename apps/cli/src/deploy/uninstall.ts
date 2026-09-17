@@ -13,11 +13,13 @@ import { nullJournal, openJournal, type Journal } from './journal.js';
 import {
   DEFAULT_APPS_ROOT,
   DEFAULT_PROXY_ROOT,
+  listInstalledApps,
   locateInstalledApp,
   type ResolvedLayout,
 } from './layout.js';
 import {
   certbotArgv,
+  listRenewalCrons,
   renewalCronPath,
   removeVhost,
   vhostPath,
@@ -223,6 +225,64 @@ function parseEnv(contents: string): Map<string, string> {
   return values;
 }
 
+/**
+ * The warning when this app held the LAST certificate renewal entry (#261).
+ *
+ * Written to be read by somebody who did not know the entries were shared -
+ * which is everybody, because the sharing lives in a comment in `proxy.ts`.
+ * Three things it must say, in this order: that automatic renewal has stopped,
+ * that this is NOT limited to the app just removed, and the exact command that
+ * puts it back.
+ *
+ * The command names a REAL surviving deployment where one exists
+ * (`listInstalledApps` minus this one), because a command that can be pasted
+ * beats one the operator has to fill in while working out what the blank
+ * means. When this was the only app on the box there is nothing to point at
+ * and the message says so instead of printing a placeholder that cannot work.
+ */
+function lastRenewalCronWarning(context: UninstallContext): string {
+  const { appsRoot, name, cronDir } = context.options;
+
+  // Still readable at this point: the `deploy-root` step runs after this one.
+  // Filtered by BOTH name and path so `--root` pointing at a folder whose
+  // state records a different name cannot suggest the app being removed.
+  const survivor = listInstalledApps(appsRoot).find(
+    (app) => app.name !== name && app.deployRoot !== context.options.deployRoot,
+  );
+
+  const reinstate =
+    survivor === undefined
+      ? [
+          `There is no other deployment under ${appsRoot} to reinstate it from.`,
+          `The next \`${CLI_NAME} deploy install\` writes an entry only when it ISSUES`,
+          'a certificate - which a reinstall onto an existing one does not do - so',
+          'pass --install-cron explicitly if you want the schedule back.',
+        ]
+      : [
+          'Reinstate it against a deployment that is staying:',
+          `  ${CLI_NAME} deploy certs renew --install-cron --apps-root ${appsRoot} --name ${survivor.name}`,
+        ];
+
+  // HARD-WRAPPED, not left to the terminal. The renderer indents this by four
+  // and an operator's eye skips a wall of reflowed text - which is the exact
+  // outcome this warning exists to avoid.
+  return [
+    'WARNING: automatic certificate renewal has STOPPED for this whole server.',
+    '',
+    renewalCronPath(name, cronDir),
+    'was the last renewal entry on this box, and every such entry runs',
+    '`certs renew --all` - so ONE entry renews EVERY certificate behind the',
+    "shared proxy, not only this app's. Removing the last one therefore affects",
+    'every other app on this server, and it surfaces in 60-90 days as expired',
+    'certificates with nothing pointing back at this uninstall.',
+    '',
+    'It was removed rather than left behind because it named the deploy root',
+    'this run deletes, so it would have failed on every run from now on.',
+    '',
+    ...reinstate,
+  ].join('\n');
+}
+
 /** The proxy target this app publishes under, when it publishes at all. */
 function proxyTargetFor(context: UninstallContext): ProxyTarget | undefined {
   const domain = context.state?.domain;
@@ -395,16 +455,48 @@ export function buildUninstallSteps(): DeployStep<UninstallContext>[] {
         context.options.skipProxy === true ? 'skipped with --skip-proxy' : undefined,
       async run(context) {
         // `/etc/cron.d/<cli>-certs-<name>`, written by install when it issued
-        // a certificate. NAMED AFTER THIS APP, so removing it cannot disturb
-        // another app's renewals: every app this CLI installs writes its own
-        // file, and each one passes `--all`, so any other app on the box is
-        // still renewing every lineage behind the shared proxy through its
-        // own entry. An app installed with `--no-install-cron` never had one
-        // to begin with, which is the honest gap worth naming here: on a box
-        // where THIS app's entry was the only one, renewals stop with it.
+        // a certificate.
+        //
+        // THE ENTRIES ARE NOT INDEPENDENT, AND THAT IS THE WHOLE DIFFICULTY.
+        // `renderRenewalCron` emits `deploy certs renew --all` deliberately -
+        // "the proxy is shared, and one entry renewing every lineage under it
+        // serves every app this CLI manages" - so the LAST surviving entry is
+        // renewing every OTHER app's certificates too. Removing it therefore
+        // stops automatic renewal for the entire shared proxy, and the bill
+        // arrives 60-90 days later as expired certificates across every app on
+        // the box, with nothing connecting the outage to the uninstall that
+        // caused it.
+        //
+        // That is the same "shared with every other app" argument this command
+        // already accepts for `devnet`, the proxy container and the
+        // certificates themselves. So this step asks first.
+        //
+        // IT STILL REMOVES THE ENTRY EITHER WAY, because leaving it is worse
+        // than removing it: the line points `--apps-root <root> --name <name>`
+        // at a deploy root this run is about to delete, so it would fail on
+        // every single run from here on - a cron that is present, broken and
+        // silent is not renewal coverage. What changes is that losing the last
+        // one is reported as something the operator must act on, not recorded
+        // as a footnote in a spec they will never read.
+        const others = listRenewalCrons(context.options.cronDir).filter(
+          (name) => name !== context.options.name,
+        );
+
         const path = renewalCronPath(context.options.name, context.options.cronDir);
         const outcome = removePath(path, context.options.dryRun === true);
         record(context, { kind: 'cron', target: outcome.path, existed: outcome.existed });
+
+        // Nothing was there to remove, so nothing stopped. An app installed
+        // with `--no-install-cron`, or one that never issued a certificate.
+        if (!outcome.existed) return;
+        if (others.length > 0) {
+          context.journal.line(
+            `Renewal is still covered by ${others.length} other entr${others.length === 1 ? 'y' : 'ies'} (${others.join(', ')}), each of which renews every certificate behind this proxy.`,
+          );
+          return;
+        }
+
+        context.warnings.push(lastRenewalCronWarning(context));
       },
     },
     {

@@ -1145,6 +1145,21 @@ export function renderUninstall(result: UninstallResult): string {
   lines.push(result.dryRun ? `  Dry run - nothing was changed.` : `  Removed ${result.name}.`);
   lines.push('');
 
+  // WARNINGS COME FIRST, before the inventory (#261). They used to sit at the
+  // bottom, after a removed list that can run to a dozen paths, which is the
+  // one place a notice that automatic certificate renewal has stopped for the
+  // whole server will not be read. A warning here is something the operator
+  // has to act on; everything below it is a record of what happened.
+  if (result.warnings.length > 0) {
+    lines.push('  Action required:');
+    for (const warning of result.warnings) {
+      // An empty line stays empty: indenting it leaves trailing whitespace
+      // that shows up in a diff, a paste and `cat -A`.
+      for (const line of warning.split('\n')) lines.push(line === '' ? '' : `    ${line}`);
+      lines.push('');
+    }
+  }
+
   const verb = result.dryRun ? 'Would remove' : 'Removed';
   lines.push(`  ${verb}:`);
   if (result.removed.length === 0) {
@@ -1164,14 +1179,6 @@ export function renderUninstall(result: UninstallResult): string {
   if (result.envBackupPath !== undefined) {
     lines.push('');
     lines.push(`  .env ${result.dryRun ? 'would be copied' : 'backed up'} to ${result.envBackupPath}`);
-  }
-
-  if (result.warnings.length > 0) {
-    lines.push('');
-    lines.push('  Left for you to finish:');
-    for (const warning of result.warnings) {
-      for (const line of warning.split('\n')) lines.push(`    ${line}`);
-    }
   }
 
   if (result.journalPath !== undefined) {
