@@ -585,8 +585,46 @@ export function defaultCliPath(): string {
   return /\.[cm]?js$/.test(resolved) ? `${process.execPath} ${resolved}` : resolved;
 }
 
+/**
+ * The prefix every renewal-cron filename shares.
+ *
+ * Declared once so `renewalCronPath` (the writer) and `listRenewalCrons` (the
+ * reader, #261) cannot drift: a lister with its own hand-rolled glob would
+ * silently stop seeing entries the moment the naming changed, and the thing it
+ * is consulted about - whether removing this app's entry stops renewal for the
+ * whole shared proxy - fails silently 60-90 days later.
+ */
+const RENEWAL_CRON_PREFIX = `${CLI_NAME}-certs-`;
+
 export function renewalCronPath(name: string, cronDir = '/etc/cron.d'): string {
-  return join(cronDir, `${CLI_NAME}-certs-${name}`);
+  return join(cronDir, `${RENEWAL_CRON_PREFIX}${name}`);
+}
+
+/**
+ * Every app that has a renewal cron entry under `cronDir`, by name (#261).
+ *
+ * WHY THIS IS NEEDED AT ALL: `renderRenewalCron` emits `deploy certs renew
+ * --all`, so ONE entry renews every lineage behind the shared proxy - that is
+ * its own comment's stated intent. The consequence is that the entries are not
+ * independent: the LAST one standing is renewing every other app's
+ * certificates too, and removing it stops renewal for the whole box.
+ * `uninstall` has to be able to tell "one of several" from "the last one".
+ *
+ * An unreadable or missing cron directory answers `[]` rather than throwing -
+ * the same posture `listCertificates` above takes, and for the same reason: a
+ * command must not fail because a directory it only wanted to look at is not
+ * there.
+ */
+export function listRenewalCrons(cronDir = '/etc/cron.d'): string[] {
+  try {
+    return readdirSync(cronDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.startsWith(RENEWAL_CRON_PREFIX))
+      .map((entry) => entry.name.slice(RENEWAL_CRON_PREFIX.length))
+      .filter((name) => name !== '')
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 /**

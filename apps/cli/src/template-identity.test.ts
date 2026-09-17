@@ -248,6 +248,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'apps/cli/src/deploy/proxy.ts',
   'apps/cli/src/deploy/repo.ts',
   'apps/cli/src/deploy/state.ts',
+  'apps/cli/src/deploy/uninstall.ts',
   'apps/cli/src/deploy/update.ts',
   'apps/cli/src/errors.ts',
   'apps/cli/src/index.ts',

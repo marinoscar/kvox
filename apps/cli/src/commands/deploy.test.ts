@@ -11,6 +11,7 @@ import { DEPLOY_STATE_VERSION, deployStatePath, writeState, type DeployState } f
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../deploy/executor.js';
 import { CLI_NAME } from '../branding.js';
 import type { InstallOptions } from '../deploy/install.js';
+import type { UninstallOptions } from '../deploy/uninstall.js';
 import { FAKE_COMMITS, fakeVps, populateClone } from '../deploy/testing/fake-vps.js';
 import type { UpdateCheck } from '../deploy/update.js';
 import { EXIT, exitCodeFor } from '../errors.js';
@@ -1079,6 +1080,84 @@ describe('kvox deploy install flags (issue #125)', () => {
     const off = installProbe();
     await runDeploy(['install', '--domain', 'app.example.test', '--no-install-cron'], { install: off.install });
     expect(off.seen().installCron).toBe(false);
+  });
+});
+
+/** Captures what the uninstall command hands to the pipeline. Removes nothing. */
+function uninstallProbe(): {
+  uninstall: typeof import('../deploy/uninstall.js').runUninstall;
+  seen: () => UninstallOptions;
+} {
+  let captured: UninstallOptions | undefined;
+  return {
+    uninstall: (async (options: UninstallOptions) => {
+      captured = options;
+      return {
+        name: 'demo',
+        deployRoot: '/opt/infra/apps/demo',
+        dryRun: options.dryRun === true,
+        removed: [{ kind: 'path' as const, target: '/opt/infra/apps/demo', existed: true }],
+        kept: [{ target: 'appdb', reason: 'drop it yourself with: dropdb appdb' }],
+        warnings: [],
+      };
+    }) as typeof import('../deploy/uninstall.js').runUninstall,
+    seen: () => {
+      if (captured === undefined) throw new Error('uninstall never ran');
+      return captured;
+    },
+  };
+}
+
+describe('kvox deploy uninstall flags (issue #261)', () => {
+  it('passes --confirm through as the typed confirmation', async () => {
+    const probe = uninstallProbe();
+    await runDeploy(['uninstall', '--confirm', 'demo'], { uninstall: probe.uninstall });
+    expect(probe.seen().confirmation).toBe('demo');
+  });
+
+  it('leaves every destructive widening flag unset unless it was passed', async () => {
+    const probe = uninstallProbe();
+    await runDeploy(['uninstall', '--confirm', 'demo'], { uninstall: probe.uninstall });
+    // --certs in particular: a certificate deleted by default is a week-long
+    // lockout on the operator's own domain the first time they iterate.
+    expect(probe.seen()).not.toHaveProperty('certs');
+    expect(probe.seen()).not.toHaveProperty('keepEnv');
+    expect(probe.seen()).not.toHaveProperty('dryRun');
+    expect(probe.seen()).not.toHaveProperty('nonInteractive');
+  });
+
+  it('passes --certs, --keep-env, --dry-run and --non-interactive through', async () => {
+    const probe = uninstallProbe();
+    await runDeploy(
+      ['uninstall', '--confirm', 'demo', '--certs', '--keep-env', '--dry-run', '--non-interactive'],
+      { uninstall: probe.uninstall },
+    );
+    const seen = probe.seen();
+    expect(seen.certs).toBe(true);
+    expect(seen.keepEnv).toBe(true);
+    expect(seen.dryRun).toBe(true);
+    expect(seen.nonInteractive).toBe(true);
+  });
+
+  it('prints what it did NOT remove, not only what it did', async () => {
+    const probe = uninstallProbe();
+    const result = await runDeploy(['uninstall', '--confirm', 'demo'], { uninstall: probe.uninstall });
+    // An operator who has just removed a deployment is exactly the person
+    // about to assume the database went with it.
+    expect(result.stderr).toContain('NOT removed:');
+    expect(result.stderr).toContain('dropdb appdb');
+  });
+});
+
+describe('kvox deploy install --fresh (issue #261)', () => {
+  it('passes --fresh through, and leaves it unset otherwise', async () => {
+    const on = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test', '--fresh'], { install: on.install });
+    expect(on.seen().fresh).toBe(true);
+
+    const off = installProbe();
+    await runDeploy(['install', '--domain', 'app.example.test'], { install: off.install });
+    expect(off.seen()).not.toHaveProperty('fresh');
   });
 });
 

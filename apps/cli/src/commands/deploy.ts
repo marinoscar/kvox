@@ -27,6 +27,7 @@ import {
 import { readState, type DeployState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
 import { runInstall, type InstallOptions } from '../deploy/install.js';
+import { runUninstall, type UninstallOptions, type UninstallResult } from '../deploy/uninstall.js';
 import {
   DEFAULT_APPS_ROOT,
   DEFAULT_BIND_PORT,
@@ -126,6 +127,8 @@ export interface DeployContext {
   cwd?: string | undefined;
   /** Injected so the install flags can be tested without running a pipeline. */
   install?: typeof runInstall | undefined;
+  /** Injected so the uninstall flags can be tested without removing anything. */
+  uninstall?: typeof runUninstall | undefined;
   /** Where `--install-cron` writes; default /etc/cron.d, tests point it away. */
   cronDir?: string | undefined;
   /** The command the renewal cron runs; default this binary. */
@@ -200,6 +203,7 @@ export function registerDeployCommand(
     .option('--answer <KEY=VALUE>', 'Supply one environment value without a prompt; repeat for more', collectAnswer, [])
     .option('--answers-file <path>', 'Supply environment values from a .env-format file')
     .option('--reinstall', 'Install over an existing deployment')
+    .option('--fresh', "Discard this app's prior .env, state file and deploy-info first")
     .option('--resume', 'Continue from the step that failed')
     .option('--skip-doctor', 'Skip the prerequisite checks')
     .option('--skip-proxy', 'Do not touch the reverse proxy or request a certificate')
@@ -255,6 +259,13 @@ export function registerDeployCommand(
         'nginx or certbot. When a certificate is issued, a renewal cron is',
         `written to ${renewalCronPath('<name>')} unless --no-install-cron.`,
         '',
+        '--fresh discards this app\'s prior LOCAL state first - the .env, the',
+        'state file and deploy-info/ - and installs clean, after copying the old',
+        `.env to <apps-root>/<name>.env.<timestamp>.bak (0600). It implies`,
+        '--reinstall, and it deliberately does NOT touch the proxy vhost, the',
+        `certificate, the database or the containers; \`${CLI_NAME} deploy uninstall\``,
+        'is the command that removes a deployment outright.',
+        '',
         'The repository and branch come from THIS checkout\'s git remote unless',
         'you pass --repo/--ref, so a fork deploys itself with no configuration.',
         '',
@@ -265,6 +276,72 @@ export function registerDeployCommand(
     )
     .action(async (options: InstallCommandOptions) => {
       await runInstallCommand(options, ctx);
+    });
+
+  withLayoutOptions(
+    deploy
+      .command('uninstall')
+      .description('Remove this deployment from this server'),
+  )
+    .option('--confirm <name>', 'Type the app\'s own name to authorise the removal')
+    .option('--dry-run', 'List everything that would be removed; change nothing')
+    .option('--certs', "Also delete the TLS certificate (see the rate limit below)")
+    .option('--keep-env', 'Leave the .env in place; a backup is taken either way')
+    .option('--non-interactive', 'Never prompt; --confirm <name> is then required')
+    .option('--skip-proxy', 'Do not touch the shared reverse proxy')
+    .option('--proxy-root <path>', `Shared reverse proxy directory (default: the app's, else ${DEFAULT_PROXY_ROOT})`)
+    .option('--proxy-container <name>', `Proxy container to reload (default: the app's, else ${DEFAULT_PROXY_CONTAINER})`)
+    .option('--json', 'Print a machine-readable result on stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        `  ${CLI_NAME} deploy uninstall --dry-run`,
+        `  ${CLI_NAME} deploy uninstall --confirm myapp`,
+        `  ${CLI_NAME} deploy uninstall --non-interactive --confirm myapp`,
+        `  ${CLI_NAME} deploy uninstall --confirm myapp --keep-env`,
+        '',
+        'Exit codes:',
+        '  0  removed (or, with --dry-run, listed)',
+        '  2  nothing is installed, or the confirmation was missing or wrong',
+        '',
+        'Removes: the compose project (containers, project networks and named',
+        'volumes, via `down -v --remove-orphans`), the deploy root (repo/, .env,',
+        'logs/, data/, deploy-info/ and the state file), this app\'s vhost in the',
+        'shared proxy - then reloads it - and this app\'s certificate renewal',
+        'cron.',
+        '',
+        'Does NOT remove, ever:',
+        '  - THE DATABASE. It is validated by deploy and never managed by it,',
+        '    it holds your data, and it usually lives on another host. The',
+        '    `dropdb` command is printed for you to run yourself.',
+        '  - THE devnet NETWORK and THE SHARED PROXY CONTAINER. Both are shared',
+        '    with every other app on this server.',
+        '  - TLS CERTIFICATES, unless --certs. Let\'s Encrypt allows only 5',
+        '    duplicate certificates per week for the same hostname set, so an',
+        '    operator iterating on a broken install who destroys and re-requests',
+        '    one each time locks themselves out of their own domain for a week.',
+        '',
+        'The app\'s name must be typed to authorise this - it is not a y/N - and',
+        'under --non-interactive it must be supplied as --confirm <name>, because',
+        'a destructive default reachable by omission is not a default.',
+        '',
+        'The .env is copied to <apps-root>/<name>.env.<timestamp>.bak (0600)',
+        'before it is deleted, outside the directory being removed: it holds',
+        'generated secrets that may exist nowhere else.',
+        '',
+        '--dry-run needs no confirmation and writes nothing at all, the run log',
+        'included. A half-removed deployment - no containers, or no deploy root -',
+        'uninstalls cleanly and reports what was not there.',
+        '',
+        `To start over on the same server, follow this with \`${CLI_NAME} deploy install\`,`,
+        `or use \`${CLI_NAME} deploy install --fresh\`, which discards only this app's`,
+        'local state and leaves the proxy and the certificate alone.',
+      ].join('\n'),
+    )
+    .action(async (options: UninstallCommandOptions) => {
+      await runUninstallCommand(options, ctx);
     });
 
   withLayoutOptions(
@@ -987,6 +1064,132 @@ export function collectAnswers(
   return answers;
 }
 
+export interface UninstallCommandOptions extends LayoutCommandOptions {
+  /** `--confirm <name>`: the app's own name, typed. */
+  confirm?: string | undefined;
+  dryRun?: boolean | undefined;
+  certs?: boolean | undefined;
+  keepEnv?: boolean | undefined;
+  nonInteractive?: boolean | undefined;
+  skipProxy?: boolean | undefined;
+  proxyRoot?: string | undefined;
+  proxyContainer?: string | undefined;
+  json?: boolean | undefined;
+}
+
+/**
+ * `kvox deploy uninstall` (issue #261).
+ *
+ * The thin command layer: flags in, `runUninstall` does the work, and the
+ * report is rendered here - never inside `src/deploy/`, which writes to no
+ * terminal (hooks.ts's rule).
+ *
+ * THE "NOT REMOVED" BLOCK IS PRINTED EVERY TIME, including on success. An
+ * operator who has just removed a deployment is exactly the person about to
+ * assume the database went with it.
+ */
+export async function runUninstallCommand(
+  options: UninstallCommandOptions,
+  ctx?: DeployContext,
+): Promise<void> {
+  const stdout = ctx?.stdout ?? process.stdout;
+  const stderr = ctx?.stderr ?? process.stderr;
+  const json = options.json === true;
+
+  const uninstallOptions: UninstallOptions = {
+    appsRoot: options.appsRoot,
+    ...(options.name === undefined ? {} : { name: options.name }),
+    ...(options.root === undefined ? {} : { deployRoot: options.root }),
+    ...(options.confirm === undefined ? {} : { confirmation: options.confirm }),
+    ...(options.dryRun === undefined ? {} : { dryRun: options.dryRun }),
+    ...(options.certs === undefined ? {} : { certs: options.certs }),
+    ...(options.keepEnv === undefined ? {} : { keepEnv: options.keepEnv }),
+    ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
+    ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
+    ...(options.proxyRoot === undefined ? {} : { proxyRoot: options.proxyRoot }),
+    ...(options.proxyContainer === undefined ? {} : { proxyContainer: options.proxyContainer }),
+    ...(ctx?.cronDir === undefined ? {} : { cronDir: ctx.cronDir }),
+    ...(ctx?.runCommand === undefined ? {} : { runCommand: ctx.runCommand }),
+    ...(json
+      ? {}
+      : {
+          hooks: {
+            onStepStart: ({ title, index, total }) =>
+              void stderr.write(`\n  [${index + 1}/${total}] ${title}\n`),
+            onStepResult: (result) =>
+              void stderr.write(
+                result.outcome === 'ok'
+                  ? `  done (${result.durationMs}ms)\n`
+                  : `  ${result.outcome}: ${result.detail ?? ''}\n`,
+              ),
+            onProgress: (message) => void stderr.write(`  ${message}\n`),
+            onLog: (line) => void stderr.write(`    ${line}\n`),
+          },
+        }),
+  };
+
+  const result = await (ctx?.uninstall ?? runUninstall)(uninstallOptions);
+
+  if (json) {
+    stdout.write(`${JSON.stringify(result)}\n`);
+    return;
+  }
+
+  stderr.write(renderUninstall(result));
+}
+
+/** The report. Exported so its wording is pinned by a test, not by a screenshot. */
+export function renderUninstall(result: UninstallResult): string {
+  const lines: string[] = [''];
+
+  lines.push(result.dryRun ? `  Dry run - nothing was changed.` : `  Removed ${result.name}.`);
+  lines.push('');
+
+  // WARNINGS COME FIRST, before the inventory (#261). They used to sit at the
+  // bottom, after a removed list that can run to a dozen paths, which is the
+  // one place a notice that automatic certificate renewal has stopped for the
+  // whole server will not be read. A warning here is something the operator
+  // has to act on; everything below it is a record of what happened.
+  if (result.warnings.length > 0) {
+    lines.push('  Action required:');
+    for (const warning of result.warnings) {
+      // An empty line stays empty: indenting it leaves trailing whitespace
+      // that shows up in a diff, a paste and `cat -A`.
+      for (const line of warning.split('\n')) lines.push(line === '' ? '' : `    ${line}`);
+      lines.push('');
+    }
+  }
+
+  const verb = result.dryRun ? 'Would remove' : 'Removed';
+  lines.push(`  ${verb}:`);
+  if (result.removed.length === 0) {
+    lines.push('    (nothing was there)');
+  }
+  for (const item of result.removed) {
+    lines.push(`    ${item.target}${item.existed ? '' : '   (already gone)'}`);
+  }
+
+  lines.push('');
+  lines.push('  NOT removed:');
+  for (const item of result.kept) {
+    lines.push(`    ${item.target}`);
+    lines.push(`      ${item.reason}`);
+  }
+
+  if (result.envBackupPath !== undefined) {
+    lines.push('');
+    lines.push(`  .env ${result.dryRun ? 'would be copied' : 'backed up'} to ${result.envBackupPath}`);
+  }
+
+  if (result.journalPath !== undefined) {
+    lines.push('');
+    lines.push(`  Log  ${result.journalPath}`);
+  }
+
+  lines.push('');
+  return lines.join('\n');
+}
+
 export interface InstallCommandOptions extends LayoutCommandOptions {
   domain?: string | undefined;
   proxyRoot: string;
@@ -1000,6 +1203,8 @@ export interface InstallCommandOptions extends LayoutCommandOptions {
   answer: string[];
   answersFile?: string | undefined;
   reinstall?: boolean | undefined;
+  /** `--fresh`: discard the prior local state before installing (#261). */
+  fresh?: boolean | undefined;
   resume?: boolean | undefined;
   skipDoctor?: boolean | undefined;
   skipProxy?: boolean | undefined;
@@ -1056,6 +1261,7 @@ export async function runInstallCommand(
     ...(options.all === undefined ? {} : { all: options.all }),
     ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
     ...(options.reinstall === undefined ? {} : { reinstall: options.reinstall }),
+    ...(options.fresh === undefined ? {} : { fresh: options.fresh }),
     ...(options.resume === undefined ? {} : { resume: options.resume }),
     ...(options.skipDoctor === undefined ? {} : { skipDoctor: options.skipDoctor }),
     ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),

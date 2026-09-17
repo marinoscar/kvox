@@ -49,6 +49,7 @@ import {
 } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
 import { readState, writeState, type DeployState } from './state.js';
+import { discardLocalState } from './teardown.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
 import type { PromptContext } from '../prompt.js';
@@ -99,6 +100,21 @@ export interface InstallOptions {
   all?: boolean | undefined;
   groups?: readonly EnvGroup[] | undefined;
   reinstall?: boolean | undefined;
+  /**
+   * `--fresh` (#261): discard this app's prior LOCAL state - the `.env`, the
+   * state file and `deploy-info/` - and install clean, after backing the
+   * `.env` up outside the deploy root.
+   *
+   * THE CONVENIENCE PATH FOR THE CASE THAT CAUSED #259, and deliberately much
+   * narrower than `deploy uninstall`: it does not touch the containers, the
+   * proxy vhost, the certificate or the database, so it needs no typed
+   * confirmation - nothing irreversible is destroyed, because the backup is
+   * taken first and the clone is re-fetched anyway.
+   *
+   * It implies `--reinstall`: discarding the state file and then refusing
+   * because a state file exists would be a contradiction one line apart.
+   */
+  fresh?: boolean | undefined;
   resume?: boolean | undefined;
   skipDoctor?: boolean | undefined;
   skipProxy?: boolean | undefined;
@@ -861,6 +877,26 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   const { layout, target } = await resolveInstallLayout(input, runCommand);
   const options: ResolvedInstallOptions = { ...input, ...layout };
 
+  // BEFORE the state is read: `--fresh` means this deployment's prior local
+  // state is not consulted at all, and the refusal below keys on exactly that
+  // state. Reading it first and discarding it after would leave `reinstall`
+  // deciding whether a state file we are about to delete blocks the install.
+  if (options.fresh === true) {
+    const discarded = discardLocalState({
+      appsRoot: options.appsRoot,
+      name: options.name,
+      deployRoot: options.deployRoot,
+    });
+    if (discarded.backup !== undefined) {
+      // Not through the journal: it has not been opened yet, and it lives
+      // under the very deploy root this is clearing part of.
+      input.hooks?.onProgress?.(`Backed up the previous .env to ${discarded.backup.path}`);
+    }
+    for (const outcome of discarded.removed.filter((entry) => entry.existed)) {
+      input.hooks?.onProgress?.(`Discarded ${outcome.path}`);
+    }
+  }
+
   const existingState = readState(options.deployRoot);
 
   // `--resume` means "continue the run that failed". If there is nothing to
@@ -887,7 +923,12 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     );
   }
 
-  if (existingState !== undefined && options.reinstall !== true && options.resume !== true) {
+  if (
+    existingState !== undefined &&
+    options.reinstall !== true &&
+    options.fresh !== true &&
+    options.resume !== true
+  ) {
     throw new UsageError(
       `A deployment already exists at ${options.deployRoot} (${existingState.commitSha.slice(0, 12)}). Use \`${CLI_NAME} deploy update\` to bring it up to date, or --reinstall to start over.`,
     );
