@@ -13,8 +13,12 @@
 // above almost every key. A fork that adds SENTRY_DSN gets a sensible prompt
 // with no change to this CLI.
 //
-// Everything here is pure. No filesystem, no prompting, no process.env.
+// Everything here is pure. No filesystem, no prompting, no process.env. The
+// one thing it does besides compute is REFUSE: serializeEnvFile throws on a
+// value it cannot honestly write (issue #259, argued at assertWritableValue).
 // =============================================================================
+
+import { UsageError } from '../errors.js';
 
 export interface EnvVarSpec {
   key: string;
@@ -28,6 +32,33 @@ export interface EnvVarSpec {
   optional: boolean;
   /** 1-based line in the source file, for error messages. */
   line: number;
+}
+
+/**
+ * Splits a file into lines, tolerating Windows endings.
+ *
+ * MUST BE THE ONLY WAY THIS MODULE SPLITS LINES (issue #259). A bare
+ * `split('\n')` leaves a trailing `\r` on every line of a CRLF file, and the
+ * consequence is not the mangled value it looks like - it is TOTAL SILENT
+ * DATA LOSS. In JavaScript, unlike most other languages, `.` does NOT match
+ * `\r` (CR is a line terminator, so `.` excludes it alongside `\n`), and `$`
+ * without the `m` flag matches only the very end of the input. So `ASSIGNMENT`
+ * does not match `KEY=value\r` AT ALL: the line is skipped, and a CRLF `.env`
+ * parses to an EMPTY map while reporting no error of any kind.
+ *
+ * A CRLF `.env.example` is worse still - no assignments, no banners, no help -
+ * because `COMMENT` and `BANNER_RULE` miss for the same reason, so the wizard
+ * has no questions to ask.
+ *
+ * Splitting on `'\n'` and then removing one trailing `\r` is used rather than
+ * `split(/\r?\n/)` deliberately: it keeps array indices identical to the LF
+ * case, which `parseEnvExample` reports as `line` and uses to look ahead at
+ * the two lines of a section banner.
+ */
+function splitLines(contents: string): string[] {
+  return contents
+    .split('\n')
+    .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
 }
 
 /** `# ----` or `# ====` - the rules that fence a section title. */
@@ -94,7 +125,7 @@ export function unquote(value: string): string {
  * than anything this code could invent.
  */
 export function parseEnvExample(contents: string): EnvVarSpec[] {
-  const lines = contents.split('\n');
+  const lines = splitLines(contents);
   const specs: EnvVarSpec[] = [];
 
   let section = '';
@@ -181,7 +212,7 @@ export function parseEnvExample(contents: string): EnvVarSpec[] {
 export function parseEnvFile(contents: string): Map<string, string> {
   const values = new Map<string, string>();
 
-  for (const line of contents.split('\n')) {
+  for (const line of splitLines(contents)) {
     if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
 
     const assignment = ASSIGNMENT.exec(line);
@@ -196,8 +227,65 @@ export function parseEnvFile(contents: string): Map<string, string> {
   return values;
 }
 
+/** The control characters a `.env` value can never carry. */
+const CONTROL_CHARACTER_NAMES: ReadonlyMap<string, string> = new Map([
+  ['\r', 'a carriage return (CR)'],
+  ['\n', 'a line feed (LF)'],
+]);
+
+/**
+ * Refuses to write a value carrying CR or LF. The safety net for issue #259.
+ *
+ * REFUSE RATHER THAN STRIP, for three reasons, in order of weight:
+ *
+ * 1. THE CAPABILITY DOES NOT EXIST, so refusing withholds nothing. A `.env`
+ *    is a line-oriented format: every reader of it, this module included,
+ *    splits on newlines before it looks at anything. A value containing one
+ *    cannot round-trip through the file by construction - `KEY=a\nb` is
+ *    written, read back as `KEY=a`, and `b` is silently discarded as an
+ *    unparseable line. Stripping would not be preserving a value the format
+ *    supports; it would be picking, quietly, which half of it to lose.
+ *
+ * 2. STRIPPING FAILS INVISIBLY, WHICH IS THE PROPERTY THAT CAUSED #259. The
+ *    original bug was not that a carriage return existed - it was that
+ *    `renderValue` QUOTED it, wrote it back looking deliberate, and nothing
+ *    ever said so. A silent strip has the same shape: the operator reads a
+ *    plausible-looking `.env`, never learns their input was altered, and
+ *    debugs the resulting behaviour against a value they believe they set.
+ *    A wrong value nobody is told about is worse than a refused install.
+ *
+ * 3. THE COST ASYMMETRY FAVOURS STOPPING. A refusal here is expensive - it
+ *    can land after a four-minute build and cost a re-run. But the measured
+ *    alternative is what #259 actually cost: an install reported as failed on
+ *    a deployment that had been serving correctly for eleven hours, with a
+ *    message (`Missing expected LF after header value`) pointing away from
+ *    the cause. Cheap and loud beats expensive and silent.
+ *
+ * With `splitLines` above in place there is no parse path left that can
+ * produce such a value, so in practice this fires only on an operator's own
+ * `--answer`/`--answers-file` input (`ANSWER_FLAG` captures with `[\s\S]*`
+ * and sanitises nothing) or on a fork's own code - both cases where a human
+ * chose the value and should be told, not overruled.
+ */
+function assertWritableValue(key: string, value: string): void {
+  for (const [character, name] of CONTROL_CHARACTER_NAMES) {
+    const index = value.indexOf(character);
+    if (index === -1) continue;
+
+    throw new UsageError(
+      `${key} contains ${name} at position ${index}, which cannot be written to a .env file.\n` +
+        `A .env is line-oriented, so such a value cannot be read back as written - and a control\n` +
+        `character that reaches a generated config (an nginx header, for one) makes the output\n` +
+        `malformed in ways that are hard to trace back here.\n` +
+        `Remove it from the value and re-run. If it came from --answer or --answers-file, check\n` +
+        `that file's line endings: a CRLF file edited on Windows is the usual source.`,
+    );
+  }
+}
+
 /** Quotes only when the value would otherwise be re-read incorrectly. */
-function renderValue(value: string): string {
+function renderValue(key: string, value: string): string {
+  assertWritableValue(key, value);
   if (value === '') return '';
   // A `#` after whitespace would be re-read as a comment, and leading or
   // trailing whitespace would be silently kept. Quote in those cases only, so
@@ -213,6 +301,9 @@ function renderValue(value: string): string {
  *
  * Diffability is the point: an operator should be able to compare a generated
  * .env against .env.example and see only their own answers.
+ *
+ * Throws `UsageError` naming the key if any value carries CR or LF - see
+ * `assertWritableValue` for why that is a refusal rather than a repair.
  */
 export function serializeEnvFile(
   values: ReadonlyMap<string, string>,
@@ -235,7 +326,7 @@ export function serializeEnvFile(
       }
     }
 
-    lines.push(`${spec.key}=${renderValue(values.get(spec.key) as string)}`);
+    lines.push(`${spec.key}=${renderValue(spec.key, values.get(spec.key) as string)}`);
     written.add(spec.key);
   }
 
@@ -249,7 +340,7 @@ export function serializeEnvFile(
     lines.push('# Not in .env.example');
     lines.push(`# ${'-'.repeat(77)}`);
     for (const key of extra) {
-      lines.push(`${key}=${renderValue(values.get(key) as string)}`);
+      lines.push(`${key}=${renderValue(key, values.get(key) as string)}`);
     }
   }
 

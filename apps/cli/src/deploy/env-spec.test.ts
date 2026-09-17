@@ -20,6 +20,7 @@ import {
   unquote,
   type EnvVarSpec,
 } from './env-spec.js';
+import { UsageError } from '../errors.js';
 import { unknownServerFacts } from './server-facts.js';
 
 const REAL_TEMPLATE = resolve(
@@ -441,5 +442,134 @@ describe('spec and metadata together', () => {
     // The registry is meant to be the exception. If it ever covers most keys,
     // the fallback that makes forks work has stopped being the common path.
     expect(annotated.length).toBeLessThan(specs.length);
+  });
+});
+
+// =============================================================================
+// Windows line endings  (issue #259)
+// =============================================================================
+//
+// A CRLF .env made a production install die at "Wait for health" on a
+// deployment that was serving correctly: a carriage return reached
+// STORAGE_CSP_ORIGIN, envsubst put it inside the Content-Security-Policy
+// header, and Node's HTTP parser rejected the whole response while curl
+// showed 200.
+//
+// These fixtures are deliberately written as explicit '\r\n' joins rather than
+// with a helper, so the bytes under test are visible in the test itself.
+// =============================================================================
+
+/** The same content twice, differing only in line terminator. */
+const LF_ENV = ['A=1', 'B=', 'C=x y', 'D="  padded  "', 'E=a#b'].join('\n');
+const CRLF_ENV = ['A=1', 'B=', 'C=x y', 'D="  padded  "', 'E=a#b'].join('\r\n');
+
+describe('parseEnvFile with CRLF line endings (issue #259)', () => {
+  it('yields exactly what the LF equivalent yields', () => {
+    expect([...parseEnvFile(CRLF_ENV).entries()]).toEqual([...parseEnvFile(LF_ENV).entries()]);
+  });
+
+  it('reads an empty value as empty, not as a carriage return', () => {
+    // THE EXACT CASE THAT BROKE: `STORAGE_CSP_ORIGIN=` in a CRLF file. The
+    // value must be '' - not '\r', and not missing.
+    const values = parseEnvFile('STORAGE_CSP_ORIGIN=\r\n');
+
+    expect(values.has('STORAGE_CSP_ORIGIN')).toBe(true);
+    expect(values.get('STORAGE_CSP_ORIGIN')).toBe('');
+  });
+
+  it('does not drop every variable in the file', () => {
+    // The regression as it actually behaved: `.` does not match CR in
+    // JavaScript, so ASSIGNMENT matched no line at all and the map came back
+    // EMPTY - every value silently lost.
+    expect(parseEnvFile(CRLF_ENV).size).toBe(5);
+  });
+
+  it('leaves no carriage return in any value', () => {
+    for (const value of parseEnvFile(CRLF_ENV).values()) {
+      expect(value).not.toMatch(/[\r\n]/);
+    }
+  });
+});
+
+describe('parseEnvExample with CRLF line endings (issue #259)', () => {
+  const crlf = parseEnvExample(FIXTURE.split('\n').join('\r\n'));
+  const lf = parseEnvExample(FIXTURE);
+
+  it('produces the identical spec list', () => {
+    expect(crlf).toEqual(lf);
+  });
+
+  it('still recognises a commented-out assignment as an optional variable', () => {
+    const spec = crlf.find((entry) => entry.key === 'S3_ENDPOINT');
+
+    expect(spec?.optional).toBe(true);
+    expect(spec?.defaultValue).toBe('http://localhost:9000');
+  });
+
+  it('still recognises section banners and help text', () => {
+    const spec = crlf.find((entry) => entry.key === 'APP_URL');
+
+    expect(spec?.section).toBe('Application');
+    expect(spec?.help).toBe('The public URL.\nTwo lines of help.');
+  });
+
+  it('leaves no carriage return in any default value', () => {
+    for (const spec of crlf) {
+      expect(spec.defaultValue).not.toMatch(/[\r\n]/);
+    }
+  });
+});
+
+describe('CRLF round-trip (issue #259)', () => {
+  it('parse -> serialize -> parse is stable and carriage-return free', () => {
+    const specs = parseEnvExample(FIXTURE.split('\n').join('\r\n'));
+    const once = parseEnvFile(CRLF_ENV);
+    const rendered = serializeEnvFile(once, specs);
+    const twice = parseEnvFile(rendered);
+
+    expect(rendered).not.toMatch(/\r/);
+    expect([...twice.entries()]).toEqual([...once.entries()]);
+    // Stable: a third pass changes nothing either.
+    expect(parseEnvFile(serializeEnvFile(twice, specs))).toEqual(twice);
+  });
+});
+
+describe('serializeEnvFile refuses control characters (issue #259)', () => {
+  const specs = parseEnvExample(FIXTURE);
+
+  it('refuses a value containing a carriage return, naming the key', () => {
+    const attempt = (): string =>
+      serializeEnvFile(new Map([['STORAGE_CSP_ORIGIN', 'https://cdn.test\r']]), specs);
+
+    expect(attempt).toThrow(UsageError);
+    expect(attempt).toThrow(/STORAGE_CSP_ORIGIN/);
+    expect(attempt).toThrow(/carriage return/i);
+  });
+
+  it('refuses a value containing a line feed, naming the key', () => {
+    const attempt = (): string => serializeEnvFile(new Map([['NODE_ENV', 'a\nb']]), specs);
+
+    expect(attempt).toThrow(UsageError);
+    expect(attempt).toThrow(/NODE_ENV/);
+    expect(attempt).toThrow(/line feed/i);
+  });
+
+  it('refuses a key the template does not know about too', () => {
+    // The "Not in .env.example" branch renders values through the same
+    // function and must not be a hole in the net.
+    expect(() => serializeEnvFile(new Map([['SENTRY_DSN', 'x\ry']]), specs)).toThrow(UsageError);
+  });
+
+  it('still writes every legitimate value, including quoted whitespace', () => {
+    // renderValue's existing purpose must survive: a value quoted because it
+    // has significant whitespace still round-trips exactly.
+    const values = new Map([
+      ['NODE_ENV', ' padded '],
+      ['HASH_MARK', 'a # b'],
+      ['APP_URL', 'https://app.example.test'],
+      ['MAX_FILE_SIZE', ''],
+    ]);
+
+    expect(parseEnvFile(serializeEnvFile(values, specs))).toEqual(values);
   });
 });
