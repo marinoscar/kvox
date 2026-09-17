@@ -15,7 +15,7 @@ import { readEnvFile } from './env-file.js';
 //     serving HTTPS because `.appctl-deploy.json` was missing, and point at
 //     `install`, whose own precondition is the opposite;
 //   - `listInstalledApps`, which discovers apps under the apps root by looking
-//     for that same file, so a bare `kvox deploy update` with no `--name` never
+//     for that same file, so a bare `deploy update` with no `--name` never
 //     even reached the first one.
 //
 // They are one defect at two levels, so they share ONE predicate - this file -

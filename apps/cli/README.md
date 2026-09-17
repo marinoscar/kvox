@@ -1151,12 +1151,18 @@ from the wrong branch.
 An existing state file is always used exactly as it is, and is never
 reconstructed over.
 
-⚠ This is `update`'s gate only. `status`, `about` and a named `certs` still
-refuse for a missing state file, and a bare `kvox deploy update` with no
-`--name`/`--root` still finds nothing to act on, because discovering apps under
-`--apps-root` works by looking for state files. Point the command at the
-deployment with `--name <app>` or `--root <dir>` and it will adopt it; the next
-run, with the record restored, needs neither.
+A bare `kvox deploy update` with no `--name`/`--root` reaches this too:
+discovering apps under `--apps-root` uses the same evidence gate, so a
+directory that is a deployment is found whether or not it has a state file. Two
+of them with nothing named refuses exactly as two installed apps always did —
+`Several apps are installed under …: alpha, beta. Pass --name <app> to say
+which one.` — and a recorded app beside an unrecorded one refuses the same way,
+with no silent preference for either.
+
+⚠ `status`, `about` and a named `certs` are **not** part of this. They still
+want a state file, because each is a read-only reporter and adopting from one
+would mean writing the CLI's private record from a command that only reports.
+Run `update` once to restore the record and they work again.
 
 ```bash
 kvox deploy update --check

@@ -2188,27 +2188,86 @@ journal opens so the write is journaled: the bookkeeping is recovered whatever
 the run then does, so a preflight failure, a `--check` or an "already up to
 date" does not each need the adoption performed again.
 
-### 23.7 Scope: this is `update`'s gate, and only `update`'s
+### 23.7 Discovery keyed on the same wrong fact, and was fixed with it
 
-`status`, `about` and `certs` were audited and deliberately not changed.
+`listInstalledApps` collects the directories under the apps root that are
+deployments, and until #285 "is a deployment" meant "holds a state file" —
+the identical defect one level up. So a bare `deploy update` with no
+`--name`/`--root` answered *"Nothing is installed under /opt/infra/apps"* and
+never reached §23.2's gate at all: the user's actual command still failed, and
+the remedy was a flag an operator whose state file is missing has no reason to
+know about.
+
+It is fixed here rather than deferred, because deferring it would leave the
+codebase disagreeing with itself — `update` saying a deployment is a clone plus
+an `.env`, discovery saying a deployment is a state file.
+
+**One predicate, not two.** The gate moved to
+`apps/cli/src/deploy/deployment-evidence.ts`, which `adopt.ts` and `layout.ts`
+both import and which imports neither, so there is no cycle and no second
+implementation to drift. `adopt.test.ts` asserts the two modules export the
+same function objects, which is the only assertion that cannot be satisfied by
+a copy.
+
+**That module reads; it does not decide.** `envFacts` answers what a
+deployment's own `.env` says — `COMPOSE_PROJECT_NAME`, `APP_BIND_PORT`,
+`APP_URL` — and a missing key is `undefined`, never a default. Defaults are
+policy and the two callers have opposite ones: `adopt.ts` falls back to
+`DEFAULT_BIND_PORT` because it is about to write a record that needs a number,
+while `siblingBindPorts` must claim **no** port for a deployment whose port it
+cannot read, since telling the install wizard 3535 is taken when nothing on
+that disk says so costs a free port on every install.
+
+**Ambiguity is unchanged, and that is the point.** `locateApp` still returns
+everything the listing found and refuses when there is more than one, naming
+them: *"Several apps are installed under `<apps-root>`: alpha, beta. Pass
+`--name <app>` to say which one."* Two evidence-bearing directories take that
+exact path. A state-bearing directory is deliberately **not** preferred over an
+evidence-bearing one — that would be a tiebreak this command has never had,
+invented at the moment an operator most needs to be asked which they meant.
+
+**An unreadable state file is still skipped, and is not promoted to an
+unrecorded deployment.** The file being there and unintelligible to this build
+is a different problem from there being no file, and the command that goes on
+to act on it raises that difference properly.
+
+#### What each caller of the listing now sees
+
+| Caller | What changed | Needed narrowing? |
+|---|---|---|
+| `locateApp` / `locateInstalledApp` (`update`, `status`, `about`, `doctor`, `certs`) | An unrecorded deployment is now findable with nothing named. Two of anything still refuses and names both. | No |
+| `siblingBindPorts` → the install wizard's port suggestions | An unrecorded deployment's `APP_BIND_PORT` now counts. **Correct**: that port is held whether or not this CLI has a record of who holds it, which is #257's point exactly. One with no readable port claims none. | No |
+| `lastRenewalCronWarning` (`uninstall`, §21) | Would have named an unrecorded survivor in a pasteable `certs renew --install-cron --name <survivor>` — and that command resolves its lineage from the survivor's **recorded** domain, so it would answer "is not published under a domain". | **Yes** — narrowed to `state !== undefined`, falling through to the honest "nothing to point at" branch |
+| The TUI's deploy menu (`listInstalledApps(...).length > 0`) | An unrecorded deployment now enables the deploy destinations. **Correct**: there is a deployment to update. | No |
+
+The `--reinstall` guard is **not** a caller of this listing, despite looking
+like one: it reads `readState(options.deployRoot)` directly. It is therefore
+unchanged, and unchanged is right either way — its test is `lastDeployedAt`
+(§22.1), and an unrecorded deployment has none to refuse on. An install over
+one gets past the precondition exactly as before. A test pins that.
+
+`locateAppFromCwd` (#266, "the deployment cwd is standing in") is also
+unchanged: it walks up looking for a state file, and it feeds `install`'s
+target resolution rather than `update`'s precondition. Widening it would change
+what `install` deploys, which is a different question from what `update` can
+find.
+
+### 23.8 Scope: `status`, `about` and `certs`
+
+Audited and deliberately not changed.
 
 - `status` and `about` each carry their **own** copy of the refusal (an inline
   `readState(...) === undefined` check with their own wording), not a call to
   `requireState`. They are read-only reporters, and adopting from one would
   mean either running `git` subprocesses during what is meant to be a cheap
-  read and *writing* the CLI's private record from a reporting command, or
-  holding a reconstruction in memory that the next command would have to
-  perform again. That is a design decision of its own, not the identical
-  one-line path, so it is left for its own issue.
+  read and *writing* the CLI's private record from a command that only reports,
+  or holding a reconstruction in memory that the next command would perform
+  again. That is a design decision of its own, and one `update` now makes
+  unnecessary in practice: a single `update` restores the record, after which
+  both work.
 - `certs` does not refuse at all: it reads the state **optionally**
-  (`state?.domain`, `state?.proxyRoot`), so `--all` already works without one
-  and a named app without a recorded domain gets its own message. Nothing to
-  fix.
-- A **third** mechanism is `locateInstalledApp`/`listInstalledApps`: with no
-  `--name` and no `--root`, apps are discovered by scanning `--apps-root` for
-  directories that hold a state file, so a bare `kvox deploy update` still
-  finds nothing. Teaching the scan to recognise deployments by evidence is a
-  different design with its own questions (two evidence-bearing directories,
-  which one?), and also belongs in its own issue. `--name <app>` or `--root
-  <dir>` reaches the adoption today, and once the record is restored the next
-  run needs neither.
+  (`state?.domain`, `state?.proxyRoot`, `state?.proxyContainer`), so `--all`
+  already works without one and a named app without a recorded domain gets its
+  own message. Nothing to fix — and §23.7's narrowing of
+  `lastRenewalCronWarning` exists precisely because that message is the one an
+  unrecorded survivor would produce.
