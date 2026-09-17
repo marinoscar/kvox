@@ -34,11 +34,25 @@ function fakeRunCommand(respond: Responder): typeof import('./executor.js').runC
   }) as typeof import('./executor.js').runCommand;
 }
 
+/**
+ * The fixture password, and why it does not look like one.
+ *
+ * The value has to carry awkward characters - `/`, `#`, a digit - because the
+ * assertion below is that NONE of it reaches an argv, and a bland value would
+ * pass that test by accident. `checks/external.test.ts` uses a realistic
+ * literal for the same reason, and a secret scanner reports it as a credential
+ * every time the file is touched. A scanner that cries wolf over fixtures is a
+ * scanner people learn to wave through, which is the day it stops catching a
+ * real one. So this says what it is, and keeps the characters that make the
+ * test worth running.
+ */
+const FIXTURE_PASSWORD = 'example-not-a-real-password/#1';
+
 const SETTINGS: DatabaseSettings = {
   host: 'db.internal',
   port: '5432',
   user: 'appuser',
-  password: 'p@ss/word#1',
+  password: FIXTURE_PASSWORD,
   database: 'appdb',
   ssl: false,
 };
@@ -70,7 +84,7 @@ const ENV = new Map([
   ['POSTGRES_HOST', 'db.internal'],
   ['POSTGRES_PORT', '5432'],
   ['POSTGRES_USER', 'appuser'],
-  ['POSTGRES_PASSWORD', 'p@ss/word#1'],
+  ['POSTGRES_PASSWORD', FIXTURE_PASSWORD],
   ['POSTGRES_DB', 'appdb'],
 ]);
 
@@ -225,10 +239,10 @@ describe('createDatabase', () => {
     );
 
     const flat = seen.flat().join(' ');
-    expect(flat).not.toContain('p@ss/word#1');
+    expect(flat).not.toContain(FIXTURE_PASSWORD);
     // PGPASSWORD is passed BY NAME in argv (as the bare variable name for
     // docker's -e flag), its value only ever appears in the child's env.
-    expect(envs[0]?.PGPASSWORD).toBe('p@ss/word#1');
+    expect(envs[0]?.PGPASSWORD).toBe(FIXTURE_PASSWORD);
   });
 
   it('never calls runCommand at all when the name fails validation', async () => {
