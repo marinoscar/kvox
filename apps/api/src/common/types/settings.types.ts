@@ -2,6 +2,7 @@ import type {
   DataTablesValue,
   NavigationValue,
   NotificationsValue,
+  OnboardingValue,
 } from '../schemas/user-settings-namespaces.schema';
 import {
   DEFAULT_MAINTENANCE_MESSAGE,
@@ -60,6 +61,24 @@ export interface UserSettingsValue {
    * notifications/notification-preferences.ts.
    */
   notifications?: NotificationsValue;
+  /**
+   * First-run onboarding INTENT (#272, epic #271): when the welcome was seen,
+   * when the user checklist was dismissed, when the administrator setup banner
+   * was dismissed, and which optional steps were explicitly skipped.
+   *
+   * OPTIONAL, AND ABSENT IS LOAD-BEARING — it is the epic's own signal that
+   * this user has never been onboarded, which is why `onboarding` appears in
+   * this interface but deliberately NOT in `DEFAULT_USER_SETTINGS` below.
+   *
+   * Nothing about onboarding READINESS lives here. Whether OAuth is configured,
+   * whether anyone is allowlisted, whether this account has an AI key — all of
+   * that is derived from live state on every read (#274), because a readiness
+   * fact frozen into a settings row starts lying the moment a deployment
+   * changes. This namespace records only what the user decided.
+   *
+   * Derived from the zod schema so the two cannot drift.
+   */
+  onboarding?: OnboardingValue;
 }
 
 /**
@@ -132,12 +151,15 @@ export interface SystemSettingsValue {
 /**
  * Default user settings
  */
-// NOTE: `dataTables`, `navigation` and `notifications` are intentionally NOT
-// listed here.
+// NOTE: `dataTables`, `navigation`, `notifications` and `onboarding` are
+// intentionally NOT listed here.
 // Seeding them would turn "absent" into "explicitly empty", which is exactly
 // the failure mode the namespaces are designed to avoid (a frozen column set
-// that silently hides every column added later, or a notification preference
-// map that freezes a user at the defaults of the day they first saved).
+// that silently hides every column added later, a notification preference map
+// that freezes a user at the defaults of the day they first saved, or — for
+// `onboarding`, #272 — an account being told it has already been through a
+// first run it has never seen, silently disabling the welcome dialog for every
+// user created after the feature shipped).
 export const DEFAULT_USER_SETTINGS: UserSettingsValue = {
   theme: 'system',
   profile: {
