@@ -55,7 +55,20 @@ export interface HealthReport {
   external?: { url: string; probe: ProbeResult } | undefined;
   migrations: MigrationState;
   deployed?:
-    | Pick<DeployState, 'commitSha' | 'ref' | 'lastDeployedAt' | 'lastAttemptAt' | 'lastCommand'>
+    | Pick<
+        DeployState,
+        | 'commitSha'
+        | 'ref'
+        | 'lastDeployedAt'
+        | 'lastAttemptAt'
+        | 'lastCommand'
+        // #267: a state file now exists for a run that FAILED, so the report
+        // has to be able to say so. Without these two, `status` on a
+        // half-finished install reads exactly like `status` on a healthy one
+        // that happens to be down.
+        | 'lastOutcome'
+        | 'lastFailedStep'
+      >
     | undefined;
 }
 
@@ -304,11 +317,19 @@ export async function collectHealth(options: HealthOptions): Promise<HealthRepor
           deployed: {
             commitSha: options.state.commitSha,
             ref: options.state.ref,
-            lastDeployedAt: options.state.lastDeployedAt,
+            ...(options.state.lastDeployedAt === undefined
+              ? {}
+              : { lastDeployedAt: options.state.lastDeployedAt }),
             ...(options.state.lastAttemptAt === undefined
               ? {}
               : { lastAttemptAt: options.state.lastAttemptAt }),
             lastCommand: options.state.lastCommand,
+            ...(options.state.lastOutcome === undefined
+              ? {}
+              : { lastOutcome: options.state.lastOutcome }),
+            ...(options.state.lastFailedStep === undefined
+              ? {}
+              : { lastFailedStep: options.state.lastFailedStep }),
           },
         }),
   };

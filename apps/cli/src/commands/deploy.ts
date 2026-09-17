@@ -890,6 +890,18 @@ export function renderHealth(
     // three blocks now, and a health report that also tried to be an
     // inventory made the verdict - the thing a monitor reads - harder to find.
     lines.push(`  ${'Revision'.padEnd(TITLE_WIDTH)}${report.deployed.commitSha.slice(0, 12)} (${report.deployed.ref})\n`);
+
+    // The one exception to "one revision line, and no more" (#267). A state
+    // file now exists for an install that FAILED, so the revision above may
+    // name a commit that was never deployed - and an operator reading this
+    // report must not have to infer that from a probe that times out.
+    if (report.deployed.lastOutcome === 'failure') {
+      const where =
+        report.deployed.lastFailedStep === undefined ? '' : ` at ${report.deployed.lastFailedStep}`;
+      lines.push(
+        `  ${'Last outcome'.padEnd(TITLE_WIDTH)}the last install failed${where}; re-run \`${CLI_NAME} deploy install --resume\` to continue\n`,
+      );
+    }
   }
 
   if (update !== undefined) {

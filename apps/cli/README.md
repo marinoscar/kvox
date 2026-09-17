@@ -773,6 +773,25 @@ application), and the refusal still stands for a directory that really does
 imply nothing. Nothing is ever scanned for candidates: exactly one deployment
 is implied by a directory, or none.
 
+`--resume` is available after **any** failed run, including the first install
+at a deploy root. A run that fails writes its deployment state before it
+exits, recording the steps that did complete, the step that stopped it and
+that it did not finish — so `--resume` re-enters at that step and skips the
+clone, the image build and the migration that already succeeded. The failed
+run does **not** write `deploy-info/`: that file is what the running
+application reports about itself, and an install that did not finish has not
+deployed what it would claim. `deploy status` says so on such a root ("the
+last install failed at `<step>`") rather than reporting it as an ordinary
+deployment, and re-running plain `install` there does **not** ask for
+`--reinstall` — nothing was deployed for it to install over. A failed run
+over a deployment that *had* previously completed still does.
+
+`--resume` reads the state file inside the deploy root, so it needs that root
+resolved first — which rank 2 above now does from the directory you are
+standing in. Outside the apps root, name the deployment with `--name` (or
+`--root`, or `--repo`) exactly as the original run did; with nothing to point
+at, `--resume` refuses rather than starting a new install somewhere else.
+
 The `publish` step talks to the shared proxy **container** only — there is
 no host `nginx` or `certbot` on the server. Before spending any Let's
 Encrypt rate-limit budget it writes a nonce under the proxy's ACME webroot

@@ -54,7 +54,13 @@ import {
   type RepoTarget,
 } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
-import { deployStatePath, readState, writeState, type DeployState } from './state.js';
+import {
+  DEPLOY_STATE_VERSION,
+  deployStatePath,
+  readState,
+  writeState,
+  type DeployState,
+} from './state.js';
 import { discardLocalState } from './teardown.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
@@ -1048,6 +1054,83 @@ export function describeLayoutSource(
   }
 }
 
+/** Everything `buildInstallState` needs that is not the run's own ending. */
+interface InstallStateInput {
+  options: ResolvedInstallOptions;
+  context: InstallContext;
+  /** The state this run found at entry, or undefined for a first install. */
+  existingState: DeployState | undefined;
+  /** Step ids that completed, as the pipeline reported them. */
+  completed: readonly string[];
+  /** One instant for the whole epilogue, so two fields cannot disagree. */
+  now: string;
+}
+
+/**
+ * The install's state record - ONE BUILDER, both endings (#267).
+ *
+ * A success and a failure differ in exactly three things: whether
+ * `lastDeployedAt` is stamped, and the two fields that name the failure. Every
+ * other field has to be identical, because the failure record's entire job is
+ * to be the file `--resume` reads back - and two object literals fifty lines
+ * apart would drift the moment one of them gained a field. (The success
+ * literal this replaces had already gained `proxyContainer` and `envPath`
+ * since it was written.)
+ *
+ * THE THREE IDENTITY FIELDS FALL BACK TO THE EXISTING STATE, and that is not
+ * defensive padding. A resumed run skips the `checkout` step, so
+ * `context.commitSha` and `context.target` are never set on that path: without
+ * the fallback the run that finally SUCCEEDS would record an empty commit and
+ * an empty repository URL, and `deploy-info` would publish them - the state
+ * file's only job being to say what is deployed here.
+ *
+ * `existingState` is read after `--fresh` has already discarded the old
+ * record, so nothing here can resurrect what `--fresh` deliberately removed.
+ */
+function buildInstallState(
+  input: InstallStateInput,
+  ending:
+    | { outcome: 'success' }
+    | { outcome: 'failure'; failedStep: string },
+): DeployState {
+  const { options, context, existingState, completed, now } = input;
+  const proxyContainer = context.proxyContainer ?? existingState?.proxyContainer;
+
+  return {
+    version: DEPLOY_STATE_VERSION,
+    repoUrl: context.target?.url ?? existingState?.repoUrl ?? '',
+    ref: context.target?.ref ?? existingState?.ref ?? '',
+    commitSha: context.commitSha ?? existingState?.commitSha ?? '',
+    ...(options.domain === undefined ? {} : { domain: options.domain }),
+    bindPort: options.bindPort,
+    deployRoot: options.deployRoot,
+    name: options.name,
+    appsRoot: options.appsRoot,
+    proxyRoot: options.proxyRoot,
+    // Resolved once, here; update reads it back rather than detecting again.
+    ...(proxyContainer === undefined ? {} : { proxyContainer }),
+    envPath: envFilePath(options.deployRoot),
+    installedAt: existingState?.installedAt ?? now,
+    // STAMPED ONLY ON SUCCESS. A failed run carries forward whatever earlier
+    // success there was, and a FIRST failed install carries nothing at all -
+    // absent means "no deploy has ever completed here". Stamping `now` on a
+    // failure is precisely the lie #120 removed from `update`, and the
+    // "already exists" refusal in `runInstall` reads this field to tell a
+    // half-finished first install from a real deployment.
+    ...(ending.outcome === 'success'
+      ? { lastDeployedAt: now }
+      : existingState?.lastDeployedAt === undefined
+        ? {}
+        : { lastDeployedAt: existingState.lastDeployedAt }),
+    ...(ending.outcome === 'success' ? {} : { lastAttemptAt: now }),
+    lastCommand: 'install',
+    lastOutcome: ending.outcome,
+    ...(ending.outcome === 'failure' ? { lastFailedStep: ending.failedStep } : {}),
+    appctlVersion: CLI_VERSION,
+    completedSteps: [...completed],
+  } as DeployState;
+}
+
 export async function runInstall(input: InstallOptions): Promise<InstallResult> {
   const runCommand = input.runCommand ?? defaultRunCommand;
   const { layout, target } = await resolveInstallLayout(input, runCommand);
@@ -1099,8 +1182,24 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     );
   }
 
+  // A HALF-FINISHED FIRST INSTALL IS NOT "A DEPLOYMENT ALREADY EXISTS" (#267).
+  //
+  // Since this run now writes a state file when the pipeline FAILS, the file
+  // alone stopped meaning "something is deployed here" - and without this
+  // clause the fix would have broken the ordinary retry it exists to enable:
+  // install fails, the operator fixes the cause, re-runs `install` with no
+  // flags, and is told to pass --reinstall to start over a deployment that
+  // never happened.
+  //
+  // The test is `lastDeployedAt`, not `lastOutcome`, and the difference
+  // matters. A failed run carries an earlier success's `lastDeployedAt`
+  // forward, so a failed REINSTALL over a real deployment still has one and is
+  // still refused - the containers, the certificate and the database it would
+  // clobber are all still there. Only a root where no deploy has ever
+  // completed is let through.
   if (
     existingState !== undefined &&
+    existingState.lastDeployedAt !== undefined &&
     options.reinstall !== true &&
     options.fresh !== true &&
     options.resume !== true
@@ -1157,8 +1256,53 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   };
 
   const result = await runPipeline(buildInstallSteps(), context);
+  const now = new Date().toISOString();
+  const stateInput: InstallStateInput = {
+    options,
+    context,
+    existingState,
+    completed: result.completed,
+    now,
+  };
 
   if (result.failed !== undefined) {
+    // ==========================================================================
+    // THE STATE IS WRITTEN ON THIS PATH TOO, AND THAT IS THE WHOLE OF #267.
+    // ==========================================================================
+    //
+    // `--resume` reads `completedSteps` out of the state file, and the state
+    // file used to be written only after the pipeline had finished - so
+    // `--resume` could only ever resume a run that had nothing left to
+    // resume. `result.completed` was computed right here and thrown away on
+    // exactly the path that needed it, while the message three lines below
+    // told the operator to use the flag it had just made useless. The answer
+    // was always "Nothing to resume: no deployment state at <root>".
+    //
+    // It is written BEFORE `journal.finish`, so a failure to write it is
+    // itself journaled - and it must never replace the pipeline's own error,
+    // which is the operator's actual problem. A full disk that stops the
+    // record being kept is a worse second run, not a different first failure.
+    try {
+      const path = writeState(
+        buildInstallState(stateInput, { outcome: 'failure', failedStep: result.failed.id }),
+      );
+      journal.line(
+        `Recorded ${result.completed.length} completed step(s) in ${path}; ` +
+          `\`--resume\` will re-enter at ${result.failed.id}.`,
+      );
+    } catch (error) {
+      journal.line(
+        `Could not record the completed steps: ${error instanceof Error ? error.message : String(error)}. ` +
+          `A re-run will start from the beginning.`,
+      );
+    }
+
+    // DELIBERATELY NO `writeDeployInfo` HERE. That document is what the
+    // RUNNING APPLICATION reports about itself (deploy-info.ts), and a failed
+    // install has not deployed what it would claim. The ordering comment
+    // below - deploy-info comes after the state, because it is derived from
+    // it - stays true; only the state write gained a second call site.
+
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     // A precondition (the preflight, a logged-out gh) keeps its exit code 6.
     throw pipelineFailure(
@@ -1169,29 +1313,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     );
   }
 
-  const now = new Date().toISOString();
-  const state = {
-    version: 1,
-    repoUrl: context.target?.url ?? '',
-    ref: context.target?.ref ?? '',
-    commitSha: context.commitSha ?? '',
-    ...(options.domain === undefined ? {} : { domain: options.domain }),
-    bindPort: options.bindPort,
-    deployRoot: options.deployRoot,
-    name: options.name,
-    appsRoot: options.appsRoot,
-    proxyRoot: options.proxyRoot,
-    // Resolved once, here; update reads it back rather than detecting again.
-    ...((context.proxyContainer ?? existingState?.proxyContainer) === undefined
-      ? {}
-      : { proxyContainer: context.proxyContainer ?? existingState?.proxyContainer }),
-    envPath: envFilePath(options.deployRoot),
-    installedAt: existingState?.installedAt ?? now,
-    lastDeployedAt: now,
-    lastCommand: 'install',
-    appctlVersion: CLI_VERSION,
-    completedSteps: result.completed,
-  } as DeployState;
+  const state = buildInstallState(stateInput, { outcome: 'success' });
   writeState(state);
 
   // AFTER the state: deploy-info is derived from it, and it is the document
@@ -1214,7 +1336,11 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   return {
     deployRoot: options.deployRoot,
     name: options.name,
-    commitSha: context.commitSha ?? '',
+    // From the state rather than from the context: a resumed run skips the
+    // `checkout` step, so `context.commitSha` is unset on exactly the path
+    // that now reaches here (#267), and the result would report nothing
+    // deployed for a deployment that just came up.
+    commitSha: state.commitSha,
     journalPath: journal.path,
     ...(options.domain === undefined ? {} : { domain: options.domain }),
     // The seed writes the ALLOWLIST row, not a user account. Nobody is an
