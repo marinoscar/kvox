@@ -173,6 +173,18 @@ export class OnboardingService {
       await Promise.all([
         this.transcriptionConfig.getConfig(),
         this.aiConfig.getConfig(userId),
+        // Two facts from one read: `profile.displayName` for `user.profile`,
+        // and the caller's `onboarding.skipped[]` (#272).
+        //
+        // ⚠ THIS METHOD MATERIALISES A DEFAULT `user_settings` ROW when the
+        // caller has none, which is the one write anywhere on this request
+        // path. It is pre-existing behaviour shared with every other reader of
+        // that service, and it is idempotent and free of onboarding meaning —
+        // `DEFAULT_USER_SETTINGS` deliberately carries no `onboarding`
+        // namespace, so an account that has never been onboarded still reads as
+        // absent afterwards, which is the distinction #272 depends on. Reading
+        // the row directly to avoid the insert would mean a second
+        // implementation of that normalisation; it is not worth it.
         this.userSettings.getSettings(userId),
         // ⚠ `deletedAt: null`, the same visibility filter
         // `transcripts.service.ts` and `notes.service.ts` use for their own
