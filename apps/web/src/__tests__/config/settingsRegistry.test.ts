@@ -642,6 +642,11 @@ describe('the Operations group (#266)', () => {
 
       expect(result.map((section) => section.label)).toEqual(['General', 'Access']);
       expect(titlesOf(result)).toEqual([
+        // #278, epic #271 — FIRST in General on purpose: on a fresh deployment
+        // this is the card that says which two settings the product cannot run
+        // without, and a hub is the wrong shape for someone on minute one. It
+        // is gated on the same `system_settings:read` its controller enforces.
+        'Setup',
         'Email',
         'Notifications',
         // #23, epic #19 — a General card gated on the same

@@ -27,6 +27,10 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import DescriptionIcon from '@mui/icons-material/Description';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+// Getting Started (#279, epic #271) — the same icon the admin `Setup` card
+// carries, on purpose: the two are the same idea on two axes (this deployment
+// vs. this account), and a user who has seen one recognises the other.
+import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
@@ -51,6 +55,37 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
   {
     label: 'Account',
     cards: [
+      {
+        // Issue #279, epic #271. FIRST IN `Account`, AND THEREFORE FIRST IN
+        // THE HUB, which is the point of it: this is where the shell banner
+        // (#277) leads, and — more importantly — where the checklist REMAINS
+        // findable after that banner has been dismissed. A dismissal is
+        // permanent by design (`onboarding.dismissedAt`, #272), so the entry
+        // point it hides has to survive somewhere a user would think to look,
+        // and the top of their own settings is that place.
+        //
+        // NO `permission`, like every other card in this registry, and here the
+        // API's own shape is the argument rather than a convention this file
+        // follows: `onboarding.controller.ts` gates `GET /api/onboarding` on
+        // `@Auth()` with NO permission string, because the resource is the
+        // caller's own activation state, scoped by `userId` in the query itself
+        // — the identical posture `ai-credentials.controller.ts`,
+        // `/api/user-settings` and `/api/user-data` take. A gate here would
+        // invent an authorization rule the API does not enforce, and it would
+        // fail in the worst direction: a Viewer — this application's DEFAULT
+        // role, and therefore most of the people who ever see this page — shut
+        // out of the one page explaining why AI features want a key from them.
+        //
+        // Under `Account` and not a group of its own: it is the same kind of
+        // fact as the four cards below it (who this account is, how it is set
+        // up), and a fourth group for one card would put a heading above a
+        // single row at the top of the hub.
+        title: 'Getting Started',
+        description:
+          'The few things that make this account yours: your AI provider key, your first recording, and your name.',
+        Icon: RocketLaunchOutlinedIcon,
+        path: '/settings/getting-started',
+      },
       {
         title: 'Profile',
         description: 'Your display name and profile image, and the email you signed in with.',

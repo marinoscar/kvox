@@ -3,6 +3,14 @@ import { Outlet } from 'react-router-dom';
 import { AppBar } from '../navigation/AppBar';
 import { MaintenanceBanner } from './MaintenanceBanner';
 import { NotificationPermissionBanner } from '../notifications/NotificationPermissionBanner';
+// Onboarding (#276/#277, epic #271). The provider and the banner mount
+// together, HERE, for the reason each of them documents in its own header: the
+// shell is the one place that exists exactly once per authenticated session,
+// and it is deliberately not `App.tsx` — every endpoint the provider calls is
+// `@Auth()`-guarded, so mounting it above `ProtectedRoute` would buy a
+// guaranteed 401 on `/login`, `/auth/callback` and `/activate`.
+import { OnboardingProvider } from '../../contexts/OnboardingContext';
+import { OnboardingBanner } from '../onboarding/OnboardingBanner';
 import { usePushSubscriptionSync } from '../../hooks/usePushSubscriptionSync';
 import { NavigationRail } from '../navigation/NavigationRail';
 import { BottomNav } from '../navigation/BottomNav';
@@ -66,73 +74,101 @@ export function Layout() {
   const pushSync = usePushSubscriptionSync();
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        // The shell is the ONLY owner of viewport height — pages must not nest
-        // their own 100vh inside it, or the document is always at least
-        // 100vh + AppBar tall and scrolls even when the content fits. `100dvh`
-        // tracks mobile browser chrome; plain `100vh` measures against the
-        // LARGEST viewport, so a collapsing URL bar adds jitter. The `100vh`
-        // below is the fallback for browsers without dvh support.
-        minHeight: '100vh',
-        '@supports (min-height: 100dvh)': { minHeight: '100dvh' },
-        backgroundColor: theme.palette.background.default,
-      }}
-    >
-      <AppBar />
-      {/* `minWidth: 0` on the ROW as well as on `<main>`: the row is itself a
-          flex item of the column above, and a runaway intrinsic width
-          propagates through every level that omits it. */}
-      <Box sx={{ display: 'flex', flexGrow: 1, minWidth: 0 }}>
-        {/* Focus order follows visual order: rail, then main — which is also
-            their DOM order here, so no tabindex juggling is needed. */}
-        {showRail && <NavigationRail />}
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            // Load-bearing, not cosmetic. A flex item's `min-width` defaults to
-            // `auto` — its min-content width — so without this, any descendant
-            // reporting a large intrinsic inline size (a wide table, a long
-            // unbroken string) cannot be shrunk and widens the whole app shell
-            // past the viewport. This is also what a DataTable embedded in this
-            // flex child requires of its host.
-            minWidth: 0,
-            p: 3,
-            // Clears the fixed bottom bar, which only exists below `sm` — the
-            // same breakpoint `BottomNav` gates on. Keeping this coupled is what
-            // stops 600–899px from carrying 80px of padding for a bar that is
-            // not mounted there.
-            pb: { xs: 10, sm: 3 },
-          }}
-        >
-          {/* Issue #258, epic #254. Above the page rather than inside any one
-              of them, because "this deployment is deliberately out of service"
-              is a property of the shell, not of whatever the operator happens
-              to be looking at. It renders NOTHING — no element, no spacing —
-              for anyone without `system_settings:read` and whenever no window
-              is open, which is every viewer on every ordinary day. */}
-          <MaintenanceBanner />
-          {/* Issue #365. Fed by the shell's single `usePushSubscriptionSync`
-              mount above; renders nothing unless this device still needs to
-              allow (or unblock, or install for) notifications. */}
-          <NotificationPermissionBanner
-            config={pushSync.config}
-            capability={pushSync.capability}
-            onRequestPermission={() => void pushSync.requestPermission()}
-            isRequestingPermission={pushSync.isRequestingPermission}
-          />
-          <Outlet />
+    /* ONE MOUNT POINT FOR THE WHOLE SHELL (#276). Four surfaces in epic #271
+       need the same answer — this banner, the admin setup page (#278), the
+       getting-started page (#279) and the welcome dialog (#280) — and a
+       provider per surface would reissue the same two reads on every hop
+       between the setup page and the pages it links to, while giving four
+       components four chances to disagree about whether setup is finished.
+
+       It wraps the WHOLE shell rather than just `<main>` so that `<Outlet />`'s
+       pages are inside it: `/admin/settings/setup` and `/settings/getting-started`
+       render the same state this banner reads, and a second provider around the
+       page would be a second copy of it. */
+    <OnboardingProvider>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          // The shell is the ONLY owner of viewport height — pages must not nest
+          // their own 100vh inside it, or the document is always at least
+          // 100vh + AppBar tall and scrolls even when the content fits. `100dvh`
+          // tracks mobile browser chrome; plain `100vh` measures against the
+          // LARGEST viewport, so a collapsing URL bar adds jitter. The `100vh`
+          // below is the fallback for browsers without dvh support.
+          minHeight: '100vh',
+          '@supports (min-height: 100dvh)': { minHeight: '100dvh' },
+          backgroundColor: theme.palette.background.default,
+        }}
+      >
+        <AppBar />
+        {/* `minWidth: 0` on the ROW as well as on `<main>`: the row is itself a
+              flex item of the column above, and a runaway intrinsic width
+              propagates through every level that omits it. */}
+        <Box sx={{ display: 'flex', flexGrow: 1, minWidth: 0 }}>
+          {/* Focus order follows visual order: rail, then main — which is also
+                their DOM order here, so no tabindex juggling is needed. */}
+          {showRail && <NavigationRail />}
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              // Load-bearing, not cosmetic. A flex item's `min-width` defaults to
+              // `auto` — its min-content width — so without this, any descendant
+              // reporting a large intrinsic inline size (a wide table, a long
+              // unbroken string) cannot be shrunk and widens the whole app shell
+              // past the viewport. This is also what a DataTable embedded in this
+              // flex child requires of its host.
+              minWidth: 0,
+              p: 3,
+              // Clears the fixed bottom bar, which only exists below `sm` — the
+              // same breakpoint `BottomNav` gates on. Keeping this coupled is what
+              // stops 600–899px from carrying 80px of padding for a bar that is
+              // not mounted there.
+              pb: { xs: 10, sm: 3 },
+            }}
+          >
+            {/* Issue #258, epic #254. Above the page rather than inside any one
+                  of them, because "this deployment is deliberately out of service"
+                  is a property of the shell, not of whatever the operator happens
+                  to be looking at. It renders NOTHING — no element, no spacing —
+                  for anyone without `system_settings:read` and whenever no window
+                  is open, which is every viewer on every ordinary day. */}
+            <MaintenanceBanner />
+            {/* Issue #277, epic #271. The THIRD component in this strip, and
+                  mounted for exactly the reasons the other two are: "what is left
+                  to set up" is a property of the session rather than of whatever
+                  page happens to be open, and a checklist you abandon on step 2
+                  has to be visible from the page you abandoned it on.
+
+                  ⚠ IT IS HERE AND NOT ON `HomePage`. That page's test asserts an
+                  exact three-request set and renders the page WITHOUT this layout,
+                  so mounting the checklist here is what leaves both the page and
+                  its assertion untouched.
+
+                  Renders NOTHING — no element, no spacing — while loading, for a
+                  read that failed, once every required step is satisfied, and for
+                  anyone who has put the checklist away. */}
+            <OnboardingBanner />
+            {/* Issue #365. Fed by the shell's single `usePushSubscriptionSync`
+                  mount above; renders nothing unless this device still needs to
+                  allow (or unblock, or install for) notifications. */}
+            <NotificationPermissionBanner
+              config={pushSync.config}
+              capability={pushSync.capability}
+              onRequestPermission={() => void pushSync.requestPermission()}
+              isRequestingPermission={pushSync.isRequestingPermission}
+            />
+            <Outlet />
+          </Box>
         </Box>
+        {/* Mounted only where it renders. `BottomNav` also gates itself on
+              `down('sm')` — belt and braces, since a self-gating-but-always-mounted
+              bar would still run its hooks at every width. `!showRail` is the exact
+              complement of the rail's gate, so there is no width with two navs and
+              none with zero. */}
+        {!showRail && <BottomNav />}
       </Box>
-      {/* Mounted only where it renders. `BottomNav` also gates itself on
-          `down('sm')` — belt and braces, since a self-gating-but-always-mounted
-          bar would still run its hooks at every width. `!showRail` is the exact
-          complement of the rail's gate, so there is no width with two navs and
-          none with zero. */}
-      {!showRail && <BottomNav />}
-    </Box>
+    </OnboardingProvider>
   );
 }

@@ -42,6 +42,20 @@ import { onboardingState, step, userState } from './onboardingFixtures';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ONBOARDING_DIR = resolve(HERE, '../../../components/onboarding');
 const CONTEXT_SOURCE = resolve(HERE, '../../../contexts/OnboardingContext.tsx');
+/**
+ * The two PAGES this epic adds (#278, #279), listed explicitly.
+ *
+ * `ONBOARDING_DIR` above is read with `readdirSync`, so every future component
+ * in that directory is covered the moment it is created. A page cannot be
+ * picked up that way — `pages/` holds forty files that have nothing to do with
+ * this epic and several that legitimately use `useMediaQuery` — so the two are
+ * named here, and a third page added to this epic without being added to this
+ * list is the one gap this arrangement leaves.
+ */
+const EPIC_PAGE_SOURCES = [
+  resolve(HERE, '../../../pages/Admin/SetupPage.tsx'),
+  resolve(HERE, '../../../pages/GettingStartedPage.tsx'),
+];
 
 const noop = () => {};
 
@@ -341,7 +355,7 @@ describe('accessibility', () => {
 // =============================================================================
 
 describe('the breakpoint-gate rule', () => {
-  it('uses no useMediaQuery anywhere in the onboarding component or context source', () => {
+  it('uses no useMediaQuery in any onboarding component, context or page of this epic', () => {
     // ⚠ CLAUDE.md's Settings UI Pattern rule 5: the coupled breakpoint gates
     // are exactly five and move together or not at all. A `useMediaQuery` in a
     // component two settings surfaces mount would be a sixth — and one nobody
@@ -353,7 +367,7 @@ describe('the breakpoint-gate rule', () => {
 
     expect(sources.length).toBeGreaterThan(0);
 
-    for (const file of [...sources, CONTEXT_SOURCE]) {
+    for (const file of [...sources, CONTEXT_SOURCE, ...EPIC_PAGE_SOURCES]) {
       const code = readFileSync(file, 'utf8')
         // The headers argue about `useMediaQuery` by name to explain why it is
         // absent, so comments are stripped first — otherwise this test could

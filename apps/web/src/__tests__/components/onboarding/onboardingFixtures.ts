@@ -18,6 +18,9 @@
  * against exactly this string (#272).
  */
 
+import { vi } from 'vitest';
+
+import type { OnboardingContextValue } from '../../../contexts/OnboardingContext';
 import type {
   OnboardingState,
   OnboardingStepState,
@@ -83,6 +86,49 @@ export function userState(overrides: Partial<OnboardingState> = {}): OnboardingS
     ],
     ...overrides,
   });
+}
+
+/**
+ * A whole `OnboardingContextValue`, for a surface rendered through
+ * `OnboardingContext.Provider` directly — issues #277, #278, #279.
+ *
+ * ⚠ THE PROVIDER IS DELIBERATELY NOT STOOD UP FOR THESE SUITES, and the
+ * distinction matters: `OnboardingContext.test.tsx` already proves the WIRING
+ * (which route is asked for whom, one PATCH per intent, a failed read degrading
+ * to nothing) over MSW and the real `useUserSettings`. Re-proving it in three
+ * more files would mean three more suites that fail when the settings endpoint
+ * changes shape, for components that never call it.
+ *
+ * What the banner and the two pages are responsible for is what they do with an
+ * ANSWER — which audience wins, what the copy says, which callback a click
+ * reaches — and a stub value is the only way to assert that against a state the
+ * server would take work to produce (both audiences outstanding, one dismissed,
+ * a step already skipped).
+ *
+ * Every callback defaults to a `vi.fn()` so a suite can assert it was called
+ * without having to pass all seven.
+ */
+export function onboardingContext(
+  overrides: Partial<OnboardingContextValue> = {},
+): OnboardingContextValue {
+  return {
+    user: null,
+    admin: null,
+    isLoading: false,
+    error: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+    dismiss: vi.fn().mockResolvedValue(undefined),
+    skip: vi.fn().mockResolvedValue(undefined),
+    unskip: vi.fn().mockResolvedValue(undefined),
+    markWelcomeSeen: vi.fn().mockResolvedValue(undefined),
+    welcomeSeen: false,
+    ...overrides,
+    // Spread AFTER the overrides so a caller passing a partial `dismissed`
+    // cannot accidentally leave one of the two audiences `undefined` — the
+    // banner branches on both, and `undefined` would read as "not dismissed"
+    // by luck rather than by intent.
+    dismissed: { user: false, admin: false, ...overrides.dismissed },
+  };
 }
 
 /** The deployment checklist an administrator sees. */
