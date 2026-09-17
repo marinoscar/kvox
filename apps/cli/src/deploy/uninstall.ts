@@ -357,8 +357,19 @@ function lastRenewalCronWarning(context: UninstallContext): string {
   // Still readable at this point: the `deploy-root` step runs after this one.
   // Filtered by BOTH name and path so `--root` pointing at a folder whose
   // state records a different name cannot suggest the app being removed.
+  // NARROWED TO A RECORDED SURVIVOR ON PURPOSE (#285). `listInstalledApps` now
+  // also reports deployments recognised by evidence alone, which is right for
+  // discovery and wrong here: the command below is
+  // `certs renew --install-cron --name <survivor>`, and that command resolves
+  // its certificate lineage from the survivor's RECORDED DOMAIN. A survivor
+  // with no state file has none, so naming it would hand the operator a
+  // pasteable command that fails with "is not published under a domain" - the
+  // exact opposite of this warning's whole purpose.
   const survivor = listInstalledApps(appsRoot).find(
-    (app) => app.name !== name && app.deployRoot !== context.options.deployRoot,
+    (app) =>
+      app.state !== undefined &&
+      app.name !== name &&
+      app.deployRoot !== context.options.deployRoot,
   );
 
   const reinstate =

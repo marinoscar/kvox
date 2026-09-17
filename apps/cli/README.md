@@ -1106,6 +1106,64 @@ Brings an already-installed server up to the latest revision (or, with
 verify. It refuses to run at all if nothing is installed under `--apps-root`
 yet.
 
+#### Adopting a deployment with no state file
+
+`update` asks whether a **deployment** is there, not whether the CLI's own
+record of one is. When `.appctl-deploy.json` is missing but a deployment
+plainly is not — an install that stopped before the record was written, a
+directory restored from a backup that skipped a dot-file, a record deleted by
+hand — `update` rebuilds the record and carries on, rather than sending you to
+`install`, whose own precondition is the opposite.
+
+Two things must **be** there before it will: a git checkout at `<root>/repo`,
+and a readable `.env`. Both, not either. Running containers are deliberately
+not part of the gate — a deployment whose containers are stopped or pruned is
+exactly the one you are trying to update. A directory with neither, or with
+one, still gets the refusal it always got, plus a line naming the half that
+was found.
+
+What is rebuilt, and from where:
+
+| Field | Read from |
+|---|---|
+| `repoUrl` | `git -C repo remote get-url origin` |
+| `commitSha` | `git -C repo rev-parse HEAD` |
+| `ref` | `--ref`, else the branch HEAD is on, else the remote's own default branch |
+| `name` | `.env`'s `COMPOSE_PROJECT_NAME`, else the directory name |
+| `bindPort` | `.env`'s `APP_BIND_PORT`, else 3535 |
+| `domain` | `.env`'s `APP_URL` host, else the proxy vhost that forwards to `bindPort` |
+| `installedAt` | `deploy-info/info.json`, when that survived — otherwise left **unknown** |
+
+`installedAt` and `lastDeployedAt` are **never invented**. Neither is knowable
+from a disk the CLI did not write, and a guessed timestamp would show up on the
+About page as a fact. Absent means unknown, `deploy-info/info.json` carries
+`null` for them, and About renders its unknown mark. The record instead carries
+`adoptedAt` — when the bookkeeping was rebuilt, which is not the same thing as
+when the deployment was made.
+
+It says so once, before the pipeline runs, listing every field and its source;
+the same block goes into the run journal, and `--json` carries it as `adopted`
+on the result. Three things make it refuse rather than guess: a clone with no
+`origin`, a clone with no HEAD, and a detached HEAD whose remote has no default
+branch (pass `--ref`) — guessing `main` is how a fork on `master` gets deployed
+from the wrong branch.
+
+An existing state file is always used exactly as it is, and is never
+reconstructed over.
+
+A bare `kvox deploy update` with no `--name`/`--root` reaches this too:
+discovering apps under `--apps-root` uses the same evidence gate, so a
+directory that is a deployment is found whether or not it has a state file. Two
+of them with nothing named refuses exactly as two installed apps always did —
+`Several apps are installed under …: alpha, beta. Pass --name <app> to say
+which one.` — and a recorded app beside an unrecorded one refuses the same way,
+with no silent preference for either.
+
+⚠ `status`, `about` and a named `certs` are **not** part of this. They still
+want a state file, because each is a read-only reporter and adopting from one
+would mean writing the CLI's private record from a command that only reports.
+Run `update` once to restore the record and they work again.
+
 ```bash
 kvox deploy update --check
 kvox deploy update --ref v1.4.0

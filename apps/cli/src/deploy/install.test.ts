@@ -955,6 +955,29 @@ describe('runInstall preconditions', () => {
     expect((error as Error).message).toContain('deploy update');
     expect((error as Error).message).toContain('--reinstall');
   });
+
+  it('is UNCHANGED by evidence-aware discovery: this guard reads the state file directly (#285)', async () => {
+    // #285 taught `listInstalledApps` to recognise a deployment by its clone
+    // and its .env. This guard is not one of its callers - it reads
+    // `readState(options.deployRoot)` - so a directory with a clone and an
+    // .env but no state file is still let through, exactly as before. That is
+    // the right answer either way: the guard's own test is `lastDeployedAt`,
+    // and an unrecorded deployment has none to refuse on.
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    mkdirSync(join(root, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(root, '.env'), 'APP_BIND_PORT=3535\n', { mode: 0o600 });
+
+    const error = await runInstall({
+      deployRoot: root,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // It gets past the precondition and fails later, on a real pipeline step,
+    // rather than being refused as "a deployment already exists".
+    expect((error as Error | undefined)?.message ?? '').not.toContain('--reinstall');
+  });
 });
 
 describe('runInstall layout resolution', () => {

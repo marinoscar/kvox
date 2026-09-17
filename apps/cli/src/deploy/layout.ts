@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 
 import { CLI_NAME } from '../branding.js';
 import { UsageError } from '../errors.js';
+import { envFacts, isDeployment } from './deployment-evidence.js';
 import { contains } from './repo.js';
 import { NotInstalledError, readState, type DeployState } from './state.js';
 
@@ -79,12 +80,43 @@ export function projectNameFor(
 export interface InstalledApp {
   name: string;
   deployRoot: string;
-  state: DeployState;
+  /**
+   * The state file, when there is one.
+   *
+   * UNDEFINED FOR A DEPLOYMENT RECOGNISED BY ITS OWN EVIDENCE (#285). A caller
+   * that genuinely needs the record - not merely the deployment - must test
+   * for it rather than assume it, and `lastRenewalCronWarning` in
+   * `uninstall.ts` is the one that does.
+   */
+  state?: DeployState | undefined;
+  /**
+   * The loopback port it holds: the state's, else the `.env`'s
+   * `APP_BIND_PORT`. Undefined when neither says - never a default, because
+   * the one caller that reads it is telling the install wizard which ports are
+   * taken, and inventing one there is worse than saying nothing.
+   */
+  bindPort?: number | undefined;
 }
 
 /**
- * Every app installed under `appsRoot`: each direct subdirectory holding a
- * state file. A missing apps root means nothing is installed, not an error.
+ * Every app deployed under `appsRoot`: each direct subdirectory that is a
+ * deployment. A missing apps root means nothing is installed, not an error.
+ *
+ * A SUBDIRECTORY IS A DEPLOYMENT IF IT HOLDS A STATE FILE **OR** PASSES THE
+ * EVIDENCE GATE (#285). It used to be the state file alone, which is the same
+ * defect `requireState` had one level down: a server whose bookkeeping was
+ * lost was invisible here, so a bare `deploy update` with no `--name`/`--root`
+ * answered "Nothing is installed under <apps-root>" and never reached the
+ * adoption path that exists to recover exactly that. The gate is the one in `deployment-evidence.ts`,
+ * shared with `adopt.ts` rather than restated, so discovery and adoption can
+ * never disagree about what a deployment is.
+ *
+ * AMBIGUITY IS NOT RESOLVED HERE AND IS NOT RESOLVED DIFFERENTLY. This returns
+ * everything it finds, in directory order; `locateApp` below refuses when
+ * there is more than one and names them, exactly as it always has. A
+ * state-bearing directory is deliberately NOT preferred over an
+ * evidence-bearing one - that would be a tiebreak this command has never had,
+ * invented at the moment an operator most needs to be asked which they meant.
  */
 export function listInstalledApps(appsRoot: string): InstalledApp[] {
   let entries: string[];
@@ -103,14 +135,32 @@ export function listInstalledApps(appsRoot: string): InstalledApp[] {
     const deployRoot = join(appsRoot, name);
     // An unreadable or foreign-version state file is reported by whichever
     // command then acts on it; a listing must not refuse to answer because
-    // of a neighbouring app.
+    // of a neighbouring app. It is also NOT then treated as an unrecorded
+    // deployment: the file is there and this build cannot interpret it, which
+    // is a different problem from there being no file, and the command that
+    // acts on it raises the difference properly.
     let state: DeployState | undefined;
+    let unreadable = false;
     try {
       state = readState(deployRoot);
     } catch {
+      unreadable = true;
+    }
+    if (unreadable) continue;
+
+    if (state !== undefined) {
+      apps.push({ name: state.name ?? name, deployRoot, state, bindPort: state.bindPort });
       continue;
     }
-    if (state !== undefined) apps.push({ name: state.name ?? name, deployRoot, state });
+
+    // No record, but the deployment may still be here (#285).
+    if (!isDeployment(deployRoot)) continue;
+    const facts = envFacts(deployRoot);
+    apps.push({
+      name: facts.composeProjectName ?? name,
+      deployRoot,
+      ...(facts.bindPort === undefined ? {} : { bindPort: facts.bindPort }),
+    });
   }
   return apps;
 }
@@ -189,15 +239,23 @@ export interface SiblingPort {
 /**
  * The bind port of every OTHER app installed under `appsRoot` (#127).
  *
- * Read from the state files, not from what is listening: a STOPPED app is
- * invisible to a bind probe, and the wizard must never suggest a port that
- * app will take back the moment it is started. The app at `deployRoot` is
+ * Read from what each sibling records - its state file, or its own `.env`
+ * when it has no state file (#285) - never from what is listening: a STOPPED
+ * app is invisible to a bind probe, and the wizard must never suggest a port
+ * that app will take back the moment it is started. The app at `deployRoot` is
  * left out so a reinstall does not see its own port as taken.
  */
 export function siblingBindPorts(appsRoot: string, deployRoot?: string): SiblingPort[] {
   return listInstalledApps(appsRoot)
     .filter((app) => app.deployRoot !== deployRoot)
-    .map((app) => ({ name: app.name, port: app.state.bindPort }));
+    // A deployment with no state file counts (#285) - that port is held
+    // whether or not this CLI has a record of who holds it, which is #257's
+    // point exactly. One whose port cannot be read claims NONE rather than the
+    // default: telling the wizard 3535 is taken when nothing on that disk says
+    // so would cost a free port on every install.
+    .flatMap((app) =>
+      app.bindPort === undefined ? [] : [{ name: app.name, port: app.bindPort }],
+    );
 }
 
 export interface LocateOptions {

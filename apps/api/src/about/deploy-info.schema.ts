@@ -120,6 +120,22 @@ export const deployInfoSchema = z
     remote: deployInfoRemoteSchema.nullable().optional(),
     /** Absent on a document written before #283, which means the run completed. */
     run: deployInfoRunSchema.nullable().optional(),
+    /**
+     * When the CLI ADOPTED this deployment — rebuilt its own state file from
+     * the clone, the `.env` and the proxy because the file was missing
+     * (issue #285).
+     *
+     * ABSENT MEANS THE RECORD CAME FROM A RUN THE CLI PERFORMED, which is
+     * every document written before #285 — the same absent-is-the-ordinary-
+     * case convention `run` above uses. It is also the explanation for a null
+     * `installedAt`: an adopted deployment's install instant is on no disk
+     * anywhere, so the CLI writes null rather than this run's own clock.
+     *
+     * Optional and nullable here, optional on the CLI side, and `schema`
+     * stays `1` — the change `.passthrough()` and rule 2 above exist to
+     * absorb without anything answering `invalid`.
+     */
+    adoptedAt: timestamp,
   })
   .passthrough();
 

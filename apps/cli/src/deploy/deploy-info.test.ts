@@ -380,6 +380,51 @@ describe('validateDeployInfo', () => {
     expect(validateDeployInfo(JSON.parse(JSON.stringify(info)))).toEqual(info);
   });
 
+  // ---------------------------------------------------------------------------
+  // An unknown install time is written as null, never guessed (issue #285)
+  // ---------------------------------------------------------------------------
+
+  it('writes null timestamps for an adopted deployment rather than inventing them', () => {
+    const { installedAt: _one, lastDeployedAt: _two, ...adopted } = sampleState('/x');
+    const info = buildDeployInfo(
+      '/x',
+      { ...adopted, adoptedAt: '2026-09-17T12:00:00.000Z' } as DeployState,
+      FACTS,
+      { appVersion: null },
+    );
+
+    // The clone, the .env and the proxy say what is deployed; none of them
+    // says when it was installed. Null is the honest answer, and the API has
+    // read both of these as optional-and-nullable since #124.
+    expect(info.installedAt).toBeNull();
+    expect(info.updatedAt).toBeNull();
+    expect(info.adoptedAt).toBe('2026-09-17T12:00:00.000Z');
+    expect(validateDeployInfo(JSON.parse(JSON.stringify(info)))).toEqual(info);
+  });
+
+  it('still falls back to installedAt for updatedAt when only that is known', () => {
+    const { lastDeployedAt: _dropped, ...state } = sampleState('/x');
+    const info = buildDeployInfo('/x', state as DeployState, FACTS, { appVersion: null });
+
+    expect(info.updatedAt).toBe('2026-09-15T18:02:11.000Z');
+  });
+
+  it('leaves adoptedAt off a document a run of this CLI wrote', () => {
+    // Absent means the record came from a real run - every document written
+    // before #285, and every ordinary one after it.
+    expect(valid()).not.toHaveProperty('adoptedAt');
+    expect(validateDeployInfo({ ...valid(), adoptedAt: undefined })).toBeDefined();
+  });
+
+  it('still refuses a timestamp that is neither null nor a UTC instant', () => {
+    expect(() => validateDeployInfo({ ...valid(), installedAt: '2026-09-15 18:02:11' })).toThrow(
+      /installedAt is not a UTC timestamp or null/,
+    );
+    expect(() => validateDeployInfo({ ...valid(), adoptedAt: 'yesterday' })).toThrow(
+      /adoptedAt is not a UTC timestamp/,
+    );
+  });
+
   it('accepts a remote once update --check has filled it', () => {
     const info = {
       ...valid(),

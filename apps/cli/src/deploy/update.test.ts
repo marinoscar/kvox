@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -19,6 +20,7 @@ import { PreconditionError } from '../errors.js';
 import { DeployInfoError, deployInfoDir, readDeployInfo, writeDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
+import { locateInstalledApp } from './layout.js';
 import { unknownServerFacts } from './server-facts.js';
 import { DEPLOY_STATE_VERSION, NotInstalledError, deployStatePath, readState, writeState, type DeployState } from './state.js';
 import {
@@ -310,6 +312,209 @@ describe('runUpdate preconditions', () => {
 });
 
 // =============================================================================
+// Adopting a deployment with no state file  (issue #285)
+// =============================================================================
+//
+// The reported failure: a deployment that is demonstrably present - clone at
+// the right revision, .env written, containers running, certificate issued,
+// site serving HTTPS - could not be updated, because `requireState` keyed the
+// precondition on the state file rather than on the deployment.
+// =============================================================================
+
+describe('runUpdate adopting a deployment whose state file is missing (#285)', () => {
+  let vps: FakeVps;
+
+  beforeEach(async () => {
+    vps = await fakeVps({ head: INSTALLED_SHA, remoteSha: NEW_SHA });
+    vi.stubGlobal('fetch', healthyFetch());
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await vps.close();
+  });
+
+  /** An installed app with its `.appctl-deploy.json` removed. */
+  function withoutState(): string {
+    const root = installedApp(vps);
+    rmSync(deployStatePath(root));
+    return root;
+  }
+
+  function update(root: string, hooks?: { onProgress?: (message: string) => void; onLog?: (line: string) => void }) {
+    return runUpdate({
+      deployRoot: root,
+      runCommand: vps.runCommand,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+      ...(hooks === undefined ? {} : { hooks }),
+    });
+  }
+
+  it('updates a live deployment whose .appctl-deploy.json is gone, instead of refusing', async () => {
+    const root = withoutState();
+
+    const result = await update(root);
+
+    expect(result.changed).toBe(true);
+    expect(result.commitSha).toBe(NEW_SHA);
+    // Rebuilt from the clone and the .env, then carried through the pipeline.
+    expect(readState(root)).toMatchObject({
+      repoUrl: 'https://example.test/o/demo',
+      ref: 'main',
+      commitSha: NEW_SHA,
+      previousSha: INSTALLED_SHA,
+      bindPort: 3535,
+      name: 'demo',
+      lastCommand: 'update',
+    });
+    expect(readState(root)?.adoptedAt).toBeDefined();
+  });
+
+  it('records the domain and port it read out of the .env', async () => {
+    const root = installedApp(vps);
+    writeEnvFile(
+      root,
+      `${readFileSync(envFilePath(root), 'utf8')}\nAPP_URL=https://adopted.example.test\n`,
+    );
+    rmSync(deployStatePath(root));
+
+    await update(root);
+
+    expect(readState(root)).toMatchObject({ domain: 'adopted.example.test', bindPort: 3535 });
+  });
+
+  it('does NOT invent an installedAt or a lastDeployedAt for it', async () => {
+    // The regression guard. Neither instant is on this disk, and stamping one
+    // puts a fiction on the About page - the class of bug #283 fixed.
+    const root = withoutState();
+
+    await update(root);
+
+    const state = readState(root) as DeployState;
+    expect(state.installedAt).toBeUndefined();
+    // `lastDeployedAt` IS stamped here, and honestly so: this run deployed.
+    expect(state.lastDeployedAt).toBeDefined();
+    // And the document the API reads says unknown rather than guessing.
+    expect(readDeployInfo(root)?.installedAt).toBeNull();
+    expect(readDeployInfo(root)?.adoptedAt).toBe(state.adoptedAt);
+  });
+
+  it('leaves both instants unknown when the adopted run deploys nothing', async () => {
+    vps.remoteSha = INSTALLED_SHA;
+    const root = withoutState();
+
+    const result = await update(root);
+
+    expect(result.changed).toBe(false);
+    expect(readState(root)?.lastDeployedAt).toBeUndefined();
+    expect(readDeployInfo(root)).toMatchObject({ installedAt: null, updatedAt: null });
+  });
+
+  it('still refuses a directory that is not a deployment, with the message it always gave', async () => {
+    // The other regression guard: the gate is positive evidence, so an empty
+    // --root is not adopted into a deployment.
+    const empty = mkdtempSync(join(tmpdir(), 'appctl-noinstall-'));
+
+    const error = await update(empty).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotInstalledError);
+    expect((error as Error).message).toContain(`No deployment found at ${empty}`);
+    expect((error as Error).message).toContain('deploy install');
+  });
+
+  it('tells the operator the record was rebuilt, and from what', async () => {
+    const root = withoutState();
+    const progress: string[] = [];
+    const logs: string[] = [];
+
+    await update(root, {
+      onProgress: (message) => void progress.push(message),
+      onLog: (line) => void logs.push(line),
+    });
+
+    expect(progress.some((line) => line.includes('Adopted this deployment'))).toBe(true);
+    expect(progress.some((line) => line.includes('.appctl-deploy.json'))).toBe(true);
+    expect(logs.some((line) => line.includes('repository  https://example.test/o/demo'))).toBe(true);
+    expect(logs.some((line) => line.includes('revision    aaaaaaaaaaaa'))).toBe(true);
+    expect(logs.some((line) => line.includes('installed   unknown'))).toBe(true);
+    // And the run journal keeps the same record for later.
+    expect(updateJournal(root)).toContain('Adopted this deployment');
+  });
+
+  it('carries the notice on the result, for --json where the hooks are silent', async () => {
+    const root = withoutState();
+
+    const result = await update(root);
+
+    expect(result.adopted?.headline).toContain('Adopted this deployment');
+    expect(result.adopted?.detail.join('\n')).toContain('(repo/ origin)');
+  });
+
+  // -------------------------------------------------------------------------
+  // `kvox deploy update`, with no flags at all (issue #285)
+  // -------------------------------------------------------------------------
+  //
+  // The user's literal command. Discovery keyed on the state file for the same
+  // reason `requireState` did, so without `--name`/`--root` this answered
+  // "Nothing is installed under <apps-root>" and never reached the adoption
+  // path at all.
+
+  it('`kvox deploy update` with no flags adopts the one deployment under the apps root', async () => {
+    const apps = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+    const root = join(apps, 'demo');
+    mkdirSync(root, { recursive: true });
+    populateClone(join(root, 'repo'));
+    writeEnvFile(root, installedEnv(vps, 'demo'));
+    expect(existsSync(deployStatePath(root))).toBe(false);
+
+    const layout = locateInstalledApp({ appsRoot: apps });
+    expect(layout.deployRoot).toBe(root);
+
+    const result = await runUpdate({
+      deployRoot: layout.deployRoot,
+      runCommand: vps.runCommand,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: layout.deployRoot,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.adopted?.headline).toContain('Adopted this deployment');
+    expect(readState(root)?.commitSha).toBe(NEW_SHA);
+  });
+
+  it('still answers "nothing is installed" for an apps root that holds no deployment', async () => {
+    const apps = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+    mkdirSync(join(apps, 'not-an-app'), { recursive: true });
+
+    expect(() => locateInstalledApp({ appsRoot: apps })).toThrow(NotInstalledError);
+    expect(() => locateInstalledApp({ appsRoot: apps })).toThrow(
+      `Nothing is installed under ${apps}`,
+    );
+  });
+
+  it('uses an existing state file as-is and never reconstructs over it', async () => {
+    const root = installedApp(vps);
+
+    const result = await update(root);
+
+    expect(result.adopted).toBeUndefined();
+    const state = readState(root) as DeployState;
+    expect(state.adoptedAt).toBeUndefined();
+    // The fields the install recorded survive untouched; nothing was re-read
+    // from the clone to overwrite them.
+    expect(state.installedAt).toBe(INSTALLED_AT);
+    expect(state.repoUrl).toBe('https://example.test/o/demo');
+  });
+});
+
+// =============================================================================
 // The pipeline end to end, against a fake VPS  (issue #120)
 // =============================================================================
 
@@ -497,7 +702,7 @@ describe('runUpdate against a fake VPS', () => {
       // "never checked", which would be wrong at the one moment it is current.
       remote: { sha: NEW_SHA, commitsBehind: 0 },
     });
-    expect(info?.updatedAt.endsWith('Z')).toBe(true);
+    expect(info?.updatedAt?.endsWith('Z')).toBe(true);
     expect(info?.remote?.checkedAt.endsWith('Z')).toBe(true);
   });
 

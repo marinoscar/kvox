@@ -107,9 +107,31 @@ export interface DeployInfo {
     ref: string;
     repoUrl: string;
   };
-  installedAt: string;
-  /** When the last deploy succeeded; equals `installedAt` on a first install. */
-  updatedAt: string;
+  /**
+   * When this deployment was first installed by this CLI - NULL WHEN THAT IS
+   * NOT KNOWN (#285).
+   *
+   * Null joins `domain` and `remote` as this document's idiom for "known to
+   * be absent". It is reachable when `update` ADOPTS a deployment whose state
+   * file is missing: the clone, the `.env` and the proxy say what is deployed
+   * and where, and none of them says when it was installed. Writing this
+   * run's own clock here would be the fiction #283 removed from the About
+   * page, so the honest answer travels instead and the page renders its
+   * unknown mark.
+   *
+   * The API has read this as optional-and-nullable since #124, and the web
+   * card already renders null as unknown, so nothing downstream changes and
+   * `DEPLOY_INFO_SCHEMA` stays at 1.
+   */
+  installedAt: string | null;
+  /**
+   * When the last deploy succeeded; equals `installedAt` on a first install.
+   *
+   * Nullable for the same reason and in the same case: an adopted deployment
+   * that this CLI has not yet deployed anything onto has no successful deploy
+   * of its own to name, and `installedAt` - the fallback - is unknown too.
+   */
+  updatedAt: string | null;
   lastCommand: 'install' | 'update';
   deployedBy: { cli: string; version: string };
   domain: string | null;
@@ -117,6 +139,21 @@ export interface DeployInfo {
   host: ServerFacts;
   /** Filled by `update --check` (#123); null until then. */
   remote: DeployRemote | null;
+  /**
+   * When this CLI adopted a deployment it had no record of making (#285).
+   *
+   * Absent means the record came from a run this CLI performed, which is
+   * every document written before #285 - the same absent-means-the-ordinary-
+   * case convention `run` above established. It is a THIRD thing from `run`:
+   * `run` says how the deploy ended, this says where the bookkeeping behind
+   * it came from, and squeezing one into the other would lose the
+   * distinction. It is also the explanation for a null `installedAt` above,
+   * which is why the two travel together.
+   *
+   * Optional on both sides and `DEPLOY_INFO_SCHEMA` stays at 1, for the
+   * reason written above that constant.
+   */
+  adoptedAt?: string | undefined;
   /**
    * How this run ended (#283). Optional on BOTH sides of the contract: a
    * document written by a CLI from before #283 has none, and the API's reader
@@ -263,8 +300,14 @@ export function validateDeployInfo(value: unknown): DeployInfo {
   }
   if (!nullableString(app['version'])) return fail('app.version is not a string or null');
 
+  // Null is allowed since #285 and means "this CLI does not know": an adopted
+  // deployment's install instant is on no disk anywhere. Anything else still
+  // has to be a real UTC instant, so a hand-edited local-time string is
+  // refused exactly as it was before.
   for (const key of ['installedAt', 'updatedAt'] as const) {
-    if (!isUtcTimestamp(value[key])) return fail(`${key} is not a UTC timestamp`);
+    if (value[key] !== null && !isUtcTimestamp(value[key])) {
+      return fail(`${key} is not a UTC timestamp or null`);
+    }
   }
   if (value['lastCommand'] !== 'install' && value['lastCommand'] !== 'update') {
     return fail('lastCommand is not install or update');
@@ -307,6 +350,10 @@ export function validateDeployInfo(value: unknown): DeployInfo {
     if (run['attemptedAt'] !== undefined && !isUtcTimestamp(run['attemptedAt'])) {
       return fail('run.attemptedAt is not a UTC timestamp');
     }
+  }
+
+  if (value['adoptedAt'] !== undefined && !isUtcTimestamp(value['adoptedAt'])) {
+    return fail('adoptedAt is not a UTC timestamp');
   }
 
   const remote = value['remote'];
@@ -392,7 +439,7 @@ export function buildDeployInfo(
       ref: state.ref,
       repoUrl: state.repoUrl,
     },
-    installedAt: state.installedAt,
+    installedAt: state.installedAt ?? null,
     // WHEN THE LAST DEPLOY SUCCEEDED, and the fallback is reachable since
     // #283. `lastDeployedAt` became optional on the state in #267, for the
     // record a FAILED install writes so `--resume` can read it back; this
@@ -407,7 +454,11 @@ export function buildDeployInfo(
     // below is what says the newest commit arrived on a run that did not
     // finish; stamping a deploy time that did not happen is the lie #120
     // removed from `update` and this must not reintroduce it.
-    updatedAt: state.lastDeployedAt ?? state.installedAt,
+    //
+    // NULL WHEN NEITHER IS KNOWN (#285): an adopted deployment this CLI has
+    // not yet deployed anything onto has no successful deploy to name and no
+    // install instant to fall back to.
+    updatedAt: state.lastDeployedAt ?? state.installedAt ?? null,
     lastCommand: state.lastCommand,
     deployedBy: { cli: CLI_NAME, version: CLI_VERSION },
     domain: state.domain ?? null,
@@ -415,6 +466,9 @@ export function buildDeployInfo(
     host: facts,
     remote: extras.remote ?? null,
     run: extras.run ?? { completed: true },
+    // Carried from the state, never stamped here: this document reports what
+    // the state records, and only `adopt.ts` decides that an adoption happened.
+    ...(state.adoptedAt === undefined ? {} : { adoptedAt: state.adoptedAt }),
   };
 }
 

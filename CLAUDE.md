@@ -514,7 +514,13 @@ deliberate refusal, not an oversight — and, in §21.3.1 (issue #268), why the
 database and the object store are **opt-in extras** rather than either a
 refusal or a default: each needs its own flag plus a typed confirmation of
 that resource's own real name, so a word typed for one can never authorise
-the other; the operator-facing runbook —
+the other, and
+[§23](docs/specs/vps-deploy.md#23-update-adopts-a-deployment-it-has-no-record-of-issue-285)
+records why `update`'s precondition asks whether a **deployment** is there
+rather than whether the CLI's own state file is — it reconstructs a missing
+record from the clone, the `.env` and the proxy, and never invents the two
+instants (`installedAt`, `lastDeployedAt`) that no disk carries; the
+operator-facing runbook —
 prerequisites, first login after install, troubleshooting — is
 [`docs/deployment/vps.md`](docs/deployment/vps.md). The command reference
 (flags, exit codes) is [`apps/cli/README.md`](apps/cli/README.md#deploying-to-a-server)

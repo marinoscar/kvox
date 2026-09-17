@@ -1510,6 +1510,17 @@ export async function runUpdateCommand(
 
   const result = await runUpdate(updateOptions);
 
+  // ADOPTION IS NEVER SILENT, INCLUDING UNDER --json (#285). On a terminal the
+  // hooks above already printed it before the pipeline ran; with --json no
+  // hooks are wired at all, so it is written here instead - to stderr, which
+  // keeps stdout pure JSON. It also covers `--check --json`, whose stdout is
+  // the check object alone and has nowhere to put it.
+  if (json && result.adopted !== undefined) {
+    stderr.write(`\n  ${result.adopted.headline}\n`);
+    for (const line of result.adopted.detail) stderr.write(`    ${line}\n`);
+    stderr.write('\n');
+  }
+
   if (options.check === true) {
     // The check IS the result: the object alone under --json, and on a
     // terminal the fetch step has already rendered `current -> latest` and

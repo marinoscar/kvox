@@ -67,7 +67,22 @@ export interface DeployState {
    * `envFilePath(deployRoot)` is the answer either way.
    */
   envPath?: string | undefined;
-  installedAt: string;
+  /**
+   * When this deployment was first installed BY THIS CLI.
+   *
+   * OPTIONAL SINCE #285, AND `DEPLOY_STATE_VERSION` STAYS AT 1, for exactly
+   * the reason `lastDeployedAt` below became optional in #267: every state
+   * file written before that was written by a run that had just installed or
+   * updated, so every existing file carries this field and it means what it
+   * always meant. What is new is the record `update` RECONSTRUCTS when it
+   * finds a live deployment and no state file (`adopt.ts`). When this CLI did
+   * not perform the install, the instant it happened is not on the disk
+   * anywhere - not in the clone, not in the `.env`, not in the containers -
+   * and stamping `now` here would put a fiction on the About page, which is
+   * the class of bug #283 fixed. Absent therefore means "this CLI has no
+   * record of installing here", which is what `adoptedAt` below then explains.
+   */
+  installedAt?: string | undefined;
   /**
    * When the last deploy SUCCEEDED. Never stamped at fetch time: a failed
    * update must not claim a deploy that never happened (#120).
@@ -123,6 +138,20 @@ export interface DeployState {
    * deliberately no migration.
    */
   appctlVersion: string;
+  /**
+   * When this CLI ADOPTED a deployment it had no record of making (#285).
+   *
+   * `update` reconstructs the record from the clone, the `.env` and the proxy
+   * when the state file is missing but a deployment is demonstrably present -
+   * see `adopt.ts`. This field is what separates such a record from one a run
+   * of this CLI actually wrote, and it is the reason `installedAt` above may
+   * be absent: absent `adoptedAt` means the record came from a run this CLI
+   * performed, which is every state file written before #285.
+   *
+   * It is NOT `installedAt` under another name. It is when the bookkeeping
+   * was rebuilt, never when the deployment was made.
+   */
+  adoptedAt?: string | undefined;
   /** The revision this replaced, for a manual roll-back. */
   previousSha?: string | undefined;
   /**
