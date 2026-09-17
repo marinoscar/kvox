@@ -144,19 +144,43 @@ const dockerComposeV2: Check = {
 export const DEVNET_NETWORK = 'devnet';
 export const DEVNET_CHECK_ID = 'docker-network-devnet';
 
+/**
+ * The shared network - reported, never demanded  (issue #251)
+ *
+ * `recommended`, not `required`, because INSTALL CREATES IT. The pipeline's
+ * `network` step runs an idempotent `docker network create`, and its own
+ * comment calls it "the one thing install is allowed to create that the
+ * doctor only reports". Failing a host over it told the operator to run a
+ * command by hand to satisfy a prerequisite the very next command satisfies
+ * for them.
+ *
+ * The install wizard already knew this - `welcomeChecks()` filters this id
+ * out of its gate, "failing on its absence would refuse the very install that
+ * fixes it" - so standalone `doctor` was the only surface still failing on
+ * it, and the two disagreed about the same host.
+ *
+ * ⚠ The network is still genuinely needed, for a reason worth keeping
+ * straight: `base.compose.yml` attaches `api` to it unconditionally as an
+ * `external` network, and Compose refuses to start a service on an external
+ * network that is absent. So it is required by the COMPOSE FILE, not by the
+ * deployment's database topology - on a deployment using external PostgreSQL,
+ * which is this template's documented shape, it is an empty network that
+ * exists only to satisfy that attachment. Do not "fix" this by deleting the
+ * check; it is the thing that explains an otherwise cryptic compose failure.
+ */
 const dockerNetworkDevnet: Check = {
   id: DEVNET_CHECK_ID,
   title: `Docker network ${DEVNET_NETWORK}`,
-  severity: 'required',
+  severity: 'recommended',
   requires: ['docker-daemon'],
   async run(context) {
     const { ok } = await probe(context, ['docker', 'network', 'inspect', DEVNET_NETWORK]);
     return ok
       ? { status: 'pass', detail: 'exists' }
       : {
-          status: 'fail',
+          status: 'warn',
           detail: 'does not exist',
-          remedy: `Create it once per host: docker network create ${DEVNET_NETWORK}`,
+          remedy: `Nothing to do: install creates it. To create it ahead of time, docker network create ${DEVNET_NETWORK}`,
         };
   },
 };
