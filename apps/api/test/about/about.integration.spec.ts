@@ -180,6 +180,88 @@ describe('About API (Integration)', () => {
   });
 
   // ===========================================================================
+  // An incomplete run is still a 200, and still makes no network call (#283)
+  // ===========================================================================
+  //
+  // The reported deployment: the CLI cloned, built, migrated 21 migrations,
+  // seeded, started the stack and issued the certificate, the API answered —
+  // and the run then failed at its last action. About said the instance had
+  // not been deployed by the CLI at all. The record now exists and says which
+  // step stopped the run; the route's two standing invariants are asserted
+  // around it, because "add a field" is exactly the change that quietly
+  // reaches for an outbound call to fill it in.
+
+  it('answers 200 with the deployment facts AND the failed step, with the field present', async () => {
+    const admin = await createMockAdminUser(context);
+    writeInfo({
+      ...fixture,
+      run: { completed: false, failedStep: 'publish', attemptedAt: '2026-09-17T09:12:00.000Z' },
+    });
+
+    const response = await request(server())
+      .get('/api/admin/about')
+      .set(authHeader(admin.accessToken))
+      .expect(200);
+
+    const body = aboutResponseSchema.parse(response.body.data);
+    // Not a fifth status: the record was read and it matched.
+    expect(body.deployInfoStatus).toBe('ok');
+    expect(body.deployInfo).toMatchObject({ app: { commitSha: fixture.app.commitSha } });
+    expect(body.deployRunComplete).toBe(false);
+    expect(body.deployFailedStep).toBe('publish');
+    expect(body.deployAttemptedAt).toBe('2026-09-17T09:12:00.000Z');
+  });
+
+  it('answers 200 with the field ABSENT — a record an older CLI wrote reads as complete', async () => {
+    const admin = await createMockAdminUser(context);
+    const { run: _run, ...older } = fixture;
+    writeInfo(older);
+
+    const response = await request(server())
+      .get('/api/admin/about')
+      .set(authHeader(admin.accessToken))
+      .expect(200);
+
+    const body = aboutResponseSchema.parse(response.body.data);
+    // An `invalid` here would be strictly worse than the missing field.
+    expect(body.deployInfoStatus).toBe('ok');
+    expect(body.detail).toBeNull();
+    expect(body.deployRunComplete).toBe(true);
+    expect(body.deployFailedStep).toBeNull();
+  });
+
+  it('makes no network call to answer, with the run field present or absent', async () => {
+    // CLAUDE.md states this as an invariant of the route and epic #118
+    // decision 7 is its whole reason: the container has no git checkout and no
+    // GitHub credential, and `remote` is whatever the CLI last recorded.
+    const admin = await createMockAdminUser(context);
+    const realFetch = globalThis.fetch;
+    const spy = jest.fn(async () => {
+      throw new Error('GET /api/admin/about must never perform network I/O');
+    });
+    globalThis.fetch = spy as unknown as typeof globalThis.fetch;
+
+    try {
+      writeInfo({ ...fixture, run: { completed: false, failedStep: 'publish' } });
+      await request(server())
+        .get('/api/admin/about')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      const { run: _run, ...older } = fixture;
+      writeInfo(older);
+      await request(server())
+        .get('/api/admin/about')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  // ===========================================================================
   // The API refuses to relay a secret, whatever the file says
   // ===========================================================================
 
