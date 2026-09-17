@@ -759,6 +759,140 @@ describe('UserSettingsService', () => {
   });
 
   // ===========================================================================
+  // onboarding namespace merge logic (issue #272, epic #271)
+  // ===========================================================================
+  //
+  // Field-wise like mergeNavigation, NOT wholesale like mergeDataTables: the
+  // four fields are independent decisions about four different surfaces, and
+  // the client writes exactly the one that just happened. A wholesale replace
+  // would drop the stored `skipped` list the first time a dialog was closed.
+  //
+  // Collapsing matters more here than anywhere else in this service: the epic
+  // reads the PRESENCE of the namespace to decide whether this user has ever
+  // been onboarded, so a stored `{}` would say "already onboarded" while
+  // containing nothing.
+
+  describe('mergeOnboarding (private)', () => {
+    const mergeOnboarding = (current: unknown, patch: unknown) =>
+      (service as any).mergeOnboarding(current, patch);
+
+    const SEEN = '2026-09-17T10:00:00.000Z';
+    const DISMISSED = '2026-09-17T11:00:00.000Z';
+    const ADMIN_DISMISSED = '2026-09-17T12:00:00.000Z';
+
+    it('patch absent leaves the namespace untouched', () => {
+      const current = { welcomeSeenAt: SEEN };
+
+      expect(mergeOnboarding(current, undefined)).toEqual(current);
+    });
+
+    it('an omitted field is left untouched', () => {
+      const current = { welcomeSeenAt: SEEN, dismissedAt: DISMISSED };
+
+      expect(mergeOnboarding(current, {})).toEqual(current);
+    });
+
+    it('setting one field leaves the other three alone', () => {
+      const current = { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] };
+
+      expect(mergeOnboarding(current, { dismissedAt: DISMISSED })).toEqual({
+        welcomeSeenAt: SEEN,
+        dismissedAt: DISMISSED,
+        skipped: ['configure_oauth'],
+      });
+    });
+
+    // THE `!== undefined` CONVENTION, not `??`. With `??` an explicit `null`
+    // would read as "not provided" and the stored value would survive - an
+    // un-dismiss request that returns 200 and changes nothing.
+    it('dismissedAt: null deletes ONLY that field, leaving the others', () => {
+      const current = {
+        welcomeSeenAt: SEEN,
+        dismissedAt: DISMISSED,
+        adminDismissedAt: ADMIN_DISMISSED,
+        skipped: ['configure_oauth'],
+      };
+
+      expect(mergeOnboarding(current, { dismissedAt: null })).toEqual({
+        welcomeSeenAt: SEEN,
+        adminDismissedAt: ADMIN_DISMISSED,
+        skipped: ['configure_oauth'],
+      });
+    });
+
+    it('adminDismissedAt: null does not disturb dismissedAt - the two surfaces are separate', () => {
+      const current = {
+        dismissedAt: DISMISSED,
+        adminDismissedAt: ADMIN_DISMISSED,
+      };
+
+      expect(mergeOnboarding(current, { adminDismissedAt: null })).toEqual({
+        dismissedAt: DISMISSED,
+      });
+    });
+
+    it('skipped is REPLACED wholesale when present - it is one list, not a set of independent keys', () => {
+      const current = { skipped: ['configure_oauth', 'invite_users'] };
+
+      expect(mergeOnboarding(current, { skipped: ['add_ai_key'] })).toEqual({
+        skipped: ['add_ai_key'],
+      });
+    });
+
+    it('skipped: null deletes the list, leaving the timestamps', () => {
+      const current = { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] };
+
+      expect(mergeOnboarding(current, { skipped: null })).toEqual({
+        welcomeSeenAt: SEEN,
+      });
+    });
+
+    // "Has skipped nothing" and "has never skipped anything" are the same
+    // fact; storing `[]` would be a second spelling of it for the read path to
+    // disagree with.
+    it('an empty skipped array is normalised to absent rather than stored as []', () => {
+      const current = { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] };
+
+      const result = mergeOnboarding(current, { skipped: [] });
+
+      expect(result).toEqual({ welcomeSeenAt: SEEN });
+      expect(result).not.toHaveProperty('skipped');
+    });
+
+    it('onboarding: null clears the whole namespace, restoring "never onboarded"', () => {
+      const current = { welcomeSeenAt: SEEN, dismissedAt: DISMISSED };
+
+      expect(mergeOnboarding(current, null)).toBeUndefined();
+    });
+
+    it('emptying the namespace collapses it back to absent (undefined), not {}', () => {
+      const current = { welcomeSeenAt: SEEN };
+
+      expect(mergeOnboarding(current, { welcomeSeenAt: null })).toBeUndefined();
+    });
+
+    it('a patch of only nulls against an absent namespace stays absent', () => {
+      expect(
+        mergeOnboarding(undefined, { welcomeSeenAt: null, skipped: null }),
+      ).toBeUndefined();
+    });
+
+    it('does not mutate the current value it read', () => {
+      const current = {
+        welcomeSeenAt: SEEN,
+        dismissedAt: DISMISSED,
+      };
+
+      mergeOnboarding(current, { dismissedAt: null });
+
+      expect(current).toEqual({
+        welcomeSeenAt: SEEN,
+        dismissedAt: DISMISSED,
+      });
+    });
+  });
+
+  // ===========================================================================
   // notifications namespace merge logic (issue #126, epic #109)
   // ===========================================================================
   //
@@ -1141,6 +1275,11 @@ describe('UserSettingsService', () => {
       // (see mergeNotifications), so the assertion has to distinguish them
       // too, not just accept `undefined` either way.
       expect('notifications' in result).toBe(false);
+      // The same distinction, and the one the whole of epic #271 reads: a
+      // never-written user must have NO `onboarding` key at all, because that
+      // absence is what means "has never been onboarded". An emitted `{}`
+      // would say the opposite of nothing.
+      expect('onboarding' in result).toBe(false);
     });
 
     it('includes dataTables, navigation and notifications in the response body when present', async () => {
@@ -1152,6 +1291,7 @@ describe('UserSettingsService', () => {
           dataTables: { jobs: { pageSize: 25 } },
           navigation: { railCollapsed: true },
           notifications: { email: { 'user.welcome': false } },
+          onboarding: { welcomeSeenAt: '2026-09-17T10:00:00.000Z' },
         } as any,
       } as any);
 
@@ -1161,6 +1301,7 @@ describe('UserSettingsService', () => {
         dataTables: { jobs: { pageSize: 25 } },
         navigation: { railCollapsed: true },
         notifications: { email: { 'user.welcome': false } },
+        onboarding: { welcomeSeenAt: '2026-09-17T10:00:00.000Z' },
       });
     });
   });
@@ -1199,6 +1340,150 @@ describe('UserSettingsService', () => {
       } as any);
 
       expect('notifications' in storedValue).toBe(false);
+    });
+  });
+
+  // ===========================================================================
+  // onboarding on the full PATCH path (issue #272, epic #271)
+  // ===========================================================================
+  //
+  // The `mergeOnboarding` cases above test the private method. These drive the
+  // whole of `patchSettings`, which is where the namespace has to survive the
+  // step the merge cannot see: `userSettingsSchema.parse(merged)`. That call
+  // silently STRIPS any key the canonical schema does not declare, so a
+  // namespace wired into the merge but missing from the schema would pass every
+  // merge test above and still persist nothing. These cases assert against what
+  // actually reached Prisma.
+  describe('onboarding on the PATCH path (issue #272)', () => {
+    const SEEN = '2026-09-17T10:00:00.000Z';
+    const DISMISSED = '2026-09-17T11:00:00.000Z';
+
+    function captureStoredValue() {
+      const captured: { value?: any } = {};
+      (mockPrisma.userSettings.update as any).mockImplementation(
+        async ({ data }: any) => {
+          captured.value = data.value;
+          return { ...mockUserSettings, value: data.value, version: 2 };
+        },
+      );
+      mockPrisma.user.update.mockResolvedValue({} as any);
+      return captured;
+    }
+
+    it('persists and returns onboarding.welcomeSeenAt, with the version incremented', async () => {
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: {
+          theme: 'system',
+          profile: { imageSource: 'provider' },
+        } as any,
+        version: 1,
+      } as any);
+
+      const captured = captureStoredValue();
+
+      const result = await service.patchSettings(mockUserId, {
+        onboarding: { welcomeSeenAt: SEEN },
+      } as any);
+
+      // Survived the post-merge `parse` rather than being stripped by it.
+      expect(captured.value.onboarding).toEqual({ welcomeSeenAt: SEEN });
+      expect(result).toMatchObject({
+        onboarding: { welcomeSeenAt: SEEN },
+        version: 2,
+      });
+      expect(mockPrisma.userSettings.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ version: { increment: 1 } }),
+        }),
+      );
+    });
+
+    it('clears one field with null and leaves the others stored', async () => {
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: {
+          theme: 'system',
+          profile: { imageSource: 'provider' },
+          onboarding: {
+            welcomeSeenAt: SEEN,
+            dismissedAt: DISMISSED,
+            skipped: ['configure_oauth'],
+          },
+        } as any,
+      } as any);
+
+      const captured = captureStoredValue();
+
+      const result = await service.patchSettings(mockUserId, {
+        onboarding: { dismissedAt: null },
+      } as any);
+
+      expect(captured.value.onboarding).toEqual({
+        welcomeSeenAt: SEEN,
+        skipped: ['configure_oauth'],
+      });
+      expect(result.onboarding).not.toHaveProperty('dismissedAt');
+    });
+
+    it("emptying the namespace removes 'onboarding' entirely from the stored value", async () => {
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: {
+          theme: 'system',
+          profile: { imageSource: 'provider' },
+          onboarding: { welcomeSeenAt: SEEN },
+        } as any,
+      } as any);
+
+      const captured = captureStoredValue();
+
+      const result = await service.patchSettings(mockUserId, {
+        onboarding: { welcomeSeenAt: null },
+      } as any);
+
+      // Absent, not `{}` - the state the epic reads as "never onboarded".
+      expect('onboarding' in captured.value).toBe(false);
+      expect('onboarding' in result).toBe(false);
+    });
+
+    it('onboarding: null clears the namespace outright', async () => {
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: {
+          theme: 'system',
+          profile: { imageSource: 'provider' },
+          onboarding: { welcomeSeenAt: SEEN, dismissedAt: DISMISSED },
+        } as any,
+      } as any);
+
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        onboarding: null,
+      } as any);
+
+      expect('onboarding' in captured.value).toBe(false);
+    });
+
+    it('an unrelated PATCH leaves a stored onboarding namespace untouched', async () => {
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: {
+          theme: 'system',
+          profile: { imageSource: 'provider' },
+          onboarding: { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] },
+        } as any,
+      } as any);
+
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, { theme: 'dark' } as any);
+
+      expect(captured.value.onboarding).toEqual({
+        welcomeSeenAt: SEEN,
+        skipped: ['configure_oauth'],
+      });
     });
   });
 });
