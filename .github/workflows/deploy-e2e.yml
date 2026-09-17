@@ -212,13 +212,18 @@ jobs:
 
       # -----------------------------------------------------------------------
       # 1. doctor, twice, around the one thing it is allowed to report but not
-      #    fix. `devnet` is `external: true` in base.compose.yml, so compose
-      #    never creates it and a host without it fails `up -d` halfway
-      #    through. Asserting that doctor NAMES it — and that it is the only
-      #    required failure — is what makes the check genuinely exercised
-      #    rather than merely present.
+      #    fix. `devnet` is still genuinely required — it is `external: true`
+      #    in base.compose.yml, so compose never creates it and refuses to
+      #    start a service on an absent one — but `install` creates it at its
+      #    own `network` step, so doctor now reports it as a warning rather
+      #    than refusing the very install that fixes it (#252). Asserting that
+      #    doctor NAMES it as a warning, that no check regresses to a required
+      #    failure, and that it then flips to a pass once the network exists —
+      #    across these two runs — is what makes the check genuinely exercised
+      #    rather than merely present. A vacuous pass here would mean this job
+      #    stopped watching the one thing it exists to watch.
       # -----------------------------------------------------------------------
-      - name: doctor reports the missing devnet network, and nothing else
+      - name: doctor warns about the missing devnet network and still passes
         run: |
           mkdir -p "$DIAG_DIR"
           set +e
@@ -230,11 +235,14 @@ jobs:
           status=$?
           set -e
           jq . "$DIAG_DIR/doctor-before.json"
-          # Required checks fail the run: exit 6, not 0.
-          test "$status" -ne 0
+          # A recommended warning does not fail the run: exit 0.
+          test "$status" -eq 0
+          jq -e '.ok == true' "$DIAG_DIR/doctor-before.json"
+          # No check has regressed to a required failure.
           jq -e '[.checks[] | select(.severity == "required" and .status == "fail") | .id]
-                   == ["docker-network-devnet"]' "$DIAG_DIR/doctor-before.json"
-          jq -e '.ok == false' "$DIAG_DIR/doctor-before.json"
+                   == []' "$DIAG_DIR/doctor-before.json"
+          jq -e '(.checks[] | select(.id == "docker-network-devnet")) as $c
+                   | $c.severity == "recommended" and $c.status == "warn"' "$DIAG_DIR/doctor-before.json"
 
       - name: Create the devnet network
         run: docker network create devnet
