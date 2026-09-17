@@ -40,6 +40,8 @@ import {
   groupsOf,
   installSteps,
   optionModeField,
+  CATCH_ALL_STEP_ID,
+  isCatchAllStep,
   prepareStep,
   pipelineItems,
   railSteps,
@@ -162,7 +164,12 @@ function fail(id: string, overrides: Partial<CompletedCheck> = {}): CompletedChe
 
 describe('installSteps', () => {
   it('walks Welcome and then steps.ts, in steps.ts order, ending on Review', () => {
-    expect(FULL.map((step) => step.id)).toEqual([
+    // Catch-all pages (#240) collapse back to the one step they came from:
+    // this pins the ORDER of the wizard against steps.ts, and how many pages
+    // the terminal needed for the last one is a separate question.
+    const ids = FULL.map((step) => (isCatchAllStep(step.id) ? CATCH_ALL_STEP_ID : step.id));
+
+    expect([...new Set(ids)]).toEqual([
       WELCOME_STEP_ID,
       ...INSTALL_WIZARD_STEPS.map((step) => step.id),
     ]);
@@ -170,8 +177,8 @@ describe('installSteps', () => {
   });
 
   it('keeps the catch-all step only when the operator asked to review everything', () => {
-    expect(stepsFor().map((step) => step.id)).not.toContain('optional');
-    expect(stepsFor({ all: true }).map((step) => step.id)).toContain('optional');
+    expect(stepsFor().some((step) => isCatchAllStep(step.id))).toBe(false);
+    expect(stepsFor({ all: true }).some((step) => isCatchAllStep(step.id))).toBe(true);
   });
 
   it('drops the storage step when the group was not opted into', () => {
@@ -645,7 +652,11 @@ describe('the Done and Failed models', () => {
 });
 
 describe('the catch-all step', () => {
-  const step = stepById('optional');
+  // The catch-all is now SEVERAL steps, one per template section (#240), so
+  // this reaches for the first page rather than a step called `optional`.
+  // `PORT` is in the first section, which is why these cases still find it.
+  const step = FULL.find((candidate) => isCatchAllStep(candidate.id));
+  if (step === undefined) throw new Error('no catch-all page');
 
   it('offers keep, edit or skip per key, defaulting to keep', () => {
     const fields = formFieldsFor(step, { specs: SPECS, answers: {} });
