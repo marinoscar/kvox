@@ -1,14 +1,15 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { PreconditionError, UsageError } from '../errors.js';
 import { CommandFailedError, runCommand, type CommandResult, type RunCommandOptions } from './executor.js';
 import {
   compareRevisions,
+  contains,
   displayRepoUrl,
   ensureCheckout,
   ensureGitHubAuth,
@@ -344,6 +345,219 @@ describe('resolveRepoTarget', () => {
     );
 
     expect((error as Error).message).toContain('--repo');
+  });
+});
+
+describe('contains', () => {
+  it('is true for equal paths', () => {
+    expect(contains('/opt/infra/apps', '/opt/infra/apps')).toBe(true);
+  });
+
+  it('is true for a child underneath', () => {
+    expect(contains('/opt/infra/apps', '/opt/infra/apps/myapp')).toBe(true);
+  });
+
+  it('is false for a sibling whose name merely shares a prefix', () => {
+    // The classic startsWith bug: without the separator guard,
+    // '/opt/infra/apps-old'.startsWith('/opt/infra/apps') is true.
+    expect(contains('/opt/infra/apps', '/opt/infra/apps-old')).toBe(false);
+  });
+
+  it('is false for a parent (the reverse direction)', () => {
+    expect(contains('/opt/infra/apps/myapp', '/opt/infra/apps')).toBe(false);
+  });
+
+  it('normalises a trailing slash', () => {
+    expect(contains('/opt/infra/apps/', '/opt/infra/apps/myapp')).toBe(true);
+  });
+
+  it('normalises a relative segment', () => {
+    expect(contains('/opt/infra/apps', '/opt/infra/other/../apps/myapp')).toBe(true);
+  });
+});
+
+// =============================================================================
+// The ambient-repo guard (#247)
+//
+// findGitRoot walks the REAL filesystem (existsSync), so these build real
+// temp directories with mkdtempSync and mark checkouts with an empty `.git`
+// directory - no real git needed, since runCommand is already injectable for
+// every case that must actually reach the network/origin lookup.
+// =============================================================================
+
+describe('resolveRepoTarget - the ambient-repo guard (#247)', () => {
+  const roots: string[] = [];
+
+  function tempDir(prefix: string): string {
+    const dir = mkdtempSync(join(tmpdir(), prefix));
+    roots.push(dir);
+    return dir;
+  }
+
+  function markGitCheckout(dir: string): void {
+    mkdirSync(join(dir, '.git'), { recursive: true });
+  }
+
+  afterEach(() => {
+    for (const dir of roots.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  const neverRunCommand = (async () => {
+    throw new Error('runCommand should not have been called');
+  }) as typeof runCommand;
+
+  /** A canned runCommand for the ordinary "resolves fine" cases below. */
+  function stubOriginRunCommand(originUrl: string, branch: string) {
+    const seen: string[][] = [];
+    const stub = cannedRunCommand((argv) => {
+      if (argv[1] === 'remote') return { exitCode: 0, stdout: originUrl };
+      if (argv[1] === 'rev-parse' && argv[2] === '--abbrev-ref') {
+        return { exitCode: 0, stdout: branch };
+      }
+      return { exitCode: 0, stdout: '' };
+    }, seen);
+    return { stub, seen };
+  }
+
+  it('refuses when cwd is the reported shape: infra repo containing the apps root', async () => {
+    const tmp = tempDir('appctl-ambient-');
+    const infra = join(tmp, 'infra');
+    const appsRoot = join(infra, 'apps');
+    markGitCheckout(infra);
+    mkdirSync(appsRoot, { recursive: true });
+
+    const error = await resolveRepoTarget({
+      cwd: appsRoot,
+      appsRoot,
+      runCommand: neverRunCommand,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    const message = (error as Error).message;
+    // The regression this guard exists for: name BOTH the discovered git
+    // root and the apps root, so an operator can tell what happened.
+    expect(message).toContain(resolve(infra));
+    expect(message).toContain(appsRoot);
+    expect(message).toContain('--repo');
+  });
+
+  it('also refuses from a directory nested deeper inside the apps root', async () => {
+    const tmp = tempDir('appctl-ambient-nested-');
+    const infra = join(tmp, 'infra');
+    const appsRoot = join(infra, 'apps');
+    const nested = join(appsRoot, 'something');
+    markGitCheckout(infra);
+    mkdirSync(nested, { recursive: true });
+
+    const error = await resolveRepoTarget({
+      cwd: nested,
+      appsRoot,
+      runCommand: neverRunCommand,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain(resolve(infra));
+  });
+
+  it('still resolves an ordinary clone that has nothing to do with the apps root', async () => {
+    const tmp = tempDir('appctl-ambient-elsewhere-');
+    const appsRoot = join(tmp, 'infra', 'apps');
+    const app = join(tmp, 'elsewhere', 'app');
+    markGitCheckout(app);
+
+    const { stub } = stubOriginRunCommand('https://example.test/o/r.git', 'main');
+
+    const target = await resolveRepoTarget({
+      cwd: app,
+      appsRoot,
+      runCommand: stub,
+    });
+
+    expect(target).toMatchObject({
+      source: 'git-remote',
+      url: normaliseRepoUrl('https://example.test/o/r.git'),
+      ref: 'main',
+    });
+  });
+
+  it('resolves a checkout that is INSIDE the apps root - the opposite direction', async () => {
+    const tmp = tempDir('appctl-ambient-inside-');
+    const appsRoot = join(tmp, 'infra', 'apps');
+    const myapp = join(appsRoot, 'myapp');
+    markGitCheckout(myapp);
+
+    const { stub } = stubOriginRunCommand('https://example.test/o/r.git', 'main');
+
+    const target = await resolveRepoTarget({
+      cwd: myapp,
+      appsRoot,
+      runCommand: stub,
+    });
+
+    expect(target).toMatchObject({
+      source: 'git-remote',
+      url: normaliseRepoUrl('https://example.test/o/r.git'),
+    });
+  });
+
+  it('lets --repo win from the refused location - rank 1 never reaches the guard', async () => {
+    const tmp = tempDir('appctl-ambient-flag-');
+    const infra = join(tmp, 'infra');
+    const appsRoot = join(infra, 'apps');
+    markGitCheckout(infra);
+    mkdirSync(appsRoot, { recursive: true });
+
+    const target = await resolveRepoTarget({
+      cwd: appsRoot,
+      appsRoot,
+      repoFlag: 'https://example.test/other/repo.git',
+      refFlag: 'v2',
+      runCommand: neverRunCommand,
+    });
+
+    expect(target).toMatchObject({
+      url: 'https://example.test/other/repo',
+      ref: 'v2',
+      source: 'flag',
+    });
+  });
+
+  it('lets recorded state win from the refused location - rank 2 never reaches the guard', async () => {
+    const tmp = tempDir('appctl-ambient-state-');
+    const infra = join(tmp, 'infra');
+    const appsRoot = join(infra, 'apps');
+    markGitCheckout(infra);
+    mkdirSync(appsRoot, { recursive: true });
+
+    const target = await resolveRepoTarget({
+      cwd: appsRoot,
+      appsRoot,
+      state: { repoUrl: 'https://example.test/state/repo', ref: 'v1.0.0' },
+      runCommand: neverRunCommand,
+    });
+
+    expect(target).toMatchObject({
+      url: 'https://example.test/state/repo',
+      ref: 'v1.0.0',
+      source: 'state',
+    });
+  });
+
+  it('does not guard at all when no appsRoot is passed', async () => {
+    const tmp = tempDir('appctl-ambient-noappsroot-');
+    const infra = join(tmp, 'infra');
+    markGitCheckout(infra);
+
+    const { stub } = stubOriginRunCommand('https://example.test/o/r.git', 'main');
+
+    const target = await resolveRepoTarget({
+      cwd: infra,
+      runCommand: stub,
+    });
+
+    expect(target.source).toBe('git-remote');
   });
 });
 

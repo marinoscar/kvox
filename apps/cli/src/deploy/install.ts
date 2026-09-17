@@ -219,6 +219,7 @@ async function resolveTarget(context: InstallContext): Promise<RepoTarget> {
   if (context.target !== undefined) return context.target;
   const target = await resolveRepoTarget({
     cwd: context.options.cwd ?? process.cwd(),
+    appsRoot: context.options.appsRoot,
     runCommand: context.runCommand,
     ...(context.options.repo === undefined ? {} : { repoFlag: context.options.repo }),
     ...(context.options.ref === undefined ? {} : { refFlag: context.options.ref }),
@@ -745,6 +746,7 @@ async function resolveInstallLayout(
 
   const target = await resolveRepoTarget({
     cwd: options.cwd ?? process.cwd(),
+    appsRoot,
     runCommand,
     ...(options.repo === undefined ? {} : { repoFlag: options.repo }),
     ...(options.ref === undefined ? {} : { refFlag: options.ref }),
