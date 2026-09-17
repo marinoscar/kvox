@@ -87,6 +87,7 @@ import {
   isTrue,
   pipelineItems,
   railSteps,
+  cursorSteps,
   railIndexFor,
   requiredFailures,
   stepCheckItems,
@@ -265,7 +266,9 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     [specs, groups, reviewAll],
   );
 
-  const wizard = useWizard(railSteps(steps), {
+  // cursorSteps, NOT railSteps: the rail collapses the catch-all pages into
+  // one entry, and a cursor built from it cannot reach past that count (#243).
+  const wizard = useWizard(cursorSteps(steps), {
     onFinish: () => {
       /* Review's ConfirmDialog starts the run; `next()` is never called there. */
     },
