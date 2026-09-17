@@ -292,8 +292,13 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       }).catch(() => unknownServerFacts());
       if (!cancelled && isMounted()) setFacts(collected);
 
+      // appsRoot lets this REFUSE to resolve from a checkout that contains
+      // the apps root (#247). The refusal lands in the catch below and simply
+      // leaves Repository blank for the operator to fill in - which is the
+      // right outcome, and far better than silently naming the wrong one.
       const target = await resolveRepoTarget({
         cwd: process.cwd(),
+        appsRoot: roots.apps,
         runCommand: defaultRunCommand,
       }).catch(() => undefined);
       if (cancelled || !isMounted()) return;
