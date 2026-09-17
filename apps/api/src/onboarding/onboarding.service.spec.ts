@@ -134,10 +134,21 @@ function build(facts: Facts = {}): Stubs {
     ),
   };
 
+  // ⚠ `in`, not `??`. Both of the facts below are legitimately `null`, and a
+  // `??` default would quietly turn the two cases this suite most needs to
+  // drive — no AI provider chosen, no display name set — back into the
+  // configured ones, passing every assertion for the wrong reason.
+  const displayName =
+    'displayName' in facts ? (facts.displayName ?? null) : 'Ada Lovelace';
+  const aiProvider =
+    facts.aiPolicy && 'provider' in facts.aiPolicy
+      ? (facts.aiPolicy.provider ?? null)
+      : 'openai';
+
   const userSettings = {
     getSettings: jest.fn(
       counted({
-        profile: { displayName: facts.displayName ?? 'Ada Lovelace' },
+        profile: { displayName },
         ...(facts.skipped ? { onboarding: { skipped: facts.skipped } } : {}),
       }),
     ),
@@ -147,7 +158,7 @@ function build(facts: Facts = {}): Stubs {
     getAiPolicy: jest.fn(
       counted({
         enabled: facts.aiPolicy?.enabled ?? true,
-        provider: facts.aiPolicy?.provider ?? 'openai',
+        provider: aiProvider,
         providers: {
           openai: {
             allowedModels: Array.from(
