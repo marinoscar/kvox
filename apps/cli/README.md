@@ -377,8 +377,8 @@ in `/api`.
 kvox deploy doctor
 ```
 
-Six subcommands (`doctor`, `install`, `update`, `status`, `about`, `certs`)
-take this repository — or, far more likely, your fork of it — from an empty
+Seven subcommands (`doctor`, `install`, `uninstall`, `update`, `status`,
+`about`, `certs`) take this repository — or, far more likely, your fork of it — from an empty
 VPS to running, migrated, seeded, and served over HTTPS at a real domain, and
 back to the latest revision on every subsequent deploy. They run **on the
 VPS itself**: SSH in with your own credentials, build `kvox` from a checkout
@@ -809,13 +809,108 @@ Options:
   --install-cron       Write the certificate renewal cron even if no
                        certificate was issued
   --no-install-cron    Never write the renewal cron
+  --fresh              Discard this app's prior .env, state file and
+                       deploy-info first, and install clean
   --json               Print a machine-readable result on stdout
 ```
+
+`--fresh` is the "start over on the same server" flag, and it exists because
+`.env` deliberately lives at `<deployRoot>/.env` — *outside* `repo/` — so
+that `rm -rf repo` can't take your secrets with it. That's right for a
+re-clone and wrong for a start-over, and it's how a corrupt `.env` survived
+three consecutive install attempts and produced a failure whose symptom
+pointed nowhere near its cause (issue #259). `--fresh` discards **this app's
+local state only** — the `.env`, the state file and `deploy-info/` — after
+copying the old `.env` to `<apps-root>/<name>.env.<timestamp>.bak` (0600),
+and then installs normally. It implies `--reinstall`.
+
+It deliberately does **not** touch the containers, the proxy vhost, the TLS
+certificate or the database, and it needs no typed confirmation: nothing
+irreversible is destroyed, because the backup is taken first and the clone is
+re-fetched anyway. To remove a deployment outright, use `uninstall` below.
 
 **`install` does not create an admin user.** The seed writes the allowlist
 row for `INITIAL_ADMIN_EMAIL`, not a user account — nobody has access until
 that address logs in through Google OAuth at `https://<domain>`. See "After
 install: the first login" in the runbook linked above.
+
+### Removing a deployment
+
+```bash
+kvox deploy uninstall --dry-run          # see exactly what would go
+kvox deploy uninstall --confirm myapp    # then do it
+```
+
+```
+  --confirm <name>          Type the app's own name to authorise the removal
+  --dry-run                 List everything that would be removed; change
+                            nothing
+  --certs                   Also delete the TLS certificate
+  --keep-env                Leave the .env in place (a backup is taken either
+                            way)
+  --non-interactive         Never prompt; --confirm <name> is then required
+  --skip-proxy              Do not touch the shared reverse proxy
+  --proxy-root <path>       Shared reverse proxy directory
+  --proxy-container <name>  Proxy container to reload
+  --json                    Print a machine-readable result on stdout
+```
+
+**Removes**, in this order:
+
+- **the compose project** — containers, project networks and named volumes,
+  with `down -v --remove-orphans` through the same
+  `-p <name> -f base -f prod -f vps` invocation `install` uses. `-v` is what
+  makes it a removal rather than a stop.
+- **the deploy root** — `repo/`, `.env`, `logs/`, `data/`, `deploy-info/` and
+  the state file, named one by one so `--dry-run` can print a list.
+- **this app's vhost** in the shared proxy, by its exact path and only when it
+  still carries the `# Managed by appctl deploy` marker, then **reloads** the
+  proxy (never restarts it — that would drop every other site's connections).
+- **this app's certificate renewal cron**, `/etc/cron.d/kvox-certs-<name>`.
+
+**Never removes** — each one a deliberate refusal, documented with its
+reasoning in
+[`docs/specs/vps-deploy.md` §21](../../docs/specs/vps-deploy.md#21-removing-a-deployment-and-the-four-things-it-refuses-to-remove-issue-261):
+
+- **Your database.** `deploy` validates it and never manages it; it holds your
+  data and usually lives on another host. The `dropdb` command is **printed**
+  — assembled from the deployment's own `.env`, read before anything is
+  deleted, because afterwards nothing is left that knows the database's name —
+  with no password in it. Run it yourself if you want it gone.
+- **The `devnet` network** and **the shared proxy container**. Both are shared
+  with every other app on the server.
+- **TLS certificates**, unless you pass `--certs`. Let's Encrypt allows only
+  **5 duplicate certificates per week** for the same set of hostnames, and a
+  reinstall re-requests the certificate — so destroying and re-requesting on
+  each iteration of a broken install locks you out of issuing for your own
+  domain for a week, with the app down. `--certs` uses `certbot delete
+  --cert-name`, which knows all three of a certificate's linked directories.
+
+**The confirmation is the app's own name, typed** — not a `y/N`. That is the
+convention this project already uses for destructive API actions
+(`confirmation: "RESTORE"`, `"ROLLBACK"`, `"REMOVE"`), and typing the name
+additionally proves you're removing the deployment you think you are. With
+`--non-interactive` it must arrive as `--confirm <name>`; a destructive
+default reachable by omission is not a default. `--dry-run` needs no
+confirmation, because it destroys nothing.
+
+**The `.env` is backed up first**, to `<apps-root>/<name>.env.<timestamp>.bak`
+(0600) — *outside* the directory being removed, or it wouldn't be a backup. It
+holds generated secrets that may exist nowhere else. `--keep-env` leaves the
+file in place as well, and the deploy root survives with just that file in it.
+
+**A half-removed deployment uninstalls cleanly.** No containers, no clone, no
+deploy root, or a state file this build can't parse: each is reported rather
+than treated as an error, and the run continues. If the clone is gone the
+compose project can't be torn down at all (compose needs its files), so the
+`docker rm -f` command that works without them is printed instead.
+
+`--dry-run` writes **nothing at all**, the run journal included, and starts no
+subprocess. A successful uninstall deletes its own log along with `logs/`; a
+*failed* one keeps it, which is the run you'd want a log for.
+
+Exit `2` covers both "nothing is installed here" and "the confirmation was
+missing or wrong".
 
 ### Deploying a fork
 

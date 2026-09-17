@@ -1261,3 +1261,176 @@ already prints, never escaped and sent anyway.
   an empty database created in error is recoverable by deleting it by hand;
   the inverse is not, and this design does not put that outcome one
   mis-clicked confirmation away.
+
+## 21. Removing a deployment, and the four things it refuses to remove (issue #261)
+
+Sections 1–20 describe a CLI that can **create** a deployment and **advance**
+one. Until issue #261 nothing could **remove** one, and the gap was not
+cosmetic. "I'll start over" meant an operator improvising `docker compose down`
+plus `rm -rf repo`, which is subtly wrong in a way §10 and the `.env` design
+make almost inevitable.
+
+**The concrete failure this closes.** `env-file.ts` keeps the environment file
+at `<deployRoot>/.env` — *outside* `repo/` — precisely so `rm -rf repo` cannot
+take the secrets with it. That is the right design for a re-clone and exactly
+the wrong outcome for a start-over, and nothing in the CLI distinguished the
+two. Issue #259 is the bill: a corrupt `.env` survived three consecutive
+`install` attempts and produced a failure (`deploy install` dying at "Wait for
+health" on a deployment that was serving correctly) whose symptom pointed
+nowhere near its cause. The same applies to the state file, `deploy-info/`, the
+journal, the compose project's **named volumes**, the vhost in the shared proxy
+and the renewal cron in `/etc/cron.d`: every one of them outlives a manual
+`rm -rf repo`, and none was documented as the operator's to clean up.
+
+### 21.1 What `uninstall` removes
+
+Five things, and each is removed by the *same* mechanism that created it, never
+by a second implementation that could drift from it:
+
+1. **The compose project** — containers, project networks and named volumes —
+   with `down -v --remove-orphans`, built through `composeArgv` so the
+   `-p <name> -f base -f prod -f vps` invocation is literally the one `install`
+   uses. `-v` is what makes this a removal rather than a stop: a "start over"
+   that silently keeps the volumes is the failure being improvised today.
+2. **The deploy root**, enumerated entry by entry (`repo/`, `.env`, `logs/`,
+   `data/`, `deploy-info/`, the state file) rather than with one `rm -rf`. Two
+   reasons: `--keep-env` has to be able to spare exactly one of them, and
+   `--dry-run` has to be able to print a list an operator can check against
+   what they believe is there, rather than a promise they must take on trust.
+3. **This app's vhost in the shared proxy**, through the existing `removeVhost`
+   (§10) — the *exact path* `vhostPath()` computes, never a glob over
+   `conf.d/`, and only when the file still carries the `# Managed by appctl
+   deploy` marker. The proxy is then **reloaded, never restarted**, for §10's
+   own reason: a restart drops every other site's connections.
+4. **This app's certificate renewal cron**, `/etc/cron.d/<cli>-certs-<name>`.
+   Named after this app, so removing it cannot disturb another app's renewals —
+   each app this CLI installs writes its own entry. The honest gap, stated
+   rather than hidden: each entry passes `--all`, so on a box where *this* app's
+   entry was the only one, renewals for the whole proxy stop with it.
+5. **The `.env`, after copying it** to `<appsRoot>/<name>.env.<timestamp>.bak`,
+   0600, with the same atomic temp-file-then-rename discipline `writeEnvFile`
+   uses. The copy lands in the **apps root** — a sibling of the folder being
+   deleted — because a backup inside the directory being removed is not a
+   backup. It is taken even with `--keep-env`: keeping the file and copying it
+   are not alternatives, and a few kilobytes is the whole cost of not losing
+   generated secrets that exist nowhere else.
+
+### 21.2 The four refusals, and why each is a decision rather than an omission
+
+**The external database.** Decision 4 of §1 is that deploy *validates* the
+database and never creates or manages it; §20 adds exactly one narrow exception
+(`CREATE DATABASE` on an explicit request) and closes it with a sentence that
+settles this question in advance: *"an empty database created in error is
+recoverable by deleting it by hand; the inverse is not, and this design does
+not put that outcome one mis-clicked confirmation away."* A `dropdb` inside
+`uninstall` is that outcome, one mis-clicked confirmation away. It also usually
+lives on another host and is frequently shared. So the command **prints the
+`dropdb`** — assembled from the deployment's own `.env`, read in the **first**
+step, because after the deploy root is gone nothing is left that knows the
+database's name — and never runs it. The printed command carries **no
+password**: `dropdb` prompts or reads `~/.pgpass`, and a connection string on a
+command line is a credential in the shell history of whoever pastes it.
+
+**The `devnet` network.** §15 declares it `external: true` in
+`base.compose.yml` precisely because it is shared: every app on the host joins
+it. `docker compose down` does not remove an external network and must not, and
+neither does this command. `install`'s `network` step creating it when absent is
+not a symmetry argument — creating a shared resource that is missing is
+idempotent and harms nobody; removing one that other apps are attached to is
+neither.
+
+**The shared proxy container.** The same argument, one level up, and §10's
+central decision: TLS is terminated once, by a shared containerized proxy, for
+every app on the box. This command removes *its own vhost* from that proxy and
+reloads it. Stopping, restarting or removing the container would take every
+other site on the server down with this one.
+
+**TLS certificates, by default.** This is the refusal most likely to be
+"fixed" by someone tidying up, so the reasoning is worth stating in full.
+Let's Encrypt enforces a **duplicate-certificate limit of 5 per week** for an
+identical set of hostnames. The operator reaching for `uninstall` is, by
+construction, the one iterating on an install that is not working — and a
+reinstall re-requests the certificate. Destroying and re-requesting on each
+iteration therefore burns the week's budget in an afternoon and locks the
+operator out of issuing for **their own domain** for a week, with the
+application down. Keeping the certificate costs a few kilobytes on disk and is
+harmless to a domain that is never redeployed; deleting it costs a week in the
+one situation where somebody is actually watching. `--certs` opts in
+explicitly, and it uses `certbot delete --cert-name` rather than `rm -rf` into
+`letsencrypt/live/`: that directory is three linked trees (`live/`, `archive/`,
+`renewal/`) and a partial removal leaves certbot able to neither renew nor
+reissue for the name.
+
+### 21.3 Safety
+
+**A typed confirmation of the app's name, not a y/N.** This is the convention
+the API already holds for destructive actions — `confirmation: "RESTORE"`,
+`"ROLLBACK"`, `"REMOVE"`, and the Danger Zone's scope-uppercased word — and it
+holds here for the same reason: a y/N is one stray Enter away from happening,
+and typing the app's own name additionally proves the operator is removing the
+deployment they *think* they are. Under `--non-interactive` it must arrive as
+`--confirm <name>`; a destructive default reachable by omission is not a
+default. A missing terminal is refused too, never treated as consent.
+
+**`--dry-run` writes nothing at all**, the run journal included. `openJournal`
+creates `<deployRoot>/logs/` and two files in it before the first line is
+written, so a dry run using the real journal would have already broken its own
+promise — and, on a deployment whose root is already gone, would recreate the
+very directory it was asked only to describe. `nullJournal()` exists for this.
+
+**It is resilient to a half-removed deployment.** No containers, no clone, no
+deploy root, an unreadable state file: each is an ordinary outcome that is
+*reported*, not an error that stops the run. The operator reaching for this
+command has, more often than not, already tried to do it by hand — and a
+deployment whose state file this build cannot parse is precisely the one
+somebody most wants to be rid of.
+
+**The uninstall journal survives only a failed uninstall.** `logs/` is part of
+the deployment being removed, so a successful run deletes its own log. The
+journal is therefore stood down — after its last line — immediately before the
+deploy root goes, rather than being left to append to files that no longer
+exist. A *failed* uninstall stops before that step and keeps its log, which is
+the run anybody wants one for.
+
+### 21.4 `install --fresh`
+
+The convenience path for the case above, and deliberately much narrower.
+`--fresh` discards this app's **local state only** — the `.env`, the state file
+and `deploy-info/` — backs the `.env` up exactly as `uninstall` does, and
+installs clean. It does **not** touch the containers, the proxy vhost, the
+certificate or the database, and it needs **no typed confirmation**: nothing
+irreversible is destroyed, because the backup is taken first and the clone is
+re-fetched in the ordinary way. It implies `--reinstall` — discarding a state
+file and then refusing because a state file exists would be a contradiction one
+line apart.
+
+The two share their teardown helpers through `deploy/teardown.ts` rather than
+duplicating them. That module exists for a mechanical reason worth recording:
+`uninstall.ts` imports `composeArgv`/`composeCwd` from `install.ts`, so putting
+the helpers in `uninstall.ts` would make `install → uninstall → install` an
+import cycle.
+
+### 21.5 Rejected alternatives
+
+- **`uninstall --all`, or any flag that also drops the database.** Rejected for
+  decision 4's reason at its strongest: a flag that exists will eventually be
+  passed by someone who meant something else, and there is no recovery. The
+  printed `dropdb` is a deliberate speed bump, not an oversight.
+- **A y/N confirmation, matching `tui/components/confirm-dialog.tsx`.**
+  Rejected: see §21.3. The TUI has no typed-confirmation component today, which
+  is exactly why this command is **not** on the `deploy` TUI menu — adding it
+  there means adding that component first, and a y/N dialog standing in for a
+  typed app name would quietly weaken the guarantee while looking like it
+  satisfied it.
+- **Removing `letsencrypt/live/<domain>` directly under `--certs`**, avoiding a
+  `docker run`. Rejected: §21.2's three-linked-trees problem.
+- **One `rm -rf <deployRoot>`.** Rejected: `--keep-env` and `--dry-run` both
+  need the entries named. See §21.1.
+- **Removing every vhost in `conf.d/` matching the app.** Rejected outright:
+  `removeVhost` removes one exact path and refuses a file this CLI did not
+  write. The proxy directory is shared, and a glob there is a bug waiting for
+  a second app with a similar domain.
+- **Deleting the deployment's storage bucket or its uploaded objects.** Out of
+  scope and refused for the database's reason: object storage is supplied by
+  the operator (§6's `STORAGE_*` variables), is frequently shared, and this CLI
+  never created it.
