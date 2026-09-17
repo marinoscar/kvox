@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { DEVNET_CHECK_ID } from '../../../deploy/checks/host.js';
 import { buildInstallSteps } from '../../../deploy/install.js';
 import { metadataFor, type Suggestion } from '../../../deploy/env-metadata.js';
 import { parseEnvExample, type EnvVarSpec } from '../../../deploy/env-spec.js';
@@ -447,7 +448,12 @@ describe('the live doctor on Welcome', () => {
     const ids = welcomeChecks().map((check) => check.id);
 
     expect(ids.length).toBeGreaterThan(5);
-    expect(ids).not.toContain('devnet-network');
+    // The CONSTANT, not a literal. This asserted `'devnet-network'` until
+    // #251 - a string no check has ever had - so it passed without proving
+    // anything for as long as it existed. A hand-typed id in a `not.toContain`
+    // is vacuous exactly when it is wrong, which is the one case it exists
+    // to catch.
+    expect(ids).not.toContain(DEVNET_CHECK_ID);
     expect(welcomeChecks().every((check) => check.severity === 'required')).toBe(true);
   });
 
