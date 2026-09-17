@@ -27,6 +27,8 @@ import {
 import { readState, type DeployState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
 import { runInstall, type InstallOptions, type InstallResult } from '../deploy/install.js';
+import { describeDatabase } from '../deploy/database-drop.js';
+import { describeInventory } from '../deploy/storage-purge.js';
 import { runUninstall, type UninstallOptions, type UninstallResult } from '../deploy/uninstall.js';
 import {
   DEFAULT_APPS_ROOT,
@@ -284,6 +286,10 @@ export function registerDeployCommand(
       .description('Remove this deployment from this server'),
   )
     .option('--confirm <name>', 'Type the app\'s own name to authorise the removal')
+    .option('--drop-database', 'ALSO drop the database this deployment used (off by default)')
+    .option('--confirm-database <name>', 'Type the database\'s own name to authorise the drop')
+    .option('--purge-storage', 'ALSO empty this application\'s prefixes in the bucket (off by default)')
+    .option('--confirm-bucket <name>', 'Type the bucket\'s own name to authorise the purge')
     .option('--dry-run', 'List everything that would be removed; change nothing')
     .option('--certs', "Also delete the TLS certificate (see the rate limit below)")
     .option('--keep-env', 'Leave the .env in place; a backup is taken either way')
@@ -301,6 +307,10 @@ export function registerDeployCommand(
         `  ${CLI_NAME} deploy uninstall --confirm myapp`,
         `  ${CLI_NAME} deploy uninstall --non-interactive --confirm myapp`,
         `  ${CLI_NAME} deploy uninstall --confirm myapp --keep-env`,
+        `  ${CLI_NAME} deploy uninstall --dry-run --drop-database --purge-storage`,
+        `  ${CLI_NAME} deploy uninstall --confirm myapp \\`,
+        `      --purge-storage --confirm-bucket my-bucket \\`,
+        `      --drop-database --confirm-database appdb`,
         '',
         'Exit codes:',
         '  0  removed (or, with --dry-run, listed)',
@@ -312,10 +322,27 @@ export function registerDeployCommand(
         'shared proxy - then reloads it - and this app\'s certificate renewal',
         'cron.',
         '',
+        'Does NOT remove unless you ask for it by name:',
+        '  - THE DATABASE, with --drop-database. Without it, the database is',
+        '    validated by deploy and never managed by it, and the `dropdb`',
+        '    command is printed for you to run yourself.',
+        '  - THE OBJECT STORAGE, with --purge-storage. That empties the six',
+        '    prefixes this application writes (avatars/, database-backups/,',
+        '    node-outputs/, notes/, transcripts/, uploads/) and REPORTS',
+        '    anything else in the bucket without reading into it or touching',
+        '    it - complete for a dedicated bucket, safe for a shared one. The',
+        '    bucket itself is never deleted. A versioned bucket has its',
+        '    versions and delete markers removed BY ID, because a plain delete',
+        '    there keeps the bytes and the bill behind a marker.',
+        '',
+        '  Each takes its OWN typed confirmation of that resource\'s real name',
+        '  - --confirm-database <database> and --confirm-bucket <bucket> - so a',
+        '  word typed for one can never authorise the other. Both print a full',
+        '  inventory (objects and bytes per prefix, the database\'s size and',
+        '  open sessions) BEFORE asking, and --dry-run prints it while',
+        '  destroying nothing.',
+        '',
         'Does NOT remove, ever:',
-        '  - THE DATABASE. It is validated by deploy and never managed by it,',
-        '    it holds your data, and it usually lives on another host. The',
-        '    `dropdb` command is printed for you to run yourself.',
         '  - THE devnet NETWORK and THE SHARED PROXY CONTAINER. Both are shared',
         '    with every other app on this server.',
         '  - TLS CERTIFICATES, unless --certs. Let\'s Encrypt allows only 5',
@@ -1079,6 +1106,12 @@ export function collectAnswers(
 export interface UninstallCommandOptions extends LayoutCommandOptions {
   /** `--confirm <name>`: the app's own name, typed. */
   confirm?: string | undefined;
+  /** `--drop-database` + `--confirm-database <name>`, the database's own name. */
+  dropDatabase?: boolean | undefined;
+  confirmDatabase?: string | undefined;
+  /** `--purge-storage` + `--confirm-bucket <name>`, the bucket's own name. */
+  purgeStorage?: boolean | undefined;
+  confirmBucket?: string | undefined;
   dryRun?: boolean | undefined;
   certs?: boolean | undefined;
   keepEnv?: boolean | undefined;
@@ -1113,6 +1146,10 @@ export async function runUninstallCommand(
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.root === undefined ? {} : { deployRoot: options.root }),
     ...(options.confirm === undefined ? {} : { confirmation: options.confirm }),
+    ...(options.dropDatabase === undefined ? {} : { dropDatabase: options.dropDatabase }),
+    ...(options.confirmDatabase === undefined ? {} : { confirmDatabase: options.confirmDatabase }),
+    ...(options.purgeStorage === undefined ? {} : { purgeStorage: options.purgeStorage }),
+    ...(options.confirmBucket === undefined ? {} : { confirmBucket: options.confirmBucket }),
     ...(options.dryRun === undefined ? {} : { dryRun: options.dryRun }),
     ...(options.certs === undefined ? {} : { certs: options.certs }),
     ...(options.keepEnv === undefined ? {} : { keepEnv: options.keepEnv }),
@@ -1186,6 +1223,42 @@ export function renderUninstall(result: UninstallResult): string {
   for (const item of result.kept) {
     lines.push(`    ${item.target}`);
     lines.push(`      ${item.reason}`);
+  }
+
+  // The two extras' own inventories, AFTER the removed list and before the
+  // .env note: they describe another system, and a reader scanning "Removed:"
+  // for paths should not have to step over a bucket listing to finish it.
+  if (result.storage !== undefined) {
+    lines.push('');
+    lines.push('  Object storage:');
+    if (result.storage.problem !== undefined) {
+      lines.push(`    NOT emptied: ${result.storage.problem}`);
+    } else if (result.storage.inventory !== undefined) {
+      for (const line of describeInventory(result.storage.inventory)) {
+        lines.push(line === '' ? '' : `    ${line}`);
+      }
+      const purge = result.storage.purge;
+      if (purge !== undefined) {
+        lines.push(
+          `    ${purge.dryRun ? 'Would delete' : 'Deleted'} ${purge.keys} key(s)` +
+            (purge.failures.length === 0 ? '.' : `, ${purge.failures.length} prefix(es) failed.`),
+        );
+      }
+    }
+  }
+
+  if (result.database !== undefined) {
+    lines.push('');
+    lines.push('  Database:');
+    if (result.database.problem !== undefined) {
+      lines.push(`    NOT dropped: ${result.database.problem}`);
+    } else if (result.database.facts !== undefined) {
+      for (const line of describeDatabase(result.database.facts)) lines.push(`    ${line}`);
+      const outcome = result.database.outcome;
+      if (outcome !== undefined && outcome.ok) lines.push(`    ${outcome.detail}`);
+      else if (outcome !== undefined) lines.push(`    NOT dropped: ${outcome.detail}`);
+      else if (result.dryRun) lines.push('    Would be dropped.');
+    }
   }
 
   if (result.envBackupPath !== undefined) {
