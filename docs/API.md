@@ -2163,7 +2163,7 @@ Opens or closes the window. Writes the persisted `maintenance` namespace and rec
 
 What is deployed here (issue #124, epic #118). One read-only route reporting the deployment record the CLI wrote at deploy time, plus what only the running process and a live database connection can answer. Gated on `system_settings:read` — **deliberately not a permission of its own** (epic #118 decision 8): "what is deployed here" is an administrator's configuration read, and the web card at `/admin/settings/about` (#126) carries this exact string per the Settings UI Pattern rule 3. Not exempt from the maintenance window — it is an admin page, and administrators bypass the window already unless `allowAdmins` is `false`.
 
-**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. `updateAvailable` and `checkedAt` are derived from the `remote` block the CLI last recorded (the deploy CLI, `deploy update --check` / `status`), never from a call made here.
+**This endpoint never performs network I/O.** The container has neither the git checkout nor a GitHub credential, and an admin page must not make an outbound call on every load. `updateAvailable` and `checkedAt` are derived from the `remote` block the CLI last recorded (the deploy CLI, `deploy update --check` / `status`), never from a call made here; `deployRunComplete`, `deployFailedStep` and `deployAttemptedAt` are derived from the record's own `run` block the same way.
 
 #### GET /admin/about
 **Requires:** `system_settings:read`
@@ -2184,7 +2184,8 @@ Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/dep
       "domain": "app.example.com",
       "bindPort": 3535,
       "host": { "hostname": "vps-01", "os": "Ubuntu 24.04.1 LTS", "kernel": "6.8.0-45-generic", "arch": "x64", "cpuModel": "AMD EPYC 7B13", "cpus": 4, "memoryBytes": 8323072000, "diskBytes": 80530636800, "dockerVersion": "27.1.1", "composeVersion": "2.29.1", "nodeVersion": "22.11.0" },
-      "remote": { "sha": "9b8c7d6e…", "commitsBehind": 2, "checkedAt": "2026-09-15T06:00:00.000Z" }
+      "remote": { "sha": "9b8c7d6e…", "commitsBehind": 2, "checkedAt": "2026-09-15T06:00:00.000Z" },
+      "run": { "completed": true }
     },
     "deployInfoStatus": "ok",
     "detail": null,
@@ -2204,7 +2205,10 @@ Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/dep
     },
     "databaseError": null,
     "updateAvailable": true,
-    "checkedAt": "2026-09-15T06:00:00.000Z"
+    "checkedAt": "2026-09-15T06:00:00.000Z",
+    "deployRunComplete": true,
+    "deployFailedStep": null,
+    "deployAttemptedAt": null
   }
 }
 ```
@@ -2221,6 +2225,11 @@ Reads `deploy-info/info.json` (the path in `DEPLOY_INFO_PATH`, default `/app/dep
 | `databaseError` | string \| null | Why `database` is null, when it is. |
 | `updateAvailable` | boolean \| null | `remote.commitsBehind > 0`. **`null` means unknown, not "no"** — the CLI has never run a remote check. Derived here so the web card and the terminal agree. |
 | `checkedAt` | string \| null | `remote.checkedAt`, passed through; `null` until the CLI has checked. |
+| `deployRunComplete` | boolean \| null | Did the deploy run that wrote the record run to the end? (issue #283) `null` when there is no record at all. **`true` also when the record carries no `run` block** — every `deploy-info` written before #283 was written only after a pipeline finished, so absence means "completed"; derived here so the web card and `deploy about` cannot disagree about it. `false` when the CLI wrote the record and a later step then failed: the deployment facts beside it are still accurate, because the record is only written once `/api/health/ready` has answered. |
+| `deployFailedStep` | string \| null | The pipeline step that stopped the run (e.g. `publish`, `verify`). `null` unless `deployRunComplete` is `false`. |
+| `deployAttemptedAt` | string \| null | When that run ended. `null` unless `deployRunComplete` is `false` — on a completed run `deployInfo.updatedAt` is already that instant. |
+
+⚠ **An incomplete run is `deployInfoStatus: "ok"`, not a fifth status.** The four statuses answer "could the record be read", and a record written by a run that later failed parsed perfectly. The two questions are independent: a client renders the deployment facts *and* warns about the step, rather than choosing between them. Note also that `deployInfo.updatedAt` keeps meaning **the last deploy that succeeded** — on a failed `update` past the health step it stays at the previous success while `deployInfo.app.commitSha` names the revision now actually serving, and `run` is what reconciles the two.
 
 Every timestamp is ISO-8601 UTC.
 

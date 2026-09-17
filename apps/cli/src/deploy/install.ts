@@ -1297,11 +1297,56 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
       );
     }
 
-    // DELIBERATELY NO `writeDeployInfo` HERE. That document is what the
-    // RUNNING APPLICATION reports about itself (deploy-info.ts), and a failed
-    // install has not deployed what it would claim. The ordering comment
-    // below - deploy-info comes after the state, because it is derived from
-    // it - stays true; only the state write gained a second call site.
+    // ==========================================================================
+    // AND `deploy-info` TOO, BUT ONLY ONCE `health` HAS PASSED (#283).
+    // ==========================================================================
+    //
+    // #267 withheld this document from every failed run: "it is what the
+    // running application reports about itself, and an install that did not
+    // finish has not deployed what it would claim." That holds for a failure
+    // at `build`, `migrate` or `start` - nothing is serving, and a record
+    // would describe a deployment that does not exist.
+    //
+    // It stops holding the moment the API answers. A real install failed at
+    // `publish`, after the stack was up, migrated, seeded and healthy and the
+    // certificate was issued - and the About page told the administrator
+    // "this instance was not deployed with the deploy CLI", which is a worse
+    // lie than "deployed, and the run did not finish" by exactly the margin
+    // between a wrong fact and a missing one.
+    //
+    // THE GATE IS `health`, NOT `verify`. `health` IS the claim this document
+    // makes - `waitForHealthy` polls `/api/health/ready` until the
+    // application answers, so a run past it has a deployment that demonstrably
+    // exists. `verify` is the LAST step, so gating on it would write the
+    // document on success and essentially nowhere else, leaving the reported
+    // failure (a `publish` that comes between them) reporting nothing at all.
+    //
+    // `result.completed` is the pipeline's own record, and `health` carries
+    // no `skip` guard - it either ran and passed on this run, or it was
+    // carried in from the state a previous run left for `--resume`, which is
+    // the same claim. A step skipped by a guard is in neither list
+    // (steps/pipeline.ts), so this cannot read a `--skip-*` as a pass.
+    //
+    // Failing to write it must not replace the operator's actual problem,
+    // exactly like the state write above - and it comes AFTER that write for
+    // the reason the success path states: deploy-info is derived from the
+    // state.
+    if (result.completed.includes('health')) {
+      try {
+        const infoPath = writeDeployInfo(
+          options.deployRoot,
+          buildInstallState(stateInput, { outcome: 'failure', failedStep: result.failed.id }),
+          await collectServerFacts({ runCommand, root: options.deployRoot }),
+          { run: { completed: false, failedStep: result.failed.id, attemptedAt: now } },
+        );
+        journal.line(`Wrote ${infoPath}, marked incomplete at ${result.failed.id}.`);
+      } catch (error) {
+        journal.line(
+          `Could not write deploy-info: ${error instanceof Error ? error.message : String(error)}. ` +
+            `About will report no deployment record.`,
+        );
+      }
+    }
 
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     // A precondition (the preflight, a logged-out gh) keeps its exit code 6.

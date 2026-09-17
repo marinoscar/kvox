@@ -82,6 +82,13 @@ export class AboutService {
 
     const remote = deploy.info?.remote ?? null;
     const commitsBehind = remote?.commitsBehind;
+    const run = deploy.info?.run ?? null;
+    // ABSENT MEANS COMPLETED (#283). A `deploy-info` written before the CLI
+    // carried this field was only ever written after a pipeline finished, so
+    // the test is `=== false` and never `!== true` — the inverted form would
+    // report every deployment installed by an older CLI as a failed one,
+    // which is the same class of wrongness this issue exists to remove.
+    const incomplete = run?.completed === false;
 
     return {
       deployInfo: deploy.info,
@@ -95,6 +102,12 @@ export class AboutService {
       updateAvailable:
         typeof commitsBehind === 'number' ? commitsBehind > 0 : null,
       checkedAt: remote?.checkedAt ?? null,
+      // Null only when there is no record at all; the two details below are
+      // null unless the run is known NOT to have completed, so a client can
+      // render them without re-deriving the convention above.
+      deployRunComplete: deploy.info === null ? null : !incomplete,
+      deployFailedStep: incomplete ? (run?.failedStep ?? null) : null,
+      deployAttemptedAt: incomplete ? (run?.attemptedAt ?? null) : null,
     };
   }
 

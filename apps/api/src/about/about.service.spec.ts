@@ -243,6 +243,98 @@ describe('AboutService', () => {
   });
 
   // ===========================================================================
+  // deployRunComplete — the second thing derived here (issue #283)
+  // ===========================================================================
+  //
+  // The reported failure was About telling an administrator "this instance was
+  // not deployed with the deploy CLI" about a server the CLI had cloned,
+  // built, migrated, seeded, started and certificated — because the install's
+  // very last action failed and the CLI withheld the record. The CLI now
+  // writes it from `health` onward, carrying whether the run finished; these
+  // are the reader's half of that contract.
+  //
+  // The three fields are ADDITIONAL to `deployInfoStatus`, never a fifth value
+  // of it: an incomplete run's record parsed perfectly, so it is `ok`.
+
+  describe('deployRunComplete', () => {
+    it('reports an incomplete run and the step that stopped it', async () => {
+      writeInfo({
+        ...fixture,
+        run: {
+          completed: false,
+          failedStep: 'publish',
+          attemptedAt: '2026-09-17T09:12:00.000Z',
+        },
+      });
+
+      const about = await service.get();
+
+      // Still `ok`: the file was read and it matched. The deployment facts
+      // are all there, because the CLI wrote them after the API had answered.
+      expect(about.deployInfoStatus).toBe('ok');
+      expect(about.deployInfo?.app?.commitSha).toBe(fixture.app.commitSha);
+      expect(about.deployRunComplete).toBe(false);
+      expect(about.deployFailedStep).toBe('publish');
+      expect(about.deployAttemptedAt).toBe('2026-09-17T09:12:00.000Z');
+    });
+
+    it('reports a completed run, with no failure details to render', async () => {
+      writeInfo(fixture);
+
+      const about = await service.get();
+
+      expect(about.deployRunComplete).toBe(true);
+      expect(about.deployFailedStep).toBeNull();
+      expect(about.deployAttemptedAt).toBeNull();
+    });
+
+    it('treats a file with NO `run` as a completed run — an older CLI wrote it', async () => {
+      // THE COMPATIBILITY THAT MATTERS. Every info.json already on every live
+      // server has no `run`, and each was written only after a pipeline
+      // finished. It must still parse as `ok` — an `invalid` here would be
+      // strictly worse than the missing field — and it must read as complete.
+      // A derivation testing `!== true` would report every one of them as a
+      // failed deploy, which is the same class of wrongness as the bug.
+      const { run: _run, ...older } = fixture;
+      expect(_run).toBeDefined();
+      writeInfo(older);
+
+      const about = await service.get();
+
+      expect(about.deployInfoStatus).toBe('ok');
+      expect(about.detail).toBeNull();
+      expect(about.deployRunComplete).toBe(true);
+      expect(about.deployFailedStep).toBeNull();
+    });
+
+    it('stays `ok` for a `run` carrying fields this build does not know', async () => {
+      // The other direction: a NEWER CLI. Every object in the schema is
+      // `.passthrough()`ed, so an added member rides through rather than
+      // downgrading the page.
+      writeInfo({ ...fixture, run: { completed: false, failedStep: 'verify', reasonCode: 'x' } });
+
+      const about = await service.get();
+
+      expect(about.deployInfoStatus).toBe('ok');
+      expect(about.deployRunComplete).toBe(false);
+      expect(
+        (about.deployInfo?.run as Record<string, unknown> | undefined)?.reasonCode,
+      ).toBe('x');
+    });
+
+    it('is null — not false — when there is no record at all', async () => {
+      // Nothing written. "No record" is not "a failed run": the page has
+      // nothing to warn about, only nothing to show.
+      const about = await service.get();
+
+      expect(about.deployInfoStatus).toBe('absent');
+      expect(about.deployRunComplete).toBeNull();
+      expect(about.deployFailedStep).toBeNull();
+      expect(about.deployAttemptedAt).toBeNull();
+    });
+  });
+
+  // ===========================================================================
   // runtime
   // ===========================================================================
 

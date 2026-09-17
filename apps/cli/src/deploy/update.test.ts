@@ -19,6 +19,7 @@ import { PreconditionError } from '../errors.js';
 import { DeployInfoError, deployInfoDir, readDeployInfo, writeDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
+import { unknownServerFacts } from './server-facts.js';
 import { DEPLOY_STATE_VERSION, NotInstalledError, deployStatePath, readState, writeState, type DeployState } from './state.js';
 import {
   FAKE_APP_VERSION,
@@ -385,7 +386,7 @@ describe('runUpdate against a fake VPS', () => {
   function update(
     root: string,
     hooks?: { onProgress?: (message: string) => void; onLog?: (line: string) => void; onStepStart?: (step: { id: string }) => void },
-    extra: { check?: boolean } = {},
+    extra: { check?: boolean; force?: boolean } = {},
   ) {
     return runUpdate({
       deployRoot: root,
@@ -446,7 +447,9 @@ describe('runUpdate against a fake VPS', () => {
     expect(state.previousSha).toBe(INSTALLED_SHA);
     expect(state.lastAttemptAt).toBeDefined();
     expect(state.lastAttemptAt as string > DEPLOYED_AT).toBe(true);
-    // And nothing claims otherwise to the application either.
+    // And nothing claims otherwise to the application either: this run failed
+    // at `build`, long before `health`, so #283's rule does not reach it -
+    // nothing was restarted and nothing new is serving.
     expect(readDeployInfo(root)).toBeUndefined();
   });
 
@@ -793,5 +796,108 @@ describe('runUpdate against a fake VPS', () => {
     expect(readFileSync(envFilePath(root), 'utf8')).toContain(`DEPLOY_ROOT=${root}`);
     expect(readFileSync(envFilePath(root), 'utf8')).toContain('COMPOSE_PROJECT_NAME=demo');
     expect(progress.some((message) => message.includes('Moved .env'))).toBe(true);
+  });
+
+  // ===========================================================================
+  // Issue #283: an update past `health` has already deployed the new revision
+  // ===========================================================================
+  //
+  // `update` writes deploy-info after its own success only. A failure after
+  // `health` therefore left the LAST SUCCESSFUL deploy's document in place,
+  // naming the OLD commit as what is running - while `restart` had already
+  // brought the stack up on the new one and the API had already answered on
+  // it. On a deployment with no document yet (a pre-#120 install, or one whose
+  // first install failed) it left nothing at all, and About said the CLI had
+  // never deployed it.
+  //
+  // `update()` passes `skipProxy`, so `verify` is the one step after `health`;
+  // failing the frontend probe fails it with /api/health/ready still
+  // answering, exactly as in install.test.ts.
+  describe('a failed update past health still refreshes what is deployed (#283)', () => {
+    function apiUpFrontendDown(): typeof globalThis.fetch {
+      return (async (input: RequestInfo | URL) =>
+        ({
+          status: String(input).includes('/api/health/') ? 200 : 502,
+        }) as Response) as typeof globalThis.fetch;
+    }
+
+    it('does not blank an existing record, and moves it to the revision now serving', async () => {
+      const root = installedApp(vps);
+      // The record the last successful deploy left behind.
+      writeDeployInfo(root, readState(root) as DeployState, {
+        ...unknownServerFacts(),
+        hostname: 'vps-1',
+      });
+      expect(readDeployInfo(root)?.app.commitSha).toBe(INSTALLED_SHA);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      const error = await update(root).catch((caught: unknown) => caught);
+
+      expect((error as Error).message).toContain('not healthy');
+      const info = readDeployInfo(root);
+      expect(info).toBeDefined();
+      // The new revision is what restart brought up and health answered on.
+      expect(info?.app.commitSha).toBe(NEW_SHA);
+      expect(info?.lastCommand).toBe('update');
+      expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
+    });
+
+    it('keeps updatedAt on the last deploy that SUCCEEDED, stamping nothing new', async () => {
+      // #120's rule, which this must not undo: `updatedAt` is the last
+      // successful deploy. `run` is what says the newest commit arrived on a
+      // run that did not finish.
+      const root = installedApp(vps);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      await update(root).catch(() => undefined);
+
+      const info = readDeployInfo(root);
+      expect(info?.updatedAt).toBe(DEPLOYED_AT);
+      expect(info?.installedAt).toBe(INSTALLED_AT);
+      // The STATE is untouched by this write: update records a deploy only on
+      // success, and a failed run must not look like one.
+      expect(readState(root)?.lastDeployedAt).toBe(DEPLOYED_AT);
+      expect(readState(root)?.commitSha).toBe(INSTALLED_SHA);
+    });
+
+    it('marks the record complete again once an update succeeds', async () => {
+      const root = installedApp(vps);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+      await update(root).catch(() => undefined);
+      expect(readDeployInfo(root)?.run?.completed).toBe(false);
+
+      // `--force`, because the first run already moved the clone to NEW_SHA:
+      // a plain re-run finds nothing to fetch and redeploys nothing, which is
+      // #120's behaviour and the next test's subject.
+      vi.stubGlobal('fetch', healthyFetch());
+      await update(root, undefined, { force: true });
+
+      expect(readDeployInfo(root)?.run).toEqual({ completed: true });
+      expect(readDeployInfo(root)?.app.commitSha).toBe(NEW_SHA);
+    });
+
+    it('does not rewrite the record BACKWARDS when the retry finds nothing to do', async () => {
+      // The regression #283's own fix would otherwise introduce. After a
+      // failure past `health` the clone is at NEW_SHA and serving it, but the
+      // state still says INSTALLED_SHA - `update` records a commit only on
+      // success. A plain re-run then takes the "already up to date" path,
+      // which refreshes deploy-info from that stale state: the record would
+      // move from the revision that IS running to the one that is not, and
+      // lose the marker saying the run never finished.
+      const root = installedApp(vps);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+      await update(root).catch(() => undefined);
+      expect(readState(root)?.commitSha).toBe(INSTALLED_SHA);
+
+      vi.stubGlobal('fetch', healthyFetch());
+      const result = await update(root);
+
+      expect(result.changed).toBe(false);
+      const info = readDeployInfo(root);
+      expect(info?.app.commitSha).toBe(NEW_SHA);
+      // This run deployed nothing, so it says nothing about how any run
+      // ended: the previous document's `run` rides through untouched.
+      expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
+    });
   });
 });
