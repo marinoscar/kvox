@@ -37,8 +37,12 @@ import {
   installRenewalCron,
   installVhost,
   issueCertificate,
+  renderRenewalCron,
+  renewalCronPath,
+  stageRenewalCron,
   type FetchLike,
   type ProxyTarget,
+  type RenewalCronOptions,
 } from './proxy.js';
 import {
   ensureCheckout,
@@ -194,6 +198,12 @@ interface InstallContext extends StepContext {
   ipv6?: boolean | undefined;
   /** Whether the publish step issued a certificate (rather than found one). */
   certificateIssued?: boolean | undefined;
+  /**
+   * Work the run could not do and the operator now has to (#265). Surfaced at
+   * the END of the run, beside `nextStep`, not only in the journal: an install
+   * that completed without a renewal schedule must never be silent about it.
+   */
+  warnings: string[];
 }
 
 /**
@@ -768,17 +778,15 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
             : { maxBodyBytes: Number(context.env.get('MAX_FILE_SIZE')) }),
         });
 
+        const cronOptions: RenewalCronOptions = {
+          name: context.options.name,
+          appsRoot: context.options.appsRoot,
+          kvoxPath: context.options.cliPath ?? defaultCliPath(),
+          ...(context.options.cronDir === undefined ? {} : { cronDir: context.options.cronDir }),
+        };
+
         if (context.options.installCron ?? certificate.issued) {
-          const cron = installRenewalCron({
-            name: context.options.name,
-            appsRoot: context.options.appsRoot,
-            kvoxPath: context.options.cliPath ?? defaultCliPath(),
-            ...(context.options.cronDir === undefined ? {} : { cronDir: context.options.cronDir }),
-          });
-          context.journal.line(`${cron.changed ? 'Wrote' : 'Kept'} ${cron.path}`);
-          context.hooks?.onProgress?.(
-            cron.changed ? `Installed the renewal cron at ${cron.path}` : `Renewal cron at ${cron.path} is current`,
-          );
+          ensureRenewalCron(context, cronOptions);
         }
       },
     },
@@ -812,6 +820,102 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
   ];
 }
 
+/**
+ * Writes the renewal cron, and NEVER lets that decide the install.  (issue #265)
+ *
+ * THE DEPLOYMENT IS COMPLETE WHEN THIS RUNS. The certificate has been issued
+ * and the vhost is live and reloaded; the only thing left is scheduling a
+ * renewal 60-90 days out. `/etc/cron.d` is root:root and this CLI is
+ * deliberately never run as root (#236: sudo resets HOME, which logs `gh`
+ * out), so on a standard server this write fails - and it used to take the
+ * whole step, and with it the whole install, down with it. Worse, the obvious
+ * retry was `--resume`, which then re-ran `publish` and called certbot again
+ * against a rate limit for a certificate that already existed.
+ *
+ * So the failure is recorded rather than thrown. NOT swallowed: it becomes a
+ * warning carrying the error as reported, the staged file, and the one line
+ * that installs it - and that warning is printed at the end of the run, next
+ * to `nextStep`, where the operator is looking.
+ *
+ * Every error is caught, not only EACCES. A cron directory that is read-only
+ * (EROFS), a path that is not a directory (ENOTDIR) or anything else leaves
+ * exactly the same deployment behind: complete, serving, unscheduled. Naming
+ * one errno here would make every other one fail an install that succeeded.
+ */
+function ensureRenewalCron(context: InstallContext, options: RenewalCronOptions): void {
+  try {
+    const cron = installRenewalCron(options);
+    context.journal.line(`${cron.changed ? 'Wrote' : 'Kept'} ${cron.path}`);
+    context.hooks?.onProgress?.(
+      cron.changed ? `Installed the renewal cron at ${cron.path}` : `Renewal cron at ${cron.path} is current`,
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const target = renewalCronPath(options.name, options.cronDir);
+    context.journal.line(`Could not write ${target}: ${reason}`);
+    context.warnings.push(renewalCronWarning(context, options, reason));
+    context.hooks?.onProgress?.(
+      `Could not write ${target}; the install continues and says how to finish it`,
+    );
+  }
+}
+
+/**
+ * The hand-installation instructions, hard-wrapped rather than left to the
+ * terminal - the renderer indents this, and an operator's eye skips a wall of
+ * reflowed text, which is the outcome this warning exists to avoid (#261).
+ */
+function renewalCronWarning(
+  context: InstallContext,
+  options: RenewalCronOptions,
+  reason: string,
+): string {
+  const target = renewalCronPath(options.name, options.cronDir);
+
+  let howTo: string[];
+  try {
+    // Into the deploy root: this run has been writing there all along, and
+    // `uninstall` removes that directory entry by entry, so the staged copy
+    // does not outlive the deployment it belongs to.
+    const staged = stageRenewalCron(options, context.options.deployRoot);
+    howTo = [
+      `The exact file has been written to ${staged.path}.`,
+      'Put it in place with:',
+      '',
+      `  ${staged.command}`,
+    ];
+  } catch {
+    // The deploy root is writable in every ordinary case; if it is not, the
+    // contents are still worth having, even though they have to be typed.
+    howTo = [
+      `Create ${target}, mode 0644, owned by root, containing:`,
+      '',
+      ...renderRenewalCron(options).replace(/\n$/, '').split('\n').map((line) => `  ${line}`),
+    ];
+  }
+
+  return [
+    'WARNING: automatic certificate renewal is NOT scheduled.',
+    '',
+    'The certificate was issued and the site is serving HTTPS - the install',
+    'itself is complete. What is missing is the entry that renews the',
+    'certificate in 60-90 days, because writing',
+    '',
+    `  ${target}`,
+    '',
+    `needs root, and ${CLI_NAME} is deliberately never run under sudo (it resets`,
+    'HOME, which logs `gh` out). It reported:',
+    '',
+    `  ${reason}`,
+    '',
+    ...howTo,
+    '',
+    'Then confirm it is there:',
+    '',
+    `  ls ${options.cronDir ?? '/etc/cron.d'}/${CLI_NAME}-certs-*`,
+  ].join('\n');
+}
+
 export interface InstallResult {
   deployRoot: string;
   /** The app folder and compose project name. */
@@ -821,6 +925,13 @@ export interface InstallResult {
   domain?: string | undefined;
   /** The one thing the operator still has to do. */
   nextStep: string;
+  /**
+   * Work this run could not finish, each entry ready to be printed as-is
+   * (#265). Empty on an ordinary install. A renewal cron the CLI could not
+   * write lands here rather than failing the run, so the operator is told at
+   * the end instead of finding out when the certificate expires.
+   */
+  warnings: string[];
 }
 
 /**
@@ -977,6 +1088,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
       options.resume === true && existingState !== undefined
         ? new Set(existingState.completedSteps ?? [])
         : new Set<string>(),
+    warnings: [],
   };
 
   const result = await runPipeline(buildInstallSteps(), context);
@@ -1044,6 +1156,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     // admin until this login happens, and an install that does not say so
     // looks broken.
     nextStep: `Log in at ${url} as ${admin} to claim the Admin role.`,
+    warnings: context.warnings,
   };
 }
 
