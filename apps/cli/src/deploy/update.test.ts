@@ -468,7 +468,7 @@ describe('runUpdate adopting a deployment whose state file is missing (#285)', (
     const root = join(apps, 'demo');
     mkdirSync(root, { recursive: true });
     populateClone(join(root, 'repo'));
-    writeEnvFile(root, installedEnv(vps, 'demo'));
+    writeEnvFile(root, installedEnv(vps, 'demo', root));
     expect(existsSync(deployStatePath(root))).toBe(false);
 
     const layout = locateInstalledApp({ appsRoot: apps });
@@ -524,12 +524,19 @@ const INSTALLED_AT = '2026-01-01T00:00:00.000Z';
 const DEPLOYED_AT = '2026-01-02T00:00:00.000Z';
 
 /** The .env an install would have written for FAKE_ENV_EXAMPLE. */
-function installedEnv(vps: FakeVps, name: string): string {
+/**
+ * The `.env` an install leaves behind. `DEPLOY_ROOT` and
+ * `COMPOSE_PROJECT_NAME` are both in it because install writes both (#142),
+ * and since #290 the first of the two is also how discovery tells one of this
+ * CLI's own deployments from a neighbouring application's directory.
+ */
+function installedEnv(vps: FakeVps, name: string, deployRoot?: string): string {
   return [
     ...[...vps.answers().entries()].map(([key, value]) => `${key}=${value}`),
     'POSTGRES_SSL=false',
     'APP_BIND_PORT=3535',
     `COMPOSE_PROJECT_NAME=${name}`,
+    ...(deployRoot === undefined ? [] : [`DEPLOY_ROOT=${deployRoot}`]),
     '',
   ].join('\n');
 }

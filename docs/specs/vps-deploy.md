@@ -115,6 +115,7 @@ kvox deploy install [--repo <url>] [--ref <ref>] [--path <dir>] [--domain <fqdn>
 kvox deploy update   [--force] [--skip-seed] [--dry-run]
 kvox deploy status   [--raw]
 kvox deploy doctor   [--all]
+kvox deploy list     [--json]                        # every app on this host (§24.3)
 ```
 
 Each is a thin `registerXCommand` delegating to a `runX` function, exactly
@@ -296,6 +297,11 @@ uses `--name`/`--root` or the single app installed under the apps root, and
 never walks a git checkout. Their own blind spot is a different one — with
 several apps installed and no flags they refuse and list them, even when cwd
 names one unambiguously — and is not this issue.
+
+> **Superseded by §24.1 (issue #290).** That blind spot is now fixed: cwd is a
+> rank of `locateApp` itself, so every command resolves the deployment the
+> operator is standing in. `install`'s rank here is unchanged and still
+> requires a state file, for the reason §23.7 gives.
 
 ## 6. The env wizard: generated from `.env.example`, not hardcoded
 
@@ -2271,3 +2277,142 @@ Audited and deliberately not changed.
   own message. Nothing to fix — and §23.7's narrowing of
   `lastRenewalCronWarning` exists precisely because that message is the one an
   unrecorded survivor would produce.
+
+## 24. Which deployment am I in? (issue #290)
+
+On a server hosting several applications under one apps root — the documented
+multi-app layout — every deploy command except `install` refused from inside
+the deployment's own directory:
+
+```
+/opt/infra/apps/kvox$ kvox
+  ✖ Several apps are installed under /opt/infra/apps: clipboard, knecta,
+    kvox, memoriahub, shellkeep, sink, vault. Pass --name <app>.
+```
+
+The operator is standing in `/opt/infra/apps/kvox` and is asked which app
+they mean. Three separate things were wrong, and this section records all
+three.
+
+### 24.1 cwd is a rank, for every command and not only `install`
+
+§5.1 made "the deployment cwd is standing in" a rank of `install`'s own layout
+resolution (#266), and closed with: *"`update`, `status` and `about` are not
+affected … Their own blind spot is a different one — with several apps
+installed and no flags they refuse and list them, even when cwd names one
+unambiguously — and is not this issue."* This is that issue.
+
+`locateApp` now has **four** ranks, most explicit first:
+
+1. `--root` — a path, verbatim.
+2. `--name` — a name under the apps root. It still outranks cwd, so
+   `--name vault` from inside another app's folder means `vault`.
+3. **The deployment cwd is standing in.**
+4. The one app installed under the apps root.
+
+…and then the refusal, naming the candidates. Rank 3 lands **before** that
+refusal, which is the whole point. Everything funnels through `locateApp` /
+`locateInstalledApp` — the five TUI deploy screens, `update`, `status`,
+`about`, `uninstall`, `doctor` and `certs` — so one rank reaches all of them
+and none of them needed editing.
+
+The bounds §5.1 set are unchanged, and are now shared by one walk
+(`walkFromCwd`): it stops at the apps root, standing at or above the apps root
+resolves nothing, a deploy root installed **outside** the apps root with
+`--root` is deliberately not found, and a cwd that resolves nothing falls
+through to the ranks below exactly as before — including the pre-install case
+where `locateApp` answers `undefined` and `doctor` carries on against the apps
+root itself. `process.cwd()` is read through a guard: it throws when the
+directory a shell is sitting in has been removed (which `uninstall` leaves
+behind), and a rank that is only ever a hint must not turn that into a crash.
+
+**`locateAppFromCwd` was not widened; a second function was added.** §23.7
+already stated why: `install` reads the state file this rank finds — the
+repository, the ref and the name, fed through `resolveRepoTarget`'s own
+`state` rank — so widening it would change what `install` *deploys*, which is
+a different question from which deployment a command is pointed at.
+`locateAppFromCwd` therefore still requires a state file and `install`'s
+behaviour is byte-for-byte what it was; `deploymentAtCwd` is the wider rank,
+over the same predicate discovery uses.
+
+### 24.2 Enumeration is narrower than adoption
+
+#285 widened `listInstalledApps` from "holds a state file" to "holds a state
+file **or** passes the evidence gate" (§23.7). That is right for **adoption**,
+where an operator has named a directory and asked "is this a deployment?" It
+is too loose for **enumeration**, which reads directories nobody named: the
+six other names in the refusal above are the operator's unrelated
+applications, deployed under the same convention, and they match the gate.
+
+"Is there a deployment here?" and "is this one of mine?" are different
+questions. The shared gate in `deployment-evidence.ts` still answers the
+first and is **untouched** — `adopt.ts` and `layout.ts` import the same
+function objects, and `adopt.test.ts`'s identity assertion still holds.
+`envWrittenByThisCli` is a **second, explicitly separate** predicate
+answering the second question, consulted only by `recogniseDeployment`
+(enumeration, and the cwd rank above). `--root`, `--name` and adoption never
+consult it.
+
+**The marker is `DEPLOY_ROOT`**, which `install`'s `environment` step writes
+and `update`'s `environment-drift` step re-pins on every run (#142), so a
+deployment installed *or* updated by any build since then carries it.
+`COMPOSE_PROJECT_NAME` is written beside it but is deliberately **not** a
+second marker: Docker Compose defines that variable itself, so a foreign app
+may legitimately set it, and it cannot appear on one of ours without
+`DEPLOY_ROOT` — it would widen the false accepts and narrow nothing.
+
+**A genuine deployment must not vanish from the listing**, which is the
+failure mode worth more than the one being fixed. Before #142 the `.env` lived
+inside the clone at `repo/infra/compose/.env` and neither marker existed, so an
+`.env` read from that legacy path counts as its own marker: it is this
+template's own layout and it is where ours used to live. The residual cost is
+that a stranger's application which happens to use that exact layout is listed
+— one extra name, which is strictly better than hiding a real deployment.
+
+A state file is never second-guessed: the marker question is only ever asked of
+a directory with **no** record at all.
+
+⚠ **This narrowing does not, on its own, fix the reported refusal.** A
+neighbouring application that is itself a fork of this template deploys with
+this same CLI, writes the same `.appctl-deploy.json` and the same markers, and
+is a deployment of ours by every test there is. Two forks on one host are
+genuinely ambiguous, and §24.1's cwd rank — not this predicate — is what
+answers them.
+
+### 24.3 `kvox deploy list`
+
+The inventory: name, deploy root, revision and ref, bind port, domain, last
+deploy, and whether the row came from the app's own state file or was inferred
+from the clone and the `.env`. `--json` like its siblings, on stdout, with the
+human rendering on stderr. Exits `2` when nothing is installed, the standing
+`certs status` gives an empty proxy, so `deploy list && …` does not proceed on
+a host this CLI has deployed nothing to. It takes `--apps-root` and `--json`
+and deliberately **not** `--name`/`--root`: both name one app.
+
+It runs **no subprocess and no network call** — which is why an unrecorded
+deployment reports no revision rather than having `git rev-parse` run for it,
+a dozen times, on a command that should be instant and should work when the
+Docker daemon is down. `update` adopts such a deployment and writes the record,
+after which it reports like any other.
+
+**No TUI destination.** The deploy menu's seven destinations each act on *one*
+deployment and resolve it with `locateInstalledApp({ appsRoot })` and no
+`--name` — so a list screen would advertise apps the TUI has no way to then
+act on. The inventory is one subcommand away, and §24.1 is what the TUI
+actually needed: its screens now resolve the app the operator is standing in
+instead of refusing.
+
+### 24.4 Rejected: a central registry in `~/.<cli>/`
+
+Considered and turned down. The registry already exists, distributed:
+`<apps-root>/<name>/.appctl-deploy.json`, one record per deployment,
+colocated with what it describes and already enumerated. A central index adds
+no information and adds drift — it lists a ghost after `rm -rf`, is stale
+after a restore from backup, points at nothing after a rename, differs between
+`sudo` and a user (`sudo` resets `HOME`), and disagrees with itself when two
+operators share a host. And #285 exists precisely because this CLI trusted
+bookkeeping over evidence and refused to update a live, serving deployment
+over a missing JSON file; a central registry is that mistake moved one level
+further from the thing it describes. SQLite would additionally put a native
+binary into a CLI that is currently pure Node, to index roughly ten
+directories.

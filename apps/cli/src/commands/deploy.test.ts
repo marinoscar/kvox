@@ -1428,6 +1428,81 @@ describe('kvox deploy certs status', () => {
 });
 
 
+// ---------------------------------------------------------------------------
+// `kvox deploy list`  (issue #290)
+// ---------------------------------------------------------------------------
+
+describe('kvox deploy list', () => {
+  it('lists every app under the apps root, with where each record came from', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+    const orphan = join(root, 'orphan');
+    mkdirSync(join(orphan, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(orphan, '.env'), `DEPLOY_ROOT=${orphan}\nAPP_BIND_PORT=3536\n`);
+
+    const result = await runDeploy(['list', '--apps-root', root], {});
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toContain('alpha');
+    expect(result.stderr).toContain('orphan');
+    expect(result.stderr).toContain('abcdef012345 (main)');
+    expect(result.stderr).toContain('no state file');
+    // stdout carries --json and nothing else.
+    expect(result.stdout).toBe('');
+  });
+
+  it('prints the inventory on stdout under --json', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+
+    const result = await runDeploy(['list', '--apps-root', root, '--json'], {});
+
+    const report = JSON.parse(result.stdout) as {
+      appsRoot: string;
+      apps: Array<{ name: string; record: string; commitSha: string | null; bindPort: number }>;
+    };
+    expect(report.appsRoot).toBe(root);
+    expect(report.apps).toHaveLength(1);
+    expect(report.apps[0]?.name).toBe('alpha');
+    expect(report.apps[0]?.record).toBe('state');
+    expect(report.apps[0]?.bindPort).toBe(3535);
+    expect(result.stderr).toBe('');
+  });
+
+  it('leaves out an application this CLI did not deploy', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+    const stranger = join(root, 'vault');
+    mkdirSync(join(stranger, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(stranger, '.env'), 'APP_BIND_PORT=8080\n');
+
+    const result = await runDeploy(['list', '--apps-root', root, '--json'], {});
+
+    const report = JSON.parse(result.stdout) as { apps: Array<{ name: string }> };
+    expect(report.apps.map((app) => app.name)).toEqual(['alpha']);
+  });
+
+  it('exits 2 when nothing is installed under the apps root', async () => {
+    // A usage-level fact, the same standing `certs status` gives an empty
+    // proxy: `deploy list && ...` must not proceed on a host with no apps.
+    const result = await runDeploy(['list', '--apps-root', appsRoot()], {});
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('Nothing is installed under');
+  });
+
+  it('takes no --name or --root: it is the inventory, not one app', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+
+    const result = await runDeploy(['list', '--apps-root', root, '--name', 'alpha'], {});
+
+    expect(result.error).toBeDefined();
+    expect(String((result.error as Error).message)).toContain('unknown option');
+  });
+});
+
+
 describe('renderInstall', () => {
   const base = {
     deployRoot: '/opt/infra/apps/demo',
