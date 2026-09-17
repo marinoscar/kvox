@@ -12,6 +12,7 @@ import {
   runChecks,
   type CheckContext,
 } from './checks/index.js';
+import { adoptDeployment, renderAdoption, type Adoption, type AdoptionNotice } from './adopt.js';
 import {
   ensureDeployInfoDir,
   readDeployInfo,
@@ -49,7 +50,7 @@ import {
   type RepoTarget,
 } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
-import { requireState, writeState, type DeployState } from './state.js';
+import { readState, writeState, type DeployState } from './state.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { composeArgv, composeCwd, secretsFrom } from './install.js';
 import type { PromptContext } from '../prompt.js';
@@ -60,9 +61,19 @@ import type { PromptContext } from '../prompt.js';
 //
 // Installing is the rare operation; updating is the one performed weekly, often
 // while something is already broken. It needs different behaviour from install,
-// not a flag on it - the PRECONDITIONS ARE OPPOSITE. Install refuses when state
-// exists; update refuses when it does not. One command with two contradictory
-// guards is harder to reason about than two commands.
+// not a flag on it - the PRECONDITIONS ARE OPPOSITE. Install refuses when a
+// deployment is already there; update refuses when one is not. One command with
+// two contradictory guards is harder to reason about than two commands.
+//
+// UPDATE'S HALF OF THAT USED TO BE KEYED ON THE STATE FILE, AND THAT WAS THE
+// WRONG FACT (#285). The state file is bookkeeping; the deployment is the
+// clone, the .env and the running containers. A server serving HTTPS on a
+// certificate this CLI issued could not be updated because `.appctl-deploy
+// .json` was missing - and the refusal sent the operator to `install`, whose
+// own precondition is the opposite. `update` now asks whether a DEPLOYMENT is
+// here, and rebuilds the bookkeeping from the disk when it is: see
+// `adopt.ts`, which holds the evidence gate and what each field is read from.
+// The refusal is unchanged for a directory that really is not a deployment.
 //
 // TWO DECISIONS WORTH KNOWING ABOUT:
 //
@@ -794,6 +805,16 @@ export interface UpdateResult {
   durationMs: number;
   /** What the fetch found; the whole answer under `--check`. */
   check?: UpdateCheck | undefined;
+  /**
+   * Present when this run ADOPTED the deployment - rebuilt a missing state
+   * file from the disk (#285).
+   *
+   * On a terminal the operator has already seen this through the hooks,
+   * before the pipeline ran, so it survives a run that then fails. It is
+   * carried here as well because `--json` wires no hooks at all, and a
+   * machine caller must be able to tell an adoption from an ordinary update.
+   */
+  adopted?: AdoptionNotice | undefined;
 }
 
 /**
@@ -809,9 +830,27 @@ function stepsFor(options: UpdateOptions): DeployStep<UpdateContext>[] {
 }
 
 export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
+  const runCommand = options.runCommand ?? defaultRunCommand;
+
   // The precondition install does not have, and the reason this is its own
-  // command: nothing to update is a different situation from nothing installed.
-  const state = requireState(options.deployRoot);
+  // command: nothing to update is a different situation from nothing
+  // installed. Since #285 it is asked of the DEPLOYMENT rather than of the
+  // CLI's notes about it - `adoptDeployment` rebuilds the record when the
+  // deployment is demonstrably there, and raises the same `NotInstalledError`
+  // with the same message when it is not.
+  const recorded = readState(options.deployRoot);
+  const adoption: Adoption | undefined =
+    recorded === undefined
+      ? await adoptDeployment({
+          deployRoot: options.deployRoot,
+          runCommand,
+          ...(options.ref === undefined ? {} : { ref: options.ref }),
+          ...(options.proxyContainer === undefined
+            ? {}
+            : { proxyContainer: options.proxyContainer }),
+        })
+      : undefined;
+  const state = recorded ?? (adoption as Adoption).state;
 
   // BEFORE the pipeline, and that ordering is the whole point (#159).
   //
@@ -844,7 +883,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
 
   const context: UpdateContext = {
     options,
-    runCommand: options.runCommand ?? defaultRunCommand,
+    runCommand,
     journal,
     hooks: options.hooks,
     completed: new Set<string>(),
@@ -852,6 +891,28 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     name: projectNameFor(state, options.deployRoot),
     ...(env === undefined ? {} : { env }),
   };
+
+  if (adoption !== undefined) {
+    // WRITTEN NOW, BEFORE THE PIPELINE. The bookkeeping is recovered whatever
+    // this run then does: a preflight failure, a `--check`, or an "already up
+    // to date" must not each need the adoption performed again. It is written
+    // after the journal is open so the write itself is journaled, the same
+    // ordering #267's failure-path state write follows.
+    writeState(adoption.state);
+    // ANNOUNCED HERE TOO, NOT IN THE EPILOGUE, so an operator whose run then
+    // fails at `preflight` still learns that their state file was rebuilt.
+    // NOT under `Action required:` (#264/#265), which is for something the
+    // operator must go and do: this is a notice about something already done,
+    // and putting it there would teach people to skim that heading.
+    const [headline, ...detail] = renderAdoption(adoption.notice);
+    journal.line(headline ?? '');
+    options.hooks?.onProgress?.(headline ?? '');
+    for (const line of detail) {
+      journal.line(line);
+      options.hooks?.onLog?.(line.trim());
+    }
+  }
+  const adopted = adoption?.notice;
 
   const result = await runPipeline(stepsFor(options), context);
 
@@ -932,6 +993,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       journalPath: journal.path,
       durationMs: Date.now() - startedAt,
       ...(context.check === undefined ? {} : { check: context.check }),
+      ...(adopted === undefined ? {} : { adopted }),
     };
   }
 
@@ -962,6 +1024,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       journalPath: journal.path,
       durationMs: Date.now() - startedAt,
       ...(context.check === undefined ? {} : { check: context.check }),
+      ...(adopted === undefined ? {} : { adopted }),
     };
   }
 
@@ -994,6 +1057,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     journalPath: journal.path,
     durationMs: Date.now() - startedAt,
     ...(context.check === undefined ? {} : { check: context.check }),
+    ...(adopted === undefined ? {} : { adopted }),
   };
 }
 
