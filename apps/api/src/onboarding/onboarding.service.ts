@@ -7,7 +7,11 @@ import { PushConfigService } from '../notifications/push-config.service';
 import { SystemSettingsService } from '../settings/system-settings/system-settings.service';
 import { UserSettingsService } from '../settings/user-settings/user-settings.service';
 import { TranscriptionConfigService } from '../transcription/transcription-config.service';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
+import {
+  toRequestUser,
+  type AuthenticatedUser,
+  type RequestUser,
+} from '../auth/interfaces/authenticated-user.interface';
 import {
   ADMIN_ONBOARDING_STEPS,
   USER_ONBOARDING_STEPS,
@@ -85,6 +89,33 @@ export interface OnboardingSnapshot<Ctx extends OnboardingContext> {
   readonly skipped: ReadonlySet<string>;
 }
 
+/**
+ * What `@CurrentUser()` can actually hand these two routes.
+ *
+ * ⚠ IT IS NOT ALWAYS A `RequestUser`, AND ASSUMING SO IS A SILENT BUG. The
+ * resolved permission list is attached to the request by `RolesGuard` and
+ * `PermissionsGuard` — and BOTH of them return early, before attaching
+ * anything, when the route declares no roles and no permissions. `GET
+ * /api/onboarding` is exactly such a route (`@Auth()` with no permission
+ * string, deliberately — see its controller), so on that route
+ * `@CurrentUser()` yields the raw `AuthenticatedUser` with its `userRoles`
+ * relation and NO `permissions` array.
+ *
+ * Reading `user.permissions` off it produces `undefined`, which becomes an
+ * empty permission set, which quietly filters EVERY step carrying a
+ * `permission` out of the response — leaving a user whose checklist is missing
+ * three of its four steps, with a 200 and no error anywhere. The permission
+ * list is therefore derived here rather than assumed.
+ */
+export type OnboardingCaller = RequestUser | AuthenticatedUser;
+
+/** Resolve either shape to the one this service reasons about. */
+function normalizeCaller(user: OnboardingCaller): RequestUser {
+  return Array.isArray((user as RequestUser).permissions)
+    ? (user as RequestUser)
+    : toRequestUser(user as AuthenticatedUser);
+}
+
 @Injectable()
 export class OnboardingService {
   constructor(
@@ -102,17 +133,19 @@ export class OnboardingService {
   // ---------------------------------------------------------------------------
 
   /** `GET /api/onboarding` — the caller's own activation checklist. */
-  async getUserState(user: RequestUser): Promise<OnboardingState> {
-    const snapshot = await this.buildUserContext(user.id);
+  async getUserState(user: OnboardingCaller): Promise<OnboardingState> {
+    const caller = normalizeCaller(user);
+    const snapshot = await this.buildUserContext(caller.id);
 
-    return this.render('user', USER_ONBOARDING_STEPS, snapshot, user.permissions);
+    return this.render('user', USER_ONBOARDING_STEPS, snapshot, caller.permissions);
   }
 
   /** `GET /api/admin/onboarding` — this deployment's setup checklist. */
-  async getAdminState(user: RequestUser): Promise<OnboardingState> {
-    const snapshot = await this.buildAdminContext(user.id);
+  async getAdminState(user: OnboardingCaller): Promise<OnboardingState> {
+    const caller = normalizeCaller(user);
+    const snapshot = await this.buildAdminContext(caller.id);
 
-    return this.render('admin', ADMIN_ONBOARDING_STEPS, snapshot, user.permissions);
+    return this.render('admin', ADMIN_ONBOARDING_STEPS, snapshot, caller.permissions);
   }
 
   // ---------------------------------------------------------------------------

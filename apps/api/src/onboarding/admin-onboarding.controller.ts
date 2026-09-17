@@ -3,10 +3,9 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Auth } from '../auth/decorators/auth.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { OnboardingStateDto } from './dto/onboarding-state.dto';
-import { OnboardingService } from './onboarding.service';
+import { OnboardingService, type OnboardingCaller } from './onboarding.service';
 
 // =============================================================================
 // `GET /api/admin/onboarding` — this deployment's setup checklist (#275, #271)
@@ -75,7 +74,7 @@ export class AdminOnboardingController {
     type: OnboardingStateDto,
   })
   async getAdminOnboarding(
-    @CurrentUser() user: RequestUser,
+    @CurrentUser() user: OnboardingCaller,
   ): Promise<OnboardingStateDto> {
     return (await this.onboarding.getAdminState(user)) as OnboardingStateDto;
   }

@@ -3,9 +3,8 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Auth } from '../auth/decorators/auth.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { RequestUser } from '../auth/interfaces/authenticated-user.interface';
 import { OnboardingStateDto } from './dto/onboarding-state.dto';
-import { OnboardingService } from './onboarding.service';
+import { OnboardingService, type OnboardingCaller } from './onboarding.service';
 
 // =============================================================================
 // `GET /api/onboarding` — the caller's own activation checklist (#275, epic #271)
@@ -21,10 +20,17 @@ import { OnboardingService } from './onboarding.service';
 // permission string is either seeded Admin-only or belongs to a different
 // controller entirely.
 //
-// The per-step permission filtering that does happen reads the caller's own
-// permission set off the request (`RequestUser.permissions`, already resolved
-// by `JwtAuthGuard`) — it is about which DESTINATIONS to offer, not about
-// whether this endpoint may be called.
+// The per-step permission filtering that does happen is about which
+// DESTINATIONS to offer, not about whether this endpoint may be called.
+//
+// ⚠ AND THAT FILTERING CANNOT READ `RequestUser.permissions` DIRECTLY HERE.
+// `RolesGuard` and `PermissionsGuard` are what attach the resolved permission
+// list to the request, and both of them return early — attaching nothing — on a
+// route that declares neither, which is precisely this route. `@CurrentUser()`
+// therefore yields the raw `AuthenticatedUser`, and `user.permissions` on it is
+// `undefined`: an empty set, silently filtering every permissioned step out of
+// a 200. `OnboardingService` derives the list instead; see `OnboardingCaller`
+// there for the whole trap.
 //
 // WHY IT IS A SEPARATE ROUTE FROM THE ADMIN ONE, ON A DIFFERENT PREFIX
 // ---------------------------------------------------------------------
@@ -79,7 +85,7 @@ export class OnboardingController {
     description: 'The caller’s activation steps, with derived statuses',
     type: OnboardingStateDto,
   })
-  async getOnboarding(@CurrentUser() user: RequestUser): Promise<OnboardingStateDto> {
+  async getOnboarding(@CurrentUser() user: OnboardingCaller): Promise<OnboardingStateDto> {
     return (await this.onboarding.getUserState(user)) as OnboardingStateDto;
   }
 }
