@@ -1,6 +1,8 @@
+import { dirname } from 'node:path';
+
 import { CLI_NAME } from '../../branding.js';
 import { probe } from './probe.js';
-import type { Check, CheckContext, CheckResult } from './types.js';
+import type { Check, CheckContext, CheckFs, CheckResult } from './types.js';
 import {
   contextFs,
   contextMemory,
@@ -357,6 +359,72 @@ export const DEFAULT_PROXY_CONTAINER = 'proxy-nginx';
 /** The image certificates are issued and renewed with (`docker run --rm`). */
 export const CERTBOT_IMAGE = 'certbot/certbot';
 
+/**
+ * The deepest ancestor of `path` that exists, or undefined.
+ *
+ * `mkdirSync(..., { recursive: true })` does not need the target to exist - it
+ * needs WRITE PERMISSION ON THE DEEPEST EXISTING ANCESTOR, because that is the
+ * directory it must add an entry to. On a first install the deploy root is
+ * exactly what does not exist yet, so testing it directly would answer about
+ * the wrong path.
+ */
+function deepestExisting(fs: CheckFs, path: string): string | undefined {
+  let current = path;
+  for (;;) {
+    if (fs.isDirectory(current)) return current;
+    const parent = dirname(current);
+    if (parent === current) return undefined;
+    current = parent;
+  }
+}
+
+/**
+ * Can this deployment create its own directory?  (issue #245)
+ *
+ * The apps root is commonly root-owned while the CLI is run as an ordinary
+ * user - the ordinary shape, because `gh` authentication is per-user and
+ * elevating to fix this trades an EACCES here for a logged-out `gh` at
+ * `checkout` (#236). Without this check that mismatch surfaced as the FIRST
+ * WRITE of the run, after the whole wizard had been answered and confirmed,
+ * and before the journal existed to record which step it was.
+ *
+ * Doctor was thorough about the shared proxy's directory and silent about its
+ * own, which is the one it is certain to touch.
+ */
+const deployRootWritable: Check = {
+  id: 'deploy-root-writable',
+  title: 'Deploy directory writable',
+  severity: 'required',
+  async run(context) {
+    const fs = contextFs(context);
+    const existing = deepestExisting(fs, context.deployRoot);
+
+    if (existing === undefined) {
+      return {
+        status: 'fail',
+        detail: `no part of ${context.deployRoot} exists`,
+        remedy: `Create it: sudo install -d -o $USER -g $USER ${context.deployRoot}`,
+      };
+    }
+
+    if (fs.isWritable(existing)) {
+      return {
+        status: 'pass',
+        detail: existing === context.deployRoot ? existing : `${existing} (will create ${context.deployRoot})`,
+      };
+    }
+
+    // Deliberately NOT `chown -R` on the apps root: a host running several
+    // apps would have its siblings' ownership rewritten to fix this one. And
+    // deliberately not "use sudo" - see the header.
+    return {
+      status: 'fail',
+      detail: `${existing} is not writable by this user`,
+      remedy: `Create this app's own directory instead of widening the parent: sudo install -d -o $USER -g $USER ${context.deployRoot}`,
+    };
+  },
+};
+
 const proxyRoot: Check = {
   id: 'proxy-root',
   title: 'Shared proxy directory',
@@ -684,6 +752,7 @@ export const HOST_CHECKS: readonly Check[] = [
   diskSpace,
   memory,
   bindPortFree,
+  deployRootWritable,
   proxyRoot,
   proxyConfWritable,
   acmeWebroot,

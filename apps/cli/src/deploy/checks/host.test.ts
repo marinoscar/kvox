@@ -51,6 +51,20 @@ const emptyFs: CheckFs = {
   isWritable: () => false,
 };
 
+/**
+ * Absent for the shared proxy's tree, present and writable for the deploy
+ * root's ancestor - i.e. everything the `--skip-proxy` test below still needs
+ * `deploy-root-writable` to see. That check is not proxy-related, so it keeps
+ * running (and reading fs) even under `--skip-proxy`; a blanket `emptyFs`
+ * would make it fail and break "still passes" for a reason that has nothing
+ * to do with the proxy this test is about.
+ */
+const proxyAbsentDeployRootWritableFs: CheckFs = {
+  exists: (path) => path === '/opt/infra/apps',
+  isDirectory: (path) => path === '/opt/infra/apps',
+  isWritable: (path) => path === '/opt/infra/apps',
+};
+
 /** A server where everything is in place. */
 const HEALTHY: Responder = (argv) => {
   const line = argv.join(' ');
@@ -140,7 +154,7 @@ describe('the registry as a whole', () => {
       HOST_CHECKS,
       context({
         skipProxy: true,
-        fs: emptyFs,
+        fs: proxyAbsentDeployRootWritableFs,
         portListening: async () => false,
         runCommand: fakeRunCommand((argv) => {
           const line = argv.join(' ');
@@ -500,6 +514,76 @@ describe('bind-port-free', () => {
     expect(result.status).toBe('fail');
     expect(result.detail).toContain('someone-elses-app');
     expect(result.remedy).toContain('APP_BIND_PORT');
+  });
+});
+
+describe('deploy-root-writable', () => {
+  it('passes when the deploy root itself already exists and is writable', async () => {
+    const result = await find('deploy-root-writable').run(context({ fs: permissiveFs }));
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toBe('/opt/infra/apps/demo');
+  });
+
+  it('passes on the ordinary first install: the root does not exist yet, but its parent does and is writable', async () => {
+    // The deploy root usually does NOT exist on a first install. The check
+    // must test the deepest EXISTING ancestor (/opt/infra/apps), not the
+    // deploy root itself, and its detail must say the root will be created.
+    const fs: CheckFs = {
+      exists: (path) => path === '/opt/infra/apps',
+      isDirectory: (path) => path === '/opt/infra/apps',
+      isWritable: (path) => path === '/opt/infra/apps',
+    };
+    const result = await find('deploy-root-writable').run(context({ fs }));
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toContain('/opt/infra/apps');
+    expect(result.detail).toContain('will create /opt/infra/apps/demo');
+  });
+
+  it('fails when the deepest existing ancestor is not writable (the reported bug)', async () => {
+    // A root-owned apps directory, run as an ordinary user: every earlier
+    // check passes, and this is the first one to notice.
+    const fs: CheckFs = {
+      exists: (path) => path === '/opt/infra/apps',
+      isDirectory: (path) => path === '/opt/infra/apps',
+      isWritable: () => false,
+    };
+    const result = await find('deploy-root-writable').run(context({ fs }));
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('/opt/infra/apps');
+    expect(result.detail).toContain('not writable');
+    expect(result.remedy).toContain('install -d');
+    expect(result.remedy).toContain('/opt/infra/apps/demo');
+  });
+
+  it('fails when no part of the path exists', async () => {
+    const result = await find('deploy-root-writable').run(context({ fs: emptyFs }));
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('/opt/infra/apps/demo');
+    expect(result.remedy).toContain('install -d');
+  });
+
+  it('never suggests chown -R on the parent or sudo kvox in its remedy', async () => {
+    // Deliberate choices (see the check's own header): chown -R on a shared
+    // apps directory would rewrite every sibling app's ownership, and `sudo
+    // kvox` trades this EACCES for a logged-out `gh` at checkout (#236).
+    const fs: CheckFs = {
+      exists: (path) => path === '/opt/infra/apps',
+      isDirectory: (path) => path === '/opt/infra/apps',
+      isWritable: () => false,
+    };
+    const result = await find('deploy-root-writable').run(context({ fs }));
+
+    expect(result.remedy).not.toContain('chown -R');
+    expect(result.remedy).not.toContain('sudo kvox');
+  });
+
+  it('is required and registered in HOST_CHECKS', () => {
+    expect(HOST_CHECKS.map((check) => check.id)).toContain('deploy-root-writable');
+    expect(find('deploy-root-writable').severity).toBe('required');
   });
 });
 
