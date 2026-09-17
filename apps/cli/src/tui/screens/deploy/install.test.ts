@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEVNET_CHECK_ID } from '../../../deploy/checks/host.js';
 import { buildInstallSteps } from '../../../deploy/install.js';
@@ -29,6 +29,8 @@ import {
   GROUPS_FIELD,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
+  NAME_FIELD,
+  NAME_RECHECK_DEBOUNCE_MS,
   PIPELINE_STEPS,
   PUBLIC_IP_FIELD,
   REVIEW_STEP_ID,
@@ -55,8 +57,11 @@ import {
   pipelineItems,
   railIndexFor,
   railSteps,
+  resolvedAppName,
   reviewRows,
+  scheduleNameRecheck,
   secretModeField,
+  shouldRecheckName,
   stepCheckItems,
   welcomeChecks,
   withAnswer,
@@ -482,6 +487,114 @@ describe('the live doctor on Welcome', () => {
     const items = checkItems(checks, [fail(id)], false);
 
     expect(items[0]?.remedy).toBe('do the thing');
+  });
+});
+
+describe('the app name the checks are given (#262)', () => {
+  it('is undefined while the field is blank, so a check knows it has no answer yet', () => {
+    // NOT `FALLBACK_APP_NAME`. The doctor starts on mount, before this field
+    // has been typed into, and `bind-port-free` handed the `app` placeholder
+    // reported a reinstall's OWN nginx as a foreign conflict - a REQUIRED
+    // failure that refused to start the install at all.
+    expect(resolvedAppName({})).toBeUndefined();
+    expect(resolvedAppName({ [NAME_FIELD]: '' })).toBeUndefined();
+  });
+
+  it('is the answer once there is one', () => {
+    expect(resolvedAppName({ [NAME_FIELD]: 'kvox' })).toBe('kvox');
+  });
+});
+
+describe('re-running the welcome checks when the name changes (#262)', () => {
+  const settled = { ready: true, started: true };
+
+  it('re-runs once the name differs from the one the last run was given', () => {
+    expect(shouldRecheckName({ ...settled, name: 'kvox', lastChecked: '' })).toBe(true);
+  });
+
+  it('does not re-run for the name that run already used', () => {
+    // The mount run and the name arriving from the resolved repository land
+    // in the same commit; comparing against a previous RENDER would schedule
+    // a full second doctor pass over an answer already checked.
+    expect(shouldRecheckName({ ...settled, name: 'kvox', lastChecked: 'kvox' })).toBe(false);
+  });
+
+  it('does not run before the first pass has started', () => {
+    // `ready` gates the mount run because the checks probe paths derived from
+    // the name. Re-running is about the SECOND pass onwards.
+    expect(
+      shouldRecheckName({ ready: false, started: false, name: 'kvox', lastChecked: undefined }),
+    ).toBe(false);
+    expect(
+      shouldRecheckName({ ready: true, started: false, name: 'kvox', lastChecked: undefined }),
+    ).toBe(false);
+  });
+
+  describe('the debounce', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /**
+     * The effect's real lifecycle: React runs the previous effect's cleanup
+     * before the next effect, and the cleanup is what cancels the armed timer.
+     * Driving it that way rather than calling a helper once is the only way
+     * this proves anything about a burst of keystrokes.
+     */
+    function typeName(keystrokes: readonly string[]): () => number {
+      let runs = 0;
+      let cleanup: (() => void) | undefined;
+      let lastChecked = '';
+
+      for (const name of keystrokes) {
+        cleanup?.();
+        cleanup = undefined;
+        if (!shouldRecheckName({ ready: true, started: true, name, lastChecked })) continue;
+        const armedFor = name;
+        cleanup = scheduleNameRecheck(() => {
+          runs += 1;
+          lastChecked = armedFor;
+        });
+      }
+
+      return () => runs;
+    }
+
+    it('collapses a burst of keystrokes into a single run', () => {
+      // Typing `kvox` is four renders. Four doctor passes - docker, the proxy
+      // container, DNS - is what the debounce exists to prevent.
+      const runs = typeName(['k', 'kv', 'kvo', 'kvox']);
+
+      expect(runs()).toBe(0);
+      vi.advanceTimersByTime(NAME_RECHECK_DEBOUNCE_MS);
+      expect(runs()).toBe(1);
+    });
+
+    it('does not run while the operator is still typing', () => {
+      const runs = typeName(['k']);
+
+      vi.advanceTimersByTime(NAME_RECHECK_DEBOUNCE_MS - 1);
+      expect(runs()).toBe(0);
+    });
+
+    it('runs again for a name typed after the first pause', () => {
+      let runs = 0;
+      let cleanup: (() => void) | undefined = scheduleNameRecheck(() => {
+        runs += 1;
+      });
+      vi.advanceTimersByTime(NAME_RECHECK_DEBOUNCE_MS);
+      expect(runs).toBe(1);
+
+      cleanup();
+      cleanup = scheduleNameRecheck(() => {
+        runs += 1;
+      });
+      vi.advanceTimersByTime(NAME_RECHECK_DEBOUNCE_MS);
+      expect(runs).toBe(2);
+    });
   });
 });
 
