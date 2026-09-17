@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import { UsageError } from '../errors.js';
 import type { Check, CheckResult } from './checks/index.js';
+import {
+  CommandFailedError,
+  type CommandResult,
+  type RunCommandOptions,
+} from './executor.js';
 import { parseEnvExample } from './env-spec.js';
 import { runEnvWizard, type WizardCheckOptions } from './env-wizard.js';
 import { unknownServerFacts, type ServerFacts } from './server-facts.js';
@@ -898,6 +903,223 @@ describe('runEnvWizard v2: the domain step', () => {
     const text = output.text();
     expect(text).toContain('https://app.example.test/api/auth/google/callback');
     expect(text.indexOf('/api/auth/google/callback')).toBeLessThan(text.indexOf('GOOGLE_CLIENT_ID ['));
+  });
+});
+
+// =============================================================================
+// offerDatabaseCreation  (issue #238)
+// =============================================================================
+//
+// Drives the offer entirely through runEnvWizard, wiring the `database-exists`
+// check as a scripted check (like the inline-check tests above) and a fake
+// `runCommand` that only the CREATE DATABASE action itself calls - the check
+// never calls runCommand at all, so any invocation this fake sees is proof
+// the action ran.
+// =============================================================================
+
+type PsqlCanned = { exitCode: number; stdout?: string; stderr?: string };
+type PsqlResponder = (argv: readonly string[], options: RunCommandOptions) => PsqlCanned | undefined;
+
+function fakePsqlRunner(respond: PsqlResponder): {
+  runCommand: StepCheckBase['runCommand'];
+  calls: () => number;
+} {
+  let calls = 0;
+  const runCommand = (async (
+    argv: readonly string[],
+    options: RunCommandOptions,
+  ): Promise<CommandResult> => {
+    calls += 1;
+    const canned = respond(argv, options) ?? { exitCode: 0, stdout: '' };
+    const result: CommandResult = {
+      argv: [...argv],
+      cwd: options.cwd,
+      exitCode: canned.exitCode,
+      stdout: canned.stdout ?? '',
+      stderr: canned.stderr ?? '',
+      durationMs: 1,
+      timedOut: false,
+    };
+    if (result.exitCode !== 0) throw new CommandFailedError(result.stderr || 'failed', result);
+    return result;
+  }) as StepCheckBase['runCommand'];
+  return { runCommand, calls: () => calls };
+}
+
+/** Succeeds on the CREATE DATABASE statement; passes anything else through. */
+function successfulCreate(): { runCommand: StepCheckBase['runCommand']; calls: () => number } {
+  return fakePsqlRunner(() => ({ exitCode: 0, stdout: '' }));
+}
+
+/** Fails the CREATE DATABASE statement with a permission error. */
+function refusedCreate(): { runCommand: StepCheckBase['runCommand']; calls: () => number } {
+  return fakePsqlRunner((argv) => {
+    const statement = argv[argv.length - 1] ?? '';
+    if (statement.includes('CREATE DATABASE')) {
+      return { exitCode: 1, stderr: 'ERROR:  42501: permission denied to create database' };
+    }
+    return { exitCode: 0, stdout: '' };
+  });
+}
+
+function inlineChecksWithRunner(
+  checks: readonly Check[],
+  runCommand: StepCheckBase['runCommand'],
+): WizardCheckOptions {
+  return {
+    checks,
+    context: {
+      runCommand,
+      deployRoot: '/tmp/app',
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+    },
+  };
+}
+
+/** A `database-exists`-shaped scripted check, missing then (optionally) present. */
+function scriptedDatabaseExists(outcomes: readonly CheckResult[]): { check: Check; calls: () => number } {
+  return scriptedCheck('database-exists', outcomes);
+}
+
+const MISSING_DATABASE: CheckResult = {
+  status: 'fail',
+  detail: 'database "appdb" does not exist',
+  remedy: 'Create it: createdb -h db.example.test -U appuser appdb. Migrations create tables, never the database itself.',
+};
+
+const DATABASE_PRESENT: CheckResult = { status: 'pass', detail: 'appdb' };
+
+describe('runEnvWizard v2: offerDatabaseCreation', () => {
+  it('--non-interactive without createDatabase never creates anything, and the check failure is still reported', async () => {
+    const databaseExists = scriptedDatabaseExists([MISSING_DATABASE]);
+    const psql = successfulCreate();
+
+    const error = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      nonInteractive: true,
+      existing: V2_DATABASE,
+      facts: facts(),
+      portFree: async () => true,
+      steps: stepsChecking('database', ['database-exists']),
+      inlineChecks: inlineChecksWithRunner([databaseExists.check], psql.runCommand),
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('does not exist');
+    // The whole point: an unattended run with nobody to ask never gets to
+    // issue a CREATE DATABASE at all.
+    expect(psql.calls()).toBe(0);
+    expect(databaseExists.calls()).toBe(1);
+  });
+
+  it('--non-interactive with createDatabase: true creates it, and the step passes on the re-run', async () => {
+    const databaseExists = scriptedDatabaseExists([MISSING_DATABASE, DATABASE_PRESENT]);
+    const psql = successfulCreate();
+
+    const { values } = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      nonInteractive: true,
+      createDatabase: true,
+      existing: V2_DATABASE,
+      facts: facts(),
+      portFree: async () => true,
+      steps: stepsChecking('database', ['database-exists']),
+      inlineChecks: inlineChecksWithRunner([databaseExists.check], psql.runCommand),
+    });
+
+    expect(values.get('POSTGRES_DB')).toBe('appdb');
+    expect(psql.calls()).toBe(1);
+    expect(databaseExists.calls()).toBe(2);
+  });
+
+  it('interactive: declining the prompt creates nothing and leaves the failure intact', async () => {
+    const databaseExists = scriptedDatabaseExists([MISSING_DATABASE]);
+    const psql = successfulCreate();
+
+    const { ctx } = terminal([
+      'db.example.test', 'appuser', 'pw-that-is-fine', 'appdb', '', // database fields
+      'n', // "Create the database appdb now?" - declined
+      'n', // "Correct them now?" - declined
+    ]);
+
+    const error = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      facts: facts(),
+      portFree: async () => true,
+      steps: stepsChecking('database', ['database-exists']),
+      inlineChecks: inlineChecksWithRunner([databaseExists.check], psql.runCommand),
+      ctx,
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('does not exist');
+    expect(psql.calls()).toBe(0);
+    expect(databaseExists.calls()).toBe(1);
+  });
+
+  it('interactive: accepting creates it and the step re-runs', async () => {
+    const databaseExists = scriptedDatabaseExists([MISSING_DATABASE, DATABASE_PRESENT]);
+    const psql = successfulCreate();
+
+    const { ctx, output, remaining } = terminal([
+      'db.example.test', 'appuser', 'pw-that-is-fine', 'appdb', '', // database fields
+      'y', // "Create the database appdb now?" - accepted
+      '', '', '', '', '', // re-entry of the database step, all kept as-is
+      'y', // JWT_SECRET: generate
+      '', '', '', // the three resource suggestions
+      'y', // review
+    ]);
+
+    const { values } = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      facts: facts(),
+      portFree: async () => true,
+      steps: stepsChecking('database', ['database-exists']),
+      inlineChecks: inlineChecksWithRunner([databaseExists.check], psql.runCommand),
+      ctx,
+    });
+
+    expect(remaining()).toBe(0);
+    expect(values.get('POSTGRES_DB')).toBe('appdb');
+    expect(psql.calls()).toBe(1);
+    expect(databaseExists.calls()).toBe(2);
+    expect(output.text()).toContain('created appdb');
+  });
+
+  it('reports a failed creation and still surfaces the check failure, rather than silently passing', async () => {
+    const databaseExists = scriptedDatabaseExists([MISSING_DATABASE]);
+    const psql = refusedCreate();
+
+    const { ctx, output } = terminal([
+      'db.example.test', 'appuser', 'pw-that-is-fine', 'appdb', '', // database fields
+      'y', // "Create the database appdb now?" - accepted, but refused server-side
+      'n', // "Correct them now?" - declined
+    ]);
+
+    const error = await runEnvWizard({
+      specs: V2_SPECS,
+      domain: 'app.example.test',
+      facts: facts(),
+      portFree: async () => true,
+      steps: stepsChecking('database', ['database-exists']),
+      inlineChecks: inlineChecksWithRunner([databaseExists.check], psql.runCommand),
+      ctx,
+    }).catch((caught: unknown) => caught);
+
+    expect(psql.calls()).toBe(1);
+    // The creation failure is reported...
+    expect(output.text()).toContain('Could not create it');
+    expect(output.text()).toContain('ALTER ROLE');
+    // ...and the original check failure is still what the run reports, never
+    // a silent pass.
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('does not exist');
+    expect(databaseExists.calls()).toBe(1);
   });
 });
 

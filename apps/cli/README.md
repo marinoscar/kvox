@@ -665,6 +665,21 @@ and whether the redirect URI is actually registered isn't checkable from
 here. Google being unreachable is a warning, not a failure — an operator on
 a restricted network must still be able to install.
 
+When the Database step's own checks fail specifically because the database
+itself does not exist yet, the wizard offers to create it — naming the
+database, host, port and user — then re-runs the step's checks so
+`database-privileges` — "can this user create tables", which is what decides
+whether the migrations will work — finally answers instead of staying skipped
+(issue #238). Declining leaves the failure exactly as it was,
+`createdb` remedy included. With a terminal, `--create-database` only sets
+that confirmation's default answer; you're still asked by name. Under
+`--non-interactive` there is nobody to ask, so `--create-database` is the
+entire authorisation — without it an unattended run reports the missing
+database and stops, same as before this flag existed. See
+[`docs/specs/vps-deploy.md` §20](../../docs/specs/vps-deploy.md#20-creating-the-database-on-request-only-issue-238)
+for the exact bounds (one statement, only when the database is genuinely
+absent, no roles or extensions, never destructive).
+
 `--answer KEY=VALUE` (repeatable) and `--answers-file <path>` (a `.env`-format
 file; the file first, then the flags) seed values without a prompt. The
 domain may be given in the file as `APP_DOMAIN`. Every value goes through
@@ -733,6 +748,7 @@ Options:
   --skip-doctor        Skip the prerequisite checks
   --skip-proxy         Do not touch the reverse proxy or request a certificate
   --skip-seed          Do not run the database seed
+  --create-database    Create the PostgreSQL database when it does not exist
   --skip-github        Never consult the GitHub CLI, even for a GitHub remote
   --no-cache           Rebuild images without the layer cache
   --force              Discard uncommitted changes in the checkout

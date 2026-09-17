@@ -93,10 +93,18 @@ yourself; let doctor do it, and fix whatever it reports.
   public IP, before you run `install` — the certificate can't be issued
   otherwise, and a failed issuance spends real rate-limit budget (section
   8).
-- An **external PostgreSQL** database, reachable from this server, that
-  already exists. This application ships no `db` service — `base.compose.yml`
-  deliberately has none — so you are responsible for standing one up
-  (managed or self-hosted) before you install.
+- An **external PostgreSQL** server, reachable from this server, that you
+  control the credentials for. This application ships no `db` service —
+  `base.compose.yml` deliberately has none — so you are responsible for
+  standing one up (managed or self-hosted) before you install. The
+  **database itself** is no longer a hard prerequisite the way the server is:
+  if it doesn't exist yet, the install wizard's Database step now offers to
+  run `CREATE DATABASE` for you, against the same credentials, once they've
+  authenticated (section 3.2). That only works when the supplied role may
+  create databases — a managed provider that denies it is the ordinary case,
+  not a failure of this feature — so creating the database yourself first, or
+  granting `CREATEDB`, remains the safer default if you'd rather not depend on
+  it.
 - The **`vector` extension (pgvector)** available on that server — see
   section 3.1. Doctor reports it as `pgvector available`, and it is a
   *required* check, because the migration that creates the semantic-search
@@ -179,7 +187,7 @@ SSH session), and everything below runs **on the VPS**.
    | Step | Asks for | Verified before moving on |
    |---|---|---|
    | Domain | The public hostname (`APP_URL` and the OAuth callback are derived from it) | `dns-resolves`, `dns-points-here` |
-   | Database | `POSTGRES_HOST`/`PORT`/`USER`/`PASSWORD`/`DB`/`SSL` — nothing is pre-filled for the host | `database-reachable`, `database-credentials`, `database-exists`, `database-privileges`, `database-vector-extension` |
+   | Database | `POSTGRES_HOST`/`PORT`/`USER`/`PASSWORD`/`DB`/`SSL` — nothing is pre-filled for the host | `database-reachable`, `database-credentials`, `database-exists` (offers to `CREATE DATABASE` if it's the one thing missing — section 3.2), `database-privileges`, `database-vector-extension` |
    | Secrets | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY` — generated with a CSPRNG unless you paste your own | — |
    | Google OAuth | `GOOGLE_CLIENT_ID`/`SECRET`/`CALLBACK_URL` — the exact redirect URI is printed first | `google-oauth-credentials`: a client id missing `.apps.googleusercontent.` fails outright; one on a reserved TLD (a well-formed placeholder) warns and skips Google entirely; otherwise the pair is presented to Google's own token endpoint with a bogus authorization code — `invalid_client` fails (not a real pair), `invalid_grant` passes (it is). A pass proves the credentials are real, not that login will work: a secret can't be fully exercised without a browser round-trip, and redirect-URI registration isn't checkable from here. Google being unreachable warns rather than fails |
    | Administrator | `INITIAL_ADMIN_EMAIL` — also the certificate registration address unless `--email` overrides it | — |
@@ -255,6 +263,45 @@ is missing: a per-deployment "some databases have these tables and some
 don't" is not a state anyone can diagnose later, whereas this refusal is one
 command to fix. See
 [`docs/specs/vps-deploy.md` §9.1](../specs/vps-deploy.md#91-database-vector-extension-the-pgvector-preflight-issue-179-epic-165).
+
+### 3.2 Creating the database, if it isn't there yet (issue #238)
+
+The Database step above still expects the database itself to already exist —
+the credentials, the server and the network path are always the operator's
+to provide, and that hasn't changed. What's new is that when `database-exists`
+fails because the database is genuinely absent (not a wrong host, not a
+rejected password — those still fail exactly as before), the wizard offers a
+shortcut instead of only printing a remedy to run by hand:
+
+```
+The database does not exist yet: appdb on db.example.com:5432 as appuser.
+The credentials above already authenticated against this server.
+Create the database appdb now? (Y/n)
+```
+
+Saying yes runs one statement, `CREATE DATABASE`, against the same server the
+credentials just authenticated against, then re-runs the step's checks — so
+`database-privileges` and `pgvector available`, both of which had nothing to
+check a moment ago, answer for real. Saying no leaves things exactly as they
+were: the step fails, the same `createdb -h ... -U ... <db>` remedy prints,
+and you run it yourself in another terminal before re-entering the step.
+
+This only works when the supplied role has `CREATEDB` (or is a superuser).
+Most managed PostgreSQL offerings — RDS, Cloud SQL, Azure Database for
+PostgreSQL — grant it to the role you create by default; a shared or
+more tightly locked-down role may not have it, and that's an ordinary refusal,
+not a bug: the wizard reports it and hands you the same `createdb` command,
+or the one-line grant (`ALTER ROLE <user> CREATEDB;`) an administrator can run
+instead.
+
+Nothing here creates a role, an extension, or anything beyond that one empty
+database — the pgvector step above still runs afterward, on its own, exactly
+as it would have if the database had existed from the start. Under
+`--non-interactive` there's nobody to ask, so nothing is created unless you
+pass `--create-database`; with a terminal that same flag only changes the
+default answer shown above, and you're still asked. Full design and the
+rejected alternatives:
+[`docs/specs/vps-deploy.md` §20](../specs/vps-deploy.md#20-creating-the-database-on-request-only-issue-238).
 
 ## 4. After install: the first login (do this before anything else)
 
@@ -536,6 +583,7 @@ own environment variables, automatically.
 | `install`/`doctor` fails on `gh-authenticated` | `gh auth status` is failing — the GitHub CLI isn't logged in, or its token expired. | Run `gh auth status` directly to see the reason, then `gh auth login --hostname github.com --git-protocol https`. `install`/`update` also run `gh auth setup-git` for you afterward, so plain `git` immediately picks up the same credential. |
 | The install wizard shows only `Welcome › Domain › Resources › Review` — no Database, Secrets, OAuth, Admin or Storage step — and Review refuses to install rather than offering a confirm dialog | None of the wizard's three ways to read `infra/compose/.env.example` produced anything: the remote read failed (the Welcome screen names the reason — `gh` not installed, not logged in, no access to the repository, timed out, or an empty file), no checkout of the repository being deployed exists on this server or is the one the CLI is running from, and no template was bundled when this CLI was installed. Installing anyway would take the database, secrets and OAuth client from template defaults, so the wizard refuses instead — see [`apps/cli/README.md`](../../apps/cli/README.md#deploying-a-fork) and [`docs/specs/vps-deploy.md`](../specs/vps-deploy.md#61-where-the-template-file-comes-from-and-why-the-order-matters-issues-229-230-234-236). | Either fix the reason the Welcome screen gave for `gh` and re-open the wizard — `gh auth login --hostname github.com --git-protocol https` as **the same user running `kvox`**: `gh`'s login is per-user, so `sudo kvox` needs root's own `gh auth login`, separate from any account you logged in as yourself — or reinstall the CLI from inside a checkout of the repository actually being deployed (`sudo bash install.sh` from that checkout, or `KVOX_SRC=<path> sudo bash install.sh`) so `install.sh` bundles that repository's own template and the wizard needs no network call for it. |
 | `install`/`doctor` fails on `proxy-container` | No container publishes port 443, and no container named `proxy-nginx` (the default) is running. | Start the shared proxy: `cd /opt/infra/proxy && docker compose up -d`. If it runs under a different name, pass `--proxy-container <name>`. |
+| You said yes to creating the database (section 3.2), but it reports `<user> may not create databases on this server` instead | The supplied role has no `CREATEDB` — the ordinary case on a managed or shared PostgreSQL instance, not a bug in the wizard. | Either create the database yourself with the `createdb -h ... -U ... <db>` command the wizard prints alongside the refusal, or have an administrator grant it first: `ALTER ROLE <user> CREATEDB;`, then answer the prompt again (or re-run `install`). Nothing was created or changed by the attempt itself. |
 | Certificate issues, but the proxy fails to **reload** afterward even though `nginx -t` passed | The vhost binds `[::]` (IPv6) listeners, and this host — or the proxy container — has no IPv6 configured. `nginx -t` doesn't catch this; only the reload does, and it fails for every site behind that proxy, not just this one. | Enable IPv6 on the host, or re-render the vhost without it: `kvox deploy install --no-ipv6` (or `doctor`'s `proxy-ipv6` check names the same remedy ahead of time). |
 | Certificate issuance fails with a message naming the domain and "did not answer" or "answered ... instead of the probe" | The ACME self-probe — a nonce written under the proxy's own webroot and fetched back over `http://<domain>/.well-known/acme-challenge/…` — didn't get its own nonce back, so Let's Encrypt's real HTTP-01 challenge would fail identically. The DNS record doesn't point here, or port 80 isn't reaching the proxy. | `doctor --domain <domain>` runs the same `dns-resolves`/`dns-points-here` checks standalone, naming both addresses (what the domain resolves to, and this server's own) so a stale record or a CDN in front of it is obvious. Nothing was requested from Let's Encrypt — the self-probe runs *before* any rate-limit budget is spent. |
 | `install` fails creating or using the `devnet` Docker network | The network doesn't exist and something prevented `install` from creating it (a permissions issue, or it exists with an incompatible configuration from an unrelated project). | Create it directly: `docker network create devnet`, then re-run. `doctor`'s `docker-network-devnet` check reports the same remedy. |
@@ -553,7 +601,7 @@ own environment variables, automatically.
 - [ ] `gh auth status` passes and the repository being deployed is visible to that account
 - [ ] DNS A record for the domain points at this server, confirmed by `doctor --domain <domain>`
 - [ ] Google OAuth redirect URI matches `https://<domain>/api/auth/google/callback` exactly
-- [ ] External PostgreSQL reachable, with credentials `doctor`/`install`'s environment validation accepts
+- [ ] External PostgreSQL reachable, with credentials `doctor`/`install`'s environment validation accepts (the database itself can be created by the wizard on request — section 3.2 — if it doesn't exist yet)
 - [ ] First install run with `--staging` if this is a new domain or a first attempt on this server
 - [ ] `kvox deploy install --domain <domain>` completed, including the external HTTPS verification step
 - [ ] Logged in at `https://<domain>` as `INITIAL_ADMIN_EMAIL` — this, not the seed, is what creates the admin account
