@@ -69,7 +69,7 @@
  * in `__tests__/components/onboarding/SetupChecklist.test.tsx`.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -82,6 +82,7 @@ import ReplayOutlinedIcon from '@mui/icons-material/ReplayOutlined';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 
 import { SetupChecklist } from '../components/onboarding/SetupChecklist';
+import { WelcomeDialog } from '../components/onboarding/WelcomeDialog';
 import { withSetupReturn } from '../components/onboarding/onboardingPaths';
 import { useOnboarding } from '../contexts/OnboardingContext';
 import type { OnboardingStepState } from '../services/onboarding';
@@ -138,29 +139,26 @@ export default function GettingStartedPage() {
   };
 
   /**
-   * ⚠⚠ SEAM FOR #280 — THE WELCOME DIALOG IS NOT BUILT YET.
+   * ⚠⚠ THE #280 SEAM, NOW FILLED — AND IT STILL TOUCHES NO SETTING.
    * ==========================================================================
-   * "Replay the intro" re-opens the welcome dialog #280 ships. It exists here,
-   * now, and wired to a deliberate no-op, for one reason: an intro you can only
-   * ever see once is one a user who dismissed it on reflex can never get back,
-   * and the place they will look for it is this page. Declaring the control
-   * with the page means #280 replaces ONE function body rather than also
-   * finding a home, a label and a position for a button.
+   * "Replay the intro" re-opens the welcome dialog. It exists here because an
+   * intro you can only ever see once is one a user who dismissed it on reflex
+   * can never get back, and this page is where they will look for it.
    *
-   * ⚠ IT MUST NOT CLEAR `welcomeSeenAt` (#279's acceptance criteria). That
-   * timestamp records the first run and nothing else; replaying the intro is a
-   * user asking to watch something again, not the first run happening twice.
-   * `markWelcomeSeen` already refuses to rewrite a timestamp that exists, so
-   * the correct implementation here OPENS the dialog and touches no setting at
-   * all — which is exactly what this no-op does, and why it takes no argument
-   * and returns nothing.
+   * ⚠ IT MUST NOT CLEAR `welcomeSeenAt` (#279's and #280's criteria alike).
+   * That timestamp records the first run and nothing else; replaying is a user
+   * asking to watch something again, not the first run happening twice —
+   * clearing it would make one deliberate replay ambush them again next
+   * session, which reads as a bug.
    *
-   * There is no `TODO` comment above this and no placeholder alert inside it:
-   * a stub that renders "coming soon" is a stub that ships.
+   * That is structural here rather than a rule someone has to remember:
+   * `WelcomeDialog` is a CONTROLLED component that writes nothing at all, and
+   * the shell's `FirstRunWelcomeDialog` is the only thing in the application
+   * that calls `markWelcomeSeen`. There is no write path to reach from this
+   * page, so `onClose` below is a state update and nothing more.
    */
-  const replayIntro = () => {
-    // #280 opens the welcome dialog here. Nothing else changes.
-  };
+  const [replaying, setReplaying] = useState(false);
+  const replayIntro = () => setReplaying(true);
 
   return (
     <Container maxWidth="md">
@@ -237,6 +235,12 @@ export default function GettingStartedPage() {
             onAction={goToStep}
           />
         </Stack>
+
+        {/* Controlled by this page alone. The shell mounts its own instance for
+            the first run (`FirstRunWelcomeDialog`); this one is a replay, and
+            the two never overlap because the shell's has already been seen by
+            anyone who can reach this button. */}
+        <WelcomeDialog open={replaying} onClose={() => setReplaying(false)} />
       </Box>
     </Container>
   );

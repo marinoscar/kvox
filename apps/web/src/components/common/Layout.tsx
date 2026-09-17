@@ -11,6 +11,12 @@ import { NotificationPermissionBanner } from '../notifications/NotificationPermi
 // guaranteed 401 on `/login`, `/auth/callback` and `/activate`.
 import { OnboardingProvider } from '../../contexts/OnboardingContext';
 import { OnboardingBanner } from '../onboarding/OnboardingBanner';
+// #280, the same epic. Both are mounted HERE and nowhere else, for the reason
+// the banner above is: `?setup=` is shell-level state that every destination
+// page has in common, and the first-run introduction is a property of the
+// session rather than of whatever page the user happened to land on.
+import { ReturnToSetupBar } from '../onboarding/ReturnToSetupBar';
+import { FirstRunWelcomeDialog } from '../onboarding/WelcomeDialog';
 import { usePushSubscriptionSync } from '../../hooks/usePushSubscriptionSync';
 import { NavigationRail } from '../navigation/NavigationRail';
 import { BottomNav } from '../navigation/BottomNav';
@@ -150,6 +156,18 @@ export function Layout() {
                   read that failed, once every required step is satisfied, and for
                   anyone who has put the checklist away. */}
             <OnboardingBanner />
+            {/* Issue #280, epic #271. The thread back out of a step that sent
+                  the user away: rendered only on a page arrived at with
+                  `?setup=<stepKey>`, and only when that key names a step in a
+                  checklist THIS caller holds. Every other value — unknown,
+                  malformed, or another audience's — renders nothing, because
+                  the parameter is user-controllable input and silence is the
+                  only safe default.
+
+                  ⚠ ONE COPY, HERE. Eight destination pages each rendering their
+                  own would be eight chances for the "back" link to drift from
+                  the audience that owns the step. */}
+            <ReturnToSetupBar />
             {/* Issue #365. Fed by the shell's single `usePushSubscriptionSync`
                   mount above; renders nothing unless this device still needs to
                   allow (or unblock, or install for) notifications. */}
@@ -161,6 +179,17 @@ export function Layout() {
             />
             <Outlet />
           </Box>
+          {/* Issue #280. Portalled, so its position in this tree is about
+                LIFETIME rather than layout: it belongs to the session, opens at
+                most once for an account that has never seen it, and writes
+                `onboarding.welcomeSeenAt` on every close route — Escape, the
+                backdrop, the close button and `Skip` alike.
+
+                ⚠ It never reopens by itself afterwards, INCLUDING once the step
+                registry grows a step: the gate reads `welcomeSeen` and no count
+                at all. `/settings/getting-started` replays it on request,
+                without clearing that timestamp. */}
+          <FirstRunWelcomeDialog />
         </Box>
         {/* Mounted only where it renders. `BottomNav` also gates itself on
               `down('sm')` — belt and braces, since a self-gating-but-always-mounted

@@ -361,11 +361,29 @@ describe('the breakpoint-gate rule', () => {
     // component two settings surfaces mount would be a sixth — and one nobody
     // remembers to move with the other five. Every responsive decision in this
     // epic is an `sx`/`Grid` breakpoint object resolved in CSS.
-    const sources = readdirSync(ONBOARDING_DIR)
-      .filter((name) => name.endsWith('.tsx') || name.endsWith('.ts'))
-      .map((name) => resolve(ONBOARDING_DIR, name));
+    const names = readdirSync(ONBOARDING_DIR).filter(
+      (name) => name.endsWith('.tsx') || name.endsWith('.ts'),
+    );
+    const sources = names.map((name) => resolve(ONBOARDING_DIR, name));
 
     expect(sources.length).toBeGreaterThan(0);
+
+    // ⚠ THE DIRECTORY SCAN IS THE MECHANISM; THIS IS THE RECEIPT. #280 added
+    // two components that the shell mounts on every page — the welcome dialog
+    // and the return-to-setup bar — and both are picked up automatically by
+    // the `readdirSync` above. Naming them here as well is what turns a silent
+    // "the glob happened to match nothing new" into a failure: a file renamed
+    // or moved out of this directory takes its coverage with it, and nothing
+    // else in the suite would notice.
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'SetupChecklist.tsx',
+        'OnboardingBanner.tsx',
+        'WelcomeDialog.tsx',
+        'ReturnToSetupBar.tsx',
+        'onboardingPaths.ts',
+      ]),
+    );
 
     for (const file of [...sources, CONTEXT_SOURCE, ...EPIC_PAGE_SOURCES]) {
       const code = readFileSync(file, 'utf8')
