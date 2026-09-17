@@ -1197,8 +1197,11 @@ interface DeployInfo {
     ref: string;
     repoUrl: string;
   };
-  installedAt: string;       // ISO-8601 UTC, set once, never overwritten
-  updatedAt: string;         // = state.lastDeployedAt: last SUCCESSFUL deploy
+  installedAt: string | null; // ISO-8601 UTC, set once, never overwritten;
+                              // NULL when unknown - #285, see §23.4
+  updatedAt: string | null;   // = state.lastDeployedAt: last SUCCESSFUL deploy;
+                              // null when there has been none and no
+                              // installedAt to fall back to (§23.4)
   lastCommand: 'install' | 'update';
   deployedBy: { cli: string; version: string };
   domain: string | null;
@@ -1226,8 +1229,19 @@ interface DeployInfo {
     failedStep?: string;     // present only when `completed` is false
     attemptedAt?: string;    // ISO-8601 UTC; present only when incomplete
   };
+  adoptedAt?: string;        // #285; ABSENT means the record came from a run
+                             // the CLI performed. A THIRD axis from `run`,
+                             // not a value inside it - see §23.5
 }
 ```
+
+Two of those changed shape without bumping `schema`, and they are the worked
+example of the paragraph above at its sharpest: `installedAt` and `updatedAt`
+became nullable in #285 (§23.4) because a deployment the CLI **adopted** has no
+install instant on any disk, and `adoptedAt` was added beside them. The API had
+already read all three as optional-and-nullable since #124, and the web card
+already renders null as its unknown mark, so nothing downstream needed to
+change — which is precisely why `1` still stands.
 
 **`run` (issue #283).** How the deploy run that wrote this document ended.
 Written from the `health` step onward, on the **failure** path as well as on
@@ -2015,3 +2029,186 @@ describes the **directory** and is accurate about it.
 contradicting each other unnoticed. Refusing the combination was considered and
 rejected: it would remove a working capability (deploy repository X into folder
 Y) to fix a defect that is not there.
+
+## 23. `update` adopts a deployment it has no record of (issue #285)
+
+A deployment that was demonstrably present — clone at the right revision,
+`.env` written, containers running, certificate issued, site serving HTTPS —
+could not be updated:
+
+```
+$ kvox deploy update
+kvox: No deployment found at /opt/infra/apps/kvox.
+Run `kvox deploy install` first, or pass --root if it is somewhere else.
+```
+
+`requireState` refused because `.appctl-deploy.json` was absent — in the
+reported case because that install had failed before §22 taught the failure
+path to write one, though the cause does not matter.
+
+### 23.1 The precondition was asking the wrong question
+
+`update.ts`'s header stated the design deliberately: *the preconditions are
+opposite — install refuses when state exists; update refuses when it does
+not.* The symmetry is right and it keyed on the wrong fact. **The state file
+is bookkeeping; the deployment is the clone, the `.env` and the running
+containers.** "Is there a state file?" and "is there a deployment here?" are
+different questions, and only the second is the one `update` needs answered.
+Everything the state records is recoverable from that disk, so refusing a live
+deployment over lost bookkeeping — and sending the operator to `install`,
+whose own precondition is the opposite — was the wrong response.
+
+`update` now reads the state, and when there is none asks `deploy/adopt.ts`
+whether a deployment is there. The symmetry survives, restated on the fact that
+matters: install refuses when a **deployment** is already there, update when
+one is not.
+
+### 23.2 The evidence gate: positive, and exactly two things
+
+`deploymentEvidence(deployRoot)` answers two independent facts, and
+`hasDeployment` requires **both**:
+
+1. `<root>/repo/.git` exists — the clone is a git checkout. (`existsSync`,
+   not a directory test: `.git` is a file in a worktree.)
+2. The deployment's `.env` is readable, in either the current layout or the
+   pre-#120 one inside the clone.
+
+Both are required because both are things this CLI itself creates and the
+pipeline itself needs: `fetch` fetches and checks out inside `repo/`, and
+everything from `build` onward interpolates `.env`. Neither is inferable from
+the other, so neither alone is evidence.
+
+**Running containers are deliberately not part of the gate**, although the
+issue offers them as a candidate. A deployment whose containers are stopped,
+pruned or wedged is precisely the deployment somebody is trying to update, so a
+gate that required them would refuse the recovery case this exists for. It
+would also put a Docker subprocess in a code path that has to work when the
+daemon is down — and three steps later the pipeline's own `preflight` checks
+Docker properly, with a failure message written for it.
+
+The gate is **positive evidence, never the absence of a refusal**: an empty
+`--root`, a directory holding only `logs/`, or a clone with no `.env` all still
+raise `NotInstalledError` with the message they always raised. What is added is
+one line naming the half that *was* found, so an operator who expected an
+adoption can see why they did not get one.
+
+### 23.3 What is reconstructed, and from where
+
+| Field | Source |
+|---|---|
+| `repoUrl` | `git -C repo remote get-url origin`, through `normaliseRepoUrl` |
+| `commitSha` | `git -C repo rev-parse HEAD` |
+| `ref` | `--ref`, else `rev-parse --abbrev-ref HEAD`, else `origin/HEAD`'s short name |
+| `name` | `.env`'s `COMPOSE_PROJECT_NAME`, else the directory name (`projectNameFor`'s own fallback) |
+| `bindPort` | `.env`'s `APP_BIND_PORT`, else `DEFAULT_BIND_PORT` |
+| `domain` | `.env`'s `APP_URL` host, else the proxy vhost forwarding to `bindPort` |
+| `proxyRoot` | the resolved proxy root |
+| `proxyContainer` | `--proxy-container`, else left unset for the preflight to find |
+| `deployRoot`, `envPath` | already resolved |
+| `appctlVersion` | `CLI_VERSION` — this CLI is adopting it now |
+| `lastCommand` | `'update'` — an adoption happens inside an update |
+| `adoptedAt` | now |
+
+Three reads **refuse rather than guess**, all for the same reason — a wrong
+answer here deploys the wrong code:
+
+- No `origin`. Deploying the wrong repository is what `resolveRepoTarget`'s
+  rank-3 guard (§18) exists to make impossible; inventing an origin walks
+  straight into it.
+- No HEAD commit.
+- A detached HEAD whose remote has no default branch. `main` is not a safe
+  guess for a fork on `master` or `develop`; the refusal names `--ref`.
+
+The domain deliberately ignores a loopback `APP_URL`: `.env.example` ships
+`http://localhost:3535`, so an install made without `--domain` keeps it, and
+adopting `localhost` would send the `publish` step to issue a certificate for
+it. The vhost fallback matches on the `proxy_pass http://127.0.0.1:<bindPort>;`
+that `renderVhost` (§10) writes, and takes the filename as the domain. Two
+vhosts on one port answer nothing rather than one of them: adopting the wrong
+one would publish this deployment under somebody else's hostname.
+
+### 23.4 The two instants that are not invented
+
+`installedAt` and `lastDeployedAt` are **not knowable from a disk this CLI did
+not write**, and a guessed instant is not a small inaccuracy — it becomes a
+fact on the About page, which is the class of bug §22 was written to remove.
+
+`DeployState.installedAt` therefore becomes **optional**, at
+`DEPLOY_STATE_VERSION` 1, for exactly the reason §22 made `lastDeployedAt`
+optional: every state file written before now was written by a run that had
+just installed or updated, so every existing file carries it and it means what
+it always meant. Absent means "this CLI has no record of installing here".
+
+`deploy-info/info.json`'s `installedAt` and `updatedAt` become **nullable**,
+joining `domain` and `remote` as that document's idiom for "known to be
+absent". The API has read both as optional-and-nullable since #124 and the web
+card already renders null as its unknown mark, so nothing downstream changes —
+and `schema` stays `1`, for the reason recorded above the constant (§19).
+`validateDeployInfo` still refuses a non-null value that is not a real UTC
+instant.
+
+One instant **is** recovered rather than invented: a deployment whose state
+file was lost often still has `deploy-info/info.json`, which carries the real
+install instant, and that is read back. `lastDeployedAt` is deliberately *not*
+recovered the same way — the document's `updatedAt` is written as
+`lastDeployedAt ?? installedAt`, so reading it back cannot tell the two apart,
+and §22's failed-first-install record would turn "never deployed" into a deploy
+that did not happen.
+
+### 23.5 `adoptedAt` is a third thing, not a value squeezed into `run`
+
+§22 added a `run` block to `deploy-info` saying how a deploy **ended**.
+Adopting is a different axis: where the bookkeeping behind that deploy **came
+from**. Neither is derivable from the other — an adopted deployment's update
+can complete perfectly — so `adoptedAt` is its own optional field on
+`DeployState` and on `deploy-info`, optional and nullable on the API's schema
+too. It is also what explains a null `installedAt`, which is why the two travel
+together.
+
+It is emphatically **not `installedAt` under another name**: it is when the
+record was rebuilt, never when the deployment was made.
+
+### 23.6 Telling the operator
+
+The notice goes out **before the pipeline runs**, through
+`hooks.onProgress`/`onLog` — not in the epilogue — so a run that then fails at
+`preflight` still says the state file was rebuilt. The same block goes to the
+run journal, and `UpdateResult.adopted` carries it for `--json`, which wires no
+hooks at all; `runUpdateCommand` writes it to stderr in that mode, keeping
+stdout pure JSON and covering `--check --json`, whose stdout is the check
+object alone.
+
+It is deliberately **not** under `Action required:` (§21's channel, from #264
+and #265). That heading is for something the operator must go and do; this is a
+notice about something already done, and putting it there would teach people to
+skim the one heading that must never be skimmed.
+
+The record itself is written **before the pipeline** too, right after the
+journal opens so the write is journaled: the bookkeeping is recovered whatever
+the run then does, so a preflight failure, a `--check` or an "already up to
+date" does not each need the adoption performed again.
+
+### 23.7 Scope: this is `update`'s gate, and only `update`'s
+
+`status`, `about` and `certs` were audited and deliberately not changed.
+
+- `status` and `about` each carry their **own** copy of the refusal (an inline
+  `readState(...) === undefined` check with their own wording), not a call to
+  `requireState`. They are read-only reporters, and adopting from one would
+  mean either running `git` subprocesses during what is meant to be a cheap
+  read and *writing* the CLI's private record from a reporting command, or
+  holding a reconstruction in memory that the next command would have to
+  perform again. That is a design decision of its own, not the identical
+  one-line path, so it is left for its own issue.
+- `certs` does not refuse at all: it reads the state **optionally**
+  (`state?.domain`, `state?.proxyRoot`), so `--all` already works without one
+  and a named app without a recorded domain gets its own message. Nothing to
+  fix.
+- A **third** mechanism is `locateInstalledApp`/`listInstalledApps`: with no
+  `--name` and no `--root`, apps are discovered by scanning `--apps-root` for
+  directories that hold a state file, so a bare `kvox deploy update` still
+  finds nothing. Teaching the scan to recognise deployments by evidence is a
+  different design with its own questions (two evidence-bearing directories,
+  which one?), and also belongs in its own issue. `--name <app>` or `--root
+  <dir>` reaches the adoption today, and once the record is restored the next
+  run needs neither.
