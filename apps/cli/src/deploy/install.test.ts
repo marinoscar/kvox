@@ -657,6 +657,164 @@ describe('runInstall layout resolution', () => {
   });
 });
 
+// =============================================================================
+// Issue #249: `--resume` must refuse rather than silently start a fresh
+// install when it finds no state at the resolved deploy root.
+//
+// The deploy root is resolved BEFORE any state is read (see the comment above
+// the guard in install.ts), so without --repo/--name/--root it is only a
+// GUESS at the repository the operator meant - and a --resume that "resumed"
+// against that guess was the actual bug: it silently started a brand-new
+// install and the only visible symptom was an EACCES on an unfamiliar
+// directory.
+// =============================================================================
+describe('runInstall --resume without state (#249)', () => {
+  /** A runCommand stub for the ambient-git-checkout ("guessed") case. */
+  function stubOriginRunCommand(originUrl: string, branch: string) {
+    return (async (argv: readonly string[], options: RunCommandOptions): Promise<CommandResult> => {
+      const stdout =
+        argv[1] === 'remote' ? originUrl : argv[1] === 'rev-parse' && argv[2] === '--abbrev-ref' ? branch : '';
+      return { argv: [...argv], cwd: options.cwd, exitCode: 0, stdout, stderr: '', durationMs: 1, timedOut: false };
+    }) as typeof import('./executor.js').runCommand;
+  }
+
+  it('throws UsageError and creates nothing when no state exists at the resolved root', async () => {
+    // A path under a fresh temp dir that has never been created - the load-
+    // bearing assertion below is that it STAYS that way. The old behaviour's
+    // first act on this exact input was `mkdirSync`.
+    const parent = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    const root = join(parent, 'fresh');
+
+    const error = await runInstall({
+      deployRoot: root,
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Nothing to resume');
+    // Names the deploy root that was searched.
+    expect((error as Error).message).toContain(root);
+    expect(existsSync(root)).toBe(false);
+  });
+
+  it('does not fire on an ordinary first install: no --resume, no state', async () => {
+    // Same shape as the case above (a deploy root that does not exist yet),
+    // but without --resume. This is the "not too broad" check: a guard that
+    // fired here would refuse every brand-new install.
+    const parent = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    const root = join(parent, 'fresh');
+
+    const error = await runInstall({
+      deployRoot: root,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // Whatever stopped the (stubbed, command-less) pipeline next, it was not
+    // the resume guard - proven by the one thing only past-the-guard code
+    // does: `mkdirSync(options.deployRoot)`.
+    expect(existsSync(root)).toBe(true);
+    expect(error).not.toBeInstanceOf(UsageError);
+  });
+
+  it('says the layout was GUESSED when it came from the ambient git checkout', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'appctl-install-guess-'));
+    const appsRoot = join(tmp, 'infra', 'apps');
+    const app = join(tmp, 'elsewhere', 'app');
+    mkdirSync(app, { recursive: true });
+    mkdirSync(join(app, '.git'), { recursive: true });
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: app,
+      runCommand: stubOriginRunCommand('https://example.test/o/guessedapp.git', 'main'),
+      resume: true,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('GUESSED from the git checkout');
+  });
+
+  it('does not claim a guess when --name named the deployment', async () => {
+    const appsRoot = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+
+    const error = await runInstall({
+      appsRoot,
+      name: 'custom',
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).not.toMatch(/guess/i);
+    expect((error as Error).message).toContain('taken from --name/--root');
+  });
+
+  it('does not claim a guess when --root named the deployment', async () => {
+    const parent = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    const root = join(parent, 'fresh');
+
+    const error = await runInstall({
+      deployRoot: root,
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).not.toMatch(/guess/i);
+    expect((error as Error).message).toContain('taken from --name/--root');
+  });
+
+  it('says the layout was derived from --repo when that flag named the repository', async () => {
+    const appsRoot = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+
+    const error = await runInstall({
+      appsRoot,
+      repo: 'https://example.test/o/flagged.git',
+      ref: 'main',
+      resume: true,
+      // Never called: an explicit --repo (with --ref, so no default-ref
+      // lookup either) resolves the target with no command at all.
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('derived from --repo');
+  });
+
+  // Together, the four assertions above exercise three of
+  // `describeLayoutSource`'s four distinct, non-empty wordings - 'derived
+  // from --repo', 'GUESSED from the git checkout...' and 'taken from
+  // --name/--root' - and prove they really are distinguishable (no two share
+  // a substring the others lack, e.g. only the guess uses "guess" at all).
+  // The fourth wording, 'taken from an existing deployment state', is
+  // produced only when `resolveRepoTarget` is called with a `state` option -
+  // which `runInstall` never does (`resolveInstallLayout` and `resolveTarget`
+  // in install.ts pass only `cwd`/`appsRoot`/`runCommand`/`repoFlag`/
+  // `refFlag`). That branch is unreachable through the public `runInstall`
+  // entry point and `describeLayoutSource` itself is not exported, so it is
+  // not covered here - covering it would require a source change, and this
+  // pass is test-files-only.
+});
+
 describe('compose invocation', () => {
   it('pins the project name and layers base, prod and vps in that order', () => {
     // `-p <name>` keeps two apps on one box from sharing the project `compose`
@@ -966,5 +1124,23 @@ describe('runInstall against a fake VPS', () => {
     expect((error as Error).message).toContain('build exploded');
     expect(readState(root)).toBeUndefined();
     expect(readDeployInfo(root)).toBeUndefined();
+  });
+
+  // ===========================================================================
+  // Issue #249: --resume must still work when it finds real state to resume
+  // ===========================================================================
+  //
+  // The new guard only fires when `--resume` finds NO state. This is the other
+  // half of that condition: a `--resume` that DOES find a valid state must
+  // keep working exactly as before - the fix must not become a second way to
+  // block an ordinary resume.
+  it('still resumes when --resume is given and a valid state exists at the deploy root', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    installedRoot(root);
+
+    const result = await install(root, { resume: true });
+
+    expect(result.commitSha).toBe('c'.repeat(40));
+    expect(readState(root)?.lastCommand).toBe('install');
   });
 });
