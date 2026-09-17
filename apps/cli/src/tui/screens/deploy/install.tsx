@@ -11,6 +11,7 @@ import {
   type CheckContext,
   type CompletedCheck,
 } from '../../../deploy/checks/index.js';
+import { readEnvFile } from '../../../deploy/env-file.js';
 import { metadataFor, type Suggestion } from '../../../deploy/env-metadata.js';
 import { parseEnvExample, type EnvVarSpec } from '../../../deploy/env-spec.js';
 import { runCommand as defaultRunCommand } from '../../../deploy/executor.js';
@@ -40,6 +41,7 @@ import {
   type DatabaseCreationTarget,
 } from '../../../deploy/database-create.js';
 import { collectServerFacts, unknownServerFacts, type ServerFacts } from '../../../deploy/server-facts.js';
+import { readState, type DeployState } from '../../../deploy/state.js';
 import { DOMAIN_FIELD } from '../../../deploy/wizard/steps.js';
 import { formatError } from '../../../errors.js';
 import {
@@ -72,6 +74,7 @@ import {
   WELCOME_STEP_ID,
   answerOf,
   applyOptionMode,
+  applyPrefill,
   applySecretMode,
   checkItems,
   checksAllowLeaving,
@@ -86,12 +89,16 @@ import {
   installSteps,
   isTrue,
   pipelineItems,
+  prefillFrom,
   railSteps,
   cursorSteps,
   railIndexFor,
   requiredFailures,
   resolvedAppName,
+  resumeNotice,
+  resumePlan,
   scheduleNameRecheck,
+  shouldReadDeployment,
   shouldRecheckName,
   stepCheckItems,
   reviewRows,
@@ -102,6 +109,7 @@ import {
   type InstallStep,
   type OptionMode,
   type PipelineProgress,
+  type ResumePlan,
   type SecretMode,
 } from './install-model.js';
 
@@ -158,6 +166,9 @@ interface CheckRun {
 
 const IDLE: CheckRun = { results: [], running: false };
 
+/** One shared empty seed, so "nothing read yet" is a stable identity. */
+const EMPTY_PREFILL: ReadonlyMap<string, string> = new Map();
+
 interface RunOutcome {
   done?: ReturnType<typeof doneModel> | undefined;
   failed?: ReturnType<typeof failedModel> | undefined;
@@ -192,6 +203,15 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   const [outcome, setOutcome] = useState<RunOutcome>({});
   /** The repository has been resolved (or given up on): the name is settled. */
   const [ready, setReady] = useState(false);
+  /**
+   * What THIS deployment already has, read back from its own folder (#288):
+   * the `.env` the answers are seeded from, and the state file that says
+   * whether a previous run left anything to resume.
+   */
+  const [prefill, setPrefill] = useState<ReadonlyMap<string, string>>(EMPTY_PREFILL);
+  const [priorState, setPriorState] = useState<DeployState | undefined>(undefined);
+  /** The seed currently in `answers`, so a later read can take it back out. */
+  const prefillRef = useRef<ReadonlyMap<string, string>>(EMPTY_PREFILL);
 
   const abortRef = useRef<AbortController | undefined>(undefined);
 
@@ -476,6 +496,68 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     });
   }, [nameAnswer, ready, isMounted]);
 
+  // ---------------------------------------------------------------------------
+  // The deployment that is already there  (issue #288)
+  // ---------------------------------------------------------------------------
+  //
+  // Keyed on the DEPLOY ROOT, which is `<apps root>/<name>` - and the name is
+  // a field on Welcome, so this re-reads while somebody types. Two things make
+  // that safe, and both of them are #229's lesson rather than a new one:
+  //
+  //   1. It is gated on `resolvedName`, never on the `FALLBACK_APP_NAME`-backed
+  //      `name` the PATHS use. Reading `<apps root>/app` because a repository
+  //      has not resolved yet would seed this wizard from a deployment the
+  //      operator never named - #262's placeholder bug with secrets in it.
+  //   2. `applyPrefill` takes the previous seed back out. Typing `demo2` on a
+  //      host that also runs `demo` passes through `demo` on the way, and a
+  //      neighbour's database password must not survive into this install for
+  //      every key `demo2`'s own file happens not to carry.
+  //
+  // Debounced through the doctor's own helper, for the doctor's own reason:
+  // the trigger is somebody typing a word, and this is a filesystem read per
+  // keystroke otherwise.
+  //
+  // NEITHER READ MAY THROW. `readState` refuses a hand-edited or
+  // future-versioned file and `readEnvFile` rethrows anything that is not
+  // ENOENT; a wizard that cannot parse a record has to start fresh, not die
+  // with a stack trace over a stray comma. `readDeployment` swallows both.
+  //
+  // ⚠ THE REF GUARD IS LOAD-BEARING, not an optimisation. `useIsMounted`
+  // returns a fresh closure per render, so this effect re-runs on EVERY
+  // render - which is what makes the debounce a debounce while somebody
+  // types, and what would otherwise make this a loop: the read produces a new
+  // `Map` each time, `setPrefill` would see a new identity, and the render
+  // that causes would arm the timer again, for ever. Recording the root the
+  // seed came from turns "read again" into "read once per deployment", the
+  // same shape `shouldRecheckName` gives the doctor's own re-run.
+  const prefillRoot = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const target = resolvedName === undefined ? undefined : deployRoot;
+    if (!shouldReadDeployment({ target, lastRead: prefillRoot.current })) return;
+    return scheduleNameRecheck(() => {
+      if (!isMounted()) return;
+      prefillRoot.current = target;
+      const found = target === undefined ? {} : readDeployment(target);
+      const seeded = prefillFrom(found.env, found.state);
+      setAnswers((current) => applyPrefill(current, prefillRef.current, seeded));
+      prefillRef.current = seeded;
+      setPrefill(seeded);
+      setPriorState(found.state);
+    });
+  }, [deployRoot, resolvedName, isMounted]);
+
+  /**
+   * Whether this run is handed `--resume`, and what Review says about it.
+   *
+   * Recomputed from the answers as they stand: condition 4 of `resumePlan` is
+   * "the answers still match the file", which is not settled until the
+   * operator stops editing them.
+   */
+  const plan: ResumePlan = useMemo(
+    () => resumePlan({ state: priorState, answers, prefill }),
+    [priorState, answers, prefill],
+  );
+
   useInput(
     (input, key) => {
       if (key.ctrl && input.toLowerCase() === 'r' && !welcome.running) startDoctor();
@@ -672,6 +754,14 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           // Every question was asked above; readline cannot ask another while
           // ink holds stdin in raw mode, so the wizard runs with nothing left.
           nonInteractive: true,
+          // ONLY WHEN THERE IS SOMETHING TO RESUME (#288). `runInstall`
+          // throws "Nothing to resume: no deployment state at <root>" for the
+          // ordinary first install, so this flag can never be unconditional -
+          // and it WAIVES the "a deployment already exists" refusal, so it
+          // must never be passed over a deployment that completed. Both are
+          // `resumePlan`'s conditions; the Review screen said which way it
+          // went before this ran.
+          ...(plan.resume ? { resume: true } : {}),
           runCommand,
           hooks: {
             onStepStart: ({ id, title }) => {
@@ -725,6 +815,14 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
         setOutcome({
           failed: failedModel({
             message,
+            // What the state file `runInstall` just wrote now holds: the
+            // steps this run finished, plus the ones a resume carried in and
+            // the pipeline re-recorded as already complete (#288). A guard's
+            // skip is in neither, which is why this counts `ok` rather than
+            // everything that is not `failed`.
+            resumable:
+              plan.completedSteps.length > 0 ||
+              progressRef.current.some((entry) => entry.outcome === 'ok'),
             ...(currentStepId(progressRef.current) === undefined
               ? {}
               : { stepId: currentStepId(progressRef.current) }),
@@ -737,7 +835,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
         setPhase('failed');
       }
     })();
-  }, [answers, append, groups, isMounted, name, roots.apps, roots.proxy]);
+  }, [answers, append, groups, isMounted, name, plan, roots.apps, roots.proxy]);
 
   // `progress` read from inside the async closure above without making the
   // whole run depend on it.
@@ -866,7 +964,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           message={outcome.failed.message}
           // The exit code will be 0 whatever happened here, so the frame has
           // to carry the failure on its own.
-          hint={`${outcome.failed.actionLabel} — \`${CLI_NAME} deploy install --resume\`.`}
+          hint={`${outcome.failed.actionLabel}. From a shell: \`${CLI_NAME} deploy install --resume\`.`}
         />
         <Box marginTop={1}>
           <KeyValue rows={outcome.failed.rows} />
@@ -921,7 +1019,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       templateSource,
       remoteProblem,
     });
-  const fields = formFieldsFor(step, { specs, answers, suggestions });
+  const fields = formFieldsFor(step, { specs, answers, suggestions, prefill });
   const reviewing = step.id === REVIEW_STEP_ID;
 
   return (
@@ -994,7 +1092,14 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
             ) : (
               <ConfirmDialog
                 message="Install with these values?"
-                detail={['Nothing has been written yet. This is the first change to the server.']}
+                detail={[
+                  'Nothing has been written yet. This is the first change to the server.',
+                  // What `--resume` will or will not do, said here rather
+                  // than discovered from the progress list a minute later
+                  // (#288). Empty for a first install, which is the one case
+                  // where there is nothing to explain.
+                  ...resumeNotice(plan),
+                ]}
                 confirmLabel="Yes, install now"
                 onResult={(confirmed) => {
                   if (confirmed) start();
@@ -1184,6 +1289,54 @@ function currentStepId(progress: readonly PipelineProgress[]): string | undefine
 /** `runInstall`'s failure message names the journal; pull it back out for the table. */
 function journalPathIn(message: string): string | undefined {
   return /The full log is at (\S+)/.exec(message)?.[1];
+}
+
+/**
+ * What is already at `deployRoot`, as far as it can be read.  (issue #288)
+ *
+ * The filesystem half of the resume fix, here rather than in
+ * `install-model.ts` for the reason `loadTemplateSpecs` is here: that module
+ * is pure so its decisions can be asserted without a disk, and these two
+ * reads are the disk.
+ *
+ * NEITHER READ IS ALLOWED TO THROW, and both of them can. `readState` refuses
+ * a file whose `version` this build does not understand, and refuses invalid
+ * JSON outright - a deliberate refusal for a COMMAND, which must not act on a
+ * record it cannot interpret, and the wrong answer for a WIZARD that has not
+ * written anything yet. `readEnvFile` rethrows anything that is not ENOENT,
+ * so a `.env` this process cannot read (a root-owned file, #159's case) would
+ * take the screen down while the operator was typing an app name. Both become
+ * "there is nothing here", which is exactly what the fresh install they then
+ * get is.
+ *
+ * ⚠ ONLY EVER THIS DEPLOYMENT'S OWN FOLDER. There is no walk, no enumeration
+ * of the apps root and no fallback to a sibling, for the reason spelled out
+ * on `loadTemplateSpecs` below: a neighbour's answer is not a degraded answer,
+ * it is a wrong one, and these two files hold the database password and the
+ * record of what is installed.
+ */
+export function readDeployment(deployRoot: string): {
+  state?: DeployState | undefined;
+  env?: Map<string, string> | undefined;
+} {
+  let state: DeployState | undefined;
+  try {
+    state = readState(deployRoot);
+  } catch {
+    state = undefined;
+  }
+
+  let env: Map<string, string> | undefined;
+  try {
+    env = readEnvFile(deployRoot);
+  } catch {
+    env = undefined;
+  }
+
+  return {
+    ...(state === undefined ? {} : { state }),
+    ...(env === undefined ? {} : { env }),
+  };
 }
 
 /**
