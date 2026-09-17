@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { isLoopbackPortFree } from './checks/types.js';
+import type { DockerPortClaim } from './docker-ports.js';
 import { DEFAULT_BIND_PORT, type SiblingPort } from './layout.js';
 import type { ServerFacts } from './server-facts.js';
 
@@ -41,6 +42,15 @@ export interface DeriveContext {
    * bind probe, so the port scan must consult these as well.
    */
   siblingPorts: readonly SiblingPort[];
+  /**
+   * Every host port docker itself has promised to a container (#257), running
+   * or not, from `dockerPortClaims`. The third source the port scan consults:
+   * a state file cannot see a container this CLI did not install, and a bind
+   * probe cannot see one that is stopped. EMPTY IS A VALID ANSWER - it is what
+   * a machine with no docker, or a docker that could not be asked, gives, and
+   * the scan carries on with the other two sources.
+   */
+  dockerPorts?: readonly DockerPortClaim[] | undefined;
   /** Loopback bind probe; injected so the port suggestion is testable. */
   portFree?: ((port: number) => Promise<boolean>) | undefined;
 }
@@ -212,18 +222,42 @@ function formatGib(bytes: number): string {
 }
 
 /**
- * The first port from 3535 that is free on loopback AND recorded by no other
- * app. Both are consulted because each misses something: a bind probe cannot
- * see a stopped sibling, and a state file cannot see a stray process.
+ * The first port from 3535 that no other app has recorded, that no container
+ * has been promised, and that nothing is listening on.
+ *
+ * THREE SOURCES, because each one misses something the other two catch:
+ *
+ *   1. `siblingPorts`  - state files. Sees a STOPPED app this CLI installed,
+ *                        which a bind probe cannot.
+ *   2. `dockerPorts`   - `HostConfig.PortBindings` (#257). Sees a STOPPED
+ *                        container this CLI did NOT install, which neither of
+ *                        the other two can: it has no state file, and it is
+ *                        not listening.
+ *   3. `portFree`      - a live bind probe. Sees a stray process that is not a
+ *                        container at all, which neither state files nor
+ *                        docker know about.
+ *
+ * They are consulted in that order because it is cheapest-first and because
+ * the reason string reads better naming an owner than "in use on this server".
+ * Source 2 answering nothing is ordinary - no docker, or a docker that could
+ * not be reached - and costs only what it was going to catch.
  */
 export async function suggestBindPort(context: DeriveContext): Promise<Suggestion | undefined> {
   const portFree = context.portFree ?? isLoopbackPortFree;
+  const dockerPorts = context.dockerPorts ?? [];
   const skipped: string[] = [];
 
   for (let port = DEFAULT_BIND_PORT; port < DEFAULT_BIND_PORT + PORT_SCAN_LIMIT; port += 1) {
     const sibling = context.siblingPorts.find((entry) => entry.port === port);
     if (sibling !== undefined) {
       skipped.push(`${port} is used by ${sibling.name}`);
+      continue;
+    }
+    const claimed = dockerPorts.find((entry) => entry.port === port);
+    if (claimed !== undefined) {
+      // Named, not just "in use": the operator has to be able to find the
+      // container, and a stopped one will not show up in anything they run next.
+      skipped.push(`${port} is held by container ${claimed.name}`);
       continue;
     }
     if (!(await portFree(port))) {

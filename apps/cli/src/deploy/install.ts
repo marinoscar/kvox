@@ -14,6 +14,7 @@ import {
   type CheckContext,
 } from './checks/index.js';
 import { ensureDeployInfoDir, writeDeployInfo } from './deploy-info.js';
+import { dockerPortClaims } from './docker-ports.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
 import { parseEnvExample, serializeEnvFile } from './env-spec.js';
 import { runEnvWizard } from './env-wizard.js';
@@ -437,6 +438,15 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           root: context.options.deployRoot,
         });
         const siblingPorts = siblingBindPorts(context.options.appsRoot, context.options.deployRoot);
+        // The third source (#257): every host port docker has promised any
+        // container, STOPPED ONES INCLUDED. Neither of the two above can see a
+        // stopped container this CLI did not install. An empty answer - no
+        // docker, no socket, a timeout - is ordinary and costs only what it
+        // was going to catch.
+        const dockerPorts = await dockerPortClaims({
+          cwd: context.options.deployRoot,
+          runCommand: context.runCommand,
+        });
 
         const result = await runEnvWizard({
           specs,
@@ -446,6 +456,7 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
           ...(existing === undefined ? {} : { existing }),
           facts,
           siblingPorts,
+          dockerPorts,
           // The domain and database steps verify their answers before the
           // next question, with the same registry the preflight ran.
           inlineChecks: {

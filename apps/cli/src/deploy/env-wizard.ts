@@ -21,6 +21,7 @@ import {
   type Suggestion,
 } from './env-metadata.js';
 import { createDatabase, creatableDatabase } from './database-create.js';
+import type { DockerPortClaim } from './docker-ports.js';
 import type { EnvVarSpec } from './env-spec.js';
 import type { SiblingPort } from './layout.js';
 import { unknownServerFacts, type ServerFacts } from './server-facts.js';
@@ -114,6 +115,12 @@ export interface WizardOptions {
   facts?: ServerFacts | undefined;
   /** Every other installed app's recorded port (#127). */
   siblingPorts?: readonly SiblingPort[] | undefined;
+  /**
+   * Every host port docker has promised a container, stopped ones included
+   * (#257). Absent means the caller did not (or could not) ask docker, which
+   * the port scan treats as "nothing claimed" and carries on.
+   */
+  dockerPorts?: readonly DockerPortClaim[] | undefined;
   /** Loopback bind probe for the port suggestion; injected by tests. */
   portFree?: ((port: number) => Promise<boolean>) | undefined;
   /**
@@ -220,6 +227,7 @@ interface Run {
   groups: readonly EnvGroup[];
   facts: ServerFacts;
   siblingPorts: readonly SiblingPort[];
+  dockerPorts: readonly DockerPortClaim[];
   output: Output;
   values: Map<string, string>;
   domain: string | undefined;
@@ -245,6 +253,7 @@ export async function runEnvWizard(options: WizardOptions): Promise<WizardResult
     groups,
     facts: options.facts ?? unknownServerFacts(),
     siblingPorts: options.siblingPorts ?? [],
+    dockerPorts: options.dockerPorts ?? [],
     output: ctx?.output ?? process.stderr,
     values: new Map<string, string>(options.existing ?? []),
     domain: options.domain,
@@ -423,6 +432,7 @@ function deriveContext(run: Run): DeriveContext {
     answers: run.values,
     facts: run.facts,
     siblingPorts: run.siblingPorts,
+    dockerPorts: run.dockerPorts,
     ...(run.options.portFree === undefined ? {} : { portFree: run.options.portFree }),
   };
 }
