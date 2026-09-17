@@ -462,7 +462,11 @@ describe('runUpdate against a fake VPS', () => {
 
     const state = readState(root) as DeployState;
     expect(state.installedAt).toBe(INSTALLED_AT);
-    expect(Date.parse(state.lastDeployedAt)).toBeGreaterThanOrEqual(before);
+    // `lastDeployedAt` is optional on the state since #267 (a failed FIRST
+    // install has none); a successful update always stamps one, which is
+    // what this asserts.
+    expect(state.lastDeployedAt).toBeDefined();
+    expect(Date.parse(state.lastDeployedAt as string)).toBeGreaterThanOrEqual(before);
     expect(state.lastAttemptAt).toBe(state.lastDeployedAt);
     expect(state.commitSha).toBe(NEW_SHA);
     expect(state.previousSha).toBe(INSTALLED_SHA);

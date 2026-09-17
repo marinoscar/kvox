@@ -316,7 +316,12 @@ export function buildDeployInfo(
       repoUrl: state.repoUrl,
     },
     installedAt: state.installedAt,
-    updatedAt: state.lastDeployedAt,
+    // `lastDeployedAt` is optional on the state since #267, for the state a
+    // FAILED install writes so `--resume` can read it back. This document is
+    // written only after a deploy has succeeded - never on that path - so the
+    // fallback is unreachable; it is here because the type cannot say so, and
+    // `installedAt` is what `updatedAt` equals on a first install anyway.
+    updatedAt: state.lastDeployedAt ?? state.installedAt,
     lastCommand: state.lastCommand,
     deployedBy: { cli: CLI_NAME, version: CLI_VERSION },
     domain: state.domain ?? null,
