@@ -380,3 +380,81 @@ describe('waitForHealthy', () => {
     expect(result.error).toBe('connection refused');
   });
 });
+
+// =============================================================================
+// A malformed response is not a dead server  (issue #259)
+// =============================================================================
+//
+// `Missing expected LF after header value` names the parser's disappointment,
+// not the operator's problem. The deployment that produced it was serving
+// correctly - a stray carriage return in the Content-Security-Policy header
+// made the response unparseable, and curl reported 200 throughout.
+// =============================================================================
+
+/** The real undici shape: a TypeError('fetch failed') wrapping HTTPParserError. */
+function parserError(): Error {
+  return Object.assign(new TypeError('fetch failed'), {
+    cause: {
+      code: 'HPE_LF_EXPECTED',
+      message:
+        'Response does not match the HTTP/1.1 protocol (Missing expected LF after header value)',
+    },
+  });
+}
+
+describe('describeFetchFailure on a protocol error (issue #259)', () => {
+  it('says the response was malformed and points at the headers', () => {
+    const described = describeFetchFailure(parserError());
+
+    expect(described).toMatch(/malformed/i);
+    expect(described).toMatch(/header/i);
+  });
+
+  it('warns that a lenient client will disagree', () => {
+    // Without this the operator checks with curl, sees 200, and concludes the
+    // CLI is wrong about a deployment that really is unreadable.
+    expect(describeFetchFailure(parserError())).toMatch(/curl|browser/i);
+  });
+
+  it('keeps the underlying parser message for the record', () => {
+    expect(describeFetchFailure(parserError())).toContain('Missing expected LF after header value');
+  });
+
+  it('does not use that wording for a connection error', () => {
+    const refused = describeFetchFailure(
+      Object.assign(new Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }),
+    );
+
+    expect(refused).toBe('connection refused');
+    expect(refused).not.toMatch(/malformed/i);
+  });
+
+  it('does not use that wording for a timeout', () => {
+    expect(describeFetchFailure(Object.assign(new Error('x'), { name: 'TimeoutError' }))).not.toMatch(
+      /malformed/i,
+    );
+  });
+});
+
+describe('probe on a protocol error (issue #259)', () => {
+  it('reports a malformed response rather than a status', async () => {
+    const result = await probe('http://x/', {
+      fetch: (() => Promise.reject(parserError())) as unknown as typeof globalThis.fetch,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBeUndefined();
+    expect(result.error).toMatch(/malformed/i);
+  });
+
+  it('does not describe a 503 as malformed', async () => {
+    // A status code means the response parsed fine. Different problem.
+    const result = await probe('http://x/', {
+      fetch: (async () => response(503)) as typeof globalThis.fetch,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(503);
+    expect(result.error).toBeUndefined();
+  });
+});
