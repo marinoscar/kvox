@@ -82,7 +82,7 @@ at once.
 | **Runs on the VPS** | The operator SSHes in with their own credentials, then runs `kvox deploy install`. The CLI never dials out over SSH itself. | An SSH client or library (`ssh2`) in the CLI; a laptop-driven orchestrator; managing the operator's SSH keys. |
 | **Code delivery is git + build** | `git clone`/`git fetch` + `docker compose build` on the server, every time. No image registry in the loop. | Pulling pre-built images from GHCR (see the rejected-alternatives table — the workflow that pushes them exists, but nothing downstream of it does). |
 | **TLS via a shared host proxy** | A single nginx + certbot stack at `/opt/infra/proxy`, outside this repository, terminates TLS for every app on the box. The app stack binds `127.0.0.1` only. | Each app owning its own port 443, its own certbot timer, its own nginx process. |
-| **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. Amended narrowly by §20 (issue #238): when the database itself is the one thing missing, the install wizard may run `CREATE DATABASE` on explicit request — nothing else about this decision changes. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. Roles, extensions, tuning, backups and anything destructive stay entirely out of scope, §20 included. |
+| **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. Amended narrowly **twice**, and only twice. §20 (issue #238): when the database itself is the one thing missing, the install wizard may run `CREATE DATABASE` on explicit request. §21.3 (issue #268): `uninstall --drop-database` may run `DROP DATABASE`, behind a typed confirmation of the database's own name. Nothing else about this decision changes. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. Roles, extensions, tuning, backups and anything destructive stay entirely out of scope, §20 included. |
 
 The git-clone-on-server model is also the answer to "how does this stay safe
 for a fork of the template": nothing about repo URL or ref is hardcoded
@@ -1262,6 +1262,15 @@ and so reported `skip` up to this point — then run for the first time against
 a real database, exactly as they would have if the database had existed
 before the wizard started.
 
+> **⚠ This section's "there is no DROP and there never will be" is now
+> qualified, in exactly one place.** §21.3 (issue #268) adds
+> `uninstall --drop-database`, and the argument below is what bounds it: the
+> asymmetry §20 names — *"an empty database created in error is recoverable by
+> deleting it by hand; the inverse is not"* — is precisely why a drop can never
+> be **offered** the way this creation is. It has to be **asked for by flag**
+> and authorised by typing the database's own name. `install` still contains no
+> DROP, and that has not changed.
+
 **Why offering this is not "managing" the database, in the sense decision 4
 rules out.** By the moment this is offered, `database-credentials` has
 already passed: the supplied user has already authenticated against this
@@ -1325,7 +1334,7 @@ already prints, never escaped and sent anyway.
   the inverse is not, and this design does not put that outcome one
   mis-clicked confirmation away.
 
-## 21. Removing a deployment, and the four things it refuses to remove (issue #261)
+## 21. Removing a deployment, what it refuses to remove, and the two extras that must be asked for (issues #261, #268)
 
 Sections 1–20 describe a CLI that can **create** a deployment and **advance**
 one. Until issue #261 nothing could **remove** one, and the gap was not
@@ -1537,7 +1546,7 @@ property §18 spent an issue removing. An operator who can read the command and
 decide to run it is a better arrangement than a tool that decides for them, and
 the gap it leaves is one printed line.
 
-### 21.2 The four refusals, and why each is a decision rather than an omission
+### 21.2 The refusals, and why each is a decision rather than an omission
 
 **The external database.** Decision 4 of §1 is that deploy *validates* the
 database and never creates or manages it; §20 adds exactly one narrow exception
@@ -1614,6 +1623,122 @@ deploy root goes, rather than being left to append to files that no longer
 exist. A *failed* uninstall stops before that step and keeps its log, which is
 the run anybody wants one for.
 
+### 21.3.1 The two opt-in extras: `--drop-database` and `--purge-storage` (issue #268)
+
+§21.2's first refusal and the "out of scope" line at the end of §21.5 both
+answer the same question — *may `uninstall` destroy the data?* — and both
+answered "no" because the alternative on offer was **a flag with a y/N**.
+Issue #268 changes the alternative, not the answer's reasoning: each extra is
+opt-in, off by default, gated by a typed confirmation of **that resource's own
+real name**, and preceded by an inventory of exactly what it would destroy. An
+operator who wants the deployment *gone*, data included, should not have to
+leave for two other tools and do it from memory.
+
+**Rule 1 — each extra confirms its own resource, never a shared "yes".** The
+database drop takes `--confirm-database <database>`; the purge takes
+`--confirm-bucket <bucket>`. Each value is compared against that one resource
+and nothing else, so a word typed for one **cannot** authorise the other. This
+is the API's own convention stated for a second surface: the Danger Zone's rule
+that *the confirmation IS the scope, uppercased*, exists precisely so a word
+typed for one scope can never authorise another. A single
+`--yes-delete-everything` would be one keystroke authorising two unrecoverable
+acts against two unrelated systems, and it is rejected permanently.
+
+**Rule 2 — the inventory precedes the confirmation.** Objects and bytes per
+prefix, everything in the bucket that is not this application's, the database's
+name, host, size and open session count. An operator cannot consent to a number
+they were never shown. The read is done in `runUninstall` *before* the first
+prompt, is entirely read-only, and runs under `--dry-run` too — which is how an
+operator looks before deciding. A resource that could not be **read** is never
+confirmed and never destroyed: there is no real name to type, and the run
+reports the problem and removes the deployment anyway.
+
+**Rule 3 — the order is fixed, and each step of it is an argument.**
+Containers down → storage → database → deployment.
+
+- *Containers first*, because nothing may write a new object or open a new
+  connection mid-teardown.
+- *Storage before the database*, because the deployment's own rows are the only
+  thing that could ever reconcile an object the purge missed, and the drop
+  destroys them.
+- *The deployment last*, because its `.env` holds the credentials the other two
+  steps authenticate with. Removing it first would leave them with nothing.
+
+**Rule 4 — a failed extra never fails the uninstall.** It is reported under
+`Action required:`. The deployment was going whatever the bucket said, and an
+abort with the containers already stopped would leave an arbitrary amount done
+and nothing said about it.
+
+#### The drop, and the one write against sessions that are not ours
+
+`DROP DATABASE "<name>"` against the `postgres` maintenance database, through
+the same one-off `psql` container §20's `CREATE DATABASE` uses — `postgres`
+because a database cannot be dropped from a session connected to it, which is
+§20's own reason inverted.
+
+`DROP DATABASE` fails with `55006` while **any** session is connected.
+`uninstall` brings this app's containers down first, so the ordinary case is
+clean — but a `psql` left open in another terminal, a pooler, or a second
+replica on another host all block it, and leaving the operator with
+`ERROR: database is being accessed by other users` and no idea which is not an
+outcome worth shipping.
+
+So: **the plain drop is tried first**, and on the ordinary path *no session
+belonging to anybody is touched at all*. Only on `55006` are the blocking
+sessions terminated, scoped `WHERE datname = <this database> AND pid <>
+pg_backend_pid()` — never a bare terminate-all, because the operator authorised
+destroying **one** database and a session against a different one is not theirs
+to end — and **the number ended is reported**, in the result and in the run log.
+Termination is defensible here and only here: by that moment the operator has
+typed this database's own name, and a session connected to a database that is
+about to cease existing cannot lose anything the drop was not already going to
+destroy.
+
+**Rejected: `DROP DATABASE … WITH (FORCE)`.** It does the same thing in one
+statement, and it is PostgreSQL 13+ — this deployment's database is
+operator-supplied and may be older, where it fails as a syntax error saying
+nothing about connections. It is also **silent** about what it killed, which is
+the one property the two-step shape exists to provide.
+
+#### The purge, and why there is no per-app key prefix to lean on
+
+This application writes at **bucket root**, under six prefixes — `avatars/`,
+`database-backups/`, `node-outputs/`, `notes/`, `transcripts/`, `uploads/`.
+There is no per-app namespace, so *"empty the bucket"* and *"delete this app's
+objects"* coincide **only when the bucket is dedicated**. The rule that follows:
+
+> **Delete the prefixes this application writes. Report everything else,
+> without reading into it and without touching it.**
+
+That is complete for a dedicated bucket and safe for a shared one, and where it
+is incomplete it says so by name instead of degrading catastrophically. The
+root listing uses `--delimiter /` deliberately: enumerating a shared bucket
+exhaustively would mean *reading* somebody else's data in order to decide not to
+touch it, and could mean millions of keys. **The bucket itself is never
+deleted** — it is infrastructure the operator created, often with a lifecycle
+policy, a CORS rule and a name that cannot be reclaimed for hours.
+
+**Versioned buckets are the trap this design refuses to fall into.** Deleting
+an object in a versioned bucket writes a **delete marker** and keeps every byte,
+and the bill. So versions and delete markers are removed **by id**, and an
+unreadable `GetBucketVersioning` (an ordinary least-privilege setup) is treated
+as *versioned*, never as off — assuming the cheaper answer is exactly what
+produces silent retention while reporting "emptied".
+
+**The `aws` client is borrowed from a one-off container**, the same argument
+`checks/database.ts` makes for `psql`: docker is already a hard prerequisite,
+the image caches after one pull, and it behaves identically on a host with
+nothing installed. Two alternatives were rejected. Adding `@aws-sdk/client-s3`
+puts ~15 MB of dependency into a CLI installed on a VPS for a teardown almost
+nobody runs — the API package carries it, this one deliberately does not, and
+the worker node never needed it because the **server** signs every URL a node
+uses. Hand-rolling SigV4 over `node:crypto` is the other no-dependency option
+and is worse: versioned listings, pagination, the batch delete's payload and its
+digest are a lot of security-relevant surface exercised only during a teardown,
+which is the single worst moment to discover a signing bug. Credentials are
+passed **by name** into the container's environment and never appear in an argv,
+the rule `runPsql` already states about `PGPASSWORD`.
+
 ### 21.4 `install --fresh`
 
 The convenience path for the case above, and deliberately much narrower.
@@ -1662,10 +1787,24 @@ import cycle.
   editing a cron entry on another app's behalf is a write to shared
   infrastructure — the very thing §21.2 refuses. Printing the one-line command
   leaves the decision where it belongs.
-- **Deleting the deployment's storage bucket or its uploaded objects.** Out of
-  scope and refused for the database's reason: object storage is supplied by
-  the operator (§6's `STORAGE_*` variables), is frequently shared, and this CLI
-  never created it.
+- **Deleting the deployment's storage bucket or its uploaded objects, with no
+  confirmation of its own.** Refused for the database's reason: object storage
+  is supplied by the operator (§6's `STORAGE_*` variables), is frequently
+  shared, and this CLI never created it. **Revisited by issue #268** (§21.3.1),
+  which keeps every word of that and adds the missing piece: the objects may be
+  deleted behind `--purge-storage` plus a typed confirmation of the bucket's own
+  name, only under the six prefixes this application writes, with everything else
+  reported rather than touched — and **the bucket itself is still never
+  deleted**, because that part was never about confirmation.
+- **A single "also delete the data" flag covering both the database and the
+  bucket.** Rejected permanently (§21.3.1, rule 1): one keystroke authorising
+  two unrecoverable acts against two unrelated systems, in a project whose own
+  API convention is that *the confirmation IS the scope, uppercased*.
+- **`DROP DATABASE … WITH (FORCE)`.** Rejected: PostgreSQL 13+ on an
+  operator-supplied server, and silent about which sessions it ended. §21.3.1.
+- **Treating an unreadable `GetBucketVersioning` as "not versioned".** Rejected:
+  it is the cheaper answer and the one that leaves data behind a delete marker
+  while the run reports "emptied". §21.3.1.
 
 ---
 
