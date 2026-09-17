@@ -100,6 +100,14 @@ export interface InstallOptions {
   resume?: boolean | undefined;
   skipDoctor?: boolean | undefined;
   skipProxy?: boolean | undefined;
+  /**
+   * `--create-database`: create the PostgreSQL database when it is absent
+   * (#238). With a terminal the operator is still asked and this only sets
+   * the default; under `--non-interactive` it is the only authorisation
+   * there can be, so without it an unattended run reports the missing
+   * database and stops, exactly as it does today.
+   */
+  createDatabase?: boolean | undefined;
   skipSeed?: boolean | undefined;
   /**
    * `--skip-github`: never consult `gh`, even for a GitHub remote. CI's
@@ -454,6 +462,9 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
                 : { proxyContainer: context.options.proxyContainer ?? context.proxyContainer }),
             },
           },
+          ...(context.options.createDatabase === undefined
+            ? {}
+            : { createDatabase: context.options.createDatabase }),
           ...(context.options.all === undefined ? {} : { all: context.options.all }),
           ...(context.options.nonInteractive === undefined
             ? {}

@@ -34,6 +34,11 @@ import {
   type TemplateSource,
 } from '../../../deploy/remote-template.js';
 import { bundledTemplateFor } from '../../../deploy/bundled-template.js';
+import {
+  createDatabase,
+  creatableDatabase,
+  type DatabaseCreationTarget,
+} from '../../../deploy/database-create.js';
 import { collectServerFacts, unknownServerFacts, type ServerFacts } from '../../../deploy/server-facts.js';
 import { DOMAIN_FIELD } from '../../../deploy/wizard/steps.js';
 import { formatError } from '../../../errors.js';
@@ -166,6 +171,13 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   const [suggestions, setSuggestions] = useState<Readonly<Record<string, Suggestion>>>({});
   const [welcome, setWelcome] = useState<CheckRun>(IDLE);
   const [stepChecks, setStepChecks] = useState<CheckRun>(IDLE);
+  /**
+   * The database this step could create, once `database-exists` has failed
+   * because it is absent (#238). Set only after the READ-ONLY check has
+   * reported — the operator sees the failure first and decides second.
+   */
+  const [creatable, setCreatable] = useState<DatabaseCreationTarget | undefined>(undefined);
+  const [creating, setCreating] = useState<string | undefined>(undefined);
   const [focusKey, setFocusKey] = useState<string | undefined>(undefined);
   const [confirming, setConfirming] = useState(false);
   const [progress, setProgress] = useState<PipelineProgress[]>([]);
@@ -257,7 +269,8 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
       /* Review's ConfirmDialog starts the run; `next()` is never called there. */
     },
     onCancel: onDone,
-    isActive: phase === 'wizard' && !confirming && !stepChecks.running,
+    isActive:
+      phase === 'wizard' && !confirming && !stepChecks.running && creatable === undefined,
   });
 
   const step = steps[wizard.index] ?? steps[0];
@@ -407,6 +420,8 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
   useEffect(() => {
     if (step === undefined) return;
     setStepChecks(IDLE);
+    setCreatable(undefined);
+    setCreating(undefined);
     setFocusKey(undefined);
     setAnswers((current) => prepareStep(current, step, specs));
   }, [step, specs]);
@@ -490,9 +505,54 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
         wizard.next();
         return;
       }
+      // Everything needed to create it is already on screen and already
+      // authenticated, so offer rather than send the operator to another
+      // terminal. `creatableDatabase` answers only for a database that is
+      // genuinely absent — never for some other reason the check failed.
+      const target = creatableDatabase(results, envAnswers(answers));
+      if (target !== undefined) {
+        setCreatable(target);
+        return;
+      }
       setFocusKey(failedField(results, step));
     })();
   }, [answers, checkBase, facts, isMounted, step, welcome, wizard]);
+
+  /**
+   * Creates the offered database, then re-runs the step's checks.
+   *
+   * Re-running rather than assuming success is the point: `database-privileges`
+   * REQUIRES `database-exists`, so until the checks run again it stays skipped
+   * and the operator still has no answer to "will the migrations work" — which
+   * is the question this step exists to settle.
+   */
+  const acceptCreate = useCallback(() => {
+    if (creatable === undefined || step === undefined) return;
+    const target = creatable;
+    setCreating(`Creating ${target.settings.database} …`);
+    void (async () => {
+      const outcome = await createDatabase(
+        { ...checkBase(), env: envAnswers(answers) },
+        target.settings,
+      ).catch((error: unknown) => ({
+        ok: false as const,
+        detail: formatError(error),
+        remedy: 'Create it yourself, then continue.',
+      }));
+      if (!isMounted()) return;
+      setCreatable(undefined);
+      if (outcome.ok) {
+        setCreating(undefined);
+        leaveStep();
+        return;
+      }
+      // Kept on screen beside the failed check rather than replacing it: the
+      // operator now knows both that the database is missing AND that this
+      // account cannot create it, which is a different problem than either.
+      setCreating(`${outcome.detail} — ${outcome.remedy}`);
+      setFocusKey(failedField(stepChecks.results, step));
+    })();
+  }, [answers, checkBase, creatable, isMounted, leaveStep, step, stepChecks.results]);
 
   // ---------------------------------------------------------------------------
   // The run
@@ -860,7 +920,7 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           <Form
             fields={fields}
             values={answers}
-            isActive={!stepChecks.running && !confirming}
+            isActive={!stepChecks.running && !confirming && creatable === undefined}
             {...(focusKey === undefined ? {} : { focusKey })}
             onChange={(key, value) => {
               setAnswers((current) => applyChange(current, key, value, fields, specs));
@@ -870,6 +930,32 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           {stepChecks.running || stepChecks.results.length > 0 ? (
             <Box marginTop={1} flexDirection="column">
               <Checklist items={stepCheckItems(step, stepChecks.results, stepChecks.running)} />
+            </Box>
+          ) : null}
+          {creating !== undefined ? (
+            <Box marginTop={1}>
+              <Text color="yellow">{creating}</Text>
+            </Box>
+          ) : null}
+          {creatable !== undefined ? (
+            <Box marginTop={1}>
+              <ConfirmDialog
+                message={`Create the database ${creatable.settings.database} now?`}
+                detail={[
+                  `${creatable.description} — the credentials above already authenticated against this server.`,
+                  'Only CREATE DATABASE is run. Nothing else on the server is changed, and the migrations still create every table.',
+                ]}
+                confirmLabel="Yes, create it"
+                cancelLabel="No, I will create it myself"
+                onResult={(confirmed) => {
+                  if (confirmed) {
+                    acceptCreate();
+                    return;
+                  }
+                  setCreatable(undefined);
+                  setFocusKey(failedField(stepChecks.results, step));
+                }}
+              />
             </Box>
           ) : null}
         </Box>

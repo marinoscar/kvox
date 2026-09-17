@@ -20,6 +20,7 @@ import {
   type EnvVarMetadata,
   type Suggestion,
 } from './env-metadata.js';
+import { createDatabase, creatableDatabase } from './database-create.js';
 import type { EnvVarSpec } from './env-spec.js';
 import type { SiblingPort } from './layout.js';
 import { unknownServerFacts, type ServerFacts } from './server-facts.js';
@@ -127,6 +128,17 @@ export interface WizardOptions {
    * check runs - the local profile (`init`) has no server to verify against.
    */
   inlineChecks?: WizardCheckOptions | undefined;
+  /**
+   * Authorise creating an absent PostgreSQL database (#238).
+   *
+   * With a terminal this is a DEFAULT, not a decision: the operator is still
+   * asked, because creating a database on somebody's server is not something
+   * to infer from a missing flag. Without one it is the whole authorisation -
+   * `--non-interactive` has nobody to ask, and silently creating a database
+   * an unattended run happened to find missing is exactly the behaviour the
+   * read-only check rule exists to prevent.
+   */
+  createDatabase?: boolean | undefined;
 }
 
 /** Shown in the review step. Never holds a usable secret. */
@@ -281,6 +293,17 @@ export async function runEnvWizard(options: WizardOptions): Promise<WizardResult
       if (!nonInteractive) printResults(run.output, results);
 
       const failed = results.filter((result) => result.status === 'fail');
+
+      // Offered BEFORE the generic "correct them now?" loop, because the
+      // answer is not a value to retype: nothing the operator typed is
+      // wrong, the database simply is not there yet. Sending them round the
+      // step again would ask them to re-enter correct values to reach the
+      // same failure.
+      if (failed.length > 0) {
+        const created = await offerDatabaseCreation(run, options, failed, ctx);
+        if (created) continue;
+      }
+
       if (failed.length > 0 && !nonInteractive) {
         run.output.write(
           `\n  ${failed.length} check(s) failed in the ${step.title} step. The values above can be corrected now.\n`,
@@ -331,6 +354,57 @@ function describeFailures(failed: readonly CompletedCheck[]): string {
 
 function stepContext(run: Run): WizardStepContext {
   return { domain: run.domain, answers: run.values, facts: run.facts };
+}
+
+/**
+ * Offers to create an absent database; true when one was created.
+ *
+ * Returns false for every other failure, for a database that is absent but
+ * whose creation was declined, and - deliberately - for an unattended run
+ * that did not pass `createDatabase`. A CREATE that nobody authorised is the
+ * thing this whole design is arranged to make impossible.
+ */
+async function offerDatabaseCreation(
+  run: Run,
+  options: WizardOptions,
+  failed: readonly CompletedCheck[],
+  ctx: PromptContext | undefined,
+): Promise<boolean> {
+  const inline = options.inlineChecks;
+  if (inline === undefined) return false;
+
+  const target = creatableDatabase(failed, run.values);
+  if (target === undefined) return false;
+
+  if (run.nonInteractive) {
+    if (options.createDatabase !== true) return false;
+  } else {
+    run.output.write(
+      `\n  The database does not exist yet: ${target.description}.\n` +
+        '  The credentials above already authenticated against this server.\n',
+    );
+    const yes = await confirm(
+      `  Create the database ${target.settings.database} now?`,
+      { defaultValue: options.createDatabase ?? false },
+      ctx,
+    );
+    if (!yes) return false;
+  }
+
+  const outcome = await createDatabase(
+    { ...inline.context, env: run.values },
+    target.settings,
+  );
+  if (outcome.ok) {
+    if (!run.nonInteractive) run.output.write(`  ${outcome.detail}\n`);
+    return true;
+  }
+
+  // Reported and then handed back: the step's own failure list is still
+  // accurate, and this adds why the shortcut did not work rather than
+  // replacing it.
+  run.output.write(`  Could not create it: ${outcome.detail}\n  ${outcome.remedy}\n`);
+  return false;
 }
 
 function checkContext(run: Run, inline: WizardCheckOptions): StepCheckContext {

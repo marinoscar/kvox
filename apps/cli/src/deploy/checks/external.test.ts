@@ -194,6 +194,56 @@ describe('database checks', () => {
   });
 });
 
+// checks/types.ts rule 4, made executable: doctor's checks are read-only, so
+// nothing in the registry may ever issue CREATE DATABASE - creating the
+// database is a separate, explicitly-authorised action in database-create.ts
+// (issue #238), never something a check does on its own. This is the guard
+// that stops a future change from quietly moving that create into a check.
+describe('checks never create a database (issue #238)', () => {
+  // Each check is run directly, the same way the `database checks` describe
+  // block above exercises one at a time - `database-reachable` alone does a
+  // real TCP probe rather than going through `runCommand`, so honouring the
+  // registry's `requires` chain via `runChecks` here would make this test's
+  // outcome depend on outbound network access the sandbox does not have.
+  // Calling `.run()` on every check directly keeps it a pure fake-runner test
+  // and exercises every statement each check can possibly issue.
+  const runnable = DATABASE_CHECKS.filter((check) => check.id !== 'database-reachable');
+
+  it('issues no CREATE DATABASE, whatever it finds', async () => {
+    const seen: string[] = [];
+    const ctx = context({
+      env: new Map([...ENV, ['POSTGRES_SSL', 'true']]),
+      runCommand: fakeRunCommand((argv) => {
+        seen.push(argv.join(' '));
+        return { exitCode: 0, stdout: 't' };
+      }),
+    });
+
+    await Promise.all(runnable.map((check) => check.run(ctx)));
+
+    // Sanity: the registry actually ran commands - an empty run would pass
+    // this test for the wrong reason.
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.some((line) => line.includes('CREATE DATABASE'))).toBe(false);
+  });
+
+  it('holds even when every probe fails, which is exactly when a "helpful" create would be tempting', async () => {
+    const seen: string[] = [];
+    const ctx = context({
+      env: new Map([...ENV, ['POSTGRES_SSL', 'true']]),
+      runCommand: fakeRunCommand((argv) => {
+        seen.push(argv.join(' '));
+        return { exitCode: 2, stderr: 'psql: error: FATAL:  database "appdb" does not exist' };
+      }),
+    });
+
+    await Promise.all(runnable.map((check) => check.run(ctx)));
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.some((line) => line.includes('CREATE DATABASE'))).toBe(false);
+  });
+});
+
 // The pgvector preflight (issue #179, epic #165). The reason it is `required`
 // and not advice is in database.ts's header: if the extension cannot be
 // provided, `prisma migrate deploy` aborts, so a warning here would mean doctor
