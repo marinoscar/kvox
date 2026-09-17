@@ -15,6 +15,20 @@ procedure (Section 3) still works and is kept as a documented fallback for a
 deployment that has not touched the admin UI — see Section 1.1 for exactly
 how the two interact when both are present.
 
+**As of issue #241, the `deploy install` environment wizard no longer asks
+about `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` at all — not
+even under `--all`.** This is a change to the *wizard prompt* only, and
+nothing about the four-case precedence in Section 1.1 changed: the three
+variables are still declared in `infra/compose/.env.example`, still read by
+`PushConfigService.resolveFromEnv()` (case 1 — no stored configuration is the
+only case that consults them), and still settable by hand in `.env`. They are
+marked `never: true` in `apps/cli/src/deploy/env-metadata.ts` specifically so
+the wizard stops pointing a first-time install at a mechanism the admin page
+has superseded, not because the mechanism itself was removed. An operator who
+wants Section 3's env-var path still gets it — they just now write the three
+lines into `.env` themselves rather than being prompted for them during
+install.
+
 Source of truth for every claim below:
 
 - `apps/api/src/notifications/push-config.service.ts` — `PushConfigService`,
@@ -271,8 +285,9 @@ key pairs.
 
 ### 3.2 Where the keys go
 
-Set three environment variables (`infra/compose/.env.example:86-93` documents
-them, commented out by default):
+Set three environment variables (`infra/compose/.env.example:98-100` documents
+them, commented out by default, right after the comment block explaining why
+the install wizard no longer prompts for them — issue #241):
 
 ```bash
 VAPID_PUBLIC_KEY=<the generated public key>

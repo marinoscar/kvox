@@ -29,7 +29,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REAL_TEMPLATE = join(HERE, '..', '..', '..', '..', '..', 'infra', 'compose', '.env.example');
 
 const SPECS = parseEnvExample(readFileSync(REAL_TEMPLATE, 'utf8'));
-const ALL_GROUPS = ['observability', 'storage', 'microsoft-oauth'] as const;
+const ALL_GROUPS = ['observability', 'storage'] as const;
 
 function stepOf(key: string, groups: readonly (typeof ALL_GROUPS)[number][] = ALL_GROUPS): string[] {
   return resolveSteps(INSTALL_WIZARD_STEPS, SPECS, { groups })
