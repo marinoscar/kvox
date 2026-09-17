@@ -12,6 +12,7 @@ import {
   appRootFor,
   listInstalledApps,
   locateApp,
+  locateAppFromCwd,
   locateInstalledApp,
   projectNameFor,
   siblingBindPorts,
@@ -203,6 +204,113 @@ describe('locateApp', () => {
     expect((error as Error).message).toContain('alpha');
     expect((error as Error).message).toContain('beta');
     expect((error as Error).message).toContain('--name');
+  });
+});
+
+// =============================================================================
+// Issue #266: the deployment the current directory is standing in.
+//
+// The reported failure is an operator in `/opt/infra/apps/kvox` - a deploy
+// root with a state file - being told to name the repository with --repo.
+// These cases pin the rank that answers instead, and the bound that keeps it
+// from answering about directories it has no business interpreting.
+// =============================================================================
+describe('locateAppFromCwd (issue #266)', () => {
+  it('answers the deployment when cwd IS the deploy root', () => {
+    const root = appsRoot();
+    const deployRoot = install(root, 'kvox');
+
+    const found = locateAppFromCwd({ appsRoot: root, cwd: deployRoot });
+
+    expect(found?.layout).toEqual({ name: 'kvox', appsRoot: root, deployRoot });
+    // The caller reads the repository off this, rather than off a git remote.
+    expect(found?.state.repoUrl).toBe('https://example.test/o/r');
+  });
+
+  it('answers the same deployment from a subdirectory of it', () => {
+    const root = appsRoot();
+    const deployRoot = install(root, 'kvox');
+    const inside = join(deployRoot, 'repo', 'infra', 'compose');
+    mkdirSync(inside, { recursive: true });
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: inside })?.layout.deployRoot).toBe(deployRoot);
+  });
+
+  it('stops at the apps root: standing there resolves nothing', () => {
+    const root = appsRoot();
+    install(root, 'kvox');
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: root })).toBeUndefined();
+  });
+
+  it('stops at the apps root: standing ABOVE it resolves nothing', () => {
+    // The reported shape - /opt/infra containing /opt/infra/apps - where an
+    // unbounded walk would keep climbing into the operator's own territory.
+    const parent = mkdtempSync(join(tmpdir(), 'appctl-infra-'));
+    const root = join(parent, 'apps');
+    mkdirSync(root, { recursive: true });
+    install(root, 'kvox');
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: parent })).toBeUndefined();
+  });
+
+  it('resolves nothing from a directory outside the apps root entirely', () => {
+    const root = appsRoot();
+    install(root, 'kvox');
+    const elsewhere = mkdtempSync(join(tmpdir(), 'appctl-elsewhere-'));
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: elsewhere })).toBeUndefined();
+  });
+
+  it('resolves nothing under the apps root when no ancestor holds a state file', () => {
+    const root = appsRoot();
+    const bare = join(root, 'not-an-app', 'deeper');
+    mkdirSync(bare, { recursive: true });
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: bare })).toBeUndefined();
+  });
+
+  it('takes the NEAREST deployment when one is nested inside another', () => {
+    const root = appsRoot();
+    const outer = install(root, 'outer');
+    const inner = join(outer, 'inner');
+    mkdirSync(inner, { recursive: true });
+    writeState({
+      version: DEPLOY_STATE_VERSION,
+      repoUrl: 'https://example.test/o/inner',
+      ref: 'main',
+      commitSha: 'b'.repeat(40),
+      bindPort: 3600,
+      deployRoot: inner,
+      installedAt: '2026-01-01T00:00:00.000Z',
+      lastDeployedAt: '2026-01-01T00:00:00.000Z',
+      lastCommand: 'install',
+      appctlVersion: '1.0.0',
+      name: 'inner',
+      appsRoot: root,
+    });
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: inner })?.layout.name).toBe('inner');
+  });
+
+  it('names the deployment after its directory when the state predates #119', () => {
+    const root = appsRoot();
+    const deployRoot = install(root, 'legacy', { name: undefined });
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: deployRoot })?.layout.name).toBe('legacy');
+  });
+
+  it('walks past an unreadable state file rather than raising', () => {
+    // Same posture as listInstalledApps: a file this build cannot interpret
+    // is reported by whichever command then acts on the deployment, not by
+    // the lookup that found the directory.
+    const root = appsRoot();
+    const deployRoot = install(root, 'kvox');
+    const broken = join(deployRoot, 'broken');
+    mkdirSync(broken, { recursive: true });
+    writeFileSync(deployStatePath(broken), '{ not json');
+
+    expect(locateAppFromCwd({ appsRoot: root, cwd: broken })?.layout.deployRoot).toBe(deployRoot);
   });
 });
 

@@ -25,11 +25,18 @@ import {
   composeArgv,
   composeCwd,
   defaultRootFor,
+  describeLayoutSource,
   runInstall,
   secretsFrom,
   type InstallOptions,
 } from './install.js';
-import { DEPLOY_STATE_VERSION, readState, writeState, type DeployState } from './state.js';
+import {
+  DEPLOY_STATE_VERSION,
+  deployStatePath,
+  readState,
+  writeState,
+  type DeployState,
+} from './state.js';
 import {
   FAKE_APP_VERSION,
   fakeVps,
@@ -1154,14 +1161,170 @@ describe('runInstall --resume without state (#249)', () => {
   // from --repo', 'GUESSED from the git checkout...' and 'taken from
   // --name/--root' - and prove they really are distinguishable (no two share
   // a substring the others lack, e.g. only the guess uses "guess" at all).
-  // The fourth wording, 'taken from an existing deployment state', is
-  // produced only when `resolveRepoTarget` is called with a `state` option -
-  // which `runInstall` never does (`resolveInstallLayout` and `resolveTarget`
-  // in install.ts pass only `cwd`/`appsRoot`/`runCommand`/`repoFlag`/
-  // `refFlag`). That branch is unreachable through the public `runInstall`
-  // entry point and `describeLayoutSource` itself is not exported, so it is
-  // not covered here - covering it would require a source change, and this
-  // pass is test-files-only.
+  //
+  // The fourth wording, the state file, is STILL not reachable through
+  // `runInstall`, and since #266 that is a property rather than an omission:
+  // `resolveInstallLayout` produces `source: 'state'` only by finding a state
+  // file, and finding one is exactly what stops this refusal from firing.
+  // `describeLayoutSource` is exported and covered directly below.
+});
+
+describe('describeLayoutSource (#249, #266)', () => {
+  const root = '/opt/infra/apps/kvox';
+
+  it('names the state file rather than calling it a guess', () => {
+    // The wording the #266 rank produces. An operator who is told where the
+    // answer came from can `cat` it; "an existing deployment state" cannot be
+    // opened, and "GUESSED" would be a lie about a file this CLI wrote.
+    const described = describeLayoutSource(
+      { url: 'https://example.test/o/kvox.git', ref: 'main', source: 'state' },
+      root,
+    );
+
+    expect(described).toBe(`taken from the deployment state at ${deployStatePath(root)}`);
+    expect(described).not.toMatch(/guess/i);
+  });
+
+  it('still calls the ambient git checkout a guess, and --repo a derivation', () => {
+    expect(
+      describeLayoutSource({ url: 'https://example.test/o/r.git', ref: 'main', source: 'git-remote' }, root),
+    ).toMatch(/GUESSED/);
+    expect(
+      describeLayoutSource({ url: 'https://example.test/o/r.git', ref: 'main', source: 'flag' }, root),
+    ).toBe('derived from --repo');
+    expect(describeLayoutSource(undefined, root)).toBe('taken from --name/--root');
+  });
+});
+
+// =============================================================================
+// Issue #266: `--resume` run from inside the deploy root it should resume.
+//
+// The reported failure is the #247 guard firing on a directory that is not a
+// guess at all: `/opt/infra/apps/kvox` is a deploy root with a state file,
+// and the CLI walked PAST it into the operator's infrastructure repository at
+// `/opt/infra` before refusing. These cases stand in exactly that shape - an
+// infra checkout containing the apps root, a deployment underneath it - and
+// assert that the state file beside the operator is what answers.
+// =============================================================================
+describe('runInstall --resume from inside the deploy root (#266)', () => {
+  /** The reported server: an infra git checkout containing the apps root. */
+  function infraServer(appName = 'kvox'): { appsRoot: string; deployRoot: string } {
+    const tmp = mkdtempSync(join(tmpdir(), 'appctl-cwd-state-'));
+    const infra = join(tmp, 'infra');
+    const appsRoot = join(infra, 'apps');
+    // An empty `.git` is all `findGitRoot` looks for (existsSync), which is
+    // what makes /opt/infra look like infrastructure-as-code here.
+    mkdirSync(join(infra, '.git'), { recursive: true });
+    const deployRoot = installedRoot(join(appsRoot, appName));
+    return { appsRoot, deployRoot };
+  }
+
+  it('resolves the deployment it is standing in instead of refusing to guess', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: deployRoot,
+      resume: true,
+      // A state file answers with no git at all: `resolveRepoTarget` returns
+      // at its `state` rank before it runs a command.
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // The reported message, in full: it must not appear at all.
+    expect(String((error as Error | undefined)?.message ?? '')).not.toContain(
+      'Refusing to guess what to deploy',
+    );
+    // Past resolution and into the run: `openJournal` is the first thing on
+    // the far side of the resume guard that leaves a mark on disk.
+    expect(existsSync(join(deployRoot, 'logs'))).toBe(true);
+  });
+
+  it('resolves the same deployment from a subdirectory of it', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+    const inside = join(deployRoot, 'repo', 'infra', 'compose');
+    mkdirSync(inside, { recursive: true });
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: inside,
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(String((error as Error | undefined)?.message ?? '')).not.toContain(
+      'Refusing to guess what to deploy',
+    );
+    expect(existsSync(join(deployRoot, 'logs'))).toBe(true);
+  });
+
+  it('still refuses when cwd is the apps root itself: nothing there names a deployment', async () => {
+    // #247's regression guard, unchanged. The apps root holds no state file
+    // of its own, so the walk stops with nothing and the ambient git lookup
+    // finds the infra repository exactly as it did before.
+    const { appsRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: appsRoot,
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Refusing to guess what to deploy');
+  });
+
+  it('lets --repo outrank the state file in the directory it is run from', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: deployRoot,
+      repo: 'https://example.test/o/flagged.git',
+      ref: 'main',
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // --repo names `flagged`, so the deploy root is <apps-root>/flagged -
+    // which has no state, so #249's refusal fires and names it.
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Nothing to resume');
+    expect((error as Error).message).toContain(join(appsRoot, 'flagged'));
+    expect((error as Error).message).toContain('derived from --repo');
+  });
+
+  it('lets --name outrank the state file in the directory it is run from', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: deployRoot,
+      name: 'other',
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Nothing to resume');
+    expect((error as Error).message).toContain(join(appsRoot, 'other'));
+  });
 });
 
 describe('compose invocation', () => {

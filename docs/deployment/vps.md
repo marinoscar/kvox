@@ -216,6 +216,14 @@ SSH session), and everything below runs **on the VPS**.
    re-run. Add `--resume` to skip straight to the step that failed rather
    than re-checking everything before it.
 
+   You can run that from inside the deployment itself — `cd
+   /opt/infra/apps/<name>` (or anywhere below it) and `kvox deploy install
+   --resume`. The state file there names the deployment, so nothing else has
+   to be re-supplied; this works even when `/opt/infra` is itself a git
+   repository, which used to make the CLI refuse (issue #266). From the apps
+   root itself, or from anywhere that names no deployment, pass `--name
+   <app>` (or `--root <dir>`) as before.
+
 4. **Once it succeeds**, do not treat a clean `install` as "the site is
    live and correct" until you've done section 4 — the seed does not create
    anyone who can log in.
