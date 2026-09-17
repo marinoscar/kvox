@@ -20,6 +20,7 @@ import {
   unquote,
   type EnvVarSpec,
 } from './env-spec.js';
+import { UsageError } from '../errors.js';
 import { unknownServerFacts } from './server-facts.js';
 
 const REAL_TEMPLATE = resolve(
@@ -530,5 +531,45 @@ describe('CRLF round-trip (issue #259)', () => {
     expect([...twice.entries()]).toEqual([...once.entries()]);
     // Stable: a third pass changes nothing either.
     expect(parseEnvFile(serializeEnvFile(twice, specs))).toEqual(twice);
+  });
+});
+
+describe('serializeEnvFile refuses control characters (issue #259)', () => {
+  const specs = parseEnvExample(FIXTURE);
+
+  it('refuses a value containing a carriage return, naming the key', () => {
+    const attempt = (): string =>
+      serializeEnvFile(new Map([['STORAGE_CSP_ORIGIN', 'https://cdn.test\r']]), specs);
+
+    expect(attempt).toThrow(UsageError);
+    expect(attempt).toThrow(/STORAGE_CSP_ORIGIN/);
+    expect(attempt).toThrow(/carriage return/i);
+  });
+
+  it('refuses a value containing a line feed, naming the key', () => {
+    const attempt = (): string => serializeEnvFile(new Map([['NODE_ENV', 'a\nb']]), specs);
+
+    expect(attempt).toThrow(UsageError);
+    expect(attempt).toThrow(/NODE_ENV/);
+    expect(attempt).toThrow(/line feed/i);
+  });
+
+  it('refuses a key the template does not know about too', () => {
+    // The "Not in .env.example" branch renders values through the same
+    // function and must not be a hole in the net.
+    expect(() => serializeEnvFile(new Map([['SENTRY_DSN', 'x\ry']]), specs)).toThrow(UsageError);
+  });
+
+  it('still writes every legitimate value, including quoted whitespace', () => {
+    // renderValue's existing purpose must survive: a value quoted because it
+    // has significant whitespace still round-trips exactly.
+    const values = new Map([
+      ['NODE_ENV', ' padded '],
+      ['HASH_MARK', 'a # b'],
+      ['APP_URL', 'https://app.example.test'],
+      ['MAX_FILE_SIZE', ''],
+    ]);
+
+    expect(parseEnvFile(serializeEnvFile(values, specs))).toEqual(values);
   });
 });

@@ -13,8 +13,12 @@
 // above almost every key. A fork that adds SENTRY_DSN gets a sensible prompt
 // with no change to this CLI.
 //
-// Everything here is pure. No filesystem, no prompting, no process.env.
+// Everything here is pure. No filesystem, no prompting, no process.env. The
+// one thing it does besides compute is REFUSE: serializeEnvFile throws on a
+// value it cannot honestly write (issue #259, argued at assertWritableValue).
 // =============================================================================
+
+import { UsageError } from '../errors.js';
 
 export interface EnvVarSpec {
   key: string;
@@ -223,8 +227,65 @@ export function parseEnvFile(contents: string): Map<string, string> {
   return values;
 }
 
+/** The control characters a `.env` value can never carry. */
+const CONTROL_CHARACTER_NAMES: ReadonlyMap<string, string> = new Map([
+  ['\r', 'a carriage return (CR)'],
+  ['\n', 'a line feed (LF)'],
+]);
+
+/**
+ * Refuses to write a value carrying CR or LF. The safety net for issue #259.
+ *
+ * REFUSE RATHER THAN STRIP, for three reasons, in order of weight:
+ *
+ * 1. THE CAPABILITY DOES NOT EXIST, so refusing withholds nothing. A `.env`
+ *    is a line-oriented format: every reader of it, this module included,
+ *    splits on newlines before it looks at anything. A value containing one
+ *    cannot round-trip through the file by construction - `KEY=a\nb` is
+ *    written, read back as `KEY=a`, and `b` is silently discarded as an
+ *    unparseable line. Stripping would not be preserving a value the format
+ *    supports; it would be picking, quietly, which half of it to lose.
+ *
+ * 2. STRIPPING FAILS INVISIBLY, WHICH IS THE PROPERTY THAT CAUSED #259. The
+ *    original bug was not that a carriage return existed - it was that
+ *    `renderValue` QUOTED it, wrote it back looking deliberate, and nothing
+ *    ever said so. A silent strip has the same shape: the operator reads a
+ *    plausible-looking `.env`, never learns their input was altered, and
+ *    debugs the resulting behaviour against a value they believe they set.
+ *    A wrong value nobody is told about is worse than a refused install.
+ *
+ * 3. THE COST ASYMMETRY FAVOURS STOPPING. A refusal here is expensive - it
+ *    can land after a four-minute build and cost a re-run. But the measured
+ *    alternative is what #259 actually cost: an install reported as failed on
+ *    a deployment that had been serving correctly for eleven hours, with a
+ *    message (`Missing expected LF after header value`) pointing away from
+ *    the cause. Cheap and loud beats expensive and silent.
+ *
+ * With `splitLines` above in place there is no parse path left that can
+ * produce such a value, so in practice this fires only on an operator's own
+ * `--answer`/`--answers-file` input (`ANSWER_FLAG` captures with `[\s\S]*`
+ * and sanitises nothing) or on a fork's own code - both cases where a human
+ * chose the value and should be told, not overruled.
+ */
+function assertWritableValue(key: string, value: string): void {
+  for (const [character, name] of CONTROL_CHARACTER_NAMES) {
+    const index = value.indexOf(character);
+    if (index === -1) continue;
+
+    throw new UsageError(
+      `${key} contains ${name} at position ${index}, which cannot be written to a .env file.\n` +
+        `A .env is line-oriented, so such a value cannot be read back as written - and a control\n` +
+        `character that reaches a generated config (an nginx header, for one) makes the output\n` +
+        `malformed in ways that are hard to trace back here.\n` +
+        `Remove it from the value and re-run. If it came from --answer or --answers-file, check\n` +
+        `that file's line endings: a CRLF file edited on Windows is the usual source.`,
+    );
+  }
+}
+
 /** Quotes only when the value would otherwise be re-read incorrectly. */
-function renderValue(value: string): string {
+function renderValue(key: string, value: string): string {
+  assertWritableValue(key, value);
   if (value === '') return '';
   // A `#` after whitespace would be re-read as a comment, and leading or
   // trailing whitespace would be silently kept. Quote in those cases only, so
@@ -240,6 +301,9 @@ function renderValue(value: string): string {
  *
  * Diffability is the point: an operator should be able to compare a generated
  * .env against .env.example and see only their own answers.
+ *
+ * Throws `UsageError` naming the key if any value carries CR or LF - see
+ * `assertWritableValue` for why that is a refusal rather than a repair.
  */
 export function serializeEnvFile(
   values: ReadonlyMap<string, string>,
@@ -262,7 +326,7 @@ export function serializeEnvFile(
       }
     }
 
-    lines.push(`${spec.key}=${renderValue(values.get(spec.key) as string)}`);
+    lines.push(`${spec.key}=${renderValue(spec.key, values.get(spec.key) as string)}`);
     written.add(spec.key);
   }
 
@@ -276,7 +340,7 @@ export function serializeEnvFile(
     lines.push('# Not in .env.example');
     lines.push(`# ${'-'.repeat(77)}`);
     for (const key of extra) {
-      lines.push(`${key}=${renderValue(values.get(key) as string)}`);
+      lines.push(`${key}=${renderValue(key, values.get(key) as string)}`);
     }
   }
 
