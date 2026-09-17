@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { readEnvFile } from './env-file.js';
+import { composeEnvPath, envFilePath, readEnvFile } from './env-file.js';
 
 // =============================================================================
 // Is there a deployment here?  (issue #285, epic #168)
@@ -115,6 +115,70 @@ export function envFacts(deployRoot: string): EnvFacts {
     ...(Number.isInteger(port) && port > 0 ? { bindPort: port } : {}),
     ...(appUrl === undefined || appUrl === '' ? {} : { appUrl }),
   };
+}
+
+// =============================================================================
+// Is this one of OUR deployments?  (issue #290, epic #168)
+// =============================================================================
+//
+// A SECOND PREDICATE, NARROWER THAN THE GATE ABOVE, AND NOT A TIGHTENING OF
+// IT. The gate answers "is there a deployment here?", which is the question
+// ADOPTION asks about a directory an operator has already named, and it must
+// stay as loose as it is: `adopt.ts` and `listInstalledApps` share it so
+// discovery and adoption can never disagree about what a deployment is.
+//
+// ENUMERATION asks a different question. `listInstalledApps` reads every
+// subdirectory of the apps root and speaks for the answer in an ambiguity
+// refusal, and on a host that runs several unrelated applications under one
+// apps root - the documented multi-app layout - a stranger's `repo/` + `.env`
+// passes the gate and is named in a refusal about THIS CLI's deployments.
+// "Is there a deployment here?" and "is this one of mine?" are different
+// questions; this is the second one, and it is used ONLY where a directory
+// was never named by anybody (enumeration, and the cwd rank that resolves
+// one deployment out of many). `adoptDeployment` does not consult it, so
+// `--root <a-stranger's-directory>` is refused or adopted exactly as before.
+//
+// THE MARKER IS `DEPLOY_ROOT`, AND THE CHOICE IS DELIBERATE. Install writes
+// `COMPOSE_PROJECT_NAME` and `DEPLOY_ROOT` into the `.env` together (#142,
+// `install.ts`'s `environment` step), and `update` re-pins `DEPLOY_ROOT` on
+// every run, so a deployment updated by any build since #142 carries it even
+// if it was installed before. `COMPOSE_PROJECT_NAME` is NOT used as a second
+// marker: it is a variable Docker Compose itself defines, so a foreign app
+// may legitimately set it, and it can never be present on one of ours
+// without `DEPLOY_ROOT` beside it - it would widen the false accepts and
+// narrow nothing.
+//
+// A GENUINE DEPLOYMENT MUST NOT VANISH FROM THE LISTING, which is why the
+// pre-#142 layout counts on its own. Before #142 the `.env` lived INSIDE the
+// clone at `repo/infra/compose/.env` and neither marker existed; a
+// deployment from that era whose state file has since been lost, and which
+// has not been updated since, would otherwise disappear from a listing it
+// used to appear in - regressing #285 in the opposite direction. An `.env`
+// read from the legacy path is therefore accepted as its own marker: it is
+// this template's own layout, it is where OURS used to live, and the cost of
+// being wrong about it is one extra name in a listing, which is strictly
+// better than hiding a real deployment.
+// =============================================================================
+
+/** The `.env` key install writes and update re-pins; not in `.env.example`. */
+export const CLI_ENV_MARKER = 'DEPLOY_ROOT';
+
+/**
+ * True when the deployment's own `.env` shows this CLI wrote it.
+ *
+ * Callers: `listInstalledApps` and the cwd rank in `layout.ts`. Never
+ * `adopt.ts` - see the header above. Reads only; a missing `.env`, or one
+ * that cannot be read, is `false` rather than an error, the same posture
+ * every other read in this module takes.
+ */
+export function envWrittenByThisCli(deployRoot: string): boolean {
+  const env = readEnvFileQuietly(deployRoot);
+  if (env === undefined) return false;
+  if (env.has(CLI_ENV_MARKER)) return true;
+
+  // The pre-#142 layout: no `<root>/.env` at all, and the file `readEnvFile`
+  // just succeeded on is the one inside the clone.
+  return !existsSync(envFilePath(deployRoot)) && existsSync(composeEnvPath(deployRoot));
 }
 
 /**

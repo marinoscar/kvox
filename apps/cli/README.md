@@ -377,8 +377,8 @@ in `/api`.
 kvox deploy doctor
 ```
 
-Seven subcommands (`doctor`, `install`, `uninstall`, `update`, `status`,
-`about`, `certs`) take this repository — or, far more likely, your fork of it — from an empty
+Eight subcommands (`doctor`, `install`, `uninstall`, `update`, `status`,
+`about`, `list`, `certs`) take this repository — or, far more likely, your fork of it — from an empty
 VPS to running, migrated, seeded, and served over HTTPS at a real domain, and
 back to the latest revision on every subsequent deploy. They run **on the
 VPS itself**: SSH in with your own credentials, build `kvox` from a checkout
@@ -398,7 +398,7 @@ scripting:
 |---|---|---|
 | `0` | Success | all |
 | `1` | A step failed / installed but unhealthy | `bootstrap-vps.sh`; `status` (unhealthy); `certs status` (a certificate has expired) |
-| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about` (nothing under `--apps-root`/`--root`); `certs status` (no certificates under the proxy) |
+| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about`, `list` (nothing under `--apps-root`/`--root`); `certs status` (no certificates under the proxy) |
 | `6` (`EXIT.PRECONDITION`) | A required `doctor` check failed before anything was changed | `doctor`; `install`/`update`'s own preflight step (a logged-out `gh` stops `install`/`update` here too, before anything is cloned) |
 
 `about` is the one exception worth calling out: it is informational and
@@ -507,10 +507,23 @@ The same three flags select the app on every subcommand:
 ```
 
 `install` defaults `--name` to the repository's own name (`…/kvox.git`
-installs as `kvox`). `update`, `status` and `doctor` default to the one app
-already installed under `--apps-root`; with several installed they refuse and
-list them until `--name` says which. `--root` is the escape hatch that names
-the full path outright.
+installs as `kvox`). With neither flag, every other subcommand resolves in
+this order:
+
+1. `--root` — a path, verbatim. The escape hatch.
+2. `--name` — a name under the apps root. It still wins from anywhere, so
+   `--name vault` typed inside another app's folder means `vault`.
+3. **The app you are standing in.** From `/opt/infra/apps/kvox`, or anywhere
+   below it, the commands act on `kvox` — no flag needed, however many apps
+   the server hosts. The walk stops at the apps root, so standing *there*, or
+   above it, resolves nothing; an app installed outside the apps root with
+   `--root` is not found this way either, because `--root` is how it was
+   named in the first place.
+4. The one app installed under `--apps-root`.
+
+With several installed, none named, and none of them the folder you are in,
+they refuse and list them until `--name` says which.
+`kvox deploy list` shows what they found.
 
 ### Checking prerequisites
 
@@ -1141,6 +1154,17 @@ About page as a fact. Absent means unknown, `deploy-info/info.json` carries
 `adoptedAt` — when the bookkeeping was rebuilt, which is not the same thing as
 when the deployment was made.
 
+One directory under the apps root is **not** enumerated as a deployment,
+however: somebody else's application, deployed by the same one-app-one-folder
+convention. It would pass the gate above — a clone and an `.env` is what a
+deployment looks like from outside — so listing it would name a stranger's app
+in a refusal about yours. An unrecorded deployment is therefore counted as
+yours when its `.env` carries `DEPLOY_ROOT`, which `install` writes and every
+`update` re-pins, or when the `.env` is still at the pre-`DEPLOY_ROOT`
+location inside the clone. This is enumeration only: `--root` and `--name`
+name a directory outright and adopt exactly as they always did, and listing
+one extra name is a better failure than hiding a real deployment.
+
 It says so once, before the pipeline runs, listing every field and its source;
 the same block goes into the run journal, and `--json` carries it as `adopted`
 on the result. Three things make it refuse rather than guess: a clone with no
@@ -1346,6 +1370,37 @@ Options:
   --server <url>     Ask this API about itself instead of the deployment's own
                      domain
   --json             Print the report on stdout
+```
+
+### Every app on this server
+
+```bash
+kvox deploy list
+kvox deploy list --json | jq -r '.apps[].name'
+```
+
+The inventory of `--apps-root`: one block per app, with its name, deploy root,
+revision and ref, bind port, domain, when it was last deployed, and whether
+that came from the app's own `.appctl-deploy.json` or was inferred from the
+clone and the `.env` (see [Adopting a deployment with no state
+file](#adopting-a-deployment-with-no-state-file) above).
+
+There is no central registry behind it and deliberately never will be: the
+registry is the apps root itself, one record per folder, next to the thing it
+describes. So this reads the filesystem and nothing else — no container, no
+network, no `git` — which is why it is instant with a dozen apps installed and
+answers the same when Docker is down, and also why an app with no state file
+reports no revision. One `kvox deploy update` on it rebuilds the record, after
+which it reports like any other.
+
+`--name`/`--root` are deliberately absent: this is the inventory, and both
+flags name one app. Exits `2` when nothing is installed under `--apps-root`.
+
+```
+Options:
+  --apps-root <dir>  Directory that holds one folder per app (default:
+                     "/opt/infra/apps")
+  --json             Print the inventory on stdout
 ```
 
 ### Certificates
