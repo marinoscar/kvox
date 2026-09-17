@@ -456,6 +456,34 @@ describe('parseDf', () => {
 });
 
 describe('bind-port-free', () => {
+  /**
+   * A docker daemon holding `containers`, answering the two commands
+   * `dockerPortClaims` issues: `docker ps -aq`, then `docker inspect` rendered
+   * through the `HostConfig.PortBindings` template. The lines are that
+   * template's real shape - `/<name>|<compose project>|<ports>` - so a fixture
+   * here cannot drift from what the parser is asserted against in
+   * docker-ports.test.ts.
+   */
+  function dockerHolding(
+    containers: readonly { name: string; project?: string; ports: readonly number[] }[],
+  ): typeof import('../executor.js').runCommand {
+    return fakeRunCommand((argv) => {
+      const line = argv.join(' ');
+      if (line.startsWith('docker ps -aq')) {
+        return { exitCode: 0, stdout: containers.map((_, index) => `id${index}`).join('\n') };
+      }
+      if (line.startsWith('docker inspect')) {
+        return {
+          exitCode: 0,
+          stdout: containers
+            .map((c) => `/${c.name}|${c.project ?? ''}|${c.ports.join(' ')}`)
+            .join('\n'),
+        };
+      }
+      return HEALTHY(argv);
+    });
+  }
+
   it('passes when the port is free', async () => {
     const result = await find('bind-port-free').run(context({ portFree: async () => true }));
     expect(result.status).toBe('pass');
@@ -467,19 +495,31 @@ describe('bind-port-free', () => {
     const result = await find('bind-port-free').run(
       context({
         portFree: async () => false,
-        runCommand: fakeRunCommand((argv) =>
-          argv.join(' ').startsWith('docker ps')
-            ? { exitCode: 0, stdout: 'demo-nginx-1' }
-            : HEALTHY(argv),
-        ),
+        runCommand: dockerHolding([{ name: 'demo-nginx-1', project: 'demo', ports: [3535] }]),
       }),
     );
 
     expect(result.status).toBe('pass');
     expect(result.detail).toContain('this deployment');
+    expect(result.detail).toContain('demo-nginx-1');
   });
 
-  it('recognises its own containers by the compose project name, not the directory', async () => {
+  it('tells the operator that `up -d` replaces its own container, not to move the port', async () => {
+    // Issue #262 item 4: "choose another port, or stop whatever holds it" is
+    // impossible advice when the thing holding the port is the app being
+    // installed.
+    const result = await find('bind-port-free').run(
+      context({
+        portFree: async () => false,
+        runCommand: dockerHolding([{ name: 'demo-nginx-1', project: 'demo', ports: [3535] }]),
+      }),
+    );
+
+    expect(result.detail).toContain('up -d');
+    expect(result.detail).not.toContain('APP_BIND_PORT');
+  });
+
+  it('recognises its own containers by the compose project label, not the directory', async () => {
     // The project is pinned with `-p <name>` (#119); a deployment whose
     // directory happens to differ from its name still owns `<name>-nginx-1`.
     const result = await find('bind-port-free').run(
@@ -487,65 +527,109 @@ describe('bind-port-free', () => {
         deployRoot: '/srv/somewhere-else',
         name: 'demo',
         portFree: async () => false,
-        runCommand: fakeRunCommand((argv) =>
-          argv.join(' ').startsWith('docker ps')
-            ? { exitCode: 0, stdout: 'demo-nginx-1' }
-            : HEALTHY(argv),
-        ),
+        runCommand: dockerHolding([{ name: 'demo-nginx-1', project: 'demo', ports: [3535] }]),
       }),
     );
 
     expect(result.status).toBe('pass');
   });
 
-  it('does not claim a container that merely contains the name', async () => {
+  it('does not claim another project\'s container that merely starts with the name', async () => {
+    // The prefix match this replaced misfired in BOTH directions. An app
+    // genuinely called `app` claimed `app-other-nginx-1`, which belongs to the
+    // project `app-other` and is nothing of ours.
     const result = await find('bind-port-free').run(
       context({
         name: 'app',
         portFree: async () => false,
-        runCommand: fakeRunCommand((argv) =>
-          argv.join(' ').startsWith('docker ps')
-            ? { exitCode: 0, stdout: 'other-app-nginx-1' }
-            : HEALTHY(argv),
-        ),
+        runCommand: dockerHolding([
+          { name: 'app-other-nginx-1', project: 'app-other', ports: [3535] },
+        ]),
       }),
     );
 
     expect(result.status).toBe('fail');
-    expect(result.detail).toContain('other-app-nginx-1');
+    expect(result.detail).toContain('app-other-nginx-1');
+    expect(result.remedy).toContain('APP_BIND_PORT');
   });
 
-  it('cannot recognise anything as its own before a name is chosen', async () => {
+  it('skips rather than fails while the app name is still unresolved (#262: the Welcome step ran the doctor against the `app` placeholder and refused the reinstall)', async () => {
+    // The reported failure, exactly: the operator reinstalls `kvox`, the
+    // doctor runs on mount before the App name field on the SAME screen has
+    // been typed into, and the deployment's own nginx is reported as a
+    // foreign conflict - as a REQUIRED failure that gates the whole install.
+    // A check whose answer depends on the app name has no answer yet.
     const result = await find('bind-port-free').run(
       context({
         name: undefined,
         portFree: async () => false,
-        runCommand: fakeRunCommand((argv) =>
-          argv.join(' ').startsWith('docker ps')
-            ? { exitCode: 0, stdout: 'demo-nginx-1' }
-            : HEALTHY(argv),
-        ),
+        runCommand: dockerHolding([{ name: 'kvox-nginx-1', project: 'kvox', ports: [3535] }]),
       }),
     );
 
-    expect(result.status).toBe('fail');
+    expect(result.status).toBe('skip');
+    expect(result.detail).toContain('no app name yet');
+    // Skips never gate the install; that is the whole point of the fix.
+    expect(checksPassed([{ ...result, id: 'bind-port-free', title: '', severity: 'required', durationMs: 0 }])).toBe(true);
   });
 
-  it('fails when the port belongs to something else, naming it', async () => {
+  it('fails when the port belongs to another compose project, naming it', async () => {
     const result = await find('bind-port-free').run(
       context({
         portFree: async () => false,
-        runCommand: fakeRunCommand((argv) =>
-          argv.join(' ').startsWith('docker ps')
-            ? { exitCode: 0, stdout: 'someone-elses-app' }
-            : HEALTHY(argv),
-        ),
+        runCommand: dockerHolding([
+          { name: 'someone-elses-app', project: 'elsewhere', ports: [3535] },
+        ]),
       }),
     );
 
     expect(result.status).toBe('fail');
     expect(result.detail).toContain('someone-elses-app');
     expect(result.remedy).toContain('APP_BIND_PORT');
+  });
+
+  it('ignores a container holding a DIFFERENT port', async () => {
+    const result = await find('bind-port-free').run(
+      context({
+        portFree: async () => false,
+        runCommand: dockerHolding([{ name: 'pgadmin', ports: [5050] }]),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).not.toContain('pgadmin');
+  });
+
+  it('still fails, without naming anyone, when docker cannot say who holds the port', async () => {
+    // No docker, no socket, a timeout: `dockerPortClaims` answers an empty
+    // list rather than throwing, and the live bind probe is still evidence
+    // that something has the port.
+    const result = await find('bind-port-free').run(
+      context({
+        portFree: async () => false,
+        runCommand: fakeRunCommand(() => ({ exitCode: 127, stderr: 'docker: not found' })),
+      }),
+    );
+
+    expect(result.status).toBe('fail');
+    expect(result.detail).toContain('127.0.0.1:3535');
+    expect(result.remedy).toContain('APP_BIND_PORT');
+  });
+
+  it('skips when the name is unresolved even if docker cannot say who holds the port', async () => {
+    // Same reasoning as the regression above: without a name there is no way
+    // to tell the app's own container from a stranger's, so there is no
+    // answer to report - let alone one worth gating the install on.
+    const result = await find('bind-port-free').run(
+      context({
+        name: undefined,
+        portFree: async () => false,
+        runCommand: fakeRunCommand(() => ({ exitCode: 127, stderr: 'docker: not found' })),
+      }),
+    );
+
+    expect(result.status).toBe('skip');
+    expect(result.detail).toContain('no app name yet');
   });
 });
 

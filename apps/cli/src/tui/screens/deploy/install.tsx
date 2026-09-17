@@ -90,6 +90,9 @@ import {
   cursorSteps,
   railIndexFor,
   requiredFailures,
+  resolvedAppName,
+  scheduleNameRecheck,
+  shouldRecheckName,
   stepCheckItems,
   reviewRows,
   stepContextFor,
@@ -192,7 +195,14 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
 
   const abortRef = useRef<AbortController | undefined>(undefined);
 
-  const name = answerOf(answers, NAME_FIELD) || FALLBACK_APP_NAME;
+  // Two different questions, deliberately answered separately (#262).
+  // `resolvedName` is undefined until the operator (or the resolved
+  // repository) has actually named the app; `name` is the placeholder-backed
+  // value the PATHS below need, because a wizard has to point somewhere.
+  const resolvedName = resolvedAppName(answers);
+  const name = resolvedName ?? FALLBACK_APP_NAME;
+  /** The raw answer, which is what the re-run below compares against. */
+  const nameAnswer = answerOf(answers, NAME_FIELD);
   const deployRoot = appRootFor(roots.apps, name);
 
   // Read here rather than beside the fetch below: three of the four template
@@ -376,7 +386,10 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     (): Omit<CheckContext, 'domain' | 'env'> => ({
       runCommand: defaultRunCommand,
       deployRoot,
-      name,
+      // Omitted, NOT defaulted: `CheckContext.name` undefined means "not known
+      // yet", and a check that judges this server against the `app`
+      // placeholder is what blocked the reinstall in #262.
+      ...(resolvedName === undefined ? {} : { name: resolvedName }),
       bindPort: Number(answers['APP_BIND_PORT'] ?? DEFAULT_BIND_PORT) || DEFAULT_BIND_PORT,
       proxyRoot: roots.proxy,
       // The whole point of running the doctor while somebody watches: the
@@ -387,22 +400,35 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
         ? {}
         : { publicIp: answerOf(answers, PUBLIC_IP_FIELD) }),
     }),
-    [answers, deployRoot, name, roots.proxy],
+    [answers, deployRoot, resolvedName, roots.proxy],
   );
 
   const doctorChecks = useMemo(() => welcomeChecks(), []);
 
+  /**
+   * Which run's results are wanted. A run started while an earlier one is
+   * still walking the registry supersedes it: the stale pass keeps going
+   * (nothing here can cancel a subprocess mid-probe) but its `onResult`
+   * callbacks and its final answer are dropped, so two passes can never
+   * interleave into one checklist.
+   */
+  const doctorRun = useRef(0);
+  /** The name the last STARTED run was given, so a re-run is never a repeat. */
+  const doctorName = useRef<string | undefined>(undefined);
+
   const startDoctor = useCallback(() => {
+    const run = (doctorRun.current += 1);
+    doctorName.current = nameAnswer;
     setWelcome({ results: [], running: true });
     const base = checkBase();
     void (async () => {
       const results = await runChecks(doctorChecks, base, (result) => {
-        if (!isMounted()) return;
+        if (!isMounted() || doctorRun.current !== run) return;
         setWelcome((current) => ({ ...current, results: [...current.results, result] }));
       }).catch(() => [] as CompletedCheck[]);
-      if (isMounted()) setWelcome({ results, running: false });
+      if (isMounted() && doctorRun.current === run) setWelcome({ results, running: false });
     })();
-  }, [checkBase, doctorChecks, isMounted]);
+  }, [checkBase, doctorChecks, isMounted, nameAnswer]);
 
   // Held until `ready`: the checks read `deployRoot`, which is
   // `<apps root>/<name>`, and the name arrives from the repository a moment
@@ -414,6 +440,41 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
     doctorStarted.current = true;
     startDoctor();
   }, [ready, startDoctor]);
+
+  // ---------------------------------------------------------------------------
+  // The name changed: run them again (#262)
+  // ---------------------------------------------------------------------------
+  //
+  // Several of these checks are answered in terms of the app name, and the
+  // field holding it is on this very screen. `ctrl-r` always re-ran them, but
+  // an operator has no way to know that, and the failure they were staring at
+  // printed a remedy pointing away from the fix. So it happens by itself.
+  //
+  // Read through a ref rather than depended on: `startDoctor` changes identity
+  // whenever ANY answer changes, and an effect keyed on it would re-arm the
+  // timer while the operator typed into an unrelated field on this step.
+  const startDoctorRef = useRef(startDoctor);
+  useEffect(() => {
+    startDoctorRef.current = startDoctor;
+  }, [startDoctor]);
+
+  useEffect(() => {
+    if (
+      !shouldRecheckName({
+        ready,
+        started: doctorStarted.current,
+        name: nameAnswer,
+        lastChecked: doctorName.current,
+      })
+    ) {
+      return;
+    }
+    // The cleanup is the debounce: React cancels the previous keystroke's
+    // timer before arming this one, so a burst is one run and not one each.
+    return scheduleNameRecheck(() => {
+      if (isMounted()) startDoctorRef.current();
+    });
+  }, [nameAnswer, ready, isMounted]);
 
   useInput(
     (input, key) => {

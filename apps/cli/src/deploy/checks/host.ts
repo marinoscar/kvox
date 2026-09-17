@@ -1,6 +1,7 @@
 import { dirname } from 'node:path';
 
 import { CLI_NAME } from '../../branding.js';
+import { dockerPortClaims } from '../docker-ports.js';
 import { probe } from './probe.js';
 import type { Check, CheckContext, CheckFs, CheckResult } from './types.js';
 import {
@@ -314,35 +315,54 @@ const bindPortFree: Check = {
       return { status: 'pass', detail: `127.0.0.1:${context.bindPort} is free` };
     }
 
+    // THE ANSWER DEPENDS ON THE APP NAME, so there is no answer before one is
+    // known (#262). The install wizard runs this on mount, while the App name
+    // field sits unanswered on the same screen; judging the port against a
+    // placeholder reported a healthy deployment's OWN nginx as a foreign
+    // conflict and refused to start the reinstall - the one moment an
+    // operator most needs the install to start. `skip` is the posture the
+    // database and domain checks already take when their input is missing
+    // ("no environment resolved yet", "no domain given"), and a skip never
+    // gates anything.
+    if (context.name === undefined) {
+      return { status: 'skip', detail: 'no app name yet' };
+    }
+
     // An UPDATE finds its own nginx on this port, which is not a conflict. A
     // doctor run that reports a false failure against a healthy deployment is
     // how operators learn to ignore doctor.
-    const owner = await probe(context, [
-      'docker',
-      'ps',
-      '--filter',
-      `publish=${context.bindPort}`,
-      '--format',
-      '{{.Names}}',
-    ]);
-    // Compose names containers `<project>-<service>-<n>`, and the project is
-    // pinned to the app name (#119). A prefix match, not a substring one: an
-    // app called `app` must not claim `other-app-nginx-1`.
-    const names = owner.stdout.split('\n').filter((name) => name !== '');
-    const own = context.name === undefined ? undefined : `${context.name}-`;
+    //
+    // Asked of the COMPOSE PROJECT LABEL (#257), which is what compose itself
+    // records and what `-p <name>` pins (#119) - never of the container name.
+    // The `startsWith(name + '-')` match this replaced was a guess that
+    // misfired in both directions: it missed the deployment's own
+    // `<name>-nginx-1` whenever the name in hand was wrong, and an app
+    // genuinely called `app` claimed `app-other-nginx-1`, which belongs to
+    // the project `app-other`.
+    //
+    // Read-only, per rule 4: `dockerPortClaims` inspects and nothing else, and
+    // answers an empty list for every failure - no docker, no socket, a
+    // timeout - rather than throwing.
+    const holders = (
+      await dockerPortClaims({ cwd: process.cwd(), runCommand: context.runCommand })
+    ).filter((claim) => claim.port === context.bindPort);
 
-    if (own !== undefined && names.some((name) => name.startsWith(own))) {
+    const own = holders.filter((claim) => claim.project === context.name);
+    if (own.length > 0) {
       return {
         status: 'pass',
-        detail: `held by this deployment (${names.join(', ')})`,
+        // Not "choose another port": the holder is the deployment being
+        // installed, and `up -d` replaces it (#262). Said in the DETAIL
+        // because a remedy is only rendered on warn and fail.
+        detail: `held by this deployment (${own.map((claim) => claim.name).join(', ')}); \`up -d\` replaces it`,
       };
     }
 
     return {
       status: 'fail',
       detail:
-        names.length > 0
-          ? `in use by ${names.join(', ')}`
+        holders.length > 0
+          ? `in use by ${holders.map((claim) => claim.name).join(', ')}`
           : `something is already listening on 127.0.0.1:${context.bindPort}`,
       remedy: `Choose another port with APP_BIND_PORT, or stop whatever holds it.`,
     };

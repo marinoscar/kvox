@@ -782,6 +782,90 @@ export function welcomeChecks(checks: readonly Check[] = ALL_CHECKS): Check[] {
 }
 
 /**
+ * The app name the operator has settled on, or undefined while the field is
+ * still blank.
+ *
+ * `FALLBACK_APP_NAME` is a fine default for a PATH - `<apps root>/app` is
+ * somewhere to point at until a better answer arrives. It is NOT a fine
+ * default for a check that compares it against what is running on this
+ * server: `CheckContext.name` is documented as "not known yet" when absent,
+ * and handing it the placeholder is what made Welcome report a healthy
+ * deployment's own nginx as a foreign port conflict and refuse the reinstall
+ * (#262). The two uses are separated here rather than at each call site, so a
+ * later one cannot quietly pick the wrong one.
+ */
+export function resolvedAppName(answers: InstallAnswers): string | undefined {
+  const answer = answerOf(answers, NAME_FIELD);
+  return answer === '' ? undefined : answer;
+}
+
+// -----------------------------------------------------------------------------
+// Re-running Welcome's checks when the app name changes  (issue #262)
+// -----------------------------------------------------------------------------
+//
+// The App name field sits on the SAME screen as the checklist those checks
+// fill in, and several of them are answered in terms of it. `ctrl-r` always
+// re-ran them, but nothing on the screen said so, and the remedy printed
+// under the failure pointed the operator away from the fix. So the re-run is
+// automatic.
+//
+// Debounced, because the alternative is one full doctor pass - docker, the
+// proxy container, DNS - per keystroke, on a screen where the operator is
+// typing a word.
+// -----------------------------------------------------------------------------
+
+/**
+ * How long the name must sit still before the checks re-run.
+ *
+ * Long enough that typing a four-letter name is one run rather than four,
+ * short enough that the checklist visibly reacts to the answer instead of
+ * feeling stuck.
+ */
+export const NAME_RECHECK_DEBOUNCE_MS = 500;
+
+/** What the re-run decision is made from. Everything it reads, and nothing else. */
+export interface NameRecheckState {
+  /** The name has settled far enough for the doctor to have started at all. */
+  ready: boolean;
+  /** The first (mount) run has been started; this is about RE-running. */
+  started: boolean;
+  /** The name as it stands now, blank while unanswered. */
+  name: string;
+  /** The name the last started run was given, or undefined before the first. */
+  lastChecked: string | undefined;
+}
+
+/**
+ * Whether the welcome checks should be re-run for the name now in hand.
+ *
+ * Compared against the name the last run ACTUALLY used, not against a
+ * previous render's value: the mount run and the name arriving from the
+ * resolved repository land in the same commit, and a re-run scheduled for a
+ * name that has already been checked is a wasted doctor pass the operator
+ * watches.
+ */
+export function shouldRecheckName(state: NameRecheckState): boolean {
+  return state.ready && state.started && state.name !== state.lastChecked;
+}
+
+/**
+ * Arms the re-run, returning the canceller its effect cleanup calls.
+ *
+ * This IS the debounce: React runs the previous effect's cleanup before the
+ * next effect, so every keystroke cancels the timer the one before it armed,
+ * and only a pause actually fires.
+ */
+export function scheduleNameRecheck(
+  run: () => void,
+  delayMs: number = NAME_RECHECK_DEBOUNCE_MS,
+): () => void {
+  const timer = setTimeout(run, delayMs);
+  return () => {
+    clearTimeout(timer);
+  };
+}
+
+/**
  * Which field a failing check sends the operator back to.
  *
  * A check reports a CONDITION; a wizard has to put the cursor somewhere.
