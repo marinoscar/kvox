@@ -30,6 +30,33 @@ export interface EnvVarSpec {
   line: number;
 }
 
+/**
+ * Splits a file into lines, tolerating Windows endings.
+ *
+ * MUST BE THE ONLY WAY THIS MODULE SPLITS LINES (issue #259). A bare
+ * `split('\n')` leaves a trailing `\r` on every line of a CRLF file, and the
+ * consequence is not the mangled value it looks like - it is TOTAL SILENT
+ * DATA LOSS. In JavaScript, unlike most other languages, `.` does NOT match
+ * `\r` (CR is a line terminator, so `.` excludes it alongside `\n`), and `$`
+ * without the `m` flag matches only the very end of the input. So `ASSIGNMENT`
+ * does not match `KEY=value\r` AT ALL: the line is skipped, and a CRLF `.env`
+ * parses to an EMPTY map while reporting no error of any kind.
+ *
+ * A CRLF `.env.example` is worse still - no assignments, no banners, no help -
+ * because `COMMENT` and `BANNER_RULE` miss for the same reason, so the wizard
+ * has no questions to ask.
+ *
+ * Splitting on `'\n'` and then removing one trailing `\r` is used rather than
+ * `split(/\r?\n/)` deliberately: it keeps array indices identical to the LF
+ * case, which `parseEnvExample` reports as `line` and uses to look ahead at
+ * the two lines of a section banner.
+ */
+function splitLines(contents: string): string[] {
+  return contents
+    .split('\n')
+    .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
+}
+
 /** `# ----` or `# ====` - the rules that fence a section title. */
 const BANNER_RULE = /^#\s*[-=]{3,}\s*$/;
 
@@ -94,7 +121,7 @@ export function unquote(value: string): string {
  * than anything this code could invent.
  */
 export function parseEnvExample(contents: string): EnvVarSpec[] {
-  const lines = contents.split('\n');
+  const lines = splitLines(contents);
   const specs: EnvVarSpec[] = [];
 
   let section = '';
@@ -181,7 +208,7 @@ export function parseEnvExample(contents: string): EnvVarSpec[] {
 export function parseEnvFile(contents: string): Map<string, string> {
   const values = new Map<string, string>();
 
-  for (const line of contents.split('\n')) {
+  for (const line of splitLines(contents)) {
     if (line.trim() === '' || line.trimStart().startsWith('#')) continue;
 
     const assignment = ASSIGNMENT.exec(line);
