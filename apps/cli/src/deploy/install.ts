@@ -756,12 +756,49 @@ async function resolveInstallLayout(
   return { layout: { name, appsRoot, deployRoot: appRootFor(appsRoot, name) }, target };
 }
 
+/** How the deployment directory was decided, for the resume refusal (#249). */
+function describeLayoutSource(target: RepoTarget | undefined): string {
+  if (target === undefined) return 'taken from --name/--root';
+  switch (target.source) {
+    case 'flag':
+      return 'derived from --repo';
+    case 'state':
+      return 'taken from an existing deployment state';
+    case 'git-remote':
+      return 'GUESSED from the git checkout around the current directory';
+  }
+}
+
 export async function runInstall(input: InstallOptions): Promise<InstallResult> {
   const runCommand = input.runCommand ?? defaultRunCommand;
   const { layout, target } = await resolveInstallLayout(input, runCommand);
   const options: ResolvedInstallOptions = { ...input, ...layout };
 
   const existingState = readState(options.deployRoot);
+
+  // `--resume` means "continue the run that failed". If there is nothing to
+  // continue, saying so is the only honest answer (#249).
+  //
+  // Silently carrying on made this the worst kind of wrong: the deploy root
+  // above is derived from the repository, and without --repo/--name/--root
+  // that comes from the `origin` of whatever checkout walking up from cwd
+  // happens to find. So a --resume that found no state did not resume - it
+  // started a BRAND-NEW install against a repository nobody had named, and
+  // reported it only as a permission error on a directory the operator had
+  // never heard of.
+  //
+  // Note the ordering this message has to explain: the deploy root is derived
+  // BEFORE any state is read, so `--resume` cannot locate a state file unless
+  // the caller has already identified the deployment. That is why the remedy
+  // names the flags rather than suggesting the command be re-run as-is.
+  if (options.resume === true && existingState === undefined) {
+    throw new UsageError(
+      `Nothing to resume: no deployment state at ${options.deployRoot}.\n` +
+        `That directory was ${describeLayoutSource(target)}, and the state file is looked for inside it — ` +
+        `so a resume can only find the run you mean once that run's deployment is named.\n` +
+        `Name it with --name <app> (or --root <dir>, or --repo <url>), or drop --resume to start a new install.`,
+    );
+  }
 
   if (existingState !== undefined && options.reinstall !== true && options.resume !== true) {
     throw new UsageError(
