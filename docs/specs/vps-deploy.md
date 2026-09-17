@@ -61,7 +61,9 @@ in this repository rather than against this document, with the rejected
 alternative each one closes off. Read a claim in sections 1–17 against §18's
 correction table before trusting it; a claim not in that table is still
 accurate. §19 documents the `deploy-info/info.json` contract §15 refers to
-forward, which did not exist when sections 1–17 were written.
+forward, which did not exist when sections 1–17 were written. §22 amends §13:
+the state file is written when a run FAILS as well as when it succeeds, which
+is what makes `--resume` work at all.
 
 ---
 
@@ -1664,3 +1666,104 @@ import cycle.
   scope and refused for the database's reason: object storage is supplied by
   the operator (§6's `STORAGE_*` variables), is frequently shared, and this CLI
   never created it.
+
+---
+
+## 22. The state is written on both endings, `deploy-info/` on only one (issue #267)
+
+`§13` above, and `§18.1`'s correction to it, describe a state file written
+after a run succeeds. That was the whole of it, and it made `--resume`
+unusable for the only thing it is for.
+
+`--resume` reads `completedSteps` out of the state file. `runInstall` computed
+`result.completed` on the failure path and threw it away there, writing the
+state only after `runPipeline` returned without a failure — so a failed
+install left no state, `--resume` answered `Nothing to resume: no deployment
+state at <root>`, and the failure message that had just recommended the flag
+was advising an impossible action. Every retry re-ran the whole pipeline,
+including a multi-minute image build, against a deployment whose first ten
+steps had already succeeded.
+
+**The state is now written on both endings, from one builder.**
+`buildInstallState` in `apps/cli/src/deploy/install.ts` is called twice —
+once with `{ outcome: 'success' }`, once with `{ outcome: 'failure',
+failedStep }` — and every field but the outcome is constructed identically.
+Two object literals would drift: the success literal being replaced had
+already gained `proxyContainer` and `envPath` since it was written, and a
+second copy would not have had either. The failure record's entire purpose is
+to be the file the next run reads back, so "identical apart from the ending"
+is a correctness property, not tidiness.
+
+**`deploy-info/info.json` is still written on success only**, and the ordering
+comment in `runInstall` ("AFTER the state: deploy-info is derived from it")
+stays true — only the state write gained a second call site. §19's document is
+what the *running application* reports about itself, mounted read-only into
+the `api` container; an install that did not finish has not deployed what that
+file would claim. This is the one place where the two records deliberately
+disagree, and the direction of the disagreement is the point.
+
+### 22.1 Three fields, and why each is shaped the way it is
+
+- **`lastOutcome: 'success' | 'failure'`, optional, absent meaning success.**
+  Every state file written before this change was written only after a
+  pipeline finished, so absence already means "this run completed". A reader
+  must therefore test for `'failure'` and never for `!== 'success'`, or every
+  pre-#267 deployment reads as broken. `DEPLOY_STATE_VERSION` stays at 1: it is
+  bumped only when a field **changes meaning**, and nothing here does.
+- **`lastFailedStep`, beside `completedSteps` rather than derived from it.**
+  A skipped step (`--skip-seed`, a non-GitHub remote) is in neither list, so
+  "the first id not in `completedSteps`" is not the step that failed.
+- **`lastDeployedAt` became optional.** §18.1 already records the rule this
+  preserves: a failed run must not claim a deploy that never happened. A failed
+  run carries an earlier success's value forward unchanged; a **first** install
+  that fails has no earlier success, so there is no instant to record and the
+  field is absent. Absent means "no deploy has ever completed here", which is
+  the only encoding that is neither a sentinel nor a lie.
+
+### 22.2 The refusal this would otherwise have broken
+
+`install` refuses to run over an existing deployment and points at `update` or
+`--reinstall`. That refusal keyed on the state file merely **existing** — which
+stopped being the same question the moment a failed run started writing one.
+Left alone, the fix would have broken the ordinary retry it exists to enable:
+install fails, the operator fixes the cause, re-runs `install`, and is told to
+pass `--reinstall` to start over a deployment that never happened.
+
+The refusal now keys on `lastDeployedAt` being present, not on `lastOutcome`.
+The difference matters: a failed **reinstall** over a real deployment still
+carries the earlier success's `lastDeployedAt`, so it is still refused — the
+containers, the certificate and the database it would clobber are all still
+there. Only a root where no deploy has ever completed is let through.
+
+`--fresh` (§21.4) is unaffected: it discards the state file **before**
+`readState`, so a failure record is discarded exactly like a success one and
+nothing on this path can resurrect it.
+
+### 22.3 Two consequences worth stating
+
+A resumed run skips `checkout`, so `context.commitSha` and `context.target`
+are never set on that path. `buildInstallState` therefore falls back to the
+existing state for `commitSha`, `repoUrl` and `ref` — without which the run
+that finally **succeeds** would record an empty commit and an empty repository
+URL, and publish both to `deploy-info`.
+
+A `deploy status` on a root whose install failed now reports it — "the last
+install failed at `<step>`" — rather than rendering it as an ordinary
+deployment that happens to be down. The TUI's status screen does the same, and
+says `never` where it would otherwise print a deploy time that does not exist.
+
+### 22.4 On `--repo` with `--name`
+
+#267 also reports that `--repo` is silently ignored when combined with
+`--name`, because `resolveInstallLayout` returns early on `--name` without a
+`RepoTarget`. Checked against the code, it is not: the `checkout` step calls
+`resolveTarget`, which passes `options.repo` to `resolveRepoTarget` as
+`repoFlag` whenever the context has no target yet, and that is rank 1 of that
+function's resolution order. The flag is honoured; what the early return costs
+is only `describeLayoutSource`'s wording in the `--resume` refusal, which
+describes the **directory** and is accurate about it.
+
+`apps/cli/src/deploy/install.test.ts` pins this, so the two flags cannot start
+contradicting each other unnoticed. Refusing the combination was considered and
+rejected: it would remove a working capability (deploy repository X into folder
+Y) to fix a defect that is not there.
