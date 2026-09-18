@@ -420,6 +420,14 @@ export interface CreateMockAllowedEmailOptions {
   claimedById?: string | null;
   claimedAt?: Date | null;
   addedAt?: Date;
+  /**
+   * Invitation-reminder bookkeeping (#301, epic #271). Defaults match a row
+   * nobody has been reminded about, which is the state of every entry created
+   * by `POST /api/allowlist`: the column is `NOT NULL DEFAULT 0` and its
+   * timestamp is `NULL` until the first reminder is requested.
+   */
+  reminderCount?: number;
+  lastReminderAt?: Date | null;
 }
 
 export function createMockAllowedEmail(
@@ -433,6 +441,8 @@ export function createMockAllowedEmail(
     claimedById = null,
     claimedAt = null,
     addedAt = new Date(),
+    reminderCount = 0,
+    lastReminderAt = null,
   } = options;
 
   return {
@@ -443,6 +453,8 @@ export function createMockAllowedEmail(
     claimedById,
     claimedAt,
     addedAt,
+    reminderCount,
+    lastReminderAt,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { EmailMessage } from '../email.types';
+import type { EmailAttachment, EmailMessage } from '../email.types';
 
 // =============================================================================
 // Email template contract (issue #123, epic #109)
@@ -51,6 +51,21 @@ export interface RenderedEmail {
    * verbatim. Most templates want {@link TRANSACTIONAL_EMAIL_HEADERS}.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Images this template's {@link html} references as `cid:…`, to travel
+   * inside the message. Usually absent.
+   *
+   * A TEMPLATE OWNS BOTH HALVES, and that is the only arrangement that works:
+   * the `cid:` is written by `renderLayout` on this template's behalf, so the
+   * matching part has to be produced at the same call site. A dispatcher
+   * cannot supply it — it has not seen the markup — and a layout cannot
+   * attach it, because a layout returns a string.
+   *
+   * See `email.types.ts`'s `EmailAttachment` for why this is narrow, and
+   * `templates/brand-logo.ts` for the one asset that uses it today.
+   */
+  attachments?: readonly EmailAttachment[];
 }
 
 /**
@@ -98,10 +113,16 @@ export type EmailTemplate<TData> = (data: TData) => RenderedEmail;
 // `EmailMessage.text` became optional, `RenderedEmail extends
 // MessageRenderedPart` would still hold, and the mandatory-text-part rule
 // would have quietly become advisory with nothing going red.
+//
+// ⚠ `attachments` IS IN THIS PICK, and adding a field to `EmailMessage`'s
+// rendered half without adding it here is how the two quietly diverge: the
+// dispatcher would keep compiling while silently dropping the part on the
+// floor, and the only symptom would be a broken-image placeholder in somebody
+// else's inbox.
 
 type MessageRenderedPart = Pick<
   EmailMessage,
-  'subject' | 'html' | 'text' | 'headers'
+  'subject' | 'html' | 'text' | 'headers' | 'attachments'
 >;
 
 export type RenderedEmailFitsMessage =
@@ -112,3 +133,35 @@ export type MessageRenderedPartFitsRendered =
 
 export const RENDERED_EMAIL_MATCHES_MESSAGE: RenderedEmailFitsMessage &
   MessageRenderedPartFitsRendered = true;
+
+/**
+ * Everything a rendered template contributes to an `EmailMessage`.
+ *
+ * WHY THIS EXISTS RATHER THAN A SPREAD AT EACH CALL SITE. There are exactly
+ * two places that turn a `RenderedEmail` into an `EmailMessage` — the
+ * notification dispatcher and the "send test email" button — and both used to
+ * enumerate the fields by hand. The Pick proof above catches a field that
+ * changes SHAPE; it cannot catch a field that a call site simply does not
+ * mention, because an optional property left out still typechecks. That is the
+ * exact failure `attachments` would produce: a message whose HTML references a
+ * `cid:` whose part was dropped between the template and the transport, seen
+ * by nobody until it lands as a broken image in somebody's inbox.
+ *
+ * Conditional spreads rather than `attachments: rendered.attachments`, so a
+ * message that carries neither headers nor attachments is the same object it
+ * has always been — which is what makes "no attachments changes nothing"
+ * assertable rather than merely intended.
+ */
+export function renderedEmailParts(
+  rendered: RenderedEmail,
+): MessageRenderedPart {
+  return {
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+    ...(rendered.headers ? { headers: rendered.headers } : {}),
+    ...(rendered.attachments && rendered.attachments.length > 0
+      ? { attachments: rendered.attachments }
+      : {}),
+  };
+}

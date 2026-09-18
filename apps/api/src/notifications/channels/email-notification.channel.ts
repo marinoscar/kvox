@@ -6,6 +6,7 @@ import {
   SmtpEmailProvider,
   findEmailTemplate,
   formatFromHeader,
+  renderedEmailParts,
 } from '../../email';
 import type {
   EmailMessage,
@@ -89,6 +90,11 @@ export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
   {
     'user.welcome': 'user-welcome',
     'allowlist.invitation': 'allowlist-invitation',
+    // The manual reminder (#301, epic #271). Its own template, not a second
+    // key pointing at `allowlist-invitation` the way the broadcast pair below
+    // shares one: these two messages read differently, which is the reason
+    // there are two event keys at all.
+    'allowlist.invitation_reminder': 'allowlist-invitation-reminder',
     'security.role_changed': 'role-changed',
     // ONE TEMPLATE, TWO KEYS (#322, epic #319). `admin.broadcast` and
     // `admin.broadcast_critical` differ in whether a recipient may MUTE them —
@@ -237,10 +243,12 @@ export class EmailNotificationChannel implements NotificationChannelSender {
     const message: EmailMessage = {
       to,
       from: formatFromHeader(settings.fromAddress, settings.fromName),
-      subject: rendered.email.subject,
-      html: rendered.email.html,
-      text: rendered.email.text,
-      ...(rendered.email.headers ? { headers: rendered.email.headers } : {}),
+      // Every rendered half in one call, rather than field by field. An
+      // optional property a call site forgets to mention still typechecks, so
+      // enumerating them here is how a template's embedded logo would get
+      // dropped between the renderer and the transport with nothing going red
+      // — see `renderedEmailParts` for the full note.
+      ...renderedEmailParts(rendered.email),
     };
 
     // No try/catch: `send` never throws, and that is implemented once in

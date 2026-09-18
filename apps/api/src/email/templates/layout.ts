@@ -1,4 +1,6 @@
 import { APP_NAME } from '@app/shared';
+import type { EmailAttachment } from '../email.types';
+import { EMAIL_LOGO_RENDERED_SIZE } from './brand-logo';
 import { SafeHtml, html, safeUrl } from './safe-html';
 
 // =============================================================================
@@ -17,14 +19,42 @@ import { SafeHtml, html, safeUrl } from './safe-html';
 //     only layout primitive with 25 years of consistent behaviour across
 //     Gmail, Outlook and Apple Mail.
 //
-//   * **No external assets whatsoever** — no `<link>`, no remote images, no
-//     web fonts. Gmail, Outlook and Apple Mail all block remote content by
-//     default until the recipient clicks "display images", so a layout that
-//     depends on a logo renders broken for the MAJORITY of recipients on first
-//     open. The wordmark below is therefore text, and the "button" is a
-//     coloured table cell rather than an image. A blocked asset is also a
-//     tracking-pixel signal to spam filters, which is a second reason not to
-//     have one.
+//   * **No REMOTE assets whatsoever** — no `<link>`, no `src` pointing at a
+//     URL, no web fonts. Gmail, Outlook and Apple Mail all block remote
+//     content by default until the recipient clicks "display images", so a
+//     layout that depends on a fetched logo renders broken for the MAJORITY of
+//     recipients on first open. A blocked asset is also a tracking-pixel
+//     signal to spam filters, which is a second, independent reason not to
+//     have one. The "button" below is therefore a coloured table cell rather
+//     than an image, and it always will be.
+//
+//   * **Exactly one EMBEDDED asset is permitted: the brand logo, by CID.**
+//     ⚠ READ THIS BEFORE CONCLUDING THE RULE ABOVE WAS ABANDONED, because the
+//     `<img>` in this file looks like the thing the previous bullet forbids
+//     and is not. A `cid:` reference (RFC 2392) names a MIME part carried
+//     INSIDE the message: there is no URL, no host, no request, and therefore
+//     nothing for a client to block or for a filter to read as tracking.
+//     Gmail, Outlook and Apple Mail all display CID parts on first open with
+//     no "display images" click. The distinction is exactly "fetched" versus
+//     "delivered", and it is the whole reason the previous bullet's conclusion
+//     (text only) no longer follows from its premise (remote content is
+//     blocked).
+//
+//     The cost is real and bounds the rule at one asset: every byte is
+//     base64-encoded into every copy of the message, once per recipient. So
+//     the logo is a deliberately small committed PNG
+//     (`templates/brand-logo.ts`), it is OPT-IN per template rather than
+//     automatic, and `EmailMessage.attachments` is typed for embedded images
+//     specifically so it cannot drift into being a file-attachment channel.
+//
+//     ⚠ AND THE TEXT WORDMARK IS STILL HERE, as the branch taken when no logo
+//     is supplied — not as dead code. A message can legitimately carry no
+//     attachment (the asset is missing from the image, a template has not
+//     opted in), and in that case the header must render the product name as
+//     text exactly as it always did. The `<img>` also carries a non-empty
+//     `alt` for the recipient who turns images off wholesale and for a screen
+//     reader, because "the client will display it" is a claim about defaults,
+//     not about every reader.
 //
 //   * **A hidden preheader.** Inbox lists show a snippet beside the subject.
 //     With no preheader the client scrapes the first visible text in the body,
@@ -50,7 +80,8 @@ import { SafeHtml, html, safeUrl } from './safe-html';
 // =============================================================================
 
 /**
- * Wordmark. Text, not an image — see the header note on blocked assets.
+ * Wordmark. The fallback the header renders when no logo is embedded, and the
+ * `alt` on the `<img>` when one is — see the header note on blocked assets.
  *
  * NOT DEFINED HERE ANY MORE (issue #163, epic #161): the product name has one
  * source of truth, `packages/shared`, which the web app, the CLI and the
@@ -120,6 +151,24 @@ export interface RenderLayoutOptions {
    */
   bodyHtml: SafeHtml;
 
+  /**
+   * The brand logo to show in the header instead of the text wordmark.
+   *
+   * TYPED AS THE WHOLE `EmailAttachment`, NOT AS A BARE CID STRING, and that
+   * is the point. The `cid:` in the markup and the MIME part in the message
+   * have to agree — a reference with no part behind it renders as a
+   * broken-image placeholder, which is worse than the wordmark it replaced —
+   * so the only way to ask for the markup is to be holding the very object
+   * that must also be attached. A caller therefore cannot produce one without
+   * the other by forgetting; it has to actively drop a value it already has.
+   * `index.spec.ts` closes the remaining gap with a registry-wide assertion
+   * that no template's HTML names a cid its `attachments` does not supply.
+   *
+   * Absent (the default, and every template but the invitation today) renders
+   * the text wordmark exactly as before.
+   */
+  logo?: EmailAttachment;
+
   /** Call-to-action button label. Rendered only together with `ctaUrl`. */
   ctaLabel?: string;
 
@@ -139,7 +188,31 @@ export interface RenderLayoutOptions {
  * else, so there is nothing left for the `SafeHtml` type to protect.
  */
 export function renderLayout(opts: RenderLayoutOptions): string {
-  const { title, previewText, bodyHtml, ctaLabel, ctaUrl } = opts;
+  const { title, previewText, bodyHtml, logo, ctaLabel, ctaUrl } = opts;
+
+  // The masthead: an embedded logo when the caller supplied one, the text
+  // wordmark otherwise. See the CID bullet in the header for why an `<img>`
+  // is permitted here and a remote one never is.
+  //
+  // `width`/`height` are ATTRIBUTES as well as CSS. The Word engine Outlook
+  // renders with ignores the CSS pair and, given no attributes, lays the image
+  // out at its intrinsic 96x96 — double the intended size, shoving the card
+  // down the page. `display:block` kills the descender gap inline images get
+  // in Gmail; `border:0` is for the Outlook builds that still draw a border on
+  // an image, though this one is not inside a link.
+  //
+  // The `alt` is the product name, deliberately not "Logo": for a recipient
+  // with images off wholesale and for a screen reader this text IS the
+  // masthead, and "Logo" tells them nothing the layout was trying to say.
+  const masthead = logo
+    ? html`<img
+        src="cid:${logo.cid}"
+        alt="${APP_NAME}"
+        width="${EMAIL_LOGO_RENDERED_SIZE}"
+        height="${EMAIL_LOGO_RENDERED_SIZE}"
+        style="display:block;width:${EMAIL_LOGO_RENDERED_SIZE}px;height:${EMAIL_LOGO_RENDERED_SIZE}px;border:0;outline:none;text-decoration:none;"
+      />`
+    : html`${APP_NAME}`;
 
   // The preheader is hidden by six overlapping declarations, not one. Clients
   // disagree about which of them they honour — Gmail respects `display:none`,
@@ -232,7 +305,7 @@ export function renderLayout(opts: RenderLayoutOptions): string {
                 align="center"
                 style="padding:0 0 20px 0;font-family:${FONT_STACK};font-size:18px;font-weight:bold;letter-spacing:-0.2px;color:${BRAND_COLOR};"
               >
-                ${APP_NAME}
+                ${masthead}
               </td>
             </tr>
             <tr>

@@ -329,6 +329,75 @@ describe('SmtpEmailProvider', () => {
       expect(opts.requireTLS).toBe(true);
     });
 
+    it('sends no `attachments` key at all when the message carries none', async () => {
+      // THE REGRESSION THAT MATTERS MOST. Every message this application sends
+      // except an invitation has no attachments, and adding the feature must
+      // not change a single byte of what they hand nodemailer — not even an
+      // `attachments: []` that nodemailer would ignore. `not.objectContaining`
+      // would pass against `attachments: []`; `in` is the check that does not.
+      const provider = new SmtpEmailProvider(makeEmailSettings(baseSmtpSettings), makeCredentials('pw'));
+      smtpSendMailMock.mockResolvedValueOnce({ messageId: 'm' });
+
+      await provider.send(baseMessage);
+
+      const options = smtpSendMailMock.mock.calls[0][0] as Record<string, unknown>;
+
+      expect('attachments' in options).toBe(false);
+      expect(options).toEqual({
+        from: baseMessage.from,
+        to: baseMessage.to,
+        subject: baseMessage.subject,
+        html: baseMessage.html,
+        text: baseMessage.text,
+      });
+    });
+
+    it('passes a cid attachment through to sendMail, so nodemailer can inline it', async () => {
+      // nodemailer handles `cid` natively: it sets contentDisposition inline
+      // and moves the part into a `multipart/related` node beside the HTML,
+      // which is what makes `src="cid:…"` resolve in the recipient's client.
+      // The SMTP half of this feature is exactly this passthrough.
+      const provider = new SmtpEmailProvider(makeEmailSettings(baseSmtpSettings), makeCredentials('pw'));
+      smtpSendMailMock.mockResolvedValueOnce({ messageId: 'm' });
+
+      const content = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+      await provider.send({
+        ...baseMessage,
+        html: '<p><img src="cid:logo@email.local" alt="App"></p>',
+        attachments: [
+          {
+            content,
+            cid: 'logo@email.local',
+            filename: 'logo.png',
+            contentType: 'image/png',
+          },
+        ],
+      });
+
+      expect(smtpSendMailMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          attachments: [
+            {
+              filename: 'logo.png',
+              content,
+              contentType: 'image/png',
+              cid: 'logo@email.local',
+            },
+          ],
+        }),
+      );
+    });
+
+    it('treats an empty attachments array as no attachments', async () => {
+      const provider = new SmtpEmailProvider(makeEmailSettings(baseSmtpSettings), makeCredentials('pw'));
+      smtpSendMailMock.mockResolvedValueOnce({ messageId: 'm' });
+
+      await provider.send({ ...baseMessage, attachments: [] });
+
+      expect('attachments' in (smtpSendMailMock.mock.calls[0][0] as object)).toBe(false);
+    });
+
     it('passes extra message headers through to sendMail', async () => {
       const provider = new SmtpEmailProvider(makeEmailSettings(baseSmtpSettings), makeCredentials('pw'));
       smtpSendMailMock.mockResolvedValueOnce({ messageId: 'm' });
