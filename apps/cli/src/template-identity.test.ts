@@ -301,7 +301,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   //
   // WHAT THIS COSTS, STATED PLAINLY: `findOffenders` below skips an
   // allowlisted file ENTIRELY — for all four patterns at once, not just
-  // `repoName`. So these 16 files are not merely exempt from matching
+  // `repoName`. So these 17 files are not merely exempt from matching
   // `kvox`; `productName` (`KVox`), `repoSlug` (`marinoscar/kvox`) and
   // `owner` (`marinoscar`) are unguarded in them too, and nothing here would
   // catch any of the four going stale. If a future fork renames the product
@@ -334,6 +334,12 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/runbooks/database-restore.md',
   'docs/runbooks/maintenance-mode.md',
   'docs/specs/database-backup.md',
+  // Added by `docs(docs): add a portable deploy CLI implementation spec`.
+  // Same standing as `docs/specs/vps-deploy.md` directly below: an
+  // implementation spec for a CLI whose command is named after the product
+  // cannot document that command without naming it, and Markdown cannot
+  // import from `@app/shared`.
+  'docs/specs/deploy-spec.md',
   'docs/specs/vps-deploy.md',
   'docs/specs/worker-nodes.md',
   'packages/shared/README.md',
