@@ -18,7 +18,12 @@ import { envFilePath, writeEnvFile } from './env-file.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
 import { DEFAULT_BIND_PORT } from './layout.js';
 import { unknownServerFacts } from './server-facts.js';
-import { NotInstalledError, DEPLOY_STATE_VERSION, type DeployState } from './state.js';
+import {
+  DEPLOY_STATE_FILENAME,
+  DEPLOY_STATE_VERSION,
+  NotInstalledError,
+  type DeployState,
+} from './state.js';
 
 // =============================================================================
 // Adopting a deployment with no state file  (issue #285)
@@ -355,8 +360,15 @@ describe('the notice the operator sees', () => {
     const rendered = renderAdoption(notice).join('\n');
 
     expect(notice.headline).toContain('Adopted this deployment');
-    expect(notice.headline).toContain('.appctl-deploy.json');
     expect(notice.headline).toContain('rebuilt from the clone, the .env and the proxy');
+    // #292: the headline says what the thing IS. The binary is `kvox`, and an
+    // operator reading `no .appctl-deploy.json was here` reasonably takes it
+    // for a bug or for this CLI talking about another tool.
+    expect(notice.headline).toContain('no deployment record was here');
+    expect(notice.headline).not.toContain('appctl');
+    // The filename is not hidden, only moved to where a name is data: one of
+    // the detail lines that already cite their sources by path.
+    expect(rendered).toContain(`record      ${join(root, DEPLOY_STATE_FILENAME)}  (written by this run)`);
     // Every reconstructed field names its own source, so an operator can see
     // what this decided and where it got it.
     expect(rendered).toContain(`repository  ${ORIGIN}  (repo/ origin)`);

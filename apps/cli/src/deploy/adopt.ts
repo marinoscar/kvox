@@ -15,9 +15,9 @@ import type { runCommand as defaultRunCommand } from './executor.js';
 import { DEFAULT_BIND_PORT, DEFAULT_PROXY_ROOT } from './layout.js';
 import { displayRepoUrl, normaliseRepoUrl } from './repo.js';
 import {
-  DEPLOY_STATE_FILENAME,
   DEPLOY_STATE_VERSION,
   NotInstalledError,
+  deployStatePath,
   type DeployState,
 } from './state.js';
 
@@ -205,10 +205,24 @@ export async function adoptDeployment(options: AdoptOptions): Promise<Adoption> 
     ...(options.proxyContainer === undefined ? {} : { proxyContainer: options.proxyContainer }),
   };
 
+  // WHERE THE REBUILT RECORD LANDS, as a path rather than a bare filename
+  // (#292). The headline below says what the thing IS: an operator reading
+  // `no .appctl-deploy.json was here` out of a binary that has not been called
+  // `appctl` for some time reasonably reads it as a bug, or as this CLI
+  // talking about a different tool. The name itself is NOT changing and must
+  // not - `state.ts` records why, at its declaration: the file is read back
+  // off live servers, so renaming it makes every existing deployment
+  // invisible. So it stays, here, on the same footing as the sources the lines
+  // above already cite and as the entry list `teardown.ts` prints for
+  // `--dry-run`: somewhere a name is DATA, in a line an operator can check by
+  // hand, and where a `--json` consumer still gets it.
+  detail.push(`record      ${deployStatePath(deployRoot)}  (written by this run)`);
+
   return {
     state,
     notice: {
-      headline: `Adopted this deployment: no ${DEPLOY_STATE_FILENAME} was here, so the record was rebuilt from the clone, the .env and the proxy.`,
+      headline:
+        'Adopted this deployment: no deployment record was here, so the record was rebuilt from the clone, the .env and the proxy.',
       detail,
     },
   };
