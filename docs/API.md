@@ -5122,9 +5122,15 @@ at all, which is what a freshly invited account looks like.
 
 #### GET /admin/onboarding
 
-This deployment's setup steps: up to seven, ending with a real transcription
-rather than a green tick on a form — `admin.smoke_test` is only satisfied
-once the caller owns a transcript that actually reached `ready`.
+This deployment's setup steps: up to seven, culminating in a real
+transcription rather than a green tick on a form — `admin.smoke_test` is
+the only step that proves the two required steps before it actually work
+together, and it is only satisfied once the caller owns a transcript that
+actually reached `ready`. It is itself `recommended` and skippable, not
+required (issue #299): the recording has to be this administrator's own and
+spends a real call against the deployment's provider account, so a
+deployment can be genuinely finished without it. Only `admin.transcription`
+and `admin.ai` are `required`.
 
 **Requires:** `system_settings:read` — an administrator's configuration
 read, deliberately **not** a permission of its own (epic #118 decision 8's
@@ -5151,14 +5157,14 @@ reports is one the holder of that permission can already read directly).
       },
       {
         "key": "admin.smoke_test",
-        "tier": "required",
+        "tier": "recommended",
         "title": "Transcribe a test recording",
         "description": "Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.",
         "actionLabel": "Upload a recording",
         "href": "/transcripts/new",
         "status": "blocked",
         "blockedReason": "Connect a transcription provider first — there is nothing to send a recording to yet.",
-        "skippable": false,
+        "skippable": true,
         "skipped": false
       },
       {
@@ -5174,12 +5180,20 @@ reports is one the holder of that permission can already read directly).
         "skipped": false
       }
     ],
-    "requiredRemaining": 3,
+    "requiredRemaining": 2,
     "totalRemaining": 3,
     "allRequiredSatisfied": false
   }
 }
 ```
+
+⚠ `requiredRemaining` is 2, not 3, even though only `admin.transcription` appears
+unsatisfied among the steps shown above — `admin.ai` (omitted from this
+abbreviated example) is the other required step still pending. Since issue
+#299, `admin.smoke_test` no longer counts toward `requiredRemaining` at all:
+there are exactly two `required` admin steps (`admin.transcription`,
+`admin.ai`), and `requiredRemaining`/`allRequiredSatisfied` reach zero/`true`
+on those two alone.
 
 **Response fields (both routes):**
 - `steps[].status` — `satisfied` / `pending` / `blocked`, **derived on every

@@ -872,8 +872,11 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
 - `GET /api/onboarding` - The caller's own activation steps. `@Auth()`, **no permission** — the
   identical ownership-scoped posture `/api/ai-credentials`/`/api/pat`/`/api/user-data` already
   take, and readable by a Viewer holding no permissions at all
-- `GET /api/admin/onboarding` - This deployment's setup steps, ending with a real transcription
-  rather than a green tick on a form. `system_settings:read` — reused rather than a new
+- `GET /api/admin/onboarding` - This deployment's setup steps, culminating in a real transcription
+  rather than a green tick on a form — though since issue #299 that step (`admin.smoke_test`) is
+  `recommended` and skippable, not required: the checklist settles once the two required steps
+  (a transcription provider and an AI provider) are configured, whether or not this administrator
+  ever transcribes anything personally. `system_settings:read` — reused rather than a new
   `onboarding:read`, per epic #118 decision 8's precedent (the About card)
 
 ### Health

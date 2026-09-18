@@ -320,7 +320,11 @@ export interface OnboardingStep<Ctx extends OnboardingContext = OnboardingContex
 // Admin steps — setting the DEPLOYMENT up
 // =============================================================================
 //
-// ⚠ THE LIST STILL ENDS WITH A REAL TRANSCRIPTION, NOT A GREEN TICK ON A FORM.
+// ⚠ THE LIST STILL CULMINATES IN A REAL TRANSCRIPTION, NOT A GREEN TICK ON A
+// FORM. ("Culminates", not "ends with": `admin.smoke_test` is the THIRD entry
+// of seven and always has been — it comes directly after the two steps it
+// proves, which is where a proof belongs. The earlier wording here read as a
+// claim about array position and was figurative even before #299/#300.)
 // `admin.smoke_test` is the only step that proves the two required ones before
 // it actually work together: a key can be saved, well-formed, accepted by the
 // settings page and still be wrong — the wrong project, a revoked token, a
