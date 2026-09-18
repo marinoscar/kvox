@@ -20,6 +20,12 @@
  *   4. NO TIMER, EVER. Asserted against this file's own SOURCE, because the
  *      absence of a poll is not observable from behaviour in a test that runs
  *      for forty milliseconds.
+ *   5. A MALFORMED 200 IS A FAILED READ. Property 3 was only ever true for a
+ *      REJECTION; a 200 carrying `{}` was truthy, was stored, and threw inside
+ *      this provider's render — which, because `Layout.tsx` mounts it in the
+ *      shell, replaced the WHOLE APPLICATION with `ErrorBoundary`'s panel on
+ *      every page. Sections 7 and 8 pin it, and section 8 does so through the
+ *      real consuming component rather than through this file's probe.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -39,6 +45,7 @@ import {
   ONBOARDING_ADMIN_PERMISSION,
 } from '../../contexts/OnboardingContext';
 import { ADMIN_ONBOARDING_PATH, ONBOARDING_PATH } from '../../services/onboarding';
+import { OnboardingBanner } from '../../components/onboarding/OnboardingBanner';
 import { adminState, step, userState } from '../components/onboarding/onboardingFixtures';
 
 const API_BASE = 'http://localhost:3000/api';
@@ -471,5 +478,156 @@ describe('useOnboarding outside a provider', () => {
     // a missing checklist into a blank application.
     render(<Probe />);
     expect(screen.getByTestId('no-provider')).toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// 7. A MALFORMED 200 IS A FAILED READ — the whole-application crash, pinned
+// =============================================================================
+//
+// ⚠ THE CASE THAT TOOK THE APPLICATION DOWN, and note that every response below
+// is a `200`. Section 3 above covers a read that FAILS; this section covers a
+// read that SUCCEEDS with a body that is not a checklist, which is a different
+// thing entirely and used to be catastrophic rather than merely wrong:
+//
+//   `{}` is truthy → it was stored, memoised, and handed to `applySkipOverlay`,
+//   whose guard was `if (!state) return null` → `state.steps.map(...)` threw a
+//   `TypeError` DURING `OnboardingProvider`'S RENDER → and because `Layout.tsx`
+//   mounts this provider in the SHELL, React unwound past every page into
+//   `ErrorBoundary`'s "Something went wrong" panel.
+//
+// It is not hypothetical: it is what turned ~67 Playwright visual specs red at
+// once, because that harness's API mocks end in a permissive
+// `return json(route, {})` catch-all. In production the same body arrives from
+// any intermediary that answers 200 with a wrapper page — a proxy, a CDN error
+// page, an expired-auth HTML redirect.
+//
+// The fix is at the service boundary (`services/onboarding.ts`), which turns
+// such a body into a REJECTION — a path this provider has handled correctly
+// since #276. So what these tests assert is that the file header's promise ("a
+// failed fetch renders nothing — it never renders an error") is now true for
+// malformed successes too, and not merely for rejections.
+// =============================================================================
+
+/** Serve one route a 200 whose body is not a checklist. */
+function serveMalformed(path: string, body: unknown) {
+  server.use(http.get(`${API_BASE}${path}`, () => HttpResponse.json({ data: body })));
+}
+
+describe('a malformed 200', () => {
+  const bodies: [name: string, body: unknown][] = [
+    ['an empty object — the permissive mock catch-all', {}],
+    ['a null `steps`', { ...userState(), steps: null }],
+    ['an HTML page from an intermediary', '<!doctype html><html>Sign in</html>'],
+    ['junk inside `steps`', { ...userState(), steps: [step(), { nope: true }] }],
+  ];
+
+  it.each(bodies)('degrades %s to null, with the children still rendered', async (_n, body) => {
+    serveMalformed(ONBOARDING_PATH, body);
+
+    renderProvider(mockAdminUser);
+    await settled();
+
+    // The three halves of the promise: no state, an error for a PAGE to render
+    // in its own body, and — the part that was broken — a subtree that rendered
+    // at all. If the provider threw, `Probe` would never have mounted and
+    // `getByTestId` below would fail outright rather than assert-fail.
+    expect(screen.getByTestId('user')).toHaveTextContent('none');
+    expect(screen.getByTestId('error').textContent).not.toBe('');
+    expect(screen.getByTestId('loading')).toHaveTextContent('false');
+  });
+
+  it('keeps the user checklist when only the ADMIN body is malformed', async () => {
+    // Same `allSettled` property section 3 pins for a 500, now for the failure
+    // mode that used to bypass it entirely by succeeding.
+    serveMalformed(ADMIN_ONBOARDING_PATH, {});
+
+    renderProvider(mockAdminUser);
+    await settled();
+
+    expect(screen.getByTestId('user')).toHaveTextContent('user');
+    expect(screen.getByTestId('admin')).toHaveTextContent('none');
+  });
+
+  it('leaves the happy path untouched', async () => {
+    // The regression guard for the guard: a narrowing that rejected a VALID
+    // checklist would hide the feature on every healthy deployment, which is a
+    // worse outage than the one being fixed.
+    renderProvider(mockAdminUser);
+    await settled();
+
+    expect(screen.getByTestId('user')).toHaveTextContent('user');
+    expect(screen.getByTestId('admin')).toHaveTextContent('admin');
+    expect(screen.getByTestId('error')).toHaveTextContent('');
+    expect(screen.getByTestId('user-remaining')).toHaveTextContent('2');
+  });
+});
+
+// =============================================================================
+// 8. The real consumer tree, not a probe
+// =============================================================================
+//
+// ⚠ THE TEST THE BUG WOULD ACTUALLY HAVE FAILED. Everything above renders
+// `Probe`, which never touches `steps` — so a provider hardened only at its own
+// boundary could pass section 7 and still hand a junk-filled `steps` array to
+// `SetupChecklist` one component further in. This mounts the SHELL surface
+// (#277) inside the real provider over MSW, which is the arrangement
+// `Layout.tsx` actually ships.
+//
+// The observable is `OnboardingBanner` RENDERING NOTHING: a `null` state means
+// "nothing true to say yet", and the sibling that renders beside it proves the
+// tree survived rather than that nothing mounted at all. A crash here is not an
+// assertion failure — it is a thrown `TypeError` that fails the test outright,
+// which is precisely the point.
+// =============================================================================
+
+describe('the shell surface over a malformed body', () => {
+  function renderShell(body: unknown) {
+    serveMalformed(ONBOARDING_PATH, body);
+    serveMalformed(ADMIN_ONBOARDING_PATH, body);
+
+    return render(
+      <OnboardingProvider>
+        <OnboardingBanner />
+        <div data-testid="page">the page</div>
+        <Probe />
+      </OnboardingProvider>,
+      { wrapperOptions: { user: mockAdminUser } },
+    );
+  }
+
+  it.each([
+    ['an empty object', {}],
+    ['a null `steps`', { ...userState(), steps: null }],
+    ['an HTML page', '<!doctype html><html>Sign in</html>'],
+    ['junk inside `steps`', { ...userState(), steps: [{ nope: true }] }],
+  ])('renders the page and no banner for %s', async (_n, body) => {
+    renderShell(body);
+    await settled();
+
+    // The page is still there: the shell did not unwind into `ErrorBoundary`.
+    expect(screen.getByTestId('page')).toBeInTheDocument();
+    // And the banner said nothing, rather than saying something wrong.
+    expect(screen.queryByRole('region', { name: /setup|getting started/i })).toBeNull();
+    expect(screen.queryByText(/required step/i)).toBeNull();
+  });
+
+  it('still renders the banner for a well-formed body', async () => {
+    // Non-vacuity for the two negatives above: the same tree, the same mount,
+    // a valid checklist — and the banner appears. Without this, a component
+    // that rendered `null` unconditionally would satisfy every assertion above.
+    render(
+      <OnboardingProvider>
+        <OnboardingBanner />
+        <div data-testid="page">the page</div>
+        <Probe />
+      </OnboardingProvider>,
+      { wrapperOptions: { user: mockAdminUser } },
+    );
+    await settled();
+
+    expect(
+      await screen.findByText(/required steps? left to finish setting up/i),
+    ).toBeInTheDocument();
   });
 });

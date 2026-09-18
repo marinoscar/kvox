@@ -75,6 +75,17 @@
  * whose deployment checklist 500s should still see their own, and a single
  * `await Promise.all` would discard both.
  *
+ * ⚠ A MALFORMED 200 IS A FAILED READ, and it is `services/onboarding.ts` that
+ * makes it one. That promise above was kept for REJECTIONS and broken for
+ * successes carrying the wrong body: a 200 of `{}` is truthy, so it was stored,
+ * memoised and handed to `applySkipOverlay`, which reached `state.steps.map`
+ * and threw inside this provider's render — and because `Layout.tsx` mounts
+ * this provider in the SHELL, React unwound the whole application into
+ * `ErrorBoundary`. The narrowing at the service boundary turns that body into a
+ * rejection, which is a path this file already handles: state `null`, `error`
+ * set, consumers render nothing. Nothing in this file had to learn a third
+ * state, which is the argument for validating there rather than here.
+ *
  * =============================================================================
  * WRITES: ONE `PATCH /api/user-settings` EACH, THROUGH THE EXISTING HOOK
  * =============================================================================
@@ -193,12 +204,22 @@ const OnboardingContext = createContext<OnboardingContextValue | null>(null);
  * since with no write in flight the effective skip list is the one the server
  * already read. That keeps the context value's identity stable across renders
  * rather than handing every consumer a fresh object on every tick.
+ *
+ * ⚠ THE GUARD CHECKS `steps` AND NOT MERELY TRUTHINESS, and that is belt to
+ * `services/onboarding.ts`'s braces rather than the fix itself. `{}` is truthy,
+ * so `if (!state)` alone let a malformed 200 reach `state.steps.map(...)` — and
+ * because this function runs inside `OnboardingProvider`'s own `useMemo`, the
+ * `TypeError` was thrown DURING THE SHELL'S RENDER and React unwound the entire
+ * application into `ErrorBoundary`'s "Something went wrong" panel, on every
+ * page. The service now rejects such a body before it is ever stored, so this
+ * line should be unreachable; it stays because the cost of being wrong about
+ * that is the whole application, and the cost of the check is one `Array.isArray`.
  */
 export function applySkipOverlay(
   state: OnboardingState | null,
   skippedKeys: readonly string[],
 ): OnboardingState | null {
-  if (!state) return null;
+  if (!state || !Array.isArray(state.steps)) return null;
 
   const skipped = new Set(skippedKeys);
   let changed = false;
