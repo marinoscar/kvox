@@ -1247,6 +1247,9 @@ Options:
   --ref <ref>        Branch, tag or commit to move to
   --force            Rebuild even when the revision has not changed
   --no-cache         Rebuild images without the layer cache
+  --app-version <semver>  Version to deploy; default is a patch bump of the
+                     current one
+  --no-version-bump  Deploy without changing the application version
   --non-interactive  Never prompt; fail listing anything unresolved
   --answer <KEY=VALUE>  Supply a value a new revision asks for; repeat for more
                      (default: [])
@@ -1256,6 +1259,90 @@ Options:
   --skip-github      Never consult the GitHub CLI, even for a GitHub remote
   --json             Print a machine-readable result on stdout
 ```
+
+### The application version
+
+Every `install` and every `update` that actually deploys something chooses an
+**application version**, writes it into the deployment, and — once the
+deployment is healthy — records it back in the repository.
+
+```bash
+kvox deploy update                      # suggests a patch bump, asks
+kvox deploy update --app-version 1.4.0  # chooses one outright
+kvox deploy update --no-version-bump    # deploys without touching it
+```
+
+The number is one shared product version. `apps/api/package.json`,
+`apps/web/package.json` and the root `package-lock.json`'s two workspace
+entries are written together — they ship as one deployment from one commit, so
+two numbers could only ever diverge by accident.
+
+Where it ends up, and what reads it:
+
+| Written to | Read by |
+|---|---|
+| `APP_VERSION` in the deployment's `.env` | `resolveApiVersion()` — the API's own reported version, and `/api/docs` |
+| `apps/api/package.json` in the clone | the built image, and `deploy-info/info.json`'s `app.version` |
+| `apps/web/package.json` in the clone | the web bundle, which shows it at the foot of **Settings** |
+| `deploy-info/info.json` | the About page's **Version** fact |
+
+`APP_VERSION` is deliberately **not** in `infra/compose/.env.example`. That
+file is the install wizard's question list, and this is a value the CLI
+chooses — the same reason `DEPLOY_ROOT` and `COMPOSE_PROJECT_NAME` are not
+there either. It is carried through every later `.env` rewrite under the
+`Not in .env.example` heading.
+
+#### Choosing the number
+
+The suggestion is a **patch bump** of the current version, and "current" is the
+higher of what the repository says and what this server is already running — so
+a version that could not be published (below) can never be handed out twice.
+A release candidate suggests its own release: `1.4.0-rc.2` suggests `1.4.0`.
+
+Two versions are refused outright, whether typed or passed as `--app-version`:
+one that is not valid SemVer (`v1.4.0` is not — the `v` is a tag convention,
+not part of the version), and one that does not sort **above** the current
+version. A deploy never moves the number backwards, and re-deploying the same
+number for different code is the same problem with a smaller step size —
+`--no-version-bump` is how you say you meant to redeploy a release unchanged.
+
+With `--non-interactive` and neither flag, the run **takes the suggestion** and
+says so in the journal. Refusing instead would break every unattended deploy
+for a question that has a correct default, and the suggestion cannot move the
+number backwards by construction.
+
+#### Publishing it back
+
+The two `package.json` files and the lockfile are committed in the clone as
+`chore(release): v<version>`, and pushed to the deployed branch **only after
+the deployment is healthy and verified**. A deploy that failed at `build` or
+`migrate` leaves the repository untouched — a version published for a release
+that never ran is a number nobody can interpret afterwards.
+
+**A push that does not happen never fails the deploy.** By then the application
+is built, migrated, started, answering and verified; the push is bookkeeping.
+Four ordinary situations end the same way — a warning under `Action required:`
+on the summary, and a deployment that is running the new version regardless:
+
+- the deployed ref is a **tag or a commit**, so there is no branch to push to;
+- the clone is a **fork you cannot push to**;
+- **another server pushed first**, so the push is not a fast-forward;
+- the remote refuses the write for any other reason.
+
+The bump commit is then taken back out of the clone, so the clone matches the
+branch again and the next `update` compares cleanly. The deployment keeps the
+version — it is in the image, the `.env` and `deploy-info` — and the next
+deploy measures its bump from there rather than from the repository.
+
+It never force-pushes, and it never retries a rejected push. Retrying would
+mean re-committing the bump on top of whatever the branch moved to, and the
+deployment was built from the *old* tip — the published commit's tree would
+then contain code this server never built. The next deploy fetches that newer
+commit, builds it, and carries the version forward then.
+
+An `update` with nothing to apply versions nothing: no release was deployed, so
+there is no release to number. That is what makes `kvox deploy update` safe to
+run from cron.
 
 ### Checking status
 

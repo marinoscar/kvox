@@ -134,9 +134,28 @@ export interface UpdateFlags {
   skipSeed: boolean;
   /** `--no-cache`: rebuild every layer. */
   noCache: boolean;
+  /**
+   * The application version this deploy will carry (#295).
+   *
+   * PRE-FILLED WITH THE SUGGESTION, which is #289's prefill rule applied to
+   * the one answer this screen asks for: the value already in the field is the
+   * one the run would use anyway, so Enter is the whole interaction and the
+   * field is there for the deploy that is a minor or a major.
+   *
+   * Empty while the suggestion has not been read yet (the clone is read after
+   * the check), which the row below renders as `—` rather than as a version.
+   */
+  appVersion: string;
+  /** False is `--no-version-bump`: deploy without touching the version. */
+  versionBump: boolean;
 }
 
-export const UPDATE_FLAG_DEFAULTS: UpdateFlags = { skipSeed: false, noCache: false };
+export const UPDATE_FLAG_DEFAULTS: UpdateFlags = {
+  skipSeed: false,
+  noCache: false,
+  appVersion: '',
+  versionBump: true,
+};
 
 /**
  * The flag line under the confirm.
@@ -154,7 +173,18 @@ export function updateFlagRows(flags: UpdateFlags): KeyValueRow[] {
       note: flags.skipSeed ? '(new permissions will not be granted)' : undefined,
     },
     { key: 'c  build cache', value: flags.noCache ? 'off (--no-cache)' : 'on' },
+    {
+      key: 'v  version',
+      value: versionRowValue(flags),
+      note: flags.versionBump && flags.appVersion !== '' ? '(v edits, b leaves it alone)' : undefined,
+    },
   ];
+}
+
+/** `1.2.4`, or what `--no-version-bump` means in words. */
+function versionRowValue(flags: UpdateFlags): string {
+  if (!flags.versionBump) return 'unchanged (--no-version-bump)';
+  return flags.appVersion === '' ? '—' : flags.appVersion;
 }
 
 /** Which half of the diff phase the keyboard is pointed at. */
@@ -184,7 +214,15 @@ export function updateDiffHints(upToDate: boolean, focus: DiffFocus = 'confirm')
   if (focus === 'commits') {
     return ['↑↓ scroll the commits', 'tab back to the answer', 'esc back'];
   }
-  return ['enter select', 's re-seed', 'c cache', 'tab scroll the commits', 'esc back'];
+  return [
+    'enter select',
+    's re-seed',
+    'c cache',
+    'v version',
+    'b bump',
+    'tab scroll the commits',
+    'esc back',
+  ];
 }
 
 // -----------------------------------------------------------------------------
@@ -205,6 +243,7 @@ export const UPDATE_PIPELINE_STEPS: ReadonlyArray<{ id: string; title: string }>
   { id: 'auth', title: 'Authenticate with GitHub' },
   { id: 'fetch', title: 'Look for a new revision' },
   { id: 'environment-drift', title: 'Check for new environment variables' },
+  { id: 'version', title: 'Set the application version' },
   { id: 'build', title: 'Build images' },
   { id: 'migrate', title: 'Apply migrations' },
   { id: 'seed', title: 'Refresh roles and permissions' },
@@ -212,6 +251,7 @@ export const UPDATE_PIPELINE_STEPS: ReadonlyArray<{ id: string; title: string }>
   { id: 'health', title: 'Wait for the API' },
   { id: 'publish', title: 'Refresh the vhost and certificate' },
   { id: 'verify', title: 'Verify the deployment' },
+  { id: 'publish-version', title: 'Publish the version to the repository' },
 ];
 
 /** The same running view the install wizard draws, over the update's steps. */

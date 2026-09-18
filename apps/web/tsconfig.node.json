@@ -5,12 +5,24 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
-    "strict": true
+    "strict": true,
+    // `app-version.ts` imports `./package.json` directly (issue #296) — see
+    // that file's header for why an import rather than a path resolved at run
+    // time. `tsconfig.json` already sets this for `src`.
+    "resolveJsonModule": true
   },
   // `pwa/` is config-side code (issue #217): `vite.config.ts` imports
   // `buildManifest()` from it and the React tree never does. It belongs here
   // rather than under `tsconfig.json`'s `include: ["src"]`, which is what
   // keeps `@app/shared` being read at build time instead of bundled into the
   // browser to be read at runtime.
-  "include": ["vite.config.ts", "pwa/**/*.ts"]
+  //
+  // `app-version.ts` is config-side too (issue #296): `vite.config.ts` and
+  // `vitest.config.ts` both import `appVersionDefine()` from it, and the React
+  // tree never does — it sees only the `__APP_VERSION__` the define emits.
+  //
+  // ⚠ IT SITS AT THE PACKAGE ROOT, NOT IN A `build/` FOLDER. This repository's
+  // `.gitignore` ignores `build/` outright, so a config-side module under that
+  // name is one `git add` silently skips and CI then fails to resolve.
+  "include": ["vite.config.ts", "pwa/**/*.ts", "app-version.ts"]
 }

@@ -1,13 +1,21 @@
 import { Box, Text, useInput } from 'ink';
 import Spinner from 'ink-spinner';
+import { join } from 'node:path';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { StepResult } from '../../../deploy/hooks.js';
 import { DEFAULT_APPS_ROOT, locateInstalledApp } from '../../../deploy/layout.js';
 import { readState, type DeployState } from '../../../deploy/state.js';
+import {
+  currentAppVersion,
+  readVersionSources,
+  suggestBump,
+  validateAppVersion,
+} from '../../../deploy/app-version.js';
+import { readEnvFile } from '../../../deploy/env-file.js';
 import { checkForUpdate, runUpdate, type UpdateCheck } from '../../../deploy/update.js';
 import { formatError } from '../../../errors.js';
-import { Checklist, ConfirmDialog, KeyValue, WizardFrame } from '../../components/index.js';
+import { Checklist, ConfirmDialog, KeyValue, TextField, WizardFrame } from '../../components/index.js';
 import { ErrorNotice, useIsMounted } from '../../layout.js';
 import { ScrollBox } from '../../scroll-box.js';
 import { withSignal } from './abort.js';
@@ -82,6 +90,14 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
   }>({});
   const [confirmingAbort, setConfirmingAbort] = useState(false);
   const [diffFocus, setDiffFocus] = useState<DiffFocus>('confirm');
+  // #295's question, as its own sub-mode rather than a field on the page: the
+  // diff screen's `s`/`c`/`v`/`b` are BARE LETTERS, which `updateDiffHints`'s
+  // header says are safe here precisely because the screen has no editable
+  // field. Opening one temporarily keeps that true — while `editingVersion` is
+  // set, the bare-letter handler is inactive and every keystroke belongs to
+  // the field.
+  const [editingVersion, setEditingVersion] = useState(false);
+  const [versionDraft, setVersionDraft] = useState('');
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined);
   const [elapsed, setElapsed] = useState(0);
 
@@ -90,6 +106,25 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
   progressRef.current = progress;
 
   const site = useMemo(() => resolveSite(root), [root]);
+
+  /**
+   * What the version step would choose, read the way it reads it (#295).
+   *
+   * The clone is already on disk here — this screen only ever runs against an
+   * installed deployment — so the suggestion is computable BEFORE the run, and
+   * the field can be pre-filled with it. `currentAppVersion` takes the maximum
+   * of the clone and the running `.env` for the reason its own comment gives.
+   */
+  const versionCurrent = useMemo(() => {
+    if ('error' in site) return undefined;
+    try {
+      return currentAppVersion(
+        readVersionSources(join(site.deployRoot, 'repo'), readEnvFile(site.deployRoot)),
+      );
+    } catch {
+      return undefined;
+    }
+  }, [site]);
 
   // Load-bearing: leaving the screen mid-run must SIGTERM the build, not
   // merely unmount the frame over it.
@@ -154,6 +189,18 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
     runCheck();
   }, [runCheck]);
 
+  // #289's prefill rule: the field opens holding the value the run would use
+  // anyway, so Enter is the whole interaction. Seeded once, and never over an
+  // answer the operator has already typed.
+  useEffect(() => {
+    if (versionCurrent === undefined) return;
+    setFlags((current) =>
+      current.appVersion === ''
+        ? { ...current, appVersion: suggestBump(versionCurrent) }
+        : current,
+    );
+  }, [versionCurrent]);
+
   // ---------------------------------------------------------------------------
   // Phase 3: the run
   // ---------------------------------------------------------------------------
@@ -174,6 +221,21 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
           deployRoot: site.deployRoot,
           skipSeed: flags.skipSeed,
           noCache: flags.noCache,
+          // #295. The version was answered on the diff screen above, so it is
+          // handed over rather than asked again — which is also why
+          // `nonInteractive` below is not a loss of the question.
+          //
+          // ⚠ ONLY WHEN IT IS NON-EMPTY. `appVersion` is blank until the
+          // suggestion has been read off the clone, and an explicit blank is
+          // REFUSED by `validateAppVersion` ("A version is required.") rather
+          // than falling back — which would fail the whole deploy over a value
+          // nobody typed. Blank here means "let the pipeline suggest one",
+          // which is exactly what omitting it does.
+          ...(flags.versionBump
+            ? flags.appVersion === ''
+              ? {}
+              : { appVersion: flags.appVersion }
+            : { versionBump: false }),
           // ink holds stdin in raw mode, so readline cannot ask anything.
           nonInteractive: true,
           runCommand: withSignal(controller.signal),
@@ -289,8 +351,27 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
       const letter = input.toLowerCase();
       if (letter === 's') setFlags((current) => ({ ...current, skipSeed: !current.skipSeed }));
       if (letter === 'c') setFlags((current) => ({ ...current, noCache: !current.noCache }));
+      if (letter === 'b') {
+        setFlags((current) => ({ ...current, versionBump: !current.versionBump }));
+      }
+      if (letter === 'v' && flags.versionBump && flags.appVersion !== '') {
+        setVersionDraft(flags.appVersion);
+        setEditingVersion(true);
+      }
     },
-    { isActive: phase === 'diff' },
+    // ⚠ Inactive while the version field is open, or its own keystrokes would
+    // also toggle `--skip-seed` and `--no-cache` on the way past.
+    { isActive: phase === 'diff' && !editingVersion },
+  );
+
+  // Esc CANCELS THE EDIT rather than leaving the screen — the rule every other
+  // field in this CLI follows: a mistake is corrected where it was made.
+  // `TextField` itself binds Enter and Tab and leaves Esc to its screen.
+  useInput(
+    (_input, key) => {
+      if (key.escape) setEditingVersion(false);
+    },
+    { isActive: phase === 'diff' && editingVersion },
   );
 
   useInput(
@@ -491,6 +572,25 @@ export function UpdateScreen({ onDone, appsRoot }: UpdateScreenProps): ReactNode
           <Box marginTop={1}>
             <KeyValue rows={updateFlagRows(flags)} />
           </Box>
+          {editingVersion ? (
+            <Box marginTop={1}>
+              <TextField
+                label="Version"
+                help="Must be valid SemVer and sort above the current version. Esc keeps the suggestion."
+                value={versionDraft}
+                validate={(value) =>
+                  versionCurrent === undefined
+                    ? undefined
+                    : validateAppVersion(value, versionCurrent)
+                }
+                onChange={setVersionDraft}
+                onSubmit={(value) => {
+                  setFlags((current) => ({ ...current, appVersion: value.trim() }));
+                  setEditingVersion(false);
+                }}
+              />
+            </Box>
+          ) : null}
           <Box marginTop={1}>
             <ConfirmDialog
               message={diff.confirm.message}

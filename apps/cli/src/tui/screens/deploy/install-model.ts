@@ -13,6 +13,7 @@ import {
   type EnvVarMetadata,
   type Suggestion,
 } from '../../../deploy/env-metadata.js';
+import { isSemver } from '../../../deploy/app-version.js';
 import type { EnvVarSpec } from '../../../deploy/env-spec.js';
 import type { ServerFacts } from '../../../deploy/server-facts.js';
 import {
@@ -101,6 +102,8 @@ export const GROUPS_FIELD = '__groups';
 export const PUBLIC_IP_FIELD = '__publicIp';
 export const STAGING_FIELD = '__staging';
 export const INSTALL_CRON_FIELD = '__installCron';
+/** #295's question: the application version this install will deploy. */
+export const APP_VERSION_FIELD = '__appVersion';
 /** `__mode:JWT_SECRET` — generate the value, or paste one. */
 export const SECRET_MODE_PREFIX = '__mode:';
 /** `__opt:SENTRY_DSN` — keep the template's value, edit it, or leave it out. */
@@ -259,7 +262,7 @@ export interface InstallStep extends WizardStep {
 /** Fields this renderer adds to a `steps.ts` step, after its own. */
 const EXTRA_FIELDS: Readonly<Record<string, readonly string[]>> = {
   domain: [PUBLIC_IP_FIELD],
-  resources: [STAGING_FIELD, INSTALL_CRON_FIELD],
+  resources: [STAGING_FIELD, INSTALL_CRON_FIELD, APP_VERSION_FIELD],
 };
 
 const WELCOME_FIELDS: readonly string[] = [
@@ -541,7 +544,41 @@ const INTERNAL_FIELDS: Readonly<Record<string, FormFieldSpec>> = {
       { value: 'false', label: 'Leave renewal to me' },
     ],
   },
+  [APP_VERSION_FIELD]: {
+    kind: 'text',
+    key: APP_VERSION_FIELD,
+    label: 'App version',
+    // NO SUGGESTION PRE-FILLED HERE, unlike the update screen's field, and the
+    // reason is a fact about install rather than an inconsistency: the clone
+    // does not exist yet when this form is answered, so there is nothing to
+    // read a current version out of and nothing to bump. The `version` step
+    // computes the suggestion once the checkout has happened, which is what
+    // blank means.
+    // Blank is a legal answer: the validator accepts it, exactly as
+    // PUBLIC_IP_FIELD's does, so the form never blocks on a question whose
+    // default is correct.
+    help: 'Blank takes a patch bump of the version in the repository. It is written to apps/api and apps/web and published back once the deployment is healthy.',
+    validate: validateInstallVersion,
+  },
 };
+
+/**
+ * The version field's rule, minus the monotonicity half.
+ *
+ * ⚠ SEMVER ONLY. "Above the current version" cannot be checked here — the
+ * clone has not been fetched, so there is no current version to compare
+ * against. The `version` step applies the full `validateAppVersion` once it
+ * can, and refuses the install there rather than deploying a number that
+ * moves backwards. Checking half of it here is still worth doing: a typo is
+ * caught while the operator is looking at the field.
+ */
+export function validateInstallVersion(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  return isSemver(trimmed)
+    ? undefined
+    : 'Not a valid SemVer version. Write it as MAJOR.MINOR.PATCH — a leading `v` is not part of it.';
+}
 
 /** Defaults for the fields this renderer adds. */
 export const INTERNAL_DEFAULTS: InstallAnswers = {
@@ -1138,6 +1175,7 @@ export const PIPELINE_STEPS: ReadonlyArray<{ id: string; title: string }> = [
   { id: 'checkout', title: 'Fetch the application' },
   { id: 'environment', title: 'Configure the environment' },
   { id: 'validate-environment', title: 'Validate the environment' },
+  { id: 'version', title: 'Set the application version' },
   { id: 'build', title: 'Build images' },
   { id: 'migrate', title: 'Apply migrations' },
   { id: 'seed', title: 'Seed roles and permissions' },
@@ -1145,6 +1183,7 @@ export const PIPELINE_STEPS: ReadonlyArray<{ id: string; title: string }> = [
   { id: 'health', title: 'Wait for health' },
   { id: 'publish', title: 'Publish behind the proxy' },
   { id: 'verify', title: 'Verify the deployment' },
+  { id: 'publish-version', title: 'Publish the version to the repository' },
 ];
 
 export interface PipelineProgress {
