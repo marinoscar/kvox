@@ -4945,10 +4945,15 @@ remove them. A template is reusable configuration with its own settings
 page, not note content, and a user who clicked "Delete notes" was told they
 were deleting notes, not silently emptying a different settings page.
 
-**No scope deletes the account.** The `users` row, `user_settings`,
-`user_roles`, `refresh_tokens` and the caller's session are untouched by
-every scope, including `everything` — the caller stays signed in throughout
-and afterward. `everything` does revoke every AI provider key and personal
+**No scope deletes the account.** The `users` row, `user_roles`,
+`refresh_tokens` and the caller's session are untouched by every scope,
+including `everything` — the caller stays signed in throughout and afterward.
+
+`everything` touches exactly one thing in `user_settings`: it clears the
+`onboarding` namespace (epic #271), so the welcome and the setup checklist are
+offered again from the start. Every other namespace — `theme`, `profile`,
+`navigation`, `notifications`, `dataTables` — survives every scope, including
+`everything`. `everything` does revoke every AI provider key and personal
 access token the caller holds, so any CLI or script authenticating with one
 stops working immediately.
 
