@@ -184,6 +184,42 @@ jobs:
 
       - run: npm ci
 
+      # -----------------------------------------------------------------------
+      # Derive the versions this job asserts, rather than pinning them.
+      # -----------------------------------------------------------------------
+      #
+      # ⚠ THESE WERE HARDCODED (`1.0.0`/`1.0.1`/`1.0.2`) AND IT BROKE THE JOB.
+      # Since issue #295 the deploy pipeline patch-bumps the version on every
+      # run, measured against whatever the clone currently carries — so the
+      # numbers this job should expect are a function of the repository's
+      # CURRENT version, not constants. `1c5db80` ("chore(release): v1.0.1")
+      # moved both manifests off the `1.0.0` the old comment assumed, every
+      # assertion below went off by exactly one patch, and the job failed at
+      # "Assert the installed layout".
+      #
+      # It was invisible for a while: `c475829` had broken the CLI unit-test
+      # gate above, which aborts this job before any deploy step runs, so the
+      # first green gate since then is what surfaced this.
+      #
+      # Deriving removes the whole class. The next release commit moves these
+      # with it and nobody has to remember this file exists.
+      - name: Derive the expected deploy versions
+        run: |
+          base=$(node -p "require('./apps/api/package.json').version")
+          web=$(node -p "require('./apps/web/package.json').version")
+          # The two manifests move in lockstep (issue #295) and the pipeline
+          # writes both; if they ever disagree the arithmetic below is
+          # meaningless, so say so here rather than failing three steps later
+          # on a number nobody can source.
+          test "$base" = "$web"
+          bump() { echo "$1" | awk -F. '{ printf "%s.%s.%s", $1, $2, $3 + 1 }'; }
+          after_install=$(bump "$base")
+          after_update=$(bump "$after_install")
+          echo "E2E_BASE_VERSION=$base"            >> "$GITHUB_ENV"
+          echo "E2E_VERSION_AFTER_INSTALL=$after_install" >> "$GITHUB_ENV"
+          echo "E2E_VERSION_AFTER_UPDATE=$after_update"   >> "$GITHUB_ENV"
+          echo "base=$base install=$after_install update=$after_update"
+
       # --- the `needs: [build]` stand-in ------------------------------------
       # Cheap, and it fails before any image is built. See the header for why
       # this is here rather than a cross-workflow `needs:`.
@@ -340,16 +376,16 @@ jobs:
           version=$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)
           echo "APP_VERSION=$version"
           test -n "$version"
-          # A patch bump of the 1.0.0 both package.json files ship with.
-          test "$version" = "1.0.1"
+          # A patch bump of whatever the manifests currently ship.
+          test "$version" = "$E2E_VERSION_AFTER_INSTALL"
           jq -e --arg v "$version" '.app.version == $v' "$APP_DIR/deploy-info/info.json"
 
           # The clone was restored after the refused push, so it still reads
           # what the repository says. Without that restore the clone would sit
           # permanently one commit ahead of origin and the `update --check`
           # below would report `current != latest` for ever.
-          jq -e '.version == "1.0.0"' "$APP_DIR/repo/apps/api/package.json"
-          jq -e '.version == "1.0.0"' "$APP_DIR/repo/apps/web/package.json"
+          jq -e --arg v "$E2E_BASE_VERSION" '.version == $v' "$APP_DIR/repo/apps/api/package.json"
+          jq -e --arg v "$E2E_BASE_VERSION" '.version == $v' "$APP_DIR/repo/apps/web/package.json"
 
           # `-p <name>` reached compose: without it every app on a host is the
           # project `compose`, and a second app's `up -d` replaces the first's
@@ -433,7 +469,7 @@ jobs:
           # `version` step is `skipWhenUnchanged` for exactly this: an update
           # from cron must not become a version generator that moves the
           # default branch every few minutes.
-          test "$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)" = "1.0.1"
+          test "$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)" = "$E2E_VERSION_AFTER_INSTALL"
 
           docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
             | sort > "$DIAG_DIR/images-after.txt"
@@ -484,13 +520,14 @@ jobs:
           jq -e '.updatedAt > .installedAt' "$info"
           jq -e '.lastCommand == "update"' "$info"
 
-          # The version moved with the revision (issue #295). 1.0.2, not 1.0.1
-          # again: the suggestion is measured against the highest of the clone
+          # The version moved with the revision (issue #295). A SECOND patch
+          # bump, not the install's one again: the suggestion is measured
+          # against the highest of the clone
           # and the RUNNING deployment's own APP_VERSION, so a bump that could
           # not be published to the repository still cannot repeat itself.
           version=$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)
           echo "APP_VERSION=$version"
-          test "$version" = "1.0.2"
+          test "$version" = "$E2E_VERSION_AFTER_UPDATE"
           jq -e --arg v "$version" '.app.version == $v' "$info"
 
           curl -fsS "http://127.0.0.1:$BIND_PORT/api/health/ready" > /dev/null
