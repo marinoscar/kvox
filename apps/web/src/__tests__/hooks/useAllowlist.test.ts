@@ -9,6 +9,7 @@ vi.mock('../../services/api', () => ({
   getAllowlist: vi.fn(),
   addToAllowlist: vi.fn(),
   removeFromAllowlist: vi.fn(),
+  sendAllowlistReminder: vi.fn(),
 }));
 
 // Mock data
@@ -19,6 +20,8 @@ const mockAllowedEmail1: AllowedEmailEntry = {
   addedAt: '2026-01-20T10:00:00Z',
   claimedBy: null,
   claimedAt: null,
+  reminderCount: 0,
+  lastReminderAt: null,
   notes: 'Test user 1',
 };
 
@@ -29,6 +32,8 @@ const mockAllowedEmail2: AllowedEmailEntry = {
   addedAt: '2026-01-21T10:00:00Z',
   claimedBy: { id: 'user-2', email: 'user2@example.com' },
   claimedAt: '2026-01-21T12:00:00Z',
+  reminderCount: 0,
+  lastReminderAt: null,
   notes: null,
 };
 
@@ -39,6 +44,8 @@ const mockAllowedEmail3: AllowedEmailEntry = {
   addedAt: '2026-01-22T10:00:00Z',
   claimedBy: null,
   claimedAt: null,
+  reminderCount: 0,
+  lastReminderAt: null,
   notes: 'Pending user',
 };
 
@@ -402,6 +409,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T10:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: 'New user',
       };
 
@@ -434,6 +443,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T11:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -515,6 +526,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T10:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -670,6 +683,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T10:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -752,6 +767,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T10:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -845,6 +862,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T10:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -1047,6 +1066,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T10:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -1057,6 +1078,8 @@ describe('useAllowlist', () => {
         addedAt: '2026-01-23T11:00:00Z',
         claimedBy: null,
         claimedAt: null,
+        reminderCount: 0,
+        lastReminderAt: null,
         notes: null,
       };
 
@@ -1086,6 +1109,72 @@ describe('useAllowlist', () => {
       await waitFor(() => {
         expect(result.current.total).toBe(5);
       });
+    });
+  });
+  // =========================================================================
+  // sendReminder (issue #301)
+  // =========================================================================
+
+  describe('sendReminder - Chasing an unused invitation', () => {
+    /**
+     * The whole reason `POST /api/allowlist/{id}/reminder` answers 200 WITH the
+     * updated entry instead of 204: the one row that changed can be written
+     * straight into the list. Asserting that `getAllowlist` was NOT called is
+     * the substantive half — a re-fetch would also work visually, and would
+     * throw away the administrator's scroll position and filter for a change
+     * already in hand.
+     */
+    it('patches the returned entry into the list without re-fetching', async () => {
+      vi.mocked(api.getAllowlist).mockResolvedValue(mockAllowlistResponse);
+
+      const { result } = renderHook(() => useAllowlist());
+      await act(async () => {
+        await result.current.fetchAllowlist();
+      });
+      await waitFor(() => expect(result.current.entries).toHaveLength(3));
+
+      const reminded: AllowedEmailEntry = {
+        ...mockAllowedEmail1,
+        reminderCount: 1,
+        lastReminderAt: '2026-01-24T09:00:00Z',
+      };
+      vi.mocked(api.sendAllowlistReminder).mockResolvedValue(reminded);
+      vi.mocked(api.getAllowlist).mockClear();
+
+      await act(async () => {
+        await result.current.sendReminder('entry-1');
+      });
+
+      expect(api.sendAllowlistReminder).toHaveBeenCalledWith('entry-1');
+      expect(result.current.entries[0].reminderCount).toBe(1);
+      expect(result.current.entries[0].lastReminderAt).toBe('2026-01-24T09:00:00Z');
+      // Untouched neighbours, and no second list read.
+      expect(result.current.entries[1].reminderCount).toBe(0);
+      expect(api.getAllowlist).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Unlike `addEmail`/`removeEmail`, this one does NOT write `error`: a
+     * reminder failure has three distinct meanings and the wording for each is
+     * presentation, which `AllowlistTable.reminderErrorMessage` owns.
+     */
+    it('rethrows without claiming the generic list error', async () => {
+      const failure = new Error('Boom');
+      vi.mocked(api.sendAllowlistReminder).mockRejectedValue(failure);
+
+      const { result } = renderHook(() => useAllowlist());
+
+      let thrown: unknown = null;
+      await act(async () => {
+        try {
+          await result.current.sendReminder('entry-1');
+        } catch (err) {
+          thrown = err;
+        }
+      });
+
+      expect(thrown).toBe(failure);
+      expect(result.current.error).toBeNull();
     });
   });
 });

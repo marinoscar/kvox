@@ -377,6 +377,27 @@ export async function removeFromAllowlist(id: string): Promise<void> {
   await api.delete<void>(`/allowlist/${id}`);
 }
 
+/**
+ * `POST /api/allowlist/{id}/reminder` (issue #301) — email an invitee again
+ * about an invitation they have not used yet.
+ *
+ * ⚠ A 200 with a BODY, not a 204. `allowlist.controller.ts` carries
+ * `@HttpCode(HttpStatus.OK)` and returns the updated entry precisely so a
+ * client can show the new `reminderCount`/`lastReminderAt` without re-listing,
+ * which is why this returns `AllowedEmailEntry` rather than `void` the way
+ * `removeFromAllowlist` above does.
+ *
+ * Two refusals worth knowing at the call site, both raised by
+ * `AllowlistService.sendReminder`: **409** when the entry is already claimed
+ * (the invitee signed in — there is nobody left to remind) and **404** for an id
+ * that is not there. Neither is a generic failure and neither should be
+ * reported as one.
+ */
+export async function sendAllowlistReminder(id: string): Promise<AllowedEmailEntry> {
+  // No body — the id is the whole request. Matches `retryJob`/`cancelBackup`.
+  return api.post<AllowedEmailEntry>(`/allowlist/${id}/reminder`);
+}
+
 // Users API
 /**
  * Sort keys `GET /api/users` accepts, mirroring `userListQuerySchema.sortBy`

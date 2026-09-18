@@ -24,7 +24,7 @@
  * desktop and a full-screen sheet on a phone.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Button, Paper, Stack, Typography } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { DataTable } from '../datatable';
@@ -35,7 +35,7 @@ import type {
 } from '../datatable';
 import { useAllowlist } from '../../hooks/useAllowlist';
 import { usePermissions } from '../../hooks/usePermissions';
-import { getAllowlist } from '../../services/api';
+import { ApiError, getAllowlist } from '../../services/api';
 import { AddEmailDialog } from './AddEmailDialog';
 import type { AllowedEmailEntry } from '../../types';
 import { TABLE_ID, asAllowlistSortField, buildAllowlistColumns } from './allowlistColumns';
@@ -50,9 +50,53 @@ function readStatusFilter(filters: DataTableFilterModel): AllowlistStatus {
   return found?.value === 'pending' || found?.value === 'claimed' ? found.value : 'all';
 }
 
+/**
+ * What to say when `POST /api/allowlist/{id}/reminder` refuses (issue #301).
+ *
+ * ⚠ THE TWO NAMED STATUSES ARE NOT FAILURES OF THE SAME KIND, AND NEITHER IS A
+ * GENERIC ONE. `AllowlistService.sendReminder` raises:
+ *
+ *   - **409** when the entry is already claimed. The invitee signed in, which
+ *     is the outcome the invitation was for — so this reads as news rather than
+ *     an apology, and it tells the administrator what to do about the stale row
+ *     in front of them (reload; it will say `Claimed`). The button is not
+ *     rendered for a claimed row at all, so reaching this means the list is
+ *     older than the database, not that the gate leaked.
+ *   - **404** for an id that is gone — somebody removed the entry in another
+ *     tab or another session. Retrying cannot help; re-reading can.
+ *
+ * Everything else keeps the server's own sentence, which is what
+ * `useAllowlist`'s other handlers do (`err.message`), falling back to a plain
+ * statement only when there is no message to show. Maintenance windows are
+ * already intercepted centrally in `services/api.ts` and never reach here.
+ *
+ * Exported for its own test: the mapping is the whole of this feature's error
+ * behaviour and deserves to be assertable without driving a click.
+ */
+export function reminderErrorMessage(error: unknown, email: string): string {
+  if (error instanceof ApiError) {
+    if (error.status === 409) {
+      return `${email} has already signed in, so there is nobody left to remind. Reload the list to see the current status.`;
+    }
+    if (error.status === 404) {
+      return `That allowlist entry no longer exists — it was removed somewhere else. Reload the list.`;
+    }
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return 'Failed to send reminder';
+}
+
 export function AllowlistTable() {
-  const { entries, total, isLoading, error, fetchAllowlist, addEmail, removeEmail } =
-    useAllowlist();
+  const {
+    entries,
+    total,
+    isLoading,
+    error,
+    fetchAllowlist,
+    addEmail,
+    removeEmail,
+    sendReminder,
+  } = useAllowlist();
   const { hasPermission } = usePermissions();
 
   const [search, setSearch] = useState('');
@@ -61,8 +105,45 @@ export function AllowlistTable() {
   const [sort, setSort] = useState<DataTableSortState | null>(null);
   const [filters, setFilters] = useState<DataTableFilterModel>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Separate from the hook's `error`, which is about LOADING and about the two
+  // writes that change which rows exist. A reminder failure is about one named
+  // person, so its sentence names them; folding the two into one state would
+  // mean a failed reminder silently clearing a failed load, and vice versa.
+  const [reminderError, setReminderError] = useState<string | null>(null);
 
-  const columns = useMemo(() => buildAllowlistColumns(), []);
+  // --- Row actions ------------------------------------------------------------
+  const canWrite = hasPermission('allowlist:write');
+
+  /**
+   * ⚠ NEVER REJECTS. `ReminderCell` awaits this to clear its own spinner, and
+   * an unhandled rejection from a cell would leave that spinner turning
+   * forever. The outcome is reported in the alert above the table instead — the
+   * same place the hook already reports a failed add or remove.
+   */
+  const handleSendReminder = useCallback(
+    async (entry: AllowedEmailEntry) => {
+      setReminderError(null);
+      try {
+        await sendReminder(entry.id);
+      } catch (err) {
+        setReminderError(reminderErrorMessage(err, entry.email));
+      }
+    },
+    [sendReminder],
+  );
+
+  const columns = useMemo(
+    () =>
+      buildAllowlistColumns({
+        canSendReminder: canWrite,
+        onSendReminder: handleSendReminder,
+      }),
+    // Both are stable (`canWrite` is a boolean off the session, `handleSendReminder`
+    // a `useCallback` over the hook's own `useCallback`), so the column array
+    // keeps its identity across renders — which is what the DataGrid's cell
+    // repaint guidance in `DesktopGridRenderer` asks pages to preserve.
+    [canWrite, handleSendReminder],
+  );
 
   // --- Query params, flattened to scalars ------------------------------------
   const status = useMemo(() => readStatusFilter(filters), [filters]);
@@ -80,9 +161,6 @@ export function AllowlistTable() {
     // Scalars only — `entries` is replaced on every fetch, so nothing here may
     // depend on a row object.
   }, [page, pageSize, search, status, sortField, sortDirection, fetchAllowlist]);
-
-  // --- Row actions ------------------------------------------------------------
-  const canWrite = hasPermission('allowlist:write');
 
   const rowActions = useMemo(() => {
     // DELETE /api/allowlist/{id} enforces allowlist:write. Gating the ARRAY (as
@@ -149,6 +227,12 @@ export function AllowlistTable() {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+        </Alert>
+      )}
+
+      {reminderError && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setReminderError(null)}>
+          {reminderError}
         </Alert>
       )}
 

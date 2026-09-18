@@ -73,6 +73,8 @@ const entry: AllowedEmailEntry = {
   notes: null,
   addedAt: '2024-01-15T10:00:00Z',
   claimedAt: null,
+  reminderCount: 0,
+  lastReminderAt: null,
   addedBy: { id: 'admin-user-id', email: 'admin@example.com' },
   claimedBy: null,
 };

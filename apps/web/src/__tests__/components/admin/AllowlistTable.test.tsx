@@ -24,7 +24,7 @@ import {
   resetContainerWidth,
   setInitialContainerWidth,
 } from '../../../components/datatable/__tests__/testUtils/layoutStubs';
-import { api } from '../../../services/api';
+import { ApiError, api } from '../../../services/api';
 import type { AllowedEmailEntry } from '../../../types';
 
 vi.mock('../../../hooks/useAllowlist', () => ({
@@ -47,6 +47,8 @@ const pendingEntry: AllowedEmailEntry = {
   claimedAt: null,
   addedBy: { id: 'admin-id', email: 'admin@example.com' },
   claimedBy: null,
+  reminderCount: 0,
+  lastReminderAt: null,
 };
 
 const claimedEntry: AllowedEmailEntry = {
@@ -57,6 +59,8 @@ const claimedEntry: AllowedEmailEntry = {
   claimedAt: '2024-01-16T10:00:00Z',
   addedBy: { id: 'admin-id', email: 'admin@example.com' },
   claimedBy: { id: 'user-id', email: 'user@example.com' },
+  reminderCount: 0,
+  lastReminderAt: null,
 };
 
 /** A seeded entry: no `addedBy`, which the column renders as "System". */
@@ -68,11 +72,28 @@ const systemEntry: AllowedEmailEntry = {
   claimedAt: null,
   addedBy: null,
   claimedBy: null,
+  reminderCount: 0,
+  lastReminderAt: null,
 };
+
+/** Already chased twice (issue #301). */
+const remindedEntry: AllowedEmailEntry = {
+  ...pendingEntry,
+  id: 'entry-4',
+  email: 'chased@example.com',
+  reminderCount: 2,
+  lastReminderAt: '2024-01-18T09:30:00Z',
+};
+
+/** The cell's date format is `Date#toLocaleString`, the same call `Added Date`
+ *  already makes — so the expectation is computed rather than hardcoded, and
+ *  the test does not depend on the runner's locale or timezone. */
+const lastReminderText = new Date(remindedEntry.lastReminderAt as string).toLocaleString();
 
 const mockFetchAllowlist = vi.fn();
 const mockAddEmail = vi.fn();
 const mockRemoveEmail = vi.fn();
+const mockSendReminder = vi.fn();
 
 function userWith(permissions: string[]): MockUser {
   return { ...mockAdminUser, permissions };
@@ -95,6 +116,7 @@ function setHookState({
     fetchAllowlist: mockFetchAllowlist,
     addEmail: mockAddEmail,
     removeEmail: mockRemoveEmail,
+    sendReminder: mockSendReminder,
   });
 }
 
@@ -127,6 +149,7 @@ describe('AllowlistTable', () => {
     vi.spyOn(api, 'patch').mockResolvedValue({} as never);
     mockAddEmail.mockResolvedValue(undefined);
     mockRemoveEmail.mockResolvedValue(undefined);
+    mockSendReminder.mockResolvedValue(undefined);
     setHookState();
   });
 
@@ -359,6 +382,157 @@ describe('AllowlistTable', () => {
       await waitFor(() =>
         expect(mockAddEmail).toHaveBeenCalledWith('new@example.com', undefined),
       );
+    });
+  });
+
+  // =========================================================================
+  // Invitation reminders (issue #301)
+  // =========================================================================
+
+  describe('reminders', () => {
+    const sendButton = (email: string) =>
+      screen.queryByRole('button', { name: `Send reminder to ${email}` });
+
+    it('offers the action on a pending row', async () => {
+      setHookState({ entries: [pendingEntry], total: 1 });
+      renderTable();
+
+      await screen.findByText('pending@example.com');
+      expect(sendButton('pending@example.com')).toBeEnabled();
+    });
+
+    /**
+     * NOT a disabled button — nothing at all. A claimed entry means the invitee
+     * signed in, so a reminder has no recipient; `POST /:id/reminder` answers
+     * 409 for precisely this row. That is the opposite treatment from `Remove`
+     * directly above, which stays on screen and disabled, and the difference is
+     * the point: `Remove` is a refused action worth explaining, this is an
+     * action with no subject.
+     */
+    it('renders no reminder control on a claimed row', async () => {
+      setHookState({ entries: [claimedEntry], total: 1 });
+      renderTable();
+
+      await screen.findByText('claimed@example.com');
+      expect(sendButton('claimed@example.com')).not.toBeInTheDocument();
+      // The row is really there and really has its other control — so the
+      // assertion above is about this action, not about an unrendered row.
+      expect(
+        screen.getByRole('button', { name: 'Remove for claimed@example.com' }),
+      ).toBeInTheDocument();
+    });
+
+    it('sends the reminder for the row whose button was pressed', async () => {
+      const user = userEvent.setup();
+      setHookState({ entries: [pendingEntry, remindedEntry], total: 2 });
+      renderTable();
+
+      await screen.findByText('chased@example.com');
+      await user.click(sendButton('chased@example.com') as HTMLElement);
+
+      await waitFor(() => expect(mockSendReminder).toHaveBeenCalledWith('entry-4'));
+      // One row, one call: the neighbouring pending row is not swept along.
+      expect(mockSendReminder).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows how many reminders have gone out and when the last one did', async () => {
+      setHookState({ entries: [remindedEntry], total: 1 });
+      renderTable();
+
+      await screen.findByText('chased@example.com');
+      expect(
+        screen.getByText(`2 sent \u00b7 ${lastReminderText}`),
+      ).toBeInTheDocument();
+    });
+
+    /**
+     * The restraint only works if a real number stands out, and it cannot stand
+     * out from a column of zeroes.
+     */
+    it('shows no count on a row that has never been reminded', async () => {
+      setHookState({ entries: [pendingEntry], total: 1 });
+      renderTable();
+
+      await screen.findByText('pending@example.com');
+      expect(screen.queryByText(/\bsent\b/)).not.toBeInTheDocument();
+    });
+
+    it('renders the new count in place once the row comes back updated', async () => {
+      const user = userEvent.setup();
+      setHookState({ entries: [pendingEntry], total: 1 });
+      const { rerender } = renderTable();
+
+      await screen.findByText('pending@example.com');
+      expect(screen.queryByText(/\bsent\b/)).not.toBeInTheDocument();
+
+      await user.click(sendButton('pending@example.com') as HTMLElement);
+      await waitFor(() => expect(mockSendReminder).toHaveBeenCalledWith('entry-1'));
+
+      // What the hook does on a 200: patch the one row, no re-list.
+      const updated = {
+        ...pendingEntry,
+        reminderCount: 1,
+        lastReminderAt: '2024-01-19T08:00:00Z',
+      };
+      setHookState({ entries: [updated], total: 1 });
+      rerender(<AllowlistTable />);
+
+      expect(
+        await screen.findByText(
+          `1 sent \u00b7 ${new Date(updated.lastReminderAt).toLocaleString()}`,
+        ),
+      ).toBeInTheDocument();
+      // And the row is still remindable — a second chase is a decision, not a
+      // door that closed.
+      expect(sendButton('pending@example.com')).toBeEnabled();
+    });
+
+    it('explains a 409 as "they have already signed in"', async () => {
+      const user = userEvent.setup();
+      mockSendReminder.mockRejectedValue(
+        new ApiError('Email pending@example.com has already been claimed', 409),
+      );
+      setHookState({ entries: [pendingEntry], total: 1 });
+      renderTable();
+
+      await screen.findByText('pending@example.com');
+      await user.click(sendButton('pending@example.com') as HTMLElement);
+
+      expect(
+        await screen.findByText(/pending@example\.com has already signed in/i),
+      ).toBeInTheDocument();
+      // The spinner is released, not left turning.
+      await waitFor(() => expect(sendButton('pending@example.com')).toBeEnabled());
+    });
+
+    it('explains a 404 as an entry removed somewhere else', async () => {
+      const user = userEvent.setup();
+      mockSendReminder.mockRejectedValue(new ApiError('Not found', 404));
+      setHookState({ entries: [pendingEntry], total: 1 });
+      renderTable();
+
+      await screen.findByText('pending@example.com');
+      await user.click(sendButton('pending@example.com') as HTMLElement);
+
+      expect(
+        await screen.findByText(/no longer exists .* removed somewhere else/i),
+      ).toBeInTheDocument();
+    });
+
+    /**
+     * `allowlist:write` is the exact string `allowlist.controller.ts` puts on
+     * `POST /:id/reminder`. The COUNT is not gated by it: reading the row is
+     * `allowlist:read`, and the number is the row.
+     */
+    it('withholds the button without allowlist:write while keeping the count', async () => {
+      setHookState({ entries: [remindedEntry], total: 1 });
+      renderTable(['allowlist:read']);
+
+      await screen.findByText('chased@example.com');
+      expect(sendButton('chased@example.com')).not.toBeInTheDocument();
+      expect(
+        screen.getByText(`2 sent \u00b7 ${lastReminderText}`),
+      ).toBeInTheDocument();
     });
   });
 
