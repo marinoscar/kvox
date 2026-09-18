@@ -302,6 +302,36 @@ export function SettingsHub({ sections, hubKey, title, subtitle }: SettingsHubPr
           )}
         </Box>
       ))}
+
+      {/* ==================================================================
+          THE BUILD THE USER IS ACTUALLY RUNNING  (issue #296)
+          ==================================================================
+          ON THE SHARED COMPONENT DELIBERATELY, so it appears on `/settings`
+          AND `/admin/settings`. Settings UI Pattern rule 4 says reuse this
+          component rather than fork it, and the whole point of the issue is
+          that a Contributor or a Viewer can see their version at all: the
+          only other place it appears is `/admin/settings/about`, whose
+          endpoint is gated on `system_settings:read` — seeded Admin-only.
+
+          NOT A DUPLICATE OF About, WHICH STAYS AUTHORITATIVE for what is
+          DEPLOYED ON THIS SERVER: the revision, the install and update
+          instants, the database, the deploy-info record. This answers the
+          different question "what am I running right now", and it answers it
+          from the BUNDLE rather than from the API on purpose — see
+          `build/app-version.ts`.
+
+          NO BREAKPOINT READ. This is content inside an existing surface, so
+          it introduces no sixth gate and changes none of the five coupled
+          ones (rule 5). It renders identically at every width.
+          ================================================================== */}
+      <Typography
+        variant="caption"
+        component="p"
+        color="text.secondary"
+        sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}
+      >
+        Version {__APP_VERSION__}
+      </Typography>
     </Box>
   );
 }

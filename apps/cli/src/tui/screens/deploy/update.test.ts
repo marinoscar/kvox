@@ -122,26 +122,70 @@ describe('updateDiffModel', () => {
 });
 
 describe('the flags on the confirm row', () => {
-  it('defaults to re-seeding and to using the build cache', () => {
-    expect(UPDATE_FLAG_DEFAULTS).toEqual({ skipSeed: false, noCache: false });
-    expect(updateFlagRows(UPDATE_FLAG_DEFAULTS).map((row) => row.value)).toEqual(['on', 'on']);
+  it('defaults to re-seeding, to using the build cache, and to bumping', () => {
+    expect(UPDATE_FLAG_DEFAULTS).toEqual({
+      skipSeed: false,
+      noCache: false,
+      appVersion: '',
+      versionBump: true,
+    });
+    // The version reads `—` until the suggestion has been computed from the
+    // clone, rather than showing a number nothing chose yet.
+    expect(updateFlagRows(UPDATE_FLAG_DEFAULTS).map((row) => row.value)).toEqual([
+      'on',
+      'on',
+      '—',
+    ]);
   });
 
   it('names the flag it will pass, and what skipping the seed costs', () => {
-    const rows = updateFlagRows({ skipSeed: true, noCache: true });
+    const rows = updateFlagRows({
+      skipSeed: true,
+      noCache: true,
+      appVersion: '1.2.4',
+      versionBump: true,
+    });
 
     expect(rows[0]?.value).toContain('--skip-seed');
     expect(rows[0]?.note).toContain('permissions');
     expect(rows[1]?.value).toContain('--no-cache');
   });
+
+  it('shows the version the run will carry, pre-filled with the suggestion (#295)', () => {
+    const rows = updateFlagRows({
+      skipSeed: false,
+      noCache: false,
+      appVersion: '1.2.4',
+      versionBump: true,
+    });
+
+    expect(rows[2]?.key).toContain('version');
+    expect(rows[2]?.value).toBe('1.2.4');
+  });
+
+  it('says what --no-version-bump means, rather than showing a number it will not use', () => {
+    const rows = updateFlagRows({
+      skipSeed: false,
+      noCache: false,
+      appVersion: '1.2.4',
+      versionBump: false,
+    });
+
+    expect(rows[2]?.value).toContain('--no-version-bump');
+    expect(rows[2]?.value).not.toContain('1.2.4');
+  });
 });
 
 describe('updateDiffHints', () => {
-  it('binds bare letters, because this screen has no text field', () => {
+  it('binds bare letters, because this screen has no PERMANENT text field', () => {
     const hints = updateDiffHints(false);
 
     expect(hints).toContain('s re-seed');
     expect(hints).toContain('c cache');
+    // #295's two. The version field opens as a sub-mode and takes the keyboard
+    // with it while it is open, so the bare letters stay unambiguous.
+    expect(hints).toContain('v version');
+    expect(hints).toContain('b bump');
     // ctrl-s is XOFF on most terminals; it is not an option here.
     expect(hints.join(' ')).not.toContain('ctrl-s');
   });
@@ -179,12 +223,13 @@ describe('the running view', () => {
     );
   });
 
-  it('is the eleven steps the issue names', () => {
+  it('is the eleven steps the issue names, plus #295\'s two', () => {
     expect(UPDATE_PIPELINE_STEPS.map((step) => step.id)).toEqual([
       'preflight',
       'auth',
       'fetch',
       'environment-drift',
+      'version',
       'build',
       'migrate',
       'seed',
@@ -192,6 +237,7 @@ describe('the running view', () => {
       'health',
       'publish',
       'verify',
+      'publish-version',
     ]);
   });
 

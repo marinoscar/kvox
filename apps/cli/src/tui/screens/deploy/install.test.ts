@@ -27,6 +27,7 @@ import {
 import {
   ABORT_DIALOG,
   ALL_FIELD,
+  APP_VERSION_FIELD,
   CATCH_ALL_PAGE_SIZE,
   ENVIRONMENT_STEP_ID,
   GROUPS_FIELD,
@@ -38,6 +39,7 @@ import {
   PUBLIC_IP_FIELD,
   REVIEW_STEP_ID,
   STAGING_FIELD,
+  validateInstallVersion,
   WELCOME_STEP_ID,
   applyOptionMode,
   applyPrefill,
@@ -263,7 +265,7 @@ describe('installSteps', () => {
     ]);
   });
 
-  it('adds the TLS choice and the renewal cron to the resources step', () => {
+  it('adds the TLS choice, the renewal cron and the app version to the resources step', () => {
     expect(stepById('resources').fields).toEqual([
       'APP_BIND_PORT',
       'JOBS_WORKER_CONCURRENCY',
@@ -271,7 +273,19 @@ describe('installSteps', () => {
       'WEB_MEM_LIMIT',
       STAGING_FIELD,
       INSTALL_CRON_FIELD,
+      APP_VERSION_FIELD,
     ]);
+  });
+
+  it('accepts a blank app version, and refuses one that is not SemVer (#295)', () => {
+    // Blank is the ordinary answer: it means "take the suggested patch bump",
+    // which cannot be computed until the clone exists — so this field checks
+    // only the half of the rule it is able to.
+    expect(validateInstallVersion('')).toBeUndefined();
+    expect(validateInstallVersion('  ')).toBeUndefined();
+    expect(validateInstallVersion('2.0.0')).toBeUndefined();
+    expect(validateInstallVersion('v2.0.0')).toContain('Not a valid SemVer');
+    expect(validateInstallVersion('2.0')).toContain('Not a valid SemVer');
   });
 
   it('gives the rail one entry per step', () => {
@@ -1452,7 +1466,9 @@ describe('resumeNotice', () => {
       reason: 'resume',
     }).join(' ');
 
-    expect(lines).toContain('4 of 13');
+    // 15 since #295 added `version` and `publish-version`; the assertion this
+    // test exists for is the RE-ENTRY POINT below, not the total.
+    expect(lines).toContain('4 of 15');
     expect(lines).toContain('Apply migrations');
     // The consequence the operator cannot otherwise see: the answers they
     // just walked through are already on disk and are not rewritten.

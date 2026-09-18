@@ -52,6 +52,12 @@ import {
 import { collectServerFacts } from './server-facts.js';
 import { readState, writeState, type DeployState } from './state.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
+import {
+  publishVersion,
+  runVersionStep,
+  type VersionPlan,
+  type VersionStepIo,
+} from './version-step.js';
 import { composeArgv, composeCwd, secretsFrom } from './install.js';
 import type { PromptContext } from '../prompt.js';
 
@@ -121,6 +127,10 @@ export interface UpdateOptions {
   proxyContainer?: string | undefined;
   /** `--no-ipv6`: render the vhost without `[::]` listeners. */
   ipv6?: boolean | undefined;
+  /** `--app-version <semver>` (#295); see InstallOptions.appVersion. */
+  appVersion?: string | undefined;
+  /** `--no-version-bump` sets this false; see InstallOptions.versionBump. */
+  versionBump?: boolean | undefined;
   runCommand?: typeof defaultRunCommand | undefined;
   hooks?: DeployHooks | undefined;
   promptContext?: PromptContext | undefined;
@@ -150,6 +160,16 @@ interface UpdateContext extends StepContext {
   proxyContainer?: string | undefined;
   /** Written by the preflight from the `proxy-ipv6` check (#122). */
   ipv6?: boolean | undefined;
+  /** What the `version` step decided (#295); undefined when it did not run. */
+  version?: VersionPlan | undefined;
+  /** Whether `publish-version` got the bump commit onto the deployed branch. */
+  versionPublished?: boolean | undefined;
+  /**
+   * Work this run could not finish (#265's shape, applied to #295's publish).
+   * `update` had no warnings channel before this; a failed publish is the
+   * first thing it can legitimately finish without.
+   */
+  warnings: string[];
 }
 
 /**
@@ -741,6 +761,24 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
       },
     },
     {
+      id: 'version',
+      title: 'Set the application version',
+      // ⚠ `skipWhenUnchanged`, AND THAT IS LOAD-BEARING FOR THE E2E AND FOR
+      // EVERY CRON. An update with nothing to apply deploys no new release, so
+      // there is no release to version: bumping here would write into the
+      // clone, commit, and push a new version for code that was already
+      // running — turning `deploy update` from cron into a version generator
+      // that moves `main` every few minutes. It would also dirty a clone that
+      // the rest of this pipeline is about to leave alone, and
+      // `.github/workflows/deploy-e2e.yml`'s "update with nothing to apply
+      // rebuilds nothing" step asserts both the `already up to date` line and
+      // an unchanged image digest.
+      skip: skipWhenUnchanged,
+      async run(context) {
+        context.version = await runVersionStep(versionIo(context));
+      },
+    },
+    {
       id: 'build',
       title: 'Build images',
       skip: skipWhenUnchanged,
@@ -913,7 +951,71 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         }
       },
     },
+    {
+      id: 'publish-version',
+      title: 'Publish the version to the repository',
+      skip: (context) =>
+        context.version === undefined
+          ? skipWhenUnchanged(context) ?? 'no version bump was made on this run'
+          : undefined,
+      async run(context) {
+        const plan = context.version;
+        if (plan === undefined) return;
+
+        // NEVER FAILS THE UPDATE. The application is already built, migrated,
+        // restarted, answering and verified by the time this runs; see
+        // `publishVersion`'s header and #265's cron precedent.
+        const outcome = await publishVersion(versionIo(context), plan);
+        context.versionPublished = outcome.published;
+
+        // ⚠ THE DEPLOYED COMMIT BECOMES THE BUMP COMMIT, and this is a
+        // correctness fix rather than bookkeeping. The images were built with
+        // HEAD at the bump commit — the `version` step commits BEFORE `build`
+        // — so its tree is exactly what is deployed. Leaving the state naming
+        // the PRE-bump commit while origin now points at the bump commit would
+        // make every server permanently report `1 commit behind` itself, and
+        // the next `update` would rebuild byte-identical code and bump again,
+        // for ever.
+        //
+        // Only on a SUCCESSFUL push. When the publish is declined the bump
+        // commit is rolled back out of the clone and exists nowhere, so the
+        // pre-bump commit stays the honest answer.
+        if (outcome.published) context.commitSha = plan.commitSha;
+
+        if (outcome.warning !== undefined) {
+          context.warnings.push(outcome.warning);
+          context.hooks?.onProgress?.(
+            `v${plan.next} is deployed but was not published to the repository`,
+          );
+        }
+      },
+    },
   ];
+}
+
+/** The `version` step's view of an update. */
+function versionIo(context: UpdateContext): VersionStepIo {
+  return {
+    deployRoot: context.options.deployRoot,
+    ref: context.target?.ref ?? context.state.ref,
+    command: 'update',
+    runCommand: context.runCommand,
+    journal: context.journal,
+    ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
+    ...(context.env === undefined ? {} : { env: context.env }),
+    ...(context.options.appVersion === undefined
+      ? {}
+      : { appVersion: context.options.appVersion }),
+    ...(context.options.versionBump === undefined
+      ? {}
+      : { versionBump: context.options.versionBump }),
+    ...(context.options.nonInteractive === undefined
+      ? {}
+      : { nonInteractive: context.options.nonInteractive }),
+    ...(context.options.promptContext === undefined
+      ? {}
+      : { promptContext: context.options.promptContext }),
+  };
 }
 
 export interface UpdateResult {
@@ -924,6 +1026,17 @@ export interface UpdateResult {
   durationMs: number;
   /** What the fetch found; the whole answer under `--check`. */
   check?: UpdateCheck | undefined;
+  /**
+   * The application version this run deployed (#295); absent when nothing was
+   * deployed or `--no-version-bump` was passed. `published` says whether it
+   * also reached the repository.
+   */
+  appVersion?: { version: string; published: boolean } | undefined;
+  /**
+   * Work this run could not finish, ready to print as-is — #265's `warnings`
+   * contract, which `update` gains here. Empty on an ordinary update.
+   */
+  warnings: string[];
   /**
    * Present when this run ADOPTED the deployment - rebuilt a missing state
    * file from the disk (#285).
@@ -1008,6 +1121,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     completed: new Set<string>(),
     state,
     name: projectNameFor(state, options.deployRoot),
+    warnings: [],
     ...(env === undefined ? {} : { env }),
   };
 
@@ -1113,6 +1227,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       durationMs: Date.now() - startedAt,
       ...(context.check === undefined ? {} : { check: context.check }),
       ...(adopted === undefined ? {} : { adopted }),
+      warnings: context.warnings,
     };
   }
 
@@ -1144,6 +1259,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       durationMs: Date.now() - startedAt,
       ...(context.check === undefined ? {} : { check: context.check }),
       ...(adopted === undefined ? {} : { adopted }),
+      warnings: context.warnings,
     };
   }
 
@@ -1177,6 +1293,15 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     durationMs: Date.now() - startedAt,
     ...(context.check === undefined ? {} : { check: context.check }),
     ...(adopted === undefined ? {} : { adopted }),
+    ...(context.version === undefined
+      ? {}
+      : {
+          appVersion: {
+            version: context.version.next,
+            published: context.versionPublished === true,
+          },
+        }),
+    warnings: context.warnings,
   };
 }
 
@@ -1201,7 +1326,15 @@ async function refreshDeployInfo(
     context.options.deployRoot,
     state,
     await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
-    { remote, ...(run === undefined ? {} : { run }) },
+    {
+      remote,
+      ...(run === undefined ? {} : { run }),
+      // What this run DEPLOYED, not what the clone happens to say (#295).
+      // `publishVersion` restores the clone to the pre-bump commit when it
+      // cannot publish, so `readDeployedAppVersion`'s default would report the
+      // old number while the running image carries the new one.
+      ...(context.version === undefined ? {} : { appVersion: context.version.next }),
+    },
   );
   context.journal.line(
     run === undefined || run.completed

@@ -420,8 +420,23 @@ is what makes it safe to run unattended:
 0 3 * * * cd /opt/infra/apps/<name> && kvox deploy update --non-interactive >> /var/log/kvox-update.log 2>&1
 ```
 
-Two behaviors surprise people who've operated the shell-script deployments
-this replaces, and both are deliberate:
+Three behaviors surprise people who've operated the shell-script deployments
+this replaces, and all three are deliberate:
+
+**It asks for an application version, and pushes it back to your
+repository.** Every deploy that actually deploys something picks a version —
+suggesting a patch bump you can override — writes it into `apps/api` and
+`apps/web`, sets `APP_VERSION` in the deployment's `.env`, and, *once the
+deployment is healthy*, commits and pushes those files to the branch you
+deployed. That is what makes the **Version** on the About page, and the line at
+the foot of **Settings**, mean something. Unattended runs take the suggestion;
+`--app-version <semver>` chooses one outright and `--no-version-bump` skips it
+entirely. A push that can't happen — a tag deploy, a fork you can't push to,
+another server that pushed first — is a **warning, never a failed deploy**: the
+server is running the new version either way. An update with nothing to apply
+versions nothing, which is what keeps the cron above harmless. Full detail:
+[`apps/cli/README.md`, "The application
+version"](../../apps/cli/README.md#the-application-version).
 
 **The seed re-runs by default, on every update.** `apps/api/prisma/seed.ts`
 is entirely upserts, and re-running it is the *only* way a permission or role

@@ -88,6 +88,9 @@ describe('the update pipeline', () => {
       'auth',
       'fetch',
       'environment-drift',
+      // #295. `version` stands down with everything else when the revision has
+      // not moved; `publish-version` is last and never runs before `health`.
+      'version',
       'build',
       'migrate',
       'seed',
@@ -95,6 +98,7 @@ describe('the update pipeline', () => {
       'health',
       'publish',
       'verify',
+      'publish-version',
     ]);
   });
 
@@ -105,11 +109,27 @@ describe('the update pipeline', () => {
   it('stands every later step down when the revision has not moved', () => {
     // Several minutes of build and a restart for a no-op is exactly the
     // friction that stops people updating often.
-    for (const id of ['build', 'migrate', 'seed', 'restart', 'health', 'publish', 'verify']) {
+    for (const id of [
+      'version',
+      'build',
+      'migrate',
+      'seed',
+      'restart',
+      'health',
+      'publish',
+      'verify',
+      'publish-version',
+    ]) {
       expect(skipReason(id, { unchanged: true, options: {}, state: {} })).toBe(
         'already up to date',
       );
     }
+  });
+
+  it('publishes no version when the run made no bump (#295)', () => {
+    expect(skipReason('publish-version', { options: {}, state: {} })).toBe(
+      'no version bump was made on this run',
+    );
   });
 
   it('still runs the fetch step when unchanged, since that is what decides', () => {
@@ -356,6 +376,14 @@ describe('runUpdate adopting a deployment whose state file is missing (#285)', (
       skipProxy: true,
       skipSeed: true,
       cwd: root,
+      // These suites are about the deploy pipeline's OTHER promises — the
+      // state file, deploy-info, adoption, redaction. #295's version step
+      // writes into the clone, commits, and (on a successful push) makes the
+      // BUMP COMMIT the deployed one, which would change the sha every one of
+      // them asserts. Turning the bump off keeps each assertion about the
+      // question it was written to ask; `version-step.test.ts` owns the
+      // versioning behaviour itself.
+      versionBump: false,
       ...(hooks === undefined ? {} : { hooks }),
     });
   }
@@ -492,6 +520,8 @@ describe('runUpdate adopting a deployment whose state file is missing (#285)', (
       skipProxy: true,
       skipSeed: true,
       cwd: layout.deployRoot,
+      // About ADOPTION, not about versioning — see the helper above.
+      versionBump: false,
     });
 
     expect(result.changed).toBe(true);
@@ -618,6 +648,14 @@ describe('runUpdate against a fake VPS', () => {
       skipProxy: true,
       skipSeed: true,
       cwd: root,
+      // These suites are about the deploy pipeline's OTHER promises — the
+      // state file, deploy-info, adoption, redaction. #295's version step
+      // writes into the clone, commits, and (on a successful push) makes the
+      // BUMP COMMIT the deployed one, which would change the sha every one of
+      // them asserts. Turning the bump off keeps each assertion about the
+      // question it was written to ask; `version-step.test.ts` owns the
+      // versioning behaviour itself.
+      versionBump: false,
       ...(hooks === undefined ? {} : { hooks }),
       ...extra,
     });
@@ -1182,6 +1220,12 @@ describe('environment drift on update (#291)', () => {
       skipProxy: true,
       skipSeed: true,
       cwd: root,
+      // These tests are about ENVIRONMENT DRIFT, and #295's version step
+      // writes `APP_VERSION` into the very file they compare byte for byte.
+      // Turning the bump off keeps each assertion about the question it was
+      // written to ask; `version-step.test.ts` and the `#295` block in this
+      // file cover the write itself.
+      versionBump: false,
       ...(answers === undefined ? {} : { answers }),
     });
   }

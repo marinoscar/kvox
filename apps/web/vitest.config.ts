@@ -2,8 +2,16 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
+import { appVersionDefine } from './app-version.js';
+
 export default defineConfig({
   plugins: [react()],
+  // ⚠ THE SAME `define` `vite.config.ts` SETS, and it must stay that way
+  // (issue #296). This config shares nothing with that one, so a define added
+  // only there leaves `__APP_VERSION__` undefined here — and an undefined
+  // global is a ReferenceError the moment a test renders the settings hub, not
+  // a type error anybody would see first.
+  define: appVersionDefine(),
   test: {
     environment: 'jsdom',
     globals: true,

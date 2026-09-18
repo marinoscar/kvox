@@ -2416,3 +2416,250 @@ over a missing JSON file; a central registry is that mistake moved one level
 further from the thing it describes. SQLite would additionally put a native
 binary into a CLI that is currently pure Node, to index roughly ten
 directories.
+
+## 25. The application version, chosen at deploy time (issues #295, #296)
+
+`apps/api/package.json` and `apps/web/package.json` had both read **1.0.0**
+since the template. The About page's Version fact therefore never changed, and
+two deployments of two different revisions were indistinguishable by version.
+
+The plumbing to carry a version already existed end to end and had simply never
+been fed:
+
+```
+apps/api/package.json  ->  readDeployedAppVersion()      (deploy-info.ts)
+                       ->  deploy-info/info.json  app.version
+                       ->  GET /api/admin/about
+                       ->  the About page's "Version" fact
+```
+
+…and a second, independent path had anticipated it for just as long:
+`resolveApiVersion()` (`apps/api/src/openapi/version.ts`) reads `APP_VERSION`
+**first**, with the comment *"set by the deploy pipeline on the built image.
+This is the only source that knows about a release tag, so it wins."* Nothing
+set it.
+
+### 25.1 The decision, and what it costs
+
+The version is chosen **during `kvox deploy install`/`update`, on the server**,
+with the CLI suggesting a number the operator can override. This was chosen
+deliberately over bumping it in the repository at release time; that
+alternative was argued and declined. The costs are recorded here so a later
+reader does not reopen this as an oversight:
+
+- **The deployed commit is not the commit CI built.** The bump creates a commit
+  after the tested one. Bounded by writing *only* version fields in
+  `package.json` and the lockfile — nothing that changes behaviour — and by
+  pushing only after the deployment is verifiably healthy.
+- **The production host can write to the repository.** Inherent to the choice.
+  Bounded by pushing only those three files, only after health, never with
+  `--force`.
+- **The same code can carry different versions on two servers.** A consequence
+  of versioning at deploy time rather than release time.
+
+One thing that was *not* accepted, and is a deviation from the issue's own
+proposal: the lockfile is **edited surgically**, not regenerated with `npm
+install --package-lock-only`. That command resolves dependency ranges against
+the registry, so a deploy could quietly pull newer transitive versions into the
+lockfile and `npm ci` would then install them into the image — which breaks the
+first accepted risk's own bound ("nothing that changes behaviour"). It would
+also require the registry, mid-deploy, for a three-character edit. A workspace's
+version lives in exactly one place in `package-lock.json`
+(`packages["apps/api"].version`), which `app-version.test.ts` asserts against
+this repository's real lockfile so a future npm format cannot make the edit
+silently partial.
+
+### 25.2 One shared product version
+
+`apps/api` and `apps/web` carry the **same** number and are written in
+lockstep, along with both lockfile entries. They ship as one deployment from
+one commit, so two numbers could only ever diverge by accident. The writes are
+prepared first and applied second, so a manifest the CLI cannot edit fails
+before anything reaches disk.
+
+### 25.3 Two steps, and where they sit
+
+| Step | Position | What it does |
+|---|---|---|
+| `version` | after `environment` (install) / `environment-drift` (update), **before `build`** | Chooses the number, writes both manifests + the lockfile + `APP_VERSION` in the `.env`, and **commits** |
+| `publish-version` | **last**, after `verify` | Pushes that commit to the deployed branch, or takes it back out |
+
+Two placements differ from a first reading of the issue, both for reasons found
+in the existing code rather than assumed:
+
+- **`version` is after `environment`, not merely after `checkout`.** The number
+  has to reach the deployment's `.env` as `APP_VERSION`, and on a first install
+  that file does not exist until the `environment` step writes it.
+- **`publish-version` is last, not immediately after `health`.** The issue's
+  gate is "only after `health` passes"; last satisfies it strictly and adds
+  one thing. Unlike `deploy-info` — which #283 gates at `health` precisely
+  because it must describe a *running* deployment even on a failed run —
+  pushing to a shared repository is irreversible and externally visible. A
+  version not pushed is re-derived and re-published on the next run; a version
+  pushed for a deploy that did not finish is a commit someone has to reason
+  about.
+
+On `update`, `version` and `publish-version` both carry `skipWhenUnchanged`.
+An update with nothing to apply deploys no new release, so there is no release
+to number — otherwise `kvox deploy update` from cron becomes a version
+generator that moves the default branch every few minutes.
+
+### 25.4 The clone's git state — the hazard that drove the design
+
+Three facts about `ensureCheckout` (`repo.ts`), all verified against real git
+before anything was written, decide everything above:
+
+1. **It refuses a dirty tree.** `git status --porcelain` non-empty raises a
+   `UsageError` telling the operator to commit, remove, or re-run with
+   `--force`. So a run that wrote `package.json` and then died at `build` — an
+   OOM kill, a lost network, a power cut — would **wedge the next `update`**
+   behind a refusal about files the operator never touched. This is why the
+   `version` step **commits in the same step as the write** rather than leaving
+   the tree dirty until the publish: the dirty window is milliseconds instead
+   of the length of a build.
+2. **It always `checkout --force --detach`es.** The deployed clone is
+   permanently in detached HEAD, on every deployment, normally. So *"publish
+   only when HEAD is attached to a branch"* — the obvious reading of the
+   issue's hazard 4 — would skip the publish on every deployment that has ever
+   existed. The real question is whether the **target ref** names a branch on
+   origin, and the push is an explicit `HEAD:refs/heads/<ref>`.
+3. **A local-only commit is not a wedge.** `checkout --force --detach` moves
+   over it with a "you are leaving 1 commit behind" warning and a clean tree.
+
+From those, one invariant, which everything else follows from:
+
+> At the end of every run, the clone's HEAD is the commit `origin/<ref>`
+> resolves to — either because the bump commit **became** that commit (the push
+> succeeded), or because the bump commit was **discarded** (it did not).
+
+The rollback is not tidiness. Without it, a clone left one commit ahead of
+origin makes every later `update --check` report `current != latest`, every
+later `update` see `changed: true`, and every later deploy rebuild
+byte-identical images for ever.
+
+### 25.5 Degrading, and never failing a finished deployment
+
+A push that does not happen is a **warning**, never a failure — #265's
+`/etc/cron.d` EACCES precedent exactly, and for the same reason: by the time
+`publish-version` runs, the application is built, migrated, started, answering
+and verified. Four ordinary situations end identically (warning under `Action
+required:`, bump commit rolled back, deployment keeps the version):
+
+- the deployed ref is a **tag or a commit** — no branch to push to;
+- the clone is a **fork with no push access**;
+- **another deployment pushed first** — not a fast-forward;
+- any other refusal from the remote.
+
+`update` gained a `warnings` channel for this; it had none before, because a
+failed publish is the first thing it can legitimately finish without.
+
+**Never `--force`, and never a retry.** The issue left the race open ("fetch
+and retry once, or warn and stop"). It warns and stops, and the reason is
+specific rather than merely conservative: retrying means re-committing the bump
+on top of whatever origin moved to — but the deployment was **built from the
+old tip**, so the published commit's tree would contain code this server never
+built, and `deploy-info`'s `commitSha` would name a commit whose content nobody
+deployed. Rebasing a version bump is a code change wearing a bookkeeping
+retry's clothes. The next deploy fetches the newer commit, builds it, and
+carries the version forward then.
+
+Credentials are whatever the `auth` step already put into git's config through
+`gh auth setup-git`. Nothing in this feature handles a token, reads one, or
+writes one anywhere.
+
+### 25.6 Choosing the number
+
+The suggestion is a **patch bump**; "current" is the **higher** of the clone's
+manifests and the running deployment's own `APP_VERSION`. That maximum is
+load-bearing rather than defensive: when a publish cannot reach the repository
+the clone is restored to the old number while the deployment serves the new
+one, so measuring from the clone alone would hand out the same number twice and
+let the running version silently go backwards. A prerelease suggests its own
+release (`1.4.0-rc.2` → `1.4.0`), which is both SemVer's own ordering and what
+an operator promoting a release candidate means.
+
+Two versions are refused, typed or passed as `--app-version`: one that is not
+strict SemVer 2.0.0, and one that does not sort **strictly above** the current
+version. Equality is refused as well as regression — re-deploying one number
+for two different builds is the same failure with a smaller step size, and
+`--no-version-bump` is the supported way to say "redeploy this release
+unchanged". A bad `--app-version` **stops the run** rather than falling back to
+the suggestion: silently deploying a different number from the one that was
+typed is the worst available outcome.
+
+**`--non-interactive` with neither flag takes the suggestion.** Decided
+deliberately. Refusing would break every unattended deploy — including
+`.github/workflows/deploy-e2e.yml`, which runs `deploy update
+--non-interactive` twice, and any operator updating from cron — for a question
+that has a correct default; the suggestion is what "we deployed the next
+revision" means; it cannot move the number backwards by construction; and
+`--no-version-bump` gives an automated caller a positive way to opt out.
+
+### 25.7 `APP_VERSION` is not in `.env.example`, deliberately
+
+`infra/compose/.env.example` **is** the install wizard's question list
+(`env-spec.ts`), so an entry there becomes a question the operator is asked —
+and the whole point of this feature is that the CLI chooses this value. A
+commented `# APP_VERSION=` entry would be worse rather than better:
+`parseEnvExample` reads any commented `# KEY=value` line as declaring an
+*optional variable*. `DEPLOY_ROOT` and `COMPOSE_PROJECT_NAME` are the existing
+precedent — both written by this CLI, both absent from the template — and
+`serializeEnvFile` already carries such keys through under its own
+`Not in .env.example` banner.
+
+The write goes through `serializeEnvFile` with the **whole** spec list, which
+is #291's serialization trap stated as a rule: the writer needs the full
+template or it strips every section banner and the template's key order from
+the file. Appending a line by hand would survive exactly until the next run of
+the drift step rewrote the file without it.
+
+### 25.8 Seeding: both manifests stay at 1.0.0
+
+This change does **not** set a different starting version. Any number chosen
+here would be fiction — no release has ever been cut from this repository, so
+there is no true version to seed — and bumping it in this PR would be a version
+bump with no release behind it, which is precisely the "the version means
+nothing" problem the feature exists to fix. `1.0.0` is already a legitimate
+first-release number. The first `install` or `update` after this lands moves it
+to `1.0.1`, and *that* number corresponds to a deployment that actually
+happened.
+
+### 25.9 The other half: showing it to everyone (issue #296)
+
+The version was visible only at `/admin/settings/about`, and
+`GET /api/admin/about` is gated on `system_settings:read` — seeded Admin-only.
+A Contributor or a Viewer could not see their own build number at all.
+
+`apps/web/package.json`'s version is baked into the bundle by a Vite `define`
+(`apps/web/app-version.ts`, shared by `vite.config.ts` and `vitest.config.ts`)
+and rendered as a quiet caption at the foot of the shared
+`components/settings/SettingsHub.tsx` — so it appears on both `/settings` and
+`/admin/settings`, which is what Settings UI Pattern rule 4 ("reuse it, never
+fork it") means here. It adds no breakpoint read, so rule 5's five coupled
+gates are untouched.
+
+**A define, not an endpoint**, and not for convenience: it reports what *the
+bundle* is. A stale cached bundle serving old JavaScript against a freshly
+deployed API is exactly the bug a version line should expose, and a number
+fetched from the server would hide it — old client code would print the new
+server's version. The two are equal by construction only because §25.2 makes
+them one number.
+
+It does not duplicate or weaken About, which stays authoritative for what is
+*deployed on this server*: the revision, the install and update instants, the
+database, the deploy-info record. This answers the different question, "what am
+I running right now".
+
+Two implementation notes that cost real time to find, both recorded in the
+files themselves:
+
+- **Both configs need the `define`.** `vite.config.ts` and `vitest.config.ts`
+  share nothing, so adding it to only the first leaves `__APP_VERSION__`
+  undefined in every test that renders the hub — a `ReferenceError` at render,
+  not a type error anybody would see first.
+- **The version is `import`ed from `package.json`, not read off a path.** Vite
+  loads a config by bundling it to `node_modules/.vite-temp/…`, so
+  `import.meta.url` points at the temp directory and `new URL('../package.json',
+  …)` resolves to `apps/package.json`, which does not exist. `__dirname` is no
+  better — it is injected per loader and absent under the native ESM loader Vite
+  is moving to. An import has no runtime path resolution at all.
