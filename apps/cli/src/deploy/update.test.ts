@@ -12,20 +12,25 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PreconditionError } from '../errors.js';
 import { DeployInfoError, deployInfoDir, readDeployInfo, writeDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
+import { metadataFor } from './env-metadata.js';
+import { diffEnv, parseEnvExample, parseEnvFile } from './env-spec.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
+import { findRepoRoot } from '../init/local-profile.js';
 import { locateInstalledApp } from './layout.js';
 import { unknownServerFacts } from './server-facts.js';
 import { DEPLOY_STATE_VERSION, NotInstalledError, deployStatePath, readState, writeState, type DeployState } from './state.js';
 import {
   FAKE_APP_VERSION,
   FAKE_COMMITS,
+  FAKE_ENV_EXAMPLE,
   fakeVps,
   healthyFetch,
   populateClone,
@@ -34,6 +39,7 @@ import {
 } from './testing/fake-vps.js';
 import {
   RENEW_WITHIN_DAYS,
+  addedVariables,
   buildUpdateSteps,
   certificateDueForRenewal,
   renderUpdateCheck,
@@ -437,7 +443,11 @@ describe('runUpdate adopting a deployment whose state file is missing (#285)', (
     });
 
     expect(progress.some((line) => line.includes('Adopted this deployment'))).toBe(true);
-    expect(progress.some((line) => line.includes('.appctl-deploy.json'))).toBe(true);
+    // #292: the headline names the thing, not the file. The filename stays in
+    // the detail below, as a path - which is what an operator can go and `ls`.
+    expect(progress.some((line) => line.includes('no deployment record was here'))).toBe(true);
+    expect(progress.some((line) => line.includes('appctl'))).toBe(false);
+    expect(logs.some((line) => line.includes(`record      ${deployStatePath(root)}`))).toBe(true);
     expect(logs.some((line) => line.includes('repository  https://example.test/o/demo'))).toBe(true);
     expect(logs.some((line) => line.includes('revision    aaaaaaaaaaaa'))).toBe(true);
     expect(logs.some((line) => line.includes('installed   unknown'))).toBe(true);
@@ -1111,5 +1121,309 @@ describe('runUpdate against a fake VPS', () => {
       // ended: the previous document's `run` rides through untouched.
       expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
     });
+  });
+});
+
+// =============================================================================
+// Issue #291: absent from the .env is not the same as added by the revision
+// =============================================================================
+//
+// On a real deployment `deploy update` stopped at step 4 of 11, "Check for new
+// environment variables", and walked the operator through the ENTIRE install
+// wizard - the domain, then the database section asking for POSTGRES_HOST - on
+// an update whose `.env.example` had not changed by one byte.
+//
+// Every test below drives the real pipeline with `nonInteractive: true` and,
+// where it is checking that nothing was asked, a state carrying NO DOMAIN.
+// That is the crisp signal: the drift step refuses with `no domain is recorded
+// for this deployment` at the moment it decides a wizard is needed, BEFORE the
+// wizard is constructed. An update that completes therefore did not decide to
+// prompt - which is also exactly how an unattended run (CI, the install TUI)
+// experiences the bug.
+// =============================================================================
+
+describe('environment drift on update (#291)', () => {
+  let vps: FakeVps;
+
+  beforeEach(async () => {
+    vps = await fakeVps({ head: INSTALLED_SHA, remoteSha: NEW_SHA });
+    vi.stubGlobal('fetch', healthyFetch());
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await vps.close();
+  });
+
+  /** FAKE_ENV_EXAMPLE with extra template lines appended. */
+  function templateWith(extra: readonly string[]): string {
+    return [FAKE_ENV_EXAMPLE, ...extra, ''].join('\n');
+  }
+
+  /** An installed deployment with a chosen template in its clone and .env. */
+  function staged(options: { template?: string; env?: string; domain?: string }): string {
+    const root = installedApp(vps);
+    if (options.template !== undefined) {
+      writeFileSync(join(root, 'repo', 'infra', 'compose', '.env.example'), options.template);
+    }
+    writeEnvFile(root, options.env ?? installedEnv(vps, 'demo'));
+    if (options.domain !== undefined) {
+      writeState({ ...(readState(root) as DeployState), domain: options.domain });
+    }
+    return root;
+  }
+
+  function update(root: string, answers?: ReadonlyMap<string, string>) {
+    return runUpdate({
+      deployRoot: root,
+      runCommand: vps.runCommand,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+      ...(answers === undefined ? {} : { answers }),
+    });
+  }
+
+  const envOf = (root: string): Map<string, string> =>
+    parseEnvFile(readFileSync(envFilePath(root), 'utf8'));
+
+  /**
+   * The .env of a deployment that declined the optional secrets during install
+   * and never opted into observability - i.e. an ordinary one. The template it
+   * is measured against is `DECLINED_TEMPLATE` below.
+   */
+  const DECLINED_TEMPLATE = [
+    // Optional AND secret. Three of this repository's eleven optional keys are
+    // exactly this shape, and it is what dragged them past the old
+    // `essential === true || secret === true` filter: BEING A SECRET DOES NOT
+    // MAKE A VARIABLE REQUIRED.
+    '# SECRETS_ENCRYPTION_KEY=',
+    // Optional, secret AND `never` - the wizard deletes it on every path.
+    '# VAPID_PRIVATE_KEY=',
+    // NOT commented out, so `spec.optional` does not cover it: a required key
+    // in a feature group this deployment never enabled. Nine observability
+    // keys are this shape in the real template and five of them are secrets,
+    // which is the larger half of the bug and the half the issue did not name.
+    'UPTRACE_ADMIN_PASSWORD=admin',
+    'OTEL_ENABLED=true',
+  ];
+
+  it('asks nothing when the revision added no variables, however many were declined', async () => {
+    const root = staged({ template: templateWith(DECLINED_TEMPLATE) });
+
+    // Before the fix this threw `no domain is recorded for this deployment`,
+    // because three declined keys and one un-enabled group read as four new
+    // variables needing an answer.
+    await update(root);
+
+    const env = envOf(root);
+    expect(env.has('SECRETS_ENCRYPTION_KEY')).toBe(false);
+    expect(env.has('VAPID_PRIVATE_KEY')).toBe(false);
+    expect(env.has('UPTRACE_ADMIN_PASSWORD')).toBe(false);
+    expect(env.has('OTEL_ENABLED')).toBe(false);
+
+    const journal = updateJournal(root);
+    expect(journal).not.toContain('This revision adds');
+    expect(journal).toContain('Leaving 4 template variable(s) out of this .env');
+  });
+
+  it('still asks nothing on the next update, and the one after that', async () => {
+    const root = staged({ template: templateWith(DECLINED_TEMPLATE) });
+
+    await update(root);
+    const first = readFileSync(envFilePath(root), 'utf8');
+
+    // A second and a third revision, neither of which touches the template.
+    for (const sha of ['c'.repeat(40), 'd'.repeat(40)]) {
+      vps.remoteSha = sha;
+      await update(root);
+      expect(readFileSync(envFilePath(root), 'utf8')).toBe(first);
+    }
+  });
+
+  it('does not force a NEWLY ADDED optional variable, secret or not', async () => {
+    // The .env is complete against the template except for one key the
+    // revision genuinely added - and that key is commented out, which is the
+    // template's way of saying it need not be written at all.
+    const root = staged({ template: templateWith(['# SECRETS_ENCRYPTION_KEY=']) });
+
+    await update(root);
+
+    expect(envOf(root).has('SECRETS_ENCRYPTION_KEY')).toBe(false);
+  });
+
+  it('adds a genuinely new variable that has a usable default, without asking', async () => {
+    const root = staged({ template: templateWith(['LOG_LEVEL=info']) });
+
+    await update(root);
+
+    expect(envOf(root).get('LOG_LEVEL')).toBe('info');
+    expect(updateJournal(root)).toContain('This revision adds 1 variable(s); 0 need a value.');
+  });
+
+  it('asks about the variable the revision added, and about nothing else', async () => {
+    // Two values this operator set BY HAND, which the wizard would overwrite
+    // if it were handed the whole template: NODE_ENV is `fixed: 'production'`
+    // in the metadata and APP_URL is DERIVED from the domain. Their survival
+    // is what proves the question list was narrowed to the new key - and it is
+    // also the "nothing already in .env is lost" requirement in its own right.
+    const root = staged({
+      template: templateWith([
+        'NODE_ENV=production',
+        'APP_URL=https://demo.example.test',
+        'GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com',
+      ]),
+      env: [
+        installedEnv(vps, 'demo'),
+        'NODE_ENV=staging',
+        'APP_URL=https://hand-edited.example.test',
+        '',
+      ].join('\n'),
+      domain: 'demo.example.test',
+    });
+
+    await update(root, new Map([['GOOGLE_CLIENT_ID', 'real-client.apps.googleusercontent.com']]));
+
+    const env = envOf(root);
+    expect(env.get('GOOGLE_CLIENT_ID')).toBe('real-client.apps.googleusercontent.com');
+    expect(env.get('NODE_ENV')).toBe('staging');
+    expect(env.get('APP_URL')).toBe('https://hand-edited.example.test');
+    expect(updateJournal(root)).toContain('This revision adds 1 variable(s); 1 need a value.');
+  });
+
+  it('keeps every pre-existing key, the template order and the section banners', async () => {
+    const root = staged({
+      template: templateWith(['GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com']),
+      domain: 'demo.example.test',
+    });
+    const before = envOf(root);
+
+    await update(root, new Map([['GOOGLE_CLIENT_ID', 'real-client.apps.googleusercontent.com']]));
+
+    const contents = readFileSync(envFilePath(root), 'utf8');
+    const after = envOf(root);
+    for (const [key, value] of before) expect(after.get(key)).toBe(value);
+    // Including the one the template has never heard of: `serializeEnvFile`
+    // carries a fork's own variables through, and narrowing the spec list it
+    // is given - the obvious version of this fix - would have demoted all of
+    // them into its "Not in .env.example" block along with the banners below.
+    expect(after.get('COMPOSE_PROJECT_NAME')).toBe('demo');
+    expect(contents).toContain('# Database');
+    expect(contents).toContain('# Application');
+    // The trap this fix had to avoid: narrowing the spec list handed to
+    // `serializeEnvFile` as well as the one handed to the wizard would put
+    // every other template key BELOW this banner, as if it were a fork's own.
+    const extras = contents.indexOf('# Not in .env.example');
+    expect(extras).toBeGreaterThan(-1);
+    expect(contents.indexOf('POSTGRES_HOST=')).toBeLessThan(extras);
+    expect(contents.indexOf('GOOGLE_CLIENT_ID=')).toBeLessThan(extras);
+  });
+
+  it('leaves an opt-in feature group alone, even one this deployment uses', async () => {
+    // `update` enables no group and never has, so the wizard would refuse to
+    // write these two whatever this step decided - offering them is a question
+    // with no answer. The honest consequence, which this pins rather than
+    // hides: a revision that adds an observability variable does not reach a
+    // deployment through `update`, and the operator adds it by hand. Before
+    // the fix the same two keys were not written either; they just cost the
+    // operator the entire install wizard first.
+    const root = staged({
+      template: templateWith([
+        'OTEL_ENABLED=true',
+        'UPTRACE_ADMIN_PASSWORD=admin',
+        'OTEL_SERVICE_NAME=demo-api',
+      ]),
+      // `OTEL_ENABLED=false` is what the e2e deployment carries, and it is why
+      // the groups are not inferred from the file: present says nothing about
+      // on or off.
+      env: [installedEnv(vps, 'demo'), 'OTEL_ENABLED=false', ''].join('\n'),
+    });
+
+    await update(root);
+
+    const env = envOf(root);
+    expect(env.get('OTEL_ENABLED')).toBe('false');
+    expect(env.has('UPTRACE_ADMIN_PASSWORD')).toBe(false);
+    expect(env.has('OTEL_SERVICE_NAME')).toBe(false);
+    expect(updateJournal(root)).not.toContain('This revision adds');
+  });
+});
+
+// =============================================================================
+// `addedVariables` against the REAL template  (#291)
+// =============================================================================
+//
+// The fake template above keeps the pipeline tests readable; these run the
+// rule over `infra/compose/.env.example` itself, which is what the reported
+// deployment was measured against. The counts are asserted as relationships
+// ("at least one optional secret exists"), not as the literal 72/11/13, so a
+// revision that adds a variable does not fail this file - the property is what
+// matters, not the arithmetic of one snapshot.
+// =============================================================================
+
+describe('addedVariables against the real template', () => {
+  const root = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
+  const specs = parseEnvExample(
+    readFileSync(join(root as string, 'infra', 'compose', '.env.example'), 'utf8'),
+  );
+
+  /** The .env of a deployment that took every default and declined the rest. */
+  const complete = new Map(
+    specs
+      .filter((spec) => {
+        const metadata = metadataFor(spec.key);
+        return !spec.optional && metadata.never !== true && metadata.group === undefined;
+      })
+      .map((spec) => [spec.key, spec.defaultValue] as const),
+  );
+
+  it('finds the template itself, so the assertions below are not vacuous', () => {
+    expect(root).toBeDefined();
+    expect(specs.length).toBeGreaterThan(20);
+    expect(specs.some((spec) => spec.optional && metadataFor(spec.key).secret === true)).toBe(true);
+    expect(
+      specs.some((spec) => !spec.optional && metadataFor(spec.key).group !== undefined),
+    ).toBe(true);
+  });
+
+  it('reports no additions for a deployment that is up to date', () => {
+    const { missing } = diffEnv(specs, complete);
+
+    // Every one of these is absent on purpose and always will be.
+    expect(missing.length).toBeGreaterThan(0);
+    expect(addedVariables(missing)).toEqual([]);
+  });
+
+  it('reports the one variable a revision adds, and not the rest', () => {
+    const { missing } = diffEnv(specs, complete);
+    const added = addedVariables([
+      ...missing,
+      { key: 'NEW_THING', section: '', defaultValue: 'x', help: '', optional: false, line: 1 },
+    ]);
+
+    expect(added.map((spec) => spec.key)).toEqual(['NEW_THING']);
+  });
+
+  it('reports a grouped key only when the caller names that group', () => {
+    // The REQUIRED ones: a commented-out key in the group is still optional,
+    // and optional still means "absent is the answer" whether or not the group
+    // is named. The two exclusions are independent and both apply.
+    const observability = specs.filter(
+      (spec) => metadataFor(spec.key).group === 'observability' && !spec.optional,
+    );
+    expect(observability.length).toBeGreaterThan(1);
+
+    const { missing } = diffEnv(specs, complete);
+
+    // What `update` asks for, and what it will keep asking for: no group.
+    expect(addedVariables(missing)).toEqual([]);
+    // And the parameter that exists so a caller which CAN enable a group -
+    // there is none today - gets the same rule applied to it rather than a
+    // second copy of it.
+    expect(addedVariables(missing, { groups: ['observability'] }).map((spec) => spec.key)).toEqual(
+      observability.map((spec) => spec.key),
+    );
   });
 });

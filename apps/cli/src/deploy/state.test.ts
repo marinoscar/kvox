@@ -1,11 +1,13 @@
-import { mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
 import { EXIT, exitCodeFor } from '../errors.js';
 import {
+  DEPLOY_STATE_FILENAME,
   DEPLOY_STATE_VERSION,
   DeployStateError,
   NotInstalledError,
@@ -193,5 +195,66 @@ describe('requireState', () => {
     expect((error as Error).message).toContain('--root');
     // A usage problem, not a broken CLI: the remedy is a different command.
     expect(exitCodeFor(error)).toBe(EXIT.USAGE);
+  });
+});
+
+// =============================================================================
+// The filename stays; the PROSE stops saying it  (issue #292)
+// =============================================================================
+//
+// `DEPLOY_STATE_FILENAME` is `.appctl-deploy.json` and is NEVER going to be
+// anything else - the declaration above it in `state.ts` carries the argument:
+// the file is read back off live servers, so renaming it makes every existing
+// deployment invisible, `deploy status` report nothing and `deploy update`
+// behave as a first install.
+//
+// What DID need fixing is that the adoption headline showed the name to a
+// person: "no .appctl-deploy.json was here", printed by a binary that has not
+// been called `appctl` for some time, reads as a bug or as this CLI talking
+// about a different tool. The distinction is not "is the name allowed" but
+// WHERE:
+//
+//   - IN A PATH, YES. `deployStatePath()` builds one, `teardown.ts` prints the
+//     deploy root's real entries for `--dry-run`, and `adopt.ts` now names the
+//     file it wrote as a full path beside the other sources it cites. A path
+//     is a thing an operator can go and `ls`; it is data.
+//   - IN A SENTENCE, NO. Interpolating the bare constant into a message is the
+//     shape that produced #292, and it is mechanically recognisable - which is
+//     what this guard checks.
+//
+// It reads the sources rather than the compiled output on purpose: the thing
+// being guarded is how the code is WRITTEN, and by the time it is a string at
+// runtime the two uses are indistinguishable.
+// =============================================================================
+
+describe('the state filename in operator-facing prose (#292)', () => {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const SRC = join(HERE, '..');
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return sources(path);
+      if (!/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) return [];
+      return [path];
+    });
+  }
+
+  it('is interpolated into no message anywhere in the CLI', () => {
+    const files = sources(SRC);
+    // Non-vacuity: a guard that scanned nothing would pass forever.
+    expect(files.length).toBeGreaterThan(50);
+
+    const offenders = files.filter((path) =>
+      readFileSync(path, 'utf8').includes('${DEPLOY_STATE_FILENAME}'),
+    );
+
+    expect(offenders.map((path) => path.slice(SRC.length + 1))).toEqual([]);
+  });
+
+  it('is still reachable as a path, which is the use that stays', () => {
+    const root = makeRoot();
+    expect(deployStatePath(root)).toBe(join(root, DEPLOY_STATE_FILENAME));
+    expect(DEPLOY_STATE_FILENAME).toBe('.appctl-deploy.json');
   });
 });
