@@ -156,6 +156,125 @@ export interface OnboardingState {
 }
 
 // =============================================================================
+// THE WIRE SHAPE IS ASSERTED HERE, AT THE BOUNDARY — NOT CAST AND HOPED FOR
+// =============================================================================
+//
+// Both calls below used to be a bare `api.get<OnboardingState>(...)`, which is
+// a TYPE ASSERTION and nothing more: at runtime it is `JSON.parse` followed by
+// a cast. A 200 whose body is not a checklist therefore travelled all the way
+// into `OnboardingContext`, was stored in state, memoised, and handed to
+// `applySkipOverlay` — whose guard was `if (!state) return null` before
+// `state.steps.map(...)`.
+//
+// ⚠ `{}` IS TRUTHY. So a 200 carrying `{}` threw a `TypeError` DURING THE
+// RENDER OF `OnboardingProvider`, which `Layout.tsx` mounts in the shell — React
+// unwound to `ErrorBoundary` and the WHOLE APPLICATION became the "Something
+// went wrong" panel, on every page. Not a hypothetical: it is what took out ~67
+// Playwright visual specs, whose API mocks end in a permissive
+// `return json(route, {})` catch-all, and it is what any intermediary answering
+// 200 with a wrapper page — a proxy, a CDN error page, an expired-auth HTML
+// redirect — does to a production tab.
+//
+// THREE REASONS THE CHECK LIVES IN THIS FILE RATHER THAN IN THE PROVIDER:
+//
+//   1. THIS IS WHERE THE WIRE SHAPE IS ASSERTED. `OnboardingState` is a
+//      restatement of the API's Zod schemas (see the header above); the moment
+//      the restatement is a claim about untrusted bytes rather than about our
+//      own data, something has to actually check it, and the only honest place
+//      is the function that produced the bytes.
+//   2. THE PROVIDER'S CONTRACT IS ALREADY "A STATE OR NULL". It handles a
+//      REJECTED read correctly and has since #276 — `Promise.allSettled`, the
+//      state cleared to `null`, `error` set for a page to render in its own
+//      body. Turning a malformed 200 into a rejection means MALFORMED AND
+//      FAILED ARE THE SAME THING, which is exactly what that file's header
+//      ("a failed fetch renders nothing — it never renders an error") has always
+//      claimed and, until this check existed, was only true for rejections.
+//   3. PATCHING ONE CONSUMER WOULD NOT BE A FIX. `applySkipOverlay` is one call
+//      site of a value that is stored, memoised and handed to four components
+//      (#277–#280). Hardening it alone leaves `SetupChecklist` to crash on a
+//      `steps` array full of junk — which is why the per-step check below is not
+//      optional thoroughness but part of the same bug.
+//
+// NO VALIDATION LIBRARY. `apps/web` has no `zod` dependency and this is not the
+// place to acquire one: `readMaintenanceBlock` (`services/maintenance.ts`) and
+// `parseOperationsConflict` (`services/transcriptEditing.ts`) already establish
+// hand-written narrowing as how this codebase reads an untrusted body.
+//
+// The check is DELIBERATELY NARROW — the fields consumers actually branch on,
+// and nothing more. It is a crash guard, not a schema mirror: a server that
+// adds a field, or sends a `blockedReason` where this client expected `null`,
+// must not be turned into a blank checklist by a client built last release.
+// =============================================================================
+
+const STEP_STATUSES: readonly OnboardingStepStatus[] = ['satisfied', 'pending', 'blocked'];
+const AUDIENCES: readonly OnboardingAudience[] = ['admin', 'user'];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The crash guard for one row.
+ *
+ * `key` and `status` only, because those are the two a consumer cannot survive
+ * without: `key` is the React list key AND the string a skip is recorded
+ * against (#272), and `status` is what every row's rendering branches on. A
+ * row missing `title` renders an empty heading — ugly, not fatal — so demanding
+ * it here would trade a real crash for a self-inflicted outage the first time
+ * the API makes a field optional.
+ */
+function isStepShape(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (typeof value.key !== 'string') return false;
+  return STEP_STATUSES.includes(value.status as OnboardingStepStatus);
+}
+
+/**
+ * Narrow an already-unwrapped response body to an {@link OnboardingState}, or
+ * throw.
+ *
+ * ⚠ THROWS RATHER THAN RETURNING `null`, and that is the entire point. A `null`
+ * return would be a third state for every caller to forget about; a throw lands
+ * in the `Promise.allSettled` the provider already has, takes the `rejected`
+ * branch it already wrote, and renders nothing — no new code path anywhere.
+ *
+ * The message names the ROUTE, because the two failures this actually catches
+ * in the field are indistinguishable from each other in a console otherwise: an
+ * intermediary wrapping one endpoint, and a test harness's catch-all answering
+ * every endpoint with `{}`.
+ */
+export function parseOnboardingState(body: unknown, path: string): OnboardingState {
+  const malformed = (detail: string): never => {
+    throw new Error(`Malformed onboarding response from ${path}: ${detail}`);
+  };
+
+  // Catches an HTML error page (a string), an array, `null`, and a number — the
+  // whole family of "200 that is not our JSON object" at once.
+  if (!isRecord(body)) malformed(`expected an object, received ${typeof body}`);
+  const value = body as Record<string, unknown>;
+
+  if (!Array.isArray(value.steps)) malformed('`steps` is not an array');
+  if (!(value.steps as unknown[]).every(isStepShape)) {
+    // Rejected WHOLESALE rather than by filtering the bad rows out. A checklist
+    // silently missing a required step is worse than no checklist: the banner
+    // would read "all done" over a deployment that cannot transcribe.
+    malformed('`steps` contains an entry that is not a step');
+  }
+  if (typeof value.requiredRemaining !== 'number') malformed('`requiredRemaining` is not a number');
+  if (typeof value.totalRemaining !== 'number') malformed('`totalRemaining` is not a number');
+  if (typeof value.allRequiredSatisfied !== 'boolean') {
+    malformed('`allRequiredSatisfied` is not a boolean');
+  }
+  if (!AUDIENCES.includes(value.audience as OnboardingAudience)) {
+    malformed('`audience` is neither "admin" nor "user"');
+  }
+
+  // The one cast in this file, and it is now earned: every field the type
+  // claims has been checked on the line above.
+  return body as OnboardingState;
+}
+
+// =============================================================================
 // The two calls
 // =============================================================================
 
@@ -179,9 +298,12 @@ export const ADMIN_ONBOARDING_PATH = '/admin/onboarding';
  * all: the resource is the caller's own state, scoped by `userId` in the query
  * itself, which is the ownership-scoped posture `/api/pat` and
  * `/api/ai-credentials` already take.
+ *
+ * Fetched as `unknown` and narrowed: see the boundary-validation block above for
+ * why a cast here was a whole-application crash rather than a cosmetic sloppiness.
  */
 export async function getOnboardingState(): Promise<OnboardingState> {
-  return api.get<OnboardingState>(ONBOARDING_PATH);
+  return parseOnboardingState(await api.get<unknown>(ONBOARDING_PATH), ONBOARDING_PATH);
 }
 
 /**
@@ -197,5 +319,8 @@ export async function getOnboardingState(): Promise<OnboardingState> {
  * then be the second place that decision is made.
  */
 export async function getAdminOnboardingState(): Promise<OnboardingState> {
-  return api.get<OnboardingState>(ADMIN_ONBOARDING_PATH);
+  return parseOnboardingState(
+    await api.get<unknown>(ADMIN_ONBOARDING_PATH),
+    ADMIN_ONBOARDING_PATH,
+  );
 }
