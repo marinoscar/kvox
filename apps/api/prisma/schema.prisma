@@ -278,6 +278,23 @@ model AllowedEmail {
   claimedAt   DateTime? @map("claimed_at") @db.Timestamptz
   notes       String?
 
+  // Reminder tracking (issue #301, epic #271). A manual, admin-pressed action
+  // — "remind this invitee" — not a scheduler: there is no cron and no job
+  // type behind this pair, on the repository owner's explicit instruction.
+  // A reminder is a fact about THIS invitation, not a separate event stream,
+  // so it lives on the row rather than in a new table.
+  //
+  // `reminderCount` is `@default(0)` and NOT NULL on purpose: zero reminders
+  // sent is the true, representable state of every row today, unlike
+  // `lastReminderAt` where absence means "never" rather than "zero". Making
+  // it nullable would give every existing row NULL and force every read site
+  // to write `?? 0`.
+  reminderCount  Int       @default(0) @map("reminder_count")
+  // Nullable: absent means no reminder has ever been sent. Set to the send
+  // time each time an admin presses the button, alongside incrementing
+  // `reminderCount`.
+  lastReminderAt DateTime? @map("last_reminder_at") @db.Timestamptz
+
   // Relations
   addedBy   User? @relation("AllowlistAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
   claimedBy User? @relation("AllowlistClaimedBy", fields: [claimedById], references: [id], onDelete: SetNull)
