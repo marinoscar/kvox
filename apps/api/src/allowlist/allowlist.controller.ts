@@ -64,6 +64,35 @@ export class AllowlistController {
     return this.allowlistService.addEmail(dto, adminUserId);
   }
 
+  @Post(':id/reminder')
+  @Auth({ permissions: [PERMISSIONS.ALLOWLIST_WRITE] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Send an invitation reminder (Admin only)',
+    description:
+      'Emails the invitee again about an invitation they have not yet used, and records that a ' +
+      'reminder was requested. Manual only: an administrator presses this, nothing schedules it. ' +
+      'The recorded count and timestamp mean a reminder was requested and handed to the ' +
+      'notification dispatcher — delivery itself is recorded per attempt in the notification ' +
+      'delivery log, not here.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiDataResponse(AllowlistEntryDto, {
+    status: 200,
+    description: 'Reminder requested; the updated entry',
+  })
+  @ApiResponse({ status: 404, description: 'Allowlist entry not found' })
+  @ApiResponse({
+    status: 409,
+    description: 'Entry is already claimed — there is nobody left to remind',
+  })
+  async sendReminder(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') adminUserId: string,
+  ) {
+    return this.allowlistService.sendReminder(id, adminUserId);
+  }
+
   @Delete(':id')
   @Auth({ permissions: [PERMISSIONS.ALLOWLIST_WRITE] })
   @HttpCode(HttpStatus.NO_CONTENT)

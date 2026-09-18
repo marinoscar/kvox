@@ -54,6 +54,17 @@ const SAMPLE_DATA: { [K in EmailTemplateName]: EmailTemplateDataMap[K] } = {
     invitedBy: '"><img src=x onerror=alert(1)>',
     signInUrl: 'https://app.example.com/login',
   },
+  // #301's reminder. Same two hostile fragments in the same two fields, for
+  // the same reason: this template renders the address into BOTH parts and the
+  // inviter into an escaped block, so the contract loop exercises escaping on
+  // each. `invitedAt` is a fixed instant so the rendered date is a pure
+  // function of this payload.
+  'allowlist-invitation-reminder': {
+    recipientEmail: '<script>alert(document.cookie)</script>@example.com',
+    invitedAt: new Date('2026-01-15T10:00:00.000Z'),
+    invitedBy: '"><img src=x onerror=alert(1)>',
+    signInUrl: 'https://app.example.com/login',
+  },
   'role-changed': {
     recipientEmail: '<script>alert(document.cookie)</script>@example.com',
     previousRoles: ['admin'],

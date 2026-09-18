@@ -90,6 +90,11 @@ export const EVENT_EMAIL_TEMPLATES: Partial<Record<string, EmailTemplateName>> =
   {
     'user.welcome': 'user-welcome',
     'allowlist.invitation': 'allowlist-invitation',
+    // The manual reminder (#301, epic #271). Its own template, not a second
+    // key pointing at `allowlist-invitation` the way the broadcast pair below
+    // shares one: these two messages read differently, which is the reason
+    // there are two event keys at all.
+    'allowlist.invitation_reminder': 'allowlist-invitation-reminder',
     'security.role_changed': 'role-changed',
     // ONE TEMPLATE, TWO KEYS (#322, epic #319). `admin.broadcast` and
     // `admin.broadcast_critical` differ in whether a recipient may MUTE them —

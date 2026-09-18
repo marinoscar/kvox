@@ -3,6 +3,10 @@ import {
   type AllowlistInvitationEmailData,
   allowlistInvitationEmail,
 } from './allowlist-invitation.email';
+import {
+  type AllowlistInvitationReminderEmailData,
+  allowlistInvitationReminderEmail,
+} from './allowlist-invitation-reminder.email';
 import { type BroadcastEmailData, broadcastEmail } from './broadcast.email';
 import {
   type BackupFailedEmailData,
@@ -93,6 +97,13 @@ export interface EmailTemplateDataMap {
   'test-email': TestEmailData;
   'user-welcome': UserWelcomeEmailData;
   'allowlist-invitation': AllowlistInvitationEmailData;
+  // #301 (epic #271). The SIBLING of the entry above, and a separate template
+  // rather than a flag on it: a reminder opens differently ("you were invited a
+  // while ago and have not signed in yet" is not "you have been invited"), and
+  // its payload carries the invitation date the original has no reason to
+  // state. It deliberately does NOT carry `reminderCount` — see the template's
+  // header for why that omission lives in the type.
+  'allowlist-invitation-reminder': AllowlistInvitationReminderEmailData;
   'role-changed': RoleChangedEmailData;
   // #322 (epic #319). The odd one out: every entry above renders content this
   // codebase wrote, and this one renders a title and body an administrator
@@ -158,6 +169,7 @@ export const EMAIL_TEMPLATES: {
   'test-email': testEmail,
   'user-welcome': userWelcomeEmail,
   'allowlist-invitation': allowlistInvitationEmail,
+  'allowlist-invitation-reminder': allowlistInvitationReminderEmail,
   'role-changed': roleChangedEmail,
   broadcast: broadcastEmail,
   'job-failed': jobFailedEmail,
@@ -287,6 +299,10 @@ export { testEmail } from './test-email.email';
 // building gets its payload type checked by name.
 export { userWelcomeEmail } from './user-welcome.email';
 export { allowlistInvitationEmail } from './allowlist-invitation.email';
+
+// The manual invitation reminder (#301, epic #271) — an administrator pressing
+// a button, with no scheduler behind it.
+export { allowlistInvitationReminderEmail } from './allowlist-invitation-reminder.email';
 export { roleChangedEmail } from './role-changed.email';
 
 // The admin-composed broadcast (#322). Registered under ONE name for BOTH
@@ -326,6 +342,7 @@ export type { TestEmailData } from './test-email.email';
 // #128 does exactly that.
 export type { UserWelcomeEmailData } from './user-welcome.email';
 export type { AllowlistInvitationEmailData } from './allowlist-invitation.email';
+export type { AllowlistInvitationReminderEmailData } from './allowlist-invitation-reminder.email';
 export type { RoleChangedEmailData } from './role-changed.email';
 export type { BroadcastEmailData } from './broadcast.email';
 
