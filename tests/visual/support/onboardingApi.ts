@@ -85,6 +85,21 @@
  * `/user-settings` seed (or leaving it at the old `{}`) would silently turn
  * this file from a no-op into a suite-wide regression the moment it shipped.
  *
+ * ⚠ THE SAME IS TRUE OF `dismissedAt`/`adminDismissedAt`, FOR `OnboardingBanner`
+ * — issue #298's own follow-up gap, closed here. `chooseBannerAudience`
+ * (`components/onboarding/OnboardingBanner.tsx`) only offers an audience whose
+ * timestamp is ABSENT, so a fixture that always sets both (the original shape
+ * of this file) makes the banner permanently unreachable — every spec asking
+ * for it would see nothing, no matter what `admin`/`user` said. Both booleans
+ * default to `true` (dismissed), for the identical reason `welcomeSeen`
+ * defaults to `true`: the ~70 baselines that existed before this file could see
+ * the banner were captured with it producing zero DOM, and that has to stay
+ * true unless a spec asks otherwise. They are two independent booleans, not
+ * one, because `OnboardingBanner`'s admin-wins precedence needs the ADMIN
+ * banner dismissed while the USER checklist's stays live (or vice versa) to be
+ * exercised at all — a single shared flag could never put the two surfaces in
+ * different states.
+ *
  * =============================================================================
  * WHAT THE OPTIONS ADD, AND WHY THEY REUSE THE REAL REGISTRY
  * =============================================================================
@@ -92,8 +107,11 @@
  * A future onboarding-chrome spec needs more than "nothing to show", so
  * {@link OnboardingApiOptions} can shift either checklist to `'outstanding'`
  * independently (so a spec can assert `OnboardingBanner`'s admin-wins
- * precedence — `chooseBannerAudience` — by requesting BOTH at once) and can
- * make the `/user-settings` fixture a first-run document.
+ * precedence — `chooseBannerAudience` — by requesting BOTH at once), can make
+ * the `/user-settings` fixture a first-run document via `welcomeSeen`, and can
+ * un-dismiss either checklist's banner independently via `userDismissed`/
+ * `adminDismissed` — see the ⚠ above for why the banner is otherwise
+ * unreachable and why that is two booleans rather than one.
  *
  * The `'outstanding'` fixtures are not invented copy. They are the real step
  * `key`/`title`/`description`/`actionLabel`/`href`/`tier`/`skippable` values
@@ -322,14 +340,35 @@ export interface OnboardingApiOptions {
    * present. Default `true`.
    *
    * ⚠ THIS TOGGLES ONLY `welcomeSeenAt`, deliberately — `dismissedAt`/
-   * `adminDismissedAt` stay at their default (set) either way.
-   * `FirstRunWelcomeDialog`'s gate reads `welcomeSeen` alone (see this file's
-   * header), so a fixture for exercising it needs to vary only that one field;
-   * leaving the two dismissal timestamps untouched means turning this option
-   * on cannot also silently change `OnboardingBanner`'s behaviour, which a
-   * spec asking only for the welcome dialog did not ask to change.
+   * `adminDismissedAt` are controlled by the two options below and stay at
+   * THEIR OWN defaults regardless of this one. `FirstRunWelcomeDialog`'s gate
+   * reads `welcomeSeen` alone (see this file's header), so a fixture for
+   * exercising it needs to vary only that one field; leaving the two dismissal
+   * timestamps untouched means turning this option on cannot also silently
+   * change `OnboardingBanner`'s behaviour, which a spec asking only for the
+   * welcome dialog did not ask to change.
    */
   welcomeSeen?: boolean;
+  /**
+   * Whether the `/user-settings` fixture's `onboarding.dismissedAt` (the
+   * USER checklist's own dismissal) is present. Default `true` — see the file
+   * header: `chooseBannerAudience` only offers `'user'` when this is absent,
+   * so the default has to match `welcomeSeen`'s "already seen" posture or the
+   * existing baselines would grow a banner nobody asked for.
+   */
+  userDismissed?: boolean;
+  /**
+   * Whether the `/user-settings` fixture's `onboarding.adminDismissedAt` (the
+   * ADMIN checklist's own dismissal) is present. Default `true`, for the
+   * identical reason {@link userDismissed} defaults to `true`.
+   *
+   * ⚠ A SEPARATE BOOLEAN FROM `userDismissed`, not a shared one — see the file
+   * header. Asserting `chooseBannerAudience`'s admin-wins precedence means
+   * requesting BOTH checklists as `'outstanding'` while dismissing NEITHER, and
+   * a single flag could not represent "admin outstanding and undismissed, user
+   * outstanding and undismissed" any differently from "both dismissed".
+   */
+  adminDismissed?: boolean;
 }
 
 /**
@@ -348,6 +387,8 @@ export interface OnboardingApiOptions {
  */
 function userSettingsBody(options: OnboardingApiOptions): Record<string, unknown> {
   const welcomeSeen = options.welcomeSeen ?? true;
+  const userDismissed = options.userDismissed ?? true;
+  const adminDismissed = options.adminDismissed ?? true;
 
   return {
     theme: 'system',
@@ -360,8 +401,8 @@ function userSettingsBody(options: OnboardingApiOptions): Record<string, unknown
     },
     onboarding: {
       ...(welcomeSeen ? { welcomeSeenAt: FIXED_ISO } : {}),
-      dismissedAt: FIXED_ISO,
-      adminDismissedAt: FIXED_ISO,
+      ...(userDismissed ? { dismissedAt: FIXED_ISO } : {}),
+      ...(adminDismissed ? { adminDismissedAt: FIXED_ISO } : {}),
       skipped: [],
     },
     updatedAt: FIXED_ISO,
