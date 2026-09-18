@@ -72,24 +72,41 @@ function deploymentRows(report: HealthReport, input: StatusInput, now: number): 
     rows.push({ key: 'Revision', value: 'unknown (no deployment state was read)' });
   } else {
     rows.push({ key: 'Revision', value: shortSha(deployed.commitSha), note: `(${deployed.ref})` });
-    rows.push({
-      key: 'Last deployed',
-      value: formatUtc(deployed.lastDeployedAt),
-      note: `(${describeAge(deployed.lastDeployedAt, now)})`,
-    });
-    if (
-      deployed.lastAttemptAt !== undefined &&
-      deployed.lastAttemptAt > deployed.lastDeployedAt
-    ) {
-      // A later attempt than the last success means something failed. The
-      // state records both precisely so this cannot be hidden.
+    const deployedAt = deployed.lastDeployedAt;
+    if (deployedAt === undefined) {
+      // #267: a state file written by an install that FAILED before it ever
+      // deployed anything. Saying "never" is the whole point of the record -
+      // a blank row here would read as a rendering bug rather than as the
+      // deployment's actual condition.
+      rows.push({ key: 'Last deployed', value: 'never - no deploy has completed here' });
+    } else {
       rows.push({
-        key: 'Last attempt',
-        value: formatUtc(deployed.lastAttemptAt),
-        note: '(did not complete)',
+        key: 'Last deployed',
+        value: formatUtc(deployedAt),
+        note: `(${describeAge(deployedAt, now)})`,
       });
+      if (deployed.lastAttemptAt !== undefined && deployed.lastAttemptAt > deployedAt) {
+        // A later attempt than the last success means something failed. The
+        // state records both precisely so this cannot be hidden.
+        rows.push({
+          key: 'Last attempt',
+          value: formatUtc(deployed.lastAttemptAt),
+          note: '(did not complete)',
+        });
+      }
     }
     rows.push({ key: 'Last command', value: deployed.lastCommand });
+    if (deployed.lastOutcome === 'failure') {
+      // Tested for `'failure'` and never for `!== 'success'`: an older state
+      // file carries no outcome at all and describes a run that completed.
+      rows.push({
+        key: 'Last outcome',
+        value:
+          deployed.lastFailedStep === undefined
+            ? 'failed - re-run install with --resume'
+            : `failed at ${deployed.lastFailedStep} - re-run install with --resume`,
+      });
+    }
   }
 
   rows.push(updateRow(input));

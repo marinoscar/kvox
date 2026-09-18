@@ -7,22 +7,30 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir, userInfo } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PreconditionError } from '../errors.js';
 import { DeployInfoError, deployInfoDir, readDeployInfo, writeDeployInfo } from './deploy-info.js';
 import { composeEnvPath, envFilePath, writeEnvFile } from './env-file.js';
+import { metadataFor } from './env-metadata.js';
+import { diffEnv, parseEnvExample, parseEnvFile } from './env-spec.js';
 import type { CommandResult, RunCommandOptions } from './executor.js';
+import { findRepoRoot } from '../init/local-profile.js';
+import { locateInstalledApp } from './layout.js';
+import { unknownServerFacts } from './server-facts.js';
 import { DEPLOY_STATE_VERSION, NotInstalledError, deployStatePath, readState, writeState, type DeployState } from './state.js';
 import {
   FAKE_APP_VERSION,
   FAKE_COMMITS,
+  FAKE_ENV_EXAMPLE,
   fakeVps,
   healthyFetch,
   populateClone,
@@ -31,6 +39,7 @@ import {
 } from './testing/fake-vps.js';
 import {
   RENEW_WITHIN_DAYS,
+  addedVariables,
   buildUpdateSteps,
   certificateDueForRenewal,
   renderUpdateCheck,
@@ -309,6 +318,213 @@ describe('runUpdate preconditions', () => {
 });
 
 // =============================================================================
+// Adopting a deployment with no state file  (issue #285)
+// =============================================================================
+//
+// The reported failure: a deployment that is demonstrably present - clone at
+// the right revision, .env written, containers running, certificate issued,
+// site serving HTTPS - could not be updated, because `requireState` keyed the
+// precondition on the state file rather than on the deployment.
+// =============================================================================
+
+describe('runUpdate adopting a deployment whose state file is missing (#285)', () => {
+  let vps: FakeVps;
+
+  beforeEach(async () => {
+    vps = await fakeVps({ head: INSTALLED_SHA, remoteSha: NEW_SHA });
+    vi.stubGlobal('fetch', healthyFetch());
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await vps.close();
+  });
+
+  /** An installed app with its `.appctl-deploy.json` removed. */
+  function withoutState(): string {
+    const root = installedApp(vps);
+    rmSync(deployStatePath(root));
+    return root;
+  }
+
+  function update(root: string, hooks?: { onProgress?: (message: string) => void; onLog?: (line: string) => void }) {
+    return runUpdate({
+      deployRoot: root,
+      runCommand: vps.runCommand,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+      ...(hooks === undefined ? {} : { hooks }),
+    });
+  }
+
+  it('updates a live deployment whose .appctl-deploy.json is gone, instead of refusing', async () => {
+    const root = withoutState();
+
+    const result = await update(root);
+
+    expect(result.changed).toBe(true);
+    expect(result.commitSha).toBe(NEW_SHA);
+    // Rebuilt from the clone and the .env, then carried through the pipeline.
+    expect(readState(root)).toMatchObject({
+      repoUrl: 'https://example.test/o/demo',
+      ref: 'main',
+      commitSha: NEW_SHA,
+      previousSha: INSTALLED_SHA,
+      bindPort: 3535,
+      name: 'demo',
+      lastCommand: 'update',
+    });
+    expect(readState(root)?.adoptedAt).toBeDefined();
+  });
+
+  it('records the domain and port it read out of the .env', async () => {
+    const root = installedApp(vps);
+    writeEnvFile(
+      root,
+      `${readFileSync(envFilePath(root), 'utf8')}\nAPP_URL=https://adopted.example.test\n`,
+    );
+    rmSync(deployStatePath(root));
+
+    await update(root);
+
+    expect(readState(root)).toMatchObject({ domain: 'adopted.example.test', bindPort: 3535 });
+  });
+
+  it('does NOT invent an installedAt or a lastDeployedAt for it', async () => {
+    // The regression guard. Neither instant is on this disk, and stamping one
+    // puts a fiction on the About page - the class of bug #283 fixed.
+    const root = withoutState();
+
+    await update(root);
+
+    const state = readState(root) as DeployState;
+    expect(state.installedAt).toBeUndefined();
+    // `lastDeployedAt` IS stamped here, and honestly so: this run deployed.
+    expect(state.lastDeployedAt).toBeDefined();
+    // And the document the API reads says unknown rather than guessing.
+    expect(readDeployInfo(root)?.installedAt).toBeNull();
+    expect(readDeployInfo(root)?.adoptedAt).toBe(state.adoptedAt);
+  });
+
+  it('leaves both instants unknown when the adopted run deploys nothing', async () => {
+    vps.remoteSha = INSTALLED_SHA;
+    const root = withoutState();
+
+    const result = await update(root);
+
+    expect(result.changed).toBe(false);
+    expect(readState(root)?.lastDeployedAt).toBeUndefined();
+    expect(readDeployInfo(root)).toMatchObject({ installedAt: null, updatedAt: null });
+  });
+
+  it('still refuses a directory that is not a deployment, with the message it always gave', async () => {
+    // The other regression guard: the gate is positive evidence, so an empty
+    // --root is not adopted into a deployment.
+    const empty = mkdtempSync(join(tmpdir(), 'appctl-noinstall-'));
+
+    const error = await update(empty).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(NotInstalledError);
+    expect((error as Error).message).toContain(`No deployment found at ${empty}`);
+    expect((error as Error).message).toContain('deploy install');
+  });
+
+  it('tells the operator the record was rebuilt, and from what', async () => {
+    const root = withoutState();
+    const progress: string[] = [];
+    const logs: string[] = [];
+
+    await update(root, {
+      onProgress: (message) => void progress.push(message),
+      onLog: (line) => void logs.push(line),
+    });
+
+    expect(progress.some((line) => line.includes('Adopted this deployment'))).toBe(true);
+    // #292: the headline names the thing, not the file. The filename stays in
+    // the detail below, as a path - which is what an operator can go and `ls`.
+    expect(progress.some((line) => line.includes('no deployment record was here'))).toBe(true);
+    expect(progress.some((line) => line.includes('appctl'))).toBe(false);
+    expect(logs.some((line) => line.includes(`record      ${deployStatePath(root)}`))).toBe(true);
+    expect(logs.some((line) => line.includes('repository  https://example.test/o/demo'))).toBe(true);
+    expect(logs.some((line) => line.includes('revision    aaaaaaaaaaaa'))).toBe(true);
+    expect(logs.some((line) => line.includes('installed   unknown'))).toBe(true);
+    // And the run journal keeps the same record for later.
+    expect(updateJournal(root)).toContain('Adopted this deployment');
+  });
+
+  it('carries the notice on the result, for --json where the hooks are silent', async () => {
+    const root = withoutState();
+
+    const result = await update(root);
+
+    expect(result.adopted?.headline).toContain('Adopted this deployment');
+    expect(result.adopted?.detail.join('\n')).toContain('(repo/ origin)');
+  });
+
+  // -------------------------------------------------------------------------
+  // `kvox deploy update`, with no flags at all (issue #285)
+  // -------------------------------------------------------------------------
+  //
+  // The user's literal command. Discovery keyed on the state file for the same
+  // reason `requireState` did, so without `--name`/`--root` this answered
+  // "Nothing is installed under <apps-root>" and never reached the adoption
+  // path at all.
+
+  it('`kvox deploy update` with no flags adopts the one deployment under the apps root', async () => {
+    const apps = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+    const root = join(apps, 'demo');
+    mkdirSync(root, { recursive: true });
+    populateClone(join(root, 'repo'));
+    writeEnvFile(root, installedEnv(vps, 'demo', root));
+    expect(existsSync(deployStatePath(root))).toBe(false);
+
+    const layout = locateInstalledApp({ appsRoot: apps });
+    expect(layout.deployRoot).toBe(root);
+
+    const result = await runUpdate({
+      deployRoot: layout.deployRoot,
+      runCommand: vps.runCommand,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: layout.deployRoot,
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.adopted?.headline).toContain('Adopted this deployment');
+    expect(readState(root)?.commitSha).toBe(NEW_SHA);
+  });
+
+  it('still answers "nothing is installed" for an apps root that holds no deployment', async () => {
+    const apps = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+    mkdirSync(join(apps, 'not-an-app'), { recursive: true });
+
+    expect(() => locateInstalledApp({ appsRoot: apps })).toThrow(NotInstalledError);
+    expect(() => locateInstalledApp({ appsRoot: apps })).toThrow(
+      `Nothing is installed under ${apps}`,
+    );
+  });
+
+  it('uses an existing state file as-is and never reconstructs over it', async () => {
+    const root = installedApp(vps);
+
+    const result = await update(root);
+
+    expect(result.adopted).toBeUndefined();
+    const state = readState(root) as DeployState;
+    expect(state.adoptedAt).toBeUndefined();
+    // The fields the install recorded survive untouched; nothing was re-read
+    // from the clone to overwrite them.
+    expect(state.installedAt).toBe(INSTALLED_AT);
+    expect(state.repoUrl).toBe('https://example.test/o/demo');
+  });
+});
+
+// =============================================================================
 // The pipeline end to end, against a fake VPS  (issue #120)
 // =============================================================================
 
@@ -318,12 +534,19 @@ const INSTALLED_AT = '2026-01-01T00:00:00.000Z';
 const DEPLOYED_AT = '2026-01-02T00:00:00.000Z';
 
 /** The .env an install would have written for FAKE_ENV_EXAMPLE. */
-function installedEnv(vps: FakeVps, name: string): string {
+/**
+ * The `.env` an install leaves behind. `DEPLOY_ROOT` and
+ * `COMPOSE_PROJECT_NAME` are both in it because install writes both (#142),
+ * and since #290 the first of the two is also how discovery tells one of this
+ * CLI's own deployments from a neighbouring application's directory.
+ */
+function installedEnv(vps: FakeVps, name: string, deployRoot?: string): string {
   return [
     ...[...vps.answers().entries()].map(([key, value]) => `${key}=${value}`),
     'POSTGRES_SSL=false',
     'APP_BIND_PORT=3535',
     `COMPOSE_PROJECT_NAME=${name}`,
+    ...(deployRoot === undefined ? [] : [`DEPLOY_ROOT=${deployRoot}`]),
     '',
   ].join('\n');
 }
@@ -385,7 +608,7 @@ describe('runUpdate against a fake VPS', () => {
   function update(
     root: string,
     hooks?: { onProgress?: (message: string) => void; onLog?: (line: string) => void; onStepStart?: (step: { id: string }) => void },
-    extra: { check?: boolean } = {},
+    extra: { check?: boolean; force?: boolean } = {},
   ) {
     return runUpdate({
       deployRoot: root,
@@ -446,7 +669,9 @@ describe('runUpdate against a fake VPS', () => {
     expect(state.previousSha).toBe(INSTALLED_SHA);
     expect(state.lastAttemptAt).toBeDefined();
     expect(state.lastAttemptAt as string > DEPLOYED_AT).toBe(true);
-    // And nothing claims otherwise to the application either.
+    // And nothing claims otherwise to the application either: this run failed
+    // at `build`, long before `health`, so #283's rule does not reach it -
+    // nothing was restarted and nothing new is serving.
     expect(readDeployInfo(root)).toBeUndefined();
   });
 
@@ -462,7 +687,11 @@ describe('runUpdate against a fake VPS', () => {
 
     const state = readState(root) as DeployState;
     expect(state.installedAt).toBe(INSTALLED_AT);
-    expect(Date.parse(state.lastDeployedAt)).toBeGreaterThanOrEqual(before);
+    // `lastDeployedAt` is optional on the state since #267 (a failed FIRST
+    // install has none); a successful update always stamps one, which is
+    // what this asserts.
+    expect(state.lastDeployedAt).toBeDefined();
+    expect(Date.parse(state.lastDeployedAt as string)).toBeGreaterThanOrEqual(before);
     expect(state.lastAttemptAt).toBe(state.lastDeployedAt);
     expect(state.commitSha).toBe(NEW_SHA);
     expect(state.previousSha).toBe(INSTALLED_SHA);
@@ -490,7 +719,7 @@ describe('runUpdate against a fake VPS', () => {
       // "never checked", which would be wrong at the one moment it is current.
       remote: { sha: NEW_SHA, commitsBehind: 0 },
     });
-    expect(info?.updatedAt.endsWith('Z')).toBe(true);
+    expect(info?.updatedAt?.endsWith('Z')).toBe(true);
     expect(info?.remote?.checkedAt.endsWith('Z')).toBe(true);
   });
 
@@ -789,5 +1018,412 @@ describe('runUpdate against a fake VPS', () => {
     expect(readFileSync(envFilePath(root), 'utf8')).toContain(`DEPLOY_ROOT=${root}`);
     expect(readFileSync(envFilePath(root), 'utf8')).toContain('COMPOSE_PROJECT_NAME=demo');
     expect(progress.some((message) => message.includes('Moved .env'))).toBe(true);
+  });
+
+  // ===========================================================================
+  // Issue #283: an update past `health` has already deployed the new revision
+  // ===========================================================================
+  //
+  // `update` writes deploy-info after its own success only. A failure after
+  // `health` therefore left the LAST SUCCESSFUL deploy's document in place,
+  // naming the OLD commit as what is running - while `restart` had already
+  // brought the stack up on the new one and the API had already answered on
+  // it. On a deployment with no document yet (a pre-#120 install, or one whose
+  // first install failed) it left nothing at all, and About said the CLI had
+  // never deployed it.
+  //
+  // `update()` passes `skipProxy`, so `verify` is the one step after `health`;
+  // failing the frontend probe fails it with /api/health/ready still
+  // answering, exactly as in install.test.ts.
+  describe('a failed update past health still refreshes what is deployed (#283)', () => {
+    function apiUpFrontendDown(): typeof globalThis.fetch {
+      return (async (input: RequestInfo | URL) =>
+        ({
+          status: String(input).includes('/api/health/') ? 200 : 502,
+        }) as Response) as typeof globalThis.fetch;
+    }
+
+    it('does not blank an existing record, and moves it to the revision now serving', async () => {
+      const root = installedApp(vps);
+      // The record the last successful deploy left behind.
+      writeDeployInfo(root, readState(root) as DeployState, {
+        ...unknownServerFacts(),
+        hostname: 'vps-1',
+      });
+      expect(readDeployInfo(root)?.app.commitSha).toBe(INSTALLED_SHA);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      const error = await update(root).catch((caught: unknown) => caught);
+
+      expect((error as Error).message).toContain('not healthy');
+      const info = readDeployInfo(root);
+      expect(info).toBeDefined();
+      // The new revision is what restart brought up and health answered on.
+      expect(info?.app.commitSha).toBe(NEW_SHA);
+      expect(info?.lastCommand).toBe('update');
+      expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
+    });
+
+    it('keeps updatedAt on the last deploy that SUCCEEDED, stamping nothing new', async () => {
+      // #120's rule, which this must not undo: `updatedAt` is the last
+      // successful deploy. `run` is what says the newest commit arrived on a
+      // run that did not finish.
+      const root = installedApp(vps);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      await update(root).catch(() => undefined);
+
+      const info = readDeployInfo(root);
+      expect(info?.updatedAt).toBe(DEPLOYED_AT);
+      expect(info?.installedAt).toBe(INSTALLED_AT);
+      // The STATE is untouched by this write: update records a deploy only on
+      // success, and a failed run must not look like one.
+      expect(readState(root)?.lastDeployedAt).toBe(DEPLOYED_AT);
+      expect(readState(root)?.commitSha).toBe(INSTALLED_SHA);
+    });
+
+    it('marks the record complete again once an update succeeds', async () => {
+      const root = installedApp(vps);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+      await update(root).catch(() => undefined);
+      expect(readDeployInfo(root)?.run?.completed).toBe(false);
+
+      // `--force`, because the first run already moved the clone to NEW_SHA:
+      // a plain re-run finds nothing to fetch and redeploys nothing, which is
+      // #120's behaviour and the next test's subject.
+      vi.stubGlobal('fetch', healthyFetch());
+      await update(root, undefined, { force: true });
+
+      expect(readDeployInfo(root)?.run).toEqual({ completed: true });
+      expect(readDeployInfo(root)?.app.commitSha).toBe(NEW_SHA);
+    });
+
+    it('does not rewrite the record BACKWARDS when the retry finds nothing to do', async () => {
+      // The regression #283's own fix would otherwise introduce. After a
+      // failure past `health` the clone is at NEW_SHA and serving it, but the
+      // state still says INSTALLED_SHA - `update` records a commit only on
+      // success. A plain re-run then takes the "already up to date" path,
+      // which refreshes deploy-info from that stale state: the record would
+      // move from the revision that IS running to the one that is not, and
+      // lose the marker saying the run never finished.
+      const root = installedApp(vps);
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+      await update(root).catch(() => undefined);
+      expect(readState(root)?.commitSha).toBe(INSTALLED_SHA);
+
+      vi.stubGlobal('fetch', healthyFetch());
+      const result = await update(root);
+
+      expect(result.changed).toBe(false);
+      const info = readDeployInfo(root);
+      expect(info?.app.commitSha).toBe(NEW_SHA);
+      // This run deployed nothing, so it says nothing about how any run
+      // ended: the previous document's `run` rides through untouched.
+      expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
+    });
+  });
+});
+
+// =============================================================================
+// Issue #291: absent from the .env is not the same as added by the revision
+// =============================================================================
+//
+// On a real deployment `deploy update` stopped at step 4 of 11, "Check for new
+// environment variables", and walked the operator through the ENTIRE install
+// wizard - the domain, then the database section asking for POSTGRES_HOST - on
+// an update whose `.env.example` had not changed by one byte.
+//
+// Every test below drives the real pipeline with `nonInteractive: true` and,
+// where it is checking that nothing was asked, a state carrying NO DOMAIN.
+// That is the crisp signal: the drift step refuses with `no domain is recorded
+// for this deployment` at the moment it decides a wizard is needed, BEFORE the
+// wizard is constructed. An update that completes therefore did not decide to
+// prompt - which is also exactly how an unattended run (CI, the install TUI)
+// experiences the bug.
+// =============================================================================
+
+describe('environment drift on update (#291)', () => {
+  let vps: FakeVps;
+
+  beforeEach(async () => {
+    vps = await fakeVps({ head: INSTALLED_SHA, remoteSha: NEW_SHA });
+    vi.stubGlobal('fetch', healthyFetch());
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await vps.close();
+  });
+
+  /** FAKE_ENV_EXAMPLE with extra template lines appended. */
+  function templateWith(extra: readonly string[]): string {
+    return [FAKE_ENV_EXAMPLE, ...extra, ''].join('\n');
+  }
+
+  /** An installed deployment with a chosen template in its clone and .env. */
+  function staged(options: { template?: string; env?: string; domain?: string }): string {
+    const root = installedApp(vps);
+    if (options.template !== undefined) {
+      writeFileSync(join(root, 'repo', 'infra', 'compose', '.env.example'), options.template);
+    }
+    writeEnvFile(root, options.env ?? installedEnv(vps, 'demo'));
+    if (options.domain !== undefined) {
+      writeState({ ...(readState(root) as DeployState), domain: options.domain });
+    }
+    return root;
+  }
+
+  function update(root: string, answers?: ReadonlyMap<string, string>) {
+    return runUpdate({
+      deployRoot: root,
+      runCommand: vps.runCommand,
+      nonInteractive: true,
+      promptContext: silentPrompt(),
+      skipProxy: true,
+      skipSeed: true,
+      cwd: root,
+      ...(answers === undefined ? {} : { answers }),
+    });
+  }
+
+  const envOf = (root: string): Map<string, string> =>
+    parseEnvFile(readFileSync(envFilePath(root), 'utf8'));
+
+  /**
+   * The .env of a deployment that declined the optional secrets during install
+   * and never opted into observability - i.e. an ordinary one. The template it
+   * is measured against is `DECLINED_TEMPLATE` below.
+   */
+  const DECLINED_TEMPLATE = [
+    // Optional AND secret. Three of this repository's eleven optional keys are
+    // exactly this shape, and it is what dragged them past the old
+    // `essential === true || secret === true` filter: BEING A SECRET DOES NOT
+    // MAKE A VARIABLE REQUIRED.
+    '# SECRETS_ENCRYPTION_KEY=',
+    // Optional, secret AND `never` - the wizard deletes it on every path.
+    '# VAPID_PRIVATE_KEY=',
+    // NOT commented out, so `spec.optional` does not cover it: a required key
+    // in a feature group this deployment never enabled. Nine observability
+    // keys are this shape in the real template and five of them are secrets,
+    // which is the larger half of the bug and the half the issue did not name.
+    'UPTRACE_ADMIN_PASSWORD=admin',
+    'OTEL_ENABLED=true',
+  ];
+
+  it('asks nothing when the revision added no variables, however many were declined', async () => {
+    const root = staged({ template: templateWith(DECLINED_TEMPLATE) });
+
+    // Before the fix this threw `no domain is recorded for this deployment`,
+    // because three declined keys and one un-enabled group read as four new
+    // variables needing an answer.
+    await update(root);
+
+    const env = envOf(root);
+    expect(env.has('SECRETS_ENCRYPTION_KEY')).toBe(false);
+    expect(env.has('VAPID_PRIVATE_KEY')).toBe(false);
+    expect(env.has('UPTRACE_ADMIN_PASSWORD')).toBe(false);
+    expect(env.has('OTEL_ENABLED')).toBe(false);
+
+    const journal = updateJournal(root);
+    expect(journal).not.toContain('This revision adds');
+    expect(journal).toContain('Leaving 4 template variable(s) out of this .env');
+  });
+
+  it('still asks nothing on the next update, and the one after that', async () => {
+    const root = staged({ template: templateWith(DECLINED_TEMPLATE) });
+
+    await update(root);
+    const first = readFileSync(envFilePath(root), 'utf8');
+
+    // A second and a third revision, neither of which touches the template.
+    for (const sha of ['c'.repeat(40), 'd'.repeat(40)]) {
+      vps.remoteSha = sha;
+      await update(root);
+      expect(readFileSync(envFilePath(root), 'utf8')).toBe(first);
+    }
+  });
+
+  it('does not force a NEWLY ADDED optional variable, secret or not', async () => {
+    // The .env is complete against the template except for one key the
+    // revision genuinely added - and that key is commented out, which is the
+    // template's way of saying it need not be written at all.
+    const root = staged({ template: templateWith(['# SECRETS_ENCRYPTION_KEY=']) });
+
+    await update(root);
+
+    expect(envOf(root).has('SECRETS_ENCRYPTION_KEY')).toBe(false);
+  });
+
+  it('adds a genuinely new variable that has a usable default, without asking', async () => {
+    const root = staged({ template: templateWith(['LOG_LEVEL=info']) });
+
+    await update(root);
+
+    expect(envOf(root).get('LOG_LEVEL')).toBe('info');
+    expect(updateJournal(root)).toContain('This revision adds 1 variable(s); 0 need a value.');
+  });
+
+  it('asks about the variable the revision added, and about nothing else', async () => {
+    // Two values this operator set BY HAND, which the wizard would overwrite
+    // if it were handed the whole template: NODE_ENV is `fixed: 'production'`
+    // in the metadata and APP_URL is DERIVED from the domain. Their survival
+    // is what proves the question list was narrowed to the new key - and it is
+    // also the "nothing already in .env is lost" requirement in its own right.
+    const root = staged({
+      template: templateWith([
+        'NODE_ENV=production',
+        'APP_URL=https://demo.example.test',
+        'GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com',
+      ]),
+      env: [
+        installedEnv(vps, 'demo'),
+        'NODE_ENV=staging',
+        'APP_URL=https://hand-edited.example.test',
+        '',
+      ].join('\n'),
+      domain: 'demo.example.test',
+    });
+
+    await update(root, new Map([['GOOGLE_CLIENT_ID', 'real-client.apps.googleusercontent.com']]));
+
+    const env = envOf(root);
+    expect(env.get('GOOGLE_CLIENT_ID')).toBe('real-client.apps.googleusercontent.com');
+    expect(env.get('NODE_ENV')).toBe('staging');
+    expect(env.get('APP_URL')).toBe('https://hand-edited.example.test');
+    expect(updateJournal(root)).toContain('This revision adds 1 variable(s); 1 need a value.');
+  });
+
+  it('keeps every pre-existing key, the template order and the section banners', async () => {
+    const root = staged({
+      template: templateWith(['GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com']),
+      domain: 'demo.example.test',
+    });
+    const before = envOf(root);
+
+    await update(root, new Map([['GOOGLE_CLIENT_ID', 'real-client.apps.googleusercontent.com']]));
+
+    const contents = readFileSync(envFilePath(root), 'utf8');
+    const after = envOf(root);
+    for (const [key, value] of before) expect(after.get(key)).toBe(value);
+    // Including the one the template has never heard of: `serializeEnvFile`
+    // carries a fork's own variables through, and narrowing the spec list it
+    // is given - the obvious version of this fix - would have demoted all of
+    // them into its "Not in .env.example" block along with the banners below.
+    expect(after.get('COMPOSE_PROJECT_NAME')).toBe('demo');
+    expect(contents).toContain('# Database');
+    expect(contents).toContain('# Application');
+    // The trap this fix had to avoid: narrowing the spec list handed to
+    // `serializeEnvFile` as well as the one handed to the wizard would put
+    // every other template key BELOW this banner, as if it were a fork's own.
+    const extras = contents.indexOf('# Not in .env.example');
+    expect(extras).toBeGreaterThan(-1);
+    expect(contents.indexOf('POSTGRES_HOST=')).toBeLessThan(extras);
+    expect(contents.indexOf('GOOGLE_CLIENT_ID=')).toBeLessThan(extras);
+  });
+
+  it('leaves an opt-in feature group alone, even one this deployment uses', async () => {
+    // `update` enables no group and never has, so the wizard would refuse to
+    // write these two whatever this step decided - offering them is a question
+    // with no answer. The honest consequence, which this pins rather than
+    // hides: a revision that adds an observability variable does not reach a
+    // deployment through `update`, and the operator adds it by hand. Before
+    // the fix the same two keys were not written either; they just cost the
+    // operator the entire install wizard first.
+    const root = staged({
+      template: templateWith([
+        'OTEL_ENABLED=true',
+        'UPTRACE_ADMIN_PASSWORD=admin',
+        'OTEL_SERVICE_NAME=demo-api',
+      ]),
+      // `OTEL_ENABLED=false` is what the e2e deployment carries, and it is why
+      // the groups are not inferred from the file: present says nothing about
+      // on or off.
+      env: [installedEnv(vps, 'demo'), 'OTEL_ENABLED=false', ''].join('\n'),
+    });
+
+    await update(root);
+
+    const env = envOf(root);
+    expect(env.get('OTEL_ENABLED')).toBe('false');
+    expect(env.has('UPTRACE_ADMIN_PASSWORD')).toBe(false);
+    expect(env.has('OTEL_SERVICE_NAME')).toBe(false);
+    expect(updateJournal(root)).not.toContain('This revision adds');
+  });
+});
+
+// =============================================================================
+// `addedVariables` against the REAL template  (#291)
+// =============================================================================
+//
+// The fake template above keeps the pipeline tests readable; these run the
+// rule over `infra/compose/.env.example` itself, which is what the reported
+// deployment was measured against. The counts are asserted as relationships
+// ("at least one optional secret exists"), not as the literal 72/11/13, so a
+// revision that adds a variable does not fail this file - the property is what
+// matters, not the arithmetic of one snapshot.
+// =============================================================================
+
+describe('addedVariables against the real template', () => {
+  const root = findRepoRoot(dirname(fileURLToPath(import.meta.url)));
+  const specs = parseEnvExample(
+    readFileSync(join(root as string, 'infra', 'compose', '.env.example'), 'utf8'),
+  );
+
+  /** The .env of a deployment that took every default and declined the rest. */
+  const complete = new Map(
+    specs
+      .filter((spec) => {
+        const metadata = metadataFor(spec.key);
+        return !spec.optional && metadata.never !== true && metadata.group === undefined;
+      })
+      .map((spec) => [spec.key, spec.defaultValue] as const),
+  );
+
+  it('finds the template itself, so the assertions below are not vacuous', () => {
+    expect(root).toBeDefined();
+    expect(specs.length).toBeGreaterThan(20);
+    expect(specs.some((spec) => spec.optional && metadataFor(spec.key).secret === true)).toBe(true);
+    expect(
+      specs.some((spec) => !spec.optional && metadataFor(spec.key).group !== undefined),
+    ).toBe(true);
+  });
+
+  it('reports no additions for a deployment that is up to date', () => {
+    const { missing } = diffEnv(specs, complete);
+
+    // Every one of these is absent on purpose and always will be.
+    expect(missing.length).toBeGreaterThan(0);
+    expect(addedVariables(missing)).toEqual([]);
+  });
+
+  it('reports the one variable a revision adds, and not the rest', () => {
+    const { missing } = diffEnv(specs, complete);
+    const added = addedVariables([
+      ...missing,
+      { key: 'NEW_THING', section: '', defaultValue: 'x', help: '', optional: false, line: 1 },
+    ]);
+
+    expect(added.map((spec) => spec.key)).toEqual(['NEW_THING']);
+  });
+
+  it('reports a grouped key only when the caller names that group', () => {
+    // The REQUIRED ones: a commented-out key in the group is still optional,
+    // and optional still means "absent is the answer" whether or not the group
+    // is named. The two exclusions are independent and both apply.
+    const observability = specs.filter(
+      (spec) => metadataFor(spec.key).group === 'observability' && !spec.optional,
+    );
+    expect(observability.length).toBeGreaterThan(1);
+
+    const { missing } = diffEnv(specs, complete);
+
+    // What `update` asks for, and what it will keep asking for: no group.
+    expect(addedVariables(missing)).toEqual([]);
+    // And the parameter that exists so a caller which CAN enable a group -
+    // there is none today - gets the same rule applied to it rather than a
+    // second copy of it.
+    expect(addedVariables(missing, { groups: ['observability'] }).map((spec) => spec.key)).toEqual(
+      observability.map((spec) => spec.key),
+    );
   });
 });

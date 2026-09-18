@@ -21,12 +21,24 @@ import { deployMenuItems, type Phase } from './index.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 describe('deployMenuItems', () => {
-  it('offers the same six destinations whatever the state', () => {
+  it('offers the same seven destinations whatever the state', () => {
     const fresh = deployMenuItems({ installed: false, loggedIn: false }).map((item) => item.value);
     const settled = deployMenuItems({ installed: true, loggedIn: true }).map((item) => item.value);
 
-    expect(fresh).toEqual(['doctor', 'install', 'update', 'status', 'certs', 'about']);
+    // #268 adds Uninstall as the seventh, LAST: it is the one destination
+    // that destroys rather than builds, and the row somebody lands on first
+    // should not be the one that removes a deployment.
+    expect(fresh).toEqual([
+      'doctor',
+      'install',
+      'update',
+      'status',
+      'certs',
+      'about',
+      'uninstall',
+    ]);
     expect(settled).toEqual(fresh);
+    expect(fresh.at(-1)).toBe('uninstall');
   });
 
   it('annotates Install once something is installed, rather than removing it', () => {
@@ -40,7 +52,7 @@ describe('deployMenuItems', () => {
   it('annotates the rows that need an installed app', () => {
     const before = deployMenuItems({ installed: false, loggedIn: true });
 
-    for (const value of ['update', 'status', 'certs'] as const) {
+    for (const value of ['update', 'status', 'certs', 'uninstall'] as const) {
       expect(before.find((item) => item.value === value)?.label, value).toContain(
         '(nothing installed here)',
       );
@@ -77,6 +89,7 @@ describe('deployMenuItems', () => {
       'status',
       'certs',
       'about',
+      'uninstall',
     ];
     for (const phase of phases) {
       expect(source, phase).toContain(`phase === '${phase}'`);

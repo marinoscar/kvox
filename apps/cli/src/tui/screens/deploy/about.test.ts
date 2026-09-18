@@ -58,6 +58,7 @@ function report(overrides: Partial<AboutReport> = {}): AboutReport {
       lastCommand: 'update',
       deployedBy: { cli: 'cli', version: '1.0.0' },
       deployRoot: '/opt/infra/apps/demo',
+      adoptedAt: null,
       lastAttemptAt: null,
       envPath: '/opt/infra/apps/demo/.env',
       proxyContainer: 'proxy',

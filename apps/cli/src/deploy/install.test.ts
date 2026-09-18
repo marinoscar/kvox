@@ -25,11 +25,18 @@ import {
   composeArgv,
   composeCwd,
   defaultRootFor,
+  describeLayoutSource,
   runInstall,
   secretsFrom,
   type InstallOptions,
 } from './install.js';
-import { DEPLOY_STATE_VERSION, readState, writeState, type DeployState } from './state.js';
+import {
+  DEPLOY_STATE_VERSION,
+  deployStatePath,
+  readState,
+  writeState,
+  type DeployState,
+} from './state.js';
 import {
   FAKE_APP_VERSION,
   fakeVps,
@@ -38,6 +45,55 @@ import {
   silentPrompt,
   type FakeVps,
 } from './testing/fake-vps.js';
+
+// =============================================================================
+// One mocked call, for the cron tests (#265)
+// =============================================================================
+//
+// The reported failure is an EACCES writing `/etc/cron.d/<cli>-certs-<app>`,
+// and it cannot be staged for real: the suite runs as whatever user CI gives
+// it, and as root no directory mode produces EACCES at all - a test that
+// needed two uids would be skipped exactly where it matters. So the WRITE is
+// failed at the seam, and only for the ONE path the test names; every other
+// `writeFileSync` in this file (fixtures, and the staged copy of the very cron
+// file that could not be written) passes straight through to the real
+// implementation via `importOriginal`. The same shape deploy-info.test.ts uses
+// for `chmodSync` (#159).
+//
+// Matched on the exact path rather than on the basename, deliberately: the
+// staged copy shares that basename, and failing it too would test a fallback
+// instead of the case being reproduced.
+// =============================================================================
+
+let writeShouldFailFor: { path: string; error: NodeJS.ErrnoException } | undefined;
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
+      const target = String(args[0]);
+      if (writeShouldFailFor !== undefined && target === writeShouldFailFor.path) {
+        throw writeShouldFailFor.error;
+      }
+      return actual.writeFileSync(...args);
+    },
+  };
+});
+
+afterEach(() => {
+  writeShouldFailFor = undefined;
+});
+
+/** The error Node raises writing into a root-owned `/etc/cron.d` as a user. */
+function eaccesOn(path: string): NodeJS.ErrnoException {
+  return Object.assign(new Error(`EACCES: permission denied, open '${path}'`), {
+    code: 'EACCES',
+    errno: -13,
+    syscall: 'open',
+    path,
+  });
+}
 
 function installedRoot(root = mkdtempSync(join(tmpdir(), 'appctl-install-'))): string {
   const state: DeployState = {
@@ -609,10 +665,14 @@ describe('the publish step', () => {
     }) as typeof import('./executor.js').runCommand;
 
     const cronDir = mkdtempSync(join(tmpdir(), 'appctl-publish-cron-'));
+    // A real directory: the renewal-cron fallback stages the rendered file
+    // here when it cannot write cron.d, and the warning names where it went.
+    const deployRoot = mkdtempSync(join(tmpdir(), 'appctl-publish-root-'));
+    const warnings: string[] = [];
     return {
       context: {
         options: {
-          deployRoot: '/tmp/x',
+          deployRoot,
           name: 'demo',
           appsRoot: '/tmp',
           bindPort: 3535,
@@ -627,12 +687,22 @@ describe('the publish step', () => {
         runCommand,
         journal: { line: (line: string) => void lines.push(line) },
         completed: new Set<string>(),
+        warnings,
         ...context,
       } as never,
       seen,
       lines,
       cronDir,
+      deployRoot,
+      warnings,
     };
+  }
+
+  /** An existing renewal entry, written the way the CLI writes one. */
+  function writeCron(cronDir: string, name = 'demo'): string {
+    const path = join(cronDir, `${CLI_NAME}-certs-${name}`);
+    writeFileSync(path, 'already here\n', { mode: 0o644 });
+    return path;
   }
 
   it('issues through docker certbot, then validates and reloads through docker exec on the detected container', async () => {
@@ -713,20 +783,78 @@ describe('the publish step', () => {
     expect(cron).toContain('/usr/local/bin/cli deploy certs renew --all --apps-root /tmp --name demo');
   });
 
-  it('leaves the cron alone when the certificate already existed, unless --install-cron', async () => {
-    const existing = proxyRoot();
-    writeCertificate(existing);
-    const kept = contextFor(existing, {});
-    await publishStep().run(kept.context);
-    // No certbot run either: the certificate was already there.
-    expect(kept.seen.some((argv) => argv.includes('certbot/certbot'))).toBe(false);
-    expect(readdirSync(kept.cronDir)).toEqual([]);
+  // ---------------------------------------------------------------------------
+  // The renewal cron (#265)
+  //
+  // A PREVIOUS TEST HERE ASSERTED THE BUG: it pinned "leaves the cron alone
+  // when the certificate already existed", which is the `--resume` skip this
+  // issue is about, so it was replaced rather than left to contradict the fix.
+  // ---------------------------------------------------------------------------
 
-    const forced = proxyRoot();
-    writeCertificate(forced);
-    const written = contextFor(forced, { installCron: true });
-    await publishStep().run(written.context);
-    expect(readdirSync(written.cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+  it('installs the renewal cron when this deployment has none yet', async () => {
+    const root = proxyRoot();
+    const { context, cronDir } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+    const cron = readFileSync(join(cronDir, `${CLI_NAME}-certs-demo`), 'utf8');
+    expect(cron).toContain('/usr/local/bin/cli deploy certs renew --all --apps-root /tmp --name demo');
+  });
+
+  it('installs the cron on a --resume over an existing certificate that has none — the silent time bomb', async () => {
+    // THE WORST DEFECT IN #265. The gate used to be `certificate.issued`, and
+    // `issueCertificate` answers false for a certificate that already exists.
+    // So the run that followed a failed cron write skipped the cron block
+    // entirely and reported success, leaving a certificate nothing renews and
+    // saying nothing at all - an outage 90 days later with no trace back here.
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir, warnings } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+    expect(warnings).toEqual([]);
+  });
+
+  it('does not re-request the certificate on that resume', async () => {
+    // The retry path must stay free of Let's Encrypt's rate limit: five
+    // duplicate certificates a week, and a failed last step is exactly when an
+    // operator re-runs. `issueCertificate` returns early on an existing one.
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, seen } = contextFor(root, {});
+
+    await publishStep().run(context);
+
+    expect(seen.some((argv) => argv.includes('certbot/certbot'))).toBe(false);
+    expect(seen.some((argv) => argv.includes('certonly'))).toBe(false);
+  });
+
+  it('writes nothing when the cron is already there', async () => {
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir } = contextFor(root, {});
+    const path = writeCron(cronDir);
+
+    await publishStep().run(context);
+
+    // Byte-for-byte untouched: the gate asked whether an entry exists, and one
+    // does, so nothing was rendered over it.
+    expect(readFileSync(path, 'utf8')).toBe('already here\n');
+    expect(readdirSync(cronDir)).toEqual([`${CLI_NAME}-certs-demo`]);
+  });
+
+  it('forces the write with --install-cron even when an entry is already there', async () => {
+    const root = proxyRoot();
+    writeCertificate(root);
+    const { context, cronDir } = contextFor(root, { installCron: true });
+    const path = writeCron(cronDir);
+
+    await publishStep().run(context);
+
+    expect(readFileSync(path, 'utf8')).toContain('deploy certs renew --all');
   });
 
   it('honours --no-install-cron even when it issued a certificate', async () => {
@@ -735,6 +863,80 @@ describe('the publish step', () => {
     await publishStep().run(context);
 
     expect(readdirSync(cronDir)).toEqual([]);
+  });
+
+  it("does not fail the install on EACCES: permission denied, open '/etc/cron.d/<cli>-certs-<app>'", async () => {
+    // The reported failure, verbatim. `/etc/cron.d` is root:root and this CLI
+    // is deliberately never run under sudo (#236), so the write fails on every
+    // standard server - after the certificate has been issued and the site is
+    // already serving HTTPS.
+    const root = proxyRoot();
+    const { context, cronDir, warnings, deployRoot } = contextFor(root, {});
+    const target = join(cronDir, `${CLI_NAME}-certs-demo`);
+    writeShouldFailFor = { path: target, error: eaccesOn(target) };
+
+    // The step SUCCEEDS. It used to reject here and take the whole run down.
+    await expect(publishStep().run(context)).resolves.toBeUndefined();
+
+    expect(warnings).toHaveLength(1);
+    const warning = warnings[0] ?? '';
+    expect(warning).toContain('renewal is NOT scheduled');
+    expect(warning).toContain("EACCES: permission denied, open '");
+    expect(warning).toContain(target);
+    // A pasteable command, and one that survives being indented by a
+    // renderer - which a `sudo tee` heredoc would not.
+    expect(warning).toContain(`sudo install -m 644 ${join(deployRoot, `${CLI_NAME}-certs-demo`)} ${target}`);
+    expect(warning).not.toContain(`sudo ${CLI_NAME}`);
+    expect(warning).toContain(`ls ${cronDir}/${CLI_NAME}-certs-*`);
+  });
+
+  it('still issued the certificate and installed the vhost in that run', async () => {
+    // The catch must not short-circuit the work that already succeeded: the
+    // deployment is COMPLETE when the cron write throws, which is the whole
+    // reason it is not fatal.
+    const root = proxyRoot();
+    const { context, seen, cronDir } = contextFor(root, {}, { proxyContainer: 'edge-proxy' });
+    const target = join(cronDir, `${CLI_NAME}-certs-demo`);
+    writeShouldFailFor = { path: target, error: eaccesOn(target) };
+
+    await publishStep().run(context);
+
+    expect(seen.map((argv) => argv.slice(0, 3).join(' '))).toEqual([
+      'docker run --rm',
+      'docker exec edge-proxy',
+      'docker exec edge-proxy',
+    ]);
+    expect(seen[0]).toContain('certbot/certbot');
+    expect(seen[2]?.slice(3)).toEqual(['nginx', '-s', 'reload']);
+    expect(existsSync(join(root, 'nginx', 'conf.d', 'app.example.test.conf'))).toBe(true);
+  });
+
+  it('is equally non-fatal, and equally loud, when the failure is not EACCES', async () => {
+    // Naming one errno would make every other one fail an install that
+    // succeeded: EROFS, ENOTDIR and EPERM all leave the same deployment
+    // behind - complete, serving, unscheduled.
+    const root = proxyRoot();
+    const { context, warnings, cronDir } = contextFor(root, {});
+    writeShouldFailFor = {
+      path: join(cronDir, `${CLI_NAME}-certs-demo`),
+      error: Object.assign(new Error('EROFS: read-only file system, open'), { code: 'EROFS' }),
+    };
+
+    await expect(publishStep().run(context)).resolves.toBeUndefined();
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('EROFS: read-only file system');
+    expect(warnings[0]).toContain('sudo install -m 644');
+  });
+
+  it('records the failure in the journal as well as in the warning', async () => {
+    const { context, lines, cronDir } = contextFor(proxyRoot(), {});
+    const target = join(cronDir, `${CLI_NAME}-certs-demo`);
+    writeShouldFailFor = { path: target, error: eaccesOn(target) };
+
+    await publishStep().run(context);
+
+    expect(lines.some((line) => line.startsWith('Could not write '))).toBe(true);
   });
 });
 
@@ -752,6 +954,29 @@ describe('runInstall preconditions', () => {
     expect(error).toBeInstanceOf(UsageError);
     expect((error as Error).message).toContain('deploy update');
     expect((error as Error).message).toContain('--reinstall');
+  });
+
+  it('is UNCHANGED by evidence-aware discovery: this guard reads the state file directly (#285)', async () => {
+    // #285 taught `listInstalledApps` to recognise a deployment by its clone
+    // and its .env. This guard is not one of its callers - it reads
+    // `readState(options.deployRoot)` - so a directory with a clone and an
+    // .env but no state file is still let through, exactly as before. That is
+    // the right answer either way: the guard's own test is `lastDeployedAt`,
+    // and an unrecorded deployment has none to refuse on.
+    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+    mkdirSync(join(root, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(root, '.env'), 'APP_BIND_PORT=3535\n', { mode: 0o600 });
+
+    const error = await runInstall({
+      deployRoot: root,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // It gets past the precondition and fails later, on a real pipeline step,
+    // rather than being refused as "a deployment already exists".
+    expect((error as Error | undefined)?.message ?? '').not.toContain('--reinstall');
   });
 });
 
@@ -959,14 +1184,170 @@ describe('runInstall --resume without state (#249)', () => {
   // from --repo', 'GUESSED from the git checkout...' and 'taken from
   // --name/--root' - and prove they really are distinguishable (no two share
   // a substring the others lack, e.g. only the guess uses "guess" at all).
-  // The fourth wording, 'taken from an existing deployment state', is
-  // produced only when `resolveRepoTarget` is called with a `state` option -
-  // which `runInstall` never does (`resolveInstallLayout` and `resolveTarget`
-  // in install.ts pass only `cwd`/`appsRoot`/`runCommand`/`repoFlag`/
-  // `refFlag`). That branch is unreachable through the public `runInstall`
-  // entry point and `describeLayoutSource` itself is not exported, so it is
-  // not covered here - covering it would require a source change, and this
-  // pass is test-files-only.
+  //
+  // The fourth wording, the state file, is STILL not reachable through
+  // `runInstall`, and since #266 that is a property rather than an omission:
+  // `resolveInstallLayout` produces `source: 'state'` only by finding a state
+  // file, and finding one is exactly what stops this refusal from firing.
+  // `describeLayoutSource` is exported and covered directly below.
+});
+
+describe('describeLayoutSource (#249, #266)', () => {
+  const root = '/opt/infra/apps/kvox';
+
+  it('names the state file rather than calling it a guess', () => {
+    // The wording the #266 rank produces. An operator who is told where the
+    // answer came from can `cat` it; "an existing deployment state" cannot be
+    // opened, and "GUESSED" would be a lie about a file this CLI wrote.
+    const described = describeLayoutSource(
+      { url: 'https://example.test/o/kvox.git', ref: 'main', source: 'state' },
+      root,
+    );
+
+    expect(described).toBe(`taken from the deployment state at ${deployStatePath(root)}`);
+    expect(described).not.toMatch(/guess/i);
+  });
+
+  it('still calls the ambient git checkout a guess, and --repo a derivation', () => {
+    expect(
+      describeLayoutSource({ url: 'https://example.test/o/r.git', ref: 'main', source: 'git-remote' }, root),
+    ).toMatch(/GUESSED/);
+    expect(
+      describeLayoutSource({ url: 'https://example.test/o/r.git', ref: 'main', source: 'flag' }, root),
+    ).toBe('derived from --repo');
+    expect(describeLayoutSource(undefined, root)).toBe('taken from --name/--root');
+  });
+});
+
+// =============================================================================
+// Issue #266: `--resume` run from inside the deploy root it should resume.
+//
+// The reported failure is the #247 guard firing on a directory that is not a
+// guess at all: `/opt/infra/apps/kvox` is a deploy root with a state file,
+// and the CLI walked PAST it into the operator's infrastructure repository at
+// `/opt/infra` before refusing. These cases stand in exactly that shape - an
+// infra checkout containing the apps root, a deployment underneath it - and
+// assert that the state file beside the operator is what answers.
+// =============================================================================
+describe('runInstall --resume from inside the deploy root (#266)', () => {
+  /** The reported server: an infra git checkout containing the apps root. */
+  function infraServer(appName = 'kvox'): { appsRoot: string; deployRoot: string } {
+    const tmp = mkdtempSync(join(tmpdir(), 'appctl-cwd-state-'));
+    const infra = join(tmp, 'infra');
+    const appsRoot = join(infra, 'apps');
+    // An empty `.git` is all `findGitRoot` looks for (existsSync), which is
+    // what makes /opt/infra look like infrastructure-as-code here.
+    mkdirSync(join(infra, '.git'), { recursive: true });
+    const deployRoot = installedRoot(join(appsRoot, appName));
+    return { appsRoot, deployRoot };
+  }
+
+  it('resolves the deployment it is standing in instead of refusing to guess', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: deployRoot,
+      resume: true,
+      // A state file answers with no git at all: `resolveRepoTarget` returns
+      // at its `state` rank before it runs a command.
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // The reported message, in full: it must not appear at all.
+    expect(String((error as Error | undefined)?.message ?? '')).not.toContain(
+      'Refusing to guess what to deploy',
+    );
+    // Past resolution and into the run: `openJournal` is the first thing on
+    // the far side of the resume guard that leaves a mark on disk.
+    expect(existsSync(join(deployRoot, 'logs'))).toBe(true);
+  });
+
+  it('resolves the same deployment from a subdirectory of it', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+    const inside = join(deployRoot, 'repo', 'infra', 'compose');
+    mkdirSync(inside, { recursive: true });
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: inside,
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(String((error as Error | undefined)?.message ?? '')).not.toContain(
+      'Refusing to guess what to deploy',
+    );
+    expect(existsSync(join(deployRoot, 'logs'))).toBe(true);
+  });
+
+  it('still refuses when cwd is the apps root itself: nothing there names a deployment', async () => {
+    // #247's regression guard, unchanged. The apps root holds no state file
+    // of its own, so the walk stops with nothing and the ambient git lookup
+    // finds the infra repository exactly as it did before.
+    const { appsRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: appsRoot,
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Refusing to guess what to deploy');
+  });
+
+  it('lets --repo outrank the state file in the directory it is run from', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: deployRoot,
+      repo: 'https://example.test/o/flagged.git',
+      ref: 'main',
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    // --repo names `flagged`, so the deploy root is <apps-root>/flagged -
+    // which has no state, so #249's refusal fires and names it.
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Nothing to resume');
+    expect((error as Error).message).toContain(join(appsRoot, 'flagged'));
+    expect((error as Error).message).toContain('derived from --repo');
+  });
+
+  it('lets --name outrank the state file in the directory it is run from', async () => {
+    const { appsRoot, deployRoot } = infraServer();
+
+    const error = await runInstall({
+      appsRoot,
+      cwd: deployRoot,
+      name: 'other',
+      resume: true,
+      runCommand: neverRun,
+      bindPort: 3535,
+      proxyRoot: '/tmp/proxy',
+      domain: 'app.example.test',
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(UsageError);
+    expect((error as Error).message).toContain('Nothing to resume');
+    expect((error as Error).message).toContain(join(appsRoot, 'other'));
+  });
 });
 
 describe('compose invocation', () => {
@@ -1266,17 +1647,12 @@ describe('runInstall against a fake VPS', () => {
     expect((error as Error).message).toContain('gh auth login');
     expect(vps.seen.some((argv) => argv[0] === 'git' && argv[1] === 'clone')).toBe(false);
     expect(existsSync(join(root, 'repo'))).toBe(false);
-    expect(readState(root)).toBeUndefined();
-  });
-
-  it('writes deploy-info only after the state, so a failed install leaves neither', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
-    vps.failWhen((argv) => argv[1] === 'compose' && argv.includes('build'), 'build exploded');
-
-    const error = await install(root).catch((caught: unknown) => caught);
-
-    expect((error as Error).message).toContain('build exploded');
-    expect(readState(root)).toBeUndefined();
+    // Since #267 the run records where it stopped so `--resume` can read it
+    // back. Nothing was deployed, so nothing claims to have been: the record
+    // names the step and carries no `lastDeployedAt`.
+    expect(readState(root)?.lastOutcome).toBe('failure');
+    expect(readState(root)?.lastFailedStep).toBe('auth');
+    expect(readState(root)?.lastDeployedAt).toBeUndefined();
     expect(readDeployInfo(root)).toBeUndefined();
   });
 
@@ -1296,5 +1672,349 @@ describe('runInstall against a fake VPS', () => {
 
     expect(result.commitSha).toBe('c'.repeat(40));
     expect(readState(root)?.lastCommand).toBe('install');
+  });
+  // ===========================================================================
+  // Issue #267: a failed install must record what it completed
+  // ===========================================================================
+  //
+  // `--resume` reads `completedSteps` out of the state file, and the state
+  // file was written only after the pipeline had finished - so the flag could
+  // only ever resume a run with nothing left to resume, while the failure
+  // message told every operator to use it. The reported symptom is the one
+  // the first test below is named after.
+  //
+  // `install()` above passes `skipDoctor`, `skipSeed` and `skipProxy`, so the
+  // steps that actually RUN here are network, checkout, environment,
+  // validate-environment, build, migrate, start, health and verify. A skipped
+  // step is not a completed one (pipeline.ts), which is why the assertions
+  // below name the ids they do.
+  describe('a failed install records what it completed (#267)', () => {
+    /**
+     * Fails one compose subcommand until `stop()` is called.
+     *
+     * `failWhen` has no way to unregister, so the switch lives in the
+     * predicate - which is what lets one test fail a run and then let the
+     * retry through, the whole shape of a resume.
+     */
+    function failCompose(subcommand: string, message: string): { stop(): void } {
+      let failing = true;
+      vps.failWhen(
+        (argv) => failing && argv[1] === 'compose' && argv.includes(subcommand),
+        message,
+      );
+      return { stop: () => void (failing = false) };
+    }
+
+    it('no longer answers "Nothing to resume" after the failure it told the operator to resume', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      const build = failCompose('build', 'build exploded');
+
+      const failure = await install(root).catch((caught: unknown) => caught);
+
+      // The advice the CLI printed, verbatim from the failure message.
+      expect((failure as Error).message).toContain('re-run with --resume');
+      build.stop();
+
+      // Following that advice used to end here, with a UsageError reading
+      // "Nothing to resume: no deployment state at <root>".
+      const resumed = await install(root, { resume: true });
+
+      expect(resumed.deployRoot).toBe(root);
+      expect(readState(root)?.lastOutcome).toBe('success');
+    });
+
+    it('re-enters at the failed step and does not re-run what already succeeded', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      const start = failCompose('up', 'the stack would not start');
+
+      await install(root).catch(() => undefined);
+
+      const recorded = readState(root)?.completedSteps ?? [];
+      expect(recorded).toContain('build');
+      expect(recorded).toContain('migrate');
+      expect(recorded).not.toContain('start');
+
+      start.stop();
+      vps.seen.length = 0;
+      await install(root, { resume: true });
+
+      // The load-bearing assertion: the ~4.5 minute image build and the clone
+      // did not happen a second time, because the state said they were done.
+      const ran = (predicate: (argv: readonly string[]) => boolean): boolean =>
+        vps.seen.some(predicate);
+      expect(ran((argv) => argv[1] === 'compose' && argv.includes('build'))).toBe(false);
+      expect(ran((argv) => argv[0] === 'git' && argv[1] === 'clone')).toBe(false);
+      // `migrate deploy` specifically: the health step runs `migrate status`
+      // against the started stack, which is a read and not the step.
+      expect(ran((argv) => argv.includes('migrate') && argv.includes('deploy'))).toBe(false);
+      // And the step that failed DID run again.
+      expect(ran((argv) => argv[1] === 'compose' && argv.includes('up'))).toBe(true);
+
+      // A resumed run skips `checkout`, so the commit can only come from the
+      // record the failed run left. An empty sha here would be published to
+      // deploy-info as what is deployed.
+      expect(readState(root)?.commitSha).toBe('c'.repeat(40));
+      expect(readState(root)?.repoUrl).toBe('https://example.test/o/demo');
+      expect(readDeployInfo(root)?.app.commitSha).toBe('c'.repeat(40));
+    });
+
+    // REGRESSION GUARD FOR #267's INSIGHT, WHICH #283 NARROWS RATHER THAN
+    // REVERSES. A run that dies at `build` has started nothing: no container
+    // is up, /api/health/ready has never answered, and a deploy-info here
+    // would describe a deployment that does not exist. #283 only changes what
+    // happens AFTER `health` - if this ever goes green with a document on
+    // disk, that change has been over-applied.
+    it('writes NO deploy-info when the run fails BEFORE health (#267, preserved by #283)', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      failCompose('build', 'build exploded');
+
+      const error = await install(root).catch((caught: unknown) => caught);
+
+      expect((error as Error).message).toContain('build exploded');
+      // The state is written on this path - deploy-info deliberately is not.
+      // The ordering ("deploy-info is derived from the state") is what makes
+      // that a one-sided move rather than a contradiction.
+      expect(readState(root)).toBeDefined();
+      expect(readState(root)?.completedSteps).not.toContain('health');
+      expect(readDeployInfo(root)).toBeUndefined();
+    });
+
+    it('records the failed outcome, the step and the attempt, and no deploy that never happened', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      const build = failCompose('build', 'build exploded');
+
+      await install(root).catch(() => undefined);
+
+      const state = readState(root) as DeployState;
+      expect(state.lastOutcome).toBe('failure');
+      expect(state.lastFailedStep).toBe('build');
+      expect(state.lastCommand).toBe('install');
+      expect(state.lastAttemptAt).toBeDefined();
+      // #120's rule, which this must not break: nothing was deployed, so no
+      // deploy time is recorded.
+      expect(state.lastDeployedAt).toBeUndefined();
+      expect(state.completedSteps).toContain('checkout');
+
+      // And a success overwrites all three, rather than leaving a healthy
+      // deployment describing itself as broken.
+      build.stop();
+      const after = await install(root, { resume: true });
+      expect(after.deployRoot).toBe(root);
+      const done = readState(root) as DeployState;
+      expect(done.lastOutcome).toBe('success');
+      expect(done.lastFailedStep).toBeUndefined();
+      expect(done.lastDeployedAt).toBeDefined();
+    });
+
+    // -------------------------------------------------------------------------
+    // The regression this change is most likely to cause
+    // -------------------------------------------------------------------------
+    it('does not demand --reinstall when a FIRST install failed and is simply re-run', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      const build = failCompose('build', 'build exploded');
+
+      await install(root).catch(() => undefined);
+      expect(readState(root)).toBeDefined();
+      build.stop();
+
+      // No flags at all - the ordinary retry. A state file that meant
+      // "a deployment already exists" would refuse this, which would make the
+      // fix strictly worse than the bug.
+      const retried = await install(root).catch((caught: unknown) => caught);
+
+      expect(retried).not.toBeInstanceOf(UsageError);
+      expect(readState(root)?.lastOutcome).toBe('success');
+    });
+
+    it('still refuses a plain install over a deployment that DID complete, even after a failed reinstall', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      await install(root);
+      const deployedAt = readState(root)?.lastDeployedAt;
+      expect(deployedAt).toBeDefined();
+
+      // A reinstall that fails leaves the earlier success's deploy time in
+      // place: the containers, certificate and database it would clobber are
+      // all still there, so the refusal must still fire.
+      failCompose('build', 'build exploded');
+      await install(root, { reinstall: true }).catch(() => undefined);
+      expect(readState(root)?.lastOutcome).toBe('failure');
+      expect(readState(root)?.lastDeployedAt).toBe(deployedAt);
+
+      const error = await install(root).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(UsageError);
+      expect((error as Error).message).toContain('--reinstall');
+    });
+
+    it('lets --fresh discard the failure record rather than resurrecting it', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      const build = failCompose('build', 'build exploded');
+
+      await install(root).catch(() => undefined);
+
+      // A sentinel only the discarded file can carry through.
+      writeState({ ...(readState(root) as DeployState), installedAt: '2000-01-01T00:00:00.000Z' });
+      build.stop();
+
+      await install(root, { fresh: true });
+
+      const state = readState(root) as DeployState;
+      expect(state.installedAt).not.toBe('2000-01-01T00:00:00.000Z');
+      expect(state.lastOutcome).toBe('success');
+      expect(state.lastFailedStep).toBeUndefined();
+    });
+
+    it('reads a state file written before the outcome field existed', async () => {
+      // `installedRoot` writes exactly that shape: no `lastOutcome`, no
+      // `lastFailedStep`, and a `lastDeployedAt`. Absence must keep meaning
+      // "this run completed" - a reader testing `!== 'success'` would see
+      // every pre-#267 deployment as broken.
+      const root = installedRoot();
+      const loaded = readState(root) as DeployState;
+      expect(loaded.lastOutcome).toBeUndefined();
+      expect(loaded.lastDeployedAt).toBe('2026-01-01T00:00:00.000Z');
+
+      const error = await install(root).catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(UsageError);
+      expect((error as Error).message).toContain('deploy update');
+    });
+
+    // -------------------------------------------------------------------------
+    // The issue's second defect, checked rather than assumed
+    // -------------------------------------------------------------------------
+    //
+    // #267 reports that `--repo` is "silently ignored when combined with
+    // --name", because `resolveInstallLayout` returns early on --name with no
+    // RepoTarget. It is not: the `checkout` step calls `resolveTarget`, which
+    // resolves `context.options.repo` as `repoFlag` whenever the context has
+    // no target yet. This pins that, so the two flags cannot start
+    // contradicting each other unnoticed while #266 reworks that function.
+    it('clones the repository --repo names even when --name chose the folder', async () => {
+      const appsRoot = mkdtempSync(join(tmpdir(), 'appctl-apps-'));
+
+      await runInstall({
+        appsRoot,
+        name: 'named',
+        repo: 'https://example.test/o/elsewhere.git',
+        ref: 'main',
+        bindPort: 3535,
+        proxyRoot: join(appsRoot, 'proxy'),
+        domain: 'app.example.test',
+        runCommand: vps.runCommand,
+        cwd: appsRoot,
+        nonInteractive: true,
+        answers: vps.answers(),
+        promptContext: silentPrompt(),
+        skipDoctor: true,
+        skipProxy: true,
+        skipSeed: true,
+      });
+
+      // `.git` is stripped by `normaliseRepoUrl` for a non-GitHub forge; the
+      // point is the HOST AND PATH, which came from --repo and not from the
+      // ambient checkout --name would otherwise have left it guessing.
+      const clone = vps.seen.find((argv) => argv[0] === 'git' && argv[1] === 'clone');
+      expect(clone?.[3]).toBe('https://example.test/o/elsewhere');
+       expect(readState(join(appsRoot, 'named'))?.repoUrl).toBe(
+        'https://example.test/o/elsewhere',
+      );
+    });
+  });
+
+  // ===========================================================================
+  // Issue #283: once `health` has passed, the deployment is real
+  // ===========================================================================
+  //
+  // The reported state, verbatim: the CLI cloned, built, migrated, seeded,
+  // started the stack and issued the certificate; the API was answering; the
+  // run then failed at its very last action - and `/admin/settings/about`
+  // said "This instance was not deployed with the deploy CLI, so deployment
+  // details are unavailable."
+  //
+  // #267 withheld deploy-info from every failed run. That is right for a
+  // failure at `build`/`migrate`/`start` (the guard above pins it) and wrong
+  // once the application is answering: the record is then the only thing that
+  // can tell an administrator what is running on their own server.
+  //
+  // `install()` passes `skipProxy`, so `verify` is the one step after
+  // `health`. Failing the FRONTEND probe fails it while leaving
+  // /api/health/ready answering - which is not a contrivance but #169's real
+  // nginx-upstream bug, and precisely the shape this issue is about: the API
+  // is up, the run is not finished.
+  describe('a run that fails after health still publishes what is deployed (#283)', () => {
+    /** 200 for the API's own probes, 502 for everything else. */
+    function apiUpFrontendDown(): typeof globalThis.fetch {
+      return (async (input: RequestInfo | URL) =>
+        ({
+          status: String(input).includes('/api/health/') ? 200 : 502,
+        }) as Response) as typeof globalThis.fetch;
+    }
+
+    it('writes deploy-info, marked incomplete and naming the step, when verify fails', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      const error = await install(root).catch((caught: unknown) => caught);
+
+      // The run genuinely failed, and it failed after the API answered.
+      expect((error as Error).message).toContain('not healthy');
+      expect(readState(root)?.lastFailedStep).toBe('verify');
+      expect(readState(root)?.completedSteps).toContain('health');
+
+      // The whole point: About has a record to render instead of asserting
+      // that this instance was never deployed by the CLI.
+      const info = readDeployInfo(root);
+      expect(info).toBeDefined();
+      expect(info?.app.commitSha).toBe('c'.repeat(40));
+      expect(info?.app.name).toBe('demo');
+      expect(info?.deployedBy).toEqual({ cli: CLI_NAME, version: CLI_VERSION });
+      // And it says, in the record itself, that the run did not finish.
+      expect(info?.run).toMatchObject({ completed: false, failedStep: 'verify' });
+      expect(info?.run?.attemptedAt).toBe(readState(root)?.lastAttemptAt);
+    });
+
+    it('records no deploy time it cannot back up: updatedAt is this run, not an invented one', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+
+      await install(root).catch(() => undefined);
+
+      const state = readState(root) as DeployState;
+      const info = readDeployInfo(root);
+      // #120's rule is untouched: the STATE claims no successful deploy.
+      expect(state.lastDeployedAt).toBeUndefined();
+      // The document's `updatedAt` therefore falls back to `installedAt` -
+      // the instant this very run began recording, which is what a first
+      // install records there anyway. Nothing is stamped that did not happen.
+      expect(info?.updatedAt).toBe(state.installedAt);
+      expect(info?.installedAt).toBe(state.installedAt);
+    });
+
+    it('marks the record complete when the run finishes, exactly as before', async () => {
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+
+      await install(root);
+
+      const info = readDeployInfo(root);
+      expect(info?.run).toEqual({ completed: true });
+      expect(info?.updatedAt).toBe(readState(root)?.lastDeployedAt);
+      expect(readState(root)?.lastOutcome).toBe('success');
+    });
+
+    it('replaces an incomplete record with a complete one when the retry succeeds', async () => {
+      // The other half of the rule: an incomplete record must not outlive the
+      // run that fixes it, or About keeps warning about a step that has since
+      // passed.
+      const root = mkdtempSync(join(tmpdir(), 'appctl-install-'));
+      vi.stubGlobal('fetch', apiUpFrontendDown());
+      await install(root).catch(() => undefined);
+      expect(readDeployInfo(root)?.run?.completed).toBe(false);
+
+      vi.stubGlobal('fetch', healthyFetch());
+      await install(root, { resume: true });
+
+      expect(readDeployInfo(root)?.run).toEqual({ completed: true });
+    });
   });
 });

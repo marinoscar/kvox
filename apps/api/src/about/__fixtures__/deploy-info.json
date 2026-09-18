@@ -34,5 +34,8 @@
     "commitsBehind": 2,
     "checkedAt": "2026-09-15T06:00:00.000Z"
   },
+  "run": {
+    "completed": true
+  },
   "unknownFutureField": "kept verbatim by the reader"
 }

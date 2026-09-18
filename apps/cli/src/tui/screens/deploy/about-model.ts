@@ -125,10 +125,29 @@ function deploymentRows(report: AboutReport, now: number): KeyValueRow[] {
     });
     rows.push({ key: 'Repository', value: deployment.repoUrl });
     rows.push({ key: 'Domain', value: deployment.domain ?? 'not published' });
-    rows.push(instantRow('Installed', deployment.installedAt, now));
-    rows.push(instantRow('Last updated', deployment.updatedAt, now));
+    rows.push(
+      deployment.installedAt === null
+        ? { key: 'Installed', value: 'unknown' }
+        : instantRow('Installed', deployment.installedAt, now),
+    );
+    rows.push(
+      deployment.updatedAt === null
+        ? { key: 'Last updated', value: 'unknown' }
+        : instantRow('Last updated', deployment.updatedAt, now),
+    );
     rows.push({ key: 'Last command', value: deployment.lastCommand });
-    if (deployment.lastAttemptAt !== null && deployment.lastAttemptAt > deployment.updatedAt) {
+    if (deployment.adoptedAt !== null) {
+      // Why the two rows above may read `unknown` (#285).
+      rows.push({
+        ...instantRow('Record adopted', deployment.adoptedAt, now),
+        note: '(rebuilt from the deployment on disk)',
+      });
+    }
+    if (
+      deployment.lastAttemptAt !== null &&
+      deployment.updatedAt !== null &&
+      deployment.lastAttemptAt > deployment.updatedAt
+    ) {
       rows.push({
         ...instantRow('Last attempt', deployment.lastAttemptAt, now),
         note: '(did not complete)',

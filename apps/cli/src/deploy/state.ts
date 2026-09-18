@@ -67,18 +67,66 @@ export interface DeployState {
    * `envFilePath(deployRoot)` is the answer either way.
    */
   envPath?: string | undefined;
-  installedAt: string;
+  /**
+   * When this deployment was first installed BY THIS CLI.
+   *
+   * OPTIONAL SINCE #285, AND `DEPLOY_STATE_VERSION` STAYS AT 1, for exactly
+   * the reason `lastDeployedAt` below became optional in #267: every state
+   * file written before that was written by a run that had just installed or
+   * updated, so every existing file carries this field and it means what it
+   * always meant. What is new is the record `update` RECONSTRUCTS when it
+   * finds a live deployment and no state file (`adopt.ts`). When this CLI did
+   * not perform the install, the instant it happened is not on the disk
+   * anywhere - not in the clone, not in the `.env`, not in the containers -
+   * and stamping `now` here would put a fiction on the About page, which is
+   * the class of bug #283 fixed. Absent therefore means "this CLI has no
+   * record of installing here", which is what `adoptedAt` below then explains.
+   */
+  installedAt?: string | undefined;
   /**
    * When the last deploy SUCCEEDED. Never stamped at fetch time: a failed
    * update must not claim a deploy that never happened (#120).
+   *
+   * OPTIONAL SINCE #267, AND `DEPLOY_STATE_VERSION` STAYS AT 1. Every state
+   * file written before that install wrote one only after its pipeline
+   * finished, so every existing file carries this field and it means exactly
+   * what it always meant. What is new is the file a FAILED FIRST INSTALL now
+   * writes so `--resume` has something to read: nothing has ever been
+   * deployed at that root, so there is no instant to record, and stamping
+   * `now` here would be precisely the lie #120 removed from `update`.
+   * Absent therefore means "never successfully deployed", which is also what
+   * `lastOutcome` below is read against.
    */
-  lastDeployedAt: string;
+  lastDeployedAt?: string | undefined;
   /**
    * When the last update was attempted, successful or not - so `status` can
    * show a failed attempt's time without `lastDeployedAt` lying about it.
    */
   lastAttemptAt?: string | undefined;
   lastCommand: 'install' | 'update';
+  /**
+   * How the run that wrote this record ENDED (#267).
+   *
+   * ABSENT MEANS SUCCESS, and that is what keeps an older state file
+   * readable: before #267 a state file was only ever written after the
+   * pipeline finished, so every file without this field describes a run that
+   * completed. A reader must therefore test for `'failure'` and never for
+   * `!== 'success'`.
+   *
+   * It exists because the state's own older idiom for "the last run did not
+   * finish" - `lastAttemptAt` being later than `lastDeployedAt`, which
+   * `deploy about` and the TUI's status screen both render - cannot express a
+   * FIRST install that failed: there is no earlier success to be later than.
+   */
+  lastOutcome?: 'success' | 'failure' | undefined;
+  /**
+   * The step id that stopped the run, when `lastOutcome` is `'failure'`.
+   *
+   * Beside `completedSteps` rather than derived from it: the steps a run
+   * SKIPPED (`--skip-seed`, a non-GitHub remote) are in neither list, so "the
+   * first id not in `completedSteps`" is not the step that failed.
+   */
+  lastFailedStep?: string | undefined;
   /**
    * Which CLI version wrote this, for diagnosing a state file from the future.
    *
@@ -90,6 +138,20 @@ export interface DeployState {
    * deliberately no migration.
    */
   appctlVersion: string;
+  /**
+   * When this CLI ADOPTED a deployment it had no record of making (#285).
+   *
+   * `update` reconstructs the record from the clone, the `.env` and the proxy
+   * when the state file is missing but a deployment is demonstrably present -
+   * see `adopt.ts`. This field is what separates such a record from one a run
+   * of this CLI actually wrote, and it is the reason `installedAt` above may
+   * be absent: absent `adoptedAt` means the record came from a run this CLI
+   * performed, which is every state file written before #285.
+   *
+   * It is NOT `installedAt` under another name. It is when the bookkeeping
+   * was rebuilt, never when the deployment was made.
+   */
+  adoptedAt?: string | undefined;
   /** The revision this replaced, for a manual roll-back. */
   previousSha?: string | undefined;
   /**

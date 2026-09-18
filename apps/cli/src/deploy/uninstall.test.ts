@@ -358,6 +358,27 @@ describe('the certificate renewal cron', () => {
     expect(prose).toContain('There is no other deployment under');
   });
 
+  it('never suggests a survivor that has no state file, because the command would fail (#285)', async () => {
+    // `listInstalledApps` now also reports deployments recognised by evidence
+    // alone, which is right for discovery and wrong here: the pasteable
+    // command resolves its certificate lineage from the survivor's RECORDED
+    // domain, and an unrecorded deployment has none. This caller is narrowed
+    // to a recorded survivor on purpose.
+    const fixture = deployment();
+    const survivor = join(fixture.appsRoot, 'keeper');
+    mkdirSync(join(survivor, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(survivor, '.env'), 'APP_BIND_PORT=3600\n', { mode: 0o600 });
+
+    const result = await uninstall(fixture);
+
+    const prose = result.warnings.join('\n').replace(/\s+/g, ' ');
+    expect(prose).toMatch(/automatic certificate renewal has STOPPED/);
+    expect(prose).not.toContain('--name keeper');
+    // It falls through to the honest "nothing to point at" branch instead of
+    // printing a command that answers "is not published under a domain".
+    expect(prose).toContain('There is no other deployment under');
+  });
+
   it('warns under --dry-run too, before the operator has committed to anything', async () => {
     const fixture = deployment();
     const before = snapshot(fixture);

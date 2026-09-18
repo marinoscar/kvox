@@ -61,7 +61,9 @@ in this repository rather than against this document, with the rejected
 alternative each one closes off. Read a claim in sections 1–17 against §18's
 correction table before trusting it; a claim not in that table is still
 accurate. §19 documents the `deploy-info/info.json` contract §15 refers to
-forward, which did not exist when sections 1–17 were written.
+forward, which did not exist when sections 1–17 were written. §22 amends §13:
+the state file is written when a run FAILS as well as when it succeeds, which
+is what makes `--resume` work at all.
 
 ---
 
@@ -80,7 +82,7 @@ at once.
 | **Runs on the VPS** | The operator SSHes in with their own credentials, then runs `kvox deploy install`. The CLI never dials out over SSH itself. | An SSH client or library (`ssh2`) in the CLI; a laptop-driven orchestrator; managing the operator's SSH keys. |
 | **Code delivery is git + build** | `git clone`/`git fetch` + `docker compose build` on the server, every time. No image registry in the loop. | Pulling pre-built images from GHCR (see the rejected-alternatives table — the workflow that pushes them exists, but nothing downstream of it does). |
 | **TLS via a shared host proxy** | A single nginx + certbot stack at `/opt/infra/proxy`, outside this repository, terminates TLS for every app on the box. The app stack binds `127.0.0.1` only. | Each app owning its own port 443, its own certbot timer, its own nginx process. |
-| **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. Amended narrowly by §20 (issue #238): when the database itself is the one thing missing, the install wizard may run `CREATE DATABASE` on explicit request — nothing else about this decision changes. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. Roles, extensions, tuning, backups and anything destructive stay entirely out of scope, §20 included. |
+| **External PostgreSQL** | The operator supplies `POSTGRES_*` for a database that already exists; deploy validates it, never creates or manages it. Amended narrowly **twice**, and only twice. §20 (issue #238): when the database itself is the one thing missing, the install wizard may run `CREATE DATABASE` on explicit request. §21.3 (issue #268): `uninstall --drop-database` may run `DROP DATABASE`, behind a typed confirmation of the database's own name. Nothing else about this decision changes. | A `postgres:` service in any compose file. `base.compose.yml` deliberately has none — see its header comment. Roles, extensions, tuning, backups and anything destructive stay entirely out of scope, §20 included. |
 
 The git-clone-on-server model is also the answer to "how does this stay safe
 for a fork of the template": nothing about repo URL or ref is hardcoded
@@ -113,6 +115,7 @@ kvox deploy install [--repo <url>] [--ref <ref>] [--path <dir>] [--domain <fqdn>
 kvox deploy update   [--force] [--skip-seed] [--dry-run]
 kvox deploy status   [--raw]
 kvox deploy doctor   [--all]
+kvox deploy list     [--json]                        # every app on this host (§24.3)
 ```
 
 Each is a thin `registerXCommand` delegating to a `runX` function, exactly
@@ -233,6 +236,72 @@ minutes and an operator watching it — in the plain command or the TUI —
 needs to see it happen, not receive a wall of text after the fact) and an
 `AbortSignal` that SIGTERMs the child (the TUI's Esc-to-cancel, section 11,
 depends on this).
+
+### 5.1 The deployment cwd is standing in (issue #266)
+
+What §5 describes is the **weakest** of three ranks, and it was reached in a
+case it had no business answering. On a server whose `/opt/infra` is itself a
+git repository — infrastructure as code, with applications under
+`/opt/infra/apps` — running `install --resume` from inside a deployment
+(`/opt/infra/apps/<app>`) walked up past that directory's own state file,
+found the infra repository, and refused: *"Refusing to guess what to deploy …
+that checkout is this server's infrastructure, not the application"* (#247).
+The refusal is correct; reaching it was the bug. cwd **was** the deployment,
+and the repository, the ref and the name were in a file the operator was
+standing on.
+
+`install` therefore resolves in three ranks, strongest first
+(`resolveInstallLayout`):
+
+1. `--root`/`--name`, and `--repo` for the repository itself.
+2. **A state file at cwd, or at an ancestor below the apps root**
+   (`locateAppFromCwd` in `layout.ts`).
+3. The `origin` of the git checkout around cwd — §5 above.
+
+Rank 2 sits where it does because a state file is **not an inference**: this
+CLI wrote it and it names the deployment outright, where a git remote is a
+guess about what the operator probably meant — and #247 exists precisely
+because that guess can land on the wrong repository. It is fed into
+`resolveRepoTarget`'s own `state` rank rather than turned into a target by
+hand, so `--ref` still overrides the recorded ref in the one place that rule
+is written down, and no `git` process is started at all.
+
+It settles the **deploy root**, not only the target. Deriving the root from
+the state's repository URL would be a second guess on top of a fact: a
+deployment installed with `--name <app>-staging` lives in a directory its
+repository's name does not spell.
+
+Two bounds, both deliberate:
+
+- **The walk stops at the apps root.** Unbounded it leaves the territory this
+  module knows about — `/opt/infra`, `/opt`, `/` — none of which is a
+  deployment, and the apps root is the outermost directory that can contain
+  one. Standing at the apps root itself, or above it, resolves nothing. A
+  deploy root installed *outside* the apps root with `--root` is deliberately
+  not found this way; there is no bound that would find it without walking the
+  whole filesystem, and `--root` is how it was named in the first place.
+- **It is a rank, not a search.** The one deployment cwd implies, or none. The
+  apps root is never listed for candidates — #249 rejected that explicitly,
+  and guessing harder is the wrong answer to a bug caused by guessing. "None"
+  still refuses exactly as it did before, #247's guard included.
+
+`describeLayoutSource` (the #249 refusal's "that directory was …" clause)
+names the state file's path for this rank, rather than reporting it as a
+guess. The wording is unreachable through that refusal by construction —
+finding a state file is what stops the refusal firing — so it is covered by
+its own test.
+
+**`update`, `status` and `about` are not affected**, because they never take
+this path: they resolve the deploy root through `locateInstalledApp`, which
+uses `--name`/`--root` or the single app installed under the apps root, and
+never walks a git checkout. Their own blind spot is a different one — with
+several apps installed and no flags they refuse and list them, even when cwd
+names one unambiguously — and is not this issue.
+
+> **Superseded by §24.1 (issue #290).** That blind spot is now fixed: cwd is a
+> rank of `locateApp` itself, so every command resolves the deployment the
+> operator is standing in. `install`'s rank here is unchanged and still
+> requires a state file, for the reason §23.7 gives.
 
 ## 6. The env wizard: generated from `.env.example`, not hardcoded
 
@@ -1110,6 +1179,17 @@ the API's Zod schema also carries `.passthrough()`, so a newer CLI adding a
 field never makes an older API answer `invalid` — the extra field rides
 through to the client untouched.
 
+**Adding an optional field does not bump it, and #283 is the worked example.**
+`schema` being the one strict field on the read side is exactly what makes a
+bump expensive: `2` would make *every already-deployed API* answer
+`deployInfoStatus: "invalid"` for a file written by a newer CLI — the very
+downgrade the optional-and-nullable rule exists to prevent — and
+`validateDeployInfo` compares for equality too, so an older CLI would refuse
+to **read** the file it has to patch during `update --check`. A field that is
+optional on both sides breaks neither direction by construction. The version
+is therefore reserved for a change that alters what an existing field
+**means**, exactly as `DEPLOY_STATE_VERSION` is (§22.1).
+
 **Shape**, as the CLI's `DeployInfo` interface and the API's
 `deployInfoSchema` both describe it:
 
@@ -1123,8 +1203,11 @@ interface DeployInfo {
     ref: string;
     repoUrl: string;
   };
-  installedAt: string;       // ISO-8601 UTC, set once, never overwritten
-  updatedAt: string;         // = state.lastDeployedAt: last SUCCESSFUL deploy
+  installedAt: string | null; // ISO-8601 UTC, set once, never overwritten;
+                              // NULL when unknown - #285, see §23.4
+  updatedAt: string | null;   // = state.lastDeployedAt: last SUCCESSFUL deploy;
+                              // null when there has been none and no
+                              // installedAt to fall back to (§23.4)
   lastCommand: 'install' | 'update';
   deployedBy: { cli: string; version: string };
   domain: string | null;
@@ -1147,8 +1230,47 @@ interface DeployInfo {
     commitsBehind: number;
     checkedAt: string;       // ISO-8601 UTC
   } | null;
+  run?: {                    // #283; ABSENT means the run completed
+    completed: boolean;
+    failedStep?: string;     // present only when `completed` is false
+    attemptedAt?: string;    // ISO-8601 UTC; present only when incomplete
+  };
+  adoptedAt?: string;        // #285; ABSENT means the record came from a run
+                             // the CLI performed. A THIRD axis from `run`,
+                             // not a value inside it - see §23.5
 }
 ```
+
+Two of those changed shape without bumping `schema`, and they are the worked
+example of the paragraph above at its sharpest: `installedAt` and `updatedAt`
+became nullable in #285 (§23.4) because a deployment the CLI **adopted** has no
+install instant on any disk, and `adoptedAt` was added beside them. The API had
+already read all three as optional-and-nullable since #124, and the web card
+already renders null as its unknown mark, so nothing downstream needed to
+change — which is precisely why `1` still stands.
+
+**`run` (issue #283).** How the deploy run that wrote this document ended.
+Written from the `health` step onward, on the **failure** path as well as on
+success — §22 below carries the rule and the argument. Three properties are
+load-bearing:
+
+* **Optional, and absent means the run completed.** Every `info.json` already
+  on every live server predates the field and was written only after a
+  pipeline finished, so absence is information, not a gap — the same
+  convention `DeployState.lastOutcome` established (§22.1). A reader must
+  test `completed === false` and never `!== true`, or every deployment
+  installed by an older CLI reads as a failed one.
+* **`failedStep` and `attemptedAt` are present only when `completed` is
+  false.** On a completed run `updatedAt` already *is* that instant, and a
+  second copy of a value is a second value that can disagree with the first.
+* **`updatedAt` still means "the last deploy that SUCCEEDED", untouched.** A
+  failed **update** past `health` keeps the previous success's instant while
+  `app.commitSha` names the revision that is now actually serving; `run` is
+  what reconciles the two. A failed first **install** past `health` has no
+  earlier success, so `updatedAt` falls back to `installedAt` — that run's
+  own `now`, which is what a first successful install records there anyway.
+  Nothing on either path stamps a deploy time that did not happen, which is
+  the rule #120 established and §22.1 restates.
 
 **Write path.** `writeDeployInfo` (install/update, full document) and
 `updateDeployInfoRemote` (`update --check`/`status`, replaces only `remote`,
@@ -1169,7 +1291,17 @@ the temp-then-rename window) is `"unreadable"`; JSON that fails schema
 validation is `"invalid"`; a successful parse is `"ok"`. `updateAvailable` is
 derived from `remote.commitsBehind` (`null` when the CLI has never checked)
 — **never** from a network call the API itself makes; this endpoint performs
-no network I/O, ever (18.2 decision 7's whole reason for existing). Every
+no network I/O, ever (18.2 decision 7's whole reason for existing).
+`deployRunComplete`, `deployFailedStep` and `deployAttemptedAt` (#283) are
+derived from `run` in the same place and for the same reason: the
+"absent means completed" convention is written **once**, on the server, so
+the web About card (#126) and the CLI's `deploy about` (#128) cannot disagree
+about a deployment an older CLI installed. They are **additional** to
+`deployInfoStatus`, not a fifth value of it — the four statuses answer "could
+the record be read", and an incomplete run's record was read perfectly well.
+Folding "incomplete" into that enum would force a client to choose between
+rendering the deployment facts and reporting the failure, when the whole
+point of the record is that both are true at once. Every
 value under a key matching `/password|secret|key|token/i`, at any depth
 `.passthrough()` let through, is stripped before the response is built — a
 defense against a future CLI, or a hand-edited file, putting something
@@ -1198,6 +1330,15 @@ table is touched, nothing is ever dropped. `database-privileges` and
 and so reported `skip` up to this point — then run for the first time against
 a real database, exactly as they would have if the database had existed
 before the wizard started.
+
+> **⚠ This section's "there is no DROP and there never will be" is now
+> qualified, in exactly one place.** §21.3 (issue #268) adds
+> `uninstall --drop-database`, and the argument below is what bounds it: the
+> asymmetry §20 names — *"an empty database created in error is recoverable by
+> deleting it by hand; the inverse is not"* — is precisely why a drop can never
+> be **offered** the way this creation is. It has to be **asked for by flag**
+> and authorised by typing the database's own name. `install` still contains no
+> DROP, and that has not changed.
 
 **Why offering this is not "managing" the database, in the sense decision 4
 rules out.** By the moment this is offered, `database-credentials` has
@@ -1262,7 +1403,7 @@ already prints, never escaped and sent anyway.
   the inverse is not, and this design does not put that outcome one
   mis-clicked confirmation away.
 
-## 21. Removing a deployment, and the four things it refuses to remove (issue #261)
+## 21. Removing a deployment, what it refuses to remove, and the two extras that must be asked for (issues #261, #268)
 
 Sections 1–20 describe a CLI that can **create** a deployment and **advance**
 one. Until issue #261 nothing could **remove** one, and the gap was not
@@ -1365,7 +1506,116 @@ Nothing is said when this app had no entry at all (installed with
 lose, and a warning about a loss that did not happen is how operators learn to
 skip warnings.
 
-### 21.2 The four refusals, and why each is a decision rather than an omission
+#### 21.1.2 Writing that cron is best effort, and must never fail an install (issue #265)
+
+§21.1.1 is about removing the entry. This is about writing it, and it is the
+same file seen from the other end of the deployment's life.
+
+**The failure.** A non-root install reached its last step and died there:
+
+```
+✖ kvox: Publish over HTTPS failed: EACCES: permission denied, open '/etc/cron.d/kvox-certs-kvox'
+```
+
+`publish` issues the certificate, installs the vhost, then writes the cron.
+The first two had **succeeded** — the certificate existed, the site was serving
+HTTPS — and the third threw, taking the step and the whole install down with it.
+
+**The contradiction it exposed.** `/etc/cron.d` is `root:root`, and this CLI is
+deliberately *not* run as root: §18 records that `sudo kvox` breaks `gh`
+authentication (sudo resets `HOME`, and `gh` credentials are per-user), and
+#245's remedy is `sudo install -d -o $USER …` on the deploy root precisely so
+the tool never needs to be elevated. So one step of the pipeline requires root
+inside a design that requires not-root. That contradiction is real and cannot
+be argued away; the only question is which way it resolves.
+
+**The decision: the cron write is best effort.** The failure is caught,
+recorded as a warning, and the install completes.
+
+*Why not fail the install, which is the conservative-looking choice?* Because
+it is not conservative, it is inaccurate. What "failed" describes is a state
+that does not exist: the deployment **is** complete when the write throws —
+certificate issued, vhost written and validated, proxy reloaded, stack healthy.
+Only the scheduling of a renewal 60–90 days out is missing. Reporting that as
+a failed install means:
+
+- The operator is told to fix a deployment that is already serving traffic.
+- The obvious remedy is `--resume`, which re-enters `publish` and asks certbot
+  again — against a rate limit of **five duplicate certificates per week**. A
+  design that makes the retry the dangerous action has chosen wrongly.
+- The thing actually needed is one `sudo` command, which the tool knows exactly
+  and was throwing an errno instead of printing.
+
+**Best effort is not silent.** These four are what separate "best effort" from
+"swallowed", and all four are load-bearing:
+
+1. **Every errno, not just `EACCES`.** `EROFS`, `ENOTDIR` and `EPERM` leave the
+   same deployment behind — complete, serving, unscheduled. Special-casing one
+   errno would fail a successful install for all the others.
+2. **The error is reported as it came.** Not flattened into "could not write the
+   cron"; an operator diagnosing a read-only `/etc` needs the errno.
+3. **The remedy is derived, never described.** The rendered file is staged into
+   the deploy root and the warning carries `sudo install -m 644 <staged>
+   <target>`, so what the operator installs is byte-identical to what the CLI
+   would have written. Prose describing the file could drift from
+   `renderRenewalCron`; a copy of its output cannot.
+4. **It surfaces at the END of the run.** `InstallResult.warnings`, printed
+   under `Action required:` — the same channel and the same renderer shape
+   §21.1.1's warning uses, for the same reason. An install that completed
+   without a renewal schedule must never be silent; the only other notice of it
+   is an expired certificate three months later.
+
+The pasteable form is one `sudo install` line rather than a `sudo tee`
+heredoc of the contents, and that is a decision, not a preference: the report
+indents warnings by four, and a heredoc does not survive indentation — the
+body keeps the leading spaces and carries them into the cron file, and an
+indented `EOF` does not terminate the heredoc at all, so the paste hangs the
+operator's shell. A single `install -m 644` line is indentation-proof and
+carries the mode, which is part of the contract (cron ignores a group- or
+world-writable file in `cron.d`).
+
+**The quieter defect, and why the gate had to change.** The cron was gated on
+
+```ts
+if (context.options.installCron ?? certificate.issued) {
+```
+
+and `issueCertificate` answers `{ issued: false }` for a certificate that
+already exists. So the `--resume` an operator reaches for after this failure
+skipped the cron block **entirely**, reported success, and left a deployment
+holding a certificate nothing renews — no error, no warning, nothing in the
+journal. A loud failure had become a silent one, which is strictly worse.
+
+The gate is therefore *"does this deployment have a renewal entry?"*, answered
+by `hasRenewalCron` over `listRenewalCrons` — §21.1.1's reader, so this and
+`renewalCronPath` share one prefix constant rather than two that can drift. An
+existing certificate with no entry is exactly the state that needs one.
+`--install-cron` still forces the write; `--no-install-cron` still declines it.
+Nothing about the rate-limit posture changes: `issueCertificate` consults
+`certificateStatus` before invoking certbot, so a re-run over an existing
+certificate never re-requests it.
+
+**Doctor gets the matching check, and it is `recommended`.** `cron-dir-writable`
+probes the deepest existing ancestor of `/etc/cron.d`, the same way
+`deploy-root-writable` probes the deploy root's — #245's finding ("doctor is
+complete about somebody else's directory and silent about its own") applied to
+the *second* directory this CLI writes outside the deploy root. `recommended`
+rather than `required` follows directly from the decision above: the install
+does not treat this as fatal, so doctor must not either. A root-owned
+`/etc/cron.d` is the ordinary state of a standard Linux server, not a broken
+one, and failing on it would refuse a machine this CLI installs on perfectly
+well — and teach the operator to pass `--force`, which is how the *required*
+checks stop being enforced too. Its remedy names the `sudo install` command and
+explicitly says not to re-run the CLI under sudo, which would trade this for a
+logged-out `gh` at the `checkout` step.
+
+**Rejected:** *run just this step under `sudo` from inside the CLI.* It would
+work, and it would make the tool one that sometimes elevates itself — the
+property §18 spent an issue removing. An operator who can read the command and
+decide to run it is a better arrangement than a tool that decides for them, and
+the gap it leaves is one printed line.
+
+### 21.2 The refusals, and why each is a decision rather than an omission
 
 **The external database.** Decision 4 of §1 is that deploy *validates* the
 database and never creates or manages it; §20 adds exactly one narrow exception
@@ -1442,6 +1692,122 @@ deploy root goes, rather than being left to append to files that no longer
 exist. A *failed* uninstall stops before that step and keeps its log, which is
 the run anybody wants one for.
 
+### 21.3.1 The two opt-in extras: `--drop-database` and `--purge-storage` (issue #268)
+
+§21.2's first refusal and the "out of scope" line at the end of §21.5 both
+answer the same question — *may `uninstall` destroy the data?* — and both
+answered "no" because the alternative on offer was **a flag with a y/N**.
+Issue #268 changes the alternative, not the answer's reasoning: each extra is
+opt-in, off by default, gated by a typed confirmation of **that resource's own
+real name**, and preceded by an inventory of exactly what it would destroy. An
+operator who wants the deployment *gone*, data included, should not have to
+leave for two other tools and do it from memory.
+
+**Rule 1 — each extra confirms its own resource, never a shared "yes".** The
+database drop takes `--confirm-database <database>`; the purge takes
+`--confirm-bucket <bucket>`. Each value is compared against that one resource
+and nothing else, so a word typed for one **cannot** authorise the other. This
+is the API's own convention stated for a second surface: the Danger Zone's rule
+that *the confirmation IS the scope, uppercased*, exists precisely so a word
+typed for one scope can never authorise another. A single
+`--yes-delete-everything` would be one keystroke authorising two unrecoverable
+acts against two unrelated systems, and it is rejected permanently.
+
+**Rule 2 — the inventory precedes the confirmation.** Objects and bytes per
+prefix, everything in the bucket that is not this application's, the database's
+name, host, size and open session count. An operator cannot consent to a number
+they were never shown. The read is done in `runUninstall` *before* the first
+prompt, is entirely read-only, and runs under `--dry-run` too — which is how an
+operator looks before deciding. A resource that could not be **read** is never
+confirmed and never destroyed: there is no real name to type, and the run
+reports the problem and removes the deployment anyway.
+
+**Rule 3 — the order is fixed, and each step of it is an argument.**
+Containers down → storage → database → deployment.
+
+- *Containers first*, because nothing may write a new object or open a new
+  connection mid-teardown.
+- *Storage before the database*, because the deployment's own rows are the only
+  thing that could ever reconcile an object the purge missed, and the drop
+  destroys them.
+- *The deployment last*, because its `.env` holds the credentials the other two
+  steps authenticate with. Removing it first would leave them with nothing.
+
+**Rule 4 — a failed extra never fails the uninstall.** It is reported under
+`Action required:`. The deployment was going whatever the bucket said, and an
+abort with the containers already stopped would leave an arbitrary amount done
+and nothing said about it.
+
+#### The drop, and the one write against sessions that are not ours
+
+`DROP DATABASE "<name>"` against the `postgres` maintenance database, through
+the same one-off `psql` container §20's `CREATE DATABASE` uses — `postgres`
+because a database cannot be dropped from a session connected to it, which is
+§20's own reason inverted.
+
+`DROP DATABASE` fails with `55006` while **any** session is connected.
+`uninstall` brings this app's containers down first, so the ordinary case is
+clean — but a `psql` left open in another terminal, a pooler, or a second
+replica on another host all block it, and leaving the operator with
+`ERROR: database is being accessed by other users` and no idea which is not an
+outcome worth shipping.
+
+So: **the plain drop is tried first**, and on the ordinary path *no session
+belonging to anybody is touched at all*. Only on `55006` are the blocking
+sessions terminated, scoped `WHERE datname = <this database> AND pid <>
+pg_backend_pid()` — never a bare terminate-all, because the operator authorised
+destroying **one** database and a session against a different one is not theirs
+to end — and **the number ended is reported**, in the result and in the run log.
+Termination is defensible here and only here: by that moment the operator has
+typed this database's own name, and a session connected to a database that is
+about to cease existing cannot lose anything the drop was not already going to
+destroy.
+
+**Rejected: `DROP DATABASE … WITH (FORCE)`.** It does the same thing in one
+statement, and it is PostgreSQL 13+ — this deployment's database is
+operator-supplied and may be older, where it fails as a syntax error saying
+nothing about connections. It is also **silent** about what it killed, which is
+the one property the two-step shape exists to provide.
+
+#### The purge, and why there is no per-app key prefix to lean on
+
+This application writes at **bucket root**, under six prefixes — `avatars/`,
+`database-backups/`, `node-outputs/`, `notes/`, `transcripts/`, `uploads/`.
+There is no per-app namespace, so *"empty the bucket"* and *"delete this app's
+objects"* coincide **only when the bucket is dedicated**. The rule that follows:
+
+> **Delete the prefixes this application writes. Report everything else,
+> without reading into it and without touching it.**
+
+That is complete for a dedicated bucket and safe for a shared one, and where it
+is incomplete it says so by name instead of degrading catastrophically. The
+root listing uses `--delimiter /` deliberately: enumerating a shared bucket
+exhaustively would mean *reading* somebody else's data in order to decide not to
+touch it, and could mean millions of keys. **The bucket itself is never
+deleted** — it is infrastructure the operator created, often with a lifecycle
+policy, a CORS rule and a name that cannot be reclaimed for hours.
+
+**Versioned buckets are the trap this design refuses to fall into.** Deleting
+an object in a versioned bucket writes a **delete marker** and keeps every byte,
+and the bill. So versions and delete markers are removed **by id**, and an
+unreadable `GetBucketVersioning` (an ordinary least-privilege setup) is treated
+as *versioned*, never as off — assuming the cheaper answer is exactly what
+produces silent retention while reporting "emptied".
+
+**The `aws` client is borrowed from a one-off container**, the same argument
+`checks/database.ts` makes for `psql`: docker is already a hard prerequisite,
+the image caches after one pull, and it behaves identically on a host with
+nothing installed. Two alternatives were rejected. Adding `@aws-sdk/client-s3`
+puts ~15 MB of dependency into a CLI installed on a VPS for a teardown almost
+nobody runs — the API package carries it, this one deliberately does not, and
+the worker node never needed it because the **server** signs every URL a node
+uses. Hand-rolling SigV4 over `node:crypto` is the other no-dependency option
+and is worse: versioned listings, pagination, the batch delete's payload and its
+digest are a lot of security-relevant surface exercised only during a teardown,
+which is the single worst moment to discover a signing bug. Credentials are
+passed **by name** into the container's environment and never appear in an argv,
+the rule `runPsql` already states about `PGPASSWORD`.
+
 ### 21.4 `install --fresh`
 
 The convenience path for the case above, and deliberately much narrower.
@@ -1490,7 +1856,563 @@ import cycle.
   editing a cron entry on another app's behalf is a write to shared
   infrastructure — the very thing §21.2 refuses. Printing the one-line command
   leaves the decision where it belongs.
-- **Deleting the deployment's storage bucket or its uploaded objects.** Out of
-  scope and refused for the database's reason: object storage is supplied by
-  the operator (§6's `STORAGE_*` variables), is frequently shared, and this CLI
-  never created it.
+- **Deleting the deployment's storage bucket or its uploaded objects, with no
+  confirmation of its own.** Refused for the database's reason: object storage
+  is supplied by the operator (§6's `STORAGE_*` variables), is frequently
+  shared, and this CLI never created it. **Revisited by issue #268** (§21.3.1),
+  which keeps every word of that and adds the missing piece: the objects may be
+  deleted behind `--purge-storage` plus a typed confirmation of the bucket's own
+  name, only under the six prefixes this application writes, with everything else
+  reported rather than touched — and **the bucket itself is still never
+  deleted**, because that part was never about confirmation.
+- **A single "also delete the data" flag covering both the database and the
+  bucket.** Rejected permanently (§21.3.1, rule 1): one keystroke authorising
+  two unrecoverable acts against two unrelated systems, in a project whose own
+  API convention is that *the confirmation IS the scope, uppercased*.
+- **`DROP DATABASE … WITH (FORCE)`.** Rejected: PostgreSQL 13+ on an
+  operator-supplied server, and silent about which sessions it ended. §21.3.1.
+- **Treating an unreadable `GetBucketVersioning` as "not versioned".** Rejected:
+  it is the cheaper answer and the one that leaves data behind a delete marker
+  while the run reports "emptied". §21.3.1.
+
+---
+
+## 22. The state is written on both endings, `deploy-info/` from `health` onward (issues #267, #283)
+
+`§13` above, and `§18.1`'s correction to it, describe a state file written
+after a run succeeds. That was the whole of it, and it made `--resume`
+unusable for the only thing it is for.
+
+`--resume` reads `completedSteps` out of the state file. `runInstall` computed
+`result.completed` on the failure path and threw it away there, writing the
+state only after `runPipeline` returned without a failure — so a failed
+install left no state, `--resume` answered `Nothing to resume: no deployment
+state at <root>`, and the failure message that had just recommended the flag
+was advising an impossible action. Every retry re-ran the whole pipeline,
+including a multi-minute image build, against a deployment whose first ten
+steps had already succeeded.
+
+**The state is now written on both endings, from one builder.**
+`buildInstallState` in `apps/cli/src/deploy/install.ts` is called twice —
+once with `{ outcome: 'success' }`, once with `{ outcome: 'failure',
+failedStep }` — and every field but the outcome is constructed identically.
+Two object literals would drift: the success literal being replaced had
+already gained `proxyContainer` and `envPath` since it was written, and a
+second copy would not have had either. The failure record's entire purpose is
+to be the file the next run reads back, so "identical apart from the ending"
+is a correctness property, not tidiness.
+
+**`deploy-info/info.json` is written from the `health` step onward**, on the
+failure path as well as on success. #267 withheld it from every failed run and
+argued the withholding: §19's document is what the *running application*
+reports about itself, mounted read-only into the `api` container, and an
+install that did not finish has not deployed what that file would claim.
+
+**That argument is right up to `health` and wrong after it (issue #283).** A
+real production install cloned, built, applied 21 migrations, seeded, started
+the stack, passed the health wait and issued the certificate — and then failed
+at its very last action, writing `/etc/cron.d/…` (§265). `/admin/settings/about`
+told the administrator *"This instance was not deployed with the deploy CLI, so
+deployment details are unavailable"*, which is false about a server the CLI had
+plainly deployed and which was serving traffic at that moment. Withholding the
+record produced a **worse lie than writing it**: "not deployed by the CLI"
+rather than "deployed, and the run did not finish".
+
+So the rule is now: **the moment the API responds, the deployment is real.**
+From `health` onward the record is written on both endings, carrying `run`
+(§19) — whether the run completed and, when it did not, which step stopped it.
+#267's actual insight is preserved unchanged: a run that fails **before**
+`health` still writes no deploy-info at all, because nothing is serving and a
+record would describe a deployment that does not exist.
+
+### 22.0 The gate is `health`, not `verify`
+
+`health` **is** the claim this document makes. `waitForHealthy` polls
+`/api/health/ready` until the application answers, so a run past that step has
+a deployment that demonstrably exists and is reachable — which is precisely
+what "what is deployed here" means. `verify` is the **last** step of both
+pipelines, so gating on it would write the record on success and essentially
+nowhere else, leaving the reported failure (a `publish` that sits *between*
+the two) reporting nothing at all — the bug, unfixed.
+
+The test is `result.completed.includes('health')`, read off the pipeline's own
+record rather than re-derived. `health` carries no `skip` guard in either
+pipeline, and a step skipped by a guard is in **neither** list
+(`steps/pipeline.ts`), so this cannot mistake a `--skip-*` for a pass. A
+`--resume` that carried `health` in from a previous run's `completedSteps` is
+the same claim: that run reached a serving API at this root.
+
+The ordering comment in `runInstall` ("AFTER the state: deploy-info is derived
+from it") stays true on both paths — both writes gained a second call site, in
+that order. Neither may fail the run: like the state write, the deploy-info
+write is wrapped and journaled, because a full disk that stops the record
+being kept is a worse second run, not a different first failure.
+
+### 22.0.1 `update`, and the two things it must not do
+
+`update` follows the same gate, with two constraints of its own.
+
+**It must not stamp a deploy time that did not happen.** `update` records
+`lastDeployedAt` only on success (§18.1, #120), and the failure path leaves
+that alone: the state file is not written at all, and the record is derived
+from an in-memory state whose `lastDeployedAt` is the previous success's. So
+`updatedAt` keeps meaning "the last deploy that succeeded" while
+`app.commitSha` names the revision `restart` actually brought up and `health`
+actually answered on.
+
+**It must not rewrite the record backwards on the next run.** After a failure
+past `health` the clone is at the new revision and serving it, while the state
+still names the old one. A plain re-run then takes the "already up to date"
+path, which refreshes deploy-info to pick up moved host facts — and, derived
+from that stale state, would move the record from the revision that *is*
+running to the one that is not, and mark it complete. That path therefore
+takes its commit from the **clone** (`context.commitSha`) and carries the
+existing document's `run` through **unchanged**: a run that deployed nothing
+has nothing to say about how any run ended.
+
+### 22.1 Three fields, and why each is shaped the way it is
+
+- **`lastOutcome: 'success' | 'failure'`, optional, absent meaning success.**
+  Every state file written before this change was written only after a
+  pipeline finished, so absence already means "this run completed". A reader
+  must therefore test for `'failure'` and never for `!== 'success'`, or every
+  pre-#267 deployment reads as broken. `DEPLOY_STATE_VERSION` stays at 1: it is
+  bumped only when a field **changes meaning**, and nothing here does.
+- **`lastFailedStep`, beside `completedSteps` rather than derived from it.**
+  A skipped step (`--skip-seed`, a non-GitHub remote) is in neither list, so
+  "the first id not in `completedSteps`" is not the step that failed.
+- **`lastDeployedAt` became optional.** §18.1 already records the rule this
+  preserves: a failed run must not claim a deploy that never happened. A failed
+  run carries an earlier success's value forward unchanged; a **first** install
+  that fails has no earlier success, so there is no instant to record and the
+  field is absent. Absent means "no deploy has ever completed here", which is
+  the only encoding that is neither a sentinel nor a lie.
+
+### 22.2 The refusal this would otherwise have broken
+
+`install` refuses to run over an existing deployment and points at `update` or
+`--reinstall`. That refusal keyed on the state file merely **existing** — which
+stopped being the same question the moment a failed run started writing one.
+Left alone, the fix would have broken the ordinary retry it exists to enable:
+install fails, the operator fixes the cause, re-runs `install`, and is told to
+pass `--reinstall` to start over a deployment that never happened.
+
+The refusal now keys on `lastDeployedAt` being present, not on `lastOutcome`.
+The difference matters: a failed **reinstall** over a real deployment still
+carries the earlier success's `lastDeployedAt`, so it is still refused — the
+containers, the certificate and the database it would clobber are all still
+there. Only a root where no deploy has ever completed is let through.
+
+`--fresh` (§21.4) is unaffected: it discards the state file **before**
+`readState`, so a failure record is discarded exactly like a success one and
+nothing on this path can resurrect it.
+
+### 22.3 Two consequences worth stating
+
+A resumed run skips `checkout`, so `context.commitSha` and `context.target`
+are never set on that path. `buildInstallState` therefore falls back to the
+existing state for `commitSha`, `repoUrl` and `ref` — without which the run
+that finally **succeeds** would record an empty commit and an empty repository
+URL, and publish both to `deploy-info`.
+
+A `deploy status` on a root whose install failed now reports it — "the last
+install failed at `<step>`" — rather than rendering it as an ordinary
+deployment that happens to be down. The TUI's status screen does the same, and
+says `never` where it would otherwise print a deploy time that does not exist.
+
+### 22.4 On `--repo` with `--name`
+
+#267 also reports that `--repo` is silently ignored when combined with
+`--name`, because `resolveInstallLayout` returns early on `--name` without a
+`RepoTarget`. Checked against the code, it is not: the `checkout` step calls
+`resolveTarget`, which passes `options.repo` to `resolveRepoTarget` as
+`repoFlag` whenever the context has no target yet, and that is rank 1 of that
+function's resolution order. The flag is honoured; what the early return costs
+is only `describeLayoutSource`'s wording in the `--resume` refusal, which
+describes the **directory** and is accurate about it.
+
+`apps/cli/src/deploy/install.test.ts` pins this, so the two flags cannot start
+contradicting each other unnoticed. Refusing the combination was considered and
+rejected: it would remove a working capability (deploy repository X into folder
+Y) to fix a defect that is not there.
+
+## 23. `update` adopts a deployment it has no record of (issue #285)
+
+A deployment that was demonstrably present — clone at the right revision,
+`.env` written, containers running, certificate issued, site serving HTTPS —
+could not be updated:
+
+```
+$ kvox deploy update
+kvox: No deployment found at /opt/infra/apps/kvox.
+Run `kvox deploy install` first, or pass --root if it is somewhere else.
+```
+
+`requireState` refused because `.appctl-deploy.json` was absent — in the
+reported case because that install had failed before §22 taught the failure
+path to write one, though the cause does not matter.
+
+### 23.1 The precondition was asking the wrong question
+
+`update.ts`'s header stated the design deliberately: *the preconditions are
+opposite — install refuses when state exists; update refuses when it does
+not.* The symmetry is right and it keyed on the wrong fact. **The state file
+is bookkeeping; the deployment is the clone, the `.env` and the running
+containers.** "Is there a state file?" and "is there a deployment here?" are
+different questions, and only the second is the one `update` needs answered.
+Everything the state records is recoverable from that disk, so refusing a live
+deployment over lost bookkeeping — and sending the operator to `install`,
+whose own precondition is the opposite — was the wrong response.
+
+`update` now reads the state, and when there is none asks `deploy/adopt.ts`
+whether a deployment is there. The symmetry survives, restated on the fact that
+matters: install refuses when a **deployment** is already there, update when
+one is not.
+
+### 23.2 The evidence gate: positive, and exactly two things
+
+`deploymentEvidence(deployRoot)` answers two independent facts, and
+`hasDeployment` requires **both**:
+
+1. `<root>/repo/.git` exists — the clone is a git checkout. (`existsSync`,
+   not a directory test: `.git` is a file in a worktree.)
+2. The deployment's `.env` is readable, in either the current layout or the
+   pre-#120 one inside the clone.
+
+Both are required because both are things this CLI itself creates and the
+pipeline itself needs: `fetch` fetches and checks out inside `repo/`, and
+everything from `build` onward interpolates `.env`. Neither is inferable from
+the other, so neither alone is evidence.
+
+**Running containers are deliberately not part of the gate**, although the
+issue offers them as a candidate. A deployment whose containers are stopped,
+pruned or wedged is precisely the deployment somebody is trying to update, so a
+gate that required them would refuse the recovery case this exists for. It
+would also put a Docker subprocess in a code path that has to work when the
+daemon is down — and three steps later the pipeline's own `preflight` checks
+Docker properly, with a failure message written for it.
+
+The gate is **positive evidence, never the absence of a refusal**: an empty
+`--root`, a directory holding only `logs/`, or a clone with no `.env` all still
+raise `NotInstalledError` with the message they always raised. What is added is
+one line naming the half that *was* found, so an operator who expected an
+adoption can see why they did not get one.
+
+### 23.3 What is reconstructed, and from where
+
+| Field | Source |
+|---|---|
+| `repoUrl` | `git -C repo remote get-url origin`, through `normaliseRepoUrl` |
+| `commitSha` | `git -C repo rev-parse HEAD` |
+| `ref` | `--ref`, else `rev-parse --abbrev-ref HEAD`, else `origin/HEAD`'s short name |
+| `name` | `.env`'s `COMPOSE_PROJECT_NAME`, else the directory name (`projectNameFor`'s own fallback) |
+| `bindPort` | `.env`'s `APP_BIND_PORT`, else `DEFAULT_BIND_PORT` |
+| `domain` | `.env`'s `APP_URL` host, else the proxy vhost forwarding to `bindPort` |
+| `proxyRoot` | the resolved proxy root |
+| `proxyContainer` | `--proxy-container`, else left unset for the preflight to find |
+| `deployRoot`, `envPath` | already resolved |
+| `appctlVersion` | `CLI_VERSION` — this CLI is adopting it now |
+| `lastCommand` | `'update'` — an adoption happens inside an update |
+| `adoptedAt` | now |
+
+Three reads **refuse rather than guess**, all for the same reason — a wrong
+answer here deploys the wrong code:
+
+- No `origin`. Deploying the wrong repository is what `resolveRepoTarget`'s
+  rank-3 guard (§18) exists to make impossible; inventing an origin walks
+  straight into it.
+- No HEAD commit.
+- A detached HEAD whose remote has no default branch. `main` is not a safe
+  guess for a fork on `master` or `develop`; the refusal names `--ref`.
+
+The domain deliberately ignores a loopback `APP_URL`: `.env.example` ships
+`http://localhost:3535`, so an install made without `--domain` keeps it, and
+adopting `localhost` would send the `publish` step to issue a certificate for
+it. The vhost fallback matches on the `proxy_pass http://127.0.0.1:<bindPort>;`
+that `renderVhost` (§10) writes, and takes the filename as the domain. Two
+vhosts on one port answer nothing rather than one of them: adopting the wrong
+one would publish this deployment under somebody else's hostname.
+
+### 23.4 The two instants that are not invented
+
+`installedAt` and `lastDeployedAt` are **not knowable from a disk this CLI did
+not write**, and a guessed instant is not a small inaccuracy — it becomes a
+fact on the About page, which is the class of bug §22 was written to remove.
+
+`DeployState.installedAt` therefore becomes **optional**, at
+`DEPLOY_STATE_VERSION` 1, for exactly the reason §22 made `lastDeployedAt`
+optional: every state file written before now was written by a run that had
+just installed or updated, so every existing file carries it and it means what
+it always meant. Absent means "this CLI has no record of installing here".
+
+`deploy-info/info.json`'s `installedAt` and `updatedAt` become **nullable**,
+joining `domain` and `remote` as that document's idiom for "known to be
+absent". The API has read both as optional-and-nullable since #124 and the web
+card already renders null as its unknown mark, so nothing downstream changes —
+and `schema` stays `1`, for the reason recorded above the constant (§19).
+`validateDeployInfo` still refuses a non-null value that is not a real UTC
+instant.
+
+One instant **is** recovered rather than invented: a deployment whose state
+file was lost often still has `deploy-info/info.json`, which carries the real
+install instant, and that is read back. `lastDeployedAt` is deliberately *not*
+recovered the same way — the document's `updatedAt` is written as
+`lastDeployedAt ?? installedAt`, so reading it back cannot tell the two apart,
+and §22's failed-first-install record would turn "never deployed" into a deploy
+that did not happen.
+
+### 23.5 `adoptedAt` is a third thing, not a value squeezed into `run`
+
+§22 added a `run` block to `deploy-info` saying how a deploy **ended**.
+Adopting is a different axis: where the bookkeeping behind that deploy **came
+from**. Neither is derivable from the other — an adopted deployment's update
+can complete perfectly — so `adoptedAt` is its own optional field on
+`DeployState` and on `deploy-info`, optional and nullable on the API's schema
+too. It is also what explains a null `installedAt`, which is why the two travel
+together.
+
+It is emphatically **not `installedAt` under another name**: it is when the
+record was rebuilt, never when the deployment was made.
+
+### 23.6 Telling the operator
+
+The notice goes out **before the pipeline runs**, through
+`hooks.onProgress`/`onLog` — not in the epilogue — so a run that then fails at
+`preflight` still says the state file was rebuilt. The same block goes to the
+run journal, and `UpdateResult.adopted` carries it for `--json`, which wires no
+hooks at all; `runUpdateCommand` writes it to stderr in that mode, keeping
+stdout pure JSON and covering `--check --json`, whose stdout is the check
+object alone.
+
+It is deliberately **not** under `Action required:` (§21's channel, from #264
+and #265). That heading is for something the operator must go and do; this is a
+notice about something already done, and putting it there would teach people to
+skim the one heading that must never be skimmed.
+
+The record itself is written **before the pipeline** too, right after the
+journal opens so the write is journaled: the bookkeeping is recovered whatever
+the run then does, so a preflight failure, a `--check` or an "already up to
+date" does not each need the adoption performed again.
+
+### 23.7 Discovery keyed on the same wrong fact, and was fixed with it
+
+`listInstalledApps` collects the directories under the apps root that are
+deployments, and until #285 "is a deployment" meant "holds a state file" —
+the identical defect one level up. So a bare `deploy update` with no
+`--name`/`--root` answered *"Nothing is installed under /opt/infra/apps"* and
+never reached §23.2's gate at all: the user's actual command still failed, and
+the remedy was a flag an operator whose state file is missing has no reason to
+know about.
+
+It is fixed here rather than deferred, because deferring it would leave the
+codebase disagreeing with itself — `update` saying a deployment is a clone plus
+an `.env`, discovery saying a deployment is a state file.
+
+**One predicate, not two.** The gate moved to
+`apps/cli/src/deploy/deployment-evidence.ts`, which `adopt.ts` and `layout.ts`
+both import and which imports neither, so there is no cycle and no second
+implementation to drift. `adopt.test.ts` asserts the two modules export the
+same function objects, which is the only assertion that cannot be satisfied by
+a copy.
+
+**That module reads; it does not decide.** `envFacts` answers what a
+deployment's own `.env` says — `COMPOSE_PROJECT_NAME`, `APP_BIND_PORT`,
+`APP_URL` — and a missing key is `undefined`, never a default. Defaults are
+policy and the two callers have opposite ones: `adopt.ts` falls back to
+`DEFAULT_BIND_PORT` because it is about to write a record that needs a number,
+while `siblingBindPorts` must claim **no** port for a deployment whose port it
+cannot read, since telling the install wizard 3535 is taken when nothing on
+that disk says so costs a free port on every install.
+
+**Ambiguity is unchanged, and that is the point.** `locateApp` still returns
+everything the listing found and refuses when there is more than one, naming
+them: *"Several apps are installed under `<apps-root>`: alpha, beta. Pass
+`--name <app>` to say which one."* Two evidence-bearing directories take that
+exact path. A state-bearing directory is deliberately **not** preferred over an
+evidence-bearing one — that would be a tiebreak this command has never had,
+invented at the moment an operator most needs to be asked which they meant.
+
+**An unreadable state file is still skipped, and is not promoted to an
+unrecorded deployment.** The file being there and unintelligible to this build
+is a different problem from there being no file, and the command that goes on
+to act on it raises that difference properly.
+
+#### What each caller of the listing now sees
+
+| Caller | What changed | Needed narrowing? |
+|---|---|---|
+| `locateApp` / `locateInstalledApp` (`update`, `status`, `about`, `doctor`, `certs`) | An unrecorded deployment is now findable with nothing named. Two of anything still refuses and names both. | No |
+| `siblingBindPorts` → the install wizard's port suggestions | An unrecorded deployment's `APP_BIND_PORT` now counts. **Correct**: that port is held whether or not this CLI has a record of who holds it, which is #257's point exactly. One with no readable port claims none. | No |
+| `lastRenewalCronWarning` (`uninstall`, §21) | Would have named an unrecorded survivor in a pasteable `certs renew --install-cron --name <survivor>` — and that command resolves its lineage from the survivor's **recorded** domain, so it would answer "is not published under a domain". | **Yes** — narrowed to `state !== undefined`, falling through to the honest "nothing to point at" branch |
+| The TUI's deploy menu (`listInstalledApps(...).length > 0`) | An unrecorded deployment now enables the deploy destinations. **Correct**: there is a deployment to update. | No |
+
+The `--reinstall` guard is **not** a caller of this listing, despite looking
+like one: it reads `readState(options.deployRoot)` directly. It is therefore
+unchanged, and unchanged is right either way — its test is `lastDeployedAt`
+(§22.1), and an unrecorded deployment has none to refuse on. An install over
+one gets past the precondition exactly as before. A test pins that.
+
+`locateAppFromCwd` (#266, "the deployment cwd is standing in") is also
+unchanged: it walks up looking for a state file, and it feeds `install`'s
+target resolution rather than `update`'s precondition. Widening it would change
+what `install` deploys, which is a different question from what `update` can
+find.
+
+### 23.8 Scope: `status`, `about` and `certs`
+
+Audited and deliberately not changed.
+
+- `status` and `about` each carry their **own** copy of the refusal (an inline
+  `readState(...) === undefined` check with their own wording), not a call to
+  `requireState`. They are read-only reporters, and adopting from one would
+  mean either running `git` subprocesses during what is meant to be a cheap
+  read and *writing* the CLI's private record from a command that only reports,
+  or holding a reconstruction in memory that the next command would perform
+  again. That is a design decision of its own, and one `update` now makes
+  unnecessary in practice: a single `update` restores the record, after which
+  both work.
+- `certs` does not refuse at all: it reads the state **optionally**
+  (`state?.domain`, `state?.proxyRoot`, `state?.proxyContainer`), so `--all`
+  already works without one and a named app without a recorded domain gets its
+  own message. Nothing to fix — and §23.7's narrowing of
+  `lastRenewalCronWarning` exists precisely because that message is the one an
+  unrecorded survivor would produce.
+
+## 24. Which deployment am I in? (issue #290)
+
+On a server hosting several applications under one apps root — the documented
+multi-app layout — every deploy command except `install` refused from inside
+the deployment's own directory:
+
+```
+/opt/infra/apps/kvox$ kvox
+  ✖ Several apps are installed under /opt/infra/apps: clipboard, knecta,
+    kvox, memoriahub, shellkeep, sink, vault. Pass --name <app>.
+```
+
+The operator is standing in `/opt/infra/apps/kvox` and is asked which app
+they mean. Three separate things were wrong, and this section records all
+three.
+
+### 24.1 cwd is a rank, for every command and not only `install`
+
+§5.1 made "the deployment cwd is standing in" a rank of `install`'s own layout
+resolution (#266), and closed with: *"`update`, `status` and `about` are not
+affected … Their own blind spot is a different one — with several apps
+installed and no flags they refuse and list them, even when cwd names one
+unambiguously — and is not this issue."* This is that issue.
+
+`locateApp` now has **four** ranks, most explicit first:
+
+1. `--root` — a path, verbatim.
+2. `--name` — a name under the apps root. It still outranks cwd, so
+   `--name vault` from inside another app's folder means `vault`.
+3. **The deployment cwd is standing in.**
+4. The one app installed under the apps root.
+
+…and then the refusal, naming the candidates. Rank 3 lands **before** that
+refusal, which is the whole point. Everything funnels through `locateApp` /
+`locateInstalledApp` — the five TUI deploy screens, `update`, `status`,
+`about`, `uninstall`, `doctor` and `certs` — so one rank reaches all of them
+and none of them needed editing.
+
+The bounds §5.1 set are unchanged, and are now shared by one walk
+(`walkFromCwd`): it stops at the apps root, standing at or above the apps root
+resolves nothing, a deploy root installed **outside** the apps root with
+`--root` is deliberately not found, and a cwd that resolves nothing falls
+through to the ranks below exactly as before — including the pre-install case
+where `locateApp` answers `undefined` and `doctor` carries on against the apps
+root itself. `process.cwd()` is read through a guard: it throws when the
+directory a shell is sitting in has been removed (which `uninstall` leaves
+behind), and a rank that is only ever a hint must not turn that into a crash.
+
+**`locateAppFromCwd` was not widened; a second function was added.** §23.7
+already stated why: `install` reads the state file this rank finds — the
+repository, the ref and the name, fed through `resolveRepoTarget`'s own
+`state` rank — so widening it would change what `install` *deploys*, which is
+a different question from which deployment a command is pointed at.
+`locateAppFromCwd` therefore still requires a state file and `install`'s
+behaviour is byte-for-byte what it was; `deploymentAtCwd` is the wider rank,
+over the same predicate discovery uses.
+
+### 24.2 Enumeration is narrower than adoption
+
+#285 widened `listInstalledApps` from "holds a state file" to "holds a state
+file **or** passes the evidence gate" (§23.7). That is right for **adoption**,
+where an operator has named a directory and asked "is this a deployment?" It
+is too loose for **enumeration**, which reads directories nobody named: the
+six other names in the refusal above are the operator's unrelated
+applications, deployed under the same convention, and they match the gate.
+
+"Is there a deployment here?" and "is this one of mine?" are different
+questions. The shared gate in `deployment-evidence.ts` still answers the
+first and is **untouched** — `adopt.ts` and `layout.ts` import the same
+function objects, and `adopt.test.ts`'s identity assertion still holds.
+`envWrittenByThisCli` is a **second, explicitly separate** predicate
+answering the second question, consulted only by `recogniseDeployment`
+(enumeration, and the cwd rank above). `--root`, `--name` and adoption never
+consult it.
+
+**The marker is `DEPLOY_ROOT`**, which `install`'s `environment` step writes
+and `update`'s `environment-drift` step re-pins on every run (#142), so a
+deployment installed *or* updated by any build since then carries it.
+`COMPOSE_PROJECT_NAME` is written beside it but is deliberately **not** a
+second marker: Docker Compose defines that variable itself, so a foreign app
+may legitimately set it, and it cannot appear on one of ours without
+`DEPLOY_ROOT` — it would widen the false accepts and narrow nothing.
+
+**A genuine deployment must not vanish from the listing**, which is the
+failure mode worth more than the one being fixed. Before #142 the `.env` lived
+inside the clone at `repo/infra/compose/.env` and neither marker existed, so an
+`.env` read from that legacy path counts as its own marker: it is this
+template's own layout and it is where ours used to live. The residual cost is
+that a stranger's application which happens to use that exact layout is listed
+— one extra name, which is strictly better than hiding a real deployment.
+
+A state file is never second-guessed: the marker question is only ever asked of
+a directory with **no** record at all.
+
+⚠ **This narrowing does not, on its own, fix the reported refusal.** A
+neighbouring application that is itself a fork of this template deploys with
+this same CLI, writes the same `.appctl-deploy.json` and the same markers, and
+is a deployment of ours by every test there is. Two forks on one host are
+genuinely ambiguous, and §24.1's cwd rank — not this predicate — is what
+answers them.
+
+### 24.3 `kvox deploy list`
+
+The inventory: name, deploy root, revision and ref, bind port, domain, last
+deploy, and whether the row came from the app's own state file or was inferred
+from the clone and the `.env`. `--json` like its siblings, on stdout, with the
+human rendering on stderr. Exits `2` when nothing is installed, the standing
+`certs status` gives an empty proxy, so `deploy list && …` does not proceed on
+a host this CLI has deployed nothing to. It takes `--apps-root` and `--json`
+and deliberately **not** `--name`/`--root`: both name one app.
+
+It runs **no subprocess and no network call** — which is why an unrecorded
+deployment reports no revision rather than having `git rev-parse` run for it,
+a dozen times, on a command that should be instant and should work when the
+Docker daemon is down. `update` adopts such a deployment and writes the record,
+after which it reports like any other.
+
+**No TUI destination.** The deploy menu's seven destinations each act on *one*
+deployment and resolve it with `locateInstalledApp({ appsRoot })` and no
+`--name` — so a list screen would advertise apps the TUI has no way to then
+act on. The inventory is one subcommand away, and §24.1 is what the TUI
+actually needed: its screens now resolve the app the operator is standing in
+instead of refusing.
+
+### 24.4 Rejected: a central registry in `~/.<cli>/`
+
+Considered and turned down. The registry already exists, distributed:
+`<apps-root>/<name>/.appctl-deploy.json`, one record per deployment,
+colocated with what it describes and already enumerated. A central index adds
+no information and adds drift — it lists a ghost after `rm -rf`, is stale
+after a restore from backup, points at nothing after a rename, differs between
+`sudo` and a user (`sudo` resets `HOME`), and disagrees with itself when two
+operators share a host. And #285 exists precisely because this CLI trusted
+bookkeeping over evidence and refused to update a live, serving deployment
+over a missing JSON file; a central registry is that mistake moved one level
+further from the thing it describes. SQLite would additionally put a native
+binary into a CLI that is currently pure Node, to index roughly ten
+directories.

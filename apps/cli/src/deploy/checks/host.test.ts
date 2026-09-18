@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { CLI_NAME } from '../../branding.js';
 import { CommandFailedError, type CommandResult, type RunCommandOptions } from '../executor.js';
 import { HOST_CHECKS, evaluateDf, evaluateUfw, parseDf } from './host.js';
 import { ALL_CHECKS, requiredChecks } from './index.js';
@@ -171,6 +172,7 @@ describe('the registry as a whole', () => {
 
     const byId = new Map(results.map((result) => [result.id, result]));
     for (const id of [
+      'cron-dir-writable',
       'proxy-root',
       'proxy-container',
       'proxy-network-mode',
@@ -700,6 +702,61 @@ describe('deploy-root-writable', () => {
   it('is required and registered in HOST_CHECKS', () => {
     expect(HOST_CHECKS.map((check) => check.id)).toContain('deploy-root-writable');
     expect(find('deploy-root-writable').severity).toBe('required');
+  });
+});
+
+describe('cron-dir-writable', () => {
+  it('passes when the cron directory can be written', async () => {
+    const result = await find('cron-dir-writable').run(context({ cronDir: '/etc/cron.d' }));
+
+    expect(result.status).toBe('pass');
+    expect(result.detail).toBe('/etc/cron.d');
+  });
+
+  it('WARNS rather than fails when it cannot — the install no longer needs it', async () => {
+    // `/etc/cron.d` is root:root on every standard server and this CLI is
+    // deliberately run as an ordinary user (#236), so this is the ORDINARY
+    // case, not a broken box. Failing here would refuse a server the CLI
+    // installs on perfectly well, and teach the operator to pass --force.
+    const fs: CheckFs = {
+      exists: (path) => path === '/etc/cron.d' || path === '/etc',
+      isDirectory: (path) => path === '/etc/cron.d' || path === '/etc',
+      isWritable: () => false,
+    };
+
+    const result = await find('cron-dir-writable').run(context({ fs }));
+
+    expect(result.status).toBe('warn');
+    expect(find('cron-dir-writable').severity).toBe('recommended');
+    expect(result.detail).toContain('not writable');
+  });
+
+  it('remedies with the sudo command, and never with sudo <cli>', async () => {
+    // Running this CLI under sudo trades an EACCES here for a logged-out `gh`
+    // at the checkout step (#236) - worse, and earlier in the run.
+    const result = await find('cron-dir-writable').run(
+      context({ fs: { ...permissiveFs, isWritable: () => false } }),
+    );
+
+    expect(result.remedy).toContain('sudo install -m 644');
+    expect(result.remedy).not.toContain(`sudo ${CLI_NAME}`);
+    expect(result.remedy).not.toMatch(/sudo\s+kvox/);
+  });
+
+  it('warns, with a remedy, when the cron directory is not there at all', async () => {
+    const result = await find('cron-dir-writable').run(context({ fs: emptyFs }));
+
+    expect(result.status).toBe('warn');
+    expect(result.detail).toContain('/etc/cron.d');
+    expect(result.remedy).toBeTruthy();
+  });
+
+  it('is recommended, proxy-gated and registered in HOST_CHECKS', async () => {
+    expect(HOST_CHECKS.map((check) => check.id)).toContain('cron-dir-writable');
+    expect(find('cron-dir-writable').severity).toBe('recommended');
+    // Under --skip-proxy there is no certificate, so there is nothing to renew.
+    const skipped = await find('cron-dir-writable').run(context({ skipProxy: true, fs: emptyFs }));
+    expect(skipped.status).toBe('skip');
   });
 });
 
