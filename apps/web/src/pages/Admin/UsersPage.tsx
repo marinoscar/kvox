@@ -24,6 +24,7 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { RequirePermission } from '../../components/common/RequirePermission';
 import { UserList } from '../../components/admin/UserList';
 import { AllowlistTable } from '../../components/admin/AllowlistTable';
+import { AllowlistEmailWarning } from '../../components/admin/AllowlistEmailWarning';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -94,6 +95,22 @@ export default function UsersPage() {
                   </Typography>
                 }
               >
+                {/* Issue #300, epic #271. THIS TAB AND NOT THE PAGE: adding an
+                    address raises the `allowlist.invitation` notification,
+                    which is email-only by construction (the recipient has no
+                    account, no session and no open tab), so a deployment with
+                    no outbound email invites people who are never told. The
+                    Users tab is about accounts that already exist and has
+                    nothing to do with sending mail.
+
+                    Inside the `allowlist:read` gate, so a user who cannot see
+                    the table is not warned about a consequence of an action
+                    they cannot take — and probes nothing on their behalf. The
+                    panel renders only while this tab is selected, so the probe
+                    costs nothing to anyone who never opens it. It renders
+                    NOTHING unless a successful read says mail is unconfigured;
+                    see its own header. */}
+                <AllowlistEmailWarning />
                 <AllowlistTable />
               </RequirePermission>
             </TabPanel>
