@@ -866,6 +866,16 @@ EITHER; see [`docs/specs/search.md`](docs/specs/search.md).
   when `q` is all stopwords. A cursor from a different query/type-filter/caller/ranking-model
   version is refused with **400**, never silently restarted (see `docs/specs/search.md` §5)
 
+### Onboarding
+A persistent, resumable, live-derived first-run checklist for a fresh deployment and a fresh
+account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding.md`](docs/specs/onboarding.md).
+- `GET /api/onboarding` - The caller's own activation steps. `@Auth()`, **no permission** — the
+  identical ownership-scoped posture `/api/ai-credentials`/`/api/pat`/`/api/user-data` already
+  take, and readable by a Viewer holding no permissions at all
+- `GET /api/admin/onboarding` - This deployment's setup steps, ending with a real transcription
+  rather than a green tick on a form. `system_settings:read` — reused rather than a new
+  `onboarding:read`, per epic #118 decision 8's precedent (the About card)
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -946,7 +956,13 @@ EITHER; see [`docs/specs/search.md`](docs/specs/search.md).
 - `roles` / `permissions` / `role_permissions` - RBAC
 - `user_roles` - User-to-role assignments
 - `system_settings` - Global app settings (JSONB). Namespaces on the `global` row: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. ⚠ Adding one costs **six** edits — see `apps/api/src/common/schemas/settings-parity.spec.ts`'s header; miss the wire DTOs and every PATCH becomes a silent no-op that returns 200. `ai` (issue #47, epic #45) carries no API key — see `apps/api/src/ai/ai-settings.schema.ts`'s compile-time proof — and includes `ai.maxDocumentBytes`, the ceiling on one uploaded note source document; it lives in this AI namespace rather than in a storage setting because the reason to bound it is token cost on the uploading user's own vendor account, not disk. Since issue #78 it also carries `ai.provider` (the nullable active-provider axis, resolved through `AiProviderRegistry` so no consumer hardcodes `'openai'`) and its `allowedModels` entries widened from bare strings to `{ id, label?, contextWindowTokens?, maxOutputTokens? }` — the legacy string form still parses and normalises on read, forever. Since issue #97 the two numbers on an entry are optional in practice, not just in the schema: `ai-model-resolution.ts`'s five-rank chain fills an omitted number from this build's catalogue, then the provider's family derivation, then its conservative floor, before an entry is reported unresolvable — see `docs/specs/notes.md` §2.5
-- `user_settings` - Per-user settings (JSONB)
+- `user_settings` - Per-user settings (JSONB). Namespaces include `onboarding` (issue #272, epic
+  #271): the caller's own first-run **intent** — `welcomeSeenAt`, `dismissedAt`,
+  `adminDismissedAt`, `skipped[]` — never readiness, which is derived rather than stored (see
+  `### Onboarding` above and [`docs/specs/onboarding.md`](docs/specs/onboarding.md)). Absent from
+  `DEFAULT_USER_SETTINGS` on purpose: absent is how "never onboarded" is spelled. Guarded by
+  `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the six-file parity check user
+  settings never had before this namespace
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
 - `allowed_emails` - Allowlist for access control
@@ -1785,6 +1801,31 @@ scope deletes the account. Full design — the FK-clearing order and why it is
 mandatory, and the honest gaps (a template that finishes archived rather
 than deleted, a provenance link lost on a stranger's note) — is
 [`docs/specs/user-data-deletion.md`](docs/specs/user-data-deletion.md).
+
+### Onboarding
+
+A live-derived first-run checklist for a fresh deployment's administrator and a fresh account's
+ordinary user — epic #271 (issues #272–#281), `apps/api/src/onboarding/`. Full rationale,
+including every rejected alternative, is [`docs/specs/onboarding.md`](docs/specs/onboarding.md);
+this is two invariants a neighbouring file can break without a test failing anywhere obvious.
+
+1. **A step's completion is DERIVED on every read, never stored.** `OnboardingService` builds a
+   fresh context from live system state on every call to `GET /api/onboarding` /
+   `GET /api/admin/onboarding` and hands it to every step in `onboarding-steps.ts`; nothing in
+   `apps/api/src/onboarding/` writes a completion row. The only persisted onboarding state
+   anywhere is the caller's own **intent** — the `onboarding` user-settings namespace above.
+2. **A step never issues its own query.** `buildUserContext`/`buildAdminContext` each perform one
+   bounded read pass and hand the *same* object to every step; a step function's only argument is
+   that context. Adding a step must not add a database call.
+
+⚠ **The permissionless-route trap.** `@Auth()` with no roles and no permissions (`GET
+/api/onboarding`) means `RolesGuard` and `PermissionsGuard` both return early and never attach
+`request.requestUser` — so `@CurrentUser()` yields the raw `AuthenticatedUser`, whose
+`.permissions` is `undefined`. Read as an empty set, that silently filters every permissioned
+step out of a 200. Any future permissionless route that needs the caller's permission list must
+go through `normalizeCaller`/`toRequestUser`, exactly as `onboarding.service.ts` does — see that
+file's `OnboardingCaller` type for the full trap, and the spec for why only an integration test
+through the real guard stack, not a unit test constructing a `RequestUser` by hand, can catch it.
 
 ## Specialized Subagents (MANDATORY)
 

@@ -12,13 +12,33 @@
 // ⚠ IT DOES NOT DELETE THE ACCOUNT
 // -----------------------------------------------------------------------------
 //
-// No scope touches the `users` row, `user_settings`, `user_roles`,
-// `refresh_tokens` or the caller's session. The user stays signed in and their
-// account keeps working; what goes is DATA and KEYS. "Delete everything" here
-// means "this deployment stops holding my content", not "close my account" —
-// two different requests with two different consequences, and conflating them
-// would mean a user clearing their library discovered they had also locked
-// themselves out.
+// No scope touches the `users` row, `user_roles`, `refresh_tokens` or the
+// caller's session. The user stays signed in and their account keeps working;
+// what goes is DATA, KEYS and — under `everything` only — the one
+// `user_settings` namespace named below. "Delete everything" here means "this
+// deployment stops holding my content", not "close my account" — two different
+// requests with two different consequences, and conflating them would mean a
+// user clearing their library discovered they had also locked themselves out.
+//
+// ⚠ THE ONE `user_settings` NAMESPACE `everything` CLEARS IS `onboarding`.
+// Nothing else in that row is touched by any scope: `theme`, `profile`,
+// `navigation`, `notifications` and `dataTables` all survive every deletion.
+// Deleting your data is not "reset my preferences" — the account still works
+// and the user is still signed in looking at it, so coming back to a light
+// theme they had switched away from would be an unasked-for change with no
+// relationship to what they clicked.
+//
+// `onboarding` is different because it is not a PREFERENCE, it is a record
+// that first-run guidance has already been given (epic #271, issue #272:
+// `welcomeSeenAt`, `dismissedAt`, `adminDismissedAt`, `skipped[]`). A full
+// wipe genuinely starts over, and the checklist — which is derived live, never
+// stored — correctly regresses on its own: no transcripts and no AI key put
+// its required steps back outstanding. But the SURVIVING intent then hides
+// them, because `chooseBannerAudience` bails on `dismissedAt` and
+// `FirstRunWelcomeDialog`'s `due` gate bails on `welcomeSeenAt`. A user who
+// deleted everything and was then shown no first-run guidance at all would
+// reasonably conclude the feature was broken, and their only way back is the
+// replay button on a settings page they have no reason to open. See step 6.
 //
 // -----------------------------------------------------------------------------
 // ⚠ SERVER-ONLY, PERMANENTLY — NO `nodeResultSchema`, NO `persistNodeResult`
@@ -128,6 +148,7 @@
 //   4. note templates   (`content`/`everything` only — never the narrow `notes`
 //                        scope; see `scopeIncludes`)
 //   5. unmanaged storage objects
+//   6. onboarding state (`everything` only)
 //
 // 2 before 3 because a note's `source_transcript_id` is `Restrict`: deleting
 // transcripts while the user's own notes still cite them would leave the
@@ -144,12 +165,24 @@
 // key is fast and definitive, and a user who asked for their keys to be gone
 // should not have them still working while several minutes of fan-out runs.
 //
+// The onboarding reset goes LAST, and that is the other step with a genuine
+// choice — it participates in no foreign key either, and it destroys no
+// content, so nothing forces its position. It is last because of what it
+// ASSERTS: showing a user their first-run checklist again says "you are
+// starting over". Run first, a later step throwing would leave them looking at
+// a fresh-start banner over a library that is still half there — guidance that
+// contradicts the screen behind it. Run last, the reset is the closing act of a
+// run that got all the way through, and a run that did not simply never makes
+// the claim.
+//
 // -----------------------------------------------------------------------------
 // RE-ENTRANCY: THE REMAINING WORK IS DISCOVERABLE FROM THE ROWS
 // -----------------------------------------------------------------------------
 //
 // Every step asks the database what is left rather than carrying a cursor: live
-// notes, live transcripts, owned templates, unmanaged objects. A second run
+// notes, live transcripts, owned templates, unmanaged objects — and the
+// onboarding reset is idempotent by construction, since clearing an
+// already-absent namespace stores the same absence. A second run
 // after a partial first one finds exactly the remainder and finishes it, and a
 // run with nothing to do succeeds having done nothing. Nothing here counts
 // down, charges twice, or fails because something is already gone — which is
@@ -171,6 +204,7 @@ import { PatService } from '../../pat/pat.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE, SEARCH_DOC_TRANSCRIPT } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { UserSettingsService } from '../../settings/user-settings/user-settings.service';
 import { ObjectsService } from '../../storage/objects/objects.service';
 import {
   TRANSCRIPT_PURGE_JOB_TYPE,
@@ -241,6 +275,7 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
     private readonly pat: PatService,
     private readonly aiCredentials: UserAiCredentialsService,
     private readonly searchIndex: SearchIndexService,
+    private readonly userSettings: UserSettingsService,
   ) {}
 
   onModuleInit(): void {
@@ -289,6 +324,14 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
 
     if (scopeIncludes(scope, 'files')) {
       await this.deleteUnmanagedObjects(userId);
+    }
+
+    // Last, and see the header's ORDER section for why: this is the one step
+    // that makes a CLAIM to the user ("you are starting over") rather than
+    // destroying something, so it may only run after the destruction it
+    // narrates has actually been carried out.
+    if (scopeIncludes(scope, 'onboarding')) {
+      await this.resetOnboarding(userId);
     }
 
     this.logger.warn(
@@ -693,6 +736,64 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
     throw new Error(
       `Bulk file deletion for user ${userId} did not converge after ` +
         `${USER_DATA_PURGE_MAX_BATCHES} batches`,
+    );
+  }
+
+  // ===========================================================================
+  // Step 6 — onboarding state (`everything` only)
+  // ===========================================================================
+
+  /**
+   * Forget that this user has ever been onboarded.
+   *
+   * ⚠ IT CLEARS EXACTLY ONE NAMESPACE, AND THAT IS THE WHOLE CONTRACT.
+   * `theme`, `profile`, `navigation`, `notifications` and `dataTables` are
+   * untouched — the account still works, the user is still signed in looking
+   * at it, and "delete my data" is not "reset my preferences". A widening of
+   * this call to the whole settings row is pinned against in
+   * `user-data-purge.handler.spec.ts` for exactly that reason: it would be a
+   * one-word change here and an invisible, unasked-for change to the user's
+   * screen.
+   *
+   * ⚠ IT REUSES `UserSettingsService.patchSettings` AND HAND-WRITES NO JSONB
+   * EDIT. `{ onboarding: null }` is already a supported, tested operation
+   * (issue #272): `onboardingPatchSchema` is `.nullable()`, `mergeOnboarding`
+   * returns `undefined` for `null`, and `patchSettings` then omits the key
+   * entirely rather than storing `{}`. That collapse-to-ABSENT is precisely
+   * the state a wipe wants, because absent is how "never onboarded" is spelled
+   * throughout epic #271 — a stored `{}` would be a PRESENT `onboarding` key
+   * and would read as "onboarded, with no opinions". A second, independently
+   * written namespace removal in this file is the duplication `scopeIncludes`'s
+   * own header argues against, and this one would be worse than most: it would
+   * have to reproduce the collapse rule from memory, and getting it wrong
+   * fails silently and permanently.
+   *
+   * ⚠ NO `If-Match`. `patchSettings`' third argument is an optimistic
+   * concurrency expectation, and this call has none to state: it is the server
+   * acting on a job the user queued minutes ago, not a browser tab racing
+   * another tab. Passing a version read moments earlier would turn a user who
+   * happened to toggle their theme mid-deletion into a `failed` purge.
+   *
+   * ⚠ IT THROWS RATHER THAN SWALLOWING, unlike `forgetFromSearchIndex` above,
+   * and the asymmetry is about POSITION rather than importance. That one runs
+   * BETWEEN destructive steps, where failing would leave the user with a
+   * `failed` row and no idea which half ran. This one runs last, after every
+   * destructive step has completed and written its own audit row, so a failure
+   * here is unambiguous: everything was deleted and the reset did not happen.
+   * Reporting that honestly costs a `failed` job the user can re-request — the
+   * handler is re-entrant, so the second run deletes nothing and retries just
+   * this. Swallowing would cost the opposite: onboarding state surviving a full
+   * wipe with nothing anywhere saying so, which is the exact bug this step was
+   * added to fix.
+   */
+  private async resetOnboarding(userId: string): Promise<void> {
+    await this.userSettings.patchSettings(userId, { onboarding: null });
+
+    await this.audit(userId, 'user_data:onboarding_reset', {});
+
+    this.logger.log(
+      `User ${userId}: first-run onboarding state cleared — the checklist and ` +
+        `welcome surfaces will be offered again`,
     );
   }
 

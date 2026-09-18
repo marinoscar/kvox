@@ -498,6 +498,31 @@ export function setupMockAuditEvents(): void {
 let mockUserSettingsRegistry: Map<string, any> = new Map();
 
 /**
+ * Resolve the `version` field of a Prisma update payload.
+ *
+ * Prisma accepts either a literal (`version: 3`) or an atomic operation
+ * (`version: { increment: 1 }`), and `UserSettingsService` sends the latter on
+ * every write. A mock that stores it verbatim returns `{ increment: 1 }` where
+ * a caller expects a number, which silently makes "did this write bump the
+ * version?" untestable through the stateful round-trip mocks.
+ */
+function resolveVersion(next: unknown, current: number): number {
+  if (typeof next === 'number') {
+    return next;
+  }
+
+  if (
+    next !== null &&
+    typeof next === 'object' &&
+    typeof (next as { increment?: unknown }).increment === 'number'
+  ) {
+    return current + (next as { increment: number }).increment;
+  }
+
+  return current;
+}
+
+/**
  * Setup user settings mocks that work with the user registry
  */
 export function setupUserSettingsMocks(): void {
@@ -537,7 +562,11 @@ export function setupUserSettingsMocks(): void {
       const updated = {
         ...existing,
         value: data.value ?? existing.value,
-        version: data.version ?? existing.version,
+        // `{ version: { increment: 1 } }` is what the service actually sends -
+        // Prisma's atomic-increment form, not a literal. Storing it verbatim
+        // handed a round-trip test the OBJECT back as the new version, so no
+        // integration test could assert that a write bumped the version at all.
+        version: resolveVersion(data.version, existing.version),
         updatedAt: new Date(),
       };
       mockUserSettingsRegistry.set(where.userId, updated);

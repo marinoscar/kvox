@@ -33,6 +33,7 @@ import { NotesModule } from './notes/notes.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 import { MaintenanceModule } from './common/maintenance/maintenance.module';
 import { MaintenanceGuard } from './common/maintenance/maintenance.guard';
 import { AboutModule } from './about/about.module';
@@ -242,6 +243,16 @@ import configuration from './config/configuration';
     // `SearchModule`'s own header for why that independence is deliberate
     // rather than an oversight.
     SearchModule,
+
+    // First-run onboarding (#274/#275, epic #271): two read-only routes over
+    // one step registry — the administrator's setup checklist and the user's
+    // own activation checklist. Registered LAST among the feature modules
+    // because it reads from most of them and owns no table of its own: every
+    // status it reports is derived, on every request, from services declared
+    // above. It stores nothing; the only persisted onboarding state in the
+    // epic is the user's INTENT, which lives in `SettingsModule`'s `onboarding`
+    // user-settings namespace (#272).
+    OnboardingModule,
 
     // Test modules (non-production only)
     ...(process.env.NODE_ENV !== 'production' ? [TestAuthModule] : []),
