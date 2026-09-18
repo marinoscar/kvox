@@ -46,12 +46,19 @@ export function formatDataSize(value: string | null | undefined): string {
 /**
  * One countable thing a scope destroys, singular and plural.
  *
- * `credentials` is deliberately absent: it is not one noun but two independent
- * counts (`aiKeys`, `accessTokens`), each worth naming in full, so it is
- * handled separately below rather than being forced into this shape.
+ * TWO CATEGORIES ARE DELIBERATELY ABSENT, for two different reasons.
+ *
+ * `credentials` is not one noun but two independent counts (`aiKeys`,
+ * `accessTokens`), each worth naming in full, so it is handled separately
+ * below rather than being forced into this shape.
+ *
+ * `onboarding` has NO COUNT AT ALL — it is one namespace on the user's
+ * settings row, not rows the summary endpoint can total. Excluding it here is
+ * what makes the compiler reject a future attempt to invent a number for it;
+ * the dialog states that part of `everything`'s blast radius in prose instead.
  */
 const CATEGORY_NOUNS: Record<
-  Exclude<UserDataCategory, 'credentials'>,
+  Exclude<UserDataCategory, 'credentials' | 'onboarding'>,
   [singular: string, plural: string]
 > = {
   transcripts: ['recording', 'recordings'],
@@ -131,6 +138,14 @@ export function buildDeletionInventory(
 
   for (const category of USER_DATA_CATEGORIES) {
     if (!scopeIncludes(scope, category)) continue;
+
+    // ⚠ ONBOARDING HAS NO COUNT AND NEVER WILL. It is one namespace on the
+    // user's settings row, not rows the summary endpoint can total — there is
+    // no honest number to print, and "1 onboarding" is not a sentence. The
+    // dialog states this part of `everything`'s blast radius in PROSE instead
+    // (see `UserDataDeleteDialog`'s `everything` copy), which is the right
+    // register for "your first-run guidance starts again".
+    if (category === 'onboarding') continue;
 
     if (category === 'credentials') {
       // Two independent counts, each named in full. For `everything` these are
