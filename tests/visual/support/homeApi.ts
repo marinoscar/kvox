@@ -1,5 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
+import { onboardingResponse, type OnboardingApiOptions } from './onboardingApi';
+
 /**
  * A mocked API for the signed-in home page — issue #32, epic #19.
  *
@@ -178,6 +180,13 @@ export interface HomeApiOptions {
   fixture?: HomeFixture;
   /** `GET /transcription/config` reports the deployment cannot transcribe. */
   transcriptionUnavailable?: boolean;
+  /**
+   * Onboarding fixture (issue #298) — `Layout.tsx` mounts `OnboardingProvider`
+   * and its chrome on every page, including this one. Defaults to the settled,
+   * already-seen fixture, so home's ~existing baselines are unaffected; a spec
+   * asserting the onboarding banner over the home page passes this explicitly.
+   */
+  onboarding?: OnboardingApiOptions;
 }
 
 /**
@@ -288,7 +297,16 @@ export async function installHomeApi(
       });
     }
 
-    // Everything else (`/user-settings`, `/notifications/config`, …) answers an
+    // Onboarding (issue #298) — MUST precede the catch-all below. Before this
+    // installer answered `/onboarding`/`/admin/onboarding`/`/user-settings` at
+    // all, they fell through to the empty-object catch-all, which is exactly
+    // the shape `services/onboarding.ts`'s `parseOnboardingState` rejects; see
+    // `onboardingApi.ts`'s header for why that used to crash the whole app
+    // into `ErrorBoundary` before #286 added that boundary check.
+    const onboarding = onboardingResponse(path, options.onboarding);
+    if (onboarding) return json(route, onboarding);
+
+    // Everything else (`/notifications/config`, …) answers an
     // empty object rather than being left to fail: an unproxied `/api` is safe
     // for the NAV specs (see `apps/web/visual/main.tsx`), but a page body
     // rendering an error banner is not something to leave to chance.

@@ -1,5 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
+import { onboardingResponse, type OnboardingApiOptions } from './onboardingApi';
+
 /**
  * A mocked transcripts API for the visual harness — issue #30, epic #19.
  *
@@ -224,6 +226,13 @@ export interface TranscriptsApiOptions {
   empty?: boolean;
   /** Serve a transcript that is still processing, for the stepper baseline. */
   processing?: boolean;
+  /**
+   * Onboarding fixture (issue #298) — `Layout.tsx` mounts `OnboardingProvider`
+   * and its chrome on every page, including these three. Defaults to the
+   * settled, already-seen fixture, so the existing transcript baselines are
+   * unaffected.
+   */
+  onboarding?: OnboardingApiOptions;
 }
 
 /**
@@ -375,7 +384,16 @@ export async function installTranscriptsApi(
       return json(route, detail, { ETag: 'W/"v1"' });
     }
 
-    // Everything else (`/user-settings`, `/notifications/config`, …) answers an
+    // Onboarding (issue #298) — MUST precede the catch-all below. Before this
+    // installer answered `/onboarding`/`/admin/onboarding`/`/user-settings` at
+    // all, they fell through to the empty-object catch-all, which is exactly
+    // the shape `services/onboarding.ts`'s `parseOnboardingState` rejects; see
+    // `onboardingApi.ts`'s header for why that used to crash the whole app
+    // into `ErrorBoundary` before #286 added that boundary check.
+    const onboarding = onboardingResponse(path, options.onboarding);
+    if (onboarding) return json(route, onboarding);
+
+    // Everything else (`/notifications/config`, …) answers an
     // empty object rather than being left to fail: the harness's own header
     // explains why an unproxied `/api` is safe for the NAV specs, but a page
     // body rendering an error banner is not something to leave to chance.
