@@ -61,6 +61,7 @@ import {
   ALL_FIELD,
   GROUPS_FIELD,
   OPTION_MODE_PREFIX,
+  APP_VERSION_FIELD,
   INSTALL_CRON_FIELD,
   INTERNAL_DEFAULTS,
   MAX_LOG_LINES,
@@ -749,6 +750,12 @@ export function InstallWizard({ onDone, appsRoot, proxyRoot }: InstallWizardProp
           all: isTrue(answers, ALL_FIELD),
           staging: isTrue(answers, STAGING_FIELD),
           installCron: isTrue(answers, INSTALL_CRON_FIELD),
+          // #295. Blank means "take the suggested patch bump", which the
+          // `version` step computes once the clone exists — see the field's
+          // own comment for why the suggestion cannot be pre-filled here.
+          ...(answerOf(answers, APP_VERSION_FIELD) === ''
+            ? {}
+            : { appVersion: answerOf(answers, APP_VERSION_FIELD) }),
           ...(answerOf(answers, REPO_FIELD) === '' ? {} : { repo: answerOf(answers, REPO_FIELD) }),
           ...(answerOf(answers, REF_FIELD) === '' ? {} : { ref: answerOf(answers, REF_FIELD) }),
           // Every question was asked above; readline cannot ask another while

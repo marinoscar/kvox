@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { APP_NAME, APP_SLUG, THEME_COLOR } from '@app/shared';
+import { appVersionDefine } from './app-version.js';
 import { buildServiceWorkerOptions } from './pwa/service-worker';
 
 /**
@@ -73,6 +74,10 @@ function pwa(): PluginOption {
 
 export default defineConfig({
   plugins: [react(), appName(), pwa()],
+  // `apps/web/package.json`'s version, baked in at build time (issue #296).
+  // See `build/app-version.ts` for why this is a define rather than an API
+  // call, and why `vitest.config.ts` has to spread the same thing.
+  define: appVersionDefine(),
   // `@app/shared` is CommonJS, and it reaches us as an npm WORKSPACE SYMLINK.
   // Vite treats a linked package as project source rather than as a dependency,
   // so it skips dep pre-bundling for it and serves `index.js` to the browser as

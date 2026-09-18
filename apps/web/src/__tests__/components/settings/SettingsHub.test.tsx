@@ -681,3 +681,78 @@ describe('Admin hub and user hub keep separate scroll offsets', () => {
     expect(window.sessionStorage.getItem('eab:scroll:user-settings-hub')).toBe('222');
   });
 });
+
+// =============================================================================
+// The version line  (issue #296)
+// =============================================================================
+//
+// THREE CLAIMS, AND THE THIRD IS THE WHOLE POINT OF THE ISSUE:
+//
+//   1. `__APP_VERSION__` resolves. It is a build-time `define`, not a module,
+//      so a config that forgot it fails as a ReferenceError at render rather
+//      than as a type error anybody would see first — and `vite.config.ts` and
+//      `vitest.config.ts` are separate files that share nothing.
+//   2. It renders on BOTH hubs, which is what putting it on the shared
+//      component means (Settings UI Pattern rule 4).
+//   3. It renders for a user holding NO permissions at all. The version was
+//      previously visible only at `/admin/settings/about`, behind
+//      `system_settings:read` — seeded Admin-only — so a Contributor or a
+//      Viewer could not see their own build number anywhere.
+// =============================================================================
+
+describe('the application version line (#296)', () => {
+  it('resolves the build-time define to this package\'s real version', () => {
+    // Not a literal assertion: pinning the number here would mean editing this
+    // test on every release, which is exactly what #295 makes routine.
+    expect(typeof __APP_VERSION__).toBe('string');
+    expect(__APP_VERSION__).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('renders at the foot of the ADMIN hub', () => {
+    setViewportWidth(DESKTOP);
+    setPermissions(['system_settings:read', 'users:read']);
+    render(<SettingsHubPage />);
+
+    expect(screen.getByText(`Version ${__APP_VERSION__}`)).toBeInTheDocument();
+  });
+
+  it('renders at the foot of the USER hub', () => {
+    setViewportWidth(DESKTOP);
+    setPermissions([]);
+    render(<UserSettingsHubPage />);
+
+    expect(screen.getByText(`Version ${__APP_VERSION__}`)).toBeInTheDocument();
+  });
+
+  it('renders for a user with NO permissions — the reason this issue exists', () => {
+    // `GET /api/admin/about` is gated on `system_settings:read`, which is
+    // seeded Admin-only. This line asks the API nothing and gates on nothing.
+    setViewportWidth(DESKTOP);
+    setPermissions([]);
+    render(<UserSettingsHubPage />);
+
+    expect(screen.getByText(`Version ${__APP_VERSION__}`)).toBeInTheDocument();
+  });
+
+  it('renders at phone width too, without a breakpoint read of its own', () => {
+    // Rule 5's five coupled gates are untouched: this is content inside an
+    // existing surface, so it must look the same at every width rather than
+    // becoming a sixth `down('sm')`.
+    setViewportWidth(PHONE);
+    setPermissions([]);
+    render(<UserSettingsHubPage />);
+
+    expect(screen.getByText(`Version ${__APP_VERSION__}`)).toBeInTheDocument();
+  });
+
+  it('does not claim to be the deployed revision — About stays authoritative', () => {
+    // #296 §3: About answers "what is deployed on this server" (revision,
+    // install/update instants, database). This answers "what am I running".
+    setViewportWidth(DESKTOP);
+    setPermissions(['system_settings:read']);
+    render(<SettingsHubPage />);
+
+    const line = screen.getByText(`Version ${__APP_VERSION__}`);
+    expect(line.textContent).not.toMatch(/revision|commit|deployed/i);
+  });
+});

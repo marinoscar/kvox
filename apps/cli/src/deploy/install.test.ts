@@ -129,6 +129,9 @@ describe('the install pipeline', () => {
       'checkout',
       'environment',
       'validate-environment',
+      // AFTER `environment` (#295): the number goes into that step's `.env` as
+      // APP_VERSION, which does not exist until it has run.
+      'version',
       'build',
       'migrate',
       'seed',
@@ -136,6 +139,9 @@ describe('the install pipeline', () => {
       'health',
       'publish',
       'verify',
+      // LAST, and never before `health` (#295's gate, #283's reasoning): a
+      // deploy that failed earlier must leave the repository untouched.
+      'publish-version',
     ]);
   });
 
@@ -194,8 +200,20 @@ describe('the install pipeline', () => {
 
   it('does not skip anything by default', () => {
     for (const id of ids) {
+      // `publish-version` is the one step whose default IS a skip: there is
+      // nothing to publish until the `version` step has recorded a plan on the
+      // context, and this helper builds a context that has not run it.
+      if (id === 'publish-version') continue;
       expect(skipReasonFor(id, { domain: 'app.example.test' })).toBeUndefined();
     }
+  });
+
+  it('publishes nothing when no version bump was made on this run', () => {
+    // The `--resume` case in particular: a resumed run skips the `version`
+    // step, so there is no plan and the push must not be guessed at.
+    expect(skipReasonFor('publish-version', { domain: 'app.example.test' })).toBe(
+      'no version bump was made on this run',
+    );
   });
 });
 
@@ -1427,6 +1445,14 @@ describe('runInstall against a fake VPS', () => {
       skipDoctor: true,
       skipProxy: true,
       skipSeed: true,
+      // These suites are about the deploy pipeline's OTHER promises — the
+      // state file, deploy-info, adoption, redaction. #295's version step
+      // writes into the clone, commits, and (on a successful push) makes the
+      // BUMP COMMIT the deployed one, which would change the sha every one of
+      // them asserts. Turning the bump off keeps each assertion about the
+      // question it was written to ask; `version-step.test.ts` owns the
+      // versioning behaviour itself.
+      versionBump: false,
       ...extra,
     });
   }

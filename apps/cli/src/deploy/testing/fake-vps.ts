@@ -26,6 +26,17 @@ import { CommandFailedError, type CommandResult, type RunCommandOptions } from '
 /** The default deployed API version, as `apps/api/package.json` in the clone. */
 export const FAKE_APP_VERSION = '1.2.3';
 
+/**
+ * The commit `git commit` creates in this fake (#295).
+ *
+ * MODELLED RATHER THAN IGNORED, because the one behaviour worth testing on
+ * the version step's success path is that HEAD MOVES: the deployed commit
+ * becomes the bump commit when the push succeeds, and stays the pre-bump one
+ * when it does not. A fake whose `commit` left `head` alone could not tell
+ * those two apart.
+ */
+export const FAKE_BUMP_SHA = 'f'.repeat(40);
+
 export const FAKE_DF =
   'Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda1 78125000 10000000 68000000 13% /\n';
 
@@ -89,13 +100,47 @@ export interface FakeVps {
   close(): Promise<void>;
 }
 
-/** Writes what a clone of this template would contain, at `path`. */
+/**
+ * Writes what a clone of this template would contain, at `path`.
+ *
+ * BOTH MANIFESTS AND THE LOCKFILE since #295: `apps/api` and `apps/web` carry
+ * ONE shared product version, so a fixture with only one of them could not
+ * catch the write going out of lockstep. The lockfile's `packages` entries
+ * carry the same number, which is what the version step edits surgically
+ * rather than regenerating.
+ *
+ * `apps/api/package.json` is deliberately left MINIFIED — one line, no
+ * indentation — because a package manifest is legal JSON in that shape and
+ * the edit has to survive it. `apps/web`'s is pretty-printed, so both forms
+ * are exercised.
+ */
 export function populateClone(path: string, appVersion = FAKE_APP_VERSION): void {
   mkdirSync(join(path, '.git'), { recursive: true });
   mkdirSync(join(path, 'infra', 'compose'), { recursive: true });
   mkdirSync(join(path, 'apps', 'api'), { recursive: true });
+  mkdirSync(join(path, 'apps', 'web'), { recursive: true });
   writeFileSync(join(path, 'infra', 'compose', '.env.example'), FAKE_ENV_EXAMPLE);
   writeFileSync(join(path, 'apps', 'api', 'package.json'), JSON.stringify({ version: appVersion }));
+  writeFileSync(
+    join(path, 'apps', 'web', 'package.json'),
+    `${JSON.stringify({ name: 'web', version: appVersion }, null, 2)}\n`,
+  );
+  writeFileSync(
+    join(path, 'package-lock.json'),
+    `${JSON.stringify(
+      {
+        name: 'root',
+        lockfileVersion: 3,
+        packages: {
+          '': { name: 'root' },
+          'apps/api': { version: appVersion },
+          'apps/web': { version: appVersion },
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
@@ -159,10 +204,22 @@ export async function fakeVps(options: FakeVpsOptions = {}): Promise<FakeVps> {
           vps.head = argv[argv.length - 1];
           return result();
         }
+        // `-c user.name=… -c user.email=… commit …` — argv[1] is `-c`, so the
+        // verb is looked for rather than assumed to be second.
+        if (argv.includes('commit')) {
+          vps.head = FAKE_BUMP_SHA;
+          return result();
+        }
         if (argv[1] === 'rev-parse' && argv[2] === '--verify') {
           // Read off `vps` rather than the closure, so a test can move the
           // remote between calls.
-          return (argv[4] as string).startsWith('refs/remotes/origin/')
+          // A TAG RESOLVES TOO (#295): `resolveRef` tries the remote branch,
+          // then `refs/tags/<ref>`, then the bare ref — and the publish step
+          // asks the FIRST of those on its own to decide whether there is a
+          // branch to push to. A fixture that could only resolve a branch made
+          // "deploying a tag" untestable.
+          return (argv[4] as string).startsWith('refs/remotes/origin/') ||
+            (argv[4] as string).startsWith('refs/tags/')
             ? result(`${vps.remoteSha}\n`)
             : { ...result(), exitCode: 1 };
         }

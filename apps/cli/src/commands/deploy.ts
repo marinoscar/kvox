@@ -53,6 +53,7 @@ import {
   remoteFromCheck,
   runUpdate,
   type UpdateOptions,
+  type UpdateResult,
 } from '../deploy/update.js';
 import type { EnvGroup } from '../deploy/env-metadata.js';
 import { runCommand } from '../deploy/executor.js';
@@ -214,6 +215,8 @@ export function registerDeployCommand(
     .option('--create-database', 'Create the PostgreSQL database when it does not exist')
     .option('--skip-github', 'Never consult the GitHub CLI, even for a GitHub remote')
     .option('--no-cache', 'Rebuild images without the layer cache')
+    .option('--app-version <semver>', 'Version to deploy; default is a patch bump of the current one')
+    .option('--no-version-bump', 'Deploy without changing the application version')
     .option('--force', 'Discard uncommitted changes in the checkout')
     .option('--staging', "Use Let's Encrypt staging while working out the setup")
     .option('--proxy-container <name>', 'Publish through this proxy container instead of finding one')
@@ -387,6 +390,8 @@ export function registerDeployCommand(
     .option('--ref <ref>', 'Branch, tag or commit to move to')
     .option('--force', 'Rebuild even when the revision has not changed')
     .option('--no-cache', 'Rebuild images without the layer cache')
+    .option('--app-version <semver>', 'Version to deploy; default is a patch bump of the current one')
+    .option('--no-version-bump', 'Deploy without changing the application version')
     .option('--non-interactive', 'Never prompt; fail listing anything unresolved')
     .option('--answer <KEY=VALUE>', 'Supply a value a new revision asks for; repeat for more', collectAnswer, [])
     .option('--answers-file <path>', 'Supply such values from a .env-format file')
@@ -1378,6 +1383,10 @@ export interface InstallCommandOptions extends LayoutCommandOptions {
   createDatabase?: boolean | undefined;
   skipGithub?: boolean | undefined;
   cache: boolean;
+  /** `--app-version <semver>` (#295). */
+  appVersion?: string | undefined;
+  /** `--no-version-bump` arrives as false; commander defaults it to true. */
+  versionBump: boolean;
   force?: boolean | undefined;
   staging?: boolean | undefined;
   proxyContainer?: string | undefined;
@@ -1435,6 +1444,8 @@ export async function runInstallCommand(
     ...(options.createDatabase === undefined ? {} : { createDatabase: options.createDatabase }),
     ...(options.skipGithub === undefined ? {} : { skipGithub: options.skipGithub }),
     ...(options.cache === false ? { noCache: true } : {}),
+    ...(options.appVersion === undefined ? {} : { appVersion: options.appVersion }),
+    ...(options.versionBump === false ? { versionBump: false } : {}),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.staging === undefined ? {} : { staging: options.staging }),
     ...(options.proxyContainer === undefined ? {} : { proxyContainer: options.proxyContainer }),
@@ -1504,6 +1515,9 @@ export function renderInstall(result: InstallResult): string {
 
   lines.push(
     `  App        ${result.name} at ${result.deployRoot}`,
+    ...(result.appVersion === undefined
+      ? []
+      : [`  Version    ${versionLine(result.appVersion)}`]),
     `  Revision   ${result.commitSha.slice(0, 12)}`,
     `  Log        ${result.journalPath}`,
     '',
@@ -1524,6 +1538,10 @@ export interface UpdateCommandOptions extends LayoutCommandOptions {
   ref?: string | undefined;
   force?: boolean | undefined;
   cache: boolean;
+  /** `--app-version <semver>` (#295). */
+  appVersion?: string | undefined;
+  /** `--no-version-bump` arrives as false; commander defaults it to true. */
+  versionBump: boolean;
   nonInteractive?: boolean | undefined;
   answer: string[];
   answersFile?: string | undefined;
@@ -1557,6 +1575,8 @@ export async function runUpdateCommand(
     ...(options.ref === undefined ? {} : { ref: options.ref }),
     ...(options.force === undefined ? {} : { force: options.force }),
     ...(options.cache === false ? { noCache: true } : {}),
+    ...(options.appVersion === undefined ? {} : { appVersion: options.appVersion }),
+    ...(options.versionBump === false ? { versionBump: false } : {}),
     ...(options.nonInteractive === undefined ? {} : { nonInteractive: options.nonInteractive }),
     ...(options.skipSeed === undefined ? {} : { skipSeed: options.skipSeed }),
     ...(options.skipProxy === undefined ? {} : { skipProxy: options.skipProxy }),
@@ -1613,17 +1633,55 @@ export async function runUpdateCommand(
     return;
   }
 
-  stderr.write(
-    [
-      '',
-      '  Updated.',
-      '',
-      `  ${(result.previousSha ?? 'unknown').slice(0, 12)} -> ${result.commitSha.slice(0, 12)}`,
-      `  Took       ${Math.round(result.durationMs / 1000)}s`,
-      `  Log        ${result.journalPath}`,
-      '',
-    ].join('\n'),
+  stderr.write(renderUpdate(result));
+}
+
+/**
+ * The update report. Exported so its wording is pinned by a test.
+ *
+ * `Action required:` comes FIRST, the shape `renderUninstall` and
+ * `renderInstall` established (#261, #265) and for the same reason. The one
+ * warning that lands here today is a version bump that could not be published
+ * to the repository (#295) — the deployment is complete and serving, and this
+ * is the only notice that the repository does not know its number.
+ */
+export function renderUpdate(result: UpdateResult): string {
+  const lines: string[] = ['', '  Updated.', ''];
+
+  if (result.warnings.length > 0) {
+    lines.push('  Action required:');
+    for (const warning of result.warnings) {
+      // An empty line stays empty: indenting it leaves trailing whitespace
+      // that shows up in a diff, a paste and `cat -A`.
+      for (const line of warning.split('\n')) lines.push(line === '' ? '' : `    ${line}`);
+      lines.push('');
+    }
+  }
+
+  lines.push(
+    `  ${(result.previousSha ?? 'unknown').slice(0, 12)} -> ${result.commitSha.slice(0, 12)}`,
+    ...(result.appVersion === undefined
+      ? []
+      : [`  Version    ${versionLine(result.appVersion)}`]),
+    `  Took       ${Math.round(result.durationMs / 1000)}s`,
+    `  Log        ${result.journalPath}`,
+    '',
   );
+
+  return lines.join('\n');
+}
+
+/**
+ * `1.2.3` — or `1.2.3 (not published to the repository)`.
+ *
+ * The parenthetical is NOT a duplicate of the warning above it. The warning
+ * says what to do; this says which number the line is talking about, for
+ * somebody scanning the summary rather than reading it.
+ */
+function versionLine(version: { version: string; published: boolean }): string {
+  return version.published
+    ? version.version
+    : `${version.version} (not published to the repository)`;
 }
 
 

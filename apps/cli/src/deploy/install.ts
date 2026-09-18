@@ -64,6 +64,12 @@ import {
 import { discardLocalState } from './teardown.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
+import {
+  publishVersion,
+  runVersionStep,
+  type VersionPlan,
+  type VersionStepIo,
+} from './version-step.js';
 import type { PromptContext } from '../prompt.js';
 
 // =============================================================================
@@ -147,6 +153,18 @@ export interface InstallOptions {
   skipGithub?: boolean | undefined;
   noCache?: boolean | undefined;
   force?: boolean | undefined;
+  /**
+   * `--app-version <semver>` (#295): the version to deploy, explicitly. Wins
+   * over the prompt and over the suggestion; refused if it is not SemVer or
+   * does not sort above the current version.
+   */
+  appVersion?: string | undefined;
+  /**
+   * `--no-version-bump` sets this false: deploy without touching the version.
+   * Undefined means "bump" — see `chooseVersion` for why the unattended
+   * default is the suggestion rather than a refusal.
+   */
+  versionBump?: boolean | undefined;
   email?: string | undefined;
   staging?: boolean | undefined;
   /**
@@ -208,6 +226,13 @@ interface InstallContext extends StepContext {
   ipv6?: boolean | undefined;
   /** Whether the publish step issued a certificate (rather than found one). */
   certificateIssued?: boolean | undefined;
+  /**
+   * What the `version` step decided (#295); undefined with
+   * `--no-version-bump`, and on a `--resume` that skipped that step.
+   */
+  version?: VersionPlan | undefined;
+  /** Whether `publish-version` got the bump commit onto the deployed branch. */
+  versionPublished?: boolean | undefined;
   /**
    * Work the run could not do and the operator now has to (#265). Surfaced at
    * the END of the run, beside `nextStep`, not only in the journal: an install
@@ -670,6 +695,23 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
       },
     },
     {
+      id: 'version',
+      title: 'Set the application version',
+      async run(context) {
+        // Resolved rather than read off the context: a `--resume` that skips
+        // `checkout` leaves `context.target` unset, and the publish step needs
+        // the REF to decide whether there is a branch to push to. `resolveTarget`
+        // caches, so this costs nothing on an ordinary run.
+        await resolveTarget(context);
+        // AFTER the environment, not merely after the checkout (#295 places it
+        // "after checkout and before build"). The number has to reach the
+        // deployment's `.env` as `APP_VERSION`, and on a first install that
+        // file does not exist until the `environment` step writes it — setting
+        // it any earlier would write into nothing.
+        context.version = await runVersionStep(versionIo(context));
+      },
+    },
+    {
       id: 'build',
       title: 'Build images',
       async run(context) {
@@ -831,7 +873,83 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
         }
       },
     },
+    {
+      id: 'publish-version',
+      title: 'Publish the version to the repository',
+      skip: (context) =>
+        context.version === undefined
+          ? 'no version bump was made on this run'
+          : undefined,
+      async run(context) {
+        await publishVersionFor(context);
+      },
+    },
   ];
+}
+
+/** The `version` step's view of an install. */
+function versionIo(context: InstallContext): VersionStepIo {
+  return {
+    deployRoot: context.options.deployRoot,
+    ref: context.target?.ref ?? context.options.ref ?? '',
+    command: 'install',
+    runCommand: context.runCommand,
+    journal: context.journal,
+    ...(context.hooks === undefined ? {} : { hooks: context.hooks }),
+    ...(context.env === undefined ? {} : { env: context.env }),
+    ...(context.options.appVersion === undefined
+      ? {}
+      : { appVersion: context.options.appVersion }),
+    ...(context.options.versionBump === undefined
+      ? {}
+      : { versionBump: context.options.versionBump }),
+    ...(context.options.nonInteractive === undefined
+      ? {}
+      : { nonInteractive: context.options.nonInteractive }),
+    ...(context.options.promptContext === undefined
+      ? {}
+      : { promptContext: context.options.promptContext }),
+  };
+}
+
+/**
+ * Pushes the version bump, and NEVER lets that decide the install (#295, #265).
+ *
+ * The identical shape — and the identical reason — as `ensureRenewalCron`
+ * below: the deployment is complete when this runs. It is built, migrated,
+ * seeded, healthy, published behind the proxy and verified. Recording the
+ * number in the repository afterwards is bookkeeping, and bookkeeping must
+ * never take a finished deployment down with it. A fork with no push access,
+ * a tag deploy with no branch to push to and a race lost to another server
+ * are all NORMAL, and each becomes a warning the operator reads at the end of
+ * the run rather than a failed install of a server that is already serving.
+ */
+async function publishVersionFor(context: InstallContext): Promise<void> {
+  const plan = context.version;
+  if (plan === undefined) return;
+
+  const outcome = await publishVersion(versionIo(context), plan);
+  context.versionPublished = outcome.published;
+  // ⚠ THE DEPLOYED COMMIT BECOMES THE BUMP COMMIT, and this is a
+  // correctness fix rather than bookkeeping. The images were built with
+  // HEAD at the bump commit — the `version` step commits BEFORE `build`
+  // — so its tree is exactly what is deployed. Leaving the state naming
+  // the PRE-bump commit while origin now points at the bump commit would
+  // make every server permanently report `1 commit behind` itself, and
+  // the next `update` would rebuild byte-identical code and bump again,
+  // for ever.
+  //
+  // Only on a SUCCESSFUL push. When the publish is declined the bump
+  // commit is rolled back out of the clone and exists nowhere, so the
+  // pre-bump commit stays the honest answer.
+  if (outcome.published) context.commitSha = plan.commitSha;
+
+  if (outcome.warning !== undefined) {
+    context.warnings.push(outcome.warning);
+    context.hooks?.onProgress?.(
+      `v${plan.next} is deployed but was not published to the repository`,
+    );
+  }
 }
 
 /**
@@ -937,6 +1055,13 @@ export interface InstallResult {
   commitSha: string;
   journalPath: string;
   domain?: string | undefined;
+  /**
+   * The application version this run deployed (#295); absent with
+   * `--no-version-bump`. `published` says whether it also reached the
+   * repository — false is normal (a fork, a tag deploy, a lost race) and is
+   * accompanied by a warning.
+   */
+  appVersion?: { version: string; published: boolean } | undefined;
   /** The one thing the operator still has to do. */
   nextStep: string;
   /**
@@ -1337,7 +1462,10 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
           options.deployRoot,
           buildInstallState(stateInput, { outcome: 'failure', failedStep: result.failed.id }),
           await collectServerFacts({ runCommand, root: options.deployRoot }),
-          { run: { completed: false, failedStep: result.failed.id, attemptedAt: now } },
+          {
+            run: { completed: false, failedStep: result.failed.id, attemptedAt: now },
+            ...deployedVersion(context),
+          },
         );
         journal.line(`Wrote ${infoPath}, marked incomplete at ${result.failed.id}.`);
       } catch (error) {
@@ -1367,6 +1495,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     options.deployRoot,
     state,
     await collectServerFacts({ runCommand, root: options.deployRoot }),
+    deployedVersion(context),
   );
   journal.line(`Wrote ${infoPath}`);
 
@@ -1392,8 +1521,33 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     // admin until this login happens, and an install that does not say so
     // looks broken.
     nextStep: `Log in at ${url} as ${admin} to claim the Admin role.`,
+    ...(context.version === undefined
+      ? {}
+      : {
+          appVersion: {
+            version: context.version.next,
+            published: context.versionPublished === true,
+          },
+        }),
     warnings: context.warnings,
   };
+}
+
+/**
+ * The version deploy-info must report, when this run chose one (#295).
+ *
+ * WITHOUT THIS THE RECORD WOULD LIE AFTER A FAILED PUSH. `buildDeployInfo`
+ * defaults `app.version` to `readDeployedAppVersion`, which reads the CLONE —
+ * and `publishVersion` restores the clone to the pre-bump commit when it
+ * cannot publish, so the clone reports the OLD number while the running image
+ * and the `.env` carry the new one. The deployment's own record has to say
+ * what is deployed.
+ *
+ * Empty when no version was chosen (`--no-version-bump`, or a `--resume` past
+ * the step), which leaves `buildDeployInfo`'s existing default in place.
+ */
+function deployedVersion(context: InstallContext): { appVersion?: string } {
+  return context.version === undefined ? {} : { appVersion: context.version.next };
 }
 
 /** The default deploy root for a repository: `<base>/<its name, slugged>`. */

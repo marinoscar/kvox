@@ -318,6 +318,39 @@ jobs:
           jq -e '.installedAt == .updatedAt' "$APP_DIR/deploy-info/info.json"
           jq -e '.lastCommand == "install"' "$APP_DIR/deploy-info/info.json"
 
+          # ---------------------------------------------------------------
+          # The deploy-time version (issue #295)
+          # ---------------------------------------------------------------
+          # The install chose a version, wrote it to the .env as APP_VERSION,
+          # and recorded it in deploy-info. Both are asserted because they come
+          # from different places and a mismatch between them IS the bug: the
+          # .env is what `resolveApiVersion()` reads at runtime, and
+          # deploy-info is what the About page reports.
+          #
+          # ⚠ THE PUSH BACK TO THE REPOSITORY FAILS HERE, BY DESIGN AND
+          # UNAVOIDABLY. `--repo file://$GITHUB_WORKSPACE` points at the
+          # runner's own non-bare checkout, which has branch `$APP_NAME`
+          # checked out — git's `receive.denyCurrentBranch` refuses a push to a
+          # branch that is checked out, always. So this job exercises the
+          # DEGRADED path: the deployment completes, carries the new version,
+          # and reports a warning. That is the same path a fork with no push
+          # access and a `--ref <tag>` deploy take, and it is worth having
+          # covered end to end. The clone is restored afterwards, which is what
+          # the two `update` legs below depend on.
+          version=$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)
+          echo "APP_VERSION=$version"
+          test -n "$version"
+          # A patch bump of the 1.0.0 both package.json files ship with.
+          test "$version" = "1.0.1"
+          jq -e --arg v "$version" '.app.version == $v' "$APP_DIR/deploy-info/info.json"
+
+          # The clone was restored after the refused push, so it still reads
+          # what the repository says. Without that restore the clone would sit
+          # permanently one commit ahead of origin and the `update --check`
+          # below would report `current != latest` for ever.
+          jq -e '.version == "1.0.0"' "$APP_DIR/repo/apps/api/package.json"
+          jq -e '.version == "1.0.0"' "$APP_DIR/repo/apps/web/package.json"
+
           # `-p <name>` reached compose: without it every app on a host is the
           # project `compose`, and a second app's `up -d` replaces the first's
           # containers.
@@ -396,6 +429,12 @@ jobs:
           # `skipped: already up to date` and the summary repeats it.
           grep -q 'already up to date' "$DIAG_DIR/update-noop.txt"
 
+          # Nothing was deployed, so nothing was versioned (issue #295). The
+          # `version` step is `skipWhenUnchanged` for exactly this: an update
+          # from cron must not become a version generator that moves the
+          # default branch every few minutes.
+          test "$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)" = "1.0.1"
+
           docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' \
             | sort > "$DIAG_DIR/images-after.txt"
           diff -u "$DIAG_DIR/images-before.txt" "$DIAG_DIR/images-after.txt"
@@ -444,6 +483,15 @@ jobs:
           # string comparison is a chronological one.
           jq -e '.updatedAt > .installedAt' "$info"
           jq -e '.lastCommand == "update"' "$info"
+
+          # The version moved with the revision (issue #295). 1.0.2, not 1.0.1
+          # again: the suggestion is measured against the highest of the clone
+          # and the RUNNING deployment's own APP_VERSION, so a bump that could
+          # not be published to the repository still cannot repeat itself.
+          version=$(sed -n 's/^APP_VERSION=//p' "$APP_DIR/.env" | head -n 1)
+          echo "APP_VERSION=$version"
+          test "$version" = "1.0.2"
+          jq -e --arg v "$version" '.app.version == $v' "$info"
 
           curl -fsS "http://127.0.0.1:$BIND_PORT/api/health/ready" > /dev/null
 
