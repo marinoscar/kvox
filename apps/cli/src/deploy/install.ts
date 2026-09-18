@@ -29,16 +29,22 @@ import {
   appNameFor,
   appRootFor,
   locateApp,
+  locateAppFromCwd,
   siblingBindPorts,
   type ResolvedLayout,
 } from './layout.js';
 import {
   defaultCliPath,
+  hasRenewalCron,
   installRenewalCron,
   installVhost,
   issueCertificate,
+  renderRenewalCron,
+  renewalCronPath,
+  stageRenewalCron,
   type FetchLike,
   type ProxyTarget,
+  type RenewalCronOptions,
 } from './proxy.js';
 import {
   ensureCheckout,
@@ -48,7 +54,13 @@ import {
   type RepoTarget,
 } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
-import { readState, writeState, type DeployState } from './state.js';
+import {
+  DEPLOY_STATE_VERSION,
+  deployStatePath,
+  readState,
+  writeState,
+  type DeployState,
+} from './state.js';
 import { discardLocalState } from './teardown.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { metadataFor } from './env-metadata.js';
@@ -146,10 +158,12 @@ export interface InstallOptions {
   /** `--no-ipv6`: render the vhost without `[::]` listeners. */
   ipv6?: boolean | undefined;
   /**
-   * `--install-cron` / `--no-install-cron`. Undefined means "when a
-   * certificate was issued by this run": a fresh certificate with nobody to
-   * renew it is a 90-day timer on an outage, while an existing one is
-   * presumably already somebody's job.
+   * `--install-cron` / `--no-install-cron`. Undefined means "when this
+   * deployment has no renewal entry yet" (#265) - NOT "when this run issued a
+   * certificate", which is what it used to mean and which made `--resume`
+   * after a failed cron write report success over a certificate nothing
+   * renews. An existing certificate with no entry is precisely the state that
+   * needs one; `--install-cron` still forces the write either way.
    */
   installCron?: boolean | undefined;
   /** The command the renewal cron runs; defaults to this binary. */
@@ -194,6 +208,12 @@ interface InstallContext extends StepContext {
   ipv6?: boolean | undefined;
   /** Whether the publish step issued a certificate (rather than found one). */
   certificateIssued?: boolean | undefined;
+  /**
+   * Work the run could not do and the operator now has to (#265). Surfaced at
+   * the END of the run, beside `nextStep`, not only in the journal: an install
+   * that completed without a renewal schedule must never be silent about it.
+   */
+  warnings: string[];
 }
 
 /**
@@ -768,18 +788,20 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
             : { maxBodyBytes: Number(context.env.get('MAX_FILE_SIZE')) }),
         });
 
-        if (context.options.installCron ?? certificate.issued) {
-          const cron = installRenewalCron({
-            name: context.options.name,
-            appsRoot: context.options.appsRoot,
-            kvoxPath: context.options.cliPath ?? defaultCliPath(),
-            ...(context.options.cronDir === undefined ? {} : { cronDir: context.options.cronDir }),
-          });
-          context.journal.line(`${cron.changed ? 'Wrote' : 'Kept'} ${cron.path}`);
-          context.hooks?.onProgress?.(
-            cron.changed ? `Installed the renewal cron at ${cron.path}` : `Renewal cron at ${cron.path} is current`,
-          );
-        }
+        const cronOptions: RenewalCronOptions = {
+          name: context.options.name,
+          appsRoot: context.options.appsRoot,
+          kvoxPath: context.options.cliPath ?? defaultCliPath(),
+          ...(context.options.cronDir === undefined ? {} : { cronDir: context.options.cronDir }),
+        };
+
+        // "Does this deployment have a renewal schedule?", not "did this run
+        // issue a certificate?" (#265). `--install-cron` still forces it.
+        const wanted =
+          context.options.installCron ??
+          !hasRenewalCron(context.options.name, context.options.cronDir);
+
+        if (wanted) ensureRenewalCron(context, cronOptions);
       },
     },
     {
@@ -812,6 +834,102 @@ export function buildInstallSteps(): DeployStep<InstallContext>[] {
   ];
 }
 
+/**
+ * Writes the renewal cron, and NEVER lets that decide the install.  (issue #265)
+ *
+ * THE DEPLOYMENT IS COMPLETE WHEN THIS RUNS. The certificate has been issued
+ * and the vhost is live and reloaded; the only thing left is scheduling a
+ * renewal 60-90 days out. `/etc/cron.d` is root:root and this CLI is
+ * deliberately never run as root (#236: sudo resets HOME, which logs `gh`
+ * out), so on a standard server this write fails - and it used to take the
+ * whole step, and with it the whole install, down with it. Worse, the obvious
+ * retry was `--resume`, which then re-ran `publish` and called certbot again
+ * against a rate limit for a certificate that already existed.
+ *
+ * So the failure is recorded rather than thrown. NOT swallowed: it becomes a
+ * warning carrying the error as reported, the staged file, and the one line
+ * that installs it - and that warning is printed at the end of the run, next
+ * to `nextStep`, where the operator is looking.
+ *
+ * Every error is caught, not only EACCES. A cron directory that is read-only
+ * (EROFS), a path that is not a directory (ENOTDIR) or anything else leaves
+ * exactly the same deployment behind: complete, serving, unscheduled. Naming
+ * one errno here would make every other one fail an install that succeeded.
+ */
+function ensureRenewalCron(context: InstallContext, options: RenewalCronOptions): void {
+  try {
+    const cron = installRenewalCron(options);
+    context.journal.line(`${cron.changed ? 'Wrote' : 'Kept'} ${cron.path}`);
+    context.hooks?.onProgress?.(
+      cron.changed ? `Installed the renewal cron at ${cron.path}` : `Renewal cron at ${cron.path} is current`,
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const target = renewalCronPath(options.name, options.cronDir);
+    context.journal.line(`Could not write ${target}: ${reason}`);
+    context.warnings.push(renewalCronWarning(context, options, reason));
+    context.hooks?.onProgress?.(
+      `Could not write ${target}; the install continues and says how to finish it`,
+    );
+  }
+}
+
+/**
+ * The hand-installation instructions, hard-wrapped rather than left to the
+ * terminal - the renderer indents this, and an operator's eye skips a wall of
+ * reflowed text, which is the outcome this warning exists to avoid (#261).
+ */
+function renewalCronWarning(
+  context: InstallContext,
+  options: RenewalCronOptions,
+  reason: string,
+): string {
+  const target = renewalCronPath(options.name, options.cronDir);
+
+  let howTo: string[];
+  try {
+    // Into the deploy root: this run has been writing there all along, and
+    // `uninstall` removes that directory entry by entry, so the staged copy
+    // does not outlive the deployment it belongs to.
+    const staged = stageRenewalCron(options, context.options.deployRoot);
+    howTo = [
+      `The exact file has been written to ${staged.path}.`,
+      'Put it in place with:',
+      '',
+      `  ${staged.command}`,
+    ];
+  } catch {
+    // The deploy root is writable in every ordinary case; if it is not, the
+    // contents are still worth having, even though they have to be typed.
+    howTo = [
+      `Create ${target}, mode 0644, owned by root, containing:`,
+      '',
+      ...renderRenewalCron(options).replace(/\n$/, '').split('\n').map((line) => `  ${line}`),
+    ];
+  }
+
+  return [
+    'WARNING: automatic certificate renewal is NOT scheduled.',
+    '',
+    'The certificate was issued and the site is serving HTTPS - the install',
+    'itself is complete. What is missing is the entry that renews the',
+    'certificate in 60-90 days, because writing',
+    '',
+    `  ${target}`,
+    '',
+    `needs root, and ${CLI_NAME} is deliberately never run under sudo (it resets`,
+    'HOME, which logs `gh` out). It reported:',
+    '',
+    `  ${reason}`,
+    '',
+    ...howTo,
+    '',
+    'Then confirm it is there:',
+    '',
+    `  ls ${options.cronDir ?? '/etc/cron.d'}/${CLI_NAME}-certs-*`,
+  ].join('\n');
+}
+
 export interface InstallResult {
   deployRoot: string;
   /** The app folder and compose project name. */
@@ -821,6 +939,13 @@ export interface InstallResult {
   domain?: string | undefined;
   /** The one thing the operator still has to do. */
   nextStep: string;
+  /**
+   * Work this run could not finish, each entry ready to be printed as-is
+   * (#265). Empty on an ordinary install. A renewal cron the CLI could not
+   * write lands here rather than failing the run, so the operator is told at
+   * the end instead of finding out when the certificate expires.
+   */
+  warnings: string[];
 }
 
 /**
@@ -831,12 +956,36 @@ export interface InstallResult {
  * the name is the repository's. `resolveRepoTarget` only reads git config, so
  * running it here rather than in the `checkout` step costs nothing; the target
  * it returns is kept so that step does not ask twice.
+ *
+ * Three ranks, strongest first:
+ *
+ *   1. `--root`/`--name`, and `--repo` for the repository itself.
+ *   2. THE DEPLOYMENT cwd IS STANDING IN (#266) - a state file at cwd or at an
+ *      ancestor below the apps root.
+ *   3. The git checkout around cwd.
+ *
+ * RANK 2 EXISTS BECAUSE RANK 3 ANSWERED A QUESTION IT COULD NOT ANSWER. Run
+ * from `/opt/infra/apps/<app>` - a deploy root, with a state file naming the
+ * repository, the ref and the name - the walk went straight past it into the
+ * server's own infrastructure repository at `/opt/infra` and tripped #247's
+ * guard, telling the operator to re-supply with `--repo` what was already on
+ * disk one directory away. That is the circularity #249 documented and did
+ * not fix: the deploy root is derived before any state is read, so the most
+ * natural place to run `--resume` was the one place it could not work.
+ *
+ * A state file is not an inference. This CLI wrote it, and it names the
+ * deployment outright - which is why it outranks a git remote, and why it
+ * settles the deploy root as well as the target. Deriving the root from the
+ * state's repository URL instead would be a second guess on top of a fact: a
+ * deployment installed with `--name <app>-staging` lives in a directory its
+ * repository's name does not spell.
  */
 async function resolveInstallLayout(
   options: InstallOptions,
   runCommand: typeof defaultRunCommand,
 ): Promise<{ layout: ResolvedLayout; target?: RepoTarget | undefined }> {
   const appsRoot = options.appsRoot ?? DEFAULT_APPS_ROOT;
+  const cwd = options.cwd ?? process.cwd();
 
   if (options.deployRoot !== undefined || options.name !== undefined) {
     const layout = locateApp({ appsRoot, name: options.name, root: options.deployRoot });
@@ -847,8 +996,29 @@ async function resolveInstallLayout(
     return { layout };
   }
 
+  // `--repo` names a repository the operator may be standing nowhere near, and
+  // it has always decided the deploy root through `appNameFor`. It keeps that:
+  // rank 2 is what happens when NOTHING was named.
+  if (options.repo === undefined) {
+    const here = locateAppFromCwd({ appsRoot, cwd });
+    if (here !== undefined) {
+      // Through `resolveRepoTarget`'s own `state` rank rather than by building
+      // a target by hand, so `--ref` still overrides the recorded ref in the
+      // one place that rule is written down. It runs no command: a state file
+      // answers before git is consulted.
+      const target = await resolveRepoTarget({
+        cwd,
+        appsRoot,
+        runCommand,
+        state: here.state,
+        ...(options.ref === undefined ? {} : { refFlag: options.ref }),
+      });
+      return { layout: here.layout, target };
+    }
+  }
+
   const target = await resolveRepoTarget({
-    cwd: options.cwd ?? process.cwd(),
+    cwd,
     appsRoot,
     runCommand,
     ...(options.repo === undefined ? {} : { repoFlag: options.repo }),
@@ -859,17 +1029,106 @@ async function resolveInstallLayout(
   return { layout: { name, appsRoot, deployRoot: appRootFor(appsRoot, name) }, target };
 }
 
-/** How the deployment directory was decided, for the resume refusal (#249). */
-function describeLayoutSource(target: RepoTarget | undefined): string {
+/**
+ * How the deployment directory was decided, for the resume refusal (#249).
+ *
+ * Exported for its own test: three of the four wordings are reachable through
+ * `runInstall`, and the fourth - the state file - deliberately is not, because
+ * finding one is exactly what stops that refusal from firing. It is still
+ * rendered honestly rather than left to fall through to the guess, and it
+ * names the file, since "an existing deployment state" and a path an operator
+ * can `cat` are not the same answer.
+ */
+export function describeLayoutSource(
+  target: RepoTarget | undefined,
+  deployRoot: string,
+): string {
   if (target === undefined) return 'taken from --name/--root';
   switch (target.source) {
     case 'flag':
       return 'derived from --repo';
     case 'state':
-      return 'taken from an existing deployment state';
+      return `taken from the deployment state at ${deployStatePath(deployRoot)}`;
     case 'git-remote':
       return 'GUESSED from the git checkout around the current directory';
   }
+}
+
+/** Everything `buildInstallState` needs that is not the run's own ending. */
+interface InstallStateInput {
+  options: ResolvedInstallOptions;
+  context: InstallContext;
+  /** The state this run found at entry, or undefined for a first install. */
+  existingState: DeployState | undefined;
+  /** Step ids that completed, as the pipeline reported them. */
+  completed: readonly string[];
+  /** One instant for the whole epilogue, so two fields cannot disagree. */
+  now: string;
+}
+
+/**
+ * The install's state record - ONE BUILDER, both endings (#267).
+ *
+ * A success and a failure differ in exactly three things: whether
+ * `lastDeployedAt` is stamped, and the two fields that name the failure. Every
+ * other field has to be identical, because the failure record's entire job is
+ * to be the file `--resume` reads back - and two object literals fifty lines
+ * apart would drift the moment one of them gained a field. (The success
+ * literal this replaces had already gained `proxyContainer` and `envPath`
+ * since it was written.)
+ *
+ * THE THREE IDENTITY FIELDS FALL BACK TO THE EXISTING STATE, and that is not
+ * defensive padding. A resumed run skips the `checkout` step, so
+ * `context.commitSha` and `context.target` are never set on that path: without
+ * the fallback the run that finally SUCCEEDS would record an empty commit and
+ * an empty repository URL, and `deploy-info` would publish them - the state
+ * file's only job being to say what is deployed here.
+ *
+ * `existingState` is read after `--fresh` has already discarded the old
+ * record, so nothing here can resurrect what `--fresh` deliberately removed.
+ */
+function buildInstallState(
+  input: InstallStateInput,
+  ending:
+    | { outcome: 'success' }
+    | { outcome: 'failure'; failedStep: string },
+): DeployState {
+  const { options, context, existingState, completed, now } = input;
+  const proxyContainer = context.proxyContainer ?? existingState?.proxyContainer;
+
+  return {
+    version: DEPLOY_STATE_VERSION,
+    repoUrl: context.target?.url ?? existingState?.repoUrl ?? '',
+    ref: context.target?.ref ?? existingState?.ref ?? '',
+    commitSha: context.commitSha ?? existingState?.commitSha ?? '',
+    ...(options.domain === undefined ? {} : { domain: options.domain }),
+    bindPort: options.bindPort,
+    deployRoot: options.deployRoot,
+    name: options.name,
+    appsRoot: options.appsRoot,
+    proxyRoot: options.proxyRoot,
+    // Resolved once, here; update reads it back rather than detecting again.
+    ...(proxyContainer === undefined ? {} : { proxyContainer }),
+    envPath: envFilePath(options.deployRoot),
+    installedAt: existingState?.installedAt ?? now,
+    // STAMPED ONLY ON SUCCESS. A failed run carries forward whatever earlier
+    // success there was, and a FIRST failed install carries nothing at all -
+    // absent means "no deploy has ever completed here". Stamping `now` on a
+    // failure is precisely the lie #120 removed from `update`, and the
+    // "already exists" refusal in `runInstall` reads this field to tell a
+    // half-finished first install from a real deployment.
+    ...(ending.outcome === 'success'
+      ? { lastDeployedAt: now }
+      : existingState?.lastDeployedAt === undefined
+        ? {}
+        : { lastDeployedAt: existingState.lastDeployedAt }),
+    ...(ending.outcome === 'success' ? {} : { lastAttemptAt: now }),
+    lastCommand: 'install',
+    lastOutcome: ending.outcome,
+    ...(ending.outcome === 'failure' ? { lastFailedStep: ending.failedStep } : {}),
+    appctlVersion: CLI_VERSION,
+    completedSteps: [...completed],
+  } as DeployState;
 }
 
 export async function runInstall(input: InstallOptions): Promise<InstallResult> {
@@ -917,14 +1176,30 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   if (options.resume === true && existingState === undefined) {
     throw new UsageError(
       `Nothing to resume: no deployment state at ${options.deployRoot}.\n` +
-        `That directory was ${describeLayoutSource(target)}, and the state file is looked for inside it — ` +
+        `That directory was ${describeLayoutSource(target, options.deployRoot)}, and the state file is looked for inside it — ` +
         `so a resume can only find the run you mean once that run's deployment is named.\n` +
         `Name it with --name <app> (or --root <dir>, or --repo <url>), or drop --resume to start a new install.`,
     );
   }
 
+  // A HALF-FINISHED FIRST INSTALL IS NOT "A DEPLOYMENT ALREADY EXISTS" (#267).
+  //
+  // Since this run now writes a state file when the pipeline FAILS, the file
+  // alone stopped meaning "something is deployed here" - and without this
+  // clause the fix would have broken the ordinary retry it exists to enable:
+  // install fails, the operator fixes the cause, re-runs `install` with no
+  // flags, and is told to pass --reinstall to start over a deployment that
+  // never happened.
+  //
+  // The test is `lastDeployedAt`, not `lastOutcome`, and the difference
+  // matters. A failed run carries an earlier success's `lastDeployedAt`
+  // forward, so a failed REINSTALL over a real deployment still has one and is
+  // still refused - the containers, the certificate and the database it would
+  // clobber are all still there. Only a root where no deploy has ever
+  // completed is let through.
   if (
     existingState !== undefined &&
+    existingState.lastDeployedAt !== undefined &&
     options.reinstall !== true &&
     options.fresh !== true &&
     options.resume !== true
@@ -977,11 +1252,102 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
       options.resume === true && existingState !== undefined
         ? new Set(existingState.completedSteps ?? [])
         : new Set<string>(),
+    warnings: [],
   };
 
   const result = await runPipeline(buildInstallSteps(), context);
+  const now = new Date().toISOString();
+  const stateInput: InstallStateInput = {
+    options,
+    context,
+    existingState,
+    completed: result.completed,
+    now,
+  };
 
   if (result.failed !== undefined) {
+    // ==========================================================================
+    // THE STATE IS WRITTEN ON THIS PATH TOO, AND THAT IS THE WHOLE OF #267.
+    // ==========================================================================
+    //
+    // `--resume` reads `completedSteps` out of the state file, and the state
+    // file used to be written only after the pipeline had finished - so
+    // `--resume` could only ever resume a run that had nothing left to
+    // resume. `result.completed` was computed right here and thrown away on
+    // exactly the path that needed it, while the message three lines below
+    // told the operator to use the flag it had just made useless. The answer
+    // was always "Nothing to resume: no deployment state at <root>".
+    //
+    // It is written BEFORE `journal.finish`, so a failure to write it is
+    // itself journaled - and it must never replace the pipeline's own error,
+    // which is the operator's actual problem. A full disk that stops the
+    // record being kept is a worse second run, not a different first failure.
+    try {
+      const path = writeState(
+        buildInstallState(stateInput, { outcome: 'failure', failedStep: result.failed.id }),
+      );
+      journal.line(
+        `Recorded ${result.completed.length} completed step(s) in ${path}; ` +
+          `\`--resume\` will re-enter at ${result.failed.id}.`,
+      );
+    } catch (error) {
+      journal.line(
+        `Could not record the completed steps: ${error instanceof Error ? error.message : String(error)}. ` +
+          `A re-run will start from the beginning.`,
+      );
+    }
+
+    // ==========================================================================
+    // AND `deploy-info` TOO, BUT ONLY ONCE `health` HAS PASSED (#283).
+    // ==========================================================================
+    //
+    // #267 withheld this document from every failed run: "it is what the
+    // running application reports about itself, and an install that did not
+    // finish has not deployed what it would claim." That holds for a failure
+    // at `build`, `migrate` or `start` - nothing is serving, and a record
+    // would describe a deployment that does not exist.
+    //
+    // It stops holding the moment the API answers. A real install failed at
+    // `publish`, after the stack was up, migrated, seeded and healthy and the
+    // certificate was issued - and the About page told the administrator
+    // "this instance was not deployed with the deploy CLI", which is a worse
+    // lie than "deployed, and the run did not finish" by exactly the margin
+    // between a wrong fact and a missing one.
+    //
+    // THE GATE IS `health`, NOT `verify`. `health` IS the claim this document
+    // makes - `waitForHealthy` polls `/api/health/ready` until the
+    // application answers, so a run past it has a deployment that demonstrably
+    // exists. `verify` is the LAST step, so gating on it would write the
+    // document on success and essentially nowhere else, leaving the reported
+    // failure (a `publish` that comes between them) reporting nothing at all.
+    //
+    // `result.completed` is the pipeline's own record, and `health` carries
+    // no `skip` guard - it either ran and passed on this run, or it was
+    // carried in from the state a previous run left for `--resume`, which is
+    // the same claim. A step skipped by a guard is in neither list
+    // (steps/pipeline.ts), so this cannot read a `--skip-*` as a pass.
+    //
+    // Failing to write it must not replace the operator's actual problem,
+    // exactly like the state write above - and it comes AFTER that write for
+    // the reason the success path states: deploy-info is derived from the
+    // state.
+    if (result.completed.includes('health')) {
+      try {
+        const infoPath = writeDeployInfo(
+          options.deployRoot,
+          buildInstallState(stateInput, { outcome: 'failure', failedStep: result.failed.id }),
+          await collectServerFacts({ runCommand, root: options.deployRoot }),
+          { run: { completed: false, failedStep: result.failed.id, attemptedAt: now } },
+        );
+        journal.line(`Wrote ${infoPath}, marked incomplete at ${result.failed.id}.`);
+      } catch (error) {
+        journal.line(
+          `Could not write deploy-info: ${error instanceof Error ? error.message : String(error)}. ` +
+            `About will report no deployment record.`,
+        );
+      }
+    }
+
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     // A precondition (the preflight, a logged-out gh) keeps its exit code 6.
     throw pipelineFailure(
@@ -992,29 +1358,7 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
     );
   }
 
-  const now = new Date().toISOString();
-  const state = {
-    version: 1,
-    repoUrl: context.target?.url ?? '',
-    ref: context.target?.ref ?? '',
-    commitSha: context.commitSha ?? '',
-    ...(options.domain === undefined ? {} : { domain: options.domain }),
-    bindPort: options.bindPort,
-    deployRoot: options.deployRoot,
-    name: options.name,
-    appsRoot: options.appsRoot,
-    proxyRoot: options.proxyRoot,
-    // Resolved once, here; update reads it back rather than detecting again.
-    ...((context.proxyContainer ?? existingState?.proxyContainer) === undefined
-      ? {}
-      : { proxyContainer: context.proxyContainer ?? existingState?.proxyContainer }),
-    envPath: envFilePath(options.deployRoot),
-    installedAt: existingState?.installedAt ?? now,
-    lastDeployedAt: now,
-    lastCommand: 'install',
-    appctlVersion: CLI_VERSION,
-    completedSteps: result.completed,
-  } as DeployState;
+  const state = buildInstallState(stateInput, { outcome: 'success' });
   writeState(state);
 
   // AFTER the state: deploy-info is derived from it, and it is the document
@@ -1037,13 +1381,18 @@ export async function runInstall(input: InstallOptions): Promise<InstallResult> 
   return {
     deployRoot: options.deployRoot,
     name: options.name,
-    commitSha: context.commitSha ?? '',
+    // From the state rather than from the context: a resumed run skips the
+    // `checkout` step, so `context.commitSha` is unset on exactly the path
+    // that now reaches here (#267), and the result would report nothing
+    // deployed for a deployment that just came up.
+    commitSha: state.commitSha,
     journalPath: journal.path,
     ...(options.domain === undefined ? {} : { domain: options.domain }),
     // The seed writes the ALLOWLIST row, not a user account. Nobody is an
     // admin until this login happens, and an install that does not say so
     // looks broken.
     nextStep: `Log in at ${url} as ${admin} to claim the Admin role.`,
+    warnings: context.warnings,
   };
 }
 

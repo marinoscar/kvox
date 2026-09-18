@@ -10,15 +10,26 @@ import { CertificatesScreen } from './certificates.js';
 import { DoctorScreen } from './doctor.js';
 import { InstallWizard } from './install.js';
 import { StatusScreen } from './status.js';
+import { UninstallScreen } from './uninstall.js';
 import { UpdateScreen } from './update.js';
 
 // =============================================================================
 // The deploy screen  (issue #131, epic #118; replacing #184's single screen)
 // =============================================================================
 //
-// SIX DESTINATIONS, ONE ROUTE (#132 completes the set: Doctor, Install,
-// Update, Status, Certificates, About are all real screens now — no phase
-// falls through to a frame naming the subcommand instead of doing the work).
+// SEVEN DESTINATIONS, ONE ROUTE (#132 completed the first six: Doctor,
+// Install, Update, Status, Certificates, About are all real screens — no phase
+// falls through to a frame naming the subcommand instead of doing the work.
+// #268 adds Uninstall as the seventh).
+//
+// UNINSTALL IS LAST, AND NOT BY ACCIDENT. It is the one destination that
+// destroys rather than builds, and `confirm-dialog.tsx`'s argument applies to
+// a menu as much as to two choices: the row somebody lands on first should not
+// be the one that removes a deployment. It also arrives only now because #261
+// refused to put it here until a TYPED-confirmation component existed — a y/N
+// dialog standing in for a typed resource name weakens the guarantee while
+// looking like it satisfies it. `components/typed-confirm.tsx` is that
+// component, so the objection is answered rather than waived.
 //
 // ONE ROUTE, SEVERAL PHASES. `routes.ts` is closed and has no history stack
 // (see its header), so an action per route would return to the TOP menu rather
@@ -37,7 +48,15 @@ export interface DeployScreenProps {
   onDone: () => void;
 }
 
-export type Phase = 'choose' | 'install' | 'update' | 'doctor' | 'status' | 'certs' | 'about';
+export type Phase =
+  | 'choose'
+  | 'install'
+  | 'update'
+  | 'doctor'
+  | 'status'
+  | 'certs'
+  | 'about'
+  | 'uninstall';
 
 export interface DeployMenuState {
   /** At least one app is installed under the apps root. */
@@ -83,6 +102,17 @@ export function deployMenuItems(state: DeployMenuState): DeployMenuItem[] {
       // rather than failing with a 401 two screens later.
       label: state.loggedIn ? 'About  (what is deployed here)' : 'About  (not logged in)',
       value: 'about',
+    },
+    {
+      key: 'uninstall',
+      // Annotated, never hidden — the menu's own convention, and here it has
+      // a second job: an operator scanning for "how do I get rid of this?"
+      // learns from the annotation that nothing is installed under this apps
+      // root, which is a different answer from the row simply not existing.
+      label: state.installed
+        ? 'Uninstall  (remove this deployment)'
+        : 'Uninstall  (nothing installed here)',
+      value: 'uninstall',
     },
   ];
 }
@@ -154,6 +184,16 @@ export function DeployScreen({ onDone }: DeployScreenProps): ReactNode {
   if (phase === 'certs') {
     return (
       <CertificatesScreen
+        onDone={() => {
+          setPhase('choose');
+        }}
+      />
+    );
+  }
+
+  if (phase === 'uninstall') {
+    return (
+      <UninstallScreen
         onDone={() => {
           setPhase('choose');
         }}

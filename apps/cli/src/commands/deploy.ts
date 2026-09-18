@@ -24,9 +24,12 @@ import {
   type HealthReport,
   type ProbeResult,
 } from '../deploy/health.js';
-import { readState, type DeployState } from '../deploy/state.js';
+import { collectInventory, renderInventory } from '../deploy/inventory.js';
+import { NotInstalledError, readState, type DeployState } from '../deploy/state.js';
 import { resolveRepoTarget } from '../deploy/repo.js';
-import { runInstall, type InstallOptions } from '../deploy/install.js';
+import { runInstall, type InstallOptions, type InstallResult } from '../deploy/install.js';
+import { describeDatabase } from '../deploy/database-drop.js';
+import { describeInventory } from '../deploy/storage-purge.js';
 import { runUninstall, type UninstallOptions, type UninstallResult } from '../deploy/uninstall.js';
 import {
   DEFAULT_APPS_ROOT,
@@ -284,10 +287,14 @@ export function registerDeployCommand(
       .description('Remove this deployment from this server'),
   )
     .option('--confirm <name>', 'Type the app\'s own name to authorise the removal')
+    .option('--drop-database', 'ALSO drop the database this deployment used (off by default)')
+    .option('--confirm-database <name>', 'Type the database\'s own name to authorise the drop')
+    .option('--purge-storage', 'ALSO empty this application\'s prefixes in the bucket (off by default)')
+    .option('--confirm-bucket <name>', 'Type the bucket\'s own name to authorise the purge')
     .option('--dry-run', 'List everything that would be removed; change nothing')
     .option('--certs', "Also delete the TLS certificate (see the rate limit below)")
     .option('--keep-env', 'Leave the .env in place; a backup is taken either way')
-    .option('--non-interactive', 'Never prompt; --confirm <name> is then required')
+    .option('--non-interactive', 'Never prompt; every --confirm* the run needs is then required')
     .option('--skip-proxy', 'Do not touch the shared reverse proxy')
     .option('--proxy-root <path>', `Shared reverse proxy directory (default: the app's, else ${DEFAULT_PROXY_ROOT})`)
     .option('--proxy-container <name>', `Proxy container to reload (default: the app's, else ${DEFAULT_PROXY_CONTAINER})`)
@@ -301,10 +308,15 @@ export function registerDeployCommand(
         `  ${CLI_NAME} deploy uninstall --confirm myapp`,
         `  ${CLI_NAME} deploy uninstall --non-interactive --confirm myapp`,
         `  ${CLI_NAME} deploy uninstall --confirm myapp --keep-env`,
+        `  ${CLI_NAME} deploy uninstall --dry-run --drop-database --purge-storage`,
+        `  ${CLI_NAME} deploy uninstall --confirm myapp \\`,
+        `      --purge-storage --confirm-bucket my-bucket \\`,
+        `      --drop-database --confirm-database appdb`,
         '',
         'Exit codes:',
         '  0  removed (or, with --dry-run, listed)',
-        '  2  nothing is installed, or the confirmation was missing or wrong',
+        '  2  nothing is installed, or a confirmation was missing or wrong',
+        '     (the app\'s, the bucket\'s or the database\'s)',
         '',
         'Removes: the compose project (containers, project networks and named',
         'volumes, via `down -v --remove-orphans`), the deploy root (repo/, .env,',
@@ -312,10 +324,27 @@ export function registerDeployCommand(
         'shared proxy - then reloads it - and this app\'s certificate renewal',
         'cron.',
         '',
+        'Does NOT remove unless you ask for it by name:',
+        '  - THE DATABASE, with --drop-database. Without it, the database is',
+        '    validated by deploy and never managed by it, and the `dropdb`',
+        '    command is printed for you to run yourself.',
+        '  - THE OBJECT STORAGE, with --purge-storage. That empties the six',
+        '    prefixes this application writes (avatars/, database-backups/,',
+        '    node-outputs/, notes/, transcripts/, uploads/) and REPORTS',
+        '    anything else in the bucket without reading into it or touching',
+        '    it - complete for a dedicated bucket, safe for a shared one. The',
+        '    bucket itself is never deleted. A versioned bucket has its',
+        '    versions and delete markers removed BY ID, because a plain delete',
+        '    there keeps the bytes and the bill behind a marker.',
+        '',
+        '  Each takes its OWN typed confirmation of that resource\'s real name',
+        '  - --confirm-database <database> and --confirm-bucket <bucket> - so a',
+        '  word typed for one can never authorise the other. Both print a full',
+        '  inventory (objects and bytes per prefix, the database\'s size and',
+        '  open sessions) BEFORE asking, and --dry-run prints it while',
+        '  destroying nothing.',
+        '',
         'Does NOT remove, ever:',
-        '  - THE DATABASE. It is validated by deploy and never managed by it,',
-        '    it holds your data, and it usually lives on another host. The',
-        '    `dropdb` command is printed for you to run yourself.',
         '  - THE devnet NETWORK and THE SHARED PROXY CONTAINER. Both are shared',
         '    with every other app on this server.',
         '  - TLS CERTIFICATES, unless --certs. Let\'s Encrypt allows only 5',
@@ -325,7 +354,14 @@ export function registerDeployCommand(
         '',
         'The app\'s name must be typed to authorise this - it is not a y/N - and',
         'under --non-interactive it must be supplied as --confirm <name>, because',
-        'a destructive default reachable by omission is not a default.',
+        'a destructive default reachable by omission is not a default. The same',
+        'rule applies to each extra above, against its OWN resource\'s name.',
+        '',
+        'The order is fixed: the containers stop, then the storage is purged,',
+        'then the database is dropped, then the deployment is removed. The',
+        'deployment goes last because its .env holds the credentials the two',
+        'steps before it authenticate with. A failed extra is reported under',
+        '"Action required:" and does NOT fail the uninstall.',
         '',
         'The .env is copied to <apps-root>/<name>.env.<timestamp>.bak (0600)',
         'before it is deleted, outside the directory being removed: it holds',
@@ -467,6 +503,38 @@ export function registerDeployCommand(
     )
     .action(async (options: AboutCommandOptions) => {
       await runAboutCommand(options, ctx);
+    });
+
+  deploy
+    .command('list')
+    .description('List every app deployed under the apps root')
+    .option('--apps-root <dir>', 'Directory that holds one folder per app', DEFAULT_APPS_ROOT)
+    .option('--json', 'Print the inventory on stdout')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Examples:',
+        `  ${CLI_NAME} deploy list`,
+        `  ${CLI_NAME} deploy list --json | jq -r '.apps[].name'`,
+        '',
+        'Exit codes:',
+        '  0  at least one app is installed',
+        '  2  nothing is installed under --apps-root',
+        '',
+        'Read from the filesystem alone - each app\'s own state file, or its',
+        '.env when it has no state file. No container, no network and no git',
+        'process is consulted, so it answers the same way when Docker is down.',
+        'An app with no state file therefore reports no revision; a',
+        `\`${CLI_NAME} deploy update\` on it rebuilds the record, after which it`,
+        'reports like any other.',
+        '',
+        'There is deliberately no --name/--root here: this is the inventory,',
+        'and both flags name one app.',
+      ].join('\n'),
+    )
+    .action(async (options: ListCommandOptions) => {
+      await runListCommand(options, ctx);
     });
 
   const certs = deploy
@@ -890,6 +958,18 @@ export function renderHealth(
     // three blocks now, and a health report that also tried to be an
     // inventory made the verdict - the thing a monitor reads - harder to find.
     lines.push(`  ${'Revision'.padEnd(TITLE_WIDTH)}${report.deployed.commitSha.slice(0, 12)} (${report.deployed.ref})\n`);
+
+    // The one exception to "one revision line, and no more" (#267). A state
+    // file now exists for an install that FAILED, so the revision above may
+    // name a commit that was never deployed - and an operator reading this
+    // report must not have to infer that from a probe that times out.
+    if (report.deployed.lastOutcome === 'failure') {
+      const where =
+        report.deployed.lastFailedStep === undefined ? '' : ` at ${report.deployed.lastFailedStep}`;
+      lines.push(
+        `  ${'Last outcome'.padEnd(TITLE_WIDTH)}the last install failed${where}; re-run \`${CLI_NAME} deploy install --resume\` to continue\n`,
+      );
+    }
   }
 
   if (update !== undefined) {
@@ -998,6 +1078,46 @@ export async function runAboutCommand(
 
 
 // ---------------------------------------------------------------------------
+// `kvox deploy list`  (issue #290)
+// ---------------------------------------------------------------------------
+
+export interface ListCommandOptions {
+  appsRoot: string;
+  json?: boolean | undefined;
+}
+
+/**
+ * The inventory, read from the distributed registry the apps root already is.
+ *
+ * "Nothing installed" is a usage-level fact, not an empty success, the same
+ * standing `certs status` gives "no certificates under the proxy": a script
+ * written as `deploy list && ...` should not proceed on a host where this CLI
+ * has deployed nothing.
+ */
+export async function runListCommand(
+  options: ListCommandOptions,
+  ctx?: DeployContext,
+): Promise<void> {
+  const stdout = ctx?.stdout ?? process.stdout;
+  const stderr = ctx?.stderr ?? process.stderr;
+
+  const report = collectInventory(options.appsRoot);
+
+  if (options.json === true) {
+    stdout.write(`${JSON.stringify(report)}\n`);
+  } else {
+    stderr.write(renderInventory(report));
+  }
+
+  if (report.apps.length === 0) {
+    throw new NotInstalledError(
+      `Nothing is installed under ${options.appsRoot}. Run \`${CLI_NAME} deploy install\` first, or pass --apps-root if the apps live somewhere else.`,
+    );
+  }
+}
+
+
+// ---------------------------------------------------------------------------
 // `kvox deploy install`  (issue #180)
 // ---------------------------------------------------------------------------
 
@@ -1067,6 +1187,12 @@ export function collectAnswers(
 export interface UninstallCommandOptions extends LayoutCommandOptions {
   /** `--confirm <name>`: the app's own name, typed. */
   confirm?: string | undefined;
+  /** `--drop-database` + `--confirm-database <name>`, the database's own name. */
+  dropDatabase?: boolean | undefined;
+  confirmDatabase?: string | undefined;
+  /** `--purge-storage` + `--confirm-bucket <name>`, the bucket's own name. */
+  purgeStorage?: boolean | undefined;
+  confirmBucket?: string | undefined;
   dryRun?: boolean | undefined;
   certs?: boolean | undefined;
   keepEnv?: boolean | undefined;
@@ -1101,6 +1227,10 @@ export async function runUninstallCommand(
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.root === undefined ? {} : { deployRoot: options.root }),
     ...(options.confirm === undefined ? {} : { confirmation: options.confirm }),
+    ...(options.dropDatabase === undefined ? {} : { dropDatabase: options.dropDatabase }),
+    ...(options.confirmDatabase === undefined ? {} : { confirmDatabase: options.confirmDatabase }),
+    ...(options.purgeStorage === undefined ? {} : { purgeStorage: options.purgeStorage }),
+    ...(options.confirmBucket === undefined ? {} : { confirmBucket: options.confirmBucket }),
     ...(options.dryRun === undefined ? {} : { dryRun: options.dryRun }),
     ...(options.certs === undefined ? {} : { certs: options.certs }),
     ...(options.keepEnv === undefined ? {} : { keepEnv: options.keepEnv }),
@@ -1174,6 +1304,42 @@ export function renderUninstall(result: UninstallResult): string {
   for (const item of result.kept) {
     lines.push(`    ${item.target}`);
     lines.push(`      ${item.reason}`);
+  }
+
+  // The two extras' own inventories, AFTER the removed list and before the
+  // .env note: they describe another system, and a reader scanning "Removed:"
+  // for paths should not have to step over a bucket listing to finish it.
+  if (result.storage !== undefined) {
+    lines.push('');
+    lines.push('  Object storage:');
+    if (result.storage.problem !== undefined) {
+      lines.push(`    NOT emptied: ${result.storage.problem}`);
+    } else if (result.storage.inventory !== undefined) {
+      for (const line of describeInventory(result.storage.inventory)) {
+        lines.push(line === '' ? '' : `    ${line}`);
+      }
+      const purge = result.storage.purge;
+      if (purge !== undefined) {
+        lines.push(
+          `    ${purge.dryRun ? 'Would delete' : 'Deleted'} ${purge.keys} key(s)` +
+            (purge.failures.length === 0 ? '.' : `, ${purge.failures.length} prefix(es) failed.`),
+        );
+      }
+    }
+  }
+
+  if (result.database !== undefined) {
+    lines.push('');
+    lines.push('  Database:');
+    if (result.database.problem !== undefined) {
+      lines.push(`    NOT dropped: ${result.database.problem}`);
+    } else if (result.database.facts !== undefined) {
+      for (const line of describeDatabase(result.database.facts)) lines.push(`    ${line}`);
+      const outcome = result.database.outcome;
+      if (outcome !== undefined && outcome.ok) lines.push(`    ${outcome.detail}`);
+      else if (outcome !== undefined) lines.push(`    NOT dropped: ${outcome.detail}`);
+      else if (result.dryRun) lines.push('    Would be dropped.');
+    }
   }
 
   if (result.envBackupPath !== undefined) {
@@ -1307,19 +1473,45 @@ export async function runInstallCommand(
     return;
   }
 
-  stderr.write(
-    [
-      '',
-      '  Installed.',
-      '',
-      `  App        ${result.name} at ${result.deployRoot}`,
-      `  Revision   ${result.commitSha.slice(0, 12)}`,
-      `  Log        ${result.journalPath}`,
-      '',
-      `  ${result.nextStep}`,
-      '',
-    ].join('\n'),
+  stderr.write(renderInstall(result));
+}
+
+/**
+ * The install report. Exported so its wording is pinned by a test.
+ *
+ * `Action required:` comes FIRST, the shape `renderUninstall` established and
+ * for the same reason (#261, #265): a warning is something the operator has to
+ * act on, and everything under it is a record of what happened. The one that
+ * lands here today is a renewal cron the CLI could not write - an install that
+ * completed without a renewal schedule must never be silent, because the only
+ * other notice of it is an expired certificate 60-90 days later.
+ *
+ * `nextStep` stays LAST and stays one line: it is the thing nobody else can do
+ * (log in and claim the Admin role), not a list of leftovers.
+ */
+export function renderInstall(result: InstallResult): string {
+  const lines: string[] = ['', '  Installed.', ''];
+
+  if (result.warnings.length > 0) {
+    lines.push('  Action required:');
+    for (const warning of result.warnings) {
+      // An empty line stays empty: indenting it leaves trailing whitespace
+      // that shows up in a diff, a paste and `cat -A`.
+      for (const line of warning.split('\n')) lines.push(line === '' ? '' : `    ${line}`);
+      lines.push('');
+    }
+  }
+
+  lines.push(
+    `  App        ${result.name} at ${result.deployRoot}`,
+    `  Revision   ${result.commitSha.slice(0, 12)}`,
+    `  Log        ${result.journalPath}`,
+    '',
+    `  ${result.nextStep}`,
+    '',
   );
+
+  return lines.join('\n');
 }
 
 
@@ -1390,6 +1582,17 @@ export async function runUpdateCommand(
   };
 
   const result = await runUpdate(updateOptions);
+
+  // ADOPTION IS NEVER SILENT, INCLUDING UNDER --json (#285). On a terminal the
+  // hooks above already printed it before the pipeline ran; with --json no
+  // hooks are wired at all, so it is written here instead - to stderr, which
+  // keeps stdout pure JSON. It also covers `--check --json`, whose stdout is
+  // the check object alone and has nowhere to put it.
+  if (json && result.adopted !== undefined) {
+    stderr.write(`\n  ${result.adopted.headline}\n`);
+    for (const line of result.adopted.detail) stderr.write(`    ${line}\n`);
+    stderr.write('\n');
+  }
 
   if (options.check === true) {
     // The check IS the result: the object alone under --json, and on a

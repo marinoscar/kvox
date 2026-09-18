@@ -497,7 +497,7 @@ do not restate it here.
 
 VPS deployment (epic #168, corrected against a real server by epic #118)
 lives entirely in this CLI as `kvox deploy
-doctor|install|uninstall|update|status|about|certs` — there is no separate
+doctor|install|uninstall|update|status|about|list|certs` — there is no separate
 deploy script or Ansible playbook anywhere in this repo, and there shouldn't
 be.
 The design (why it runs on the VPS with no SSH client in the CLI, why TLS is
@@ -507,10 +507,20 @@ no `db` service, what was rejected) is documented in full in
 [§18](docs/specs/vps-deploy.md#18-v2-the-real-vps-epic-118) is what epic #118
 corrected against the shipped code, [§19](docs/specs/vps-deploy.md#19-the-deploy-infoinfojson-schema)
 is the `deploy-info/info.json` schema, and
-[§21](docs/specs/vps-deploy.md#21-removing-a-deployment-and-the-four-things-it-refuses-to-remove-issue-261)
-records why `uninstall` refuses to touch the database, the shared `devnet`
-network, the shared proxy container or (by default) the TLS certificates —
-each a deliberate refusal, not an oversight; the operator-facing runbook —
+[§21](docs/specs/vps-deploy.md#21-removing-a-deployment-what-it-refuses-to-remove-and-the-two-extras-that-must-be-asked-for-issues-261-268)
+records why `uninstall` refuses to touch the shared `devnet` network, the
+shared proxy container or (by default) the TLS certificates — each a
+deliberate refusal, not an oversight — and, in §21.3.1 (issue #268), why the
+database and the object store are **opt-in extras** rather than either a
+refusal or a default: each needs its own flag plus a typed confirmation of
+that resource's own real name, so a word typed for one can never authorise
+the other, and
+[§23](docs/specs/vps-deploy.md#23-update-adopts-a-deployment-it-has-no-record-of-issue-285)
+records why `update`'s precondition asks whether a **deployment** is there
+rather than whether the CLI's own state file is — it reconstructs a missing
+record from the clone, the `.env` and the proxy, and never invents the two
+instants (`installedAt`, `lastDeployedAt`) that no disk carries; the
+operator-facing runbook —
 prerequisites, first login after install, troubleshooting — is
 [`docs/deployment/vps.md`](docs/deployment/vps.md). The command reference
 (flags, exit codes) is [`apps/cli/README.md`](apps/cli/README.md#deploying-to-a-server)

@@ -176,6 +176,11 @@ export interface CheckContext {
    * service is deliberately not consulted (see dns.ts); this is the override.
    */
   publicIp?: string | undefined;
+  /**
+   * Where the certificate-renewal cron goes. Default `/etc/cron.d`; a test
+   * points it elsewhere, exactly as `RenewalCronOptions.cronDir` does.
+   */
+  cronDir?: string | undefined;
   /** `--skip-proxy`: proxy, certificate, port and DNS checks report `skip`. */
   skipProxy?: boolean | undefined;
   /** `--skip-dns`: the `dns-*` checks report `skip`. */

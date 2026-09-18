@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { CLI_NAME } from '../branding.js';
 import { PreconditionError, UsageError } from '../errors.js';
 import { CLI_VERSION } from '../package-info.js';
+import { adoptDeployment, renderAdoption, type Adoption, type AdoptionNotice } from './adopt.js';
 import {
   ALL_CHECKS,
   DEFAULT_PROXY_CONTAINER,
@@ -14,13 +15,15 @@ import {
 } from './checks/index.js';
 import {
   ensureDeployInfoDir,
+  readDeployInfo,
   updateDeployInfoRemote,
   writeDeployInfo,
   type DeployRemote,
+  type DeployRun,
 } from './deploy-info.js';
 import { ensureComposeEnvLink, envFilePath, readEnvFile, writeEnvFile } from './env-file.js';
-import { diffEnv, parseEnvExample, serializeEnvFile } from './env-spec.js';
-import { metadataFor } from './env-metadata.js';
+import { diffEnv, parseEnvExample, serializeEnvFile, type EnvVarSpec } from './env-spec.js';
+import { metadataFor, type EnvGroup, type EnvVarMetadata } from './env-metadata.js';
 import { runEnvWizard } from './env-wizard.js';
 import { runCommand as defaultRunCommand } from './executor.js';
 import { collectHealth, isHealthy, waitForHealthy } from './health.js';
@@ -47,7 +50,7 @@ import {
   type RepoTarget,
 } from './repo.js';
 import { collectServerFacts } from './server-facts.js';
-import { requireState, writeState, type DeployState } from './state.js';
+import { readState, writeState, type DeployState } from './state.js';
 import { pipelineFailure, runPipeline, type DeployStep, type StepContext } from './steps/pipeline.js';
 import { composeArgv, composeCwd, secretsFrom } from './install.js';
 import type { PromptContext } from '../prompt.js';
@@ -58,9 +61,19 @@ import type { PromptContext } from '../prompt.js';
 //
 // Installing is the rare operation; updating is the one performed weekly, often
 // while something is already broken. It needs different behaviour from install,
-// not a flag on it - the PRECONDITIONS ARE OPPOSITE. Install refuses when state
-// exists; update refuses when it does not. One command with two contradictory
-// guards is harder to reason about than two commands.
+// not a flag on it - the PRECONDITIONS ARE OPPOSITE. Install refuses when a
+// deployment is already there; update refuses when one is not. One command with
+// two contradictory guards is harder to reason about than two commands.
+//
+// UPDATE'S HALF OF THAT USED TO BE KEYED ON THE STATE FILE, AND THAT WAS THE
+// WRONG FACT (#285). The state file is bookkeeping; the deployment is the
+// clone, the .env and the running containers. A server serving HTTPS on a
+// certificate this CLI issued could not be updated because `.appctl-deploy
+// .json` was missing - and the refusal sent the operator to `install`, whose
+// own precondition is the opposite. `update` now asks whether a DEPLOYMENT is
+// here, and rebuilds the bookkeeping from the disk when it is: see
+// `adopt.ts`, which holds the evidence gate and what each field is read from.
+// The refusal is unchanged for a directory that really is not a deployment.
 //
 // TWO DECISIONS WORTH KNOWING ABOUT:
 //
@@ -324,6 +337,97 @@ async function recordUpdateCheck(context: UpdateContext, check: UpdateCheck): Pr
   }
 }
 
+// =============================================================================
+// Absent is not the same as new  (issue #291)
+// =============================================================================
+//
+// `diffEnv` answers "in the template, absent from the .env", and `update` read
+// that as "this revision added a variable". They are not the same question,
+// and on a real deployment the difference walked the operator through the
+// ENTIRE install wizard - domain, database, the lot - on an update whose
+// `.env.example` had not changed by a single byte.
+//
+// THREE KINDS OF KEY ARE ABSENT FROM A CORRECT, UP-TO-DATE .env, PERMANENTLY:
+//
+//   1. AN OPTIONAL KEY THE OPERATOR DECLINED. #255 made a commented-out
+//      template entry skippable, and "skipped" is recorded by the key NOT
+//      BEING IN THE FILE - there is nowhere else it could be recorded. So
+//      every declined key reads as absent on every update, forever. Three of
+//      this template's eleven optional keys are also `secret: true`, which is
+//      what dragged them past the `essential || secret` filter below: BEING A
+//      SECRET DOES NOT MAKE A VARIABLE REQUIRED, and that filter read only the
+//      second half of the question.
+//   2. A KEY `env-metadata.ts` MARKS `never`. `resolveKey`'s first branch
+//      DELETES it whatever the template says, so it cannot be in the file by
+//      design. `VAPID_PRIVATE_KEY` is this AND case 1.
+//   3. A KEY IN AN OPT-IN FEATURE GROUP. This is the larger half, and the
+//      issue that reported the bug did not name it: nine observability keys
+//      and four storage keys are NOT commented out in the template, so case 1
+//      does not cover them, and five of the nine are `secret: true`. `update`
+//      enables no group and never has, so all thirteen are absent from a
+//      normal deployment's .env and all thirteen read as drift - a deployment
+//      that simply never opted into Uptrace re-ran the whole wizard on every
+//      update with no optional key declined at all.
+//
+// None of the three is drift, and for none of them would the wizard produce
+// anything: cases 2 and 3 are keys it REFUSES TO WRITE, so the operator was
+// asked every essential question in the template in order to write the same
+// keys back out unset.
+//
+// WHY THE RULE IS NOT IN `diffEnv`. That module is pure and imports no
+// metadata by deliberate design (see `env-spec.ts`'s header), so it can see
+// case 1 and nothing else - and a `missing` that excluded only optionals would
+// LOOK fixed while leaving the reported failure live on every deployment
+// without observability. Narrowing it there would also change what
+// `run-init.ts` sees, which already filters `diffEnv` through its own profile
+// and says in its own comment why that filtering belongs at the call site.
+// =============================================================================
+
+/**
+ * The variables a revision genuinely ADDS, out of everything absent from the
+ * .env. See the block above for each exclusion and why it is not drift.
+ *
+ * `groups` IS A PARAMETER AND `update` PASSES NONE, deliberately. It has never
+ * passed any to `runEnvWizard` either, so a grouped key is one the wizard
+ * would refuse to write even if this reported it: offering it is a question
+ * with no answer. THE HONEST CONSEQUENCE, STATED RATHER THAN HIDDEN: a
+ * revision that adds a variable to a feature group is not applied by `update`,
+ * and an operator running observability or object storage adds that one by
+ * hand. That is exactly what happened before this fix too - the difference is
+ * that it now happens quietly instead of after the whole install wizard.
+ *
+ * INFERRING THE GROUPS FROM THE .env IS NOT THE FIX, and it is worth recording
+ * why, because it looks like one: nothing distinguishes `OTEL_ENABLED=true`
+ * from `OTEL_ENABLED=false`, both of which are simply PRESENT. The e2e
+ * deployment carries the second one, and an inference would have read it as
+ * "observability is on" and written eight Uptrace placeholder defaults into a
+ * live .env. Teaching `update` to enable a group means a flag on `update`,
+ * passed to BOTH this and the wizard in the same breath - which is why the
+ * parameter is here rather than the exclusion being hardcoded.
+ */
+export function addedVariables(
+  missing: readonly EnvVarSpec[],
+  options: {
+    /** The groups this deployment uses; a key outside them is not offered. */
+    groups?: readonly EnvGroup[] | undefined;
+    metadata?: ((key: string) => EnvVarMetadata) | undefined;
+  } = {},
+): EnvVarSpec[] {
+  const groups = options.groups ?? [];
+  const resolve = options.metadata ?? metadataFor;
+
+  return missing.filter((spec) => {
+    // (1) Commented out in the template: absent IS the recorded answer.
+    if (spec.optional) return false;
+    const metadata = resolve(spec.key);
+    // (2) The wizard deletes it on every path; it can never be in the file.
+    if (metadata.never === true) return false;
+    // (3) A group this deployment does not use; the wizard would skip it.
+    if (metadata.group !== undefined && !groups.includes(metadata.group)) return false;
+    return true;
+  });
+}
+
 export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
   return [
     {
@@ -554,7 +658,20 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           context.journal.line(`Keeping ${unknown.length} variable(s) not in the template`);
         }
 
-        if (missing.length === 0) {
+        // ABSENT IS NOT THE SAME AS NEW (#291). `missing` is every template key
+        // this .env does not have, which permanently includes the optional ones
+        // the operator declined and every opt-in feature group's keys.
+        // `addedVariables` above carries the argument for each exclusion.
+        const added = addedVariables(missing);
+
+        const settled = missing.length - added.length;
+        if (settled > 0) {
+          context.journal.line(
+            `Leaving ${settled} template variable(s) out of this .env, as before: skipped optional variables, keys this deployment never writes, and opt-in feature groups.`,
+          );
+        }
+
+        if (added.length === 0) {
           if (pinned) {
             writeEnvFile(context.options.deployRoot, serializeEnvFile(current, specs));
             context.env = current;
@@ -562,21 +679,21 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
           return;
         }
 
-        const needsAnswer = missing.filter((spec) => {
+        const needsAnswer = added.filter((spec) => {
           const metadata = metadataFor(spec.key);
           return metadata.essential === true || metadata.secret === true;
         });
 
         context.journal.line(
-          `This revision adds ${missing.length} variable(s); ${needsAnswer.length} need a value.`,
+          `This revision adds ${added.length} variable(s); ${needsAnswer.length} need a value.`,
         );
 
         if (needsAnswer.length === 0) {
           // Everything new has a usable default; add them and say so.
+          // `added` holds no optional key, so every one of these has a default
+          // the template actually states.
           const merged = new Map(current);
-          for (const spec of missing) {
-            if (!spec.optional) merged.set(spec.key, spec.defaultValue);
-          }
+          for (const spec of added) merged.set(spec.key, spec.defaultValue);
           writeEnvFile(context.options.deployRoot, serializeEnvFile(merged, specs));
           context.env = merged;
           return;
@@ -590,7 +707,22 @@ export function buildUpdateSteps(): DeployStep<UpdateContext>[] {
         }
 
         const { values } = await runEnvWizard({
-          specs,
+          // THE QUESTION LIST IS THE NEW KEYS; THE FILE IS STILL WRITTEN
+          // AGAINST THE WHOLE TEMPLATE (#291). Handing the wizard all 72 specs
+          // re-asked every essential question in a step called "Check for new
+          // environment variables". Handing `serializeEnvFile` the same
+          // narrowed list instead - the obvious version of this fix - does not
+          // lose the other 71 (they fall through to its "Not in .env.example"
+          // block) but it does strip every section banner and the template's
+          // key order from the file, and declare 71 template variables to be a
+          // fork's own additions. The wizard needs the QUESTIONS narrowed; the
+          // writer needs the TEMPLATE whole. They are different arguments, so
+          // they take different values.
+          //
+          // Nothing already set is at risk either way: `existing` seeds the
+          // wizard's value map, which it returns with the answers merged in,
+          // and a key outside `added` is never visited.
+          specs: added,
           domain,
           existing:
             context.options.answers === undefined
@@ -792,6 +924,16 @@ export interface UpdateResult {
   durationMs: number;
   /** What the fetch found; the whole answer under `--check`. */
   check?: UpdateCheck | undefined;
+  /**
+   * Present when this run ADOPTED the deployment - rebuilt a missing state
+   * file from the disk (#285).
+   *
+   * On a terminal the operator has already seen this through the hooks,
+   * before the pipeline ran, so it survives a run that then fails. It is
+   * carried here as well because `--json` wires no hooks at all, and a
+   * machine caller must be able to tell an adoption from an ordinary update.
+   */
+  adopted?: AdoptionNotice | undefined;
 }
 
 /**
@@ -807,9 +949,27 @@ function stepsFor(options: UpdateOptions): DeployStep<UpdateContext>[] {
 }
 
 export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
+  const runCommand = options.runCommand ?? defaultRunCommand;
+
   // The precondition install does not have, and the reason this is its own
-  // command: nothing to update is a different situation from nothing installed.
-  const state = requireState(options.deployRoot);
+  // command: nothing to update is a different situation from nothing
+  // installed. Since #285 it is asked of the DEPLOYMENT rather than of the
+  // CLI's notes about it - `adoptDeployment` rebuilds the record when the
+  // deployment is demonstrably there, and raises the same `NotInstalledError`
+  // with the same message when it is not.
+  const recorded = readState(options.deployRoot);
+  const adoption: Adoption | undefined =
+    recorded === undefined
+      ? await adoptDeployment({
+          deployRoot: options.deployRoot,
+          runCommand,
+          ...(options.ref === undefined ? {} : { ref: options.ref }),
+          ...(options.proxyContainer === undefined
+            ? {}
+            : { proxyContainer: options.proxyContainer }),
+        })
+      : undefined;
+  const state = recorded ?? (adoption as Adoption).state;
 
   // BEFORE the pipeline, and that ordering is the whole point (#159).
   //
@@ -842,7 +1002,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
 
   const context: UpdateContext = {
     options,
-    runCommand: options.runCommand ?? defaultRunCommand,
+    runCommand,
     journal,
     hooks: options.hooks,
     completed: new Set<string>(),
@@ -851,9 +1011,83 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     ...(env === undefined ? {} : { env }),
   };
 
+  if (adoption !== undefined) {
+    // WRITTEN NOW, BEFORE THE PIPELINE. The bookkeeping is recovered whatever
+    // this run then does: a preflight failure, a `--check`, or an "already up
+    // to date" must not each need the adoption performed again. It is written
+    // after the journal is open so the write itself is journaled, the same
+    // ordering #267's failure-path state write follows.
+    writeState(adoption.state);
+    // ANNOUNCED HERE TOO, NOT IN THE EPILOGUE, so an operator whose run then
+    // fails at `preflight` still learns that their state file was rebuilt.
+    // NOT under `Action required:` (#264/#265), which is for something the
+    // operator must go and do: this is a notice about something already done,
+    // and putting it there would teach people to skim that heading.
+    const [headline, ...detail] = renderAdoption(adoption.notice);
+    journal.line(headline ?? '');
+    options.hooks?.onProgress?.(headline ?? '');
+    for (const line of detail) {
+      journal.line(line);
+      options.hooks?.onLog?.(line.trim());
+    }
+  }
+  const adopted = adoption?.notice;
+
   const result = await runPipeline(stepsFor(options), context);
 
   if (result.failed !== undefined) {
+    // ==========================================================================
+    // `deploy-info` IS REFRESHED ONCE `health` HAS PASSED, ON THIS PATH TOO.
+    // ==========================================================================
+    // (issue #283, the update half of the rule install.ts states in full)
+    //
+    // An update that fails after `health` has ALREADY deployed the new
+    // revision: `restart` brought the stack up on it and the API answered on
+    // it. Leaving the last successful deploy's document in place would then
+    // name the OLD commit as what is running, and a deployment that never had
+    // one - a pre-#120 install, or the run that first created this root -
+    // would keep reporting nothing at all.
+    //
+    // NOTHING HERE STAMPS A DEPLOY TIME THAT DID NOT HAPPEN. The state is not
+    // written (this command writes it at `fetch` and on success, and #120's
+    // rule that `lastDeployedAt` belongs only to a run that finished is
+    // untouched), and the record below is derived from an in-memory state
+    // whose `lastDeployedAt` is carried forward from the previous success -
+    // so `updatedAt` still means "when the last deploy succeeded" while
+    // `app.commitSha` says which revision is actually serving, and `run` says
+    // the run that put it there did not finish.
+    if (result.completed.includes('health')) {
+      // ONE INSTANT for both fields, the same rule `runInstall`'s epilogue
+      // follows: two `new Date()` calls can land a millisecond apart and the
+      // record would carry two answers to one question.
+      const attemptedAt = new Date().toISOString();
+      try {
+        await refreshDeployInfo(
+          context,
+          {
+            ...state,
+            ref: context.target?.ref ?? state.ref,
+            commitSha: context.commitSha ?? state.commitSha,
+            ...(context.previousSha === undefined ? {} : { previousSha: context.previousSha }),
+            ...((context.proxyContainer ?? state.proxyContainer) === undefined
+              ? {}
+              : { proxyContainer: context.proxyContainer ?? state.proxyContainer }),
+            envPath: envFilePath(options.deployRoot),
+            lastAttemptAt: attemptedAt,
+            lastCommand: 'update',
+            appctlVersion: CLI_VERSION,
+          } as DeployState,
+          { completed: false, failedStep: result.failed.id, attemptedAt },
+        );
+      } catch (error) {
+        // Never in place of the operator's actual problem, which is the
+        // pipeline's own error three lines below.
+        journal.line(
+          `Could not refresh deploy-info: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
     journal.finish('failure', `${result.failed.id}: ${result.failed.detail ?? ''}`);
     const previous = context.previousSha ?? state.commitSha;
 
@@ -878,6 +1112,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       journalPath: journal.path,
       durationMs: Date.now() - startedAt,
       ...(context.check === undefined ? {} : { check: context.check }),
+      ...(adopted === undefined ? {} : { adopted }),
     };
   }
 
@@ -886,7 +1121,21 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     // refreshed from it: the host facts may have moved (a kernel upgrade), and
     // a deployment from before #120 gets its first info.json here rather than
     // only once the remote moves.
-    await refreshDeployInfo(context, state);
+    //
+    // TWO THINGS COME FROM THE CLONE AND THE EXISTING RECORD, NOT THE STATE
+    // (#283). A run that failed AFTER `health` left the new revision checked
+    // out and serving while the state still names the old one - `update`
+    // records a commit only on success - so this run's "already up to date"
+    // would otherwise rewrite the document backwards, from the revision that
+    // is actually running to the one that is not, and mark it complete. It
+    // deployed nothing, so it has nothing to say about how any run ended:
+    // the previous document's `run` is carried through unchanged rather than
+    // replaced with a completion this run did not observe.
+    await refreshDeployInfo(
+      context,
+      { ...state, commitSha: context.commitSha ?? state.commitSha } as DeployState,
+      existingDeployRun(context),
+    );
     journal.finish('success', 'already up to date');
     return {
       changed: false,
@@ -894,6 +1143,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
       journalPath: journal.path,
       durationMs: Date.now() - startedAt,
       ...(context.check === undefined ? {} : { check: context.check }),
+      ...(adopted === undefined ? {} : { adopted }),
     };
   }
 
@@ -926,6 +1176,7 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
     journalPath: journal.path,
     durationMs: Date.now() - startedAt,
     ...(context.check === undefined ? {} : { check: context.check }),
+    ...(adopted === undefined ? {} : { adopted }),
   };
 }
 
@@ -937,7 +1188,11 @@ export async function runUpdate(options: UpdateOptions): Promise<UpdateResult> {
  * dropped to null - an About page that said "never checked" right after an
  * update would be wrong about the one moment it is certainly current.
  */
-async function refreshDeployInfo(context: UpdateContext, state: DeployState): Promise<void> {
+async function refreshDeployInfo(
+  context: UpdateContext,
+  state: DeployState,
+  run?: DeployRun,
+): Promise<void> {
   const remote: DeployRemote | null =
     context.check === undefined
       ? null
@@ -946,9 +1201,30 @@ async function refreshDeployInfo(context: UpdateContext, state: DeployState): Pr
     context.options.deployRoot,
     state,
     await collectServerFacts({ runCommand: context.runCommand, root: context.options.deployRoot }),
-    { remote },
+    { remote, ...(run === undefined ? {} : { run }) },
   );
-  context.journal.line(`Wrote ${path}`);
+  context.journal.line(
+    run === undefined || run.completed
+      ? `Wrote ${path}`
+      : `Wrote ${path}; the record is marked incomplete at ${run.failedStep}.`,
+  );
+}
+
+/**
+ * The `run` block already on disk, for a refresh that deployed nothing (#283).
+ *
+ * Undefined when there is no document or it cannot be read - `writeDeployInfo`
+ * then defaults to a completed run, which is what a deployment with no record
+ * at all has always been assumed to be. Never allowed to throw: refusing to
+ * refresh host facts because an unrelated field is unreadable would make a
+ * corrupt document permanent.
+ */
+function existingDeployRun(context: UpdateContext): DeployRun | undefined {
+  try {
+    return readDeployInfo(context.options.deployRoot)?.run;
+  } catch {
+    return undefined;
+  }
 }
 
 export { RENEW_WITHIN_DAYS };

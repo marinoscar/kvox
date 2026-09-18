@@ -86,13 +86,24 @@ export interface AboutDeployment {
   repoUrl: string;
   domain: string | null;
   bindPort: number;
-  /** ISO-8601 UTC. */
-  installedAt: string;
-  /** ISO-8601 UTC; equals `installedAt` on a first install. */
-  updatedAt: string;
+  /**
+   * ISO-8601 UTC - null when this CLI does not know (#285).
+   *
+   * An ADOPTED deployment (`update` rebuilt the state file from the clone and
+   * the `.env`) has no install instant on disk anywhere, and `adoptedAt`
+   * below says why. Reported as unknown rather than guessed.
+   */
+  installedAt: string | null;
+  /** ISO-8601 UTC; equals `installedAt` on a first install. Null when unknown. */
+  updatedAt: string | null;
   lastCommand: 'install' | 'update';
   deployedBy: { cli: string; version: string };
   deployRoot: string;
+  /**
+   * When this CLI adopted a deployment it had no record of making (#285);
+   * null for a record a run of this CLI wrote, which is the ordinary case.
+   */
+  adoptedAt: string | null;
   // --- from the state file only; null when it does not carry them ---
   /** ISO-8601 UTC of the last attempt, successful or not. */
   lastAttemptAt: string | null;
@@ -285,6 +296,10 @@ function mergeDeployment(
     lastCommand: info.lastCommand,
     deployedBy: info.deployedBy,
     deployRoot: layout.deployRoot,
+    // The STATE is preferred for this one: the info document carries it too,
+    // but the state is where `update` records the adoption and is the half
+    // that is still right when a later deploy has not rewritten the document.
+    adoptedAt: state.adoptedAt ?? info.adoptedAt ?? null,
     lastAttemptAt: state.lastAttemptAt ?? null,
     envPath: state.envPath ?? envFilePath(layout.deployRoot),
     proxyContainer: state.proxyContainer ?? null,
@@ -615,11 +630,27 @@ export function renderAbout(report: AboutReport, options: RenderAboutOptions = {
     row('Repository', deployment.repoUrl);
     row('Domain', deployment.domain ?? 'not published');
     row('Port', String(deployment.bindPort));
-    row('Installed', formatInstant(deployment.installedAt, now));
-    row('Last updated', formatInstant(deployment.updatedAt, now));
+    row(
+      'Installed',
+      deployment.installedAt === null
+        ? 'unknown'
+        : formatInstant(deployment.installedAt, now),
+    );
+    row(
+      'Last updated',
+      deployment.updatedAt === null ? 'unknown' : formatInstant(deployment.updatedAt, now),
+    );
     row('Last command', deployment.lastCommand);
     row('Deployed by', `${deployment.deployedBy.cli} ${deployment.deployedBy.version}`);
-    if (deployment.lastAttemptAt !== null && deployment.lastAttemptAt > deployment.updatedAt) {
+    if (deployment.adoptedAt !== null) {
+      // Why the two instants above may read `unknown`, on the line after them.
+      row('Record', `adopted ${formatInstant(deployment.adoptedAt, now)} - rebuilt from the deployment on disk`);
+    }
+    if (
+      deployment.lastAttemptAt !== null &&
+      deployment.updatedAt !== null &&
+      deployment.lastAttemptAt > deployment.updatedAt
+    ) {
       row('Last attempt', `${formatInstant(deployment.lastAttemptAt, now)} - did not complete`);
     }
     if (deployment.previousSha !== null) {

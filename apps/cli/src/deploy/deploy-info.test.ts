@@ -139,6 +139,10 @@ describe('buildDeployInfo', () => {
       bindPort: 3535,
       host: FACTS,
       remote: null,
+      // Explicit, not absent (#283): a caller that says nothing about how its
+      // run ended is one whose run finished. Absent is reserved for documents
+      // written by a CLI from before the field existed.
+      run: { completed: true },
     } satisfies DeployInfo);
   });
 
@@ -376,6 +380,51 @@ describe('validateDeployInfo', () => {
     expect(validateDeployInfo(JSON.parse(JSON.stringify(info)))).toEqual(info);
   });
 
+  // ---------------------------------------------------------------------------
+  // An unknown install time is written as null, never guessed (issue #285)
+  // ---------------------------------------------------------------------------
+
+  it('writes null timestamps for an adopted deployment rather than inventing them', () => {
+    const { installedAt: _one, lastDeployedAt: _two, ...adopted } = sampleState('/x');
+    const info = buildDeployInfo(
+      '/x',
+      { ...adopted, adoptedAt: '2026-09-17T12:00:00.000Z' } as DeployState,
+      FACTS,
+      { appVersion: null },
+    );
+
+    // The clone, the .env and the proxy say what is deployed; none of them
+    // says when it was installed. Null is the honest answer, and the API has
+    // read both of these as optional-and-nullable since #124.
+    expect(info.installedAt).toBeNull();
+    expect(info.updatedAt).toBeNull();
+    expect(info.adoptedAt).toBe('2026-09-17T12:00:00.000Z');
+    expect(validateDeployInfo(JSON.parse(JSON.stringify(info)))).toEqual(info);
+  });
+
+  it('still falls back to installedAt for updatedAt when only that is known', () => {
+    const { lastDeployedAt: _dropped, ...state } = sampleState('/x');
+    const info = buildDeployInfo('/x', state as DeployState, FACTS, { appVersion: null });
+
+    expect(info.updatedAt).toBe('2026-09-15T18:02:11.000Z');
+  });
+
+  it('leaves adoptedAt off a document a run of this CLI wrote', () => {
+    // Absent means the record came from a real run - every document written
+    // before #285, and every ordinary one after it.
+    expect(valid()).not.toHaveProperty('adoptedAt');
+    expect(validateDeployInfo({ ...valid(), adoptedAt: undefined })).toBeDefined();
+  });
+
+  it('still refuses a timestamp that is neither null nor a UTC instant', () => {
+    expect(() => validateDeployInfo({ ...valid(), installedAt: '2026-09-15 18:02:11' })).toThrow(
+      /installedAt is not a UTC timestamp or null/,
+    );
+    expect(() => validateDeployInfo({ ...valid(), adoptedAt: 'yesterday' })).toThrow(
+      /adoptedAt is not a UTC timestamp/,
+    );
+  });
+
   it('accepts a remote once update --check has filled it', () => {
     const info = {
       ...valid(),
@@ -384,8 +433,38 @@ describe('validateDeployInfo', () => {
     expect(validateDeployInfo(info)).toEqual(info);
   });
 
+  // ---------------------------------------------------------------------------
+  // `run`, and both directions of compatibility (issue #283)
+  // ---------------------------------------------------------------------------
+
+  it('defaults to a completed run, so every writer says so explicitly', () => {
+    expect(valid().run).toEqual({ completed: true });
+  });
+
+  it('accepts an incomplete run naming the step that stopped it', () => {
+    const info = buildDeployInfo('/x', sampleState('/x'), FACTS, {
+      appVersion: null,
+      run: { completed: false, failedStep: 'publish', attemptedAt: '2026-09-17T09:00:00.000Z' },
+    });
+    expect(validateDeployInfo(JSON.parse(JSON.stringify(info)))).toEqual(info);
+  });
+
+  it('accepts a document with NO run at all: one written before #283', () => {
+    // The compatibility that matters most. `schema` deliberately stayed at 1,
+    // so this CLI must keep reading - and `update --check` must keep patching
+    // - every info.json already sitting on every live server. A required
+    // field here would make `updateDeployInfoRemote` throw on all of them.
+    const { run: _run, ...older } = valid();
+    expect(_run).toBeDefined();
+    expect(() => validateDeployInfo(older)).not.toThrow();
+    expect(validateDeployInfo(older).run).toBeUndefined();
+  });
+
   it.each([
     ['not an object', 'a string'],
+    ['run', { ...valid(), run: { completed: 'no' } }],
+    ['run.failedStep', { ...valid(), run: { completed: false, failedStep: 7 } }],
+    ['run.attemptedAt', { ...valid(), run: { completed: false, attemptedAt: 'yesterday' } }],
     ['schema', { ...valid(), schema: 0 }],
     ['app.commitSha', { ...valid(), app: { ...valid().app, commitSha: 42 } }],
     ['app.version', { ...valid(), app: { ...valid().app, version: 1 } }],

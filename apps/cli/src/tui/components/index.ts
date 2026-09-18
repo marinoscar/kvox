@@ -51,5 +51,8 @@ export {
 } from './confirm-dialog.js';
 export type { ConfirmChoice, ConfirmDialogProps } from './confirm-dialog.js';
 
+export { TypedConfirm, typedConfirmVerdict, typedConfirmMismatch } from './typed-confirm.js';
+export type { TypedConfirmProps, TypedConfirmResult, TypedConfirmVerdict } from './typed-confirm.js';
+
 export { contentWidth, useContentWidth, FRAME_CHROME_COLUMNS } from './content-width.js';
 export { truncateEnd, ELLIPSIS } from './truncate.js';

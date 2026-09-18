@@ -143,7 +143,25 @@ export const OPTION_MODE_CHOICES: ReadonlyArray<SelectChoice<OptionMode>> = [
  */
 export function optionModeChoicesFor(
   spec: EnvVarSpec | undefined,
+  /**
+   * The key already carries THIS deployment's own value, seeded from its
+   * `.env` (#288). "Keep" then keeps that, not the template's - and saying
+   * "the template's own value, unchanged" over it would describe the one
+   * thing keeping it does not do.
+   */
+  fromDeployment = false,
 ): ReadonlyArray<SelectChoice<OptionMode>> {
+  if (fromDeployment) {
+    return [
+      {
+        value: 'keep',
+        label: 'Keep',
+        hint: "This deployment's current value, unchanged.",
+      },
+      { value: 'edit', label: 'Edit', hint: 'Type a value in the field below.' },
+      { value: 'skip', label: 'Skip', hint: 'Leave the key out of the environment file.' },
+    ];
+  }
   const hasValue = (spec?.defaultValue ?? '') !== '' && spec?.optional !== true;
   if (hasValue) return OPTION_MODE_CHOICES;
   return [
@@ -430,6 +448,16 @@ export interface FormInput {
   answers: InstallAnswers;
   /** Server-derived defaults (#127), keyed by env key. */
   suggestions?: Readonly<Record<string, Suggestion>> | undefined;
+  /**
+   * What this deployment's own `.env` seeded (#288), keyed by field ref.
+   *
+   * Only used to WORD a field, never to fill one - `applyPrefill` already put
+   * the value in `answers`. It matters because a masked field is otherwise
+   * indistinguishable from a freshly minted one, and an operator who cannot
+   * tell "the secret you are already running on" from "a new secret about to
+   * replace it" has no way to know that pressing on is safe.
+   */
+  prefill?: ReadonlyMap<string, string> | undefined;
 }
 
 const INTERNAL_FIELDS: Readonly<Record<string, FormFieldSpec>> = {
@@ -534,6 +562,11 @@ export function formFieldsFor(step: InstallStep, input: FormInput): FormFieldSpe
   const byKey = new Map(input.specs.map((spec) => [spec.key, spec]));
   const suggestions = input.suggestions ?? {};
   const fields: FormFieldSpec[] = [];
+  /** Still exactly what the `.env` said - anything typed over is the operator's. */
+  const fromDeployment = (ref: string): boolean => {
+    const seeded = input.prefill?.get(ref);
+    return seeded !== undefined && seeded === input.answers[ref];
+  };
 
   for (const ref of step.fields) {
     if (ref === DOMAIN_FIELD) {
@@ -587,7 +620,9 @@ export function formFieldsFor(step: InstallStep, input: FormInput): FormFieldSpe
         key: ref,
         label: `  value`,
         secret: true,
-        help: 'Generated. Type here to replace it with your own.',
+        help: fromDeployment(ref)
+          ? 'The value this deployment is already using. Type here to replace it — anything encrypted with the old one stops being readable.'
+          : 'Generated. Type here to replace it with your own.',
         validate: optionalise(metadata.validate, step.optional === true),
       });
       continue;
@@ -602,7 +637,7 @@ export function formFieldsFor(step: InstallStep, input: FormInput): FormFieldSpe
         kind: 'select',
         key: optionModeField(ref),
         label: ref,
-        choices: optionModeChoicesFor(spec),
+        choices: optionModeChoicesFor(spec, fromDeployment(ref)),
         ...(helpFor(spec, metadata) === '' ? {} : { help: helpFor(spec, metadata) }),
       });
       fields.push({
@@ -738,6 +773,16 @@ export function ensureOptionModes(
     const spec = byKey.get(ref);
     if (spec === undefined) continue;
     if (next[optionModeField(ref)] !== undefined) continue;
+    // A key that ALREADY has an answer keeps it (#288). `applyOptionMode`
+    // writes the TEMPLATE's default for `keep`, which is right for a key
+    // nobody has answered and catastrophic for one seeded from this
+    // deployment's own `.env`: the mode says "keep" and the value it kept
+    // would be the template's, so opening the review-everything step would
+    // quietly reset every customised optional variable on the next write.
+    if ((next[ref] ?? '') !== '') {
+      next = withAnswer(next, optionModeField(ref), 'keep');
+      continue;
+    }
     next = applyOptionMode(next, ref, 'keep', spec);
   }
   return next;
@@ -1178,7 +1223,7 @@ export const ABORT_DIALOG = {
   message: 'Stop the install?',
   detail: [
     'A build or migration interrupted mid-way can leave a partial deployment.',
-    'Re-running install will resume safely.',
+    'The steps that finished are recorded, and re-running install picks up from there.',
   ],
   confirmLabel: 'Yes, stop the install',
   cancelLabel: DEFAULT_CANCEL_LABEL,
@@ -1196,6 +1241,8 @@ export interface DoneInput {
   name: string;
   /** `runInstall`'s own sentence: log in as <admin> to claim the Admin role. */
   nextStep: string;
+  /** Work the run could not finish (#265). Usually empty. */
+  warnings?: readonly string[] | undefined;
 }
 
 export interface DoneModel {
@@ -1203,6 +1250,13 @@ export interface DoneModel {
   rows: KeyValueRow[];
   /** The one thing that still has to happen before anybody is an admin. */
   nextStep: string;
+  /**
+   * Shown above the facts, the same place `renderInstall` puts it (#265). This
+   * screen is a second RENDERER of the install result, never a second set of
+   * rules about it, so an install that could not schedule certificate renewal
+   * has to say so here too.
+   */
+  warnings: readonly string[];
 }
 
 export function doneModel(input: DoneInput): DoneModel {
@@ -1216,6 +1270,7 @@ export function doneModel(input: DoneInput): DoneModel {
       { key: 'Journal', value: input.journalPath },
     ],
     nextStep: input.nextStep,
+    warnings: input.warnings ?? [],
   };
 }
 
@@ -1225,13 +1280,24 @@ export interface FailedInput {
   message: string;
   journalPath?: string | undefined;
   domain?: string | undefined;
+  /**
+   * Whether the state file this failure just wrote has a step to skip (#288).
+   *
+   * It is the SCREEN that knows: the run's completed steps are the ones it
+   * watched go green, plus whatever a resume carried in - and the only
+   * honest version of "re-running resumes" is one that can also say it does
+   * not. `install.ts` writes `completedSteps` on the failure path (#267), so
+   * a re-run of a failed `build` genuinely re-enters at `build`; a failure in
+   * the very first step has nothing recorded and genuinely starts over.
+   */
+  resumable?: boolean | undefined;
 }
 
 export interface FailedModel {
   title: string;
   rows: KeyValueRow[];
   message: string;
-  /** The default action: install resumes, it does not start over. */
+  /** The default action: install resumes when there is anything to resume. */
   actionLabel: string;
 }
 
@@ -1245,12 +1311,379 @@ export function failedModel(input: FailedInput): FailedModel {
       { key: 'Journal', value: input.journalPath ?? '(not opened)' },
     ],
     message: input.message,
-    actionLabel: 'Re-run install (resumes)',
+    actionLabel:
+      input.resumable === true
+        ? `Re-run install — it resumes at ${step === undefined ? (input.stepId ?? 'the step that failed') : step.title}`
+        : 'Re-run install — nothing completed, so it starts from the beginning',
   };
 }
 
 /** The state an aborted run leaves behind, said honestly. */
 export const ABORTED_DETAIL: readonly string[] = [
   'The install was stopped. Whatever had already been written is still there.',
-  'Re-running install resumes from the last completed step.',
+  'The steps that finished were recorded, so re-running install resumes from the last one',
+  'unless you change an answer it had already written.',
 ];
+
+// -----------------------------------------------------------------------------
+// What this deployment already has  (issue #288)
+// -----------------------------------------------------------------------------
+//
+// THE SCREEN PROMISED A RESUME IT NEVER ASKED FOR. `failedModel` said
+// "Re-run install (resumes)", the abort dialog said "Re-running install will
+// resume safely" and `ABORTED_DETAIL` said it a third time - while
+// `InstallWizard` called `runInstall` with no `resume` field at all, so
+// `install.ts` built an empty `completed` set and every one of the thirteen
+// steps ran again, `build` included. The wizard also opened on
+// `INTERNAL_DEFAULTS` and never read the deployment's own `.env`, so every
+// question came up blank on the re-run the copy was recommending.
+//
+// Everything below is the DECISION half of the fix, kept pure so it can be
+// asserted without mounting anything (this module's header). The two reads it
+// decides from - the state file and the `.env` - are `readDeployment` in
+// install.tsx, beside `loadTemplateSpecs`, for the same reason that one lives
+// there: it touches the filesystem.
+//
+// THE SCREEN IS STILL A RENDERER (the principle `failedModel` above states).
+// Nothing here invents a rule `install.ts` does not already have. It picks
+// between two invocations the CLI already offers - with `--resume` and
+// without - and then says on the Review screen which one it picked and what
+// that means, because a wizard that silently chooses between "skip nine
+// steps" and "run all thirteen" is worse than one that never resumed at all.
+// -----------------------------------------------------------------------------
+
+/**
+ * The pipeline step that writes the `.env`.
+ *
+ * Named rather than spelled out at each use: it is the ONE step whose being
+ * skipped changes what the operator's answers mean, and `resumePlan` below
+ * turns on exactly that.
+ */
+export const ENVIRONMENT_STEP_ID = 'environment';
+
+/**
+ * Keys never seeded back into the wizard from a deployment's `.env`.
+ *
+ * `COMPOSE_PROJECT_NAME` and `DEPLOY_ROOT` are not in the template and not in
+ * `ENV_METADATA`: `install.ts` sets both itself, after the wizard, from the
+ * resolved layout. Carrying them back in as answers would let a `.env` copied
+ * from another server name a project this install is not going to use.
+ */
+export const PREFILL_NEVER: ReadonlySet<string> = new Set([
+  'COMPOSE_PROJECT_NAME',
+  'DEPLOY_ROOT',
+]);
+
+/**
+ * Whether the deployment at `target` still has to be read.
+ *
+ * The same shape - and the same reason - as `shouldRecheckName` above: the
+ * effect that reads it re-runs on every render, because `useIsMounted` hands
+ * out a new closure each time. Without this the read would repeat for ever,
+ * and each repeat produces a NEW `Map`, so the state it sets would re-render
+ * the screen and arm the next read. `undefined` on either side is a real
+ * value here: it means "no deployment is named", which is where a cleared
+ * app-name field has to take the seed back out again.
+ */
+export function shouldReadDeployment(state: {
+  target: string | undefined;
+  lastRead: string | undefined;
+}): boolean {
+  return state.target !== state.lastRead;
+}
+
+/** The host of an `APP_URL`, when it is one `validateDomain` would accept. */
+export function domainFromAppUrl(appUrl: string | undefined): string | undefined {
+  if (appUrl === undefined || appUrl === '') return undefined;
+  const host = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(appUrl)?.[1];
+  if (host === undefined || host === '') return undefined;
+  // A port, userinfo or an IP literal is not a domain this wizard can ask
+  // for - `validateDomain` is the same rule the Domain field applies, so a
+  // prefill can never be a value the form would then refuse to submit.
+  return validateDomain(host) === undefined ? host : undefined;
+}
+
+/**
+ * The answers a deployment's own `.env` can seed, keyed by FIELD REF.
+ *
+ * Four kinds of key are dropped, each because writing it back would be a lie
+ * rather than a memory:
+ *
+ *   - `fixed` (NODE_ENV) - `install.ts` forces it whatever is asked.
+ *   - `derive` (APP_URL, GOOGLE_CALLBACK_URL) - computed from the domain, and
+ *     an answer for one of them would outrank the domain the operator gives.
+ *     APP_URL is not discarded, though: it is where the DOMAIN comes from,
+ *     which is the one answer this wizard cannot carry any other way.
+ *   - `never` (the three VAPID_* keys) - never written at all, by any path.
+ *   - `PREFILL_NEVER` - set by the installer from the resolved layout.
+ *
+ * A blank value on disk is also dropped: it is indistinguishable from the
+ * blank the field already shows, and seeding it would only make
+ * `environmentEdited` below see a difference where there is none.
+ *
+ * THE DOMAIN COMES FROM THE STATE FILE WHEN THE `.env` CANNOT SUPPLY IT. It
+ * is the one answer with no environment key of its own - APP_URL and
+ * GOOGLE_CALLBACK_URL are DERIVED from it - and a template that does not
+ * carry APP_URL at all (a fork's, the test fixtures') would otherwise leave
+ * the Domain field blank on every re-run, which `environmentEdited` would
+ * then read as a changed environment and decline every resume over. The
+ * state's own `domain` is the value the previous run published under, which
+ * is exactly the question being asked.
+ */
+export function prefillFrom(
+  env: ReadonlyMap<string, string> | undefined,
+  state?: { domain?: string | undefined } | undefined,
+): Map<string, string> {
+  const seeded = new Map<string, string>();
+
+  for (const [key, value] of env ?? []) {
+    if (value === '') continue;
+    if (PREFILL_NEVER.has(key)) continue;
+    if (key.startsWith(INTERNAL_PREFIX)) continue;
+    const metadata = metadataFor(key);
+    if (metadata.never === true) continue;
+    if (metadata.fixed !== undefined) continue;
+    if (metadata.derive !== undefined) continue;
+    seeded.set(key, value);
+  }
+
+  const recorded = state?.domain;
+  const domain =
+    domainFromAppUrl(env?.get('APP_URL')) ??
+    (recorded !== undefined && validateDomain(recorded) === undefined ? recorded : undefined);
+  if (domain !== undefined) seeded.set(DOMAIN_FIELD, domain);
+
+  return seeded;
+}
+
+/**
+ * Seeds `next`'s values into the answers, and takes `previous`'s back out.
+ *
+ * TWO RULES, AND THE SECOND ONE IS #229's RULE AGAIN. The first is the
+ * ordinary one this file already applies to a resolved repository: an answer
+ * the operator has typed is the more recent statement of intent and is never
+ * overwritten. The second is that a prefill is only ever THIS deployment's -
+ * and the app name is a field on Welcome, so the deploy root changes while
+ * somebody types. Walking from `demo` to `demo2` reads `demo`'s file on the
+ * way past; without taking those values back out again, the neighbour's
+ * database password would survive into the install of a different app for
+ * every key `demo2`'s own file happens not to carry. A value is removed only
+ * while it still equals what was seeded, so nothing the operator typed over
+ * is lost.
+ *
+ * Returns the SAME object when nothing changed, so the effect that calls it
+ * cannot loop.
+ */
+export function applyPrefill(
+  answers: InstallAnswers,
+  previous: ReadonlyMap<string, string> | undefined,
+  next: ReadonlyMap<string, string> | undefined,
+): InstallAnswers {
+  const updated: Record<string, string> = { ...answers };
+  let changed = false;
+
+  for (const [key, value] of previous ?? []) {
+    if (next?.has(key) === true) continue;
+    if (updated[key] !== value) continue;
+    delete updated[key];
+    changed = true;
+  }
+
+  for (const [key, value] of next ?? []) {
+    const current = updated[key];
+    const untouched =
+      current === undefined || current === '' || current === previous?.get(key);
+    if (!untouched || current === value) continue;
+    updated[key] = value;
+    changed = true;
+  }
+
+  return changed ? updated : answers;
+}
+
+/**
+ * Would confirming these answers write something the `.env` does not already
+ * say?
+ *
+ * The question `resumePlan` needs, and the reason it is asked in terms of the
+ * PREFILL rather than of the file: `envAnswers` drops a blank answer so the
+ * value on disk stands, which is what makes "clear a prefilled field" mean
+ * "leave it alone" rather than "write it empty". A blank is therefore never
+ * an edit here either - the two have to agree, or the wizard would decline to
+ * resume over a field somebody cleared and then write nothing anyway.
+ *
+ * `DOMAIN_FIELD` counts although it is internal: APP_URL and
+ * GOOGLE_CALLBACK_URL are derived from it, so a changed domain is a changed
+ * environment file.
+ */
+export function environmentEdited(
+  answers: InstallAnswers,
+  prefill: ReadonlyMap<string, string>,
+): boolean {
+  const keys = new Set<string>(prefill.keys());
+  for (const key of Object.keys(answers)) {
+    if (key === DOMAIN_FIELD || !key.startsWith(INTERNAL_PREFIX)) keys.add(key);
+  }
+
+  for (const key of keys) {
+    const answer = answers[key] ?? '';
+    if (answer === '') continue;
+    if (answer !== (prefill.get(key) ?? '')) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Why this run will or will not be resumed. Rendered, never only logged.
+ *
+ *   `resume`            - `--resume`'s exact conditions are met.
+ *   `no-state`          - no state file: the ordinary first install.
+ *   `already-deployed`  - a deploy has completed here, so `runInstall` will
+ *                         refuse without `--reinstall`. Said BEFORE the run.
+ *   `environment-edited`- a resumable run exists, but the answers differ from
+ *                         the `.env` it wrote and the step that writes it is
+ *                         among the completed ones.
+ *   `no-completed-steps`- a state file with nothing to skip.
+ */
+export type ResumeReason =
+  | 'resume'
+  | 'no-state'
+  | 'already-deployed'
+  | 'environment-edited'
+  | 'no-completed-steps';
+
+export interface ResumePlan {
+  /** Whether `resume: true` is passed to `runInstall`. */
+  resume: boolean;
+  /** The steps the previous run recorded, in the order it recorded them. */
+  completedSteps: readonly string[];
+  /** The step that stopped it, when the state names one. */
+  failedStep?: string | undefined;
+  reason: ResumeReason;
+}
+
+/** The subset of the deploy state this decision reads. */
+export interface ResumeStateInput {
+  lastOutcome?: 'success' | 'failure' | undefined;
+  lastDeployedAt?: string | undefined;
+  lastFailedStep?: string | undefined;
+  completedSteps?: readonly string[] | undefined;
+}
+
+/**
+ * Whether to hand `runInstall` a `resume`, and what to tell the operator.
+ *
+ * FOUR CONDITIONS, AND EVERY ONE OF THEM IS A REFUSAL install.ts WOULD
+ * OTHERWISE MAKE, OR A DECISION IT CANNOT MAKE FOR ITSELF.
+ *
+ *   1. A STATE FILE EXISTS. `install.ts` answers `--resume` with no state by
+ *      throwing "Nothing to resume: no deployment state at <root>" - the
+ *      ordinary first install - so the flag can never be passed
+ *      unconditionally. An unreadable or hand-edited file reaches this as
+ *      `undefined` (see `readDeployment`) and is treated as no state: a
+ *      wizard that cannot parse a record must start fresh, never crash.
+ *
+ *   2. THE PREVIOUS RUN FAILED. `lastOutcome` is absent on every state file
+ *      written before #267 and ABSENT MEANS SUCCESS, so this tests for
+ *      `'failure'` and never for `!== 'success'` (state.ts says so outright).
+ *      A COMPLETED deployment is a reinstall or an update, not a resume, and
+ *      `install.ts`'s own "A deployment already exists" refusal is the right
+ *      answer to it. Passing `resume` there would be strictly worse than the
+ *      refusal: the flag EXEMPTS that guard, so a run over a successful
+ *      deployment would skip all thirteen recorded steps and report an
+ *      install that did nothing. Silently turning a reinstall into a resume
+ *      is the one outcome this function exists to make impossible.
+ *
+ *   3. SOMETHING WAS COMPLETED. With an empty `completedSteps` the flag skips
+ *      nothing, and all it would still do is waive condition 2's guard. A
+ *      resume that resumes nothing is not worth waiving a refusal for.
+ *
+ *   4. THE ANSWERS STILL MATCH THE FILE. `environment` is step five of
+ *      thirteen, so a run that got as far as `build` has it in
+ *      `completedSteps` - and a resumed run SKIPS it, `.env` and all. That is
+ *      right for a `deploy install --resume` at a shell, where nobody was
+ *      asked anything. It is wrong here, because this screen asks all ten
+ *      pages of questions FIRST: an operator whose install failed at
+ *      `migrate`, who
+ *      re-runs and corrects the database password, would have the correction
+ *      dropped on the floor and watch the identical failure. So an edited
+ *      environment declines the resume and pays for the rebuild, which is
+ *      what applying the fix costs. Prefilling is what makes "unchanged" the
+ *      ordinary case rather than a lucky one.
+ */
+export function resumePlan(input: {
+  state: ResumeStateInput | undefined;
+  answers: InstallAnswers;
+  prefill: ReadonlyMap<string, string>;
+}): ResumePlan {
+  const { state } = input;
+  if (state === undefined) {
+    return { resume: false, completedSteps: [], reason: 'no-state' };
+  }
+
+  const completedSteps = state.completedSteps ?? [];
+  const failedStep = state.lastFailedStep;
+  const base = {
+    completedSteps,
+    ...(failedStep === undefined ? {} : { failedStep }),
+  };
+
+  const failed = state.lastOutcome === 'failure';
+  const edited =
+    completedSteps.includes(ENVIRONMENT_STEP_ID) &&
+    environmentEdited(input.answers, input.prefill);
+
+  if (failed && completedSteps.length > 0 && !edited) {
+    return { ...base, resume: true, reason: 'resume' };
+  }
+
+  // Not resuming, so the guard this flag would have waived is now live.
+  if (state.lastDeployedAt !== undefined) {
+    return { ...base, resume: false, reason: 'already-deployed' };
+  }
+  if (edited) return { ...base, resume: false, reason: 'environment-edited' };
+  return { ...base, resume: false, reason: 'no-completed-steps' };
+}
+
+/**
+ * What the Review screen says about that decision.
+ *
+ * It is on the LAST screen before the first write, beside the values, because
+ * that is the only place the answer to "so what is actually going to happen"
+ * is worth anything.
+ */
+export function resumeNotice(plan: ResumePlan): string[] {
+  const done = plan.completedSteps.length;
+  const total = PIPELINE_STEPS.length;
+  const at = PIPELINE_STEPS.find((step) => step.id === plan.failedStep)?.title;
+
+  switch (plan.reason) {
+    case 'resume':
+      return [
+        `Resuming a previous run: ${String(done)} of ${String(total)} steps are already done and will be skipped${
+          at === undefined ? '' : `, re-entering at ${at}`
+        }.`,
+        ...(plan.completedSteps.includes(ENVIRONMENT_STEP_ID)
+          ? [
+              'The environment file is already written and matches the answers above, so it is kept as it is.',
+            ]
+          : []),
+      ];
+    case 'environment-edited':
+      return [
+        `A previous run stopped${at === undefined ? '' : ` at ${at}`}, but the answers above differ from the environment file it wrote.`,
+        'So every step runs again and the new values are written — the rebuild is what applying them costs.',
+      ];
+    case 'already-deployed':
+      return [
+        'A deployment has already been installed here, so install will refuse rather than run.',
+        'Use Update to bring it up to date.',
+      ];
+    case 'no-completed-steps':
+      return ['A previous run recorded no completed steps, so this starts from the beginning.'];
+    case 'no-state':
+    default:
+      return [];
+  }
+}

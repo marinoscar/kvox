@@ -20,6 +20,7 @@ import {
   buildReport,
   describeAge,
   registerDeployCommand,
+  renderInstall,
   renderResult,
   renderSummary,
   type DeployContext,
@@ -1423,5 +1424,121 @@ describe('kvox deploy certs status', () => {
 
     expect(result.error).toBeUndefined();
     expect(result.stderr).toContain(proxyRoot);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// `kvox deploy list`  (issue #290)
+// ---------------------------------------------------------------------------
+
+describe('kvox deploy list', () => {
+  it('lists every app under the apps root, with where each record came from', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+    const orphan = join(root, 'orphan');
+    mkdirSync(join(orphan, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(orphan, '.env'), `DEPLOY_ROOT=${orphan}\nAPP_BIND_PORT=3536\n`);
+
+    const result = await runDeploy(['list', '--apps-root', root], {});
+
+    expect(result.error).toBeUndefined();
+    expect(result.stderr).toContain('alpha');
+    expect(result.stderr).toContain('orphan');
+    expect(result.stderr).toContain('abcdef012345 (main)');
+    expect(result.stderr).toContain('no state file');
+    // stdout carries --json and nothing else.
+    expect(result.stdout).toBe('');
+  });
+
+  it('prints the inventory on stdout under --json', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+
+    const result = await runDeploy(['list', '--apps-root', root, '--json'], {});
+
+    const report = JSON.parse(result.stdout) as {
+      appsRoot: string;
+      apps: Array<{ name: string; record: string; commitSha: string | null; bindPort: number }>;
+    };
+    expect(report.appsRoot).toBe(root);
+    expect(report.apps).toHaveLength(1);
+    expect(report.apps[0]?.name).toBe('alpha');
+    expect(report.apps[0]?.record).toBe('state');
+    expect(report.apps[0]?.bindPort).toBe(3535);
+    expect(result.stderr).toBe('');
+  });
+
+  it('leaves out an application this CLI did not deploy', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+    const stranger = join(root, 'vault');
+    mkdirSync(join(stranger, 'repo', '.git'), { recursive: true });
+    writeFileSync(join(stranger, '.env'), 'APP_BIND_PORT=8080\n');
+
+    const result = await runDeploy(['list', '--apps-root', root, '--json'], {});
+
+    const report = JSON.parse(result.stdout) as { apps: Array<{ name: string }> };
+    expect(report.apps.map((app) => app.name)).toEqual(['alpha']);
+  });
+
+  it('exits 2 when nothing is installed under the apps root', async () => {
+    // A usage-level fact, the same standing `certs status` gives an empty
+    // proxy: `deploy list && ...` must not proceed on a host with no apps.
+    const result = await runDeploy(['list', '--apps-root', appsRoot()], {});
+
+    expect(exitCodeFor(result.error)).toBe(EXIT.USAGE);
+    expect((result.error as Error).message).toContain('Nothing is installed under');
+  });
+
+  it('takes no --name or --root: it is the inventory, not one app', async () => {
+    const root = appsRoot();
+    installedRoot(join(root, 'alpha'), 'alpha');
+
+    const result = await runDeploy(['list', '--apps-root', root, '--name', 'alpha'], {});
+
+    expect(result.error).toBeDefined();
+    expect(String((result.error as Error).message)).toContain('unknown option');
+  });
+});
+
+
+describe('renderInstall', () => {
+  const base = {
+    deployRoot: '/opt/infra/apps/demo',
+    name: 'demo',
+    commitSha: 'a'.repeat(40),
+    journalPath: '/opt/infra/apps/demo/logs/install.log',
+    nextStep: 'Log in at https://demo.example.test as admin@example.test to claim the Admin role.',
+  };
+
+  it('says nothing extra on an ordinary install', () => {
+    const output = renderInstall({ ...base, warnings: [] });
+
+    expect(output).toContain('Installed.');
+    expect(output).not.toContain('Action required');
+    expect(output.trimEnd().endsWith(base.nextStep)).toBe(true);
+  });
+
+  it('puts an unscheduled renewal under "Action required" ABOVE the facts (#265)', () => {
+    // An install that completed with no renewal schedule must never be silent:
+    // the only other notice of it is an expired certificate 90 days later.
+    const output = renderInstall({
+      ...base,
+      warnings: ['WARNING: automatic certificate renewal is NOT scheduled.\n\nsudo install -m 644 /a /b'],
+    });
+
+    expect(output).toContain('  Action required:');
+    expect(output.indexOf('Action required')).toBeLessThan(output.indexOf('App        demo'));
+    expect(output).toContain('    sudo install -m 644 /a /b');
+    // nextStep stays the last line: the one thing nobody else can do.
+    expect(output.trimEnd().endsWith(base.nextStep)).toBe(true);
+  });
+
+  it('leaves a blank line blank rather than indenting whitespace into it', () => {
+    const output = renderInstall({ ...base, warnings: ['first\n\nsecond'] });
+
+    expect(output.split('\n')).toContain('');
+    expect(output.split('\n').some((line) => /^\s+$/.test(line))).toBe(false);
   });
 });

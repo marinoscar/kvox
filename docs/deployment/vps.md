@@ -216,6 +216,14 @@ SSH session), and everything below runs **on the VPS**.
    re-run. Add `--resume` to skip straight to the step that failed rather
    than re-checking everything before it.
 
+   You can run that from inside the deployment itself — `cd
+   /opt/infra/apps/<name>` (or anywhere below it) and `kvox deploy install
+   --resume`. The state file there names the deployment, so nothing else has
+   to be re-supplied; this works even when `/opt/infra` is itself a git
+   repository, which used to make the CLI refuse (issue #266). From the apps
+   root itself, or from anywhere that names no deployment, pass `--name
+   <app>` (or `--root <dir>`) as before.
+
 4. **Once it succeeds**, do not treat a clean `install` as "the site is
    live and correct" until you've done section 4 — the seed does not create
    anyone who can log in.
@@ -469,14 +477,46 @@ kvox deploy certs renew --install-cron
 Writes `/etc/cron.d/kvox-certs-<name>` — `root`, twice daily at a minute
 derived from the app's name (so several apps on one box don't all fire
 together), running `certs renew --all` so one cron entry serves every app
-behind the shared proxy. `install` writes this same file automatically the
-first time it issues a certificate; `doctor`'s `certificate-renewal` check
-recognizes it (or `certbot.timer`, or any cron line mentioning `certbot`/
-`renew`) as evidence something is renewing certificates on this box.
+behind the shared proxy. `install` writes this same file automatically
+whenever this deployment doesn't already have one — the gate is whether the
+entry exists, not whether that run issued a certificate, so a re-run over an
+existing certificate installs the missing schedule rather than skipping it.
+`doctor`'s `certificate-renewal` check recognizes it (or `certbot.timer`, or
+any cron line mentioning `certbot`/`renew`) as evidence something is renewing
+certificates on this box.
 
-**Verify:** `crontab -l` inside `/etc/cron.d/kvox-certs-<name>` shows the
-entry, and `kvox deploy doctor --domain <domain>`'s `certificate-renewal`
-check passes.
+### This is the one step that may need your `sudo`
+
+`/etc/cron.d` is `root:root`, and the CLI runs as an ordinary user on purpose
+— `sudo kvox` resets `HOME` and logs `gh` out, which is why section 2 has you
+create the deploy root with `sudo install -d -o $USER` rather than run the
+tool as root. So on a standard server this one write fails, and it is
+deliberately **not** fatal: the certificate has been issued, the vhost is
+live, the site is serving HTTPS, and only the *future* renewal is unscheduled.
+
+The install finishes and ends with an `Action required:` block naming the
+error and the one line that completes it:
+
+```bash
+sudo install -m 644 /opt/infra/apps/<name>/kvox-certs-<name> /etc/cron.d/kvox-certs-<name>
+```
+
+The staged file is the exact one the CLI would have written — `cat` it first
+if you like. Do **not** re-run the install under `sudo` to avoid this; that
+trades one manual step for a logged-out `gh` much earlier in the run.
+
+**Verify:**
+
+```bash
+ls /etc/cron.d/kvox-certs-*          # this app's entry should be listed
+cat /etc/cron.d/kvox-certs-<name>    # root, 0644, `certs renew --all`
+```
+
+and `kvox deploy doctor --domain <domain>`'s `certificate-renewal` check
+passes. `doctor`'s `cron-dir-writable` check tells you *before* installing
+whether this step will be needed; it is `recommended`, never `required`,
+because a root-owned `/etc/cron.d` is the ordinary case rather than a broken
+server.
 
 ## 8. Using Let's Encrypt staging while you work out the setup
 
@@ -597,6 +637,9 @@ answer.
 
 ### 11.2 "Remove this deployment from this server" — `uninstall`
 
+This is also the `Uninstall` destination in `kvox tui` → Deploy, which runs
+this exact command and asks for the same typed names.
+
 **Look first. It costs nothing:**
 
 ```bash
@@ -631,7 +674,9 @@ to reach the destructive path by leaving a flag off.
 
 | | |
 |---|---|
-| **Your database** | `deploy` validates it; it never creates or manages it (section 3.2's `CREATE DATABASE` is the one narrow exception, and it has no counterpart here). It holds your data and usually lives on another host. The `dropdb` command is **printed** for you — run it yourself if you want the database gone. |
+| **Your database** | Not unless you pass `--drop-database` (section 11.2.1). Without it, `deploy` validates the database and never manages it; it holds your data and usually lives on another host, and the `dropdb` command is **printed** for you instead. |
+| **Your object storage** | Not unless you pass `--purge-storage` (section 11.2.1). Without it, every upload, transcript, note and database backup stays in the bucket. |
+| **The bucket itself** | **Ever.** Even with `--purge-storage`. You created it, it probably has a lifecycle policy and a CORS rule, and its name can't be reclaimed for hours. |
 | **The `devnet` network** | Shared with every other app on this server. |
 | **The shared proxy container** | Likewise. Its vhost for *this* app is removed and the proxy reloaded; the container is never stopped, restarted or removed, because that takes every other site on the box down with it. |
 | **TLS certificates** | Kept by default. Let's Encrypt allows only **5 duplicate certificates per week** for the same hostname set, and a reinstall re-requests one — so destroying and re-requesting on each attempt at a broken install locks you out of issuing for **your own domain** for a week. Pass `--certs` when you genuinely mean it. |
@@ -671,6 +716,90 @@ docker ps -a --filter label=com.docker.compose.project=<name>   # empty
 ls /opt/infra/proxy/nginx/conf.d/           # this app's .conf gone, others intact
 docker exec <proxy-container> nginx -t      # still valid for every other site
 ls /etc/cron.d/kvox-certs-*                 # at least one entry should remain
+```
+
+### 11.2.1 "…and the data too" — `--drop-database` and `--purge-storage`
+
+`uninstall` on its own removes the **deployment**. Your database and your
+bucket survive it. If you want them gone as well, ask for each by name.
+
+**Look first — this costs nothing and destroys nothing:**
+
+```bash
+kvox deploy uninstall --dry-run --drop-database --purge-storage
+```
+
+That prints a full inventory *before* anything is confirmed: how many objects
+and how many bytes sit under each of this application's prefixes, **anything
+else in the bucket that isn't ours**, and the database's name, host, size and
+how many sessions are open on it right now. Read the numbers. Then:
+
+```bash
+kvox deploy uninstall --confirm <name> \
+    --purge-storage --confirm-bucket <bucket> \
+    --drop-database --confirm-database <database>
+```
+
+**Three separate typed names, and that is the point.** The app's name
+authorises removing the deployment; the bucket's name authorises emptying the
+bucket; the database's name authorises dropping the database. A word typed for
+one **cannot** authorise another — there is deliberately no single "yes, delete
+the data too" flag, and there won't be one. Unattended, each must arrive as its
+own `--confirm*` flag.
+
+**What `--purge-storage` actually deletes.** There is no per-app folder in your
+bucket: this application writes at bucket *root*, under six prefixes.
+
+```
+avatars/  database-backups/  node-outputs/  notes/  transcripts/  uploads/
+```
+
+Those six are emptied. **Anything else in the bucket is listed in the output
+and left completely alone** — not read into, not deleted. So on a bucket
+dedicated to this app, the purge is complete; on a bucket you share with
+something else, it is safe, and the output tells you by name what it did not
+touch. The bucket itself is never deleted.
+
+> **If your bucket has versioning on**, deleting an object normally writes a
+> *delete marker* and quietly keeps every byte — and the bill. This does not:
+> it removes each version and delete marker **by id**, so the data really goes,
+> and the output says which mode it used. If the credentials can't read the
+> versioning setting, it assumes versioning is **on** and deletes by id anyway
+> (harmless on an unversioned bucket).
+
+**What `--drop-database` actually does.** One `DROP DATABASE "<name>"` against
+the `postgres` maintenance database, using the `POSTGRES_*` credentials from
+this deployment's own `.env`. It runs **after** the containers are stopped, so
+usually nothing is connected and **no session anywhere is touched**.
+
+If something *is* still connected — a `psql` you left open, a pooler, a second
+copy of the app on another host — PostgreSQL refuses the drop. Rather than
+leaving you with `ERROR: database is being accessed by other users`, the
+command ends the sessions **on this one database only** and retries, then tells
+you how many it ended. If it isn't allowed to end them, it prints the query
+that names exactly what is holding the database open:
+
+```bash
+psql -h <host> -p <port> -U <user> -d postgres \
+  -c "select pid, usename, application_name, client_addr from pg_stat_activity where datname = '<database>'"
+```
+
+**The order is fixed, and you cannot get a partial teardown by accident:**
+containers stop → storage is purged → the database is dropped → the deployment
+is removed. The deployment goes **last** because its `.env` is where the
+credentials for the two steps before it live. If either extra fails, it is
+reported under `Action required:` and the deployment is still removed — the
+data being left behind is stated plainly rather than assumed.
+
+If the bucket or the database can't be *read* at all (wrong key, no permission,
+already gone), you are never asked to confirm it and it is never touched. The
+run says why and removes the deployment anyway.
+
+**Verify:**
+
+```bash
+aws s3 ls s3://<bucket>/                    # the six prefixes gone, anything else intact
+psql -h <host> -U <user> -d postgres -c '\l' | grep <database>   # no row
 ```
 
 ### 11.3 If you already took it apart by hand
@@ -737,7 +866,8 @@ own environment variables, automatically.
 - [ ] Logged in at `https://<domain>` as `INITIAL_ADMIN_EMAIL` — this, not the seed, is what creates the admin account
 - [ ] Additional users added to the allowlist from the admin panel
 - [ ] `kvox deploy status` reports healthy and current; `kvox deploy about` shows the expected revision
-- [ ] Renewal cron installed (`kvox deploy certs renew --install-cron`, or it was written automatically on first issuance) and `doctor`'s `certificate-renewal` check passes
+- [ ] Renewal cron installed — `ls /etc/cron.d/kvox-certs-*` lists this app. `install` writes it automatically when there isn't one; if it reported `Action required:` instead, run the `sudo install -m 644 …` line it printed (section 7). `doctor`'s `certificate-renewal` check passes
 - [ ] `kvox deploy update` scheduled (cron or otherwise) if this server should track new releases automatically
 - [ ] `<deployRoot>/logs/` reviewed for anything unexpected if any step above didn't go as described
 - [ ] If you need to start over: `kvox deploy install --fresh` (local state only), or `kvox deploy uninstall --dry-run` then `--confirm <name>` (the whole deployment) — never a hand-rolled `rm -rf`, which leaves the `.env`, the volumes, the vhost and the cron behind (section 11)
+- [ ] To remove the **data** as well, add `--drop-database` / `--purge-storage`, each with its own typed confirmation of that resource's real name — and run `--dry-run` with them first to see the object counts and the database size you are consenting to (section 11.2.1)

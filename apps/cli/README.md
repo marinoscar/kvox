@@ -377,8 +377,8 @@ in `/api`.
 kvox deploy doctor
 ```
 
-Seven subcommands (`doctor`, `install`, `uninstall`, `update`, `status`,
-`about`, `certs`) take this repository — or, far more likely, your fork of it — from an empty
+Eight subcommands (`doctor`, `install`, `uninstall`, `update`, `status`,
+`about`, `list`, `certs`) take this repository — or, far more likely, your fork of it — from an empty
 VPS to running, migrated, seeded, and served over HTTPS at a real domain, and
 back to the latest revision on every subsequent deploy. They run **on the
 VPS itself**: SSH in with your own credentials, build `kvox` from a checkout
@@ -398,7 +398,7 @@ scripting:
 |---|---|---|
 | `0` | Success | all |
 | `1` | A step failed / installed but unhealthy | `bootstrap-vps.sh`; `status` (unhealthy); `certs status` (a certificate has expired) |
-| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about` (nothing under `--apps-root`/`--root`); `certs status` (no certificates under the proxy) |
+| `2` | Usage error, or nothing is installed where asked | `bootstrap-vps.sh`; `status`, `about`, `list` (nothing under `--apps-root`/`--root`); `certs status` (no certificates under the proxy) |
 | `6` (`EXIT.PRECONDITION`) | A required `doctor` check failed before anything was changed | `doctor`; `install`/`update`'s own preflight step (a logged-out `gh` stops `install`/`update` here too, before anything is cloned) |
 
 `about` is the one exception worth calling out: it is informational and
@@ -507,10 +507,23 @@ The same three flags select the app on every subcommand:
 ```
 
 `install` defaults `--name` to the repository's own name (`…/kvox.git`
-installs as `kvox`). `update`, `status` and `doctor` default to the one app
-already installed under `--apps-root`; with several installed they refuse and
-list them until `--name` says which. `--root` is the escape hatch that names
-the full path outright.
+installs as `kvox`). With neither flag, every other subcommand resolves in
+this order:
+
+1. `--root` — a path, verbatim. The escape hatch.
+2. `--name` — a name under the apps root. It still wins from anywhere, so
+   `--name vault` typed inside another app's folder means `vault`.
+3. **The app you are standing in.** From `/opt/infra/apps/kvox`, or anywhere
+   below it, the commands act on `kvox` — no flag needed, however many apps
+   the server hosts. The walk stops at the apps root, so standing *there*, or
+   above it, resolves nothing; an app installed outside the apps root with
+   `--root` is not found this way either, because `--root` is how it was
+   named in the first place.
+4. The one app installed under `--apps-root`.
+
+With several installed, none named, and none of them the folder you are in,
+they refuse and list them until `--name` says which.
+`kvox deploy list` shows what they found.
 
 ### Checking prerequisites
 
@@ -749,6 +762,49 @@ the step that failed rather than re-running everything before it.
 discards uncommitted changes in the checkout it manages; `--skip-doctor`,
 `--skip-proxy` and `--skip-seed` each skip exactly the one stage they name.
 
+**Which deployment `install` acts on** is decided before anything is read or
+written, in three ranks (issue #266):
+
+1. `--root <dir>` or `--name <app>`, and `--repo <url>` for the repository
+   itself.
+2. **The deployment you are standing in.** From a deploy root under
+   `--apps-root` — or any directory inside one, such as
+   `<root>/repo/infra/compose` — the state file there names the repository,
+   the ref and the app, and that is what is used. This is what makes
+   `cd /opt/infra/apps/<app> && kvox deploy install --resume` work, which is
+   where the on-screen instruction after a failed install leaves you standing.
+   The walk upward stops at the apps root: standing at the apps root itself,
+   or above it, resolves nothing this way.
+3. The `origin` of the git checkout around the current directory.
+
+Rank 2 exists because rank 3 answered a question it could not answer: on a
+server whose `/opt/infra` is itself a git repository — infrastructure as code,
+with the apps underneath it — the walk went past the deploy root's own state
+file and derived the app from the infrastructure repository. That is refused
+outright (a checkout containing the apps root is never treated as the
+application), and the refusal still stands for a directory that really does
+imply nothing. Nothing is ever scanned for candidates: exactly one deployment
+is implied by a directory, or none.
+
+`--resume` is available after **any** failed run, including the first install
+at a deploy root. A run that fails writes its deployment state before it
+exits, recording the steps that did complete, the step that stopped it and
+that it did not finish — so `--resume` re-enters at that step and skips the
+clone, the image build and the migration that already succeeded. The failed
+run does **not** write `deploy-info/`: that file is what the running
+application reports about itself, and an install that did not finish has not
+deployed what it would claim. `deploy status` says so on such a root ("the
+last install failed at `<step>`") rather than reporting it as an ordinary
+deployment, and re-running plain `install` there does **not** ask for
+`--reinstall` — nothing was deployed for it to install over. A failed run
+over a deployment that *had* previously completed still does.
+
+`--resume` reads the state file inside the deploy root, so it needs that root
+resolved first — which rank 2 above now does from the directory you are
+standing in. Outside the apps root, name the deployment with `--name` (or
+`--root`, or `--repo`) exactly as the original run did; with nothing to point
+at, `--resume` refuses rather than starting a new install somewhere else.
+
 The `publish` step talks to the shared proxy **container** only — there is
 no host `nginx` or `certbot` on the server. Before spending any Let's
 Encrypt rate-limit budget it writes a nonce under the proxy's ACME webroot
@@ -764,9 +820,34 @@ fails. The container is `--proxy-container`, else whatever `doctor` found
 publishing `:443`, else `proxy-nginx`, and is recorded in the state so
 `update` reuses it. `--no-ipv6` renders the vhost without `[::]` listeners
 for a host with IPv6 disabled (the reload, not `nginx -t`, is what fails
-there). When a certificate was issued, a renewal cron is written to
+there). When this deployment has no renewal entry yet, one is written to
 `/etc/cron.d/kvox-certs-<name>` (see [Certificates](#certificates) below);
-`--install-cron` writes it regardless, `--no-install-cron` never does.
+`--install-cron` writes it regardless, `--no-install-cron` never does. The
+gate is whether an entry exists, not whether this run issued a certificate,
+so a re-run over an existing certificate installs the missing schedule
+instead of silently leaving it out.
+
+**`/etc/cron.d` is root-owned, so this one step may need you.** The CLI runs
+as an ordinary user on purpose — running it under `sudo` resets `HOME` and
+logs `gh` out — so on a standard server it cannot write that file. That does
+**not** fail the install: the certificate is issued, the vhost is live, the
+site serves HTTPS, and the run finishes with an `Action required:` block
+carrying the error and one line to paste, e.g.
+
+```bash
+sudo install -m 644 /opt/infra/apps/<name>/kvox-certs-<name> /etc/cron.d/kvox-certs-<name>
+```
+
+The file named there is the exact one the CLI would have written; it is
+staged in the deploy root so you can read it first. Verify afterwards with:
+
+```bash
+ls /etc/cron.d/kvox-certs-*
+```
+
+`doctor`'s `cron-dir-writable` check tells you in advance whether this step
+will be needed. It is `recommended`, never `required` — a root-owned
+`/etc/cron.d` is the ordinary case, not a broken server.
 
 Other flags, from `kvox deploy install --help`:
 
@@ -806,8 +887,8 @@ Options:
                        finding one
   --no-ipv6            Render the vhost without [::] listeners (a host with
                        IPv6 disabled)
-  --install-cron       Write the certificate renewal cron even if no
-                       certificate was issued
+  --install-cron       Write the certificate renewal cron even when this
+                       deployment already has one
   --no-install-cron    Never write the renewal cron
   --fresh              Discard this app's prior .env, state file and
                        deploy-info first, and install clean
@@ -839,20 +920,33 @@ install: the first login" in the runbook linked above.
 ```bash
 kvox deploy uninstall --dry-run          # see exactly what would go
 kvox deploy uninstall --confirm myapp    # then do it
+
+# the data too, each with its own typed confirmation
+kvox deploy uninstall --dry-run --drop-database --purge-storage
+kvox deploy uninstall --confirm myapp \
+    --purge-storage --confirm-bucket my-bucket \
+    --drop-database --confirm-database appdb
 ```
 
+It is also the `Uninstall` destination in `kvox tui` → Deploy, which drives
+this exact command.
+
 ```
-  --confirm <name>          Type the app's own name to authorise the removal
-  --dry-run                 List everything that would be removed; change
-                            nothing
-  --certs                   Also delete the TLS certificate
-  --keep-env                Leave the .env in place (a backup is taken either
-                            way)
-  --non-interactive         Never prompt; --confirm <name> is then required
-  --skip-proxy              Do not touch the shared reverse proxy
-  --proxy-root <path>       Shared reverse proxy directory
-  --proxy-container <name>  Proxy container to reload
-  --json                    Print a machine-readable result on stdout
+  --confirm <name>           Type the app's own name to authorise the removal
+  --drop-database            ALSO drop the database (off by default)
+  --confirm-database <name>  Type the database's own name to authorise it
+  --purge-storage            ALSO empty this app's prefixes in the bucket
+  --confirm-bucket <name>    Type the bucket's own name to authorise it
+  --dry-run                  List everything that would be removed; change
+                             nothing
+  --certs                    Also delete the TLS certificate
+  --keep-env                 Leave the .env in place (a backup is taken either
+                             way)
+  --non-interactive          Never prompt; every --confirm* is then required
+  --skip-proxy               Do not touch the shared reverse proxy
+  --proxy-root <path>        Shared reverse proxy directory
+  --proxy-container <name>   Proxy container to reload
+  --json                     Print a machine-readable result on stdout
 ```
 
 **Removes**, in this order:
@@ -878,15 +972,58 @@ kvox deploy uninstall --confirm myapp    # then do it
   to put it back — naming a real surviving deployment where there is one.
   `--dry-run` prints it too, which is when you actually want to know.
 
+**Removes only if you ask for it by name** (issue #268). Both are off by
+default, and neither is reachable by omission:
+
+- **`--drop-database`** issues `DROP DATABASE "<name>"` against the `postgres`
+  maintenance database, through the same one-off `psql` container every
+  database check uses. It runs **after** the containers are down, so in the
+  ordinary case nothing is connected and **no session is touched at all**. If
+  the drop is refused with `55006` ("is being accessed by other users"), the
+  open sessions are ended — **scoped to this one database**, never a bare
+  terminate-all — and the number ended is reported. If they can't be ended,
+  you get the `pg_stat_activity` query that names exactly what is holding it
+  open, not psql's own sentence.
+- **`--purge-storage`** empties the six prefixes this application writes —
+  `avatars/`, `database-backups/`, `node-outputs/`, `notes/`, `transcripts/`,
+  `uploads/` — and **reports anything else in the bucket without reading into
+  it or deleting it**. There is no per-app key prefix: objects are written at
+  bucket root, so "empty the bucket" and "delete this app's objects" coincide
+  only when the bucket is dedicated. This is complete for a dedicated bucket
+  and safe for a shared one. **The bucket itself is never deleted.** On a
+  **versioned** bucket every version *and* delete marker is removed **by id**,
+  because a plain delete there writes another marker and keeps the bytes and
+  the bill; an unreadable `GetBucketVersioning` is treated as versioned rather
+  than off. The `aws` client is borrowed from a one-off container, like
+  `psql`, so no S3 SDK is added to this package and the credentials from your
+  `.env` are passed by name, never in an argv.
+
+**Each takes its own typed confirmation of that resource's real name.**
+`--confirm-database <database>` and `--confirm-bucket <bucket>`, compared
+against that resource and nothing else — a word typed for one can never
+authorise the other. That is the convention the API already uses (the Danger
+Zone's rule that *the confirmation IS the scope, uppercased*). Under
+`--non-interactive` each must arrive as its flag; there is no combined
+"delete the data too" switch and there will not be one.
+
+**You see the numbers before you are asked.** Both print a full inventory
+first — objects and bytes per prefix, everything in the bucket that is not
+ours, the database's name, host, size and open session count — because you
+cannot consent to a number you were never shown. `--dry-run` prints the same
+inventory and destroys nothing, which is how to look before deciding. A
+resource that could not be *read* is never confirmed and never destroyed; the
+run reports why and removes the deployment anyway.
+
 **Never removes** — each one a deliberate refusal, documented with its
 reasoning in
-[`docs/specs/vps-deploy.md` §21](../../docs/specs/vps-deploy.md#21-removing-a-deployment-and-the-four-things-it-refuses-to-remove-issue-261):
+[`docs/specs/vps-deploy.md` §21](../../docs/specs/vps-deploy.md#21-removing-a-deployment-what-it-refuses-to-remove-and-the-two-extras-that-must-be-asked-for-issues-261-268):
 
-- **Your database.** `deploy` validates it and never manages it; it holds your
-  data and usually lives on another host. The `dropdb` command is **printed**
-  — assembled from the deployment's own `.env`, read before anything is
-  deleted, because afterwards nothing is left that knows the database's name —
-  with no password in it. Run it yourself if you want it gone.
+- **Your database, without `--drop-database`.** `deploy` validates it and
+  never manages it; it holds your data and usually lives on another host. The
+  `dropdb` command is **printed** — assembled from the deployment's own
+  `.env`, read before anything is deleted, because afterwards nothing is left
+  that knows the database's name — with no password in it.
+- **Your object storage, without `--purge-storage`.**
 - **The `devnet` network** and **the shared proxy container**. Both are shared
   with every other app on the server.
 - **TLS certificates**, unless you pass `--certs`. Let's Encrypt allows only
@@ -919,8 +1056,17 @@ compose project can't be torn down at all (compose needs its files), so the
 subprocess. A successful uninstall deletes its own log along with `logs/`; a
 *failed* one keeps it, which is the run you'd want a log for.
 
-Exit `2` covers both "nothing is installed here" and "the confirmation was
-missing or wrong".
+**The order is fixed**: the containers stop, then the storage is purged, then
+the database is dropped, then the deployment is removed. Containers first
+because nothing may write an object or open a connection mid-teardown; storage
+before the database because the deployment's own rows are the only thing that
+could ever reconcile an object the purge missed; the deployment last because
+its `.env` holds the credentials the other two steps authenticate with. A
+failed extra is reported under `Action required:` and does **not** fail the
+uninstall — the deployment was going whatever the bucket said.
+
+Exit `2` covers "nothing is installed here" and any confirmation that was
+missing or wrong — the app's, the bucket's or the database's.
 
 ### Deploying a fork
 
@@ -972,6 +1118,75 @@ Brings an already-installed server up to the latest revision (or, with
 `--ref`, to a specific one): auth, fetch, build, migrate, seed, restart,
 verify. It refuses to run at all if nothing is installed under `--apps-root`
 yet.
+
+#### Adopting a deployment with no state file
+
+`update` asks whether a **deployment** is there, not whether the CLI's own
+record of one is. When `.appctl-deploy.json` is missing but a deployment
+plainly is not — an install that stopped before the record was written, a
+directory restored from a backup that skipped a dot-file, a record deleted by
+hand — `update` rebuilds the record and carries on, rather than sending you to
+`install`, whose own precondition is the opposite.
+
+Two things must **be** there before it will: a git checkout at `<root>/repo`,
+and a readable `.env`. Both, not either. Running containers are deliberately
+not part of the gate — a deployment whose containers are stopped or pruned is
+exactly the one you are trying to update. A directory with neither, or with
+one, still gets the refusal it always got, plus a line naming the half that
+was found.
+
+What is rebuilt, and from where:
+
+| Field | Read from |
+|---|---|
+| `repoUrl` | `git -C repo remote get-url origin` |
+| `commitSha` | `git -C repo rev-parse HEAD` |
+| `ref` | `--ref`, else the branch HEAD is on, else the remote's own default branch |
+| `name` | `.env`'s `COMPOSE_PROJECT_NAME`, else the directory name |
+| `bindPort` | `.env`'s `APP_BIND_PORT`, else 3535 |
+| `domain` | `.env`'s `APP_URL` host, else the proxy vhost that forwards to `bindPort` |
+| `installedAt` | `deploy-info/info.json`, when that survived — otherwise left **unknown** |
+
+`installedAt` and `lastDeployedAt` are **never invented**. Neither is knowable
+from a disk the CLI did not write, and a guessed timestamp would show up on the
+About page as a fact. Absent means unknown, `deploy-info/info.json` carries
+`null` for them, and About renders its unknown mark. The record instead carries
+`adoptedAt` — when the bookkeeping was rebuilt, which is not the same thing as
+when the deployment was made.
+
+One directory under the apps root is **not** enumerated as a deployment,
+however: somebody else's application, deployed by the same one-app-one-folder
+convention. It would pass the gate above — a clone and an `.env` is what a
+deployment looks like from outside — so listing it would name a stranger's app
+in a refusal about yours. An unrecorded deployment is therefore counted as
+yours when its `.env` carries `DEPLOY_ROOT`, which `install` writes and every
+`update` re-pins, or when the `.env` is still at the pre-`DEPLOY_ROOT`
+location inside the clone. This is enumeration only: `--root` and `--name`
+name a directory outright and adopt exactly as they always did, and listing
+one extra name is a better failure than hiding a real deployment.
+
+It says so once, before the pipeline runs, listing every field and its source;
+the same block goes into the run journal, and `--json` carries it as `adopted`
+on the result. Three things make it refuse rather than guess: a clone with no
+`origin`, a clone with no HEAD, and a detached HEAD whose remote has no default
+branch (pass `--ref`) — guessing `main` is how a fork on `master` gets deployed
+from the wrong branch.
+
+An existing state file is always used exactly as it is, and is never
+reconstructed over.
+
+A bare `kvox deploy update` with no `--name`/`--root` reaches this too:
+discovering apps under `--apps-root` uses the same evidence gate, so a
+directory that is a deployment is found whether or not it has a state file. Two
+of them with nothing named refuses exactly as two installed apps always did —
+`Several apps are installed under …: alpha, beta. Pass --name <app> to say
+which one.` — and a recorded app beside an unrecorded one refuses the same way,
+with no silent preference for either.
+
+⚠ `status`, `about` and a named `certs` are **not** part of this. They still
+want a state file, because each is a read-only reporter and adopting from one
+would mean writing the CLI's private record from a command that only reports.
+Run `update` once to restore the record and they work again.
 
 ```bash
 kvox deploy update --check
@@ -1157,6 +1372,37 @@ Options:
   --json             Print the report on stdout
 ```
 
+### Every app on this server
+
+```bash
+kvox deploy list
+kvox deploy list --json | jq -r '.apps[].name'
+```
+
+The inventory of `--apps-root`: one block per app, with its name, deploy root,
+revision and ref, bind port, domain, when it was last deployed, and whether
+that came from the app's own `.appctl-deploy.json` or was inferred from the
+clone and the `.env` (see [Adopting a deployment with no state
+file](#adopting-a-deployment-with-no-state-file) above).
+
+There is no central registry behind it and deliberately never will be: the
+registry is the apps root itself, one record per folder, next to the thing it
+describes. So this reads the filesystem and nothing else — no container, no
+network, no `git` — which is why it is instant with a dozen apps installed and
+answers the same when Docker is down, and also why an app with no state file
+reports no revision. One `kvox deploy update` on it rebuilds the record, after
+which it reports like any other.
+
+`--name`/`--root` are deliberately absent: this is the inventory, and both
+flags name one app. Exits `2` when nothing is installed under `--apps-root`.
+
+```
+Options:
+  --apps-root <dir>  Directory that holds one folder per app (default:
+                     "/opt/infra/apps")
+  --json             Print the inventory on stdout
+```
+
 ### Certificates
 
 ```bash
@@ -1180,8 +1426,15 @@ daily at 03:xx and 15:xx with a minute derived from the app's name so
 several apps on one box don't all fire together — calling
 `kvox deploy certs renew --all --apps-root <…> --name <…>` and logging to
 `/var/log/kvox-certs-<name>.log`. It is idempotent: a second run rewrites
-nothing. `install` writes the same file when it issues a certificate.
-`doctor`'s `certificate-renewal` check recognises it.
+nothing. `install` writes the same file whenever this deployment does not
+already have one. `doctor`'s `certificate-renewal` check recognises it, and
+its `cron-dir-writable` check says in advance whether the write will succeed.
+
+Writing into `/etc/cron.d` needs root and this CLI is deliberately never run
+under `sudo`, so on a standard server the write fails. `install` treats that
+as non-fatal and prints a `sudo install -m 644 …` line to finish it by hand
+(see [Installing](#installing) above); `certs renew --install-cron`,
+where you asked for the cron explicitly, still reports the failure as one.
 
 `status` lists every certificate under the proxy with its expiry; exits `0`
 while all are valid, `1` when one has expired, `2` when there are none.
