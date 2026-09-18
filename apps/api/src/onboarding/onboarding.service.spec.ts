@@ -317,6 +317,28 @@ describe('OnboardingService', () => {
       for (const step of USER_ONBOARDING_STEPS) expect(step.audience).toBe('user');
     });
 
+    it('orders `admin.email` before `admin.access`', () => {
+      // ⚠ LOAD-BEARING ORDER, NOT EDITORIAL (#300), which is why it is pinned
+      // here beside the other registry invariants rather than left to reading.
+      //
+      // Adding an address to the allowlist — `admin.access` — is what fires
+      // `allowlist.invitation`, and that event declares `channels: ['email']`
+      // and nothing else, because its recipient has no account, no session and
+      // no open tab at the moment it fires. So an invitation issued before
+      // outbound email works sends nothing at all, to nobody, with no failure
+      // surfaced to either party. The checklist teaches the order that works.
+      //
+      // `OnboardingService.render` never sorts, so this array's order IS the
+      // order an administrator reads ('returns the registry order' below pins
+      // that half). Without this assertion the dependency is invisible and a
+      // later edit reverses it silently.
+      const keys = ADMIN_ONBOARDING_STEPS.map((step) => step.key);
+
+      expect(keys).toContain('admin.email');
+      expect(keys).toContain('admin.access');
+      expect(keys.indexOf('admin.email')).toBeLessThan(keys.indexOf('admin.access'));
+    });
+
     it('every href is root-relative', () => {
       for (const step of everyStep) {
         expect([step.key, step.href.startsWith('/')]).toEqual([step.key, true]);

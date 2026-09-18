@@ -320,11 +320,48 @@ export interface OnboardingStep<Ctx extends OnboardingContext = OnboardingContex
 // Admin steps — setting the DEPLOYMENT up
 // =============================================================================
 //
-// ⚠ THE LIST ENDS WITH A REAL TRANSCRIPTION, NOT A GREEN TICK ON A FORM.
-// `admin.smoke_test` is the only step that proves the three before it actually
-// work together: a key can be saved, well-formed, accepted by the settings page
-// and still be wrong — the wrong project, a revoked token, a region the account
-// does not have. Every other step here reports that a form was filled in.
+// ⚠ THE LIST STILL CULMINATES IN A REAL TRANSCRIPTION, NOT A GREEN TICK ON A
+// FORM. ("Culminates", not "ends with": `admin.smoke_test` is the THIRD entry
+// of seven and always has been — it comes directly after the two steps it
+// proves, which is where a proof belongs. The earlier wording here read as a
+// claim about array position and was figurative even before #299/#300.)
+// `admin.smoke_test` is the only step that proves the two required ones before
+// it actually work together: a key can be saved, well-formed, accepted by the
+// settings page and still be wrong — the wrong project, a revoked token, a
+// region the account does not have. Every other step here reports that a form
+// was filled in.
+//
+// ⚠ AND IT IS NONETHELESS `recommended`, NOT `required` (#299). The two facts
+// are not in tension, because they are about different things: being the only
+// real proof is a claim about what this step is EVIDENCE of, while the tier is
+// a claim about whether this deployment is broken without it. It is not. The
+// recording has to be this administrator's OWN, it spends a real call against
+// the deployment's provider account, and somebody configuring a deployment for
+// other people to use may reasonably never upload anything themselves. Leaving
+// it `required` left that administrator's checklist permanently unable to
+// settle, with no control to say so — and it could not simply gain one, because
+// a `required` step is NEVER skippable (see `OnboardingStep.skippable`). So the
+// step keeps its position, its argument and its blocked reason, and gains the
+// skip control the honest tier allows.
+//
+// THE ARITHMETIC THIS CHANGES: there are TWO required admin steps, not three —
+// `admin.transcription` and `admin.ai`, the pair that decides whether this
+// deployment can do anything at all. `requiredRemaining` reaches zero, and the
+// setup banner clears, once both providers are configured, whether or not this
+// administrator ever transcribed anything personally.
+//
+// -----------------------------------------------------------------------------
+// THIS ARRAY'S ORDER IS THE RENDERED ORDER, AND ONE PAIR OF IT IS LOAD-BEARING
+// -----------------------------------------------------------------------------
+//
+// `OnboardingService.render` filters this array and maps it and NEVER SORTS IT,
+// so the sequence written here is the sequence an administrator reads top to
+// bottom. Most of that sequence is editorial and a future edit may reshuffle it
+// freely. ONE PAIR MAY NOT: `admin.email` comes before `admin.access` because
+// inviting somebody before outbound email works sends nothing at all, to
+// nobody, with no failure surfaced anywhere. That argument is written out on
+// `admin.email` itself, and `onboarding.service.spec.ts`'s registry block pins
+// the pair — a dependency nothing pins is one a later edit silently reverses.
 // =============================================================================
 
 export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminContext>[] =
@@ -374,7 +411,18 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
     {
       key: 'admin.smoke_test',
       audience: 'admin',
-      tier: 'required',
+      // ⚠ RECOMMENDED, NOT REQUIRED, AND THAT IS WHAT MAKES IT SKIPPABLE (#299).
+      // This is the one admin step that is not a form, and it is the one an
+      // administrator may legitimately decline: the recording has to be theirs,
+      // it costs a real provider call against the deployment's own account, and
+      // a deployment can be genuinely, correctly configured by somebody who
+      // never intends to upload anything themselves. Leaving it `required` left
+      // the checklist unable to settle for that administrator, with no control
+      // to say so — and it could not simply gain one, because a `required` step
+      // is never skippable (see `OnboardingStep.skippable`). Demoting the tier
+      // is the honest fix rather than the convenient one: a step the
+      // administrator may decline is, by definition, not required.
+      tier: 'recommended',
       title: 'Transcribe a test recording',
       description:
         'Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.',
@@ -385,7 +433,7 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
       // /api/transcripts`. Seeded to all three roles, so this never hides the
       // step from an administrator.
       permission: PERMISSIONS.TRANSCRIPTS_WRITE,
-      skippable: false,
+      skippable: true,
       applies: () => true,
       evaluate: (ctx) => {
         if (ctx.ownReadyTranscriptCount > 0) {
@@ -393,10 +441,15 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
         }
 
         // ⚠ BLOCKED, NOT PENDING, while the provider is unconfigured. A
-        // required step you cannot yet perform must say why rather than sit
-        // there looking like a to-do the administrator is ignoring — and the
-        // fix is the step directly above this one, which is worth saying out
-        // loud rather than leaving them to notice the ordering.
+        // SKIPPABLE step especially must distinguish "you cannot do this yet"
+        // from "you have declined this": the skip control sits right there, and
+        // an administrator who reads an unexplained to-do as one they do not
+        // need is making that decision on bad information — they would be
+        // switching off the one check that would have caught a wrong key,
+        // believing they had merely opted out of a chore. So the step says what
+        // is in the way, and the fix is the step directly above this one, which
+        // is worth saying out loud rather than leaving them to notice the
+        // ordering.
         if (!ctx.transcription.available) {
           return {
             status: 'blocked',
@@ -409,6 +462,50 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
       },
     },
     {
+      // ⚠ BEFORE `admin.access`, AND THE ORDER IS THE WHOLE POINT (#300).
+      // Adding an address to the allowlist — which is what `admin.access` below
+      // asks an administrator to do — is what fires the `allowlist.invitation`
+      // notification, and that event declares `channels: ['email']` AND NOTHING
+      // ELSE. Not because the browser channel is unimplemented: because it is
+      // impossible. The recipient has no account, no session and no open tab at
+      // the moment it fires — that is what being newly allowlisted means — so
+      // there is no in-app channel that could reach them (read the entry's own
+      // comment in `notifications/notification-events.ts`, where it is the
+      // worked example of `channels` carrying real per-event information).
+      //
+      // So inviting somebody before outbound email works sends NOTHING AT ALL.
+      // The address lands on the allowlist, the administrator sees it succeed,
+      // and the invited person is simply never told they can sign in. Neither
+      // of them is shown a failure, because from the application's point of
+      // view nothing failed. The checklist's job here is to teach the order
+      // that works: configure email, then invite.
+      key: 'admin.email',
+      audience: 'admin',
+      tier: 'recommended',
+      title: 'Configure outbound email',
+      description:
+        'Invitations, welcome messages and notification emails need somewhere to be sent from. Until this is configured an invitation reaches nobody at all — the person being invited has no account for it to appear in.',
+      actionLabel: 'Open email settings',
+      href: '/admin/settings/email',
+      permission: PERMISSIONS.SYSTEM_SETTINGS_READ,
+      skippable: true,
+      applies: () => true,
+      evaluate: (ctx) => ({
+        status: ctx.email.configured ? 'satisfied' : 'pending',
+      }),
+    },
+    {
+      // ⚠ AFTER `admin.email`, deliberately — see that step's comment for why an
+      // invitation issued with no outbound email configured is delivered
+      // nowhere and reported to nobody.
+      //
+      // ⚠ AND STILL `pending`, NOT `blocked`, in that state. `blocked` is for a
+      // step the caller CANNOT perform; allowlisting somebody without email is
+      // something an administrator may legitimately do, having told them out of
+      // band. Ordering is the honest instrument here, and `admin.email` being
+      // `recommended` and skippable is the other half of the same reasoning: a
+      // hard block would refuse a deployment that has decided it does not want
+      // to send mail.
       key: 'admin.access',
       audience: 'admin',
       tier: 'recommended',
@@ -432,22 +529,6 @@ export const ADMIN_ONBOARDING_STEPS: readonly OnboardingStep<OnboardingAdminCont
         // `> 0` would mark this satisfied on every fresh installation.
         status:
           ctx.allowedEmailCount > 1 || ctx.userCount > 1 ? 'satisfied' : 'pending',
-      }),
-    },
-    {
-      key: 'admin.email',
-      audience: 'admin',
-      tier: 'recommended',
-      title: 'Configure outbound email',
-      description:
-        'Invitations, welcome messages and notification emails need somewhere to be sent from. Without it, those notifications are only ever visible inside the app.',
-      actionLabel: 'Open email settings',
-      href: '/admin/settings/email',
-      permission: PERMISSIONS.SYSTEM_SETTINGS_READ,
-      skippable: true,
-      applies: () => true,
-      evaluate: (ctx) => ({
-        status: ctx.email.configured ? 'satisfied' : 'pending',
       }),
     },
     {

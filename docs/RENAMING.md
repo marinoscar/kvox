@@ -203,7 +203,7 @@ If you don't have a specific reason to rename the binary, don't — leave
 
 ## The manual steps
 
-The codemod handles everything a file edit can handle. Four things need a
+The codemod handles everything a file edit can handle. Five things need a
 human, in this order:
 
 1. **`npm install`.** The npm workspace root name lives in the lockfile as
@@ -223,13 +223,32 @@ human, in this order:
    See [CI will be red until you regenerate the baselines](#ci-will-be-red-until-you-regenerate-the-baselines)
    below for why this isn't optional.
 
-3. **Rename the repository on GitHub, then re-point the local remote:**
+3. **Regenerate the email logo**, if the rebrand changed the theme colour
+   (identity's icon rasters carry no product name, so a name-only rename has
+   nothing here to redo):
+
+   ```bash
+   node apps/api/scripts/make-email-logo.mjs
+   ```
+
+   This rewrites `apps/api/assets/email/logo.png` — the raster every
+   invitation and reminder email embeds by CID (`templates/brand-logo.ts`)
+   — from the just-regenerated `apps/web/public/icons/icon-192.png`.
+   `generate-icons.py` doesn't produce it: the API's Docker image contains
+   no `apps/web`, only `apps/api/assets/`, which `apps/api/Dockerfile`
+   already copies (the arrangement issue #28 set up for the bundled PDF
+   fonts). Nothing else regenerates this file, so skipping it ships the
+   original product's mark in every email a fork ever sends. The natural
+   fix is teaching `generate-icons.py` to emit this raster itself so this
+   step disappears; nothing does that today.
+
+4. **Rename the repository on GitHub, then re-point the local remote:**
 
    ```bash
    git remote set-url origin https://github.com/oscar/acme-hub.git
    ```
 
-4. **Update the OAuth redirect URIs** in the Google Cloud Console (and any
+5. **Update the OAuth redirect URIs** in the Google Cloud Console (and any
    other provider you've enabled), so the callback still matches `APP_URL`.
    Nothing in this repository can reach into a third-party console for you.
 

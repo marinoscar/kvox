@@ -53,17 +53,30 @@ export class AdminOnboardingController {
     summary: 'This deployment’s setup checklist',
     description:
       'What still has to be configured before this deployment is usable: a transcription ' +
-      'provider, an AI policy, somebody invited, outbound email, browser notifications and a ' +
+      'provider, an AI policy, outbound email, somebody invited, browser notifications and a ' +
       'backup schedule — plus one step that is not a form at all.\n\n' +
-      '**The list ends with a real transcription.** `admin.smoke_test` is satisfied only once ' +
-      'this administrator owns a transcript that actually reached `ready`; it is the only step ' +
-      'that proves the keys the earlier steps saved work together. A key can be well-formed, ' +
-      'accepted and still wrong.\n\n' +
+      '**The order is the rendered order, and `admin.email` precedes `admin.access` on ' +
+      'purpose.** Adding an address to the allowlist is what sends the invitation, and that ' +
+      'notification can only go by email — the recipient has no account, no session and no ' +
+      'open tab at the moment it fires. Inviting somebody before outbound email is configured ' +
+      'therefore delivers nothing and reports nothing, so the checklist asks for email ' +
+      'first.\n\n' +
+      '**The list ends with a real transcription — one the administrator may decline.** ' +
+      '`admin.smoke_test` is satisfied only once this administrator owns a transcript that ' +
+      'actually reached `ready`; it is the only step that proves the keys the earlier steps ' +
+      'saved work together, because a key can be well-formed, accepted and still wrong. It is ' +
+      '`recommended` and `skippable` all the same: the recording has to be this ' +
+      'administrator’s own and costs a real provider call, and a deployment configured for ' +
+      'other people to use is not broken because nobody transcribed anything from this ' +
+      'account. So the two `required` steps are `admin.transcription` and `admin.ai` alone, ' +
+      'and `allRequiredSatisfied` can reach `true` with the smoke test still outstanding.\n\n' +
       '**Every status is derived on each read**, never stored — rotating a provider key away ' +
       'flips the step back on the next request rather than leaving a green tick over a ' +
       'deployment that can no longer transcribe.\n\n' +
       '`blocked` means another step has to land first and `blockedReason` says which: ' +
-      '`admin.smoke_test` is blocked, not pending, while no transcription provider is connected.\n\n' +
+      '`admin.smoke_test` is blocked, not pending, while no transcription provider is ' +
+      'connected. That distinction matters most on a step that can be skipped — skipping ' +
+      'something that was merely blocked is a decision made on bad information.\n\n' +
       'Gated on `system_settings:read` — an administrator’s configuration read, deliberately not ' +
       'a permission of its own (epic #118 decision 8’s precedent, the same one the About card ' +
       'follows).',

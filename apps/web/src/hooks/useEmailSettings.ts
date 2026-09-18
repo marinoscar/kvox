@@ -26,6 +26,23 @@ import { ApiError, getEmailSettings, sendTestEmail, updateEmailSettings } from '
 import type { EmailSettings, EmailSettingsInput, EmailTestResult } from '../types';
 import { useIsMounted } from './useIsMounted';
 
+export interface UseEmailSettingsOptions {
+  /**
+   * Whether to talk to the API at all. Default `true`.
+   *
+   * `false` is for a caller that already knows the request would 403 — the
+   * Allowlist tab's "outbound email is not configured" warning (#300, epic
+   * #271), which is rendered for anyone holding `allowlist:read`, most of whom
+   * may hold no `system_settings:read` at all. Rendering nothing but still
+   * firing the request would buy a predictable 403 per visit for an answer the
+   * session already knew could not be read — the position `useMaintenance`
+   * takes for its banner and `OnboardingContext` takes for the admin
+   * checklist, spelled the same way here: a BOOLEAN PASSED INTO ONE
+   * `useCallback`, never a conditional hook call.
+   */
+  enabled?: boolean;
+}
+
 interface UseEmailSettingsReturn {
   settings: EmailSettings | null;
   isLoading: boolean;
@@ -44,9 +61,18 @@ interface UseEmailSettingsReturn {
   refresh: () => Promise<void>;
 }
 
-export function useEmailSettings(): UseEmailSettingsReturn {
+export function useEmailSettings(
+  options: UseEmailSettingsOptions = {},
+): UseEmailSettingsReturn {
+  const { enabled = true } = options;
+
   const [settings, setSettings] = useState<EmailSettings | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Starts `false` when disabled, matching `useMaintenance`: a hook that will
+  // never fetch must not report a load that is permanently in progress, or a
+  // consumer gating on `isLoading` would sit forever in "not known yet" — and
+  // for this hook's #300 consumer that state and "email is fine" have to be
+  // told apart.
+  const [isLoading, setIsLoading] = useState(enabled);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -60,6 +86,12 @@ export function useEmailSettings(): UseEmailSettingsReturn {
   const isMounted = useIsMounted();
 
   const fetchSettings = useCallback(async () => {
+    // Nothing is sent, and nothing is cleared: `settings` stays `null`, which
+    // every consumer already treats as "no answer", so a disabled hook is
+    // indistinguishable from one whose read has not landed. That is the point
+    // — neither is a licence to state anything about this deployment.
+    if (!enabled) return;
+
     try {
       setIsLoading(true);
       setLoadError(null);
@@ -78,7 +110,7 @@ export function useEmailSettings(): UseEmailSettingsReturn {
     } finally {
       if (isMounted()) setIsLoading(false);
     }
-  }, [isMounted]);
+  }, [enabled, isMounted]);
 
   useEffect(() => {
     fetchSettings();

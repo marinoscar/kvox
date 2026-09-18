@@ -61,11 +61,23 @@ export {
   plainText,
   renderEmailTemplate,
   renderLayout,
+  // The one way a rendered template becomes an `EmailMessage`'s payload half,
+  // so a call site cannot silently omit a part the markup references.
+  renderedEmailParts,
+  // The single embedded asset (the masthead logo) and its content id. See
+  // ./templates/layout.ts's header for why an embedded CID image is permitted
+  // where a remote one is not.
+  EMAIL_LOGO_CID,
+  EMAIL_LOGO_RENDERED_SIZE,
+  emailLogoAttachment,
   safeUrl,
   testEmail,
   // The three real event templates (#128).
   userWelcomeEmail,
   allowlistInvitationEmail,
+  // The manual invitation reminder (#301, epic #271) — the invitation's
+  // sibling, raised by an administrator pressing a button.
+  allowlistInvitationReminderEmail,
   roleChangedEmail,
   // The admin-composed broadcast template (#322, epic #319).
   broadcastEmail,
@@ -87,7 +99,11 @@ export {
   SMTP_CREDENTIAL_PURPOSE,
 } from './providers/smtp-email.provider';
 
-export type { EmailMessage, EmailSendResult } from './email.types';
+export type {
+  EmailAttachment,
+  EmailMessage,
+  EmailSendResult,
+} from './email.types';
 export type {
   EmailTemplate,
   EmailTemplateDataMap,
@@ -101,6 +117,7 @@ export type {
   // `notify` takes `data: unknown` by design.
   UserWelcomeEmailData,
   AllowlistInvitationEmailData,
+  AllowlistInvitationReminderEmailData,
   RoleChangedEmailData,
   // #322's payload. Also the type the BROWSER and PUSH channels project from,
   // since one `notify()` call carries one payload to every channel.

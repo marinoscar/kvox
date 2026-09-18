@@ -67,11 +67,12 @@ trips over them.
 The two checklists answer different questions for different reasons, and
 the registry keeps them as two arrays of one shared interface rather than
 two modules for exactly that reason (§4): the **admin** checklist
-(`ADMIN_ONBOARDING_STEPS`, seven entries — three `required`, four
-`recommended`) is about whether the *deployment* can do its job; the **user**
-checklist (`USER_ONBOARDING_STEPS`, four entries — two `required`, one
-`recommended`, one `optional`) is about whether *this account* has done
-anything with it yet.
+(`ADMIN_ONBOARDING_STEPS`, seven entries — two `required`, five
+`recommended` since issue #299 demoted `admin.smoke_test`; see §5 and §8.5)
+is about whether the *deployment* can do its job; the **user** checklist
+(`USER_ONBOARDING_STEPS`, four entries — two `required`, one `recommended`,
+one `optional`) is about whether *this account* has done anything with it
+yet.
 
 Four findings shaped a checklist rather than a tour, each ruling out a
 specific alternative:
@@ -147,6 +148,31 @@ Both take `ctx` as their only argument and must not mutate it or read
 anything else — `onboarding.service.spec.ts`'s "step purity" suite asserts
 exactly that, per step.
 
+**The registry array's order is the rendered order, and one pair of it is
+load-bearing.** `OnboardingService.render` filters this array and maps it —
+it never sorts — so the sequence written in `ADMIN_ONBOARDING_STEPS` /
+`USER_ONBOARDING_STEPS` is the sequence a caller reads top to bottom. Most
+of that sequence is editorial and a future edit may reshuffle it freely. One
+pair may not: `admin.email` was moved to precede `admin.access` (#300)
+because adding an address to the allowlist — what `admin.access` asks an
+administrator to do — is what fires `allowlist.invitation`, and that event
+declares `channels: ['email']` and nothing else. Not because the browser
+channel is unimplemented: because it is impossible. The recipient has no
+account, no session and no open tab at the moment the event fires — that is
+what being newly allowlisted means — so there is no in-app channel that
+could ever reach them. Inviting somebody before outbound email works
+therefore sends nothing at all, to nobody, and neither the administrator nor
+the invitee is shown a failure, because from the application's point of view
+nothing failed. The checklist's job here is to teach the order that works,
+not to enforce it: `admin.access` still evaluates independently of
+`admin.email`'s status (§5, §8.5), because allowlisting somebody you told
+out of band is legitimate, and a hard dependency would refuse a deployment
+that has deliberately decided not to send mail. The only thing that pins the
+order is a registry-level test asserting `admin.email`'s index precedes
+`admin.access`'s (`onboarding.service.spec.ts`, "orders `admin.email`
+before `admin.access`") — a dependency nothing pins is one a later edit
+silently reverses.
+
 **Two context types, not one with nullable admin facts.**
 `OnboardingUserContext` and `OnboardingAdminContext` are separate
 TypeScript interfaces, and the two step arrays are typed against them
@@ -203,8 +229,15 @@ refuses.
 Concretely, `blocked` appears in three places, each naming who has to act:
 
 - `admin.smoke_test` is `blocked` (not `pending`) while
-  `admin.transcription` is unsatisfied — a required step you cannot yet
-  perform must say why rather than sit there looking like an ignored to-do.
+  `admin.transcription` is unsatisfied. This distinction matters *more*,
+  not less, now that the step is `recommended` and skippable (#299): a skip
+  control sitting next to an unexplained to-do invites exactly the wrong
+  reading. An administrator who cannot yet run the smoke test because no
+  provider is connected has to be told so, rather than left to read a bare
+  "not done" as something they are choosing to decline — skipping something
+  that was merely blocked is a decision made on bad information, and here
+  specifically it would mean switching off the one check that would have
+  caught a wrong key while believing they had only opted out of a chore.
 - `user.first_transcript` is `blocked`, naming the administrator, when
   `transcription.available` is false — a user staring at a disabled upload
   button is told this is not their mistake and no amount of retrying fixes
@@ -515,6 +548,31 @@ warning about a deployment that genuinely does not work.
 (§6) — a skip a user cannot reverse is a decision made once, permanently,
 from a row that may have been clicked by accident.
 
+`admin.smoke_test` is the sharpest illustration of what this invariant costs
+when a step genuinely needs to become skippable (#299). It is the only step
+that proves the two required steps before it actually work *together* — a
+key can be saved, well-formed, accepted by the settings page and still be
+wrong, the wrong project, a revoked token, a region the account does not
+have. That is a claim about what the step is **evidence of**. Whether the
+deployment is **broken** without it is a separate claim, and the answer is
+no: the recording has to be this administrator's own, it spends a real
+provider call against the deployment's account, and somebody configuring a
+deployment for other people to use may reasonably never upload anything
+themselves. The two facts are not in tension because they answer different
+questions. But the invariant above is unconditional — a `required` step is
+*never* skippable — so the step could not simply gain a skip control while
+staying `required`; leaving it `required` left exactly that
+administrator's checklist unable to settle, at "6 of 7" forever, with no
+control to say so. Demoting the tier to `recommended` is the fix that keeps
+the invariant intact rather than carving an exception into it: a step the
+administrator may decline is, by definition, not required, and only once
+that was true could it honestly gain the skip control. `evaluate()` is
+unchanged — still `satisfied` off a real ready transcript, still `blocked`
+(§5) rather than `pending` while no provider is connected — and the
+arithmetic this tier change moves is exactly two required admin steps now,
+`admin.transcription` and `admin.ai`, the pair that decides whether the
+deployment can do anything at all.
+
 ## 9. Accessibility
 
 Accessibility is asserted throughout this epic, not assumed from the
@@ -649,6 +707,7 @@ instead, for that reason.
 | Claim | Where it is asserted |
 |---|---|
 | A `required` step is never `skippable`; every `permission` matches a real permission constant, not a string invented in the test | `apps/api/src/onboarding/onboarding.service.spec.ts` ("the registry") |
+| The registry orders `admin.email` before `admin.access` (#300) | `apps/api/src/onboarding/onboarding.service.spec.ts` ("the registry", "orders `admin.email` before `admin.access`") |
 | Each step function takes `ctx` as its only argument, mutates nothing, and reads no collaborator | `apps/api/src/onboarding/onboarding.service.spec.ts` ("step purity") |
 | Adding a user or an admin step changes the number of reads issued by zero | `apps/api/src/onboarding/onboarding.service.spec.ts` ("bounded read count") |
 | The user route never reads an admin-only fact | `apps/api/src/onboarding/onboarding.service.spec.ts` ("bounded read count") |

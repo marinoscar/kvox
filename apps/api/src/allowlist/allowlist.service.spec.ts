@@ -19,6 +19,7 @@ describe('AllowlistService', () => {
   let service: AllowlistService;
   let mockPrisma: MockPrismaService;
   let mockNotifications: { notify: jest.Mock; notifyAddress: jest.Mock };
+  let mockConfig: { get: jest.Mock };
 
   const mockAddedBy = {
     id: 'admin-id',
@@ -78,7 +79,10 @@ describe('AllowlistService', () => {
         },
         {
           provide: ConfigService,
-          useValue: { get: jest.fn().mockReturnValue(undefined) },
+          // Captured so a test can configure `appUrl` and assert the CTA URL
+          // the reminder payload carries. Default: unset, which is the state
+          // every pre-existing test in this file was written against.
+          useValue: (mockConfig = { get: jest.fn().mockReturnValue(undefined) }),
         },
       ],
     }).compile();
@@ -509,6 +513,249 @@ describe('AllowlistService', () => {
 
       const [, , payload] = mockNotifications.notifyAddress.mock.calls[0];
       expect(payload).not.toHaveProperty('invitedBy');
+    });
+  });
+
+  // ===========================================================================
+  // sendReminder — the manual nudge (#301, epic #271)
+  // ===========================================================================
+  //
+  // There is no scheduler behind this: an administrator presses a button. So
+  // what is asserted here is a request handler's contract — the two refusals,
+  // the single write that records the request, the audit row, and the call-site
+  // contract with the (mocked) dispatcher. Delivery itself is not this
+  // service's to promise, which is exactly why the counter is written whether
+  // or not the send later succeeds.
+  // ===========================================================================
+  describe('sendReminder', () => {
+    const pendingWithReminders = {
+      ...mockPendingEntry,
+      reminderCount: 2,
+      lastReminderAt: new Date('2024-02-01T09:00:00Z'),
+    };
+
+    it('increments the count and stamps the time in ONE write', async () => {
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        pendingWithReminders as any,
+      );
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        reminderCount: 3,
+        lastReminderAt: new Date(),
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      const before = Date.now();
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+      const after = Date.now();
+
+      expect(mockPrisma.allowedEmail.update).toHaveBeenCalledTimes(1);
+
+      const [args] = mockPrisma.allowedEmail.update.mock.calls[0];
+      expect(args.where).toEqual({ id: pendingWithReminders.id });
+      // `increment`, not `entry.reminderCount + 1`: two administrators pressing
+      // the button at the same moment must not both write 3.
+      expect(args.data.reminderCount).toEqual({ increment: 1 });
+      // Prisma's update input widens this to `string | Date | {set: …}`; the
+      // service passes a `Date`, which is what the instanceof pins before the
+      // window check narrows it.
+      const stamped = args.data.lastReminderAt as Date;
+      expect(stamped).toBeInstanceOf(Date);
+      expect(stamped.getTime()).toBeGreaterThanOrEqual(before);
+      expect(stamped.getTime()).toBeLessThanOrEqual(after);
+    });
+
+    it('returns the updated entry, matching the shape its sibling mutations return', async () => {
+      const updated = {
+        ...pendingWithReminders,
+        reminderCount: 3,
+        lastReminderAt: new Date('2024-03-01T12:00:00Z'),
+        claimedBy: null,
+      };
+
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        pendingWithReminders as any,
+      );
+      mockPrisma.allowedEmail.update.mockResolvedValue(updated as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      const result = await service.sendReminder(
+        pendingWithReminders.id,
+        mockAddedBy.id,
+      );
+
+      expect(result).toBe(updated);
+    });
+
+    it('throws ConflictException (409) for an entry that has already been claimed', async () => {
+      // They signed in — which is what `claimedAt` means — so there is nobody
+      // left to remind. Not a malformed request: a conflict with the state.
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        mockClaimedEntry as any,
+      );
+
+      await expect(
+        service.sendReminder(mockClaimedEntry.id, mockAddedBy.id),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockPrisma.allowedEmail.update).not.toHaveBeenCalled();
+      expect(mockNotifications.notifyAddress).not.toHaveBeenCalled();
+      expect(mockPrisma.auditEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException (404) for an id that does not exist', async () => {
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.sendReminder('missing-id', mockAddedBy.id),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(mockPrisma.allowedEmail.update).not.toHaveBeenCalled();
+      expect(mockNotifications.notifyAddress).not.toHaveBeenCalled();
+    });
+
+    it('fires allowlist.invitation_reminder via notifyAddress (never notify), with the invitation date', async () => {
+      mockConfig.get.mockReturnValue('https://app.example.test');
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        pendingWithReminders as any,
+      );
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        reminderCount: 3,
+        lastReminderAt: new Date(),
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+
+      // The account-less recipient path — never `notify`, which needs a user
+      // id this recipient by definition does not have.
+      expect(mockNotifications.notify).not.toHaveBeenCalled();
+      expect(mockNotifications.notifyAddress).toHaveBeenCalledTimes(1);
+      expect(mockNotifications.notifyAddress).toHaveBeenCalledWith(
+        'allowlist.invitation_reminder',
+        pendingWithReminders.email,
+        {
+          recipientEmail: pendingWithReminders.email,
+          // "A while ago" is the entire reason this message exists.
+          invitedAt: pendingWithReminders.addedAt,
+          invitedBy: mockAddedBy.email,
+          signInUrl: 'https://app.example.test/login',
+        },
+      );
+    });
+
+    it('does not put the admin note into the reminder payload', async () => {
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue({
+        ...pendingWithReminders,
+        notes: 'contractor, ends in March',
+      } as any);
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        reminderCount: 3,
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+
+      const [, , payload] = mockNotifications.notifyAddress.mock.calls[0];
+      expect(payload).not.toHaveProperty('notes');
+      expect(JSON.stringify(payload)).not.toContain('contractor');
+    });
+
+    it('does not put the reminder count into the payload — it is internal bookkeeping', async () => {
+      // The recipient is never told how many times they have been emailed: the
+      // count records reminders HANDED OFF, not delivered, and reads as an
+      // accusation besides. See the template's header.
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        pendingWithReminders as any,
+      );
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        reminderCount: 3,
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+
+      const [, , payload] = mockNotifications.notifyAddress.mock.calls[0];
+      expect(payload).not.toHaveProperty('reminderCount');
+      expect(payload).not.toHaveProperty('lastReminderAt');
+    });
+
+    it('omits invitedBy when the entry has no addedBy relation, rather than sending undefined', async () => {
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue({
+        ...pendingWithReminders,
+        addedBy: null,
+      } as any);
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        addedBy: null,
+        reminderCount: 3,
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+
+      const [, , payload] = mockNotifications.notifyAddress.mock.calls[0];
+      expect(payload).not.toHaveProperty('invitedBy');
+    });
+
+    it('audits the reminder, naming the administrator who asked for it', async () => {
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        pendingWithReminders as any,
+      );
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        reminderCount: 3,
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+
+      expect(mockPrisma.auditEvent.create).toHaveBeenCalledWith({
+        data: {
+          actorUserId: mockAddedBy.id,
+          action: 'allowlist:remind',
+          targetType: 'allowed_email',
+          targetId: pendingWithReminders.id,
+          meta: {
+            email: pendingWithReminders.email,
+            reminderCount: 3,
+          },
+        },
+      });
+    });
+
+    it('records the request before handing the message off — the counter means "requested", not "delivered"', async () => {
+      // `notifyAddress` is detached and never rejects, so no ordering of these
+      // two statements could make the counter mean "this arrived". Pinned so
+      // that nobody later reorders them believing it would.
+      mockPrisma.allowedEmail.findUnique.mockResolvedValue(
+        pendingWithReminders as any,
+      );
+      mockPrisma.allowedEmail.update.mockResolvedValue({
+        ...pendingWithReminders,
+        reminderCount: 3,
+        claimedBy: null,
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+
+      await service.sendReminder(pendingWithReminders.id, mockAddedBy.id);
+
+      const updateOrder = mockPrisma.allowedEmail.update.mock.invocationCallOrder[0];
+      const auditOrder = mockPrisma.auditEvent.create.mock.invocationCallOrder[0];
+      const notifyOrder =
+        mockNotifications.notifyAddress.mock.invocationCallOrder[0];
+
+      expect(notifyOrder).toBeGreaterThan(updateOrder);
+      expect(notifyOrder).toBeGreaterThan(auditOrder);
     });
   });
 

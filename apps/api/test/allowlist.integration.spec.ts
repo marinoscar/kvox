@@ -450,4 +450,151 @@ describe('Allowlist (Integration)', () => {
         .expect(403);
     });
   });
+  // ===========================================================================
+  // POST /api/allowlist/:id/reminder — the manual nudge (#301, epic #271)
+  // ===========================================================================
+  //
+  // Gated on `allowlist:write`, the SAME permission adding an address requires:
+  // reminding somebody about an invitation is that same authority exercised
+  // again, not a lesser one, and it puts mail in a stranger's inbox on this
+  // deployment's behalf exactly as the original did. What this suite covers
+  // that the service unit tests cannot is the guard stack itself — that the
+  // route really carries the permission it claims.
+  // ===========================================================================
+  describe('POST /api/allowlist/:id/reminder', () => {
+    it('should return 401 if not authenticated', async () => {
+      await request(context.app.getHttpServer())
+        .post('/api/allowlist/123e4567-e89b-12d3-a456-426614174000/reminder')
+        .expect(401);
+    });
+
+    it('should return 403 if user lacks allowlist:write permission', async () => {
+      const viewer = await createMockViewerUser(context);
+
+      await request(context.app.getHttpServer())
+        .post('/api/allowlist/123e4567-e89b-12d3-a456-426614174000/reminder')
+        .set(authHeader(viewer.accessToken))
+        .expect(403);
+    });
+
+    it('should return 403 for non-admin (Contributor)', async () => {
+      const contributor = await createMockContributorUser(context);
+
+      await request(context.app.getHttpServer())
+        .post('/api/allowlist/123e4567-e89b-12d3-a456-426614174000/reminder')
+        .set(authHeader(contributor.accessToken))
+        .expect(403);
+    });
+
+    it('should validate UUID format', async () => {
+      const admin = await createMockAdminUser(context);
+
+      await request(context.app.getHttpServer())
+        .post('/api/allowlist/invalid-uuid/reminder')
+        .set(authHeader(admin.accessToken))
+        .expect(400);
+    });
+
+    it('should increment the count, stamp the time, and answer 200 with the updated entry', async () => {
+      const admin = await createMockAdminUser(context);
+
+      const entry = createMockAllowedEmail({
+        email: 'pending-invitee@example.com',
+        addedById: admin.id,
+        reminderCount: 1,
+        lastReminderAt: new Date('2026-01-20T09:00:00Z'),
+      });
+
+      context.prismaMock.allowedEmail.findUnique.mockResolvedValue(entry);
+      context.prismaMock.allowedEmail.update.mockResolvedValue({
+        ...entry,
+        reminderCount: 2,
+        lastReminderAt: new Date('2026-02-01T09:00:00Z'),
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .post(`/api/allowlist/${entry.id}/reminder`)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(response.body.data).toHaveProperty('reminderCount', 2);
+      expect(response.body.data).toHaveProperty('lastReminderAt');
+      expect(context.prismaMock.allowedEmail.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: entry.id },
+          data: expect.objectContaining({
+            reminderCount: { increment: 1 },
+            lastReminderAt: expect.any(Date),
+          }),
+        }),
+      );
+    });
+
+    it('should return 409 when the entry has already been claimed', async () => {
+      // They signed in, which is what `claimedAt` means — there is nobody left
+      // to remind.
+      const admin = await createMockAdminUser(context);
+      const viewer = await createMockViewerUser(context);
+
+      const entry = createMockAllowedEmail({
+        email: 'already-here@example.com',
+        addedById: admin.id,
+        claimedById: viewer.id,
+        claimedAt: new Date(),
+      });
+
+      context.prismaMock.allowedEmail.findUnique.mockResolvedValue(entry);
+
+      await request(context.app.getHttpServer())
+        .post(`/api/allowlist/${entry.id}/reminder`)
+        .set(authHeader(admin.accessToken))
+        .expect(409);
+
+      expect(context.prismaMock.allowedEmail.update).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 for an id that does not exist', async () => {
+      const admin = await createMockAdminUser(context);
+
+      context.prismaMock.allowedEmail.findUnique.mockResolvedValue(null);
+
+      await request(context.app.getHttpServer())
+        .post('/api/allowlist/00000000-0000-0000-0000-000000000000/reminder')
+        .set(authHeader(admin.accessToken))
+        .expect(404);
+
+      expect(context.prismaMock.allowedEmail.update).not.toHaveBeenCalled();
+    });
+
+    it('should create an audit event naming the administrator who asked', async () => {
+      const admin = await createMockAdminUser(context);
+
+      const entry = createMockAllowedEmail({
+        email: 'audited-reminder@example.com',
+        addedById: admin.id,
+      });
+
+      context.prismaMock.allowedEmail.findUnique.mockResolvedValue(entry);
+      context.prismaMock.allowedEmail.update.mockResolvedValue({
+        ...entry,
+        reminderCount: 1,
+        lastReminderAt: new Date(),
+      });
+
+      await request(context.app.getHttpServer())
+        .post(`/api/allowlist/${entry.id}/reminder`)
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(context.prismaMock.auditEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            actorUserId: admin.id,
+            action: 'allowlist:remind',
+            targetId: entry.id,
+          }),
+        }),
+      );
+    });
+  });
 });

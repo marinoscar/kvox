@@ -34,6 +34,8 @@ jest.mock('@aws-sdk/client-sesv2', () => ({
   })),
 }));
 
+import MimeNode = require('nodemailer/lib/mime-node');
+
 import { SesEmailProvider } from './ses-email.provider';
 import { CredentialsService } from '../../credentials/credentials.service';
 import type { EmailSettingsService } from '../email-settings.service';
@@ -46,6 +48,27 @@ const baseMessage: EmailMessage = {
   subject: 'Test subject',
   html: '<p>hello</p>',
   text: 'hello',
+};
+
+/**
+ * Four bytes standing in for the committed logo. The real asset's CONTENT is
+ * `brand-logo.spec.ts`'s business; what matters here is that whatever bytes
+ * arrive come back out of the MIME document base64-encoded and reachable by
+ * their content id.
+ */
+const LOGO_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+const messageWithLogo: EmailMessage = {
+  ...baseMessage,
+  html: '<p><img src="cid:logo@email.local" alt="App"></p>',
+  attachments: [
+    {
+      content: LOGO_BYTES,
+      cid: 'logo@email.local',
+      filename: 'logo.png',
+      contentType: 'image/png',
+    },
+  ],
 };
 
 const baseEmailSettings: EmailSettings = {
@@ -227,6 +250,159 @@ describe('SesEmailProvider', () => {
       const result = await provider.send(baseMessage);
 
       expect(result).toEqual({ success: true, messageId: 'ses-real-message-id' });
+    });
+
+    it('uses Content.Simple, and nothing else, for a message with no attachments', async () => {
+      // THE REGRESSION THAT MATTERS MOST. Every message this application sends
+      // except an invitation has no attachments, and each one must go out
+      // through exactly the request it always did. `Raw` must be ABSENT, not
+      // merely empty — a provider rewrite that put every email on
+      // hand-assembled MIME in order to add a logo would risk the
+      // deliverability of role changes and operational alerts for a
+      // decoration, in ways only visible in somebody's inbox.
+      const provider = new SesEmailProvider(
+        makeConfig({
+          'email.awsAccessKeyId': 'AKIAEXAMPLE',
+          'email.awsSecretAccessKey': 'super-secret-access-key-value',
+        }),
+        makeEmailSettings({ ...baseEmailSettings, sesRegion: 'us-east-1' }),
+      );
+      sesSendMock.mockResolvedValueOnce({ MessageId: 'ses-simple-1' });
+
+      await provider.send(baseMessage);
+
+      const { input } = sesSendMock.mock.calls[0][0] as {
+        input: { Content: Record<string, unknown> };
+      };
+
+      expect(Object.keys(input.Content)).toEqual(['Simple']);
+      expect(input.Content).toEqual({
+        Simple: {
+          Subject: { Data: baseMessage.subject, Charset: 'UTF-8' },
+          Body: {
+            Html: { Data: baseMessage.html, Charset: 'UTF-8' },
+            Text: { Data: baseMessage.text, Charset: 'UTF-8' },
+          },
+        },
+      });
+    });
+
+    it('switches to Content.Raw only when the message carries attachments', async () => {
+      // SESv2 simple content CANNOT carry a MIME part at all, so an embedded
+      // `cid:` image is only expressible as raw. The switch is per message.
+      const provider = new SesEmailProvider(
+        makeConfig({
+          'email.awsAccessKeyId': 'AKIAEXAMPLE',
+          'email.awsSecretAccessKey': 'super-secret-access-key-value',
+        }),
+        makeEmailSettings({ ...baseEmailSettings, sesRegion: 'us-east-1' }),
+      );
+      sesSendMock.mockResolvedValueOnce({ MessageId: 'ses-raw-1' });
+
+      const result = await provider.send(messageWithLogo);
+
+      expect(result).toEqual({ success: true, messageId: 'ses-raw-1' });
+
+      const { input } = sesSendMock.mock.calls[0][0] as {
+        input: {
+          FromEmailAddress: string;
+          Destination: { ToAddresses: string[] };
+          Content: { Raw?: { Data: Buffer }; Simple?: unknown };
+        };
+      };
+
+      expect(Object.keys(input.Content)).toEqual(['Raw']);
+      expect(input.Content.Simple).toBeUndefined();
+      // Envelope fields are still supplied, so SES has a sender and a
+      // recipient that agree with the document's own headers.
+      expect(input.FromEmailAddress).toBe(baseMessage.from);
+      expect(input.Destination.ToAddresses).toEqual([baseMessage.to]);
+    });
+
+    it('builds raw MIME that a client can actually resolve the cid against', async () => {
+      const provider = new SesEmailProvider(
+        makeConfig({
+          'email.awsAccessKeyId': 'AKIAEXAMPLE',
+          'email.awsSecretAccessKey': 'super-secret-access-key-value',
+        }),
+        makeEmailSettings({ ...baseEmailSettings, sesRegion: 'us-east-1' }),
+      );
+      sesSendMock.mockResolvedValueOnce({ MessageId: 'ses-raw-2' });
+
+      await provider.send({
+        ...messageWithLogo,
+        headers: { 'X-Correlation-Id': 'abc-123' },
+      });
+
+      const { input } = sesSendMock.mock.calls[0][0] as {
+        input: { Content: { Raw: { Data: Buffer } } };
+      };
+      const mime = Buffer.from(input.Content.Raw.Data).toString('utf8');
+
+      // Both alternatives survive: a text part is required for
+      // deliverability and for text-only clients (see EmailMessage.text).
+      expect(mime).toContain('multipart/alternative');
+      expect(mime).toContain('text/plain');
+      expect(mime).toContain('text/html');
+      // `multipart/related` with a matching Content-ID is what makes
+      // `src="cid:…"` resolve to a part rather than fetch something.
+      expect(mime).toContain('multipart/related');
+      expect(mime).toContain('Content-ID: <logo@email.local>');
+      expect(mime).toContain('Content-Disposition: inline');
+      expect(mime).toContain('Content-Type: image/png');
+      // The PNG travels base64-encoded inside the document.
+      expect(mime).toContain(LOGO_BYTES.toString('base64'));
+      // Headers go INTO the document on this path — SESv2's `Headers` field
+      // belongs to simple content and has no raw counterpart.
+      //
+      // Matched case-insensitively on the NAME because nodemailer normalises
+      // header-name casing on the way out (`X-Correlation-Id` is emitted as
+      // `X-Correlation-ID`). That is RFC-legal — field names are
+      // case-insensitive — and pinning the exact casing here would be pinning
+      // a detail of somebody else's library.
+      expect(mime).toMatch(/^X-Correlation-Id: abc-123$/im);
+      expect(mime).toContain(`Subject: ${baseMessage.subject}`);
+      // RFC 5322 line endings, which SES will not fix up for us.
+      expect(mime).toContain('\r\n');
+    });
+
+    it('reports a MIME-building failure without putting message content in the error', async () => {
+      // `EmailSendResult.error` is shown to an administrator verbatim (#124)
+      // and stored in a delivery row (#125). A composer raising
+      // `new Error(\`Invalid content: ${body}\`)` — text we do not author and
+      // cannot constrain — would put the rendered invitation, link and all,
+      // onto both surfaces. So the cause is replaced by a fixed sentence plus
+      // the error's CLASS NAME, which is a diagnostic, not content.
+      const provider = new SesEmailProvider(
+        makeConfig({
+          'email.awsAccessKeyId': 'AKIAEXAMPLE',
+          'email.awsSecretAccessKey': 'super-secret-access-key-value',
+        }),
+        makeEmailSettings({ ...baseEmailSettings, sesRegion: 'us-east-1' }),
+      );
+
+      const secretBody = '<p>SECRET-INVITATION-TOKEN-xyz</p>';
+      const composeSpy = jest
+        .spyOn(MimeNode.prototype, 'build')
+        .mockImplementation(() => {
+          throw new TypeError(`Invalid content: ${secretBody}`);
+        });
+
+      try {
+        const result = await provider.send({
+          ...messageWithLogo,
+          html: secretBody,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Could not assemble the MIME message');
+        expect(result.error).toContain('TypeError');
+        expect(result.error).not.toContain('SECRET-INVITATION-TOKEN-xyz');
+        // And it never threw — the base class's contract still holds.
+        expect(sesSendMock).not.toHaveBeenCalled();
+      } finally {
+        composeSpy.mockRestore();
+      }
     });
 
     it('builds the SendEmailCommand input from the message, including extra headers', async () => {

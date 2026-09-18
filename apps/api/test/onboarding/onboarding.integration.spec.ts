@@ -428,11 +428,16 @@ describe('Onboarding Integration', () => {
 
       const step = stepOf(response.body, 'admin.smoke_test');
 
-      // A required step nobody can yet perform must say why, rather than
-      // sitting in the list looking like a to-do the administrator is ignoring.
+      // A step nobody can yet perform must say why, rather than sitting in the
+      // list looking like a to-do the administrator is ignoring — and since
+      // #299 this one is `recommended` and carries a skip control, which is
+      // what makes the reason load-bearing rather than decorative: skipping
+      // something that was merely blocked is a decision made on bad
+      // information. So both halves are asserted together over the wire — the
+      // step is blocked, it says by what, AND the control is offered anyway.
       expect(step.status).toBe('blocked');
       expect(step.blockedReason).toContain('transcription provider');
-      expect(step.skippable).toBe(false);
+      expect(step.skippable).toBe(true);
     });
 
     it('does read the admin facts on this route — the mirror of the Viewer assertion', async () => {

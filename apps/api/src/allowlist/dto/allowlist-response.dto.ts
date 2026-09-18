@@ -23,6 +23,19 @@ export const allowlistEntrySchema = z.object({
   claimedById: z.uuid().nullable(),
   claimedAt: z.iso.datetime().nullable(),
   notes: z.string().nullable(),
+
+  /**
+   * How many invitation reminders have been REQUESTED for this entry (#301),
+   * and when the most recent one was.
+   *
+   * ⚠ Requested and handed to the notification dispatcher — not confirmed
+   * delivered. Dispatch is detached and a failed send is recorded against the
+   * notification delivery log, so a non-zero count here is evidence that an
+   * administrator pressed the button, not that mail arrived. `lastReminderAt`
+   * is `null` exactly when `reminderCount` is 0.
+   */
+  reminderCount: z.number().int().nonnegative(),
+  lastReminderAt: z.iso.datetime().nullable(),
   addedBy: allowlistActorSchema.nullable(),
   claimedBy: allowlistActorSchema.nullable(),
 });

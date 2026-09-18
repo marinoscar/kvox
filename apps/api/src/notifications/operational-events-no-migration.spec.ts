@@ -89,6 +89,21 @@ const MIGRATIONS_AT_288 = [
   // chose from one it may improve on. A provenance column, and equally not
   // about notifications.
   '20260915210000_add_note_title_source',
+  // #301 (epic #271): `allowed_emails.reminder_count` and `.last_reminder_at`,
+  // the bookkeeping behind an administrator pressing "send reminder" on an
+  // invitation nobody has claimed yet.
+  //
+  // ⚠ THE CLOSEST CALL IN THIS LIST, AND IT STILL BELONGS HERE. A reminder IS
+  // delivered as a notification, so unlike every entry above it this migration
+  // is adjacent to the subject. What this file actually forbids is a migration
+  // that makes the DATABASE the source of truth for events — a table of event
+  // keys, a seeded row per event, a preference the registry would then be a
+  // cache of. These two columns are neither: they record how many times a
+  // human pressed a button and when, about one allowlist row, and they name no
+  // event key. `allowlist.invitation_reminder` is declared in
+  // `notification-events.ts` like every other event, with no migration and no
+  // row anywhere, which is precisely the property this spec exists to keep.
+  '20260918120000_add_allowlist_reminder_tracking',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

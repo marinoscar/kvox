@@ -10,7 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AddEmailDto } from './dto/add-email.dto';
 import { AllowlistQueryDto } from './dto/allowlist-query.dto';
 import { NotificationsService } from '../notifications/notifications.service';
-import type { AllowlistInvitationEmailData } from '../email';
+import type {
+  AllowlistInvitationEmailData,
+  AllowlistInvitationReminderEmailData,
+} from '../email';
 
 @Injectable()
 export class AllowlistService {
@@ -175,6 +178,167 @@ export class AllowlistService {
     await this.notifications.notifyAddress('allowlist.invitation', email, payload);
 
     return entry;
+  }
+
+  /**
+   * Send an invitation reminder for one pending allowlist entry.
+   *
+   * ---------------------------------------------------------------------------
+   * A MANUAL ACTION. THERE IS NO SCHEDULER, AND THAT IS A DECISION (#301)
+   * ---------------------------------------------------------------------------
+   *
+   * An administrator looks at the allowlist, sees somebody who was invited
+   * three weeks ago and never signed in, and presses a button. There is no
+   * `@Cron`, no `JobHandler` and no `databaseBackup`-style settings namespace
+   * behind this — deliberately, on the repository owner's instruction, and not
+   * because one was forgotten. A reminder is a judgement about one person
+   * ("did they get the first one? are they still joining?") that nothing in
+   * this application is in a position to make on an administrator's behalf,
+   * and the failure mode of automating it — a stranger receiving mail from an
+   * unfamiliar system on a schedule they cannot stop — is exactly the shape of
+   * the messages spam filters exist to catch.
+   *
+   * It follows that CLAUDE.md's "every long-running activity is a queue job"
+   * rule is not engaged here: this handler does one indexed read, one write and
+   * a detached `notifyAddress`, all of which finish inside the request.
+   *
+   * ---------------------------------------------------------------------------
+   * 409 FOR A CLAIMED ENTRY, AND WHY IT IS NOT A 400
+   * ---------------------------------------------------------------------------
+   *
+   * `claimedAt`/`claimedById` being set means the invitee signed in — they did
+   * the thing this message would ask them to do. There is nobody left to
+   * remind, and the request is not malformed; it conflicts with the current
+   * state of the resource, which is what 409 means. (`removeEmail` above
+   * answers 400 for its own claimed-entry refusal. That is a different
+   * statement — "this entry may never be removed now" is a rule about the
+   * request, not a race with state — and it is long-standing behaviour with
+   * integration tests written against it, so it is deliberately left alone
+   * rather than harmonised here.)
+   */
+  async sendReminder(id: string, adminUserId: string) {
+    const entry = await this.prisma.allowedEmail.findUnique({
+      where: { id },
+      include: {
+        addedBy: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // 404 for an unknown id, consistent with `removeEmail`.
+    if (!entry) {
+      throw new NotFoundException(`Allowlist entry with ID ${id} not found`);
+    }
+
+    if (entry.claimedById) {
+      throw new ConflictException(
+        `Email ${entry.email} has already been claimed — there is nobody left to remind`,
+      );
+    }
+
+    // ONE WRITE, and `increment` rather than `entry.reminderCount + 1`: the
+    // latter is a read-modify-write across two statements, so two admins
+    // pressing the button at the same moment would both write the same value
+    // and the row would record one reminder where two were sent. `increment`
+    // is resolved by PostgreSQL against the row it is updating, which has no
+    // such window.
+    const updated = await this.prisma.allowedEmail.update({
+      where: { id },
+      data: {
+        reminderCount: { increment: 1 },
+        lastReminderAt: new Date(),
+      },
+      include: {
+        addedBy: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        claimedBy: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    // Audited, exactly as `addEmail` and `removeEmail` are: sending mail to
+    // somebody outside this deployment on an administrator's authority is an
+    // action worth a row naming who did it. The resulting count is included so
+    // the audit trail carries the number without anyone having to correlate
+    // rows by hand.
+    await this.createAuditEvent(
+      adminUserId,
+      'allowlist:remind',
+      'allowed_email',
+      entry.id,
+      { email: entry.email, reminderCount: updated.reminderCount },
+    );
+
+    this.logger.log(
+      `Invitation reminder for ${entry.email} requested by admin ${adminUserId} ` +
+        `(reminder ${updated.reminderCount})`,
+    );
+
+    // -------------------------------------------------------------------------
+    // Trigger: `allowlist.invitation_reminder` (#301, epic #271)
+    // -------------------------------------------------------------------------
+    //
+    // ⚠ THE COUNTER IS WRITTEN FIRST, AND WHAT IT RECORDS IS WEAKER THAN
+    // "A REMINDER WAS DELIVERED". `notifyAddress` is DETACHED — it schedules
+    // the dispatch and returns before anything is rendered or sent, it never
+    // rejects, and a provider failure becomes a `notification_deliveries` row
+    // rather than an exception (see `NotificationsService.notifyAddress`). So
+    // there is no ordering of these two statements under which the increment
+    // could mean "this message arrived": moving it after the call would change
+    // nothing except to add a window in which the row disagrees with the log
+    // line above.
+    //
+    // `reminderCount`/`lastReminderAt` therefore mean, precisely: **a reminder
+    // was requested by an administrator and handed to the dispatcher at this
+    // time**. That is the only claim this endpoint can honestly make, it is
+    // the claim the admin console needs ("have I already chased this person?"),
+    // and it is why the template refuses to tell the recipient how many times
+    // they have been emailed — see
+    // `email/templates/allowlist-invitation-reminder.email.ts`.
+    //
+    // Delivery, when it matters, is answered by `notification_deliveries`,
+    // which records the provider's own outcome per attempt. This column is not
+    // a second, weaker copy of that.
+    //
+    // `notifyAddress`, NOT `notify`, for the invitation's reason exactly: the
+    // recipient has no account — not having signed in is the precondition for
+    // this whole endpoint — so there is no user id to pass and no preference
+    // row to resolve. It still resolves the address to an account when one
+    // happens to exist.
+    const signInUrl = this.signInUrl();
+
+    const payload: AllowlistInvitationReminderEmailData = {
+      recipientEmail: entry.email,
+      // The whole point of a reminder: "a while ago" is why it is being sent,
+      // and `added_at` is NOT NULL, so this is always available.
+      invitedAt: entry.addedAt,
+      ...(entry.addedBy?.email ? { invitedBy: entry.addedBy.email } : {}),
+      ...(signInUrl ? { signInUrl } : {}),
+    };
+
+    // `entry.notes` IS DELIBERATELY NOT IN THE PAYLOAD, for the same reason it
+    // is absent from the invitation's: it is an administrator's private
+    // annotation about this person, and omitting it at the call site means no
+    // future edit to the copy can surface it.
+    await this.notifications.notifyAddress(
+      'allowlist.invitation_reminder',
+      entry.email,
+      payload,
+    );
+
+    return updated;
   }
 
   /**

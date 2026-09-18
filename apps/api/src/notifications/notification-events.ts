@@ -242,6 +242,41 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
     defaultEnabled: true,
   },
   {
+    // -------------------------------------------------------------------------
+    // #301 (epic #271) — A SEPARATE KEY FROM `allowlist.invitation`, NOT A FLAG
+    // -------------------------------------------------------------------------
+    //
+    // The obvious alternative is one `allowlist.invitation` event with a
+    // `reminder: true` in its payload. It was rejected for two reasons, and the
+    // first is the one that settles it:
+    //
+    //   1. **A key IS the unit of preference.** Somebody who wants to be told
+    //      they have been invited, but does not want to be chased about it, has
+    //      no way to say so if both messages arrive under one key — muting the
+    //      reminder would mute the invitation, which is the one message they
+    //      asked for. Two keys make that expressible; one key makes it
+    //      unrepresentable no matter what the UI offers.
+    //   2. **The copy genuinely differs.** "You have been invited" and "you were
+    //      invited a while ago and have not signed in yet" are different
+    //      messages with different openings, and the second states a date the
+    //      first has no reason to carry. One key would mean one template
+    //      branching on a payload flag — the shape that drifts.
+    //
+    // MANUAL, NOT SCHEDULED. This fires when an administrator presses a button
+    // (`POST /api/allowlist/:id/reminder`); there is no cron, no job type and
+    // no settings namespace behind it, on purpose.
+    key: 'allowlist.invitation_reminder',
+    label: 'Invitation reminder',
+    description:
+      'Sent when an administrator reminds you that your email address was allowlisted and you have not signed in yet.',
+    // Email only, for the IDENTICAL reason the invitation above declares it,
+    // and if anything more forcefully: the recipient still has no account, no
+    // session and no open tab — not having signed in is the precondition of
+    // this event existing at all — so no in-app channel can reach them.
+    channels: ['email'],
+    defaultEnabled: true,
+  },
+  {
     key: 'security.role_changed',
     label: 'Your roles changed',
     description:

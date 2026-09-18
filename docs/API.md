@@ -836,6 +836,28 @@ Add email to allowlist.
 
 ---
 
+#### POST /allowlist/:id/reminder
+Email the invitee again about an invitation they have not yet used (issue #301).
+
+**Requires:** `allowlist:write` permission — the same permission that adds an entry; sending a reminder is that authority exercised again, not a new one.
+
+**Parameters:**
+- `id` (UUID) - Allowlist entry ID
+
+**Response:** HTTP 200, the updated entry (same shape as `POST /allowlist`), with `reminderCount` incremented and `lastReminderAt` set to the send time.
+
+**Error Cases:**
+- 404 Not Found - Allowlist entry not found
+- 409 Conflict - Entry already claimed - there is nobody left to remind
+
+**Note:** Manual by design - there is no cron, no job type and no settings namespace behind this endpoint. An administrator presses the button once per send; the bounds an automated sweep would need (a maximum count, a minimum gap between sends, a delay before the first reminder, an off switch) all collapse into "somebody decided to send this one," so none of them exist.
+
+⚠ **`reminderCount`/`lastReminderAt` record that a reminder was requested and handed to the notification dispatcher, not that it was delivered.** The email is sent through `notifyAddress`, which is detached, never rejects, and turns a send failure into a row in the notification delivery log rather than an exception here. Read this pair as "an admin asked for N reminders," never as "N reminders arrived" — delivery status lives in the delivery log, not on this row.
+
+The reminder is a separate notification event (`allowlist.invitation_reminder`), not a flag on the original `allowlist.invitation` event: a recipient who wants the invitation but not the chasing has no way to say so under one shared key, and the copy genuinely differs ("you were invited" vs. "you were invited a while ago and haven't signed in"). Like the invitation, it is email-only — the recipient still has no account and no open tab.
+
+---
+
 #### DELETE /allowlist/:id
 Remove email from allowlist.
 
@@ -5122,9 +5144,15 @@ at all, which is what a freshly invited account looks like.
 
 #### GET /admin/onboarding
 
-This deployment's setup steps: up to seven, ending with a real transcription
-rather than a green tick on a form — `admin.smoke_test` is only satisfied
-once the caller owns a transcript that actually reached `ready`.
+This deployment's setup steps: up to seven, culminating in a real
+transcription rather than a green tick on a form — `admin.smoke_test` is
+the only step that proves the two required steps before it actually work
+together, and it is only satisfied once the caller owns a transcript that
+actually reached `ready`. It is itself `recommended` and skippable, not
+required (issue #299): the recording has to be this administrator's own and
+spends a real call against the deployment's provider account, so a
+deployment can be genuinely finished without it. Only `admin.transcription`
+and `admin.ai` are `required`.
 
 **Requires:** `system_settings:read` — an administrator's configuration
 read, deliberately **not** a permission of its own (epic #118 decision 8's
@@ -5151,14 +5179,14 @@ reports is one the holder of that permission can already read directly).
       },
       {
         "key": "admin.smoke_test",
-        "tier": "required",
+        "tier": "recommended",
         "title": "Transcribe a test recording",
         "description": "Upload a short recording and watch it come back as a transcript. This is the only step that proves the provider key you saved actually works.",
         "actionLabel": "Upload a recording",
         "href": "/transcripts/new",
         "status": "blocked",
         "blockedReason": "Connect a transcription provider first — there is nothing to send a recording to yet.",
-        "skippable": false,
+        "skippable": true,
         "skipped": false
       },
       {
@@ -5174,12 +5202,20 @@ reports is one the holder of that permission can already read directly).
         "skipped": false
       }
     ],
-    "requiredRemaining": 3,
+    "requiredRemaining": 2,
     "totalRemaining": 3,
     "allRequiredSatisfied": false
   }
 }
 ```
+
+⚠ `requiredRemaining` is 2, not 3, even though only `admin.transcription` appears
+unsatisfied among the steps shown above — `admin.ai` (omitted from this
+abbreviated example) is the other required step still pending. Since issue
+#299, `admin.smoke_test` no longer counts toward `requiredRemaining` at all:
+there are exactly two `required` admin steps (`admin.transcription`,
+`admin.ai`), and `requiredRemaining`/`allRequiredSatisfied` reach zero/`true`
+on those two alone.
 
 **Response fields (both routes):**
 - `steps[].status` — `satisfied` / `pending` / `blocked`, **derived on every

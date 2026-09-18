@@ -88,6 +88,13 @@ import type { Role, User } from '../src/types';
 
 const HomePage = lazy(() => import('../src/pages/HomePage'));
 const UserSettingsHubPage = lazy(() => import('../src/pages/UserSettingsHubPage'));
+// Issue #298, follow-up to epic #271 / PR #286. Registered for the same reason
+// every route in this file is: a route the harness cannot reach is a route
+// this suite silently stops asserting pixels for — and #286 mounts the
+// onboarding chrome (`OnboardingBanner`, `FirstRunWelcomeDialog`,
+// `ReturnToSetupBar`) on every page, including these two checklist pages
+// themselves.
+const GettingStartedPage = lazy(() => import('../src/pages/GettingStartedPage'));
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
 const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
@@ -106,6 +113,9 @@ const NotePage = lazy(() => import('../src/pages/NotePage'));
 const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
+// Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
+// import above for why this is registered at all.
+const SetupPage = lazy(() => import('../src/pages/Admin/SetupPage'));
 
 /** Byte-identical to `contexts/ThemeContext.tsx`'s private constant. */
 const THEME_STORAGE_KEY = 'theme_mode';
@@ -355,6 +365,13 @@ function HarnessRoutes() {
           />
 
           <Route path="/settings" element={<UserSettingsHubPage />} />
+          {/* Issue #279, epic #271 (harness wiring: issue #298). Ungated, exactly
+              as `App.tsx` has it: `onboarding.controller.ts` gates
+              `GET /api/onboarding` on `@Auth()` and no permission, because the
+              resource is the caller's own activation state, scoped by `userId`
+              in the query itself. A `RequirePermission` here would be a gate the
+              API does not have. */}
+          <Route path="/settings/getting-started" element={<GettingStartedPage />} />
           <Route path="/settings/profile" element={<UserProfilePage />} />
           <Route path="/settings/appearance" element={<UserAppearancePage />} />
           <Route path="/settings/tokens" element={<UserTokensPage />} />
@@ -376,6 +393,20 @@ function HarnessRoutes() {
             element={
               <RequirePermission permission="users:read" fallback={<Navigate to="/" replace />}>
                 <AdminUsersPage />
+              </RequirePermission>
+            }
+          />
+          {/* Issue #278, epic #271 (harness wiring: issue #298). Gate copied
+              verbatim from `App.tsx`: the same `system_settings:read` string
+              `admin-onboarding.controller.ts` enforces on its one GET (#275). */}
+          <Route
+            path="/admin/settings/setup"
+            element={
+              <RequirePermission
+                permission="system_settings:read"
+                fallback={<Navigate to="/" replace />}
+              >
+                <SetupPage />
               </RequirePermission>
             }
           />

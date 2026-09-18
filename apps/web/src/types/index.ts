@@ -558,6 +558,23 @@ export interface AllowedEmailEntry {
   claimedBy: { id: string; email: string } | null;
   claimedAt: string | null;
   notes: string | null;
+  /**
+   * How many invitation reminders have been REQUESTED for this entry, and when
+   * the most recent one was (issue #301).
+   *
+   * ⚠ Requested, not delivered. `AllowlistService.sendReminder` increments the
+   * counter and then hands the message to the notification dispatcher, which is
+   * detached and never rejects — a failed send lands in
+   * `notification_deliveries`, not here. So a non-zero count is evidence that an
+   * administrator pressed the button, which is exactly the question the console
+   * needs answered ("have I already chased this person?").
+   *
+   * `lastReminderAt` is `null` exactly when `reminderCount` is 0; the two are
+   * written in the same statement and there is no path that moves one without
+   * the other.
+   */
+  reminderCount: number;
+  lastReminderAt: string | null;
 }
 
 export interface AllowlistResponse {

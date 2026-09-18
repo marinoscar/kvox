@@ -1,5 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
+import { onboardingResponse, type OnboardingApiOptions } from './onboardingApi';
+
 /**
  * A mocked notes API for the visual harness — issue #57, epic #45.
  *
@@ -237,6 +239,12 @@ export interface NotesApiOptions {
   failed?: boolean;
   /** Answer `GET /api/ai/config` with `keyConfigured: false`. */
   noKey?: boolean;
+  /**
+   * Onboarding fixture (issue #298) — `Layout.tsx` mounts `OnboardingProvider`
+   * and its chrome on every page, including these. Defaults to the settled,
+   * already-seen fixture, so the existing note baselines are unaffected.
+   */
+  onboarding?: OnboardingApiOptions;
 }
 
 /**
@@ -397,6 +405,15 @@ export async function installNotesApi(
         }),
       );
     }
+
+    // Onboarding (issue #298) — MUST precede the catch-all below. Before this
+    // installer answered `/onboarding`/`/admin/onboarding`/`/user-settings` at
+    // all, they fell through to the empty-object catch-all, which is exactly
+    // the shape `services/onboarding.ts`'s `parseOnboardingState` rejects; see
+    // `onboardingApi.ts`'s header for why that used to crash the whole app
+    // into `ErrorBoundary` before #286 added that boundary check.
+    const onboarding = onboardingResponse(path, options.onboarding);
+    if (onboarding) return json(route, onboarding);
 
     // Anything else this harness has not been asked about. Answered with an
     // empty envelope rather than left hanging, so one unmocked call can never
