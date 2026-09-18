@@ -3,6 +3,8 @@ import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+import { appVersionDefine } from '../app-version.js';
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -19,6 +21,22 @@ const here = path.dirname(fileURLToPath(import.meta.url));
  */
 export default defineConfig({
   root: here,
+  // ⚠ THE SAME `define` `apps/web/vite.config.ts` AND `vitest.config.ts`
+  // SET, and it must stay that way (issue #296).
+  //
+  // This is the THIRD config that renders `SettingsHub`, and it was the one
+  // missed. `vitest.config.ts`'s own comment states the failure exactly:
+  // these configs share nothing, so a define added only to the others
+  // leaves `__APP_VERSION__` undefined here — and an undefined global is a
+  // ReferenceError the moment anything renders the settings hub, not a type
+  // error anybody would see first.
+  //
+  // What that cost, concretely: `SettingsHub.tsx` renders
+  // `Version {__APP_VERSION__}`, so every harness page mounting either hub
+  // threw during render, `ErrorBoundary` replaced the WHOLE application, and
+  // all eight hub/rail specs failed with `element(s) not found` rather than
+  // a pixel diff — a crash wearing a locator timeout's clothes.
+  define: appVersionDefine(),
   // Serve `apps/web/public` — the REAL application's static asset directory —
   // as this harness's public dir, overriding Vite's `<root>/public` default
   // (which would be `visual/public`, a directory that does not and must not
