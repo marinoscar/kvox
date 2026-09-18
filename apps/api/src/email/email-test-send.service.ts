@@ -9,7 +9,7 @@ import type { EmailMessage } from './email.types';
 import type { EmailProvider } from './providers/email-provider.interface';
 import { SesEmailProvider } from './providers/ses-email.provider';
 import { SmtpEmailProvider } from './providers/smtp-email.provider';
-import { renderEmailTemplate } from './templates';
+import { renderEmailTemplate, renderedEmailParts } from './templates';
 import type { TestEmailResult } from './dto/test-email-result.dto';
 
 // =============================================================================
@@ -236,10 +236,10 @@ export class EmailTestSendService {
     const message: EmailMessage = {
       to: actor.email,
       from: formatFromHeader(settings.fromAddress, settings.fromName),
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
-      ...(rendered.headers ? { headers: rendered.headers } : {}),
+      // See `renderedEmailParts`: the rendered halves travel as one value so
+      // that a template which grows an embedded part cannot have it silently
+      // dropped by a call site that enumerates fields by hand.
+      ...renderedEmailParts(rendered),
     };
 
     // `send` NEVER throws — that contract is implemented once, in

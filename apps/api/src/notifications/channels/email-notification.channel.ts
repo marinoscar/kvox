@@ -6,6 +6,7 @@ import {
   SmtpEmailProvider,
   findEmailTemplate,
   formatFromHeader,
+  renderedEmailParts,
 } from '../../email';
 import type {
   EmailMessage,
@@ -237,10 +238,12 @@ export class EmailNotificationChannel implements NotificationChannelSender {
     const message: EmailMessage = {
       to,
       from: formatFromHeader(settings.fromAddress, settings.fromName),
-      subject: rendered.email.subject,
-      html: rendered.email.html,
-      text: rendered.email.text,
-      ...(rendered.email.headers ? { headers: rendered.email.headers } : {}),
+      // Every rendered half in one call, rather than field by field. An
+      // optional property a call site forgets to mention still typechecks, so
+      // enumerating them here is how a template's embedded logo would get
+      // dropped between the renderer and the transport with nothing going red
+      // — see `renderedEmailParts` for the full note.
+      ...renderedEmailParts(rendered.email),
     };
 
     // No try/catch: `send` never throws, and that is implemented once in

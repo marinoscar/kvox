@@ -4,6 +4,7 @@ import {
   findEmailTemplate,
   isEmailTemplateName,
   renderEmailTemplate,
+  renderedEmailParts,
   type EmailTemplateDataMap,
   type EmailTemplateName,
   type RenderedEmail,
@@ -182,6 +183,28 @@ function render(name: EmailTemplateName): RenderedEmail {
   return template(SAMPLE_DATA[name]);
 }
 
+/**
+ * Does this document fetch anything? Strip embedded `src="cid:…"` references,
+ * then apply the original "any src= inside a real tag" rule to the remainder.
+ *
+ * Written as strip-then-match rather than as one negative-lookahead regex: a
+ * lookahead placed after an optional quote backtracks past the quote and
+ * reports every `src="cid:…"` as remote — a false PASS wearing a clever
+ * regex. The same helper, for the same reason, is in layout.spec.ts.
+ */
+function fetchesRemoteContent(document: string): boolean {
+  const withoutEmbedded = document.replace(/\bsrc\s*=\s*"cid:[^"]*"/gi, '');
+
+  return /<[a-zA-Z][a-zA-Z0-9-]*\b[^>]*\bsrc\s*=/i.test(withoutEmbedded);
+}
+
+/** Every content id the document references, as it appears after `cid:`. */
+function referencedContentIds(document: string): string[] {
+  return [...document.matchAll(/\bsrc\s*=\s*"cid:([^"]*)"/gi)].map(
+    (match) => match[1] ?? '',
+  );
+}
+
 describe('email template registry — keys and functions agree', () => {
   it('EMAIL_TEMPLATE_NAMES is exactly the key set of EMAIL_TEMPLATES', () => {
     expect([...EMAIL_TEMPLATE_NAMES].sort()).toEqual(Object.keys(EMAIL_TEMPLATES).sort());
@@ -234,6 +257,80 @@ describe('email template registry — lookup helpers', () => {
   });
 });
 
+describe('renderedEmailParts — the one bridge from a template to a message', () => {
+  it('produces exactly the fields a message with no attachments always had', () => {
+    // Both call sites (the notification dispatcher and the "send test email"
+    // button) used to enumerate these by hand. The Pick proof in
+    // email-template.types.ts catches a field that changes SHAPE; it cannot
+    // catch a field a call site simply does not mention, because an optional
+    // property left out still typechecks. So this pins the no-attachment case
+    // exactly — no `attachments` key, not an empty one.
+    const parts = renderedEmailParts({
+      subject: 'S',
+      html: '<p>h</p>',
+      text: 't',
+      headers: { 'X-A': '1' },
+    });
+
+    expect(parts).toEqual({
+      subject: 'S',
+      html: '<p>h</p>',
+      text: 't',
+      headers: { 'X-A': '1' },
+    });
+    expect('attachments' in parts).toBe(false);
+  });
+
+  it('omits both optional keys when the template supplied neither', () => {
+    const parts = renderedEmailParts({ subject: 'S', html: '<p>h</p>', text: 't' });
+
+    expect(Object.keys(parts).sort()).toEqual(['html', 'subject', 'text']);
+  });
+
+  it('treats an empty attachments array as no attachments', () => {
+    const parts = renderedEmailParts({
+      subject: 'S',
+      html: '<p>h</p>',
+      text: 't',
+      attachments: [],
+    });
+
+    expect('attachments' in parts).toBe(false);
+  });
+
+  it('carries every attachment through by reference', () => {
+    const attachment = {
+      content: Buffer.from([1, 2, 3]),
+      cid: 'logo@email.local',
+      filename: 'logo.png',
+      contentType: 'image/png',
+    };
+
+    const parts = renderedEmailParts({
+      subject: 'S',
+      html: '<p><img src="cid:logo@email.local"></p>',
+      text: 't',
+      attachments: [attachment],
+    });
+
+    expect(parts.attachments).toEqual([attachment]);
+    expect(parts.attachments?.[0]).toBe(attachment);
+  });
+
+  it('loses nothing from any registered template', () => {
+    // The whole registry, so a template that starts embedding something is
+    // covered the day it is added rather than the day somebody remembers.
+    for (const name of EMAIL_TEMPLATE_NAMES) {
+      const rendered = render(name);
+      const parts = renderedEmailParts(rendered);
+
+      expect(parts.html).toBe(rendered.html);
+      expect(parts.text).toBe(rendered.text);
+      expect(parts.attachments ?? []).toEqual(rendered.attachments ?? []);
+    }
+  });
+});
+
 describe.each(EMAIL_TEMPLATE_NAMES)('template contract: "%s"', (name) => {
   const rendered = render(name);
 
@@ -279,14 +376,45 @@ describe.each(EMAIL_TEMPLATE_NAMES)('template contract: "%s"', (name) => {
     expect(rendered.text).not.toContain('&lt;script&gt;');
   });
 
-  it('html has no <link>, no <style> block, and no external src=', () => {
+  it('html has no <link>, no <style> block, and fetches nothing', () => {
     expect(rendered.html).not.toMatch(/<link\b/i);
     expect(rendered.html).not.toMatch(/<style\b/i);
-    // Matches `src=` only inside an actual (unescaped) tag — e.g. `<img
-    // src=...>` — not the literal substring "src=" that can legitimately
-    // appear as ESCAPED text content (see the hostile sample payload above,
-    // which contains "src=x" as inert, HTML-escaped text).
-    expect(rendered.html).not.toMatch(/<[a-zA-Z][a-zA-Z0-9-]*\b[^>]*\bsrc\s*=/i);
+    // ⚠ WIDENED, NOT WEAKENED — see `fetchesRemoteContent` above and
+    // layout.ts's header. An embedded `cid:` part is delivered inside the
+    // message; a remote asset is fetched, blocked by default in Gmail,
+    // Outlook and Apple Mail, and read as a tracking pixel by spam filters.
+    // Only the second is forbidden, and this still fails for `https://`, for
+    // a protocol-relative `//host/x` and for a `data:` URI.
+    expect(fetchesRemoteContent(rendered.html)).toBe(false);
+  });
+
+  it('references no content id it does not also attach', () => {
+    // THE INVARIANT THAT MAKES THE FEATURE SAFE TO EXTEND, asserted over the
+    // whole registry rather than over the one template that uses it today.
+    // A `cid:` with no MIME part behind it renders as a broken-image
+    // placeholder in the recipient's client — strictly worse than the text
+    // wordmark it replaced, and invisible to every test that only looks at
+    // the markup. `RenderLayoutOptions.logo` takes the whole attachment
+    // specifically so the two are produced from one value; this is the guard
+    // for the template that finds a way around that anyway.
+    const attached = new Set((rendered.attachments ?? []).map((a) => a.cid));
+
+    for (const cid of referencedContentIds(rendered.html)) {
+      expect(attached).toContain(cid);
+    }
+  });
+
+  it('attaches no part the html does not reference', () => {
+    // The other direction: `EmailMessage.attachments` is for EMBEDDED IMAGES,
+    // not for files (see email.types.ts). A part nothing references is either
+    // a leak of bytes into every copy of the message or the beginning of a
+    // general file-attachment channel, and both should be a conversation
+    // rather than a diff.
+    const referenced = referencedContentIds(rendered.html);
+
+    for (const attachment of rendered.attachments ?? []) {
+      expect(referenced).toContain(attachment.cid);
+    }
   });
 
   it('html is table-based', () => {

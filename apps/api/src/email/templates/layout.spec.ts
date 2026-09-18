@@ -1,5 +1,9 @@
+import { APP_NAME } from '@app/shared';
+
 import { html, SafeHtml } from './safe-html';
 import { plainText, renderLayout } from './layout';
+import { EMAIL_LOGO_RENDERED_SIZE } from './brand-logo';
+import type { EmailAttachment } from '../email.types';
 
 // =============================================================================
 // layout.ts — tests (issue #123, epic #109)
@@ -174,10 +178,18 @@ describe('renderLayout — structural invariants', () => {
     expect(out).not.toMatch(/<link\b/i);
   });
 
-  it('contains no external src= (no remote image/asset)', () => {
-    // Matches `src=` only inside an actual (unescaped) tag, not the literal
-    // substring "src=" as escaped text content.
-    expect(out).not.toMatch(/<[a-zA-Z][a-zA-Z0-9-]*\b[^>]*\bsrc\s*=/i);
+  it('contains no REMOTE src= (a fetched asset is still forbidden)', () => {
+    // ⚠ THIS TEST WAS WIDENED, NOT WEAKENED. It used to forbid `src=`
+    // outright, because the layout had no images at all. The rule it encodes
+    // is about REMOTE content — an asset a client has to fetch, which Gmail,
+    // Outlook and Apple Mail block by default and which a spam filter reads as
+    // a tracking pixel. An embedded `cid:` part is delivered inside the
+    // message and is none of those things (see layout.ts's header). So the
+    // assertion now rejects any `src` whose value is not a `cid:` reference,
+    // which still fails for `https://`, for a protocol-relative `//host/…` and
+    // for a `data:` URI — and this case, with no logo supplied, has no `src`
+    // at all.
+    expect(fetchesRemoteContent(out)).toBe(false);
   });
 
   it('contains no <style> block', () => {
@@ -231,6 +243,103 @@ describe('renderLayout — hidden preheader', () => {
     // is actually supplied.
     expect(withPreview).toMatch(/mso-hide:all/i);
     expect(withoutPreview).not.toMatch(/mso-hide:all/i);
+  });
+});
+
+/**
+ * Does this document fetch anything?
+ *
+ * Embedded `src="cid:…"` references are removed first, then the ORIGINAL
+ * "any src= inside a real tag" rule is applied to what is left. Written as
+ * strip-then-match rather than as one negative-lookahead regex on purpose: a
+ * lookahead after an optional quote (`["']?(?!cid:)`) backtracks past the
+ * quote and reports every `src="cid:…"` as remote, which is a false PASS
+ * dressed as a clever regex.
+ *
+ * Still deliberately NOT "contains https://": that would miss a
+ * protocol-relative `src=//host/x` and a `src=data:…`. And still matched
+ * inside a real tag only, so the hostile `"><img src=x onerror=alert(1)>`
+ * payload that templates escape into inert text does not fire it.
+ */
+function fetchesRemoteContent(document: string): boolean {
+  const withoutEmbedded = document.replace(/\bsrc\s*=\s*"cid:[^"]*"/gi, '');
+
+  return /<[a-zA-Z][a-zA-Z0-9-]*\b[^>]*\bsrc\s*=/i.test(withoutEmbedded);
+}
+
+const logo: EmailAttachment = {
+  content: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+  cid: 'test-logo@email.local',
+  filename: 'logo.png',
+  contentType: 'image/png',
+};
+
+describe('renderLayout — the masthead', () => {
+  it('renders the text wordmark, and no image at all, when no logo is supplied', () => {
+    // The pre-existing behaviour, and a real production path: the asset is
+    // unreadable, or a template has not opted in. Every template but the
+    // invitation takes this branch today.
+    const out = renderLayout({ title: 'Title', bodyHtml: basicBody });
+
+    expect(out).toContain(APP_NAME);
+    expect(out).not.toMatch(/<img\b/i);
+    expect(out).not.toContain('cid:');
+  });
+
+  it('renders an <img> referencing the attachment by content id when one is supplied', () => {
+    const out = renderLayout({ title: 'Title', bodyHtml: basicBody, logo });
+
+    expect(out).toMatch(/<img\b/i);
+    expect(out).toContain(`src="cid:${logo.cid}"`);
+  });
+
+  it('gives the image a non-empty alt carrying the product name', () => {
+    // ⚠ NOT OPTIONAL. The whole premise is that a CID part renders where a
+    // remote image would not — but a recipient with images off wholesale, and
+    // a screen-reader user, still need to know who sent this.
+    const out = renderLayout({ title: 'Title', bodyHtml: basicBody, logo });
+
+    const alt = /<img\b[^>]*\balt="([^"]*)"/i.exec(out);
+
+    expect(alt).not.toBeNull();
+    expect(alt?.[1]?.trim().length ?? 0).toBeGreaterThan(0);
+    expect(alt?.[1]).toBe(APP_NAME);
+  });
+
+  it('states the rendered dimensions as ATTRIBUTES, not only in CSS', () => {
+    // Outlook renders with the Word engine, which ignores the CSS pair and
+    // would lay a 96px asset out at its intrinsic size — double the intended
+    // 48px, pushing the card down the page.
+    const out = renderLayout({ title: 'Title', bodyHtml: basicBody, logo });
+
+    expect(out).toMatch(
+      new RegExp(`<img\\b[^>]*\\bwidth="${EMAIL_LOGO_RENDERED_SIZE}"`, 'i'),
+    );
+    expect(out).toMatch(
+      new RegExp(`<img\\b[^>]*\\bheight="${EMAIL_LOGO_RENDERED_SIZE}"`, 'i'),
+    );
+  });
+
+  it('still has no REMOTE src when the logo IS rendered', () => {
+    // The amended structural rule, stated against the case it was amended
+    // for: an embedded part is permitted, a fetched one is not, and the two
+    // are told apart by the `cid:` scheme rather than by trusting the author.
+    const out = renderLayout({ title: 'Title', bodyHtml: basicBody, logo });
+
+    expect(fetchesRemoteContent(out)).toBe(false);
+  });
+
+  it('escapes a hostile cid rather than letting it break out of the attribute', () => {
+    // A cid is a value like any other. It is a constant today, but the layout
+    // must not be the place that assumes so.
+    const out = renderLayout({
+      title: 'Title',
+      bodyHtml: basicBody,
+      logo: { ...logo, cid: '" onerror="alert(1)' },
+    });
+
+    expect(out).not.toContain('onerror="alert(1)"');
+    expect(out).toContain('&quot; onerror=&quot;alert(1)');
   });
 });
 

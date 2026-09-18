@@ -262,7 +262,23 @@ export {
 export {
   TRANSACTIONAL_EMAIL_HEADERS,
   RENDERED_EMAIL_MATCHES_MESSAGE,
+  // The one way a rendered template becomes the payload half of an
+  // `EmailMessage`. Both call sites use it; see its own note for why a spread
+  // per call site is the wrong shape.
+  renderedEmailParts,
 } from './email-template.types';
+
+// The single embedded asset (see `layout.ts`'s header on CID versus remote).
+// `emailLogoAttachment()` is what a template calls to opt in to the masthead
+// image; it returns `null` when the committed PNG is unreadable, and the
+// layout then renders the text wordmark it always did.
+export {
+  EMAIL_LOGO_CID,
+  EMAIL_LOGO_PATH,
+  EMAIL_LOGO_RENDERED_SIZE,
+  emailLogoAttachment,
+  resetEmailLogoCacheForTests,
+} from './brand-logo';
 
 export { testEmail } from './test-email.email';
 

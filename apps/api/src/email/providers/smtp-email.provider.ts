@@ -128,6 +128,29 @@ export class SmtpEmailProvider extends BaseEmailProvider {
       // Always both parts -- see the same note in the SES provider.
       text: msg.text,
       ...(msg.headers ? { headers: msg.headers } : {}),
+      // Embedded images, essentially always just the masthead logo. nodemailer
+      // handles `cid` natively: it sets `contentDisposition: 'inline'` and
+      // moves the part into a `multipart/related` node beside the HTML, which
+      // is what makes `src="cid:..."` resolve in the recipient's client. That
+      // is the entire SMTP half of this feature -- contrast the SES provider,
+      // which has to compose the MIME document itself because SESv2's simple
+      // content cannot carry a part at all.
+      //
+      // The conditional spread keeps a message with no attachments producing
+      // byte-for-byte the `sendMail` options it always did, rather than one
+      // with `attachments: []` bolted on. Nothing in nodemailer minds the
+      // empty array; the point is that "no attachments changes nothing" is
+      // observable rather than merely believed.
+      ...(msg.attachments && msg.attachments.length > 0
+        ? {
+            attachments: msg.attachments.map((attachment) => ({
+              filename: attachment.filename,
+              content: attachment.content,
+              contentType: attachment.contentType,
+              cid: attachment.cid,
+            })),
+          }
+        : {}),
     });
 
     // nodemailer synthesises a Message-ID when the server does not return one,
