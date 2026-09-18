@@ -19,7 +19,14 @@ import {
   type UserDataScope,
 } from './job-types';
 
-const CATEGORIES = ['transcripts', 'notes', 'noteTemplates', 'files', 'credentials'] as const;
+const CATEGORIES = [
+  'transcripts',
+  'notes',
+  'noteTemplates',
+  'files',
+  'credentials',
+  'onboarding',
+] as const;
 
 describe('user.data.purge job type strings', () => {
   it('are the permanent strings a queued payload records', () => {
@@ -45,6 +52,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       noteTemplates: false,
       files: false,
       credentials: false,
+      onboarding: false,
     },
     notes: {
       transcripts: false,
@@ -52,6 +60,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       noteTemplates: false,
       files: false,
       credentials: false,
+      onboarding: false,
     },
     files: {
       transcripts: false,
@@ -59,6 +68,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       noteTemplates: false,
       files: true,
       credentials: false,
+      onboarding: false,
     },
     content: {
       transcripts: true,
@@ -66,6 +76,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       noteTemplates: true,
       files: true,
       credentials: false,
+      onboarding: false,
     },
     everything: {
       transcripts: true,
@@ -73,6 +84,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       noteTemplates: true,
       files: true,
       credentials: true,
+      onboarding: true,
     },
   };
 
@@ -107,15 +119,17 @@ describe('scopeIncludes — the full scope x category matrix', () => {
     expect(scopeIncludes('content', 'credentials')).toBe(false);
   });
 
-  it('composes `everything` as `content` plus credentials, the only line the two composites differ on', () => {
+  it('composes `everything` as `content` plus credentials AND onboarding, the only two lines the composites differ on', () => {
     for (const category of CATEGORIES) {
-      if (category === 'credentials') continue;
+      if (category === 'credentials' || category === 'onboarding') continue;
 
       expect(scopeIncludes('everything', category)).toBe(scopeIncludes('content', category));
     }
 
     expect(scopeIncludes('content', 'credentials')).toBe(false);
     expect(scopeIncludes('everything', 'credentials')).toBe(true);
+    expect(scopeIncludes('content', 'onboarding')).toBe(false);
+    expect(scopeIncludes('everything', 'onboarding')).toBe(true);
   });
 
   // ⚠ THE REGRESSION THIS TEST EXISTS TO CATCH: silently reaching note
@@ -144,6 +158,46 @@ describe('scopeIncludes — the full scope x category matrix', () => {
 
       expect(reachable).toBe(scope === 'everything');
     }
+  });
+
+  // ⚠ THE REGRESSION THIS PAIR EXISTS TO CATCH, in both directions.
+  //
+  // Too narrow: without `everything` reaching `onboarding`, a user who wipes
+  // their account keeps `welcomeSeenAt`/`dismissedAt`, and the checklist —
+  // which correctly regresses on its own, because it is derived live — is
+  // never shown again. Nothing errors; the guidance simply stops appearing,
+  // and the only way back is a replay button on a settings page they have no
+  // reason to open.
+  //
+  // Too wide: `content` reaching `onboarding` would reset a user's first-run
+  // state for "delete my content", which is not the request they made — and
+  // the three narrow scopes reaching it would be worse still, since "delete my
+  // files" would restart a welcome tour.
+  it('reaches onboarding ONLY from `everything` — never from `content`, never from a narrow scope', () => {
+    for (const scope of USER_DATA_SCOPES) {
+      const reachable = scopeIncludes(scope, 'onboarding');
+
+      expect(reachable).toBe(scope === 'everything');
+    }
+  });
+
+  it('keeps onboarding out of every scope but `everything`, one explicit assertion per scope', () => {
+    expect(scopeIncludes('transcripts', 'onboarding')).toBe(false);
+    expect(scopeIncludes('notes', 'onboarding')).toBe(false);
+    expect(scopeIncludes('files', 'onboarding')).toBe(false);
+    expect(scopeIncludes('content', 'onboarding')).toBe(false);
+    expect(scopeIncludes('everything', 'onboarding')).toBe(true);
+  });
+
+  // ⚠ `onboarding` IS A STEP, NOT A REQUESTABLE SCOPE. The category union in
+  // `scopeIncludes` names what a scope fans out TO; `USER_DATA_SCOPES` names
+  // what a caller may ASK for, and its strings are permanent once a queued
+  // payload records one. Adding `'onboarding'` there would create a
+  // "delete my onboarding state" request that destroys nothing and that the
+  // replay button on `/settings/getting-started` already provides.
+  it('does NOT add `onboarding` to the requestable scopes — those five strings are permanent', () => {
+    expect(USER_DATA_SCOPES).toEqual(['transcripts', 'notes', 'files', 'content', 'everything']);
+    expect(USER_DATA_SCOPES).not.toContain('onboarding');
   });
 });
 

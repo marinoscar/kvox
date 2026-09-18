@@ -335,6 +335,16 @@ account"), and conflating them would mean a user clearing their media
 library discovered afterward that they had also signed themselves out of a
 system they may still need — to see the confirmation that their data is
 actually gone, if nothing else. No scope here touches `users`,
-`user_settings`, `user_roles`, `refresh_tokens`, or the caller's session.
+`user_roles`, `refresh_tokens`, or the caller's session.
+
+The one `user_settings` exception is `everything`, which clears the
+`onboarding` namespace (epic #271) and nothing else in that row. A wipe that
+left `welcomeSeenAt` and `dismissedAt` behind produced a genuinely confusing
+state: the derived checklist regresses correctly — no transcripts, no AI key,
+so both required steps are outstanding again — and then neither the banner nor
+the welcome dialog will surface it, because both gate on the surviving
+timestamps. "Delete everything" should mean start over. Every other namespace
+— `theme`, `profile`, `navigation`, `notifications`, `dataTables` — survives
+every scope, because deleting your data is not resetting your preferences.
 Account deletion, if this application ever adds it, is a separate feature
 with its own confirmation flow, not a sixth scope on this one.
