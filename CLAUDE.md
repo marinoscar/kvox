@@ -566,6 +566,7 @@ above. Don't restate any of that here; extend those three instead.
 ### Allowlist (Admin-only)
 - `GET /api/allowlist` - List allowlisted emails (paginated, filterable)
 - `POST /api/allowlist` - Add email to allowlist
+- `POST /api/allowlist/{id}/reminder` - Re-email an unclaimed invitee (`allowlist:write`, issue #301). 409 if already claimed. Manual only — no cron, no job type; `reminderCount`/`lastReminderAt` mean "requested", not "delivered"
 - `DELETE /api/allowlist/{id}` - Remove email from allowlist
 
 ### Storage Objects
@@ -968,7 +969,11 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   settings never had before this namespace
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
-- `allowed_emails` - Allowlist for access control
+- `allowed_emails` - Allowlist for access control. `reminder_count`/`last_reminder_at` (issue
+  #301) track `POST /api/allowlist/{id}/reminder`: a manual, admin-pressed resend, not a
+  scheduler — there is deliberately no cron or job type behind it. `reminder_count` is
+  incremented in the database (`increment`, not a read-modify-write) so two admins pressing
+  the button at once can't both write the same count
 - `device_codes` - Device authorization codes (RFC 8628)
 - `storage_objects` - File metadata, status, storage references. `part_size` (#21) is
   the part size an upload was initialised with, **persisted rather than recomputed**:
@@ -1318,7 +1323,10 @@ settings hub makes on its own axis (epic #109, wired end to end by #128).
      Build the body with the `html` tagged literal so every interpolation is
      escaped by construction, pass it to `renderLayout`, put any CTA URL
      through the layout (it applies `safeUrl`), and **hand-write the text
-     part** — there is deliberately no HTML-to-text helper. Register it in
+     part** — there is deliberately no HTML-to-text helper. A template may
+     opt into the one embedded brand logo by passing `emailLogoAttachment()`'s
+     result through as `logo`/`attachments` — see `templates/layout.ts`'s
+     header and `templates/brand-logo.ts`. Register it in
      `templates/index.ts` (`EmailTemplateDataMap` **and** `EMAIL_TEMPLATES`;
      the compiler rejects half a registration), then map the event key to the
      template name in `EVENT_EMAIL_TEMPLATES`

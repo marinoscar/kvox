@@ -836,6 +836,28 @@ Add email to allowlist.
 
 ---
 
+#### POST /allowlist/:id/reminder
+Email the invitee again about an invitation they have not yet used (issue #301).
+
+**Requires:** `allowlist:write` permission — the same permission that adds an entry; sending a reminder is that authority exercised again, not a new one.
+
+**Parameters:**
+- `id` (UUID) - Allowlist entry ID
+
+**Response:** HTTP 200, the updated entry (same shape as `POST /allowlist`), with `reminderCount` incremented and `lastReminderAt` set to the send time.
+
+**Error Cases:**
+- 404 Not Found - Allowlist entry not found
+- 409 Conflict - Entry already claimed - there is nobody left to remind
+
+**Note:** Manual by design - there is no cron, no job type and no settings namespace behind this endpoint. An administrator presses the button once per send; the bounds an automated sweep would need (a maximum count, a minimum gap between sends, a delay before the first reminder, an off switch) all collapse into "somebody decided to send this one," so none of them exist.
+
+⚠ **`reminderCount`/`lastReminderAt` record that a reminder was requested and handed to the notification dispatcher, not that it was delivered.** The email is sent through `notifyAddress`, which is detached, never rejects, and turns a send failure into a row in the notification delivery log rather than an exception here. Read this pair as "an admin asked for N reminders," never as "N reminders arrived" — delivery status lives in the delivery log, not on this row.
+
+The reminder is a separate notification event (`allowlist.invitation_reminder`), not a flag on the original `allowlist.invitation` event: a recipient who wants the invitation but not the chasing has no way to say so under one shared key, and the copy genuinely differs ("you were invited" vs. "you were invited a while ago and haven't signed in"). Like the invitation, it is email-only — the recipient still has no account and no open tab.
+
+---
+
 #### DELETE /allowlist/:id
 Remove email from allowlist.
 
