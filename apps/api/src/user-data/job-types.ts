@@ -45,10 +45,11 @@ export const USER_DATA_SUBJECT_TYPE = 'user';
  * EXACTLY the category its row names and nothing else — see `scopeIncludes`,
  * where `noteTemplates` is the case that rule had to be defended on. `content`
  * is everything the user MADE: transcripts, notes, their own note templates and
- * their plain uploads. `everything` is that plus their CREDENTIALS, which is
- * the only line the two composites differ on and deliberately the only one:
- * "delete my content" and "delete my content and revoke my keys" are two
- * decisions a person makes separately.
+ * their plain uploads. `everything` is that plus the two things that are NOT
+ * content — their CREDENTIALS and their first-run ONBOARDING state — and that
+ * is the only line the two composites differ on: "delete my content" and
+ * "delete my content, revoke my keys and start me over" are two decisions a
+ * person makes separately.
  *
  * ⚠ THESE STRINGS ARE PERMANENT ONCE A JOB CARRIES ONE. A `user.data.purge`
  * row's payload records the scope it was queued for, and a handler that ran
@@ -81,7 +82,13 @@ export type UserDataScope = (typeof USER_DATA_SCOPES)[number];
  */
 export function scopeIncludes(
   scope: UserDataScope,
-  category: 'transcripts' | 'notes' | 'noteTemplates' | 'files' | 'credentials',
+  category:
+    | 'transcripts'
+    | 'notes'
+    | 'noteTemplates'
+    | 'files'
+    | 'credentials'
+    | 'onboarding',
 ): boolean {
   switch (category) {
     // ⚠ EVERY NARROW SCOPE MAPS TO EXACTLY ONE CATEGORY. Only the composites
@@ -120,6 +127,33 @@ export function scopeIncludes(
     // implied by "delete my recordings", and a `content` scope that silently
     // signed out their CLI would be a surprise with no way back.
     case 'credentials':
+      return scope === 'everything';
+    // ⚠ ONBOARDING IS `everything` ONLY, for a reason RELATED TO CREDENTIALS
+    // RATHER THAN TO THE FOUR CONTENT CATEGORIES ABOVE: it is not something the
+    // user MADE. The `onboarding` user-settings namespace (epic #271, issue
+    // #272) holds first-run INTENT — `welcomeSeenAt`, `dismissedAt`,
+    // `adminDismissedAt`, `skipped[]` — state this application wrote about the
+    // user rather than content the user authored, which is exactly what keeps
+    // it out of `content` ("everything you made") on the same line credentials
+    // sit on.
+    //
+    // A full wipe should genuinely start over, and without this it did not.
+    // The checklist itself is DERIVED on every read, so after an `everything`
+    // run its required steps correctly go outstanding again (no transcripts,
+    // no AI key) — but the surviving `dismissedAt` makes
+    // `chooseBannerAudience` bail and the surviving `welcomeSeenAt` makes
+    // `FirstRunWelcomeDialog`'s `due` gate bail, so the user is never shown the
+    // guidance those steps exist to give. A person who deleted everything and
+    // then saw no first-run guidance at all would reasonably conclude the
+    // feature was broken.
+    //
+    // ⚠ THIS CATEGORY IS NOT A MEMBER OF `USER_DATA_SCOPES`, deliberately.
+    // That array's strings are permanent once a queued payload records one;
+    // this union is internal to this function and names the STEPS a scope fans
+    // out to, not the requests a caller may make. There is no "delete my
+    // onboarding state" scope and there should not be — the replay button on
+    // `/settings/getting-started` is already that, without destroying anything.
+    case 'onboarding':
       return scope === 'everything';
   }
 }

@@ -7,6 +7,8 @@ import {
   navigationPatchSchema,
   notificationsSchema,
   notificationsPatchSchema,
+  onboardingSchema,
+  onboardingPatchSchema,
 } from '../../common/schemas/user-settings-namespaces.schema';
 import {
   userProfileSettingsSchema,
@@ -25,6 +27,7 @@ export const updateUserSettingsSchema = z.object({
   dataTables: dataTablesSchema.optional(),
   navigation: navigationSchema.optional(),
   notifications: notificationsSchema.optional(),
+  onboarding: onboardingSchema.optional(),
 });
 
 export class UpdateUserSettingsDto extends createZodDto(
@@ -49,6 +52,13 @@ export const patchUserSettingsSchema = z.object({
   //      preferences page sends when a toggle returns to its default; writing
   //      the default value instead would pin the user to it forever.
   notifications: notificationsPatchSchema.nullable().optional(),
+  // `onboarding` (#272) deletes at two levels:
+  //   `onboarding: null`                    -> clear the namespace entirely,
+  //      restoring "never onboarded" and showing the first-run surfaces again
+  //   `onboarding: { dismissedAt: null }`   -> un-dismiss ONE surface, leaving
+  //      the other three fields alone. Field-wise like `navigation`, because
+  //      the four are independent decisions rather than one view state.
+  onboarding: onboardingPatchSchema.nullable().optional(),
 });
 
 export class PatchUserSettingsDto extends createZodDto(

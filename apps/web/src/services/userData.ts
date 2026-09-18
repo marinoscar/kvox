@@ -129,7 +129,7 @@ export const USER_DATA_CONFIRMATION: Record<UserDataScope, string> = {
 // =============================================================================
 
 /**
- * The five categories a scope may or may not cover.
+ * The six categories a scope may or may not cover.
  *
  * Named exactly as `apps/api/src/user-data/job-types.ts` names them, and in the
  * same order, so the two functions can be read side by side.
@@ -139,7 +139,8 @@ export type UserDataCategory =
   | 'notes'
   | 'noteTemplates'
   | 'files'
-  | 'credentials';
+  | 'credentials'
+  | 'onboarding';
 
 /** Every category, for callers that need to ask about all of them. */
 export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
@@ -148,6 +149,7 @@ export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
   'noteTemplates',
   'files',
   'credentials',
+  'onboarding',
 ];
 
 /**
@@ -200,6 +202,14 @@ export function scopeIncludes(scope: UserDataScope, category: UserDataCategory):
     // ⚠ CREDENTIALS ARE `everything` ONLY. Revoking a user's API tokens is not
     // implied by deleting their recordings.
     case 'credentials':
+      return scope === 'everything';
+    // ⚠ ONBOARDING IS `everything` ONLY, and it is the one category here with
+    // NO COUNT. It is not content the user made; it is the first-run state this
+    // application wrote about them, cleared so a full wipe genuinely starts
+    // over (epic #271). It is listed because this mirror's whole job is to
+    // match the server's switch — `userDataDisplay.ts` skips it when building
+    // the itemised inventory, since "1 onboarding" is not a sentence.
+    case 'onboarding':
       return scope === 'everything';
   }
 }

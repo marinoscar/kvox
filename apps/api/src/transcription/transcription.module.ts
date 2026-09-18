@@ -57,8 +57,25 @@ import { TranscriptionSettingsService } from './transcription-settings.service';
   ],
   // The registry and the settings service are what #25's job handler needs:
   // one to resolve the configured provider, the other to read the policy and
-  // the credential. The config service is deliberately NOT exported — it is one
-  // projection for one endpoint in this module.
-  exports: [TranscriptionProviderRegistry, TranscriptionSettingsService],
+  // the credential.
+  exports: [
+    TranscriptionProviderRegistry,
+    TranscriptionSettingsService,
+    // ⚠ ADDED BY #274, AND FOR THE NARROW REASON EXPORTS IN THIS REPOSITORY ARE
+    // ADDED FOR: somebody now imports it. It was previously withheld as "one
+    // projection for one endpoint in this module", which stopped being true the
+    // moment a second surface had to answer the same question.
+    //
+    // The onboarding checklist has to report whether this deployment can
+    // transcribe at all, and that is the four-fact conjunction this service's
+    // header describes (enabled, a provider chosen, that provider registered in
+    // THIS build, a key stored for it). Re-deriving it inside the onboarding
+    // module from `TranscriptionSettingsService` + the registry would be a
+    // second implementation of `available` — which could then report the
+    // feature ready on a deployment whose own capability probe, and therefore
+    // whose upload button, calls it unavailable. It resolves no credential and
+    // returns no configuration detail, so exporting it widens nothing.
+    TranscriptionConfigService,
+  ],
 })
 export class TranscriptionModule {}

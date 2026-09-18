@@ -335,8 +335,9 @@ export default function UserDangerZonePage() {
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           <strong>Delete everything</strong> removes all of that and also your stored AI
           provider keys and every personal access token you have created — any CLI or script
-          using one stops working immediately. Your account is still <strong>not</strong>{' '}
-          deleted, and you stay signed in.
+          using one stops working immediately. It also resets your first-run guidance, so the
+          welcome and the setup checklist are offered again from the start. Your account is
+          still <strong>not</strong> deleted, and you stay signed in.
         </Typography>
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>

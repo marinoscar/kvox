@@ -16,6 +16,8 @@ import {
   notificationsSchema,
   notificationsPatchSchema,
   notificationEventKeySchema,
+  onboardingSchema,
+  onboardingPatchSchema,
   NOTIFICATION_MAX_EVENTS_PER_CHANNEL,
 } from './user-settings-namespaces.schema';
 
@@ -75,6 +77,12 @@ export const userSettingsSchema = z.object({
   // materialise a preference blob for the whole user base at the first PUT
   // and freeze them at today's defaults. See notification-preferences.ts.
   notifications: notificationsSchema.optional(),
+  // `onboarding` (#272, epic #271) is optional for the strongest version of the
+  // same reason: absent means "this user has never been onboarded", which is
+  // the fact the welcome dialog, the checklist and the admin banner all read.
+  // A default here would tell every account it had already been through an
+  // experience it has never seen. See user-settings-namespaces.schema.ts.
+  onboarding: onboardingSchema.optional(),
 });
 
 export type UserSettingsDto = z.infer<typeof userSettingsSchema>;
@@ -91,6 +99,10 @@ export const userSettingsPatchSchema = z.object({
   // Three nullable levels, three different deletes: the namespace, one
   // channel, one event key. See notificationsPatchSchema.
   notifications: notificationsPatchSchema.nullable().optional(),
+  // `{ onboarding: null }` clears the namespace (a full "show me all of this
+  // again"); `{ onboarding: { dismissedAt: null } }` un-dismisses just the
+  // checklist, leaving the welcome and the admin banner alone.
+  onboarding: onboardingPatchSchema.nullable().optional(),
 });
 
 // =============================================================================

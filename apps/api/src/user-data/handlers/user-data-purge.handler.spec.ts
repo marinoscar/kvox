@@ -51,6 +51,7 @@ interface Harness {
   pat: { revokeAllForUser: jest.Mock };
   aiCredentials: { removeAll: jest.Mock };
   searchIndex: { forget: jest.Mock; forgetOwnerDocuments: jest.Mock };
+  userSettings: { patchSettings: jest.Mock };
   registry: JobHandlerRegistry;
 }
 
@@ -84,6 +85,11 @@ function harness(): Harness {
     forget: jest.fn().mockResolvedValue(undefined),
     forgetOwnerDocuments: jest.fn().mockResolvedValue(0),
   };
+  // Epic #271: `everything` clears the `onboarding` namespace through the
+  // service that owns the settings row, never through a hand-written JSONB
+  // edit. The mock is the service, so the assertions below are about the
+  // REQUEST this handler makes — which namespace, and only which namespace.
+  const userSettings = { patchSettings: jest.fn().mockResolvedValue({}) };
   const registry = new JobHandlerRegistry();
 
   const handler = new UserDataPurgeHandler(
@@ -96,6 +102,7 @@ function harness(): Harness {
     pat as never,
     aiCredentials as never,
     searchIndex as never,
+    userSettings as never,
   );
 
   return {
@@ -108,6 +115,7 @@ function harness(): Harness {
     pat,
     aiCredentials,
     searchIndex,
+    userSettings,
     registry,
   };
 }
@@ -322,8 +330,8 @@ describe('UserDataPurgeHandler — a shared transcript can be cited by a note th
 // -----------------------------------------------------------------------------
 
 describe('UserDataPurgeHandler — step ordering for scope "everything"', () => {
-  it('runs credentials, then notes, then transcripts, then note templates, then unmanaged files', async () => {
-    const { handler, prisma, aiCredentials } = harness();
+  it('runs credentials, then notes, then transcripts, then note templates, then unmanaged files, then the onboarding reset', async () => {
+    const { handler, prisma, aiCredentials, userSettings } = harness();
 
     const order: string[] = [];
     aiCredentials.removeAll.mockImplementation(async () => {
@@ -346,10 +354,25 @@ describe('UserDataPurgeHandler — step ordering for scope "everything"', () => 
       order.push('files');
       return [];
     });
+    userSettings.patchSettings.mockImplementation(async () => {
+      order.push('onboarding');
+      return {};
+    });
 
     await handler.process(job('everything'));
 
-    expect(order).toEqual(['credentials', 'notes', 'transcripts', 'noteTemplates', 'files']);
+    // ⚠ ONBOARDING IS LAST, AND THAT POSITION IS THE ASSERTION. Resetting
+    // first-run state tells the user "you are starting over"; made before the
+    // destruction it narrates, a later step throwing would leave them reading
+    // a fresh-start banner over a library that is still half there.
+    expect(order).toEqual([
+      'credentials',
+      'notes',
+      'transcripts',
+      'noteTemplates',
+      'files',
+      'onboarding',
+    ]);
   });
 });
 
@@ -512,6 +535,126 @@ describe('UserDataPurgeHandler — credentials are destroyed under "everything" 
       expect(pat.revokeAllForUser).not.toHaveBeenCalled();
     },
   );
+});
+
+// -----------------------------------------------------------------------------
+// Onboarding state — everything only, and exactly one namespace
+// -----------------------------------------------------------------------------
+//
+// Epic #271 put first-run INTENT in the `onboarding` user-settings namespace:
+// `welcomeSeenAt`, `dismissedAt`, `adminDismissedAt`, `skipped[]`. The
+// checklist itself is derived live and regresses on its own after a wipe — no
+// transcripts and no AI key put its required steps back outstanding — but the
+// SURVIVING intent then hides it, because `chooseBannerAudience` bails on
+// `dismissedAt` and `FirstRunWelcomeDialog`'s `due` gate bails on
+// `welcomeSeenAt`. So `everything` clears it, and nothing else does.
+// -----------------------------------------------------------------------------
+
+describe('UserDataPurgeHandler — onboarding state is reset under "everything" only', () => {
+  it('clears the onboarding namespace for scope "everything"', async () => {
+    const { handler, userSettings } = harness();
+
+    await handler.process(job('everything'));
+
+    expect(userSettings.patchSettings).toHaveBeenCalledTimes(1);
+    expect(userSettings.patchSettings).toHaveBeenCalledWith(USER_ID, { onboarding: null });
+  });
+
+  // ⚠ THE ASSERTION THAT MATTERS MOST IN THIS FILE'S NEWEST SECTION: the patch
+  // body is EXACTLY `{ onboarding: null }` and carries no other key. A widening
+  // to a whole-settings reset — `{ theme: 'system', navigation: null, ... }`, or
+  // a `replaceSettings(userId, DEFAULT_USER_SETTINGS)` — is a one-word change
+  // away and would be invisible in every other test here, because nothing else
+  // in this handler reads settings. It would also be wrong in a way the user
+  // pays for: deleting your data is not "reset my preferences", and the account
+  // survives, so the person is still signed in looking at a screen that
+  // silently changed theme, navigation and notification choices they never
+  // touched.
+  it('sends EXACTLY { onboarding: null } — never a whole-settings reset', async () => {
+    const { handler, userSettings } = harness();
+
+    await handler.process(job('everything'));
+
+    const [userId, patch] = userSettings.patchSettings.mock.calls[0];
+
+    expect(userId).toBe(USER_ID);
+    expect(patch).toEqual({ onboarding: null });
+    expect(Object.keys(patch as Record<string, unknown>)).toEqual(['onboarding']);
+
+    for (const survivor of ['theme', 'profile', 'navigation', 'notifications', 'dataTables']) {
+      expect(patch as Record<string, unknown>).not.toHaveProperty(survivor);
+    }
+  });
+
+  // ⚠ NO `If-Match`. `patchSettings`' third argument is an optimistic
+  // concurrency expectation, and a background job queued minutes ago has none
+  // to state. Passing one would turn a user who toggled their theme mid-run
+  // into a `failed` purge.
+  it('passes no expected version — a server-side reset states no concurrency expectation', async () => {
+    const { handler, userSettings } = harness();
+
+    await handler.process(job('everything'));
+
+    expect(userSettings.patchSettings.mock.calls[0]).toHaveLength(2);
+  });
+
+  it('does NOT reset onboarding for scope "content" — deleting your content is not starting over', async () => {
+    const { handler, userSettings } = harness();
+
+    await handler.process(job('content'));
+
+    expect(userSettings.patchSettings).not.toHaveBeenCalled();
+  });
+
+  it.each<UserDataScope>(['transcripts', 'notes', 'files'])(
+    'does NOT reset onboarding for the narrow scope "%s"',
+    async (scope) => {
+      const { handler, userSettings } = harness();
+
+      await handler.process(job(scope));
+
+      expect(userSettings.patchSettings).not.toHaveBeenCalled();
+    },
+  );
+
+  // A payload this build cannot read names no user and no scope, so the
+  // handler returns before any step — including this one.
+  it('touches settings for no scope at all when the payload is unreadable', async () => {
+    const { handler, userSettings } = harness();
+
+    await handler.process({ id: JOB_ID, payload: { userId: USER_ID } } as never);
+
+    expect(userSettings.patchSettings).not.toHaveBeenCalled();
+  });
+
+  // Idempotent by construction: clearing an already-absent namespace stores
+  // the same absence, so a re-requested deletion after a partial run needs no
+  // special case here.
+  it('is idempotent — a second run issues the same clear and does not throw', async () => {
+    const { handler, userSettings } = harness();
+
+    await handler.process(job('everything'));
+    await handler.process(job('everything'));
+
+    expect(userSettings.patchSettings).toHaveBeenCalledTimes(2);
+    expect(userSettings.patchSettings).toHaveBeenNthCalledWith(2, USER_ID, { onboarding: null });
+  });
+
+  // ⚠ THROWS RATHER THAN SWALLOWING, unlike `forgetFromSearchIndex`. That one
+  // runs BETWEEN destructive steps, where failing would leave the user with a
+  // `failed` row and no idea which half ran. This one runs last, after every
+  // destructive step has completed and audited, so a failure is unambiguous:
+  // everything was deleted, the reset did not happen. Reporting it honestly
+  // costs a re-request the handler is re-entrant enough to satisfy cheaply;
+  // swallowing would cost onboarding state surviving a full wipe with nothing
+  // anywhere saying so — the exact bug this step was added to fix.
+  it('fails the job loudly when the settings patch fails — it does not swallow', async () => {
+    const { handler, userSettings } = harness();
+
+    userSettings.patchSettings.mockRejectedValue(new Error('settings row is on fire'));
+
+    await expect(handler.process(job('everything'))).rejects.toThrow('settings row is on fire');
+  });
 });
 
 // -----------------------------------------------------------------------------

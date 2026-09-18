@@ -9,6 +9,8 @@ import {
   DATA_TABLE_MAX_TABLES,
   NOTIFICATION_MAX_EVENT_KEY_LENGTH,
   NOTIFICATION_MAX_EVENTS_PER_CHANNEL,
+  ONBOARDING_MAX_SKIPPED,
+  ONBOARDING_MAX_STEP_KEY_LENGTH,
 } from '../../common/schemas/user-settings-namespaces.schema';
 
 // A valid uuid to stand in for `imageObjectId` throughout — the DTO schema
@@ -1250,4 +1252,219 @@ describe('notifications namespace (PATCH)', () => {
       ).toHaveLength(NOTIFICATION_MAX_EVENTS_PER_CHANNEL + 1);
     },
   );
+});
+
+// =============================================================================
+// onboarding namespace (issue #272, epic #271)
+// =============================================================================
+//
+// The bounds on `skipped` are a SECURITY CONTROL, not ergonomics: it is a
+// user-supplied array written straight into the `user_settings.value` JSONB
+// blob by the user's own request, and without a cap on the entry count and a
+// format for each entry an authenticated user can inflate a row that every read
+// of their settings then loads back. Both bounds are expressible in zod here
+// (unlike the record-shaped `dataTables`/`notifications` caps, which have to be
+// enforced post-merge in the service), so they surface as a 400 from the
+// validation pipe.
+
+describe('onboarding namespace (PUT)', () => {
+  const baseValid = {
+    theme: 'light' as const,
+    profile: { imageSource: 'provider' },
+  };
+
+  const SEEN = '2026-09-17T10:00:00.000Z';
+
+  it('is optional - absent when not provided, which is how "never onboarded" is spelled', () => {
+    const result = updateUserSettingsSchema.parse(baseValid);
+    expect(result.onboarding).toBeUndefined();
+  });
+
+  it('does not materialise any field default when given an empty object', () => {
+    const result = updateUserSettingsSchema.parse({
+      ...baseValid,
+      onboarding: {},
+    });
+    expect(result.onboarding).toEqual({});
+    expect(result.onboarding).not.toHaveProperty('welcomeSeenAt');
+    expect(result.onboarding).not.toHaveProperty('dismissedAt');
+    expect(result.onboarding).not.toHaveProperty('adminDismissedAt');
+    expect(result.onboarding).not.toHaveProperty('skipped');
+  });
+
+  it('accepts all four fields together', () => {
+    const result = updateUserSettingsSchema.parse({
+      ...baseValid,
+      onboarding: {
+        welcomeSeenAt: SEEN,
+        dismissedAt: SEEN,
+        adminDismissedAt: SEEN,
+        skipped: ['configure_oauth', 'ai.add_key'],
+      },
+    });
+    expect(result.onboarding).toEqual({
+      welcomeSeenAt: SEEN,
+      dismissedAt: SEEN,
+      adminDismissedAt: SEEN,
+      skipped: ['configure_oauth', 'ai.add_key'],
+    });
+  });
+
+  it('rejects a non-ISO timestamp', () => {
+    expect(() =>
+      updateUserSettingsSchema.parse({
+        ...baseValid,
+        onboarding: { welcomeSeenAt: 'yesterday' },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a misspelled key instead of silently dropping it (.strict())', () => {
+    expect(() =>
+      updateUserSettingsSchema.parse({
+        ...baseValid,
+        onboarding: { dismisedAt: SEEN },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects onboarding: null on PUT - null has no "delete" meaning for a full replace', () => {
+    expect(() =>
+      updateUserSettingsSchema.parse({ ...baseValid, onboarding: null }),
+    ).toThrow();
+  });
+
+  it('rejects a nullable field on PUT - the nullable form is PATCH-only', () => {
+    expect(() =>
+      updateUserSettingsSchema.parse({
+        ...baseValid,
+        onboarding: { dismissedAt: null },
+      }),
+    ).toThrow();
+  });
+
+  describe('skipped bounds (a storage-exhaustion control)', () => {
+    const stepKeys = (count: number) =>
+      Array.from({ length: count }, (_, i) => `step_${i}`);
+
+    it(`accepts exactly ${ONBOARDING_MAX_SKIPPED} entries`, () => {
+      const result = updateUserSettingsSchema.parse({
+        ...baseValid,
+        onboarding: { skipped: stepKeys(ONBOARDING_MAX_SKIPPED) },
+      });
+      expect(result.onboarding?.skipped).toHaveLength(ONBOARDING_MAX_SKIPPED);
+    });
+
+    it(`rejects ${ONBOARDING_MAX_SKIPPED + 1} entries`, () => {
+      expect(() =>
+        updateUserSettingsSchema.parse({
+          ...baseValid,
+          onboarding: { skipped: stepKeys(ONBOARDING_MAX_SKIPPED + 1) },
+        }),
+      ).toThrow();
+    });
+
+    it.each([
+      ['an uppercase letter', 'Configure_OAuth'],
+      ['a leading digit', '1step'],
+      ['a leading dot', '.step'],
+      ['a hyphen', 'configure-oauth'],
+      ['a space', 'configure oauth'],
+      ['a slash (path traversal shape)', '../../etc/passwd'],
+      ['an empty string', ''],
+    ])('rejects a step key with %s', (_label, key) => {
+      expect(() =>
+        updateUserSettingsSchema.parse({
+          ...baseValid,
+          onboarding: { skipped: [key] },
+        }),
+      ).toThrow();
+    });
+
+    it.each([
+      ['a bare identifier', 'configure_oauth'],
+      ['a dotted key', 'ai.add_key'],
+      ['digits after the first character', 'step2'],
+    ])('accepts a step key that is %s', (_label, key) => {
+      expect(
+        updateUserSettingsSchema.parse({
+          ...baseValid,
+          onboarding: { skipped: [key] },
+        }).onboarding?.skipped,
+      ).toEqual([key]);
+    });
+
+    it(`rejects a step key longer than ${ONBOARDING_MAX_STEP_KEY_LENGTH} characters`, () => {
+      expect(() =>
+        updateUserSettingsSchema.parse({
+          ...baseValid,
+          onboarding: {
+            skipped: ['a'.repeat(ONBOARDING_MAX_STEP_KEY_LENGTH + 1)],
+          },
+        }),
+      ).toThrow();
+    });
+  });
+});
+
+describe('onboarding namespace (PATCH)', () => {
+  const SEEN = '2026-09-17T10:00:00.000Z';
+
+  it('is optional - absent when not provided', () => {
+    expect(patchUserSettingsSchema.parse({}).onboarding).toBeUndefined();
+  });
+
+  // THE SILENT NO-OP THIS SCHEMA EXISTS TO PREVENT. A namespace missing from
+  // this schema parses to `{}`, the service merges nothing, and the endpoint
+  // answers 200 with a body that looks correct. Asserting the parsed value is
+  // therefore the point - a truthiness check would pass against that bug.
+  it('carries a welcomeSeenAt through the parse rather than stripping it', () => {
+    const result = patchUserSettingsSchema.parse({
+      onboarding: { welcomeSeenAt: SEEN },
+    });
+    expect(result.onboarding).toEqual({ welcomeSeenAt: SEEN });
+  });
+
+  it('accepts onboarding: null to clear the whole namespace', () => {
+    expect(patchUserSettingsSchema.parse({ onboarding: null }).onboarding).toBeNull();
+  });
+
+  it('accepts a per-field null to delete just that field', () => {
+    expect(
+      patchUserSettingsSchema.parse({ onboarding: { dismissedAt: null } })
+        .onboarding,
+    ).toEqual({ dismissedAt: null });
+  });
+
+  it('accepts skipped: null to delete the list', () => {
+    expect(
+      patchUserSettingsSchema.parse({ onboarding: { skipped: null } })
+        .onboarding,
+    ).toEqual({ skipped: null });
+  });
+
+  it('rejects a misspelled key instead of silently dropping it (.strict())', () => {
+    expect(() =>
+      patchUserSettingsSchema.parse({ onboarding: { dismisedAt: SEEN } }),
+    ).toThrow();
+  });
+
+  it('enforces the same skipped bounds as PUT', () => {
+    expect(() =>
+      patchUserSettingsSchema.parse({
+        onboarding: {
+          skipped: Array.from(
+            { length: ONBOARDING_MAX_SKIPPED + 1 },
+            (_, i) => `step_${i}`,
+          ),
+        },
+      }),
+    ).toThrow();
+
+    expect(() =>
+      patchUserSettingsSchema.parse({
+        onboarding: { skipped: ['Configure_OAuth'] },
+      }),
+    ).toThrow();
+  });
 });

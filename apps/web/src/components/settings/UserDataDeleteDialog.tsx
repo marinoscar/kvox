@@ -138,16 +138,26 @@ const COPY: Record<UserDataScope, ScopeCopy> = {
     confirmLabel: 'Delete all content',
   },
   everything: {
+    // ⚠ THE FIRST-RUN CLAUSE IS PART OF THE BLAST RADIUS, not a nicety. This
+    // scope is the only one that clears the `onboarding` user-settings
+    // namespace, so the welcome dialog and the setup checklist come back as
+    // though the account were new. A scope described incompletely on the one
+    // screen where a user types its name is how somebody is surprised by their
+    // own confirmation — and this surprise arrives later, on a screen with no
+    // connection to the button they pressed.
     title: 'Delete everything stored for your account?',
     consequence:
       'Every recording, transcript, note, note template and uploaded file is deleted, ' +
       'together with all of their version history and exports — and so are your stored ' +
       'AI provider keys and every personal access token you have created. Any CLI, ' +
-      'script or integration using one of those tokens stops working immediately.',
+      'script or integration using one of those tokens stops working immediately. ' +
+      'Your first-run guidance is reset too, so the welcome and the setup checklist ' +
+      'start again from the beginning.',
     survives:
       'Your account itself is NOT deleted and you stay signed in. Your profile and your ' +
-      'settings are kept, and you can upload and generate again straight away — you will ' +
-      'need to paste your AI provider key back in first.',
+      'settings — theme, navigation and notification preferences — are kept, and you can ' +
+      'upload and generate again straight away — you will need to paste your AI provider ' +
+      'key back in first.',
     confirmLabel: 'Delete everything',
   },
 };

@@ -118,11 +118,14 @@ export class UserDataController {
       '`files` removes your plain uploads only: a transcript\'s audio and a note\'s export ' +
       'belong to those, not here. `content` is everything you made — all three categories ' +
       '**plus your own custom note templates**. `everything` is `content` **plus your ' +
-      'credentials**: your stored AI provider keys and every personal access token you ' +
-      'hold.\n\n' +
-      '**Your account survives.** No scope deletes your user record, your settings, your ' +
-      'roles or your session — you stay signed in. `everything` revokes your API tokens, so ' +
-      'any CLI or script using one will need a new token.\n\n' +
+      'credentials** — your stored AI provider keys and every personal access token you ' +
+      'hold — **and it resets your first-run guidance**, so the welcome and the setup ' +
+      'checklist are offered again from the start.\n\n' +
+      '**Your account survives.** No scope deletes your user record, your roles or your ' +
+      'session — you stay signed in. `everything` revokes your API tokens, so any CLI or ' +
+      'script using one will need a new token. The only setting any scope touches is the ' +
+      'first-run onboarding state `everything` clears; your theme, profile, navigation, ' +
+      'notification and table preferences are kept by every scope.\n\n' +
       '**`confirmation` must be the scope, uppercased** — `TRANSCRIPTS`, `NOTES`, `FILES`, ' +
       '`CONTENT` or `EVERYTHING`, compared exactly with no trimming and no case folding. ' +
       'The token is scope-specific deliberately: a word typed for one scope can never ' +

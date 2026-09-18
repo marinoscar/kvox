@@ -18,7 +18,11 @@ import {
   DEFAULT_USER_SETTINGS,
   UserSettingsValue,
 } from '../../src/common/types/settings.types';
-import { DATA_TABLE_MAX_ID_LENGTH } from '../../src/common/schemas/user-settings-namespaces.schema';
+import {
+  DATA_TABLE_MAX_ID_LENGTH,
+  ONBOARDING_MAX_SKIPPED,
+  ONBOARDING_MAX_STEP_KEY_LENGTH,
+} from '../../src/common/schemas/user-settings-namespaces.schema';
 
 describe('User Settings Integration', () => {
   let context: TestContext;
@@ -712,6 +716,181 @@ describe('User Settings Integration', () => {
 
         expect(response.status).toBe(400);
       });
+    });
+  });
+
+  // ===========================================================================
+  // onboarding namespace (issue #272, epic #271)
+  // ===========================================================================
+  //
+  // Same stateful-mock round-trip approach as the block above, and for the same
+  // reason: the value a GET returns here is the value the service's own merge
+  // actually asked Prisma to persist, so a namespace that was wired into the
+  // merge but missed in one of the six declarations shows up as a real
+  // round-trip failure rather than as a green unit test.
+  //
+  // These cases drive the SILENT failure specifically. A namespace missing from
+  // `patchUserSettingsSchema` produces a 200 with a body that looks correct, so
+  // every assertion below is on the VALUE returned by the subsequent GET, never
+  // on the status code alone.
+  describe('onboarding namespace', () => {
+    const SEEN = '2026-09-17T10:00:00.000Z';
+    const DISMISSED = '2026-09-17T11:00:00.000Z';
+    const ADMIN_DISMISSED = '2026-09-17T12:00:00.000Z';
+
+    const getSettings = (token: string) =>
+      request(context.app.getHttpServer())
+        .get('/api/user-settings')
+        .set(authHeader(token))
+        .expect(200);
+
+    const patchSettings = (token: string, body: object) =>
+      request(context.app.getHttpServer())
+        .patch('/api/user-settings')
+        .set(authHeader(token))
+        .send(body);
+
+    describe('round trip (PATCH then GET)', () => {
+      it('persists onboarding.welcomeSeenAt through PATCH, returns it, and increments version', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        const before = await getSettings(user.accessToken);
+
+        const patched = await patchSettings(user.accessToken, {
+          onboarding: { welcomeSeenAt: SEEN },
+        }).expect(200);
+
+        expect(patched.body.data.onboarding).toEqual({ welcomeSeenAt: SEEN });
+        expect(patched.body.data.version).toBe(before.body.data.version + 1);
+
+        const response = await getSettings(user.accessToken);
+
+        expect(response.body.data.onboarding).toEqual({ welcomeSeenAt: SEEN });
+      });
+
+      it('clears one field with null and leaves the others stored', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        await patchSettings(user.accessToken, {
+          onboarding: {
+            welcomeSeenAt: SEEN,
+            dismissedAt: DISMISSED,
+            adminDismissedAt: ADMIN_DISMISSED,
+            skipped: ['configure_oauth'],
+          },
+        }).expect(200);
+
+        await patchSettings(user.accessToken, {
+          onboarding: { dismissedAt: null },
+        }).expect(200);
+
+        const response = await getSettings(user.accessToken);
+
+        expect(response.body.data.onboarding).toEqual({
+          welcomeSeenAt: SEEN,
+          adminDismissedAt: ADMIN_DISMISSED,
+          skipped: ['configure_oauth'],
+        });
+      });
+
+      it('collapses an emptied onboarding back to ABSENT, not {}', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        await patchSettings(user.accessToken, {
+          onboarding: { welcomeSeenAt: SEEN },
+        }).expect(200);
+
+        await patchSettings(user.accessToken, {
+          onboarding: { welcomeSeenAt: null },
+        }).expect(200);
+
+        const response = await getSettings(user.accessToken);
+
+        // `in`, not a truthiness check: `{}` and absent are two different
+        // states, and it is the ABSENT one the epic reads as "never onboarded".
+        expect('onboarding' in response.body.data).toBe(false);
+      });
+
+      it('onboarding: null clears the namespace outright', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        await patchSettings(user.accessToken, {
+          onboarding: { welcomeSeenAt: SEEN, dismissedAt: DISMISSED },
+        }).expect(200);
+
+        await patchSettings(user.accessToken, { onboarding: null }).expect(200);
+
+        const response = await getSettings(user.accessToken);
+
+        expect('onboarding' in response.body.data).toBe(false);
+      });
+
+      it('a never-written user reads no onboarding key at all', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        const response = await getSettings(user.accessToken);
+
+        // The acceptance criterion the whole epic hangs on: absence is what
+        // "this account has never been onboarded" is spelled as, so
+        // DEFAULT_USER_SETTINGS must not seed the namespace.
+        expect('onboarding' in response.body.data).toBe(false);
+      });
+
+      it('an unrelated PATCH leaves a stored onboarding namespace untouched', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        await patchSettings(user.accessToken, {
+          onboarding: { welcomeSeenAt: SEEN, skipped: ['configure_oauth'] },
+        }).expect(200);
+
+        await patchSettings(user.accessToken, { theme: 'dark' }).expect(200);
+
+        const response = await getSettings(user.accessToken);
+
+        expect(response.body.data.onboarding).toEqual({
+          welcomeSeenAt: SEEN,
+          skipped: ['configure_oauth'],
+        });
+      });
+    });
+
+    describe('rejections return 400, not 500', () => {
+      const invalidOnboardingPatches: Array<[string, unknown]> = [
+        ['a misspelled key (dismisedAt)', { dismisedAt: DISMISSED }],
+        ['a non-ISO timestamp', { welcomeSeenAt: 'yesterday' }],
+        [
+          `more than ${ONBOARDING_MAX_SKIPPED} skipped steps`,
+          {
+            skipped: Array.from(
+              { length: ONBOARDING_MAX_SKIPPED + 1 },
+              (_, i) => `step_${i}`,
+            ),
+          },
+        ],
+        ['a skipped key with an uppercase letter', { skipped: ['Step_One'] }],
+        ['a skipped key with a leading digit', { skipped: ['1step'] }],
+        ['a skipped key with a hyphen', { skipped: ['configure-oauth'] }],
+        [
+          'a skipped key over the length limit',
+          { skipped: ['a'.repeat(ONBOARDING_MAX_STEP_KEY_LENGTH + 1)] },
+        ],
+      ];
+
+      it.each(invalidOnboardingPatches)(
+        'rejects an onboarding patch with %s',
+        async (_label, onboarding) => {
+          const user = await createMockTestUser(context);
+          setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+          await patchSettings(user.accessToken, { onboarding }).expect(400);
+        },
+      );
     });
   });
 

@@ -51,6 +51,40 @@ export interface DataTableSettings {
   pageSize?: number;
 }
 
+/**
+ * First-run onboarding INTENT (#272, epic #271) — what this user has DECIDED,
+ * never what the deployment is ready for.
+ *
+ * Readiness (is OAuth configured, is anyone allowlisted, does this account have
+ * an AI key) is derived from live state on every read and is never stored here;
+ * a readiness fact frozen into a settings row starts lying the moment a
+ * deployment changes.
+ *
+ * Every field is optional and ABSENCE IS THE SIGNAL, at both levels: no
+ * `onboarding` key at all means this user has never been onboarded, and an
+ * absent field means that one surface has not been dismissed. Never backfill
+ * either with a literal default — that is how a welcome dialog stops appearing
+ * for everybody with no error anywhere. Timestamps rather than booleans so the
+ * record can still answer "when", which a boolean throws away irrecoverably.
+ */
+export interface OnboardingSettings {
+  /** When this user was shown the welcome dialog. */
+  welcomeSeenAt?: string;
+  /** When this user dismissed the onboarding checklist. */
+  dismissedAt?: string;
+  /**
+   * When this user dismissed the ADMINISTRATOR setup banner — separate from
+   * `dismissedAt`, because an administrator is also a user and the two surfaces
+   * say different things.
+   */
+  adminDismissedAt?: string;
+  /**
+   * Step keys this user explicitly skipped. Bounded server-side (count and key
+   * format) because it is a user-written array in a JSONB blob.
+   */
+  skipped?: string[];
+}
+
 // =============================================================================
 // Notifications — the registry (#124) and the stored preferences (#126, epic #109)
 // =============================================================================
@@ -384,6 +418,15 @@ export interface UserSettings {
    * registry default. Never backfill it with a materialised object.
    */
   notifications?: NotificationPreferences;
+  /**
+   * First-run onboarding state (#272, epic #271).
+   *
+   * OPTIONAL, AND ABSENT IS THE POINT — it means this user has never been
+   * onboarded, which is what the welcome dialog, the checklist and the admin
+   * banner read. `settings.onboarding?.dismissedAt` being `undefined` is a
+   * real answer, not a loading state.
+   */
+  onboarding?: OnboardingSettings;
   updatedAt: string;
   version: number;
 }
@@ -404,6 +447,18 @@ export type NavigationSettingsPatch = {
  * `{ [id]: { sort: null } }`; omit the field or replace the whole entry.
  */
 export type DataTablesPatch = Record<string, DataTableSettings | null>;
+
+/**
+ * PATCH form of `onboarding`: each field may additionally be `null`, meaning
+ * "delete this field". Field-wise like navigation, so recording that the
+ * welcome was seen never discards the stored `skipped` list.
+ *
+ * `skipped` is the exception to "field-wise": a non-null value REPLACES the
+ * stored list wholesale (there is no per-entry delete), and `null` removes it.
+ */
+export type OnboardingSettingsPatch = {
+  [K in keyof OnboardingSettings]?: OnboardingSettings[K] | null;
+};
 
 /**
  * `POST` / `DELETE /api/user-settings/profile-image` response, after the
@@ -429,6 +484,9 @@ export interface ProfileImageMutationResponse {
  *   - `{ notifications: { email: null } }`      clears one channel
  *   - `{ notifications: { email: { k: null } }}` deletes ONE event key, restoring
  *                                               the registry default for it
+ *   - `{ onboarding: null }`                    clears the whole namespace, so
+ *                                               the first-run surfaces are due again
+ *   - `{ onboarding: { dismissedAt: null } }`   un-dismisses just that surface
  * Omitting a key leaves the stored value untouched. Server-owned fields
  * (`updatedAt`, `version`) are not patchable and so are absent here.
  */
@@ -443,6 +501,12 @@ export interface UserSettingsUpdate {
    * exactly the one key it changed and leave every other preference absent.
    */
   notifications?: NotificationPreferencesPatch | null;
+  /**
+   * Onboarding intent (#272). Merged FIELD-WISE server-side, so the client
+   * sends exactly the one thing that just happened — `{ welcomeSeenAt }` when
+   * the dialog closes — and never has to restate the rest.
+   */
+  onboarding?: OnboardingSettingsPatch | null;
 }
 
 /**

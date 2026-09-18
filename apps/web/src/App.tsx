@@ -77,6 +77,10 @@ const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage')
 // spends the USER'S own AI provider account, which is why this is a per-user
 // destination and why there is no admin equivalent and no backfill cron.
 const UserSearchIndexPage = lazy(() => import('./pages/UserSearchIndexPage'));
+// Issue #279, epic #271 — the caller's own activation checklist, and the place
+// the shell banner (#277) leads. A registry card in `userSettingsSections.tsx`
+// like every sibling above, and ungated here for the same reason they are.
+const GettingStartedPage = lazy(() => import('./pages/GettingStartedPage'));
 
 // Console — the hub (#93) plus one route per card in
 // `config/adminSections.tsx` (#92, epic #90).
@@ -120,6 +124,11 @@ const DbBackupPage = lazy(() => import('./pages/Admin/DbBackupPage'));
 // the same reason: a DataTable, a composer dialog and a detail dialog that
 // nobody who never opens the Console will ever mount.
 const BroadcastsPage = lazy(() => import('./pages/Admin/BroadcastsPage'));
+// Issue #278, epic #271 — the deployment's first-run checklist. Lazy like
+// every other admin page: an administrator who never opens the Console should
+// not carry it in the entry chunk, and neither should a Viewer, who cannot
+// reach the route at all.
+const SetupPage = lazy(() => import('./pages/Admin/SetupPage'));
 const AdminUsersPage = lazy(() => import('./pages/Admin/UsersPage'));
 
 // Test login page (development only)
@@ -397,6 +406,17 @@ function AppRoutes() {
                       v6 ranks by specificity, so `/settings/profile` beats
                       `/settings` wherever each is written. */}
                   <Route path="/settings" element={<UserSettingsHubPage />} />
+                  {/* Issue #279, epic #271. Ungated like every `/settings/*`
+                      sibling, and with the same reason `/settings/ai` carries:
+                      `onboarding.controller.ts` gates `GET /api/onboarding` on
+                      `@Auth()` and NO permission, because the resource is the
+                      caller's own activation state, scoped by `userId` in the
+                      query itself. A `RequirePermission` here would be a gate
+                      the API does not have — and it would fail in the worst
+                      direction, shutting a VIEWER (this application's default
+                      role) out of the one page that explains why AI features
+                      are going to ask them for a key. */}
+                  <Route path="/settings/getting-started" element={<GettingStartedPage />} />
                   <Route path="/settings/profile" element={<UserProfilePage />} />
                   <Route path="/settings/appearance" element={<UserAppearancePage />} />
                   {/* Ungated like its siblings (#126): these are the caller's own
@@ -520,6 +540,30 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <SettingsHubPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Issue #278, epic #271. Same permission string the `Setup`
+                      card declares in `config/adminSections.tsx`, which is the
+                      same string `onboarding/admin-onboarding.controller.ts`
+                      enforces on its one GET (#275) — the invariant
+                      `destinations.test.ts` asserts for every card. #275
+                      deliberately reused `system_settings:read` rather than
+                      minting `onboarding:read`, following epic #118 decision
+                      8's precedent for the About card.
+                      The page is read-only apart from the inline invite, which
+                      gates itself on `allowlist:write` internally: the route
+                      gate is about REACHABILITY, and "what does this
+                      deployment still need" is the first thing a new
+                      administrator should be able to open. */}
+                  <Route
+                    path="/admin/settings/setup"
+                    element={
+                      <RequirePermission
+                        permission="system_settings:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <SetupPage />
                       </RequirePermission>
                     }
                   />

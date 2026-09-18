@@ -52,6 +52,11 @@ import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 // About (#126, epic #118) — what is deployed here: version, revision, when it
 // was installed and updated, and the server it runs on.
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+// Setup (#278, epic #271) — the first-run checklist. Shares its icon with the
+// per-user `Getting Started` card in `userSettingsSections.tsx` on purpose: the
+// two are the same idea on two axes, and an administrator who has seen one
+// recognises the other.
+import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
 
 /**
  * One settings page, fully described for every surface that draws it.
@@ -115,6 +120,44 @@ export const ADMIN_SECTIONS: SettingsSectionDef[] = [
   {
     label: 'General',
     cards: [
+      {
+        // Issue #278, epic #271. FIRST IN `General`, AND THEREFORE FIRST IN
+        // THE HUB, which is the only thing about this card's position that is
+        // load-bearing: a fresh deployment's administrator faces thirteen
+        // cards across three groups and nothing in that grid says the product
+        // cannot transcribe or generate anything until two of them are filled
+        // in. The hub is the right shape for an operator who knows what they
+        // came for and the wrong one for somebody on minute one, so the answer
+        // to "what do I do first" is literally the first thing in it.
+        //
+        // `system_settings:read` is the exact string
+        // `onboarding/admin-onboarding.controller.ts` enforces on its one GET
+        // (#275) — the registry never invents a permission, it mirrors one.
+        // #275 deliberately reused this pair rather than minting
+        // `onboarding:read`, following epic #118 decision 8's precedent for
+        // the About card: "what does this deployment still need" is an
+        // administrator's configuration read, and a permission no role is
+        // seeded with would be a card nobody can open.
+        //
+        // GENERAL, NOT OPERATIONS. `Operations` is the running system — work
+        // in flight, the machines executing it, the backups taken while it
+        // ran. Setup is configuration an administrator SETS, which is what
+        // `General` means; and every step on the page links to a `General`
+        // card.
+        //
+        // ⚠ THE CARD DOES NOT DISAPPEAR ONCE SETUP IS COMPLETE, and that is a
+        // decision rather than an omission. The checklist is DERIVED on every
+        // read and never stored (`onboarding-steps.ts`'s own header), so it is
+        // the one page that can answer "is this deployment still configured"
+        // after a provider key has been rotated away — and a card that
+        // vanishes is a card nobody can use to ask.
+        title: 'Setup',
+        description:
+          'What this deployment still needs before it can transcribe and generate notes, and where to go to finish it.',
+        Icon: RocketLaunchOutlinedIcon,
+        path: '/admin/settings/setup',
+        permission: 'system_settings:read',
+      },
       {
         // Issue #124, epic #109. `system_settings:read` is the string
         // `email-settings.controller.ts` enforces on its GET, exactly as the

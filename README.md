@@ -13,6 +13,12 @@ stuck with.
 
 ## What it does
 
+A first-run setup checklist — live-derived, never a stored flag, so it goes
+back to "not set up" if an admin later rotates away the key that satisfied
+it — walks a fresh deployment's administrator through what's missing and a
+fresh account's user through connecting their own AI key, before either one
+hits a disabled button.
+
 ### Transcripts
 
 - Upload multi-GB audio over a resumable multipart upload — a dropped
