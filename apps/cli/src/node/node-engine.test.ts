@@ -585,8 +585,11 @@ describe('NodeEngine — input handling', () => {
     expect(result.computedBy).toBe('node');
     expect(result.sha256).toMatch(/^[0-9a-f]{64}$/);
 
-    // Cleaned up in the `finally` — on success as well as on failure.
-    expect(readdirSync(join(tmp, 'work'))).toEqual([]);
+    // Cleaned up in the `finally` — on success as well as on failure. That
+    // `finally` runs AFTER `submitResult` resolves, which is what the waitFor
+    // above observed, so the unlink may still be in flight: wait for it rather
+    // than asserting the instant the result lands (a race CI lost).
+    await vi.waitFor(() => expect(readdirSync(join(tmp, 'work'))).toEqual([]));
 
     await engine.drain();
     await run;
@@ -625,7 +628,8 @@ describe('NodeEngine — input handling', () => {
 
     const run = engine.run();
     await vi.waitFor(() => expect(rec.failures).toHaveLength(1));
-    expect(readdirSync(join(tmp, 'work'))).toEqual([]);
+    // Same race as above: the failure is reported before the `finally` unlinks.
+    await vi.waitFor(() => expect(readdirSync(join(tmp, 'work'))).toEqual([]));
 
     await engine.drain();
     await run;
