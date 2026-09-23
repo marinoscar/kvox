@@ -414,6 +414,51 @@ export function noteConflictCurrentVersion(err: unknown): number | null {
 }
 
 // =============================================================================
+// Generation context (issue #308)
+// =============================================================================
+
+/**
+ * `GET /api/notes/{id}/context` and `.../generations/{generationId}/context` —
+ * the exact prompt a generation sent. Mirrors `noteGenerationContextResponseSchema`
+ * in `dto/note.dto.ts` field for field.
+ *
+ * `stored: false` marks a generation that predates capture: `systemPrompt` is
+ * then rebuilt from the template as it is today (or `null`) and `userContent`
+ * is `null`. `sourceRedacted: true` means the source material was withheld
+ * from `userContent` because the caller can no longer read the source.
+ */
+export interface NoteGenerationContext {
+  generationId: string;
+  kind: 'create' | 'regenerate' | 'preview';
+  status: 'pending' | 'streaming' | 'succeeded' | 'failed';
+  stored: boolean;
+  capturedAt: string | null;
+  templateId: string | null;
+  templateNameSnapshot: string | null;
+  provider: string | null;
+  model: string | null;
+  contextText: string | null;
+  sourceType: 'transcript' | 'note' | 'document';
+  sourceVersion: number | null;
+  sourceRedacted: boolean;
+  systemPrompt: string | null;
+  userContent: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+}
+
+/** The `details.reason` of the 404 a note with no generation answers. */
+export const NOTE_NO_GENERATION_REASON = 'no_generation';
+
+/** `true` for the 404 that means "this note has no generation yet" — not an error. */
+export function isNoGenerationError(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 404) return false;
+  const details = err.details;
+  if (typeof details !== 'object' || details === null) return false;
+  return (details as { reason?: unknown }).reason === NOTE_NO_GENERATION_REASON;
+}
+
+// =============================================================================
 // Reads
 // =============================================================================
 
@@ -468,6 +513,24 @@ export async function getNoteVersion(
 ): Promise<NoteVersionDetail> {
   return api.get<NoteVersionDetail>(
     `/notes/${encodeURIComponent(id)}/versions/${encodeURIComponent(String(version))}`,
+  );
+}
+
+/**
+ * `GET /api/notes/{id}/context` (the current generation) or, with a
+ * `generationId`, `GET /api/notes/{id}/generations/{generationId}/context`.
+ * A note with no generation is a 404 with `details.reason: 'no_generation'` —
+ * see {@link isNoGenerationError}.
+ */
+export async function getNoteGenerationContext(
+  noteId: string,
+  generationId?: string,
+): Promise<NoteGenerationContext> {
+  const base = `/notes/${encodeURIComponent(noteId)}`;
+  return api.get<NoteGenerationContext>(
+    generationId
+      ? `${base}/generations/${encodeURIComponent(generationId)}/context`
+      : `${base}/context`,
   );
 }
 

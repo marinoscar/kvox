@@ -55,6 +55,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { CopyButton } from '../common/CopyButton';
+
 import type { UseNoteTemplateDetailResult } from '../../hooks/useNoteTemplates';
 import type { Note } from '../../services/notes';
 import { NOTE_OUTPUT_FORMAT_LABELS } from '../../services/noteTemplates';
@@ -94,6 +96,12 @@ export interface NoteGenerationContextProps {
    */
   templateError?: string | null;
   defaultExpanded?: boolean;
+  /**
+   * Opens the full "context sent to the AI" view (issue #308). Optional so a
+   * caller that has no such view still renders the panel; without it the
+   * button at the foot of the panel is not drawn.
+   */
+  onOpenContext?: () => void;
 }
 
 /**
@@ -126,10 +134,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
  * characters, and a panel that pushed the note off the screen would defeat the
  * reason it is collapsed in the first place.
  */
-function TextBlock({ children }: { children: React.ReactNode }) {
-  return (
+function TextBlock({
+  children,
+  copyText,
+  copyLabel,
+}: {
+  children: React.ReactNode;
+  copyText?: string;
+  copyLabel?: string;
+}) {
+  const block = (
     <Box
       sx={{
+        flex: 1,
+        minWidth: 0,
         whiteSpace: 'pre-wrap',
         maxHeight: 240,
         overflow: 'auto',
@@ -141,6 +159,15 @@ function TextBlock({ children }: { children: React.ReactNode }) {
       {children}
     </Box>
   );
+
+  if (copyText === undefined) return block;
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5 }}>
+      {block}
+      <CopyButton text={copyText} label={copyLabel} variant="icon" size="small" />
+    </Box>
+  );
 }
 
 export function NoteGenerationContext({
@@ -150,6 +177,7 @@ export function NoteGenerationContext({
   templateState,
   templateError,
   defaultExpanded = false,
+  onOpenContext,
 }: NoteGenerationContextProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -278,7 +306,9 @@ export function NoteGenerationContext({
           {template && (
             <>
               <Field label="Instructions">
-                <TextBlock>{template.instructions}</TextBlock>
+                <TextBlock copyText={template.instructions} copyLabel="Copy instructions">
+                  {template.instructions}
+                </TextBlock>
               </Field>
 
               <Field label="Output format">
@@ -305,7 +335,9 @@ export function NoteGenerationContext({
 
           <Field label="Context">
             {note.contextText ? (
-              <TextBlock>{note.contextText}</TextBlock>
+              <TextBlock copyText={note.contextText} copyLabel="Copy context">
+                {note.contextText}
+              </TextBlock>
             ) : (
               // "None provided", not an empty cell: the absence of context is a
               // fact about how this note was generated, and a blank would read
@@ -329,6 +361,33 @@ export function NoteGenerationContext({
             ) : null}
           </Field>
         </Box>
+
+        {onOpenContext && (
+          <Box sx={{ px: 2, pb: 2 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={onOpenContext}
+              disabled={note.currentGenerationId === null}
+              aria-describedby={
+                note.currentGenerationId === null ? `${PANEL_ID}-context-help` : undefined
+              }
+            >
+              View full context sent to the AI
+            </Button>
+            {note.currentGenerationId === null && (
+              <Typography
+                id={`${PANEL_ID}-context-help`}
+                variant="caption"
+                color="text.secondary"
+                component="p"
+                sx={{ mt: 0.5 }}
+              >
+                Available once generation starts
+              </Typography>
+            )}
+          </Box>
+        )}
       </Collapse>
     </Paper>
   );
