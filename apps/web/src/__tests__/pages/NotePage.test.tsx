@@ -1171,9 +1171,11 @@ describe('NotePage — regenerating', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Regenerate this note?' });
     // FACT 1 — it is the user's own money, again.
     expect(within(dialog).getByText(/costs you money again/i)).toBeInTheDocument();
-    // FACT 2 — the current body is kept as a version, not lost.
-    expect(within(dialog).getByText(/version 2/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Nothing is lost/i)).toBeInTheDocument();
+    // FACT 2 — the current body is kept as a version, not lost. #312: the
+    // one-click confirmation says it as "stays in History" and names the
+    // template it will reuse; the version number is in the options dialog.
+    expect(within(dialog).getByText(/current version stays in History/i)).toBeInTheDocument();
+    expect(within(dialog).getByText('Meeting minutes')).toBeInTheDocument();
     // Nothing has been spent while the question is still on screen.
     expect(regenerateCalls).toBe(0);
   });
@@ -1241,6 +1243,11 @@ describe('NotePage — regenerating', () => {
     await screen.findByRole('button', { name: 'Regenerate' });
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    // #312: the main button confirms "the same again"; the controls are one
+    // click further, behind "Change options…".
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Change options…' }),
+    );
     const dialog = await screen.findByRole('dialog');
 
     // The template list has to have landed for a second option to exist.
@@ -1278,9 +1285,14 @@ describe('NotePage — regenerating', () => {
     await screen.findByRole('button', { name: 'Regenerate' });
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
-    const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Regenerate' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Regenerate' }),
+    );
 
+    // #312: the one-click confirmation has no select to answer with, so the
+    // options dialog takes over — a different dialog element, carrying the
+    // same question.
+    const dialog = await screen.findByRole('dialog');
     expect(
       await within(dialog).findByText('Choose a template to regenerate with'),
     ).toBeInTheDocument();
@@ -1308,7 +1320,11 @@ describe('NotePage — regenerating', () => {
     expect(listReads).toBe(0);
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    // #312: the one-click confirmation reads nothing either — only the options
+    // dialog needs the list.
     await screen.findByRole('dialog');
+    expect(listReads).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Change options…' }));
 
     await waitFor(() => expect(listReads).toBe(1));
   });

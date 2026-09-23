@@ -98,4 +98,16 @@ export function buildRegenerateInput(
   return input;
 }
 
+/**
+ * The cost sentence, said the same way by every regenerate confirmation (#58,
+ * #312).
+ *
+ * One constant rather than two copies, because there are now two dialogs that
+ * can spend the user's money — the one-click "same again" confirmation and the
+ * full options dialog — and a statement about money that drifted between them
+ * would leave one of them saying less than the truth.
+ */
+export const REGENERATE_COST_SENTENCE =
+  'This runs on your own provider account and costs you money again, the same as the first generation did.';
+
 export default buildRegenerateInput;

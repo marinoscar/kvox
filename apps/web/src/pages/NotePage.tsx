@@ -112,7 +112,6 @@ import EditIcon from '@mui/icons-material/Edit';
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
@@ -128,7 +127,9 @@ import { NoteGenerationContext } from '../components/notes/NoteGenerationContext
 import { NoteProvenance } from '../components/notes/NoteProvenance';
 import { NoteSourceMedia } from '../components/notes/NoteSourceMedia';
 import { NoteStatusChip } from '../components/notes/NoteStatusChip';
+import { RegenerateMenuButton } from '../components/notes/RegenerateMenuButton';
 import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNoteDialogContainer';
+import { RegenerateSameConfirmDialog } from '../components/notes/RegenerateSameConfirmDialog';
 import { useAiConfig } from '../hooks/useAiConfig';
 import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
 import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../hooks/useNotes';
@@ -287,7 +288,10 @@ export function NotePage() {
   // --- The other two dialogs -----------------------------------------------
   const [exportOpen, setExportOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
-  const [regenerateOpen, setRegenerateOpen] = useState(false);
+  // #312: `same` is the one-click "same again" confirmation, `options` the full
+  // dialog. `optionsFocus` records which door opened `options`.
+  const [regenerateMode, setRegenerateMode] = useState<'closed' | 'same' | 'options'>('closed');
+  const [optionsFocus, setOptionsFocus] = useState<'template' | undefined>(undefined);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
@@ -595,15 +599,20 @@ export function NotePage() {
       // the stream effect re-opens on this render rather than after a poll.
       setNote(result.note);
       setWatching(true);
-      setRegenerateOpen(false);
+      setRegenerateMode('closed');
     } catch (err) {
       // ⚠ `template_required` IS A QUESTION, NOT A FAILURE — AND THE DIALOG
       // STAYS OPEN. The note's template row is gone, the API cannot guess a
       // replacement, and the one control that can answer is the select the user
       // is already looking at. Closing the dialog to show this on the page
       // would put the answer and the question on different screens.
+      //
+      // From the one-click confirmation (#312) there IS no select to answer
+      // with, so the full dialog takes over, carrying the same question.
       if (noteConflictReason(err) === 'template_required') {
         setRegenerateError('Choose a template to regenerate with');
+        setRegenerateMode((mode) => (mode === 'same' ? 'options' : mode));
+        setOptionsFocus('template');
 
         return;
       }
@@ -615,6 +624,22 @@ export function NotePage() {
       setIsRegenerating(false);
     }
   }, [id, setNote]);
+
+  const openRegenerateSame = useCallback(() => {
+    setRegenerateError(null);
+    setRegenerateMode('same');
+  }, []);
+
+  const openRegenerateOptions = useCallback(() => {
+    setRegenerateError(null);
+    setOptionsFocus('template');
+    setRegenerateMode('options');
+  }, []);
+
+  const closeRegenerate = useCallback(() => {
+    setRegenerateMode('closed');
+    setRegenerateError(null);
+  }, []);
 
   // ---------------------------------------------------------------------------
   // Leaving the page with unsaved work
@@ -891,15 +916,15 @@ export function NotePage() {
           sx={{ mb: 2 }}
           action={
             keyConfigured ? (
-              <Button
+              <RegenerateMenuButton
+                note={note}
                 color="inherit"
                 size="small"
-                startIcon={<RefreshIcon />}
-                onClick={() => setRegenerateOpen(true)}
+                variant="outlined"
                 disabled={isRegenerating}
-              >
-                Regenerate
-              </Button>
+                onRegenerateSame={openRegenerateSame}
+                onRegenerateWithOptions={openRegenerateOptions}
+              />
             ) : undefined
           }
         >
@@ -920,7 +945,7 @@ export function NotePage() {
         </Alert>
       )}
 
-      {regenerateError && !regenerateOpen && (
+      {regenerateError && regenerateMode === 'closed' && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {regenerateError}
         </Alert>
@@ -1030,13 +1055,13 @@ export function NotePage() {
         <Box sx={{ mt: 3 }}>
           {keyConfigured ? (
             <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
-              <Button
-                startIcon={<RefreshIcon />}
-                onClick={() => setRegenerateOpen(true)}
+              <RegenerateMenuButton
+                note={note}
+                variant="outlined"
                 disabled={inFlight || isRegenerating}
-              >
-                Regenerate
-              </Button>
+                onRegenerateSame={openRegenerateSame}
+                onRegenerateWithOptions={openRegenerateOptions}
+              />
               <Typography variant="caption" color="text.secondary">
                 Writes this note again on your own AI account. The current text is kept as
                 a version.
@@ -1085,18 +1110,34 @@ export function NotePage() {
       {/* ⚠ MOUNTED ONLY WHILE OPEN. The container owns the two template reads
           the dialog needs, so simply READING a note — which is what this page
           is for — issues neither. See the container's own header. */}
-      {regenerateOpen && (
+      {/* #312: the one-click confirmation reads nothing and sends `{}`. Mounted
+          only while open, so switching to the options dialog replaces it at
+          once rather than stacking two dialogs through a close transition. */}
+      {regenerateMode === 'same' && (
+        <RegenerateSameConfirmDialog
+          open
+          note={note}
+          busy={isRegenerating}
+          error={regenerateError}
+          onCancel={closeRegenerate}
+          onConfirm={() => void handleRegenerate({})}
+          onChangeOptions={() => {
+            setRegenerateError(null);
+            setOptionsFocus(undefined);
+            setRegenerateMode('options');
+          }}
+        />
+      )}
+      {regenerateMode === 'options' && (
         <RegenerateNoteDialogContainer
-          open={regenerateOpen}
+          open
           note={note}
           models={aiConfig?.models ?? []}
           defaultModel={aiConfig?.defaultModel ?? null}
           busy={isRegenerating}
           error={regenerateError}
-          onCancel={() => {
-            setRegenerateOpen(false);
-            setRegenerateError(null);
-          }}
+          initialFocus={optionsFocus}
+          onCancel={closeRegenerate}
           onConfirm={(input) => void handleRegenerate(input)}
         />
       )}
