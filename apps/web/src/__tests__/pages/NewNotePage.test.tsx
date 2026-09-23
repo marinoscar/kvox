@@ -31,6 +31,12 @@ const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 let createdBodies: Record<string, unknown>[] = [];
 /** What the next `POST /api/notes` should answer with. */
 let createResponse: () => HttpResponse;
+/** Every `GET /api/note-templates` request's query string this file has seen. */
+let templateListQueries: string[] = [];
+/** Every `GET /api/note-templates/:id` id requested (the `?templateId=` deep link). */
+let templateDetailRequests: string[] = [];
+/** What `GET /api/note-templates/:id` should answer with next. */
+let templateDetailResponse: () => HttpResponse;
 
 function aiConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -68,7 +74,13 @@ function aiConfig(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function template(id: string, name: string, builtIn = false, model: string | null = null) {
+function template(
+  id: string,
+  name: string,
+  builtIn = false,
+  model: string | null = null,
+  hidden = false,
+) {
   return {
     id,
     name,
@@ -81,6 +93,7 @@ function template(id: string, name: string, builtIn = false, model: string | nul
     model,
     isArchived: false,
     builtIn,
+    hidden,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -164,14 +177,23 @@ beforeEach(() => {
   localStorage.setItem('theme_mode', 'light');
   createdBodies = [];
   createResponse = () => HttpResponse.json({ data: createdNote() }, { status: 201 });
+  templateListQueries = [];
+  templateDetailRequests = [];
+  templateDetailResponse = () =>
+    HttpResponse.json({ statusCode: 404, code: 'NOT_FOUND', message: 'Not found' }, { status: 404 });
 
   server.use(
     http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: aiConfig() })),
-    http.get(`${API_BASE}/note-templates`, () =>
-      HttpResponse.json({
+    http.get(`${API_BASE}/note-templates`, ({ request }) => {
+      templateListQueries.push(new URL(request.url).search);
+      return HttpResponse.json({
         data: { items: [template('tpl-1', 'Meeting minutes', true), template('tpl-2', 'Brief')], total: 2 },
-      }),
-    ),
+      });
+    }),
+    http.get(`${API_BASE}/note-templates/:id`, ({ params }) => {
+      templateDetailRequests.push(String(params.id));
+      return templateDetailResponse();
+    }),
     http.get(`${API_BASE}/transcripts`, () =>
       HttpResponse.json({
         data: { items: [transcriptRow('t1', 'Q3 planning'), transcriptRow('t2', 'Standup')], nextCursor: null },
@@ -599,7 +621,7 @@ describe('NewNotePage — layout and accessibility', () => {
     renderPage();
     await waitForForm();
 
-    expect(screen.getByRole('link', { name: 'Manage your templates' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Manage or hide templates' })).toHaveAttribute(
       'href',
       '/settings/note-templates',
     );
@@ -722,5 +744,116 @@ describe('NewNotePage — choosing a model', () => {
 
     await waitFor(() => expect(createdBodies).toHaveLength(1));
     expect(createdBodies[0]).not.toHaveProperty('model');
+  });
+});
+
+// =============================================================================
+// #311 — hidden templates
+// =============================================================================
+
+describe('NewNotePage — hidden templates', () => {
+  it('asks for the DEFAULT list — no includeHidden — so hidden templates never arrive', async () => {
+    renderPage();
+    await waitForForm();
+
+    expect(templateListQueries.length).toBeGreaterThan(0);
+    for (const query of templateListQueries) {
+      expect(query).not.toContain('includeHidden');
+    }
+  });
+
+  it('never offers a hidden template in the picker, and pre-selects a VISIBLE one', async () => {
+    server.use(
+      http.get(`${API_BASE}/note-templates`, ({ request }) => {
+        const url = new URL(request.url);
+        templateListQueries.push(url.search);
+        const includeHidden = url.searchParams.get('includeHidden') === 'true';
+        const items = [
+          template('tpl-hidden', 'Hidden recipe', false, null, true),
+          template('tpl-2', 'Brief'),
+        ].filter((item) => includeHidden || !item.hidden);
+        return HttpResponse.json({ data: { items, total: items.length } });
+      }),
+    );
+    const user = userEvent.setup();
+    renderPage();
+    await waitForForm();
+
+    // Pre-selected the first VISIBLE template, never the hidden one.
+    expect(screen.getByLabelText('Template')).toHaveTextContent('Brief');
+
+    await user.click(screen.getByLabelText('Template'));
+    expect(screen.queryByRole('option', { name: /hidden recipe/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Brief' })).toBeInTheDocument();
+  });
+
+  it('shows the all-hidden empty state, links to the manager, and disables Generate', async () => {
+    server.use(
+      http.get(`${API_BASE}/note-templates`, ({ request }) => {
+        const url = new URL(request.url);
+        templateListQueries.push(url.search);
+        const includeHidden = url.searchParams.get('includeHidden') === 'true';
+        const items = [template('tpl-hidden', 'Hidden recipe', false, null, true)].filter(
+          (item) => includeHidden || !item.hidden,
+        );
+        return HttpResponse.json({ data: { items, total: items.length } });
+      }),
+    );
+    renderPage('/notes/new?transcriptId=t1');
+    await screen.findByRole('heading', { name: 'New note', level: 1 });
+
+    expect(await screen.findByText(/all your templates are hidden/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /manage templates/i })).toHaveAttribute(
+      'href',
+      '/settings/note-templates',
+    );
+    // No template can be chosen, so Generate/Next has nothing to submit.
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeDisabled();
+  });
+
+  it('honours a ?templateId= deep link to a HIDDEN template: fetches it by id and labels it hidden', async () => {
+    server.use(
+      http.get(`${API_BASE}/note-templates`, ({ request }) => {
+        templateListQueries.push(new URL(request.url).search);
+        return HttpResponse.json({
+          data: { items: [template('tpl-2', 'Brief')], total: 1 },
+        });
+      }),
+    );
+    templateDetailResponse = () =>
+      HttpResponse.json({
+        data: template('tpl-hidden', 'Retired template', false, null, true),
+      });
+    renderPage('/notes/new?transcriptId=t1&templateId=tpl-hidden');
+    await waitForForm();
+
+    await waitFor(() => expect(templateDetailRequests).toContain('tpl-hidden'));
+    expect(screen.getByLabelText('Template')).toHaveTextContent('Retired template (hidden)');
+
+    await screen.getByLabelText('Template');
+    // The list itself must not have carried it — it came from the by-id fetch.
+    expect(templateListQueries.length).toBeGreaterThan(0);
+    for (const query of templateListQueries) {
+      expect(query).not.toContain('includeHidden');
+    }
+  });
+
+  it('falls back to the ordinary pre-selection when fetching the requested template fails', async () => {
+    server.use(
+      http.get(`${API_BASE}/note-templates`, ({ request }) => {
+        templateListQueries.push(new URL(request.url).search);
+        return HttpResponse.json({
+          data: { items: [template('tpl-2', 'Brief')], total: 1 },
+        });
+      }),
+    );
+    templateDetailResponse = () =>
+      HttpResponse.json({ statusCode: 404, code: 'NOT_FOUND', message: 'Not found' }, { status: 404 });
+    renderPage('/notes/new?transcriptId=t1&templateId=does-not-exist');
+    await waitForForm();
+
+    await waitFor(() => expect(templateDetailRequests).toContain('does-not-exist'));
+    // Dropped back to the first (only) template the list actually offers.
+    await waitFor(() => expect(screen.getByLabelText('Template')).toHaveTextContent('Brief'));
   });
 });

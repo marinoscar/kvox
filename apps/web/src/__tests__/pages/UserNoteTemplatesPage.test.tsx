@@ -69,6 +69,8 @@ vi.mock('../../services/noteTemplates', async (importOriginal) => {
     deleteNoteTemplate: vi.fn(),
     duplicateNoteTemplate: vi.fn(),
     previewNoteTemplate: vi.fn(),
+    hideNoteTemplate: vi.fn(),
+    unhideNoteTemplate: vi.fn(),
   };
 });
 
@@ -79,7 +81,9 @@ import { getTranscripts } from '../../services/transcripts';
 import {
   duplicateNoteTemplate,
   getNoteTemplates,
+  hideNoteTemplate,
   previewNoteTemplate,
+  unhideNoteTemplate,
 } from '../../services/noteTemplates';
 import type { AiConfig } from '../../services/ai';
 import type { NoteTemplate, NoteTemplatePreview } from '../../services/noteTemplates';
@@ -90,6 +94,8 @@ const mockGetTranscripts = vi.mocked(getTranscripts);
 const mockGetTemplates = vi.mocked(getNoteTemplates);
 const mockDuplicate = vi.mocked(duplicateNoteTemplate);
 const mockPreview = vi.mocked(previewNoteTemplate);
+const mockHide = vi.mocked(hideNoteTemplate);
+const mockUnhide = vi.mocked(unhideNoteTemplate);
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
@@ -141,6 +147,7 @@ function template(overrides: Partial<NoteTemplate> = {}): NoteTemplate {
     model: null,
     isArchived: false,
     builtIn: false,
+    hidden: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-02T00:00:00.000Z',
     ...overrides,
@@ -197,6 +204,8 @@ function setup(options: { config?: Partial<AiConfig>; templates?: NoteTemplate[]
     nextCursor: null,
   });
   mockPreview.mockResolvedValue(queued);
+  mockHide.mockResolvedValue(undefined);
+  mockUnhide.mockResolvedValue(undefined);
 }
 
 async function renderPage() {
@@ -561,6 +570,166 @@ describe('UserNoteTemplatesPage', () => {
       );
       // Still the editor — the loop never navigates.
       expect(screen.getByRole('heading', { level: 2, name: 'Template' })).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // Hiding and showing templates — issue #311
+  // ==========================================================================
+
+  describe('hiding and showing templates', () => {
+    it('asks the API with includeHidden=true — the template manager sees everything', async () => {
+      await renderPage();
+      await screen.findByText('My meeting notes');
+
+      expect(mockGetTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({ includeHidden: true }),
+      );
+    });
+
+    it('shows filter counts and filters the list', async () => {
+      const user = userEvent.setup();
+      setup({
+        templates: [
+          template({ id: 'shown-1', name: 'Shown one', hidden: false }),
+          template({ id: 'hidden-1', name: 'Hidden one', hidden: true }),
+          builtIn,
+        ],
+      });
+      await renderPage();
+      await screen.findByText('Shown one');
+
+      expect(screen.getByRole('button', { name: /^all \(3\)$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^shown \(2\)$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^hidden \(1\)$/i })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^hidden \(1\)$/i }));
+      expect(screen.getByText('Hidden one')).toBeInTheDocument();
+      expect(screen.queryByText('Shown one')).not.toBeInTheDocument();
+      expect(screen.queryByText('Standard meeting notes')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^shown \(2\)$/i }));
+      expect(screen.queryByText('Hidden one')).not.toBeInTheDocument();
+      expect(screen.getByText('Shown one')).toBeInTheDocument();
+      expect(screen.getByText('Standard meeting notes')).toBeInTheDocument();
+    });
+
+    it('persists the chosen filter to localStorage and restores it on the next mount', async () => {
+      const user = userEvent.setup();
+      setup({
+        templates: [
+          template({ id: 'shown-1', name: 'Shown one', hidden: false }),
+          template({ id: 'hidden-1', name: 'Hidden one', hidden: true }),
+        ],
+      });
+      const { unmount } = await renderPage();
+      await screen.findByText('Shown one');
+
+      await user.click(screen.getByRole('button', { name: /^hidden \(1\)$/i }));
+      expect(localStorage.getItem('noteTemplates.visibilityFilter')).toBe('hidden');
+
+      unmount();
+
+      await renderPage();
+      await screen.findByText('Hidden one');
+      expect(screen.queryByText('Shown one')).not.toBeInTheDocument();
+    });
+
+    it('does not crash when localStorage throws on read or write', async () => {
+      const getSpy = vi
+        .spyOn(Storage.prototype, 'getItem')
+        .mockImplementation(() => {
+          throw new Error('blocked');
+        });
+      const setSpy = vi
+        .spyOn(Storage.prototype, 'setItem')
+        .mockImplementation(() => {
+          throw new Error('blocked');
+        });
+      const user = userEvent.setup();
+      setup({
+        templates: [
+          template({ id: 'shown-1', name: 'Shown one', hidden: false }),
+          template({ id: 'hidden-1', name: 'Hidden one', hidden: true }),
+        ],
+      });
+
+      await renderPage();
+      await screen.findByText('Shown one');
+      // The default filter falls back to `all` when the read throws.
+      expect(screen.getByText('Hidden one')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /^hidden \(1\)$/i }));
+      expect(screen.queryByText('Shown one')).not.toBeInTheDocument();
+
+      getSpy.mockRestore();
+      setSpy.mockRestore();
+    });
+
+    it('hides a template: PUT is sent, a snackbar reports it, and Undo sends DELETE', async () => {
+      const user = userEvent.setup();
+      setup({ templates: [template({ id: 'tpl-owned', name: 'My meeting notes', hidden: false })] });
+      await renderPage();
+      await screen.findByText('My meeting notes');
+
+      await user.click(screen.getByRole('button', { name: 'Hide My meeting notes' }));
+
+      await waitFor(() => expect(mockHide).toHaveBeenCalledWith('tpl-owned'));
+      expect(await screen.findByText('“My meeting notes” hidden')).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /undo/i }));
+
+      await waitFor(() => expect(mockUnhide).toHaveBeenCalledWith('tpl-owned'));
+    });
+
+    it('rolls back and shows an error snackbar when the hide request fails', async () => {
+      const user = userEvent.setup();
+      const { ApiError } = await import('../../services/api');
+      setup({ templates: [template({ id: 'tpl-owned', name: 'My meeting notes', hidden: false })] });
+      mockHide.mockRejectedValue(new ApiError('Server error', 500));
+      await renderPage();
+      await screen.findByText('My meeting notes');
+
+      await user.click(screen.getByRole('button', { name: 'Hide My meeting notes' }));
+
+      await waitFor(() => expect(mockHide).toHaveBeenCalled());
+      // Rolled back: the row is shown again and the toggle reads "Hide" again.
+      expect(await screen.findByRole('button', { name: 'Hide My meeting notes' })).toBeInTheDocument();
+      expect(screen.getByText('Server error')).toBeInTheDocument();
+    });
+
+    it('warns when every template is hidden', async () => {
+      setup({ templates: [template({ id: 'tpl-1', name: 'Only one', hidden: true })] });
+      await renderPage();
+      await screen.findByText('Only one');
+
+      expect(
+        screen.getByText(/all templates are hidden.*unhide one to create a note/i),
+      ).toBeInTheDocument();
+    });
+
+    it('shows a message for an empty filtered view without claiming there are no templates at all', async () => {
+      const user = userEvent.setup();
+      setup({ templates: [template({ id: 'tpl-1', name: 'Only shown', hidden: false })] });
+      await renderPage();
+      await screen.findByText('Only shown');
+
+      await user.click(screen.getByRole('button', { name: /^hidden \(0\)$/i }));
+
+      expect(screen.getByText('No hidden templates.')).toBeInTheDocument();
+    });
+
+    it('passes axe with the hide/show controls and a Hidden chip on screen', async () => {
+      setup({
+        templates: [
+          template({ id: 'shown-1', name: 'Shown one', hidden: false }),
+          template({ id: 'hidden-1', name: 'Hidden one', hidden: true }),
+        ],
+      });
+      const { container } = await renderPage();
+      await screen.findByText('Hidden one');
+
+      expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
     });
   });
 

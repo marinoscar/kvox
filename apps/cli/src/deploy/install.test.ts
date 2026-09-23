@@ -995,7 +995,12 @@ describe('runInstall preconditions', () => {
     // It gets past the precondition and fails later, on a real pipeline step,
     // rather than being refused as "a deployment already exists".
     expect((error as Error | undefined)?.message ?? '').not.toContain('--reinstall');
-  });
+    // An explicit budget, not the 5s default: getting "past the precondition"
+    // means running real pipeline steps (docker probes, server facts) against
+    // whatever the host has installed. That takes ~0.3-0.9s normally and has
+    // been measured over 5s on a loaded CI runner, which is a slow host, not a
+    // wrong answer.
+  }, 30_000);
 });
 
 describe('runInstall layout resolution', () => {

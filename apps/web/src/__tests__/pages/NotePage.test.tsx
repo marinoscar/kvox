@@ -107,6 +107,7 @@ function templateRow(overrides: Record<string, unknown> = {}) {
     model: null,
     isArchived: false,
     builtIn: false,
+    hidden: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
