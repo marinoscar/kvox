@@ -3,6 +3,8 @@ import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
+import { INestApplicationContext } from '@nestjs/common';
+import { SchedulerRegistry } from '@nestjs/schedule';
 import fastifyCookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import { AppModule } from '../../src/app.module';
@@ -51,6 +53,55 @@ export interface TestAppOptions {
    * overrides only that spec knows about.
    */
   overrideProviders?: Array<{ provide: unknown; useValue: unknown }>;
+}
+
+/**
+ * Stops every `@Cron`/`@Interval`/`@Timeout` `ScheduleModule` registered for
+ * this application context (issue #319).
+ *
+ * `AppModule` wires `ScheduleModule.forRoot()` (`src/app.module.ts`), so every
+ * boot of the real module graph — which every integration spec's
+ * `createTestApp` performs — starts the same crons a running deployment
+ * would: node-stale-offline, the db-backup scheduler, notes/transcripts
+ * housekeeping, and the rest. Those tasks fire on real 10-minute wall-clock
+ * boundaries and, when they land, enqueue jobs through `prisma.job.create` —
+ * so a suite that asserts `expect(prisma.job.create).not.toHaveBeenCalled()`
+ * (or counts calls at all) is at the mercy of whatever second the CI runner
+ * happened to be at, and fails only on the runs that cross `hh:x0:00`. That
+ * is not a flaky assertion to relax; it is this helper's job to stop.
+ *
+ * An integration test must not depend on the wall clock. Each cron's own
+ * behaviour is already covered by its unit spec (e.g. `*.task.spec.ts`),
+ * which calls the handler directly and controls time itself, and
+ * `test/jobs/cron-enqueue-only.spec.ts` separately pins that every `@Cron`
+ * body only *decides* whether to enqueue rather than doing the work inline.
+ * Nothing here is meant to exercise scheduling — so scheduling is turned off.
+ *
+ * Guarded in a `try/catch`: a test module built from a hand-picked provider
+ * list (rather than the full `AppModule`) never imports `ScheduleModule`, and
+ * `app.get(SchedulerRegistry, { strict: false })` throws in that case rather
+ * than returning `undefined`.
+ */
+export function stopScheduledWork(app: INestApplicationContext): void {
+  let registry: SchedulerRegistry;
+  try {
+    registry = app.get(SchedulerRegistry, { strict: false });
+  } catch {
+    return;
+  }
+  if (!registry) {
+    return;
+  }
+
+  for (const job of registry.getCronJobs().values()) {
+    job.stop();
+  }
+  for (const name of registry.getIntervals()) {
+    registry.deleteInterval(name);
+  }
+  for (const name of registry.getTimeouts()) {
+    registry.deleteTimeout(name);
+  }
 }
 
 /**
@@ -122,6 +173,13 @@ export async function createTestApp(
   options.registerRoutes?.(app);
 
   await app.init();
+
+  // See `stopScheduledWork`'s header (issue #319): a test app boots the same
+  // `ScheduleModule.forRoot()` crons a real deployment runs, and this must
+  // happen right after `init()` — before any spec gets a chance to observe a
+  // `prisma.job.create` call a wall-clock boundary crossed during setup.
+  stopScheduledWork(app);
+
   await app.getHttpAdapter().getInstance().ready();
 
   const prisma = moduleFixture.get<PrismaService>(PrismaService);
