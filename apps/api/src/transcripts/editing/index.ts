@@ -20,5 +20,6 @@ export * from './ordinals';
 export * from './reducers';
 export * from './state-diff';
 export * from './snapshot-policy';
+export * from './speaker-identity';
 export * from './summary';
 export * from './word-alignment';

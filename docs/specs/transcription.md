@@ -833,6 +833,7 @@ one `transcripts` row per uploaded recording.
 | Provider | `provider`, `provider_job_id?`, `provider_options` (JSONB: `speakersExpected`, `language`) |
 | Timestamps | `submitted_at?`, `last_polled_at?`, `completed_at?`, `remote_deleted_at?`, `deleted_at?`, `created_at`, `updated_at` |
 | Derived | `duration_ms?`, `failure_reason?`, `current_version` (int, default 0), `speaker_count`, `word_count` |
+| Identities | `speaker_identities` (JSONB, default `{}`; speaker id → display name — §4.6) |
 | Indexes | `(owner_id, updated_at desc)`, `(status)` |
 
 `source_object_id` is `Restrict`, not `Cascade` — a `storage_objects` row a
@@ -1091,6 +1092,60 @@ rollup with no further meaning; a transcript's version 1 is exactly the
 the transcript exists, full stop, deleted only when the whole transcript is
 (`transcript.purge`, §1.5.7, §10).
 
+### 4.6 Naming a speaker is an overlay, not a version (issue #323)
+
+Turning "Speaker A" into "Oscar" is an *identification*: metadata about the
+recording, the same category as its title, not a correction of what was
+said. A batch made only of `speaker.rename` ops that each either replace a
+speaker still on its ingest placeholder (`defaultSpeakerName`, "Speaker
+`<label>`") with a real name, or change nothing, takes a second, unversioned
+path (`TranscriptEditingService.identify`/`saveIdentifications`): the name is
+written straight to the live speaker row and to
+`transcripts.speaker_identities` (id → name), and nothing else —
+`current_version` does not move, no `transcript_versions` row is appended, no
+snapshot is queued. Renaming an already-identified speaker ("Oscar" →
+"Joe") is a correction and stays on the ordinary versioned path; a batch
+mixing an identification with any other op — including a text edit — is one
+version as before, exactly like every other mixed batch. `rev` is never
+bumped by an identification: the version log has no record of it, so a `rev`
+it produced would be one a replay could not reproduce, and the speaker's next
+versioned op would fail replay as corrupt history.
+
+Because the name never enters the log, `materialize()` cannot get it from
+replay. Instead every materialized state — history view, restore, exports,
+note sources — is overlaid with the current `speaker_identities` map exactly
+once, at `TranscriptMaterializeService.materialize`'s outermost return: any
+speaker still carrying its ingest placeholder at the requested version takes
+its identified name. This is deliberate on three counts: it is
+**retroactive** (Oscar was Oscar in the recording, so v1 viewed today says
+"Oscar" too); it is **rev-neutral** (the overlay does not touch `rev`
+either, so the log stays replayable); and it is **idempotent** (a state that
+already carries the name — a snapshot taken from live tables after the
+naming, or a restored state re-overlaid under the transcript row's lock —
+passes through unchanged). `loadLiveState` itself is never overlaid: the
+live row already carries the name, and the write paths diff against exactly
+what is in the table.
+
+A *versioned* rename that puts a speaker back on its placeholder ("Oscar" →
+"Speaker A") retires that speaker's `speaker_identities` entry in the same
+transaction. Without this the overlay would turn the live placeholder back
+into "Oscar" on every subsequent read, breaking `materialize(currentVersion)
+== DB state` (§4.4). The honest edge case: retiring the entry is a
+whole-history choice, not a per-version one — every *older* version that
+replays to the placeholder for that speaker now shows "Speaker A" too, where
+it showed "Oscar" a moment before, because the overlay can only say
+"identified" or "not" for the whole transcript, never "identified as of
+version N." A version whose *snapshot* was taken from live tables while the
+name was still set keeps "Oscar" baked into its snapshot regardless — that is
+the one place the retired name survives.
+
+An identification-only batch returns the current version unchanged, with a
+summary of `"Named Speaker A as Oscar"` (joined with `; ` for more than one)
+or `"No changes"`, and is recorded to the audit log as
+`transcript.speaker_identified` — the one change to what a transcript says
+that leaves no `transcript_versions` row, so the audit entry is the only
+place "who decided that voice was Oscar" is answered at all.
+
 ## 5. Concurrency
 
 Optimistic, using a **per-entity `rev`** (one on `transcript_speakers`, one
@@ -1126,11 +1181,19 @@ on `transcript_segments`) **plus** a batch-level `baseVersion`:
   the exact shape `enqueue()`'s dedup already gives job creation
   (`docs/specs/job-queue.md` §4.1), applied here to a write endpoint instead
   of a queue insert.
-- **Reads poll with a weak ETag**, `W/"v<currentVersion>"`, on `GET
-  /:id` and `GET /:id/segments`. A client polling while nothing has changed
-  gets a `304` with no body — the transcript's own equivalent of
-  `useTranscript`'s (issue #30) adaptive 5s/20s polling costing nothing on
-  the common case where the answer has not moved.
+- **Reads poll with a weak ETag** on `GET /:id` and `GET /:id/segments`:
+  `W/"v<currentVersion>"` while nobody has named a speaker, or
+  `W/"v<currentVersion>-<fingerprint>"` once somebody has (§4.6) — naming a
+  speaker changes the response without moving `current_version`, so the
+  version alone would poll `304` forever after a naming and the client would
+  never see it. The fingerprint is the first twelve hex digits of a SHA-256
+  over the sorted `speaker_identities` map (`transcriptETag`); it is absent
+  precisely when the map is empty, so every ETag issued before issue #323
+  stays valid, and clients must treat the value as opaque rather than parse a
+  version out of it. A client polling while nothing has changed gets a `304`
+  with no body — the transcript's own equivalent of `useTranscript`'s (issue
+  #30) adaptive 5s/20s polling costing nothing on the common case where the
+  answer has not moved.
 
 **Rejected: CRDTs or full operational-transform real-time collaboration.**
 Per-entity optimistic concurrency is enough for the realistic case this epic
@@ -1554,10 +1617,14 @@ enough to inline," where the inline path silently breaks the day a
 short recording happens to have an unusually dense correction history or a
 slow render, at the one moment nobody is watching for it.
 
-`POST /:id/exports` hashes `{ format, version, options }` into
+`POST /:id/exports` hashes `{ format, version, options }` — plus, since issue
+#323, a fingerprint of `speaker_identities` when that map is non-empty — into
 `options_hash` and checks `transcript_exports` for an existing,
 **unexpired** row with the same `(transcriptId, version, format,
-options_hash)` — the index issue #24 declares for exactly this lookup. A
+options_hash)` — the index issue #24 declares for exactly this lookup. The
+fingerprint is needed because §4.6's overlay means the same version can
+render different bytes before and after a speaker is named — without it, a
+render taken before the naming would be served back, unrevised, after it. A
 match returns **200** with the existing export immediately, skipping a
 redundant render entirely; no match enqueues the job and returns **202**
 `{ exportId }`. This reuse check is deliberately **not** the queue's own

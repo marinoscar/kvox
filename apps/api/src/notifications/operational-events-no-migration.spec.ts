@@ -112,6 +112,10 @@ const MIGRATIONS_AT_288 = [
   // this template" LISTING preference over note templates. A join table, and
   // equally not about notifications.
   '20260923130000_add_user_hidden_note_templates',
+  // #323: `transcripts.speaker_identities`, the JSONB map of speakers a user
+  // has named for the first time ("Speaker A" -> "Oscar") without creating a
+  // version. Transcript metadata, and equally not about notifications.
+  '20260923140000_add_transcript_speaker_identities',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
