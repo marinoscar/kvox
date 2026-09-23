@@ -43,7 +43,7 @@
  * page, and no generation request is issued from this branch at all.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -60,6 +60,7 @@ import { AiKeyRequired } from '../components/ai/AiKeyRequired';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { NoteTemplateEditor } from '../components/notes/NoteTemplateEditor';
 import { NoteTemplateList } from '../components/notes/NoteTemplateList';
+import { TemplateEditorActions } from '../components/notes/TemplateEditorActions';
 import { TemplatePreviewPanel } from '../components/notes/TemplatePreviewPanel';
 import type { PreviewSourceOption } from '../components/notes/TemplatePreviewPanel';
 import { useAiConfig } from '../hooks/useAiConfig';
@@ -314,7 +315,39 @@ export default function UserNoteTemplatesPage() {
     [draft.instructions, selectedSourceId],
   );
 
-  const canSave = draft.name.trim().length > 0 && draft.instructions.trim().length > 0;
+  const hasName = draft.name.trim().length > 0;
+  const hasInstructions = draft.instructions.trim().length > 0;
+  const canSave = hasName && hasInstructions;
+  const saveDisabledReason = canSave
+    ? null
+    : !hasName && !hasInstructions
+      ? 'Name and instructions are required'
+      : !hasName
+        ? 'Add a name to save'
+        : 'Add instructions to save';
+
+  // Ctrl/⌘ + S saves while the editor is open (issue #331). The listener reads
+  // the latest render through a ref, so it never saves a stale draft and does
+  // not have to be re-attached on every keystroke.
+  const saveShortcutRef = useRef<() => void>(() => undefined);
+  saveShortcutRef.current = () => {
+    if (canSave && !isSaving) void handleSave();
+  };
+
+  const isEditing = mode.kind === 'edit';
+  useEffect(() => {
+    if (!isEditing) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        // Always swallowed while editing: the browser's "save page" dialog is
+        // never what someone pressing this shortcut in a form wants.
+        event.preventDefault();
+        saveShortcutRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isEditing]);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -451,7 +484,16 @@ export default function UserNoteTemplatesPage() {
               <Button startIcon={<ArrowBackIcon />} onClick={backToList}>
                 All templates
               </Button>
-              <Button variant="contained" onClick={() => void handleSave()} disabled={!canSave || isSaving}>
+              {/* Phones only. From `sm` up the editor's own sticky footer
+                  (`TemplateEditorActions`) carries Save; below `sm` that footer
+                  is static at the end of a long form, so this keeps finishing
+                  reachable without scrolling to the bottom. */}
+              <Button
+                variant="contained"
+                onClick={() => void handleSave()}
+                disabled={!canSave || isSaving}
+                sx={{ display: { xs: 'inline-flex', sm: 'none' } }}
+              >
                 {isSaving ? 'Saving…' : mode.template ? 'Save changes' : 'Create template'}
               </Button>
             </Stack>
@@ -473,6 +515,16 @@ export default function UserNoteTemplatesPage() {
                 models={config?.models ?? []}
                 defaultModel={config?.defaultModel ?? null}
                 disabled={isSaving}
+                footer={
+                  <TemplateEditorActions
+                    primaryLabel={mode.template ? 'Save changes' : 'Create template'}
+                    onSave={() => void handleSave()}
+                    onCancel={backToList}
+                    disabled={!canSave}
+                    isSaving={isSaving}
+                    disabledReason={saveDisabledReason}
+                  />
+                }
               />
 
               <TemplatePreviewPanel
