@@ -1400,6 +1400,80 @@ describe('NotePage — the generation context panel', () => {
   });
 });
 
+describe('NotePage — the full context dialog (issue #308)', () => {
+  /** What `GET /api/notes/:id/context` answers with when it is asked. */
+  function contextResponse() {
+    return {
+      generationId: 'gen-1',
+      kind: 'create',
+      status: 'succeeded',
+      stored: true,
+      capturedAt: new Date().toISOString(),
+      templateId: 'tpl-1',
+      templateNameSnapshot: 'Meeting minutes',
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      contextText: null,
+      sourceType: 'transcript',
+      sourceVersion: 1,
+      sourceRedacted: false,
+      systemPrompt: 'You write meeting notes.',
+      userContent: 'Ana and Ben discussed the budget.',
+      promptTokens: 500,
+      completionTokens: 200,
+    };
+  }
+
+  beforeEach(() => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+  });
+
+  it('does NOT request the context endpoint merely by loading the page', async () => {
+    let contextRequests = 0;
+    server.use(
+      // ⚠ THE GENERATION-SCOPED ROUTE. The note fixture carries a
+      // `currentGenerationId`, so `getNoteGenerationContext` always calls
+      // `/notes/:id/generations/:generationId/context` here, never the bare
+      // `/notes/:id/context` (which is only hit with no generationId at all).
+      http.get(`${API_BASE}/notes/:id/generations/:generationId/context`, () => {
+        contextRequests += 1;
+        return HttpResponse.json({ data: contextResponse() });
+      }),
+    );
+
+    renderNote();
+    await screen.findByText('Done.');
+
+    expect(contextRequests).toBe(0);
+  });
+
+  it('opens the dialog and requests the context exactly once, from the panel’s button', async () => {
+    const user = userEvent.setup();
+    let contextRequests = 0;
+    server.use(
+      http.get(`${API_BASE}/notes/:id/generations/:generationId/context`, () => {
+        contextRequests += 1;
+        return HttpResponse.json({ data: contextResponse() });
+      }),
+    );
+
+    renderNote();
+
+    // Expand "How this note was generated" (#109) first — the button this
+    // suite is about lives inside it.
+    await user.click(
+      await screen.findByRole('button', { name: /How this note was generated/i }),
+    );
+    // Still no request: expanding the summary panel is not opening the dialog.
+    expect(contextRequests).toBe(0);
+
+    await user.click(screen.getByRole('button', { name: 'View full context sent to the AI' }));
+
+    expect(await screen.findByText('Context sent to the AI')).toBeInTheDocument();
+    await waitFor(() => expect(contextRequests).toBe(1));
+  });
+});
+
 describe('NotePage — with no AI key saved', () => {
   beforeEach(() => {
     current = note({ status: 'ready', body: '# Kept\n\nMy own note.', currentVersion: 2 });
