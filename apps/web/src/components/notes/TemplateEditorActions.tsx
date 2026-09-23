@@ -32,6 +32,7 @@
 
 import { useId } from 'react';
 import Box from '@mui/material/Box';
+import { useTheme } from '@mui/material/styles';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 
@@ -59,11 +60,17 @@ export function TemplateEditorActions({
   disabledReason,
 }: TemplateEditorActionsProps) {
   const hintId = useId();
+  const theme = useTheme();
+  const paperRadius = `${theme.shape.borderRadius}px`;
   const reason = disabled && disabledReason ? disabledReason : null;
 
   return (
     <Box
-      sx={(theme) => ({
+      // ⚠ Every responsive difference is a responsive VALUE, never a literal
+      // `[theme.breakpoints.up('sm')]` key: both emit the same
+      // `@media (min-width:600px)` key, and one silently overwrites the other
+      // (which rendered this row as a column on desktop).
+      sx={{
         mt: 3,
         display: 'flex',
         // Phones: a caption stacked above a full-width button. Wider: one row.
@@ -73,21 +80,21 @@ export function TemplateEditorActions({
         gap: 1,
         position: { xs: 'static', sm: 'sticky' },
         bottom: 0,
+        zIndex: { sm: 1 },
+        bgcolor: { sm: 'background.paper' },
+        borderTop: { xs: 0, sm: 1 },
+        borderColor: 'divider',
         // Edge to edge across the editor Paper, whose padding is `{ xs: 2, sm: 3 }`.
-        [theme.breakpoints.up('sm')]: {
-          bgcolor: 'background.paper',
-          borderTop: 1,
-          borderColor: 'divider',
-          zIndex: 1,
-          mx: -3,
-          mb: -3,
-          px: 3,
-          py: 1.5,
-          // A literal CSS length, so no theme-unit multiplication can apply.
-          borderBottomLeftRadius: `${theme.shape.borderRadius}px`,
-          borderBottomRightRadius: `${theme.shape.borderRadius}px`,
-        },
-      })}
+        mx: { sm: -3 },
+        mb: { sm: -3 },
+        px: { sm: 3 },
+        py: { sm: 1.5 },
+        // The Paper's own corner radius. Only the `borderRadius` shorthand is
+        // multiplied by `theme.shape.borderRadius` in `sx`; these longhands are
+        // plain CSS, so they take a literal length.
+        borderBottomLeftRadius: { sm: paperRadius },
+        borderBottomRightRadius: { sm: paperRadius },
+      }}
     >
       <Typography
         id={hintId}
