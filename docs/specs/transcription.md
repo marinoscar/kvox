@@ -1026,6 +1026,19 @@ invariant exists to rule out. Expanding to concrete ops before recording
 means a version's ops are a permanent, self-contained description of exactly
 what changed, immune to any future change in how matches are *found*.
 
+**AI name correction (epic #326) is a different kind of correction, expanded
+the same way.** `find_replace` needs a human to already know the misspelling
+and to choose one matching pattern to apply uniformly; a name check does not
+know the misspelling in advance — that is what its phonetic-retrieval and
+optional discovery passes exist to find — and needs each occurrence verified
+by a model in its own context before being touched. It still lands as
+concrete `segment.update_text` ops, one per affected segment, through this
+exact same recording discipline — never a second write path, never an
+abstract "name check" op in the version log. See
+[`docs/specs/transcript-name-correction.md`](transcript-name-correction.md)
+§7 for the full apply mechanics, including how it computes a stale/relocated
+span the same way `resolveSpan` here matches `original` against current text.
+
 ### 4.3 Snapshot policy
 
 `transcript.snapshot` (§1.5.5) runs:

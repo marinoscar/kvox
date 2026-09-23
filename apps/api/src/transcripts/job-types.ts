@@ -70,6 +70,19 @@ export const TRANSCRIPT_SNAPSHOT_JOB_TYPE = 'transcript.snapshot';
  */
 export const TRANSCRIPT_EXPORT_JOB_TYPE = 'transcript.export';
 
+/**
+ * Propose corrections for mis-transcribed names (issues #328 and #330, epic
+ * #326): phonetic retrieval, an optional AI discovery pass, and AI
+ * adjudication, producing `transcript_name_suggestions` rows for the user to
+ * accept or reject.
+ *
+ * SERVER-ONLY PERMANENTLY, for `note.generate`'s reason exactly: it spends the
+ * requesting user's own AI key, and no vendor offers a job-scoped sub-key a
+ * `nodeSecretBroker` could hand a node instead. `maxAttempts: 1` for the same
+ * reason — see the handler.
+ */
+export const TRANSCRIPT_NAME_CHECK_JOB_TYPE = 'transcript.name_check';
+
 /** Remove every byte and every row a deleted transcript ever owned. */
 export const TRANSCRIPT_PURGE_JOB_TYPE = 'transcript.purge';
 

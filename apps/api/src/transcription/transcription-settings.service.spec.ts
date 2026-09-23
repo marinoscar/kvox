@@ -50,6 +50,7 @@ function stubProvider(
       acceptedMimeTypes: ['audio/mpeg'],
       remoteDelete: true,
       cancel: false,
+      keyterms: null,
     },
     settingsSchema: {
       safeParse: (value: unknown) => ({ success: true as const, data: value }),

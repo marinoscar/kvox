@@ -2968,6 +2968,7 @@ it.
   "title": "Board meeting, 3 March",
   "language": "en",
   "speakersExpected": 4,
+  "keyterms": ["Oscar Marín", "Kubernetes"],
   "source": { "name": "meeting.m4a", "size": 148372910, "mimeType": "audio/mp4" }
 }
 ```
@@ -2976,6 +2977,18 @@ it.
 null asks the provider to detect it. `speakersExpected` is a **hint** a provider
 may bias diarization with, never a constraint, and is ignored entirely by a
 provider whose `speakersExpectedHint` capability is false.
+
+`keyterms` (issue #327) is a **recognition hint**, not a constraint: names and
+domain terms the caller already knows appear in the recording, sent to the
+active transcription provider as a bias on its own guess. Up to 200 terms of
+at most 6 words each are accepted here — deliberately tighter than any
+vendor's own limit — and are **stored regardless of what the active provider
+supports**; they are clamped to that provider's own capability only at submit
+time (`GET /api/transcription/config`'s `keytermsSupported`/`maxKeyterms` say
+what the active provider can currently use). A provider with no keyterm
+capability simply never sees them — the field is accepted and stored anyway,
+so switching to a capable provider later honours terms already typed, on a
+retry. See [`docs/specs/transcript-name-correction.md`](specs/transcript-name-correction.md#2-feed-forward-keyterms-327).
 
 `source.mimeType` is optional because mobile browsers report audio types
 inconsistently — `application/octet-stream`, or nothing at all, for `.m4a` and
@@ -3442,6 +3455,126 @@ scoped by `transcriptId`, which *is* the authorisation.
 
 **Requires:** `transcripts:read`, plus view access
 
+#### Name Checks
+
+AI-assisted detection of speech-recognition errors in names — epic #326.
+After a speaker is renamed "Oscar," the transcript text still says what the
+provider heard: "Skar," "Oh scar." A name check finds spans that are probably
+a mis-hearing of a known name and **proposes** a fix; nothing in the
+transcript changes until a proposal is accepted. Full design — the phonetic
+retrieval pass, the optional thorough discovery pass, LLM adjudication and
+its over-correction guard, cost scaling, and the apply/stale/conflict
+mechanics — is
+[`docs/specs/transcript-name-correction.md`](specs/transcript-name-correction.md).
+
+Five routes, sharing this section's permission pair and access posture
+exactly: `transcripts:read` + view access for reads, `transcripts:write` +
+edit access for writes, and **no access is a 404, never a 403**.
+
+#### POST /transcripts/{id}/name-checks
+Queues a `transcript.name_check` job. **202**, body carries the queued run
+and its cost `estimate`.
+
+**Requires:** `transcripts:write`, plus edit access
+
+**Request:**
+```json
+{ "mode": "standard", "terms": ["Aurelia"], "speakerIds": ["…"] }
+```
+
+`mode` is `standard` (verifies phonetic candidates only) or `thorough`
+(additionally has the model read the whole transcript for mis-hearings a
+phonetic match misses — several times the tokens, on the caller's own
+provider account). `terms` and `speakerIds` are both optional: the names
+checked for are the display names of the selected speakers (default every
+speaker; generic labels like "Speaker A" are skipped), plus `terms`, plus the
+transcript's own upload `keyterms`.
+
+**400** when that combination leaves nothing to check, or an unknown speaker
+id is given. **409** with `details.reason`: `ai_not_configured` (the
+deployment has no AI provider configured), `ai_key_missing` (the caller has
+not saved a key — a check runs on **their own** provider account),
+`name_check_running` (one is already pending or running for this
+transcript), or `transcript_not_ready`.
+
+#### GET /transcripts/{id}/name-checks/estimate?mode
+What `POST /name-checks` of the given `mode` (default `standard`) would cost
+— input tokens, provider requests, candidate count — without creating
+anything. Needs no API key (counting is free); still **409**
+`ai_not_configured` when the deployment has no AI provider. A **lower bound**
+for `thorough` mode: discovery's own findings are adjudicated too, and how
+many there will be is exactly what discovery finds out.
+
+**Requires:** `transcripts:read`, plus view access
+
+#### GET /transcripts/{id}/name-checks/latest
+The most recent run for this transcript (`run: null` if none has ever run),
+its **pending** suggestions in reading order, and counts by status. Poll this
+while `run.status` is `pending` or `running`.
+
+**Requires:** `transcripts:read`, plus view access
+
+**Response:**
+```json
+{
+  "data": {
+    "run": { "id": "…", "mode": "standard", "status": "ready", "suggestionCount": 3, "…": "…" },
+    "suggestions": [
+      {
+        "id": "…", "segmentId": "…", "original": "Oh scar", "replacement": "Oscar",
+        "confidence": 0.94, "source": "phonetic", "preview": "…said Oh scar was right…", "stale": false
+      }
+    ],
+    "counts": { "pending": 3, "accepted": 0, "rejected": 0, "stale": 0 }
+  }
+}
+```
+
+Each suggestion's `start`/`end` and `preview` are computed against the
+segment's **current** text, relocated when the line was edited since the
+check ran (`original` still occurs exactly once as a whole word); `stale:
+true` means it could not be relocated and applying it will skip it.
+
+#### POST /transcripts/{id}/name-checks/{checkId}/apply
+Writes the named **pending** suggestions into the transcript as ordinary
+corrections: one `segment.update_text` op per affected line, through the same
+path as `POST /api/transcripts/{id}/operations`, recorded as a new version
+("Applied N AI name corrections"), in batches of up to 200 lines.
+
+**Requires:** `transcripts:write`, plus edit access
+
+**Request:**
+```json
+{ "suggestionIds": ["…", "…"] }
+```
+
+**Response:** the applied/stale counts, the transcript's new `version`, and
+every segment/speaker (the same shape `POST /:id/operations` returns), so a
+client can adopt the new state without a second fetch. A suggestion no longer
+uniquely locatable in the current text is marked `stale` and skipped rather
+than failing the call; so is one overlapping another suggestion in the same
+request. Suggestions that are not `pending`, or belong to another check, are
+ignored. A **409** from a concurrent edit is passed through unchanged (see
+`POST /:id/operations`); suggestions not yet applied stay pending.
+
+#### POST /transcripts/{id}/name-checks/{checkId}/reject
+Marks the named pending suggestions `rejected`. The transcript is not
+touched.
+
+**Requires:** `transcripts:write`, plus edit access
+
+**Request:**
+```json
+{ "suggestionIds": ["…", "…"] }
+```
+
+**Response:**
+```json
+{ "data": { "rejected": 2 } }
+```
+
+---
+
 #### The three export formats
 
 | Format | What it is |
@@ -3745,6 +3878,12 @@ naming a real permission rather than "authenticated and nothing else" costs
 nothing here precisely because the permission is universal, while
 `system_settings:read` is not.
 
+`keytermsSupported` and `maxKeyterms` (issue #327) say whether the active
+provider accepts recognition-hint names/terms at upload and how many
+`POST /api/transcripts` will actually forward (the smaller of this API's own
+limit of 200 and the provider's own). `false`/`0` when unsupported or no
+provider is chosen at all.
+
 **Response:**
 ```json
 {
@@ -3754,7 +3893,9 @@ nothing here precisely because the permission is universal, while
     "maxUploadBytes": 5368709120,
     "maxDurationMs": 36000000,
     "acceptedExtensions": [".mp3", ".m4a", ".wav", ".flac", ".mov"],
-    "acceptedMimeTypes": ["audio/mpeg", "audio/m4a", "audio/wav", "audio/flac", "video/quicktime"]
+    "acceptedMimeTypes": ["audio/mpeg", "audio/m4a", "audio/wav", "audio/flac", "video/quicktime"],
+    "keytermsSupported": true,
+    "maxKeyterms": 200
   }
 }
 ```

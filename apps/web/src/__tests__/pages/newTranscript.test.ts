@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   ACCEPTED_AUDIO_EXTENSIONS,
   AUDIO_ACCEPT_ATTRIBUTE,
+  addKeyterms,
   checkAudioDuration,
   checkAudioFile,
   extensionOf,
@@ -10,6 +11,7 @@ import {
   formatMegabytes,
   formatSpeed,
   probeAudioDurationMs,
+  splitKeytermInput,
   titleFromFileName,
 } from '../../pages/newTranscript';
 
@@ -293,5 +295,41 @@ describe('progress formatting', () => {
 
   it('formats megabytes in decimal units, like a file manager', () => {
     expect(formatMegabytes(1_500_000)).toBe('1.5 MB');
+  });
+});
+
+describe('keyterms (#327)', () => {
+  it('splits on commas and newlines, trimming and dropping empties', () => {
+    expect(splitKeytermInput(' Ana ,\n\nBeto  Ruiz\r\nCarla,, ')).toEqual([
+      'Ana',
+      'Beto Ruiz',
+      'Carla',
+    ]);
+  });
+
+  it('appends, keeping the first spelling of a case-insensitive duplicate', () => {
+    expect(addKeyterms(['Ana'], ['ANA', 'Beto', 'beto'], 200)).toEqual({
+      terms: ['Ana', 'Beto'],
+      error: null,
+    });
+  });
+
+  it('accepts exactly six words and refuses seven', () => {
+    expect(addKeyterms([], ['a b c d e f'], 200).terms).toEqual(['a b c d e f']);
+    const refused = addKeyterms([], ['a b c d e f g'], 200);
+    expect(refused.terms).toEqual([]);
+    expect(refused.error).toMatch(/more than 6 words/);
+  });
+
+  it('accepts 100 characters and refuses 101', () => {
+    expect(addKeyterms([], ['x'.repeat(100)], 200).terms).toHaveLength(1);
+    expect(addKeyterms([], ['x'.repeat(101)], 200).error).toMatch(/longer than 100/);
+  });
+
+  it('stops at the ceiling and says so, keeping what fit', () => {
+    expect(addKeyterms(['a'], ['b', 'c'], 2)).toEqual({
+      terms: ['a', 'b'],
+      error: 'At most 2 names and terms can be added.',
+    });
   });
 });

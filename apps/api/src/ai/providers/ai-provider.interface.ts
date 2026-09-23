@@ -328,6 +328,24 @@ export interface AiGenerateRequest {
    * `ai.reasoningEffort` in `../ai-settings.schema.ts`.
    */
   reasoningEffort?: AiReasoningEffort;
+  /**
+   * Ask the vendor to constrain the completion to a JSON object (#328).
+   *
+   * OPTIONAL, AND SAFE TO IGNORE — exactly like
+   * {@link AiGenerateRequest.reasoningEffort}: a provider whose vendor has no
+   * JSON mode simply drops it, and absent (or `'text'`) means the ordinary,
+   * unconstrained completion every provider already produces.
+   *
+   * ⚠ IT IS A HINT, NEVER A GUARANTEE. A provider that ignores it, a gateway
+   * that strips it, or a completion cut short at
+   * {@link AiGenerateRequest.maxOutputTokens} (finish reason `length`) all
+   * return text that is not valid JSON. A caller that asks for `'json'` MUST
+   * still parse and validate what comes back — the flag narrows how often that
+   * validation fails, it never removes the need for it. Note also that the
+   * vendor may require the prompt itself to mention JSON; composing such a
+   * prompt is the caller's job, not the provider's.
+   */
+  responseFormat?: 'text' | 'json';
 }
 
 /** Why the provider stopped producing tokens. */

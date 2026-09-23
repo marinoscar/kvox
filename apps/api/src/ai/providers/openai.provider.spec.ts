@@ -431,6 +431,44 @@ describe('OpenAiProvider.generate — reasoning_effort wire shape (#87)', () => 
   );
 });
 
+describe('OpenAiProvider.generate — response_format wire shape (#328)', () => {
+  async function bodyFor(
+    responseFormat: AiGenerateRequest['responseFormat'],
+  ): Promise<Record<string, unknown>> {
+    let body: Record<string, unknown> | null = null;
+
+    const provider = providerWith(async (_url, init) => {
+      body = JSON.parse((init as { body: string }).body) as Record<
+        string,
+        unknown
+      >;
+      return streamResponse(oneChunk(fixture('simple-completion')));
+    });
+
+    await collect(provider.generate(ctx(), { ...REQUEST, responseFormat }));
+
+    return body as unknown as Record<string, unknown>;
+  }
+
+  it("sends `response_format: { type: 'json_object' }` when JSON is requested", async () => {
+    const body = await bodyFor('json');
+
+    expect(body.response_format).toEqual({ type: 'json_object' });
+  });
+
+  it.each([
+    ['unset', undefined],
+    ["'text'", 'text'],
+  ] as const)(
+    'omits `response_format` entirely when %s',
+    async (_label, responseFormat) => {
+      const body = await bodyFor(responseFormat);
+
+      expect(body).not.toHaveProperty('response_format');
+    },
+  );
+});
+
 describe('OpenAiProvider HTTP status mapping', () => {
   async function generateAgainst(response: FetchLikeResponse): Promise<unknown> {
     const provider = providerWith(async () => response);

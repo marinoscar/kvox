@@ -232,6 +232,11 @@ export interface CreateTranscriptInput {
   language?: string | null;
   /** A HINT the provider may bias diarization with. 1–50, or null for auto. */
   speakersExpected?: number | null;
+  /**
+   * Names and terms the provider should expect (#327). The server trims and
+   * de-duplicates case-insensitively; omit when empty.
+   */
+  keyterms?: string[];
   source: CreateTranscriptSource;
 }
 
