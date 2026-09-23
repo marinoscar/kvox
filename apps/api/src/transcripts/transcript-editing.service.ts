@@ -158,6 +158,19 @@ export interface OperationsResult {
   merges: MergeUndoRecord[];
 }
 
+/**
+ * Internal, server-side options for {@link TranscriptEditingService.applyOperations}.
+ * Never part of the HTTP request body.
+ */
+export interface ApplyOperationsOptions {
+  /**
+   * The version summary to record instead of the one `summarizeOps` derives —
+   * for a caller whose batch has a better description than its ops do
+   * ("Applied 12 AI name corrections" rather than "Edited 9 lines", #328).
+   */
+  summary?: string;
+}
+
 @Injectable()
 export class TranscriptEditingService {
   private readonly logger = new Logger(TranscriptEditingService.name);
@@ -177,6 +190,7 @@ export class TranscriptEditingService {
     id: string,
     dto: ApplyOperationsDto,
     user: RequestUser,
+    options: ApplyOperationsOptions = {},
   ): Promise<OperationsResult> {
     const { transcript } = await this.access.require(user.id, id, 'edit', user.permissions);
 
@@ -215,7 +229,7 @@ export class TranscriptEditingService {
       }
 
       try {
-        const saved = await this.saveBatch(transcript.id, user, dto, expanded);
+        const saved = await this.saveBatch(transcript.id, user, dto, expanded, options);
 
         await this.afterCommit(transcript.id, saved, expanded, user);
 
@@ -608,6 +622,7 @@ export class TranscriptEditingService {
     user: RequestUser,
     dto: ApplyOperationsDto,
     expanded: ExpandedBatch,
+    options: ApplyOperationsOptions,
   ): Promise<{ result: OperationsResult; version: number; kind: 'edit' }> {
     const wordsNeeded = requiredWordSegmentIds(expanded.ops);
 
@@ -650,10 +665,12 @@ export class TranscriptEditingService {
         const speakerNames = new Map(
           applied.state.speakers.map((speaker) => [speaker.id, speaker.displayName]),
         );
-        const summary = summarizeOps(expanded.ops, {
-          findReplace: expanded.findReplace,
-          speakerNames,
-        });
+        const summary =
+          options.summary ??
+          summarizeOps(expanded.ops, {
+            findReplace: expanded.findReplace,
+            speakerNames,
+          });
 
         await tx.transcriptVersion.create({
           data: {
@@ -1090,8 +1107,14 @@ export class TranscriptEditingService {
     };
   }
 
-  /** The live tables, shaped like an operations result. */
-  private async currentResult(
+  /**
+   * The live tables, shaped like an operations result.
+   *
+   * Public for `TranscriptNameCheckService` (#328): an apply whose every
+   * suggestion turned out stale commits nothing, and still answers with the
+   * state the client should adopt.
+   */
+  async currentResult(
     transcriptId: string,
     version: number,
     summary: string,
