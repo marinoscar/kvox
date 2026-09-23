@@ -102,6 +102,25 @@ The composites still take templates, and that is consistent rather than a
 special case: `content` means "everything you made," and a template is
 something the user made.
 
+The same "configuration, not content" argument settles what happens to
+`user_hidden_note_templates` (issue #310) under each scope. A `content`
+(or `everything`) purge only **archives** a caller's own custom templates
+when notes still reference them (§4 below) — it does not delete the row —
+so a hidden-preference row naming one of the caller's own templates that
+survives as archived also survives untouched; the same row on a template
+that a later sweep does hard-delete cascades away with it, by the FK's own
+`ON DELETE CASCADE`, with nothing here to do about it. A hidden-preference
+row naming a **built-in** is never touched by any scope: `content`/
+`everything` never delete or archive a built-in (`owner_id IS NULL` rows
+are immutable through this API under every role, §7.2), so "I don't want to
+see the seeded Meeting Notes template" is a preference about the caller,
+not about their content, and a content purge has no more business clearing
+it than it has clearing the caller's UI theme. Only **account deletion**
+(a raw cascading user delete, not `user.data.purge` — no scope here touches
+`users`) removes every `user_hidden_note_templates` row naming that caller,
+via the same `user_id` `Cascade` every other per-user preference in this
+schema already gets.
+
 Credentials sit at the opposite end of the same argument: they are
 `everything`-only because revoking a user's API tokens is not implied by
 "delete my recordings," and a `content` scope that silently signed a user's

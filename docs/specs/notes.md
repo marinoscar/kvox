@@ -1069,6 +1069,14 @@ invariant extends to every consumer of it).
 | `created_at`, `updated_at` | |
 | `@@unique([owner_id, name])` | Postgres's NULLS-DISTINCT behaviour — the same free property `docs/specs/transcription.md` §4's Database Tables entry notes for `transcript_versions.clientBatchId` — means this constrains only **owned** rows against each other. Any number of `owner_id IS NULL` built-ins may share a `name` as far as this index is concerned, so "no two of *your* templates can be called the same thing" is enforced with no second, narrower partial index needed to carve the built-ins back out |
 
+**`user_hidden_note_templates`** (issue #310, epic #306) is a separate join
+table, not a column here: `(user_id, template_id)` primary key, both FKs
+**Cascade** (a hiding preference has no meaning once either the user or the
+template it names is gone), indexed on `template_id` for the reverse lookup a
+template deletion sweep needs. It records a per-**user** LISTING preference,
+never access control — see §7.4 for the full rationale, including why it is a
+join table and not a `user_settings` namespace or a reuse of `is_archived`.
+
 No `is_built_in` boolean: it would be a second, independently-settable
 statement of a fact `owner_id IS NULL` already states, which is the identical
 "presence is the declaration, never a flag that can disagree with it"
@@ -1536,6 +1544,84 @@ evidence: once duplicated, it is simply the user's own template, free to
 diverge with no product need to trace which built-in it started from. Adding
 lineage tracking here would be applying §4.1's provenance discipline to
 something the product's own thesis does not ask it to apply to.
+
+### 7.4 Hidden templates (issue #310, epic #306)
+
+`PUT`/`DELETE /api/note-templates/:id/hidden` let a caller remove one
+template — theirs or a built-in — from their **own**
+`GET /api/note-templates` list without touching the shared row at all.
+
+**Hiding is a LISTING preference, never access control, and that distinction
+is load-bearing throughout.** `POST /api/notes` (create), `POST
+/api/notes/:id/regenerate`, and `POST /api/note-templates/preview` all keep
+accepting a hidden template by id exactly as before it was hidden — hiding
+changes what a picker *shows*, not what an id *resolves to*. A hidden
+template a note already references keeps producing that note's history
+unaffected; hiding it after the fact does not retroactively hide the note
+or its provenance line.
+
+**Why hiding a built-in is allowed, and deliberately not the §7.2 403
+path.** §7.2's built-in immutability check exists because `PATCH`/`DELETE`
+would mutate the **shared** row every other account also reads. Hiding
+writes a row in `user_hidden_note_templates` keyed on the caller and touches
+nothing on `note_templates` itself, so there is nothing here for the
+immutability rule to protect — the access check the controller performs is
+`'read'`, the same check `GET /:id` already performs, not the write-and-own
+check `PATCH`/`DELETE` perform. Hiding is exactly the operation a built-in's
+public, shared existence should support: an account that has no use for the
+"Meeting Notes" seed template can remove it from its own picker without
+that seed disappearing, or even changing, for anyone else. Another user's
+**custom** template, by contrast, is still a 404 on either route — hiding
+does not create a second way to probe for a row you cannot read.
+
+**Idempotent both ways.** `PUT` on an already-hidden template, and `DELETE`
+on one that was never hidden, both answer `204` — the caller asked for a
+state, not for an edge to fire, mirroring the idempotency posture
+`docs/specs/transcription.md` and this file's own §5.2 resumable-stream
+contract already establish elsewhere in this codebase.
+
+**Audited, not versioned.** `note_template:hide` / `note_template:unhide`
+audit events record `{ templateId, builtIn }` (`NoteTemplatesService.hide`
+/ `.unhide`) — a preference change is worth an audit trail entry for "who
+tidied their own picker and when," but it is not content, so it gets no
+`note_templates` version-style history of its own.
+
+**`GET /api/note-templates` excludes hidden templates by default** and
+includes them under `?includeHidden=true`; every returned item — hidden or
+not, built-in or the caller's own — carries `hidden` for **the caller**,
+computed from a `hiddenBy` relation filtered to `userId` so that another
+account hiding a built-in can never make it read as hidden for anyone else.
+A freshly **duplicated** copy of a hidden template (§7.3) is visible: the
+duplicate is a new row with no `user_hidden_note_templates` entry of its
+own, hiding the source never propagates to a copy.
+
+**Orthogonal to `is_archived`.** Archiving is a property of the template
+row itself (§4.3) — visible to nobody, because the row's own
+`DELETE`-with-references fallback set it — while hiding is a property of
+the `(user, template)` pair. A caller may archive their own template and
+separately hide a built-in; the two states compose with no shared code path
+and no shared column.
+
+**Why a join table, and not the two obvious alternatives:**
+
+- **Not a `user_settings` namespace.** A namespace would need to enumerate
+  an unbounded, growing list of template ids inside one JSONB blob with no
+  foreign key to `note_templates` in either direction — nothing catches a
+  hidden id that outlives the template it named, filtering "is this template
+  hidden" becomes a JSONB containment check instead of an indexed join, and
+  the six-file settings-parity discipline this codebase's `CLAUDE.md`
+  documents for a `system_settings` namespace (and its five-file counterpart
+  for `user_settings`) buys nothing here that a plain table with two foreign
+  keys does not already get for free. A join table gives real FK integrity
+  in both directions, an ordinary indexed `WHERE user_id = ...` / `WHERE
+  template_id = ...` query, no cap on how many templates one caller may
+  hide, and zero settings-parity cost.
+- **Not `note_templates.is_archived`.** `is_archived` is a column on the
+  **shared** row (§4.3) — true or false for every viewer at once, which is
+  exactly wrong for hiding: a built-in must stay archived-`false` and fully
+  visible to everyone else while one account hides it from their own list.
+  Reusing `is_archived` would mean the first user to hide a built-in
+  archives it for the entire deployment.
 
 ## 8. Export
 

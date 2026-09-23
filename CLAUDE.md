@@ -821,6 +821,8 @@ pair from `notes:*`. See [`docs/API.md`](docs/API.md#note-templates).
 - `PATCH /api/note-templates/{id}` - Edit one of the caller's own. **403** on a built-in, never 404 — its existence is public (`note_templates:write`)
 - `DELETE /api/note-templates/{id}` - Archives rather than deletes when notes still reference it. **403** on a built-in (`note_templates:write`)
 - `POST /api/note-templates/{id}/duplicate` - Copy any readable template — built-in or the caller's own — into a new, editable row owned by the caller (`note_templates:write`)
+- `PUT /api/note-templates/{id}/hidden` - Hide a template (own or built-in) from the caller's own list (issue #310). A listing preference, never access control — create/regenerate/preview still accept it by id. Idempotent, 204
+- `DELETE /api/note-templates/{id}/hidden` - Un-hide it. Idempotent, 204
 
 ### AI Settings (Admin-only)
 The deployment AI policy — which provider is active, which models are permitted, and the
@@ -1144,6 +1146,13 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   `docs/specs/notes.md` §8). `jobId` is `@unique`/nullable/`SetNull`; the row's own 7-day
   expiry is independent of `job.history.purge`'s retention schedule for the underlying `jobs`
   row.
+- `user_hidden_note_templates` - Per-user, per-template "hide from my picker" preference
+  (issue #310, epic #306), `@@id([userId, templateId])`, both FKs **Cascade**. A join table
+  rather than a `user_settings` namespace (real FK integrity, plain indexed `WHERE user_id =`
+  queries, no cap, no six-file settings-parity cost) and rather than reusing
+  `note_templates.is_archived` (that column is shared by every viewer; hiding is per-user and
+  must never affect anyone else's picker, built-in included). Hiding is a listing preference
+  only — it never gates create/regenerate/preview reading the template by id.
 
 ## Navigation Destination Model
 

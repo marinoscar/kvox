@@ -216,6 +216,15 @@ export const listNoteTemplatesQuerySchema = z.object({
     .default(false)
     .transform((value) => value === true || value === 'true')
     .describe('Include your archived templates. Built-ins are never archived.'),
+  includeHidden: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .optional()
+    .default(false)
+    .transform((value) => value === true || value === 'true')
+    .describe(
+      'Include templates you have hidden from your own picker (built-ins included). Each item ' +
+        'says whether it is hidden in `hidden`.',
+    ),
 });
 
 export type ListNoteTemplatesQueryDto = z.infer<typeof listNoteTemplatesQuerySchema>;
@@ -340,6 +349,13 @@ export const noteTemplateResponseSchema = z.object({
     .describe(
       'Seeded and owned by nobody. Readable by every user, **editable by none** — `PATCH` and ' +
         '`DELETE` answer **403**. Duplicate it to get an editable copy.',
+    ),
+  hidden: z
+    .boolean()
+    .describe(
+      'Hidden from **your own** picker (issue #310). Per-user: hiding a built-in changes nothing ' +
+        'on the shared row and nothing for anybody else. A hidden template still works — an ' +
+        'existing note keeps it, and it can still be generated from, previewed and duplicated.',
     ),
   // ⚠ `z.string()`, NOT `z.date()`: these schemas ALSO generate the published
   // OpenAPI document, and a `z.date()` is not expressible as JSON Schema (it

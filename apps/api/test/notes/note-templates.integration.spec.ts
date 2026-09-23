@@ -144,9 +144,10 @@ describe('Note templates (#50)', () => {
     it('returns the caller\'s own templates AND the built-ins, correctly flagged', async () => {
       const user = await createMockTestUser(context);
 
+      // `hiddenBy` is the caller-filtered include `list()` requests (issue #310).
       prismaMock.noteTemplate.findMany.mockResolvedValue([
-        builtInRow(),
-        templateRow({ ownerId: user.id }),
+        builtInRow({ hiddenBy: [] }),
+        templateRow({ ownerId: user.id, hiddenBy: [] }),
       ]);
 
       const response = await request(context.app.getHttpServer())

@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import {
@@ -50,7 +51,7 @@ import { NoteTemplatesService } from './note-templates.service';
 // NoteTemplatesController (issue #50, epic #45)
 // =============================================================================
 //
-// Seven routes. A Note Template is what makes this feature adaptable without
+// Nine routes (the last two, per-user hide/unhide, are issue #310). A Note Template is what makes this feature adaptable without
 // hard-coding every AI workflow into the application — "produce meeting notes"
 // and "produce a follow-up email" are two ROWS, not two code paths — so this
 // controller is deliberately a thin CRUD surface over `note_templates` plus the
@@ -113,13 +114,23 @@ export class NoteTemplatesController {
       'Another user\'s templates are **never** included, under any role: there is no ' +
       '`note_templates:read_any` and no admin read-any route.\n\n' +
       'Archived templates of your own are omitted unless `includeArchived=true`. Built-ins are ' +
-      'never archived — nothing can write to them.',
+      'never archived — nothing can write to them.\n\n' +
+      'Templates **you** have hidden (`PUT /{id}/hidden`, built-ins included) are omitted unless ' +
+      '`includeHidden=true`; every item carries `hidden` for you. Hiding is per-user — ' +
+      'another account hiding a built-in never removes it from yours. `total` counts the ' +
+      'filtered list.',
   })
   @ApiQuery({
     name: 'includeArchived',
     required: false,
     type: Boolean,
     description: 'Include your own archived templates (default `false`).',
+  })
+  @ApiQuery({
+    name: 'includeHidden',
+    required: false,
+    type: Boolean,
+    description: 'Include templates you have hidden, built-ins included (default `false`).',
   })
   @ApiDataResponse(NoteTemplateListDto, { description: 'Your templates and the built-ins' })
   async list(
@@ -300,5 +311,57 @@ export class NoteTemplatesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.templates.duplicate(userId, id);
+  }
+
+  // ===========================================================================
+  // Per-user visibility (issue #310)
+  // ===========================================================================
+  //
+  // ⚠ `note_templates:write`, but the ACCESS check is `'read'` — hiding changes
+  // one row keyed on the caller and nothing on the template, so a BUILT-IN may
+  // be hidden (no 403). Another user's template is still a 404.
+
+  @Put(':id/hidden')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Auth({ permissions: [PERMISSIONS.NOTE_TEMPLATES_WRITE] })
+  @ApiOperation({
+    summary: 'Hide a template from your own picker',
+    description:
+      'Hides the template from **your** `GET /api/note-templates` list (unless ' +
+      '`includeHidden=true`). Works on any template you can read — **built-ins included**: ' +
+      'nothing on the shared template changes, so the built-in 403 `PATCH`/`DELETE` answer does ' +
+      'not apply here. Nobody else\'s list is affected.\n\n' +
+      'A hidden template still works: notes already generated from it keep it, and it can still ' +
+      'be read, generated from, previewed and duplicated by id.\n\n' +
+      'Idempotent — hiding a template that is already hidden succeeds.',
+  })
+  @ApiParam({ name: 'id', description: 'Template id — yours or a built-in' })
+  @ApiResponse({ status: 204, description: 'Hidden (or already hidden)' })
+  @ApiResponse({ status: 404, description: 'No such template, for you' })
+  async hide(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<void> {
+    await this.templates.hide(userId, id);
+  }
+
+  @Delete(':id/hidden')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Auth({ permissions: [PERMISSIONS.NOTE_TEMPLATES_WRITE] })
+  @ApiOperation({
+    summary: 'Un-hide a template in your own picker',
+    description:
+      'Returns a template you hid to your `GET /api/note-templates` list. Built-ins included.\n\n' +
+      'Idempotent — un-hiding a template that is not hidden succeeds. An id you cannot read is ' +
+      'still a **404**.',
+  })
+  @ApiParam({ name: 'id', description: 'Template id — yours or a built-in' })
+  @ApiResponse({ status: 204, description: 'Visible (or already visible)' })
+  @ApiResponse({ status: 404, description: 'No such template, for you' })
+  async unhide(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser('id') userId: string,
+  ): Promise<void> {
+    await this.templates.unhide(userId, id);
   }
 }
