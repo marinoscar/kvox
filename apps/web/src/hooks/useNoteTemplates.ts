@@ -99,19 +99,29 @@ export function useNoteTemplates(
 
   const isMounted = useIsMounted();
 
+  /**
+   * ⚠ ONLY THE LATEST READ MAY LAND. `includeHidden` can flip while a read is
+   * in flight (the regenerate dialog's "Show hidden templates", #312), and the
+   * two requests can answer in either order; without this the slower, OLDER
+   * answer would overwrite the list the user just asked for.
+   */
+  const readSeq = useRef(0);
+
   const refresh = useCallback(async () => {
+    const seq = ++readSeq.current;
+    const current = () => isMounted() && seq === readSeq.current;
     try {
       setIsLoading(true);
       setLoadError(null);
       const list = await getNoteTemplates(includeHidden ? { includeHidden: true } : {});
-      if (isMounted()) setTemplates(list.items);
+      if (current()) setTemplates(list.items);
     } catch (err) {
-      if (isMounted()) {
+      if (current()) {
         setLoadError(messageFor(err, 'Failed to load your note templates'));
         setTemplates([]);
       }
     } finally {
-      if (isMounted()) setIsLoading(false);
+      if (current()) setIsLoading(false);
     }
   }, [includeHidden, isMounted]);
 

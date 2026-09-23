@@ -322,3 +322,53 @@ describe('useNoteTemplates — setHidden, optimism and rollback', () => {
     expect(result.current.actionError).toBe('This template no longer exists.');
   });
 });
+
+// =============================================================================
+// `useNoteTemplates` — the latest read wins, issue #312
+// =============================================================================
+
+/**
+ * `includeHidden` can flip while an earlier read of the list is still in
+ * flight (the regenerate dialog's "Show hidden templates"), and the two
+ * requests can answer in either order. Without the sequence guard in
+ * `refresh`, a slow FIRST answer landing after a fast SECOND one would
+ * overwrite the list the user just asked for with the stale one.
+ */
+describe('useNoteTemplates — a slow earlier response does not win a later one', () => {
+  it('keeps the answer for the CURRENT includeHidden value, not whichever request lands last', async () => {
+    let resolveFirst!: (value: { items: NoteTemplate[]; total: number }) => void;
+    const firstPromise = new Promise<{ items: NoteTemplate[]; total: number }>((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    mockGetNoteTemplates.mockImplementationOnce(() => firstPromise);
+
+    const { result, rerender } = renderHook(
+      ({ includeHidden }: { includeHidden: boolean }) => useNoteTemplates({ includeHidden }),
+      { initialProps: { includeHidden: false } },
+    );
+
+    // The first read (includeHidden: false) is still pending.
+    expect(mockGetNoteTemplates).toHaveBeenCalledTimes(1);
+
+    // The option flips, firing a second, faster read.
+    mockGetNoteTemplates.mockResolvedValueOnce({
+      items: [template({ id: 'hidden-1', name: 'Hidden template', hidden: true })],
+      total: 1,
+    });
+    rerender({ includeHidden: true });
+
+    await waitFor(() =>
+      expect(result.current.templates.map((t) => t.id)).toEqual(['hidden-1']),
+    );
+
+    // The FIRST request now resolves, late, with a different list. It must
+    // not overwrite what the second (current) request already produced.
+    resolveFirst({ items: [template({ id: 'stale-1', name: 'Stale' })], total: 1 });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(result.current.templates.map((t) => t.id)).toEqual(['hidden-1']);
+    expect(result.current.isLoading).toBe(false);
+  });
+});

@@ -36,10 +36,37 @@
  * free to stop reading templates without breaking regeneration.
  */
 
+import { useCallback, useState } from 'react';
+
 import { useNoteTemplateDetail, useNoteTemplates } from '../../hooks/useNoteTemplates';
 import type { AiConfigModel } from '../../services/ai';
 import type { Note, RegenerateNoteInput } from '../../services/notes';
 import { RegenerateNoteDialog } from './RegenerateNoteDialog';
+
+/**
+ * Where "Show hidden templates" is remembered (#312) — per viewer, per browser.
+ *
+ * A convenience, not state anybody else needs, so `localStorage` rather than a
+ * user setting; every access is wrapped because storage can be absent or throw
+ * (a private window, blocked site data), and the dialog must work without it.
+ */
+const SHOW_HIDDEN_KEY = 'regenerate.showHiddenTemplates';
+
+function readShowHidden(): boolean {
+  try {
+    return window.localStorage.getItem(SHOW_HIDDEN_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeShowHidden(value: boolean): void {
+  try {
+    window.localStorage.setItem(SHOW_HIDDEN_KEY, value ? 'true' : 'false');
+  } catch {
+    // Not remembered; the choice still applies for this dialog.
+  }
+}
 
 export interface RegenerateNoteDialogContainerProps {
   open: boolean;
@@ -50,6 +77,8 @@ export interface RegenerateNoteDialogContainerProps {
   error: string | null;
   onCancel: () => void;
   onConfirm: (input: RegenerateNoteInput) => void;
+  /** Passed through: `template` focuses the template select on open (#312). */
+  initialFocus?: 'template';
 }
 
 export function RegenerateNoteDialogContainer({
@@ -61,9 +90,22 @@ export function RegenerateNoteDialogContainer({
   error,
   onCancel,
   onConfirm,
+  initialFocus,
 }: RegenerateNoteDialogContainerProps) {
-  const { templates, isLoading: templatesLoading } = useNoteTemplates();
+  // ⚠ HIDDEN TEMPLATES ARE EXCLUDED BY DEFAULT, like every other picker (#311):
+  // a template the user hid must not be offered unless they ask for it. The
+  // option is derived from state rather than branching between two hook calls,
+  // and `useNoteTemplates` re-reads the list whenever it changes.
+  const [showHidden, setShowHidden] = useState(readShowHidden);
+  const { templates, isLoading: templatesLoading } = useNoteTemplates({
+    includeHidden: showHidden,
+  });
   const detail = useNoteTemplateDetail(note.templateId);
+
+  const handleShowHiddenChange = useCallback((value: boolean) => {
+    setShowHidden(value);
+    writeShowHidden(value);
+  }, []);
 
   return (
     <RegenerateNoteDialog
@@ -77,6 +119,10 @@ export function RegenerateNoteDialogContainer({
       // denormalised `templateName`, so the select still shows a name rather
       // than a blank.
       currentTemplate={detail.template}
+      currentTemplateState={detail.state}
+      initialFocus={initialFocus}
+      showHiddenTemplates={showHidden}
+      onShowHiddenTemplatesChange={handleShowHiddenChange}
       models={models}
       defaultModel={defaultModel}
       busy={busy}
