@@ -84,6 +84,7 @@ import {
   hideNoteTemplate,
   previewNoteTemplate,
   unhideNoteTemplate,
+  updateNoteTemplate,
 } from '../../services/noteTemplates';
 import type { AiConfig } from '../../services/ai';
 import type { NoteTemplate, NoteTemplatePreview } from '../../services/noteTemplates';
@@ -96,6 +97,7 @@ const mockDuplicate = vi.mocked(duplicateNoteTemplate);
 const mockPreview = vi.mocked(previewNoteTemplate);
 const mockHide = vi.mocked(hideNoteTemplate);
 const mockUnhide = vi.mocked(unhideNoteTemplate);
+const mockUpdate = vi.mocked(updateNoteTemplate);
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
@@ -344,6 +346,24 @@ describe('UserNoteTemplatesPage', () => {
 
       expect(screen.getByLabelText('Section 1')).toHaveValue('Decisions');
       expect(screen.getByLabelText('Section 2')).toHaveValue('Overview');
+    });
+
+    it('choosing Body format "Plain text" sends bodyFormat: \'plain_text\' on save (issue #334)', async () => {
+      const user = userEvent.setup();
+      mockUpdate.mockResolvedValue(template({ bodyFormat: 'plain_text' }));
+      await renderPage();
+      await openEditor(user);
+
+      await user.click(screen.getByRole('combobox', { name: 'Body format' }));
+      await user.click(await screen.findByRole('option', { name: 'Plain text' }));
+
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(mockUpdate).toHaveBeenCalledWith(
+        'tpl-owned',
+        expect.objectContaining({ bodyFormat: 'plain_text' }),
+      );
     });
   });
 

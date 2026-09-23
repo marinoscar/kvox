@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
@@ -1955,5 +1955,134 @@ describe('NotePage — Suggest a title', () => {
     await user.click(menuItemFor(menu, 'Suggest a title'));
 
     expect(await screen.findByText('The server had a problem.')).toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// #334 — copy, the visual editor, and plain-text notes
+// =============================================================================
+
+// jsdom has no layout engine, and the Visual editor (Tiptap/ProseMirror) reaches
+// for `getClientRects`/`getBoundingClientRect` on a selection change — see
+// `VisualMarkdownEditor.test.tsx` for the full explanation.
+beforeAll(() => {
+  const fakeRect = (): DOMRect => ({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    toJSON: () => ({}),
+  });
+  if (!Range.prototype.getClientRects) {
+    Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  }
+  Range.prototype.getBoundingClientRect = fakeRect;
+  Element.prototype.getClientRects = function getClientRects() {
+    return [fakeRect()] as unknown as DOMRectList;
+  };
+});
+
+function stubRichClipboard() {
+  Object.defineProperty(window, 'isSecureContext', {
+    value: true,
+    configurable: true,
+    writable: true,
+  });
+  class FakeClipboardItem {
+    constructor(public types: Record<string, Blob>) {}
+  }
+  (globalThis as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
+  const write = vi.fn().mockResolvedValue(undefined);
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { write, writeText },
+    configurable: true,
+  });
+  return { write, writeText };
+}
+
+describe('NotePage — copying the note (issue #334)', () => {
+  it('the header Copy button copies the note to the clipboard', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: '# Decisions\n\nWe agreed.', currentVersion: 1 });
+    const { write } = stubRichClipboard();
+    renderNote();
+
+    await screen.findByRole('heading', { name: 'Q3 planning — decisions', level: 1 });
+    await user.click(screen.getByRole('button', { name: 'Copy' }));
+
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('NotePage — the visual editor (issue #334)', () => {
+  it('Edit opens on the Visual view, with the formatting toolbar visible', async () => {
+    const user = userEvent.setup();
+    current = note({ status: 'ready', body: '# Decisions\n\nWe agreed.', currentVersion: 3 });
+    renderNote();
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(await screen.findByRole('toolbar', { name: 'Formatting' })).toBeInTheDocument();
+    // The rendered document, not the raw markdown textarea.
+    expect(screen.getByRole('heading', { name: 'Decisions' })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Note' })).not.toBeInTheDocument();
+  });
+});
+
+describe('NotePage — a plain-text note (issue #334)', () => {
+  it('renders the body literally, with no markdown rendering', async () => {
+    current = note({
+      status: 'ready',
+      body: '# not heading\n\nJust plain text.',
+      currentVersion: 1,
+      bodyFormat: 'plain_text',
+    });
+    renderNote();
+
+    await screen.findByRole('heading', { name: 'Q3 planning — decisions', level: 1 });
+    expect(screen.queryByRole('heading', { name: 'not heading' })).not.toBeInTheDocument();
+    expect(screen.getByText(/# not heading/)).toBeInTheDocument();
+  });
+
+  it('Edit shows a plain textarea, with no Visual/Markdown/Preview toggle', async () => {
+    const user = userEvent.setup();
+    current = note({
+      status: 'ready',
+      body: 'Just plain text.',
+      currentVersion: 1,
+      bodyFormat: 'plain_text',
+    });
+    renderNote();
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue('Just plain text.');
+    expect(screen.queryByRole('button', { name: 'Visual' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Markdown' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
+  });
+
+  it('has no axe violations on the edit view', async () => {
+    const user = userEvent.setup();
+    current = note({
+      status: 'ready',
+      body: 'Just plain text.',
+      currentVersion: 1,
+      bodyFormat: 'plain_text',
+    });
+    const { container } = render(
+      <Routes>
+        <Route path="/notes/:id" element={<NotePage />} />
+      </Routes>,
+      { wrapperOptions: { user: mockAdminUser, route: '/notes/n1' } },
+    );
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
