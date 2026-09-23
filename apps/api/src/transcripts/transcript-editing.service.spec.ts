@@ -515,6 +515,36 @@ describe('TranscriptEditingService', () => {
     });
   });
 
+  it('records the caller-supplied summary instead of the ops-derived one (issue #328)', async () => {
+    await service.applyOperations(
+      TRANSCRIPT_ID,
+      {
+        baseVersion: 3,
+        clientBatchId: 'batch-0005',
+        ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'Oscar is great' }],
+      } as never,
+      USER,
+      { summary: 'Applied 1 AI name correction' },
+    );
+
+    expect(versionCreate.mock.calls[0][0].data.summary).toBe('Applied 1 AI name correction');
+  });
+
+  it('falls back to the ops-derived summary when no override is given', async () => {
+    await service.applyOperations(
+      TRANSCRIPT_ID,
+      {
+        baseVersion: 3,
+        clientBatchId: 'batch-0006',
+        ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'Oscar is great' }],
+      } as never,
+      USER,
+    );
+
+    expect(versionCreate.mock.calls[0][0].data.summary).not.toBe('Applied 1 AI name correction');
+    expect(typeof versionCreate.mock.calls[0][0].data.summary).toBe('string');
+  });
+
   // ===========================================================================
   // Guards that answer before anything is written
   // ===========================================================================

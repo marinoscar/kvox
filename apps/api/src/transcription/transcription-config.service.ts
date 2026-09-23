@@ -8,6 +8,8 @@ import {
   transcriptionCredentialName,
 } from './transcription-credential.constants';
 import type { TranscriptionConfigResponse } from './dto/transcription-settings.dto';
+import { maxKeytermsFor } from './keyterms';
+import type { TranscriptionProviderCapabilities } from './providers/transcription-provider.interface';
 
 // =============================================================================
 // TranscriptionConfigService (issue #23, epic #19)
@@ -78,6 +80,8 @@ const UNAVAILABLE: TranscriptionConfigResponse = {
   maxDurationMs: 0,
   acceptedExtensions: [],
   acceptedMimeTypes: [],
+  keytermsSupported: false,
+  maxKeyterms: 0,
 };
 
 @Injectable()
@@ -134,7 +138,13 @@ export class TranscriptionConfigService {
 
   /** The provider's published limits, without the availability verdict. */
   private describeProviderLimits(
-    provider: { label: string; capabilities: { maxInputBytes: number; maxDurationMs: number; acceptedMimeTypes: string[] } },
+    provider: {
+      label: string;
+      capabilities: Pick<
+        TranscriptionProviderCapabilities,
+        'maxInputBytes' | 'maxDurationMs' | 'acceptedMimeTypes' | 'keyterms'
+      >;
+    },
   ): Omit<TranscriptionConfigResponse, 'available'> {
     const mimeTypes = provider.capabilities.acceptedMimeTypes.map((type) =>
       type.toLowerCase(),
@@ -153,6 +163,8 @@ export class TranscriptionConfigService {
       maxDurationMs: provider.capabilities.maxDurationMs,
       acceptedExtensions: extensions,
       acceptedMimeTypes: mimeTypes,
+      keytermsSupported: provider.capabilities.keyterms !== null,
+      maxKeyterms: maxKeytermsFor(provider.capabilities.keyterms),
     };
   }
 }

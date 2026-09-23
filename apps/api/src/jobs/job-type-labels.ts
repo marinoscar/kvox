@@ -112,6 +112,9 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'transcript.export': 'Transcript export',
   'transcript.purge': 'Transcript purge',
   'transcripts.housekeeping': 'Transcript housekeeping',
+  // AI name correction (#328/#330, epic #326). Spends the requesting user's
+  // own AI key, like `note.generate` — the label says what it checks, not how.
+  'transcript.name_check': 'Transcript name check',
   // The note pipeline (#49, epic #45). All five originally sat here ahead of
   // their handlers — a label is a display string, not a registration, so having
   // one ready costs nothing while a missing one shows an operator a raw dotted

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AiModule } from '../ai/ai.module';
 import { CredentialsModule } from '../credentials/credentials.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -16,6 +17,7 @@ import { TranscriptPurgeHandler } from './handlers/transcript-purge.handler';
 import { TranscriptSnapshotHandler } from './handlers/transcript-snapshot.handler';
 import { TranscriptsHousekeepingHandler } from './handlers/transcripts-housekeeping.handler';
 import { TranscriptExportHandler } from './handlers/transcript-export.handler';
+import { TranscriptNameCheckHandler } from './handlers/transcript-name-check.handler';
 import { JsonTranscriptExporter } from './export/json.exporter';
 import { MarkdownTranscriptExporter } from './export/markdown.exporter';
 import { PdfTranscriptExporter } from './export/pdf.exporter';
@@ -29,6 +31,8 @@ import { TranscriptsHousekeepingTask } from './tasks/transcripts-housekeeping.ta
 import { TranscriptAccessService } from './transcript-access.service';
 import { TranscriptEditingService } from './transcript-editing.service';
 import { TranscriptMaterializeService } from './transcript-materialize.service';
+import { TranscriptNameCheckService } from './transcript-name-check.service';
+import { TranscriptNameChecksController } from './transcript-name-checks.controller';
 import { TranscriptObjectsService } from './transcript-objects.service';
 import { TranscriptPipelineService } from './transcript-pipeline.service';
 import { TranscriptSharingService } from './transcript-sharing.service';
@@ -115,8 +119,14 @@ import { TranscriptsService } from './transcripts.service';
     // anything from here — the handler reads `transcripts` through Prisma
     // directly, precisely so this import needs no `forwardRef`.
     SearchIndexingModule,
+    // AI name correction (#328/#330, epic #326): the provider registry, the
+    // policy, the capability probe and the per-user key, for the
+    // `transcript.name_check` job and its request-time pre-flight. ONE-WAY, like
+    // the import above — `AiModule` imports nothing from here, and `NotesModule`
+    // (which imports this module) is never imported back, so no `forwardRef`.
+    AiModule,
   ],
-  controllers: [TranscriptsController],
+  controllers: [TranscriptsController, TranscriptNameChecksController],
   providers: [
     TranscriptsService,
     TranscriptAccessService,
@@ -146,6 +156,8 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptPurgeHandler,
     TranscriptSnapshotHandler,
     TranscriptExportHandler,
+    TranscriptNameCheckService,
+    TranscriptNameCheckHandler,
     JsonTranscriptExporter,
     MarkdownTranscriptExporter,
     PdfTranscriptExporter,

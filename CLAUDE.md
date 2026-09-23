@@ -704,7 +704,7 @@ learning. There is deliberately no admin read-any. See
 [`docs/specs/transcription.md`](docs/specs/transcription.md) and the
 `### Transcripts` section of [`docs/API.md`](docs/API.md); don't restate them
 here.
-- `POST /api/transcripts` - Create the transcript **and** its resumable upload in one call (`transcripts:write`). 409 when transcription is not configured (the deployment is not ready — not the caller's fault), 400 over the active provider's size ceiling. The upload object is created `managed_by: 'transcripts'`, which a client cannot ask for
+- `POST /api/transcripts` - Create the transcript **and** its resumable upload in one call (`transcripts:write`). 409 when transcription is not configured (the deployment is not ready — not the caller's fault), 400 over the active provider's size ceiling. The upload object is created `managed_by: 'transcripts'`, which a client cannot ask for. `keyterms` (issue #327, epic #326) is an optional recognition hint — up to 200 names/terms fed forward to the transcription provider at submit time, stored regardless of what the active provider supports and clamped only at submit; see [`docs/specs/transcript-name-correction.md`](docs/specs/transcript-name-correction.md)
 - `GET /api/transcripts` - List, cursor-paginated over `(updatedAt, id)` — every pipeline transition rewrites `updatedAt`, so offset paging would skip and repeat rows (`transcripts:read`)
 - `GET /api/transcripts/summary` - Four lists and four counts for the home page, in one round trip (`transcripts:read`). The fourth list is `failed` — the caller's **own** failed transcripts, owner-scoped (retry is owner-only) and capped at eight, while `counts.failed` stays the true total
 - `GET /api/transcripts/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, or `W/"v<currentVersion>-<fingerprint>"` once a speaker has been named (issue #323, opaque, treat as such), 304 with **no body** on a match
@@ -723,6 +723,11 @@ here.
 - `GET /api/transcripts/exporters` - Every registered export format with the options it accepts, so a client builds its export UI from the server's answer rather than from a list of formats compiled into it (`transcripts:read`)
 - `POST /api/transcripts/{id}/exports` - Render one version into one format. **202** when a render was queued, **200** when an identical unexpired export already exists — `reused` says which, for a client that cannot see the status line. Reuse is content-addressed on `sha256({format, version, options})` — plus a fingerprint of `speakerIdentities` when non-empty (issue #323), since naming a speaker changes what the same version renders — with the options **as parsed**, so an omitted option and an explicit default share one render; a `failed` row is never reused. Requires **view** access, which a `viewer` share satisfies: taking a conversation you were shown out of this application is a read
 - `GET /api/transcripts/{id}/exports/{exportId}` - Status, and once ready a short-lived signed `downloadUrl` serving the file as `<title> (v<n>).<ext>`. The `Content-Disposition` is signed **into** the URL, so a client cannot add the filename afterwards
+- `POST /api/transcripts/{id}/name-checks` - Queue an AI check for mis-transcribed names (issues #328/#330, epic #326). `mode: standard|thorough`, optional `terms`/`speakerIds`. **202** with the queued run and its cost `estimate`; 400 nothing to check; 409 `ai_not_configured`/`ai_key_missing`/`name_check_running`/`transcript_not_ready`
+- `GET /api/transcripts/{id}/name-checks/estimate?mode` - What a run would cost, uncreated — no API key needed to count. A lower bound for `thorough` (`transcripts:read`)
+- `GET /api/transcripts/{id}/name-checks/latest` - The latest run plus its **pending** suggestions (relocated against current text; `stale` when they can't be) and status counts (`transcripts:read`)
+- `POST /api/transcripts/{id}/name-checks/{checkId}/apply` - Accept named suggestions as ordinary `segment.update_text` corrections through the same `/operations` path, batched at 200 lines; a 409 from a concurrent edit passes through unchanged
+- `POST /api/transcripts/{id}/name-checks/{checkId}/reject` - Mark named pending suggestions `rejected`; the transcript is untouched
 
 Three correction rules that are easy to break from a neighbouring file:
 
@@ -782,7 +787,7 @@ preserved by an empty submission.
 - `PUT /api/transcription-settings` - Partial update, plus an optional write-only `apiKey` (blank/absent keeps the stored key) (`system_settings:write`)
 - `POST /api/transcription-settings/test` - Probe a credential, **including one that has not been saved**; audited. ⚠ Answers **200** with `{ ok: false, detail }` on a refusal — a refused probe is a successful diagnosis (`system_settings:write`)
 - `DELETE /api/transcription-settings/credentials/{provider}` - Erase one provider's key; the only path that does. Does not change the settings, so a rotation is not an outage (`system_settings:write`)
-- `GET /api/transcription/config` - Narrow capability probe (`available`, provider label, size/duration ceilings, accepted types) gated on `transcripts:read` (#25), which is seeded to **all three roles** — so it stays readable by every ordinary account, exactly like `GET /api/notifications/config`, while naming a real permission rather than "authenticated and nothing else"
+- `GET /api/transcription/config` - Narrow capability probe (`available`, provider label, size/duration ceilings, accepted types, plus `keytermsSupported`/`maxKeyterms` — issue #327) gated on `transcripts:read` (#25), which is seeded to **all three roles** — so it stays readable by every ordinary account, exactly like `GET /api/notifications/config`, while naming a real permission rather than "authenticated and nothing else"
 
 ### Notes
 Turning a transcript, another note, or an uploaded document into an AI-generated,
@@ -1092,6 +1097,19 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun.jobId` exactly: this row's own
   7-day expiry is independent of `job.history.purge`'s retention schedule for the underlying
   `jobs` row.
+- `transcript_name_checks` - One row per AI name-check **run** (issues #328/#330, epic #326):
+  `mode` (`standard`/`thorough`), `status`, `basedOnVersion`, the resolved `terms` checked for,
+  denormalized `candidateCount`/`suggestionCount`, cost accounting, and `jobId`
+  (`@unique`/nullable/`SetNull`, mirroring `TranscriptExport.jobId`). `requestedById` is
+  `SetNull`, not `Cascade` — a run is kept as transcript history after its requester is gone,
+  matching `TranscriptVersion.authorId`. See
+  [`docs/specs/transcript-name-correction.md`](docs/specs/transcript-name-correction.md)
+- `transcript_name_suggestions` - One row per **proposed** correction a run produced: the
+  segment and the `TranscriptSegment.rev` its `start`/`end` offsets were computed against
+  (the same `rev`-pinning shape `TranscriptVersion` uses), `original`/`replacement`, `source`
+  (`'phonetic'`/`'discovery'`), and `status` (`pending`/`accepted`/`rejected`/`stale`).
+  Accepting one never writes `transcript_segments.text` directly — it becomes an ordinary
+  `segment.update_text` op through the same `/operations` path every other correction uses
 - `user_ai_credentials` - One AI provider API key per `(userId, provider)` (issue #47, epic
   #45): each user's own key, never a deployment-wide one — see `docs/specs/notes.md` §9.
   `secret` is `encryptSecret(rawKey, 'ai-key')` — the same cipher every other secret in this
@@ -1548,6 +1566,14 @@ enqueues, like every other one. `transcript.export` runs at priority **−10**,
 the opposite end of the spectrum from `HOUSEKEEPING_PRIORITY = 100`: it is the
 one type in this epic where somebody is watching a spinner.
 
+A ninth type, `transcript.name_check` (issues #328/#330, epic #326), is
+server-only permanently for the same reason `note.generate` is: every request
+runs on the requesting user's own AI provider key, and no vendor here offers
+a job-scoped sub-key a `nodeSecretBroker` could mint instead. `profile:
+{ maxRuntimeMs: 20 min, maxAttempts: 1 }` — one attempt, deliberately, so a
+retry never re-runs and double-charges a click; see
+[`docs/specs/transcript-name-correction.md`](docs/specs/transcript-name-correction.md) §6.
+
 ### Worker Node Fleet, Maintenance Mode
 
 Distributed worker nodes (server + CLI + container + TUI) and the maintenance
@@ -1702,6 +1728,16 @@ split, why there is no `transcripts:read_any` and no access ever answers
 public export contract published alongside it as
 [`docs/specs/transcript-export.v1.schema.json`](docs/specs/transcript-export.v1.schema.json).
 Don't restate any of that here; extend those two instead.
+
+**AI name correction** (epic #326, issues #327–#330) builds on this pipeline:
+feeding a transcript's known names to the provider as a `keyterms` hint at
+submit time, then a separate, user-triggered `transcript.name_check` job that
+finds and proposes fixes for names speech recognition still got wrong —
+deterministic phonetic retrieval, an optional thorough LLM discovery pass,
+and LLM adjudication with an over-correction guard, applied through the exact
+same `/operations` correction path as any other edit. Full design in
+[`docs/specs/transcript-name-correction.md`](docs/specs/transcript-name-correction.md);
+don't restate it here.
 
 ### Notes, Note Templates and the AI Layer
 

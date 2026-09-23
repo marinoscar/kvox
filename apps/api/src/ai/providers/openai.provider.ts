@@ -1127,6 +1127,13 @@ export class OpenAiProvider
           // `reasoning_effort` string rather than Responses API's
           // `reasoning: { effort }`.
           ...this.reasoningEffortBody(request.reasoningEffort),
+          // Spread for the same reason: absent at the default, so a gateway
+          // that rejects unknown parameters never sees `response_format` on
+          // an ordinary prose request. JSON mode is `json_object` (not
+          // `json_schema`) — the caller validates the shape itself (#328).
+          ...(request.responseFormat === 'json'
+            ? { response_format: { type: 'json_object' } }
+            : {}),
           messages: [
             { role: 'system', content: request.systemPrompt },
             { role: 'user', content: request.userContent },

@@ -245,15 +245,26 @@ export class TranscriptsController {
       '- **400** when the file is larger than the active provider accepts, or is not a ' +
       'type this deployment allows at all.\n' +
       '- **403** when the caller does not hold `transcripts:write`.\n\n' +
+      '`keyterms` (#327) are names and domain terms the caller expects in the recording, ' +
+      'fed forward to the provider as a recognition hint. They are trimmed, blanks dropped ' +
+      'and duplicates removed case-insensitively; more than 200, or any term over 100 ' +
+      'characters or 6 words, is a **400**. They are stored whatever the active provider ' +
+      'supports and forwarded only to one that supports them — read `keytermsSupported` ' +
+      'and `maxKeyterms` from `GET /api/transcription/config` before offering the field.\n\n' +
       'The upload object is created `managed_by: transcripts`, which makes it invisible to ' +
       '`GET /api/storage/objects` and refuses a generic `DELETE` — only this transcript ' +
       'being deleted removes it.',
   })
+  @ApiBody({ type: CreateTranscriptBodyDto })
   @ApiDataResponse(CreateTranscriptResponseDto, {
     status: 201,
     description: 'Transcript created and upload initialised',
   })
-  @ApiResponse({ status: 400, description: 'The file is too large or is not an accepted type' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'The file is too large or is not an accepted type, or `keyterms` exceeds its limits',
+  })
   @ApiResponse({ status: 409, description: 'Transcription is not configured for this deployment' })
   async create(
     @Body(new ZodValidationPipe(createTranscriptSchema)) dto: CreateTranscriptDto,

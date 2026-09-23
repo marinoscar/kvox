@@ -217,6 +217,10 @@ export class TranscriptsService {
         providerOptions: {
           speakersExpected: dto.speakersExpected ?? null,
           language: dto.language ?? null,
+          // Stored WHATEVER the active provider supports (#327): they are
+          // clamped to its capability at submit, so a provider switch before
+          // a retry still honours them. Already normalised by the schema.
+          keyterms: dto.keyterms ?? [],
         } as Prisma.InputJsonValue,
       },
     });

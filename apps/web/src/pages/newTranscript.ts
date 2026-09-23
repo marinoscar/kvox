@@ -228,3 +228,74 @@ export function formatEta(etaSeconds: number | null): string {
     ? `about ${hours} hr left`
     : `about ${hours} hr ${remainder} min left`;
 }
+
+// -----------------------------------------------------------------------------
+// Keyterms (#327, epic #326)
+// -----------------------------------------------------------------------------
+
+/** Longest single keyterm, in characters — mirrors the API's `MAX_KEYTERM_LENGTH`. */
+export const MAX_KEYTERM_LENGTH = 100;
+
+/** Most words one keyterm may contain — mirrors the API's `MAX_KEYTERM_WORDS`. */
+export const MAX_KEYTERM_WORDS = 6;
+
+/** Trim and collapse internal whitespace, exactly as the server normalises. */
+export function normalizeKeyterm(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ');
+}
+
+/** Split a typed or pasted list on commas and newlines. Empties are dropped. */
+export function splitKeytermInput(text: string): string[] {
+  return text
+    .split(/[,\n\r]+/)
+    .map(normalizeKeyterm)
+    .filter((term) => term.length > 0);
+}
+
+export interface AddKeytermsResult {
+  /** The list after every acceptable candidate was appended. */
+  terms: string[];
+  /** Why a candidate was refused, or `null` when nothing was. The FIRST refusal wins. */
+  error: string | null;
+}
+
+/**
+ * Append `candidates` to `current`, enforcing the API's limits client-side so a
+ * refusal is shown at the field rather than as a 400 after the user pressed
+ * Start. A case-insensitive duplicate is skipped silently — keeping the first
+ * spelling, as the server does — because it is not a mistake worth scolding.
+ */
+export function addKeyterms(
+  current: readonly string[],
+  candidates: readonly string[],
+  maxKeyterms: number,
+): AddKeytermsResult {
+  const terms = [...current];
+  const seen = new Set(terms.map((term) => term.toLowerCase()));
+  let error: string | null = null;
+
+  for (const raw of candidates) {
+    const term = normalizeKeyterm(raw);
+    if (term.length === 0) continue;
+    if (seen.has(term.toLowerCase())) continue;
+
+    let refusal: string | null = null;
+    if (term.length > MAX_KEYTERM_LENGTH) {
+      refusal = `"${term.slice(0, 40)}…" is longer than ${MAX_KEYTERM_LENGTH} characters.`;
+    } else if (term.split(' ').length > MAX_KEYTERM_WORDS) {
+      refusal = `"${term}" has more than ${MAX_KEYTERM_WORDS} words — use a shorter phrase.`;
+    } else if (terms.length >= maxKeyterms) {
+      refusal = `At most ${maxKeyterms} names and terms can be added.`;
+    }
+
+    if (refusal) {
+      error ??= refusal;
+      continue;
+    }
+
+    seen.add(term.toLowerCase());
+    terms.push(term);
+  }
+
+  return { terms, error };
+}

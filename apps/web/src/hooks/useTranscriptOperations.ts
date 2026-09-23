@@ -153,6 +153,27 @@ export interface UseTranscriptOperationsResult {
   updateText: (segmentId: string, text: string) => void;
   /** Flush whatever is pending now — what a blur and the unload guard call. */
   flush: () => Promise<void>;
+  /**
+   * Flush, then WAIT until nothing is queued or in flight (#329).
+   *
+   * Unlike `flush`, which returns at once when a drain is already running,
+   * this resolves only once the outbox is empty — what an action that writes
+   * through a DIFFERENT endpoint (accepting AI name suggestions) needs before
+   * it starts, so the server applies it on top of every edit the user made.
+   * Resolves `false` when it gave up (offline, a retry backing off).
+   */
+  settle: () => Promise<boolean>;
+  /**
+   * Adopt a server state that arrived through another endpoint (#329), the
+   * same way a batch's own response is adopted.
+   */
+  adoptServerState: (state: {
+    speakers: TranscriptSpeaker[];
+    segments: TranscriptSegment[];
+    version: number;
+  }) => void;
+  /** Re-read speakers and segments from the server and adopt them (#329). */
+  reload: () => Promise<void>;
 
   setSpeaker: (segmentId: string, speakerId: string) => Promise<void>;
   splitSegment: (
@@ -162,7 +183,11 @@ export interface UseTranscriptOperationsResult {
   ) => Promise<void>;
   joinWithNext: (segmentId: string) => Promise<void>;
   deleteSegment: (segmentId: string) => Promise<void>;
-  renameSpeaker: (speakerId: string, displayName: string) => Promise<void>;
+  /**
+   * Resolves `true` once the rename is SAVED — not merely applied locally —
+   * so a caller can follow up on a rename that really happened (#329).
+   */
+  renameSpeaker: (speakerId: string, displayName: string) => Promise<boolean>;
   /** Resolves with the speaker the SERVER created — id and colour are its choice. */
   createSpeaker: (displayName: string) => Promise<TranscriptSpeaker | null>;
   mergeSpeakers: (
@@ -362,6 +387,8 @@ export function useTranscriptOperations(
   const draining = useRef(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** `clientBatchId`s the server accepted — what `runImmediate` reports on. */
+  const savedBatches = useRef(new Set<string>());
 
   const [working, setWorking] = useState<WorkingState>({
     speakers: [...speakers],
@@ -638,6 +665,7 @@ export function useTranscriptOperations(
             ops: batch.ops,
           });
           outbox.current.shift();
+          savedBatches.current.add(batch.clientBatchId);
           if (!isMounted()) return;
           adoptResult(result);
           setError(null);
@@ -740,6 +768,56 @@ export function useTranscriptOperations(
     await drain();
   }, [drain, publishPending, queuePendingText]);
 
+  const settle = useCallback(async (): Promise<boolean> => {
+    queuePendingText();
+    publishPending();
+    // Bounded: ~10 s of 50 ms waits for an in-flight drain to finish. A drain
+    // that takes longer is a retry backing off, which `retryTimer` reports.
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      await drain();
+      if (!isMounted()) return false;
+      if (outbox.current.length === 0 && !draining.current && pendingText.current.size === 0) {
+        return true;
+      }
+      if (retryTimer.current !== null) return false;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return false;
+  }, [drain, isMounted, publishPending, queuePendingText]);
+
+  const adoptServerState = useCallback(
+    (state: { speakers: TranscriptSpeaker[]; segments: TranscriptSegment[]; version: number }) => {
+      commitWorking({
+        speakers: state.speakers,
+        segments: state.segments,
+        version: state.version,
+      });
+    },
+    [commitWorking],
+  );
+
+  const reload = useCallback(async () => {
+    if (!transcriptId) return;
+    try {
+      const [detail, segmentsResult] = await Promise.all([
+        getTranscript(transcriptId, null),
+        getTranscriptSegments(transcriptId, null),
+      ]);
+      if (!isMounted()) return;
+      if (detail.status === 'ok' && segmentsResult.status === 'ok') {
+        commitWorking({
+          speakers: detail.data.speakers,
+          segments: segmentsResult.data.segments,
+          version: segmentsResult.data.currentVersion,
+        });
+      }
+    } catch {
+      // Leaves the working copy where it was — the safe direction, exactly as
+      // the conflict path's own refetch does.
+    }
+  }, [commitWorking, isMounted, transcriptId]);
+
   /**
    * Flush the pending text, then send `build()`'s ops as their own batch.
    *
@@ -748,22 +826,34 @@ export function useTranscriptOperations(
    * and an array built before the await would carry the stale ones.
    */
   const runImmediate = useCallback(
-    async (build: () => TranscriptOp[] | null) => {
-      if (!enabled || !transcriptId) return;
+    async (build: () => TranscriptOp[] | null): Promise<boolean> => {
+      if (!enabled || !transcriptId) return false;
       queuePendingText();
       publishPending();
       await drain();
-      if (!isMounted()) return;
+      if (!isMounted()) return false;
 
       const ops = build();
-      if (!ops || ops.length === 0) return;
+      if (!ops || ops.length === 0) return false;
 
+      const clientBatchId = newClientBatchId();
       commitWorking((current) => ops.reduce(applyLocally, current));
-      outbox.current.push({ clientBatchId: newClientBatchId(), ops, attempts: 0 });
+      outbox.current.push({ clientBatchId, ops, attempts: 0 });
       publishPending();
       await drain();
+      const saved = savedBatches.current.has(clientBatchId);
+      savedBatches.current.delete(clientBatchId);
+      return saved;
     },
     [commitWorking, drain, enabled, isMounted, publishPending, queuePendingText, transcriptId],
+  );
+
+  /** `runImmediate` for the actions whose callers only need "done". */
+  const runVoid = useCallback(
+    async (build: () => TranscriptOp[] | null): Promise<void> => {
+      await runImmediate(build);
+    },
+    [runImmediate],
   );
 
   // ---------------------------------------------------------------------------
@@ -798,17 +888,17 @@ export function useTranscriptOperations(
 
   const setSpeaker = useCallback(
     (segmentId: string, speakerId: string) =>
-      runImmediate(() => {
+      runVoid(() => {
         const segment = workingRef.current.segments.find((item) => item.id === segmentId);
         if (!segment || segment.speakerId === speakerId) return null;
         return [{ op: OP_TYPES.SET_SPEAKER, segmentId, rev: segment.rev, speakerId }];
       }),
-    [runImmediate],
+    [runVoid],
   );
 
   const splitSegment = useCallback(
     (segmentId: string, atCharOffset: number, newSpeakerId?: string | null) =>
-      runImmediate(() => {
+      runVoid(() => {
         const segment = workingRef.current.segments.find((item) => item.id === segmentId);
         if (!segment) return null;
         // A split at 0 or at the end produces an empty half and no useful
@@ -825,12 +915,12 @@ export function useTranscriptOperations(
           },
         ];
       }),
-    [runImmediate],
+    [runVoid],
   );
 
   const joinWithNext = useCallback(
     (segmentId: string) =>
-      runImmediate(() => {
+      runVoid(() => {
         const list = workingRef.current.segments;
         const index = list.findIndex((item) => item.id === segmentId);
         if (index < 0 || index + 1 >= list.length) return null;
@@ -844,17 +934,17 @@ export function useTranscriptOperations(
           },
         ];
       }),
-    [runImmediate],
+    [runVoid],
   );
 
   const deleteSegment = useCallback(
     (segmentId: string) =>
-      runImmediate(() => {
+      runVoid(() => {
         const segment = workingRef.current.segments.find((item) => item.id === segmentId);
         if (!segment) return null;
         return [{ op: OP_TYPES.DELETE, segmentId, rev: segment.rev }];
       }),
-    [runImmediate],
+    [runVoid],
   );
 
   const renameSpeaker = useCallback(
@@ -896,12 +986,12 @@ export function useTranscriptOperations(
 
   const mergeSpeakers = useCallback(
     (sourceIds: string[], targetId: string, keepName: boolean) =>
-      runImmediate(() => {
+      runVoid(() => {
         const sources = sourceIds.filter((id) => id !== targetId);
         if (sources.length === 0) return null;
         return [{ op: OP_TYPES.MERGE_SPEAKERS, sourceIds: sources, targetId, keepName }];
       }),
-    [runImmediate],
+    [runVoid],
   );
 
   const replaceAll = useCallback(
@@ -912,7 +1002,7 @@ export function useTranscriptOperations(
       wholeWord: boolean;
       speakerId?: string | null;
     }) =>
-      runImmediate(() => {
+      runVoid(() => {
         if (!params.find) return null;
         // ONE op, however many segments it rewrites — the server expands it
         // into concrete text ops before recording, so this is one version.
@@ -927,7 +1017,7 @@ export function useTranscriptOperations(
           },
         ];
       }),
-    [runImmediate],
+    [runVoid],
   );
 
   const replaceOne = useCallback(
@@ -1087,6 +1177,9 @@ export function useTranscriptOperations(
     resolveConflict,
     updateText,
     flush,
+    settle,
+    adoptServerState,
+    reload,
     setSpeaker,
     splitSegment,
     joinWithNext,

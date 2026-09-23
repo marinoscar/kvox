@@ -26,6 +26,7 @@ const capabilities = (
   acceptedMimeTypes: ['audio/mpeg', 'audio/mp4'],
   remoteDelete: true,
   cancel: true,
+  keyterms: null,
   ...overrides,
 });
 

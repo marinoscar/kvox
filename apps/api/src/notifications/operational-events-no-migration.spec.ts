@@ -116,6 +116,10 @@ const MIGRATIONS_AT_288 = [
   // has named for the first time ("Speaker A" -> "Oscar") without creating a
   // version. Transcript metadata, and equally not about notifications.
   '20260923140000_add_transcript_speaker_identities',
+  // #328 (epic #326): `transcript_name_checks` / `transcript_name_suggestions`,
+  // the AI name-correction runs and the proposals they produced. Transcript
+  // editing, and equally not about notifications.
+  '20260923150000_transcript_name_checks',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

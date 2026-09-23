@@ -41,6 +41,7 @@ export function fakeCapabilities(
     acceptedMimeTypes: ['audio/mpeg', 'audio/mp4'],
     remoteDelete: true,
     cancel: true,
+    keyterms: { maxTerms: 1000, maxWordsPerTerm: 6 },
     ...overrides,
   };
 }

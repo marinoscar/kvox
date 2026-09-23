@@ -62,6 +62,10 @@ export class TranscriptionConfigController {
       'describe the ACTIVE provider and are still reported when a provider is chosen but has ' +
       'no key — so a disabled control can still say what it would allow. They are zero and ' +
       'empty when no provider is chosen at all.\n\n' +
+      '`keytermsSupported` and `maxKeyterms` (#327) say whether the active provider accepts ' +
+      'expected names and terms at upload, and how many `POST /api/transcripts` will forward ' +
+      '(the smaller of this API\'s limit of 200 and the provider\'s). `false`/`0` when ' +
+      'unsupported or no provider is chosen.\n\n' +
       '**No configuration detail is published here** — not the region, not the model, not ' +
       'the delivery mode, and no part of the API key. Administrators read ' +
       '`GET /api/transcription-settings` for those.',

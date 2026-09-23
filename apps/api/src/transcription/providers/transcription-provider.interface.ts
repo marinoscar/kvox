@@ -81,6 +81,26 @@ export interface TranscriptionProviderCapabilities {
   remoteDelete: boolean;
   /** Can an in-flight job be cancelled? Pairs with the optional `cancel`. */
   cancel: boolean;
+  /**
+   * Can it be told which names and domain terms to expect (#327), and within
+   * what limits? `null` means unsupported — REQUIRED-BUT-NULLABLE rather than
+   * optional, for the reason the header above gives: an absent key would read
+   * as "unknown" at every call site.
+   *
+   * A HINT, like `speakersExpectedHint`: the vendor biases recognition towards
+   * these terms, it never forces them into the text. Callers must drop the
+   * terms entirely for a provider that declares `null`, and must never send
+   * more than `maxTerms` or a term longer than `maxWordsPerTerm` words.
+   */
+  keyterms: TranscriptionKeytermsCapability | null;
+}
+
+/** The limits a provider places on {@link TranscriptionOptions.keyterms}. */
+export interface TranscriptionKeytermsCapability {
+  /** Most terms one submission may carry. */
+  maxTerms: number;
+  /** Most whitespace-separated words one term may contain. */
+  maxWordsPerTerm: number;
 }
 
 /**
@@ -184,6 +204,14 @@ export interface TranscriptionOptions {
    * Ignored by providers whose `speakersExpectedHint` is false.
    */
   speakersExpected?: number | null;
+  /**
+   * Names and domain terms the user expects in the recording (#327). A HINT
+   * that biases recognition, never a constraint. Already validated and
+   * clamped to the provider's `keyterms` capability by the caller; a provider
+   * whose capability is `null` never receives them. Absent or empty means
+   * "no hint", and a provider must then send nothing at all.
+   */
+  keyterms?: string[];
 }
 
 /** One submission. */
