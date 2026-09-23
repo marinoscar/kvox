@@ -46,10 +46,16 @@ import {
   MAX_HINT_CHARS,
   MAX_INSTRUCTIONS_CHARS,
   MAX_NAME_CHARS,
+  NOTE_BODY_FORMATS,
+  NOTE_BODY_FORMAT_LABELS,
   NOTE_OUTPUT_FORMATS,
   NOTE_OUTPUT_FORMAT_LABELS,
 } from '../../services/noteTemplates';
-import type { NoteOutputFormat, NoteTemplateDraft } from '../../services/noteTemplates';
+import type {
+  NoteBodyFormat,
+  NoteOutputFormat,
+  NoteTemplateDraft,
+} from '../../services/noteTemplates';
 import type { AiConfigModel } from '../../services/ai';
 
 /**
@@ -153,20 +159,46 @@ export function NoteTemplateEditor({
           error={draft.instructions.length > MAX_INSTRUCTIONS_CHARS}
         />
 
-        <TextField
-          select
-          fullWidth
-          label="Output format"
-          value={draft.outputFormat}
-          onChange={(event) => set('outputFormat', event.target.value as NoteOutputFormat)}
-          disabled={disabled}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { sm: 'flex-start' },
+            gap: 2,
+          }}
         >
-          {NOTE_OUTPUT_FORMATS.map((format) => (
-            <MenuItem key={format} value={format}>
-              {NOTE_OUTPUT_FORMAT_LABELS[format]}
-            </MenuItem>
-          ))}
-        </TextField>
+          <TextField
+            select
+            fullWidth
+            label="Output format"
+            value={draft.outputFormat}
+            onChange={(event) => set('outputFormat', event.target.value as NoteOutputFormat)}
+            disabled={disabled}
+          >
+            {NOTE_OUTPUT_FORMATS.map((format) => (
+              <MenuItem key={format} value={format}>
+                {NOTE_OUTPUT_FORMAT_LABELS[format]}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          {/* Issue #334: the SHAPE of the text, independent of what kind of note it is. */}
+          <TextField
+            select
+            fullWidth
+            label="Body format"
+            value={draft.bodyFormat}
+            onChange={(event) => set('bodyFormat', event.target.value as NoteBodyFormat)}
+            disabled={disabled}
+            helperText="Markdown keeps headings, lists and bold; Plain text asks the AI for text with no formatting symbols."
+          >
+            {NOTE_BODY_FORMATS.map((format) => (
+              <MenuItem key={format} value={format}>
+                {NOTE_BODY_FORMAT_LABELS[format]}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
 
         <StructureListEditor
           sections={draft.structure}

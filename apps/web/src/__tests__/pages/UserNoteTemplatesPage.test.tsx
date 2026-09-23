@@ -403,6 +403,8 @@ describe('UserNoteTemplatesPage', () => {
           // The typed text, not `'Write up the meeting.'` from the fixture.
           instructions: 'Only list decisions.',
           outputFormat: 'meeting_notes',
+          // Issue #334: a fixture without `bodyFormat` reads as markdown.
+          bodyFormat: 'markdown',
           structure: ['Outcomes', 'Decisions'],
           tone: 'direct',
           length: 'short',

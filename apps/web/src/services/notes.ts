@@ -51,6 +51,7 @@
  */
 
 import { api, ApiError } from './api';
+import type { NoteBodyFormat } from './noteTemplates';
 import type { PlaybackStatus, TranscriptStatus } from './transcripts';
 
 // =============================================================================
@@ -128,6 +129,12 @@ export interface Note {
   sourceObjectId: string | null;
   templateId: string | null;
   templateName: string | null;
+  /**
+   * Issue #334 — the shape of {@link Note.body}, snapshotted from the template
+   * at generation time and read-only here. Absent (a server predating the
+   * field) means `markdown`; read it through `effectiveBodyFormat`.
+   */
+  bodyFormat?: NoteBodyFormat;
   /**
    * The SOURCE's name — issue #192, denormalised onto every row and the detail.
    *
@@ -294,6 +301,11 @@ export interface NoteVersionDetail extends NoteVersion {
   /** The full markdown AS IT WAS at this version. */
   body: string;
   isCurrent: boolean;
+  /**
+   * Issue #334 — the note's body format, if the server includes it here.
+   * Absent means `markdown`, which is also what every note predating #334 is.
+   */
+  bodyFormat?: NoteBodyFormat;
 }
 
 /**
