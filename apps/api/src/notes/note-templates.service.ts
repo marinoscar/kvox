@@ -75,19 +75,27 @@ export class NoteTemplatesService {
    * `isArchived` narrows only when asked. Built-ins are never archived in
    * practice (nothing can write to them), so this flag is about the caller's
    * own rows.
+   *
+   * `includeHidden` (issue #310) narrows the same way, over the CALLER'S OWN
+   * `user_hidden_note_templates` rows. The `hiddenBy` include is filtered to
+   * `userId` too — another user having hidden a built-in must never make it
+   * read as hidden here — so `hidden` is simply "did that filtered relation
+   * come back non-empty".
    */
   async list(userId: string, query: ListNoteTemplatesQueryDto) {
     const where: Prisma.NoteTemplateWhereInput = {
       OR: [{ ownerId: null }, { ownerId: userId }],
       ...(query.includeArchived ? {} : { isArchived: false }),
+      ...(query.includeHidden ? {} : { hiddenBy: { none: { userId } } }),
     };
 
     const rows = await this.prisma.noteTemplate.findMany({
       where,
       orderBy: [{ name: 'asc' }],
+      include: { hiddenBy: { where: { userId }, select: { userId: true } } },
     });
 
-    const items = rows.map((row) => toResponse(row));
+    const items = rows.map((row) => toResponse(row, row.hiddenBy.length > 0));
 
     return { items, total: items.length };
   }
@@ -96,7 +104,7 @@ export class NoteTemplatesService {
   async get(userId: string, templateId: string): Promise<NoteTemplateResponse> {
     const { template } = await this.access.require(userId, templateId, 'read');
 
-    return toResponse(template);
+    return toResponse(template, await this.isHidden(userId, templateId));
   }
 
   // ---------------------------------------------------------------------------
@@ -129,7 +137,8 @@ export class NoteTemplatesService {
         },
       });
 
-      return toResponse(created);
+      // A row created a moment ago cannot have been hidden by anyone yet.
+      return toResponse(created, false);
     } catch (error) {
       throw this.toNameConflict(error, dto.name);
     }
@@ -175,7 +184,7 @@ export class NoteTemplatesService {
         data,
       });
 
-      return toResponse(updated);
+      return toResponse(updated, await this.isHidden(userId, templateId));
     } catch (error) {
       throw this.toNameConflict(error, dto.name ?? '');
     }
@@ -246,11 +255,90 @@ export class NoteTemplatesService {
       },
     });
 
-    return toResponse(created);
+    // A fresh copy is visible even when its source is hidden — duplicating
+    // a template is an explicit ask to work with it.
+    return toResponse(created, false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Per-user visibility (issue #310)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Hide a template from the caller's OWN picker. Idempotent.
+   *
+   * ⚠ THE ACCESS LEVEL IS `'read'`, NOT `'write'`, AND THAT IS THE FEATURE —
+   * the same argument `duplicate` makes. Hiding writes one row in
+   * `user_hidden_note_templates` keyed on the caller; nothing on the shared
+   * `note_templates` row changes, so the built-in 403 (which exists to keep
+   * that shared row immutable) has nothing to protect here. Built-ins are
+   * precisely what most users will want to hide. Another user's template is
+   * still a 404, because `'read'` already refuses it.
+   *
+   * An upsert with an empty `update`, so hiding twice is a no-op rather than a
+   * P2002 — a double-clicked button must not produce an error.
+   */
+  async hide(userId: string, templateId: string): Promise<void> {
+    const { builtIn } = await this.access.require(userId, templateId, 'read');
+
+    await this.prisma.userHiddenNoteTemplate.upsert({
+      where: { userId_templateId: { userId, templateId } },
+      create: { userId, templateId },
+      update: {},
+    });
+
+    await this.audit(userId, 'note_template:hide', templateId, { templateId, builtIn });
+  }
+
+  /**
+   * Un-hide a template. Idempotent: un-hiding one that is not hidden succeeds.
+   *
+   * `deleteMany`, not `delete`, so an absent row is zero rows affected rather
+   * than a P2025. The template itself must still be readable — an unreadable
+   * id is the same 404 every other route answers.
+   */
+  async unhide(userId: string, templateId: string): Promise<void> {
+    const { builtIn } = await this.access.require(userId, templateId, 'read');
+
+    await this.prisma.userHiddenNoteTemplate.deleteMany({ where: { userId, templateId } });
+
+    await this.audit(userId, 'note_template:unhide', templateId, { templateId, builtIn });
   }
 
   // ---------------------------------------------------------------------------
   // Helpers
+  // ---------------------------------------------------------------------------
+
+  /** Has THIS caller hidden this template? Never anybody else's answer. */
+  private async isHidden(userId: string, templateId: string): Promise<boolean> {
+    const row = await this.prisma.userHiddenNoteTemplate.findUnique({
+      where: { userId_templateId: { userId, templateId } },
+      select: { userId: true },
+    });
+
+    return row != null;
+  }
+
+  /**
+   * One audit row, `targetType: 'note_template'` — the same shape
+   * `NotesService.audit` writes for notes.
+   */
+  private async audit(
+    userId: string,
+    action: string,
+    templateId: string,
+    meta: Prisma.InputJsonObject,
+  ): Promise<void> {
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: userId,
+        action,
+        targetType: 'note_template',
+        targetId: templateId,
+        meta,
+      },
+    });
+  }
   // ---------------------------------------------------------------------------
 
   /**
@@ -358,6 +446,9 @@ function mentionsNameConstraint(error: Prisma.PrismaClientKnownRequestError): bo
 /**
  * One row as the wire sees it.
  *
+ * `hidden` is an ARGUMENT, not a column: it is a fact about the caller, not
+ * the row (issue #310), so every caller of this function states it.
+ *
  * ⚠ `builtIn` IS DERIVED HERE AND `ownerId` IS DROPPED HERE. There is no
  * `is_built_in` column (spec §4.3) and there is no second statement of the fact
  * on the wire either — one boolean, computed in one place, that cannot disagree
@@ -369,7 +460,7 @@ function mentionsNameConstraint(error: Prisma.PrismaClientKnownRequestError): bo
  * A second, more permissive projection here would show a user a section the
  * generation silently omits.
  */
-export function toResponse(template: NoteTemplate): NoteTemplateResponse {
+export function toResponse(template: NoteTemplate, hidden: boolean): NoteTemplateResponse {
   return {
     id: template.id,
     name: template.name,
@@ -382,6 +473,8 @@ export function toResponse(template: NoteTemplate): NoteTemplateResponse {
     model: template.model,
     isArchived: template.isArchived,
     builtIn: template.ownerId === null,
+    // Per-caller, so it cannot be read off the row — the caller supplies it.
+    hidden,
     // ISO strings, matching the published schema — see its note on why these
     // are not `z.date()`.
     createdAt: template.createdAt.toISOString(),

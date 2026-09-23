@@ -275,6 +275,34 @@ describe('Notes API (#53)', () => {
       expect(prismaMock.note.create.mock.calls[0][0].data.title).toBe('Concise Meeting Notes');
     });
 
+    it('creates a note from a template the caller has HIDDEN (issue #310) — hiding is a listing preference, not access control', async () => {
+      const user = await createMockTestUser(context);
+
+      ownedTranscript(user.id);
+      prismaMock.note.create.mockResolvedValue(noteRow({ ownerId: user.id }));
+      prismaMock.note.update.mockResolvedValue(noteRow({ ownerId: user.id }));
+      // If `NoteTemplateAccessService`/`NotesService.create` ever consulted
+      // `user_hidden_note_templates`, this row would say "hidden, refuse it" —
+      // and this test would then fail on the 201 below rather than on an
+      // assertion the reader has to go looking for.
+      prismaMock.userHiddenNoteTemplate.findUnique.mockResolvedValue({
+        userId: user.id,
+        templateId: TEMPLATE_ID,
+      });
+
+      await request(context.app.getHttpServer())
+        .post(NOTES)
+        .set(authHeader(user.accessToken))
+        .send(body)
+        .expect(201);
+
+      expect(prismaMock.note.create).toHaveBeenCalled();
+      // The create path never reads `user_hidden_note_templates` at all — the
+      // table exists to narrow what a PICKER lists, never what a create/
+      // regenerate/preview call honours.
+      expect(prismaMock.userHiddenNoteTemplate.findUnique).not.toHaveBeenCalled();
+    });
+
     it('is 409 with a branchable reason — and CREATES NO NOTE — when the caller has no API key', async () => {
       const user = await createMockTestUser(context);
 

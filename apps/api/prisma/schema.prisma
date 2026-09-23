@@ -92,6 +92,12 @@ model User {
   // their own `ownerId`. See the block comment above `SearchIndexState`.
   searchIndexStates SearchIndexState[] @relation("SearchIndexStateOwner")
 
+  // Per-user "hide this template from my picker" preference (#310, epic
+  // #306). CASCADES — the preference is meaningless once its owner is gone.
+  // See the block comment above `UserHiddenNoteTemplate` for why this is a
+  // join table rather than a `user_settings` namespace.
+  hiddenNoteTemplates UserHiddenNoteTemplate[]
+
   @@map("users")
 }
 
@@ -3093,12 +3099,73 @@ model NoteTemplate {
   notes       Note[]           @relation("NoteTemplateSelection")
   generations NoteGeneration[] @relation("NoteGenerationTemplateSelection")
 
+  // Who has hidden THIS template from their own picker (#310, epic #306) —
+  // the built-in-safe complement to `isArchived` above. See the block
+  // comment above `UserHiddenNoteTemplate`.
+  hiddenBy UserHiddenNoteTemplate[]
+
   // A user may not have two templates sharing a name — see the block
   // comment above the enums for why PostgreSQL's NULLS-DISTINCT behaviour
   // leaves built-ins (permanently null `ownerId`) entirely unaffected by
   // this constraint.
   @@unique([ownerId, name])
   @@map("note_templates")
+}
+
+// =============================================================================
+// `user_hidden_note_templates`: a per-user LISTING preference, never access
+// control (#310, epic #306)
+// =============================================================================
+//
+// A join table, deliberately, over the two alternatives this could have been:
+//
+// 1. A `user_settings` namespace (an array of hidden template ids in the
+//    caller's own JSONB blob). Rejected on three counts: a JSONB array has
+//    no foreign key, so a deleted template leaves a dangling id nothing ever
+//    cleans up — the exact failure mode `user_settings`'s existing namespaces
+//    (`notifications`, `onboarding`, ...) never need to worry about, because
+//    none of them names another table's row by id; "is this specific
+//    template hidden" and "list every template I've hidden" both become an
+//    application-level filter over a blob instead of a `WHERE` clause an
+//    index can serve; and there is no natural cap, so a user who hides
+//    hundreds of templates over time grows one JSONB column without bound.
+//    It would also cost the six-file parity `user-settings-parity.spec.ts`
+//    guards for every namespace, for a preference that isn't shaped like the
+//    rest of that document at all — it names rows in another table, not a
+//    scalar or a small enum a client renders as a toggle.
+// 2. `note_templates.is_archived`, reused per-caller. Rejected outright:
+//    `is_archived` is a property of the TEMPLATE, shared by every user who
+//    can see it (a built-in row is everyone's row), so "archived" can only
+//    ever mean one thing for all viewers at once. Hiding is a property of
+//    the (user, template) PAIR — my hiding a built-in template from my own
+//    picker must never affect anyone else's.
+//
+// A join table gives real FK integrity in both directions (see the two
+// `onDelete: Cascade`s below — hiding a template is meaningless once either
+// side is gone), a plain indexed `WHERE user_id = ...` for the picker's
+// exclusion query, no cap, and zero settings-parity cost.
+//
+// ⚠ HIDING IS A LISTING PREFERENCE ONLY, NEVER ACCESS CONTROL. A row here
+// must never be consulted by `POST /api/notes` (create), `POST
+// /api/notes/:id/regenerate`, or `POST /api/note-templates/preview` — all
+// three continue to accept a hidden template by id exactly as before. This
+// table only narrows what a picker LISTS, the identical scope
+// `note_templates.is_archived` already keeps for the built-in-vs-custom
+// axis: archiving/hiding decide what is offered, never what is honoured.
+// =============================================================================
+model UserHiddenNoteTemplate {
+  userId     String   @map("user_id") @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Both cascade: a hidden-template row has no meaning once either the user
+  // or the template it names is gone.
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template NoteTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([userId, templateId])
+  @@index([templateId])
+  @@map("user_hidden_note_templates")
 }
 
 // -----------------------------------------------------------------------------
