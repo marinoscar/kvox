@@ -122,6 +122,7 @@ import { MarkdownView } from '../components/notes/MarkdownView';
 import { NoteBodyEditor } from '../components/notes/NoteBodyEditor';
 import type { NoteEditorView } from '../components/notes/NoteBodyEditor';
 import { NoteConflictDialog } from '../components/notes/NoteConflictDialog';
+import { NoteContextDialog } from '../components/notes/NoteContextDialog';
 import { NoteExportDialog } from '../components/notes/NoteExportDialog';
 import { NoteGenerationContext } from '../components/notes/NoteGenerationContext';
 import { NoteProvenance } from '../components/notes/NoteProvenance';
@@ -285,6 +286,7 @@ export function NotePage() {
 
   // --- The other two dialogs -----------------------------------------------
   const [exportOpen, setExportOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenerateError, setRegenerateError] = useState<string | null>(null);
@@ -847,6 +849,7 @@ export function NotePage() {
         template={templateDetail.template}
         templateState={templateDetail.state}
         templateError={templateDetail.error}
+        onOpenContext={() => setContextOpen(true)}
       />
 
       {inFlight && (
@@ -1059,6 +1062,18 @@ export function NotePage() {
         onKeepEditing={() => setConflict(null)}
         onDiscardAndReload={discardAndReload}
       />
+
+      {/* Mounted only while open: the prompt can be megabytes, and simply
+          reading a note must not download it (issue #308). */}
+      {contextOpen && (
+        <NoteContextDialog
+          open
+          noteId={note.id}
+          noteTitle={note.title}
+          generationId={note.currentGenerationId ?? undefined}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
 
       <NoteExportDialog
         open={exportOpen}

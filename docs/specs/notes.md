@@ -1167,6 +1167,25 @@ backfilled — re-materializing the source today would fabricate history, since
 the source may have been corrected and the template edited since. See
 `NoteGenerationContextService` and `GET /notes/{id}/context` in `docs/API.md`.
 
+**The web client's "View full context sent to the AI" dialog (issue #308)**
+is the long form of the "How this note was generated" panel
+(`apps/web/src/components/notes/NoteGenerationContext.tsx`): opening it mounts
+`apps/web/src/components/notes/NoteContextDialog.tsx`, which is what actually
+calls `GET /api/notes/{id}/context` /
+`GET /api/notes/{id}/generations/{generationId}/context` — the fetch is gated
+on the dialog being open, never on the note loading, because the recorded
+prompt can be megabytes for a long transcript. Three tabs (Full prompt /
+Instructions / Context & source) are parallel views of one prompt, not a
+hierarchy, so they are tabs inside this one dialog rather than three
+destinations (Settings UI Pattern rule 2). The dialog surfaces the two edge
+cases §4.4 describes structurally: `stored: false` (a generation from before
+issue #307, its instructions rebuilt from today's template, its source never
+recorded) renders as a warning banner, and `sourceRedacted` (the caller can no
+longer read the source that was used) as an info banner. Copy-all, per-tab
+copy, and "Download .txt" always act on the complete recorded text regardless
+of on-screen truncation (large prompts are display-truncated past
+`CONTEXT_TRUNCATE_THRESHOLD`, never truncated for copy/export).
+
 ### 4.5 `note_versions`
 
 Mirrors `transcript_versions` (`docs/specs/transcription.md` §3, §4.4–4.5)

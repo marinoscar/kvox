@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
@@ -308,6 +308,89 @@ describe('NoteGenerationContext — the template’s own chips', () => {
 
     expect(screen.getByText('archived')).toBeInTheDocument();
     expect(screen.queryByText('built-in')).not.toBeInTheDocument();
+  });
+});
+
+describe('NoteGenerationContext — copy buttons (issue #308)', () => {
+  it('offers a copy button for Instructions only while a template is loaded', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await expand(user);
+
+    expect(screen.getByRole('button', { name: 'Copy instructions' })).toBeInTheDocument();
+  });
+
+  it('offers no copy button for Instructions when there is no template row to read', async () => {
+    const user = userEvent.setup();
+    renderPanel({ note: note({ templateId: null }), template: null, templateState: 'idle' });
+    await expand(user);
+
+    expect(screen.queryByRole('button', { name: 'Copy instructions' })).not.toBeInTheDocument();
+  });
+
+  it('offers a copy button for Context only while there is context text to copy', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await expand(user);
+
+    expect(screen.getByRole('button', { name: 'Copy context' })).toBeInTheDocument();
+  });
+
+  it('offers no copy button for Context when none was provided', async () => {
+    const user = userEvent.setup();
+    renderPanel({ note: note({ contextText: null }) });
+    await expand(user);
+
+    expect(screen.queryByRole('button', { name: 'Copy context' })).not.toBeInTheDocument();
+    expect(screen.getByText('None provided')).toBeInTheDocument();
+  });
+});
+
+describe('NoteGenerationContext — "View full context sent to the AI" (issue #308)', () => {
+  it('is absent when the caller passes no onOpenContext', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    await expand(user);
+
+    expect(
+      screen.queryByRole('button', { name: 'View full context sent to the AI' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('calls onOpenContext when pressed', async () => {
+    const user = userEvent.setup();
+    const onOpenContext = vi.fn();
+    renderPanel({ onOpenContext });
+    await expand(user);
+
+    await user.click(screen.getByRole('button', { name: 'View full context sent to the AI' }));
+
+    expect(onOpenContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled, with an explanatory caption, when the note has never generated', async () => {
+    const user = userEvent.setup();
+    const onOpenContext = vi.fn();
+    renderPanel({
+      note: note({ currentGenerationId: null }),
+      onOpenContext,
+    });
+    await expand(user);
+
+    const button = screen.getByRole('button', { name: 'View full context sent to the AI' });
+    expect(button).toBeDisabled();
+    expect(screen.getByText('Available once generation starts')).toBeInTheDocument();
+  });
+
+  it('is enabled once a generation exists', async () => {
+    const user = userEvent.setup();
+    renderPanel({ onOpenContext: vi.fn() });
+    await expand(user);
+
+    expect(
+      screen.getByRole('button', { name: 'View full context sent to the AI' }),
+    ).toBeEnabled();
+    expect(screen.queryByText('Available once generation starts')).not.toBeInTheDocument();
   });
 });
 
