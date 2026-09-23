@@ -1043,6 +1043,19 @@ cannot disagree about who may go where. See
 [`docs/specs/settings-ui.md`](specs/settings-ui.md) for the full registry
 pattern this route belongs to.
 
+### 9.5 Shared Clipboard Primitive
+
+`apps/web/src/hooks/useCopyToClipboard.ts` and
+`apps/web/src/components/common/CopyButton.tsx` (issue #308) are the shared
+copy-to-clipboard primitive for new call sites: the hook exposes an
+idle/done/failed status, prefers the secure-context `navigator.clipboard` API
+and falls back to `execCommand('copy')`, and reports a failure honestly
+instead of claiming success. `CopyButton` wraps it as an icon or text button
+with a "Copied"/"Copy failed" transient state. It was introduced for
+`NoteContextDialog.tsx` (see `docs/specs/notes.md` §4.4); the six pre-existing
+inline `navigator.clipboard` call sites were deliberately left as-is by that
+change and are candidates to migrate later, not a regression to fix now.
+
 ---
 
 ## 10. Infrastructure Architecture
