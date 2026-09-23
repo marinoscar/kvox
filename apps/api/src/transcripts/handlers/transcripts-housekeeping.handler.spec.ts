@@ -3,9 +3,13 @@ import type { Job } from '@prisma/client';
 
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TranscriptionSettingsService } from '../../transcription/transcription-settings.service';
 import { TranscriptObjectsService } from '../transcript-objects.service';
 import { TranscriptPipelineService } from '../transcript-pipeline.service';
-import { TranscriptsHousekeepingHandler } from './transcripts-housekeeping.handler';
+import {
+  decideAbandonedUpload,
+  TranscriptsHousekeepingHandler,
+} from './transcripts-housekeeping.handler';
 
 // =============================================================================
 // `transcripts.housekeeping` — the reconciliation sweep (issue #25, §1.5.8)
@@ -22,17 +26,21 @@ const job = (): Job => ({ id: 'job-1', payload: null } as unknown as Job);
 describe('TranscriptsHousekeepingHandler', () => {
   let handler: TranscriptsHousekeepingHandler;
   let prisma: {
-    transcript: { findMany: jest.Mock };
+    transcript: { findMany: jest.Mock; updateMany: jest.Mock };
     job: { findMany: jest.Mock };
     storageObject: { findMany: jest.Mock };
     transcriptExport: { findMany: jest.Mock; update: jest.Mock; delete: jest.Mock };
   };
-  let pipeline: { enqueueFirstPoll: jest.Mock; markFailed: jest.Mock };
+  let pipeline: { enqueueFirstPoll: jest.Mock; markFailed: jest.Mock; enqueuePurge: jest.Mock };
   let objects: { deleteIfPresent: jest.Mock };
+  let transcriptionSettings: { get: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
-      transcript: { findMany: jest.fn().mockResolvedValue([]) },
+      transcript: {
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
       job: { findMany: jest.fn().mockResolvedValue([]) },
       storageObject: { findMany: jest.fn().mockResolvedValue([]) },
       transcriptExport: {
@@ -45,6 +53,11 @@ describe('TranscriptsHousekeepingHandler', () => {
     pipeline = {
       enqueueFirstPoll: jest.fn().mockResolvedValue(undefined),
       markFailed: jest.fn().mockResolvedValue(true),
+      enqueuePurge: jest.fn().mockResolvedValue(undefined),
+    };
+
+    transcriptionSettings = {
+      get: jest.fn().mockResolvedValue({ abandonedUploadHours: 3 }),
     };
 
     objects = { deleteIfPresent: jest.fn().mockResolvedValue(true) };
@@ -56,6 +69,7 @@ describe('TranscriptsHousekeepingHandler', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: TranscriptPipelineService, useValue: pipeline },
         { provide: TranscriptObjectsService, useValue: objects },
+        { provide: TranscriptionSettingsService, useValue: transcriptionSettings },
       ],
     }).compile();
 
@@ -111,55 +125,109 @@ describe('TranscriptsHousekeepingHandler', () => {
     });
   });
 
-  describe('failing abandoned uploads', () => {
-    const stuck = [{ id: 't-9', sourceObjectId: 'obj-9' }];
+  describe('purging abandoned uploads (issue #322)', () => {
+    const HOUR = 3_600_000;
+    const stuck = [{ id: 't-9', status: 'uploading', sourceObjectId: 'obj-9' }];
 
-    it('fails a transcript whose upload record has been cleaned up', async () => {
+    /** Step 2 is the only query with an `OR`; step 1 filters on `status`. */
+    const step2Returns = (rows: unknown[]) =>
       prisma.transcript.findMany.mockImplementation(
-        async ({ where }: { where: { status?: string } }) =>
-          where.status === 'uploading' ? stuck : [],
+        async ({ where }: { where: { OR?: unknown } }) => (where.OR ? rows : []),
       );
+
+    it('purges a transcript whose upload record is gone', async () => {
+      step2Returns(stuck);
       prisma.storageObject.findMany.mockResolvedValue([]);
 
       await handler.process(job());
 
-      expect(pipeline.markFailed).toHaveBeenCalledWith(
-        expect.objectContaining({
-          transcriptId: 't-9',
-          stage: 'upload',
-          retryable: false,
-          reason: expect.stringContaining('cleaned up'),
-        }),
-      );
+      expect(prisma.transcript.updateMany).toHaveBeenCalledWith({
+        where: { id: 't-9', deletedAt: null, status: 'uploading' },
+        data: { status: 'deleting', deletedAt: expect.any(Date) },
+      });
+      expect(pipeline.enqueuePurge).toHaveBeenCalledWith('t-9');
+      expect(pipeline.markFailed).not.toHaveBeenCalled();
     });
 
-    it('fails one whose upload is still sitting `pending`, naming the status', async () => {
-      prisma.transcript.findMany.mockImplementation(
-        async ({ where }: { where: { status?: string } }) =>
-          where.status === 'uploading' ? stuck : [],
-      );
-      prisma.storageObject.findMany.mockResolvedValue([{ id: 'obj-9', status: 'pending' }]);
+    it('purges one whose upload has been idle past the configured window', async () => {
+      step2Returns(stuck);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-9', status: 'uploading', updatedAt: new Date(Date.now() - 4 * HOUR) },
+      ]);
 
       await handler.process(job());
 
-      expect(pipeline.markFailed).toHaveBeenCalledWith(
-        expect.objectContaining({ reason: expect.stringContaining("'pending'") }),
-      );
+      expect(pipeline.enqueuePurge).toHaveBeenCalledWith('t-9');
     });
 
-    it('REFUSES to fail one whose audio is present and ready', async () => {
-      // That is a different bug — a missed upload event — and failing a
+    it('KEEPS one whose upload was touched recently, however old the transcript', async () => {
+      step2Returns(stuck);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-9', status: 'uploading', updatedAt: new Date(Date.now() - 10 * 60_000) },
+      ]);
+
+      await handler.process(job());
+
+      expect(prisma.transcript.updateMany).not.toHaveBeenCalled();
+      expect(pipeline.enqueuePurge).not.toHaveBeenCalled();
+    });
+
+    it('REFUSES to purge one whose audio is present and ready', async () => {
+      // That is a different bug — a missed upload event — and purging a
       // transcript whose audio is fine would destroy the one thing worth
       // keeping.
-      prisma.transcript.findMany.mockImplementation(
-        async ({ where }: { where: { status?: string } }) =>
-          where.status === 'uploading' ? stuck : [],
-      );
-      prisma.storageObject.findMany.mockResolvedValue([{ id: 'obj-9', status: 'ready' }]);
+      step2Returns(stuck);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-9', status: 'ready', updatedAt: new Date(0) },
+      ]);
 
       await handler.process(job());
 
-      expect(pipeline.markFailed).not.toHaveBeenCalled();
+      expect(prisma.transcript.updateMany).not.toHaveBeenCalled();
+      expect(pipeline.enqueuePurge).not.toHaveBeenCalled();
+    });
+
+    it('does not enqueue when the conditional soft-delete loses the race', async () => {
+      step2Returns(stuck);
+      prisma.storageObject.findMany.mockResolvedValue([]);
+      prisma.transcript.updateMany.mockResolvedValue({ count: 0 });
+
+      await handler.process(job());
+
+      expect(pipeline.enqueuePurge).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the default window when the settings read fails', async () => {
+      transcriptionSettings.get.mockRejectedValue(new Error('db down'));
+      step2Returns(stuck);
+      prisma.storageObject.findMany.mockResolvedValue([
+        { id: 'obj-9', status: 'pending', updatedAt: new Date(Date.now() - 4 * HOUR) },
+      ]);
+
+      await expect(handler.process(job())).resolves.toBeUndefined();
+
+      expect(pipeline.enqueuePurge).toHaveBeenCalledWith('t-9');
+    });
+  });
+
+  describe('decideAbandonedUpload', () => {
+    const cutoff = new Date('2026-01-01T12:00:00Z');
+    const before = new Date('2026-01-01T11:00:00Z');
+    const after = new Date('2026-01-01T13:00:00Z');
+
+    it.each([
+      ['uploading', undefined, 'purge'],
+      ['uploading', { status: 'failed', updatedAt: after }, 'purge'],
+      ['uploading', { status: 'pending', updatedAt: before }, 'purge'],
+      ['uploading', { status: 'uploading', updatedAt: after }, 'keep'],
+      ['uploading', { status: 'ready', updatedAt: before }, 'audio_present'],
+      ['uploading', { status: 'processing', updatedAt: before }, 'audio_present'],
+      ['failed', undefined, 'purge'],
+      ['failed', { status: 'uploading', updatedAt: after }, 'purge'],
+      ['failed', { status: 'ready', updatedAt: before }, 'audio_present'],
+      ['failed', { status: 'processing', updatedAt: before }, 'audio_present'],
+    ] as const)('%s transcript, object %j → %s', (status, object, expected) => {
+      expect(decideAbandonedUpload(status, object, cutoff)).toBe(expected);
     });
   });
 
