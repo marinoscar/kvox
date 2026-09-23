@@ -384,6 +384,17 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     });
 
     // -------------------------------------------------------------------------
+    // 5b. Record what is about to be sent (#307) — after the budget check (a
+    // refusal sent nothing, so records nothing) and before the provider is
+    // touched (a failure after this point still shows what it asked).
+    // -------------------------------------------------------------------------
+    await this.generations.recordContext(generation.id, {
+      systemPrompt: prompt.systemPrompt,
+      userContent: prompt.userContent,
+      sourceVersion: source.sourceVersion,
+    });
+
+    // -------------------------------------------------------------------------
     // 6. Stream.
     // -------------------------------------------------------------------------
     await this.generations.markStreaming(generation, new Date());

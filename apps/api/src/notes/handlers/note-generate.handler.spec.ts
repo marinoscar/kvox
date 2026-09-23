@@ -170,6 +170,7 @@ interface Harness {
   throttle: ProviderThrottleService;
   generations: {
     loadForJob: jest.Mock;
+    recordContext: jest.Mock;
     markStreaming: jest.Mock;
     flush: jest.Mock;
     commit: jest.Mock;
@@ -197,6 +198,7 @@ function harness(options: {
 
   const generations = {
     loadForJob: jest.fn().mockResolvedValue(options.generation ?? generationRow()),
+    recordContext: jest.fn().mockResolvedValue(undefined),
     markStreaming: jest.fn().mockResolvedValue(undefined),
     flush: jest.fn().mockResolvedValue(undefined),
     commit: jest.fn().mockResolvedValue(undefined),
@@ -207,6 +209,7 @@ function harness(options: {
     resolve: jest.fn().mockResolvedValue({
       text: options.sourceText ?? 'Ana: we ship on Friday.',
       describe: 'transcript transcript-1 at version 7',
+      sourceVersion: 7,
     }),
   };
 

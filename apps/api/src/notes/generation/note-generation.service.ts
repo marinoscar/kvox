@@ -88,6 +88,14 @@ export interface MarkFailedInput {
   category: string;
 }
 
+/** The assembled context one generation sent (or was about to send) to its provider (#307). */
+export interface RecordContextInput {
+  systemPrompt: string;
+  userContent: string;
+  /** The source version materialized into `userContent`; `null` for a document. */
+  sourceVersion: number | null;
+}
+
 /** What one successful generation commits. */
 export interface CommitInput {
   generation: GenerationWithNote;
@@ -130,6 +138,28 @@ export class NoteGenerationService {
   // ---------------------------------------------------------------------------
   // Writes
   // ---------------------------------------------------------------------------
+
+  /**
+   * Snapshot WHAT IS ABOUT TO BE SENT to the provider (issue #307).
+   *
+   * Called after prompt assembly and the budget check and BEFORE the provider
+   * request, so a generation that then fails still records what it asked. A
+   * budget refusal happens earlier and records nothing — nothing was sent.
+   * Previews run the same handler and so record the same snapshot on their own
+   * row. A repeat (a retried job for the same row) simply overwrites: the last
+   * assembly is the one that was sent.
+   */
+  async recordContext(generationId: string, input: RecordContextInput): Promise<void> {
+    await this.prisma.noteGeneration.update({
+      where: { id: generationId },
+      data: {
+        systemPrompt: input.systemPrompt,
+        userContent: input.userContent,
+        sourceVersion: input.sourceVersion,
+        contextCapturedAt: new Date(),
+      },
+    });
+  }
 
   /**
    * `pending → streaming`, and the note `→ generating`.
