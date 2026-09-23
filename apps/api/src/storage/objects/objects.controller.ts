@@ -340,12 +340,20 @@ export class ObjectsController {
   @Delete(':id/upload/abort')
   @ApiOperation({
     summary: 'Abort resumable upload',
-    description: 'Cancel an in-progress multipart upload',
+    description:
+      'Cancel an in-progress multipart upload. An unmanaged object is deleted. An object ' +
+      'managed by another module (e.g. a transcript\'s source audio) is marked `failed` ' +
+      'instead, and the owning module removes it — a transcript whose upload is cancelled ' +
+      'is purged (issue #322).',
   })
   @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Object ID' })
   @ApiResponse({
     status: 204,
     description: 'Upload aborted successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'No multipart upload ID, or a managed upload that has already completed',
   })
   async abortUpload(
     @Param('id') objectId: string,

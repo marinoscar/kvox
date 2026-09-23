@@ -86,6 +86,7 @@ const unconfigured: TranscriptionSettingsAdminView = {
     deleteRemoteAfterIngest: true,
     defaultLanguage: null,
     transcodeNodeOffloadEnabled: true,
+    abandonedUploadHours: 3,
     playback: { bitrateKbps: 64 },
   },
   keyStatuses: [
@@ -110,6 +111,7 @@ const configured: TranscriptionSettingsAdminView = {
     provider: 'assemblyai',
     providers: { assemblyai: { region: 'eu', speechModel: 'universal' } },
     defaultLanguage: 'en',
+    abandonedUploadHours: 12,
   },
   keyStatuses: [
     {
@@ -463,6 +465,38 @@ describe('TranscriptionSettingsPage', () => {
 
       expect(
         await screen.findByText(/whole number between 16 and 320/),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    it('renders the stored abandoned-upload window and sends a changed one (issue #322)', async () => {
+      const user = userEvent.setup();
+      const { save } = setHook();
+      render(<TranscriptionSettingsPage />);
+
+      const hours = await screen.findByLabelText('Abandoned upload cleanup (hours)');
+      expect(hours).toHaveValue(12);
+
+      await user.clear(hours);
+      await user.type(hours, '48');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(save).toHaveBeenCalled());
+      expect(save.mock.calls[0][0].abandonedUploadHours).toBe(48);
+    });
+
+    it('refuses to save an out-of-range abandoned-upload window', async () => {
+      const user = userEvent.setup();
+      const { save } = setHook();
+      render(<TranscriptionSettingsPage />);
+
+      const hours = await screen.findByLabelText('Abandoned upload cleanup (hours)');
+      await user.clear(hours);
+      await user.type(hours, '721');
+
+      expect(
+        await screen.findByText(/whole number of hours between 1 and 720/),
       ).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
       expect(save).not.toHaveBeenCalled();

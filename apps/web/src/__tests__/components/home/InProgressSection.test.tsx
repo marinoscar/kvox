@@ -545,3 +545,26 @@ describe('InProgressSection — both kinds at once', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+describe('InProgressSection — an upload nothing here is carrying (issue #322)', () => {
+  it('shows "Upload interrupted" and no progress bar for an orphaned uploading row', () => {
+    mockUseUploadManager.mockReturnValue(manager({ uploads: [] }));
+
+    render(
+      <InProgressSection
+        items={[
+          transcript({
+            id: 't-stuck',
+            status: 'uploading',
+            transcriptionStatus: 'waiting_input',
+            playbackStatus: 'pending',
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Upload interrupted')).toBeInTheDocument();
+    expect(screen.queryByText('Preparing audio')).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar', { hidden: true })).not.toBeInTheDocument();
+  });
+});

@@ -101,6 +101,11 @@ export interface TranscriptionSettings {
   deleteRemoteAfterIngest: boolean;
   defaultLanguage: string | null;
   transcodeNodeOffloadEnabled: boolean;
+  /**
+   * Hours an upload may sit with no activity before the server deletes the
+   * transcript and its partial object (issue #322). Integer, 1–720, default 3.
+   */
+  abandonedUploadHours: number;
   playback: {
     bitrateKbps: number;
   };
@@ -141,6 +146,7 @@ export interface UpdateTranscriptionSettingsInput {
   deleteRemoteAfterIngest?: boolean;
   defaultLanguage?: string | null;
   transcodeNodeOffloadEnabled?: boolean;
+  abandonedUploadHours?: number;
   playback?: { bitrateKbps?: number };
   /**
    * WRITE-ONLY. Omit or send empty to keep the stored key. There is no way to

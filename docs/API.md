@@ -1542,6 +1542,17 @@ non-browser client that already has the ETags and would rather avoid the extra
 
 **Requires Authentication** - Cancel an in-progress upload and clean up resources.
 
+For an **unmanaged** object, the row is deleted after the multipart upload is
+aborted, exactly as before. For an object **managed by another module**
+(`managed_by` set — a transcript's source audio, for one), the row cannot be
+deleted here: the owning module's table points at it with a `Restrict`
+foreign key. Instead the multipart upload is aborted, the object is marked
+`failed`, and `storage.object.upload_aborted` is emitted for the owning
+module to reconcile its own record — for a transcript, that means
+soft-deleting it and queuing `transcript.purge`, the one path allowed to free
+the object (issue #322). **400** if the managed upload already completed
+(`processing`/`ready`) — that is never silently downgraded to `failed`.
+
 **Response:** HTTP 204 No Content
 
 ---
@@ -3509,6 +3520,12 @@ are dropped on read; if nothing remains, the default list
 `"universal"` keeps working with no migration (2026-09-14, issue #95 — see
 `docs/specs/transcription.md` §2.7).
 
+`abandonedUploadHours` (default 3, 1–720) is how long a transcript's source
+upload may sit idle — no part-URL batch, no status poll — before
+`transcripts.housekeeping` purges the transcript. Measured from the source
+object's `updated_at`, i.e. last upload activity, never from when the
+transcript was created (issue #322; see `docs/specs/transcription.md` §1.5.8).
+
 **Requires:** `system_settings:read`
 
 **Response:**
@@ -3526,6 +3543,7 @@ are dropped on read; if nothing remains, the default list
       "deleteRemoteAfterIngest": true,
       "defaultLanguage": null,
       "transcodeNodeOffloadEnabled": true,
+      "abandonedUploadHours": 3,
       "playback": { "bitrateKbps": 64 }
     },
     "keyStatuses": [

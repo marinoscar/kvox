@@ -1136,6 +1136,9 @@ export class SystemSettingsService {
         transcodeNodeOffloadEnabled:
           dto.transcription?.transcodeNodeOffloadEnabled ??
           currentValue.transcription.transcodeNodeOffloadEnabled,
+        abandonedUploadHours:
+          dto.transcription?.abandonedUploadHours ??
+          currentValue.transcription.abandonedUploadHours,
         playback: {
           bitrateKbps:
             dto.transcription?.playback?.bitrateKbps ??

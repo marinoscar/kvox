@@ -272,6 +272,10 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // presigned URL and a CPU, not a credential to this deployment's database
     // — so the trust question the backup's switch answers does not arise.
     transcodeNodeOffloadEnabled: true,
+    // Three hours of INACTIVITY (the source upload's `updated_at`, refreshed
+    // by every part batch and status poll), not three hours since creation —
+    // an upload being actively pushed is never purged (issue #322).
+    abandonedUploadHours: 3,
     playback: {
       // 64 kbit/s mono is comfortably intelligible speech at roughly a
       // twentieth the size of the source, which is what a proof-reading
