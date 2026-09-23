@@ -108,6 +108,10 @@ const MIGRATIONS_AT_288 = [
   // recording the assembled prompt a generation sent. Nothing to do with
   // notifications.
   '20260923120000_add_note_generation_context_snapshot',
+  // #310 (epic #306): `user_hidden_note_templates`, a per-user "don't show me
+  // this template" LISTING preference over note templates. A join table, and
+  // equally not about notifications.
+  '20260923130000_add_user_hidden_note_templates',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
