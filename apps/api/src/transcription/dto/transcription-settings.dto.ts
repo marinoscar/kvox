@@ -247,6 +247,11 @@ export const transcriptionSettingsResponseSchema = z.object({
       transcodeNodeOffloadEnabled: z
         .boolean()
         .describe('May a worker node produce the playback rendition?'),
+      abandonedUploadHours: z
+        .number()
+        .describe(
+          'Hours a source upload may sit idle (no part batch or status poll) before its transcript is purged. 1-720.',
+        ),
       playback: z.object({
         bitrateKbps: z
           .number()

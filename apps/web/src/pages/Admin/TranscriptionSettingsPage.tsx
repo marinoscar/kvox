@@ -119,6 +119,7 @@ export default function TranscriptionSettingsPage() {
   const [defaultLanguage, setDefaultLanguage] = useState('');
   const [bitrateKbps, setBitrateKbps] = useState('64');
   const [nodeOffload, setNodeOffload] = useState(true);
+  const [abandonedUploadHours, setAbandonedUploadHours] = useState('3');
 
   // The key box is separate from the draft above: it is write-only, it starts
   // empty every time, and `isReplacingKey` controls whether it is even shown.
@@ -138,6 +139,7 @@ export default function TranscriptionSettingsPage() {
     setDefaultLanguage(s.defaultLanguage ?? '');
     setBitrateKbps(String(s.playback.bitrateKbps));
     setNodeOffload(s.transcodeNodeOffloadEnabled);
+    setAbandonedUploadHours(String(s.abandonedUploadHours));
     // The key draft is deliberately reset on every server response: a key that
     // has just been saved must not stay in a form field, and a failed save
     // should not leave the box silently pre-filled on the next render.
@@ -177,10 +179,21 @@ export default function TranscriptionSettingsPage() {
     !Number.isInteger(parsedBitrate) || parsedBitrate < 16 || parsedBitrate > 320
       ? 'Must be a whole number between 16 and 320 kbit/s.'
       : null;
+  // Same shape as the bitrate check, and the same bounds the API's schema
+  // enforces (issue #322): whole hours, one hour to thirty days.
+  const parsedAbandonedHours = Number(abandonedUploadHours);
+  const abandonedHoursError =
+    abandonedUploadHours.trim() === '' ||
+    !Number.isInteger(parsedAbandonedHours) ||
+    parsedAbandonedHours < 1 ||
+    parsedAbandonedHours > 720
+      ? 'Must be a whole number of hours between 1 and 720.'
+      : null;
+  const hasFieldError = !!bitrateError || !!abandonedHoursError;
 
   const handleSave = async (event: FormEvent) => {
     event.preventDefault();
-    if (!canWrite || bitrateError) return;
+    if (!canWrite || hasFieldError) return;
 
     const input: UpdateTranscriptionSettingsInput = {
       enabled,
@@ -191,6 +204,7 @@ export default function TranscriptionSettingsPage() {
       // expressed, and an empty string is a language code nobody has.
       defaultLanguage: defaultLanguage.trim() || null,
       transcodeNodeOffloadEnabled: nodeOffload,
+      abandonedUploadHours: parsedAbandonedHours,
       playback: { bitrateKbps: parsedBitrate },
     };
 
@@ -476,6 +490,22 @@ export default function TranscriptionSettingsPage() {
                 }
               />
             </Stack>
+
+            <TextField
+              fullWidth
+              type="number"
+              label="Abandoned upload cleanup (hours)"
+              value={abandonedUploadHours}
+              onChange={(e) => setAbandonedUploadHours(e.target.value)}
+              disabled={!canWrite}
+              error={!!abandonedHoursError}
+              slotProps={{ htmlInput: { min: 1, max: 720, step: 1 } }}
+              helperText={
+                abandonedHoursError ??
+                'Uploads with no activity for this long are deleted automatically. Default 3.'
+              }
+              sx={{ mt: 2 }}
+            />
           </Paper>
 
           {saveError && (
@@ -497,7 +527,7 @@ export default function TranscriptionSettingsPage() {
             <Button
               type="submit"
               variant="contained"
-              disabled={!canWrite || isSaving || !!bitrateError}
+              disabled={!canWrite || isSaving || hasFieldError}
             >
               {isSaving ? 'Saving…' : 'Save changes'}
             </Button>
