@@ -11,6 +11,7 @@ import {
   type NoteOutputFormat,
   type NoteTemplateResponse,
   type UpdateNoteTemplateDto,
+  toNoteBodyFormat,
 } from './dto/note-template.dto';
 
 // =============================================================================
@@ -130,6 +131,7 @@ export class NoteTemplatesService {
           description: dto.description,
           instructions: dto.instructions,
           outputFormat: dto.outputFormat,
+          bodyFormat: dto.bodyFormat ?? 'markdown',
           structure: dto.structure,
           tone: dto.tone,
           length: dto.length,
@@ -172,6 +174,7 @@ export class NoteTemplatesService {
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.instructions !== undefined) data.instructions = dto.instructions;
     if (dto.outputFormat !== undefined) data.outputFormat = dto.outputFormat;
+    if (dto.bodyFormat !== undefined) data.bodyFormat = dto.bodyFormat;
     if (dto.structure !== undefined) data.structure = dto.structure;
     if (dto.tone !== undefined) data.tone = dto.tone;
     if (dto.length !== undefined) data.length = dto.length;
@@ -245,6 +248,7 @@ export class NoteTemplatesService {
         description: template.description,
         instructions: template.instructions,
         outputFormat: template.outputFormat,
+        bodyFormat: toNoteBodyFormat(template.bodyFormat),
         structure: template.structure as Prisma.InputJsonValue,
         tone: template.tone,
         length: template.length,
@@ -467,6 +471,7 @@ export function toResponse(template: NoteTemplate, hidden: boolean): NoteTemplat
     description: template.description,
     instructions: template.instructions,
     outputFormat: template.outputFormat as NoteOutputFormat,
+    bodyFormat: toNoteBodyFormat(template.bodyFormat),
     structure: parseTemplateStructure(template.structure),
     tone: template.tone,
     length: template.length,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   MAX_CONTEXT_CHARS,
   MAX_NAME_CHARS,
+  bodyFormatSchema,
   previewSourceSchema,
 } from './note-template.dto';
 import { PLAYBACK_STATUSES, TRANSCRIPT_STATUSES } from '../../transcripts/dto/transcript.dto';
@@ -417,6 +418,10 @@ export const noteResponseSchema = z.object({
   title: z.string().describe('The note\'s title.'),
   titleSource: noteTitleSourceSchema,
   body: z.string().describe('The live markdown body — by invariant, the version at `currentVersion`.'),
+  bodyFormat: bodyFormatSchema.describe(
+    'How `body` is written (issue #334): `markdown`, or `plain_text` — render it literally, never ' +
+      'as Markdown. Taken from the template when the note is created or regenerated.',
+  ),
   status: noteStatusSchema,
   currentVersion: z
     .number()
