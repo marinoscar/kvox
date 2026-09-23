@@ -190,6 +190,18 @@ export const providerCapabilitiesSchema = z.object({
     .boolean()
     .describe('Can a submitted job and its audio be deleted from the provider?'),
   cancel: z.boolean().describe('Can an in-flight job be cancelled?'),
+  keyterms: z
+    .object({
+      maxTerms: z.number().int().describe('Most terms one submission may carry.'),
+      maxWordsPerTerm: z
+        .number()
+        .int()
+        .describe('Most words one term may contain.'),
+    })
+    .nullable()
+    .describe(
+      'Can it be told which names and terms to expect (#327)? `null` means unsupported.',
+    ),
 });
 
 export const transcriptionProviderDescriptionSchema = z.object({
@@ -327,6 +339,17 @@ export const transcriptionConfigSchema = z.object({
   acceptedMimeTypes: z
     .array(z.string())
     .describe('Lowercase MIME types the active provider accepts.'),
+  keytermsSupported: z
+    .boolean()
+    .describe(
+      'Whether the active provider can be told which names and terms to expect (#327). A client should only offer a keyterms field when this is true; terms sent anyway are stored but not forwarded.',
+    ),
+  maxKeyterms: z
+    .number()
+    .int()
+    .describe(
+      'Most keyterms `POST /api/transcripts` will forward to the active provider: the smaller of this API\'s own limit (200) and the provider\'s. 0 when unsupported or none is usable.',
+    ),
 });
 
 export class TranscriptionConfigDto extends createZodDto(

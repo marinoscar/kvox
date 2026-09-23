@@ -20,6 +20,7 @@ function provider(
       acceptedMimeTypes: ['audio/mpeg'],
       remoteDelete: true,
       cancel: false,
+      keyterms: null,
       ...(overrides.capabilities ?? {}),
     },
     settingsSchema: {} as TranscriptionProvider<unknown>['settingsSchema'],

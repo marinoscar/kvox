@@ -254,7 +254,21 @@ describe('TranscriptsService', () => {
       expect(prisma.transcript.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            providerOptions: { speakersExpected: 4, language: null },
+            providerOptions: { speakersExpected: 4, language: null, keyterms: [] },
+          }),
+        }),
+      );
+    });
+
+    it('stores keyterms in provider_options whatever the provider supports (#327)', async () => {
+      await service.create({ ...dto, keyterms: ['Kvox', 'Oscar Marín'] }, USER);
+
+      expect(prisma.transcript.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            providerOptions: expect.objectContaining({
+              keyterms: ['Kvox', 'Oscar Marín'],
+            }),
           }),
         }),
       );

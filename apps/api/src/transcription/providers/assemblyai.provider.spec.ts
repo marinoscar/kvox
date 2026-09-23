@@ -619,6 +619,57 @@ describe('AssemblyAiProvider job lifecycle', () => {
     );
   });
 
+  describe('keyterms (#327)', () => {
+    async function submitBody(keyterms: string[] | undefined) {
+      const fetch = fakeFetch([
+        { ok: true, status: 200, json: async () => ({ id: 'abc123' }) },
+      ]);
+
+      await buildProvider(fetch.impl).submit(ctx(), {
+        audio: { kind: 'url', url: 'https://storage.invalid/a.mp3' },
+        options: { detectLanguage: true, keyterms },
+      });
+
+      return JSON.parse(fetch.calls[0].body as string) as Record<string, unknown>;
+    }
+
+    it('declares the capability with the vendor limits', () => {
+      expect(buildProvider(fakeFetch([]).impl).capabilities.keyterms).toEqual({
+        maxTerms: 1000,
+        maxWordsPerTerm: 6,
+      });
+    });
+
+    it('sends keyterms_prompt when there are terms', async () => {
+      const body = await submitBody(['Oscar Marín', 'Kubernetes']);
+
+      expect(body.keyterms_prompt).toEqual(['Oscar Marín', 'Kubernetes']);
+    });
+
+    it('never sends the deprecated word_boost / boost_param', async () => {
+      const body = await submitBody(['Kubernetes']);
+
+      expect(body).not.toHaveProperty('word_boost');
+      expect(body).not.toHaveProperty('boost_param');
+    });
+
+    it.each([
+      ['absent', undefined],
+      ['empty', []],
+      ['only blanks', ['  ', '']],
+    ])('omits keyterms_prompt entirely when %s', async (_label, keyterms) => {
+      const body = await submitBody(keyterms);
+
+      expect(body).not.toHaveProperty('keyterms_prompt');
+    });
+
+    it('drops a term over the six-word limit rather than failing the submission', async () => {
+      const body = await submitBody(['one two three four five six seven', 'fine']);
+
+      expect(body.keyterms_prompt).toEqual(['fine']);
+    });
+  });
+
   it('uploads the bytes first for a stream source, then submits the upload_url', async () => {
     const fetch = fakeFetch([
       {

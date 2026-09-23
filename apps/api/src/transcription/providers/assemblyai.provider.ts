@@ -306,6 +306,12 @@ export const ASSEMBLYAI_DEFAULT_SPEECH_MODELS: readonly string[] = [
   'universal-2',
 ];
 
+/** Most `keyterms_prompt` entries one pre-recorded submission may carry. */
+export const ASSEMBLYAI_MAX_KEYTERMS = 1000;
+
+/** Most words one `keyterms_prompt` entry may contain. */
+export const ASSEMBLYAI_MAX_WORDS_PER_KEYTERM = 6;
+
 /**
  * Model ids that predate the `speech_models` array and are no longer accepted.
  * A stored setting naming one of these is a deployment configured before #95,
@@ -378,6 +384,14 @@ export class AssemblyAiProvider
     // than one that does not offer it, and the registry refuses a provider
     // whose capability and method disagree.
     cancel: false,
+    // `keyterms_prompt` (#327). The vendor accepts up to 1000 terms of at most
+    // six words each for pre-recorded audio; `POST /api/transcripts` caps its
+    // own input at `MAX_TRANSCRIPT_KEYTERMS` (200), well inside that, so the
+    // capability states the VENDOR's limit and the API states its own.
+    keyterms: {
+      maxTerms: ASSEMBLYAI_MAX_KEYTERMS,
+      maxWordsPerTerm: ASSEMBLYAI_MAX_WORDS_PER_KEYTERM,
+    },
   };
 
   /**
@@ -548,7 +562,8 @@ export class AssemblyAiProvider
         ? request.audio.url
         : await this.uploadAudio(ctx, request.audio.stream, request.audio.size);
 
-    const { language, detectLanguage, speakersExpected } = request.options;
+    const { language, detectLanguage, speakersExpected, keyterms } =
+      request.options;
 
     const body: Record<string, unknown> = {
       audio_url: audioUrl,
@@ -572,6 +587,30 @@ export class AssemblyAiProvider
 
     if (typeof speakersExpected === 'number' && speakersExpected > 0) {
       body.speakers_expected = speakersExpected;
+    }
+
+    // KEYTERMS (#327): `keyterms_prompt`, NEVER the deprecated `word_boost` /
+    // `boost_param` pair. Documented for `universal-3-5-pro` and
+    // `universal-3-pro`; with the default `speech_models` fallback list
+    // (`universal-3-5-pro, universal-2`) the vendor applies the prompt to the
+    // model that supports it. ⚠ UNVERIFIED: whether a request whose list names
+    // ONLY `universal-2` (or another model without keyterm support) is refused
+    // or merely has the prompt ignored. Sent regardless — the terms are a hint
+    // the user asked for — and omitted entirely when there are none, so a
+    // submission without keyterms is byte-for-byte what it was before #327.
+    // Clamped to this provider's own limits defensively; the caller already
+    // validated against them.
+    const terms = (keyterms ?? [])
+      .map((term) => term.trim())
+      .filter(
+        (term) =>
+          term.length > 0 &&
+          term.split(/\s+/).length <= ASSEMBLYAI_MAX_WORDS_PER_KEYTERM,
+      )
+      .slice(0, ASSEMBLYAI_MAX_KEYTERMS);
+
+    if (terms.length > 0) {
+      body.keyterms_prompt = terms;
     }
 
     const response = await this.fetchImpl(

@@ -28,6 +28,13 @@
 
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
+import {
+  MAX_KEYTERM_LENGTH,
+  MAX_KEYTERM_WORDS,
+  MAX_TRANSCRIPT_KEYTERMS,
+  keytermWordCount,
+  normalizeKeyterms,
+} from '../../transcription/keyterms';
 
 /** `transcripts.status` — the top-level lifecycle (spec §1.1). */
 export const TRANSCRIPT_STATUSES = [
@@ -93,6 +100,47 @@ export const transcriptSourceSchema = z.object({
   mimeType: z.string().trim().max(255).optional(),
 });
 
+/**
+ * The keyterms list: normalised first (`normalizeKeyterms`), then held to this
+ * API's limits. Each violation is a 400 naming the offending term, never a
+ * silent truncation — the user typed these names deliberately, and one that
+ * quietly vanished would be a transcript that misspells it with nothing to say
+ * why.
+ */
+export const keytermsSchema = z
+  .array(z.string().max(1000))
+  .max(1000)
+  .transform((terms) => normalizeKeyterms(terms))
+  .superRefine((terms, ctx) => {
+    if (terms.length > MAX_TRANSCRIPT_KEYTERMS) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `At most ${MAX_TRANSCRIPT_KEYTERMS} keyterms are accepted; ${terms.length} were given.`,
+      });
+    }
+
+    terms.forEach((term, index) => {
+      if (term.length > MAX_KEYTERM_LENGTH) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message: `Keyterm "${term.slice(0, 40)}…" is longer than ${MAX_KEYTERM_LENGTH} characters.`,
+        });
+      }
+
+      if (keytermWordCount(term) > MAX_KEYTERM_WORDS) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message: `Keyterm "${term}" has more than ${MAX_KEYTERM_WORDS} words; use a shorter phrase.`,
+        });
+      }
+    });
+  })
+  .describe(
+    `Names and terms to expect in the recording (#327): at most ${MAX_TRANSCRIPT_KEYTERMS}, each at most ${MAX_KEYTERM_LENGTH} characters and ${MAX_KEYTERM_WORDS} words. Trimmed, blanks dropped and duplicates (case-insensitive) removed before the limits apply. A hint to the provider, never a constraint; ignored by a provider that does not support it.`,
+  );
+
 export const createTranscriptSchema = z.object({
   /** Defaults to the source filename when omitted. */
   title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).optional(),
@@ -107,6 +155,15 @@ export const createTranscriptSchema = z.object({
    * `speakersExpectedHint` capability is false.
    */
   speakersExpected: z.number().int().min(1).max(50).nullable().optional(),
+  /**
+   * Names and domain terms the user expects in the recording (#327), fed
+   * forward to the provider as a recognition HINT. Trimmed, empties dropped,
+   * de-duplicated case-insensitively BEFORE the limits are checked — so a list
+   * padded with blanks or repeats is judged on what it actually says. Stored
+   * whatever the active provider supports; forwarded only to one whose
+   * `keyterms` capability is non-null (see `GET /api/transcription/config`).
+   */
+  keyterms: keytermsSchema.optional(),
   source: transcriptSourceSchema,
 });
 

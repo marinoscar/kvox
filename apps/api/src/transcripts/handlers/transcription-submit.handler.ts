@@ -52,6 +52,10 @@ import {
   type StorageProvider,
 } from '../../storage/providers/storage-provider.interface';
 import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
+import {
+  clampKeytermsToCapability,
+  readKeyterms,
+} from '../../transcription/keyterms';
 import type { TranscriptionAudioSource } from '../../transcription/providers/transcription-provider.interface';
 import {
   TRANSCRIPTION_SUBMIT_JOB_TYPE,
@@ -328,6 +332,13 @@ export class TranscriptionSubmitHandler implements JobHandler, OnModuleInit {
           // to whichever branch the vendor's client happens to take.
           detectLanguage: language === null,
           speakersExpected: readSpeakersExpected(transcript.providerOptions),
+          // #327: dropped silently when the provider declares no keyterms
+          // capability — a hint that cannot be delivered is not a failure.
+          // The stored list is left untouched either way.
+          keyterms: clampKeytermsToCapability(
+            readKeyterms(transcript.providerOptions),
+            provider.capabilities.keyterms,
+          ),
         },
       });
 

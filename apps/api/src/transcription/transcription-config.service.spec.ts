@@ -15,7 +15,13 @@ import type { TranscriptionProvider } from './providers/transcription-provider.i
 
 const DEFAULTS = DEFAULT_SYSTEM_SETTINGS.transcription;
 
-function provider(id = 'assemblyai'): TranscriptionProvider<unknown> {
+function provider(
+  id = 'assemblyai',
+  keyterms: TranscriptionProvider<unknown>['capabilities']['keyterms'] = {
+    maxTerms: 1000,
+    maxWordsPerTerm: 6,
+  },
+): TranscriptionProvider<unknown> {
   return {
     id,
     label: 'AssemblyAI',
@@ -31,6 +37,7 @@ function provider(id = 'assemblyai'): TranscriptionProvider<unknown> {
       acceptedMimeTypes: ['audio/mpeg', 'audio/mp3', 'audio/wav', 'video/quicktime'],
       remoteDelete: true,
       cancel: false,
+      keyterms,
     },
     settingsSchema: {} as TranscriptionProvider<unknown>['settingsSchema'],
     fieldDescriptors: [],
@@ -44,10 +51,16 @@ function provider(id = 'assemblyai'): TranscriptionProvider<unknown> {
 
 function build(
   policy: typeof DEFAULTS,
-  { registered = true, keyStored = true } = {},
+  {
+    registered = true,
+    keyStored = true,
+    keyterms = undefined as
+      | TranscriptionProvider<unknown>['capabilities']['keyterms']
+      | undefined,
+  } = {},
 ) {
   const registry = new TranscriptionProviderRegistry();
-  if (registered) registry.register(provider());
+  if (registered) registry.register(provider('assemblyai', keyterms));
 
   const credentials = {
     describe: jest.fn(async () => (keyStored ? { hint: '••••1234' } : null)),
@@ -89,6 +102,9 @@ describe('TranscriptionConfigService', () => {
             'audio/wav',
             'video/quicktime',
           ],
+          keytermsSupported: true,
+          // The smaller of this API's own cap (200) and the provider's (1000).
+          maxKeyterms: 200,
         });
       });
   });
@@ -163,5 +179,30 @@ describe('TranscriptionConfigService', () => {
     expect(config).not.toHaveProperty('audioDelivery');
     expect(config).not.toHaveProperty('deleteRemoteAfterIngest');
     expect(JSON.stringify(config)).not.toContain('universal');
+  });
+
+  describe('keyterms (#327)', () => {
+    it('reports unsupported and zero for a provider without the capability', async () => {
+      const config = await build(CONFIGURED, { keyterms: null }).service.getConfig();
+
+      expect(config.keytermsSupported).toBe(false);
+      expect(config.maxKeyterms).toBe(0);
+    });
+
+    it("reports the provider's own limit when it is below this API's cap", async () => {
+      const config = await build(CONFIGURED, {
+        keyterms: { maxTerms: 50, maxWordsPerTerm: 6 },
+      }).service.getConfig();
+
+      expect(config.keytermsSupported).toBe(true);
+      expect(config.maxKeyterms).toBe(50);
+    });
+
+    it('reports unsupported and zero when nothing is usable', async () => {
+      const config = await build({ ...CONFIGURED, enabled: false }).service.getConfig();
+
+      expect(config.keytermsSupported).toBe(false);
+      expect(config.maxKeyterms).toBe(0);
+    });
   });
 });

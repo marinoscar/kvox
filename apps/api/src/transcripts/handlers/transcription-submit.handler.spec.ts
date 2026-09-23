@@ -198,9 +198,73 @@ describe('TranscriptionSubmitHandler', () => {
       expect(provider.submit).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          options: { language: null, detectLanguage: true, speakersExpected: 3 },
+          options: {
+            language: null,
+            detectLanguage: true,
+            speakersExpected: 3,
+            // A row with no stored keyterms (every row before #327) sends none.
+            keyterms: [],
+          },
         }),
       );
+    });
+
+    it('passes the stored keyterms out of provider_options (#327)', async () => {
+      pipeline.loadForJob.mockResolvedValue(
+        transcriptRow({
+          providerOptions: { speakersExpected: 3, keyterms: ['Kvox', 'Oscar Marín'] },
+        }),
+      );
+
+      await handler.process(job());
+
+      expect(provider.submit).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          options: expect.objectContaining({ keyterms: ['Kvox', 'Oscar Marín'] }),
+        }),
+      );
+    });
+
+    it("clamps the stored keyterms to the provider's own limits (#327)", async () => {
+      provider = createFakeProvider({ keyterms: { maxTerms: 1, maxWordsPerTerm: 2 } });
+      runtime.resolve.mockResolvedValue({ provider, ctx: { apiKey: 'k' }, policy });
+      pipeline.loadForJob.mockResolvedValue(
+        transcriptRow({
+          providerOptions: { keyterms: ['three word phrase', 'Kvox', 'Second'] },
+        }),
+      );
+
+      await handler.process(job());
+
+      expect(provider.submit).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          options: expect.objectContaining({ keyterms: ['Kvox'] }),
+        }),
+      );
+    });
+
+    it('silently drops keyterms for a provider without the capability, leaving them stored (#327)', async () => {
+      provider = createFakeProvider({ keyterms: null });
+      runtime.resolve.mockResolvedValue({ provider, ctx: { apiKey: 'k' }, policy });
+      pipeline.loadForJob.mockResolvedValue(
+        transcriptRow({ providerOptions: { keyterms: ['Kvox'] } }),
+      );
+
+      await handler.process(job());
+
+      expect(provider.submit).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          options: expect.objectContaining({ keyterms: [] }),
+        }),
+      );
+      // The job never rewrites provider_options: the stored terms survive for a
+      // later retry against a provider that can take them.
+      for (const [arg] of prisma.transcript.update.mock.calls) {
+        expect(arg.data).not.toHaveProperty('providerOptions');
+      }
     });
 
     it('forces the language and turns detection off when one is chosen', async () => {
