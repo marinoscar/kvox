@@ -232,6 +232,34 @@ describe('NotesService', () => {
     });
   });
 
+  describe('create — bodyFormat (#334)', () => {
+    const dto = {
+      templateId: TEMPLATE_ID,
+      source: { type: 'transcript' as const, transcriptId: 'transcript-1' },
+    };
+
+    it('sets the note\'s bodyFormat from a markdown template', async () => {
+      await service.create(dto, USER);
+
+      expect(prisma.note.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bodyFormat: 'markdown' }) }),
+      );
+    });
+
+    it('sets the note\'s bodyFormat to plain_text from a plain_text template', async () => {
+      templates.require.mockResolvedValue({
+        template: templateRow({ bodyFormat: 'plain_text' }),
+        builtIn: true,
+      });
+
+      await service.create(dto, USER);
+
+      expect(prisma.note.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bodyFormat: 'plain_text' }) }),
+      );
+    });
+  });
+
   describe('update — a rename always claims the change', () => {
     it('marks the title user-chosen on a metadata-only rename', async () => {
       await service.update(NOTE_ID, { title: 'Renamed by hand' }, USER);
