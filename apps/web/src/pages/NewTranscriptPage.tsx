@@ -48,6 +48,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { KeytermsField } from '../components/transcripts/KeytermsField';
 import { KeepScreenAwakeToggle } from '../components/upload/KeepScreenAwakeToggle';
 import { usePermissions } from '../hooks/usePermissions';
 import { useIsMounted } from '../hooks/useIsMounted';
@@ -87,6 +88,7 @@ export function NewTranscriptPage() {
   const [title, setTitle] = useState('');
   const [language, setLanguage] = useState<string>('auto');
   const [speakers, setSpeakers] = useState<string>('auto');
+  const [keyterms, setKeyterms] = useState<string[]>([]);
 
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -163,6 +165,10 @@ export function NewTranscriptPage() {
         title: title.trim() || titleFromFileName(file.name),
         language: language === 'auto' ? null : language,
         speakersExpected: speakers === 'auto' ? null : Number(speakers),
+        // Only sent when the provider can use them AND the user gave some: an
+        // empty array is noise, and terms the provider cannot take would be
+        // stored but never forwarded (#327).
+        ...(config?.keytermsSupported && keyterms.length > 0 ? { keyterms } : {}),
         source: {
           name: file.name,
           size: file.size,
@@ -204,7 +210,16 @@ export function NewTranscriptPage() {
     } finally {
       if (isMounted()) setIsStarting(false);
     }
-  }, [file, isMounted, language, speakers, startUpload, title]);
+  }, [
+    config?.keytermsSupported,
+    file,
+    isMounted,
+    keyterms,
+    language,
+    speakers,
+    startUpload,
+    title,
+  ]);
 
   if (configLoading) {
     return (
@@ -372,6 +387,20 @@ export function NewTranscriptPage() {
                   ))}
                 </Select>
               </FormControl>
+
+              {/* Offered only when the active provider can be told what to
+                  expect (#327) — a field whose contents are silently dropped
+                  would be worse than no field. No suggestions yet: the only
+                  speaker-name source today is one transcript's own speakers,
+                  and there is no transcript yet. */}
+              {config.keytermsSupported && config.maxKeyterms > 0 && (
+                <KeytermsField
+                  value={keyterms}
+                  onChange={setKeyterms}
+                  maxKeyterms={config.maxKeyterms}
+                  disabled={isStarting}
+                />
+              )}
 
               {/* NAMES THE PROVIDER, because "sent to a third party" is not
                   consent — the user is entitled to know WHICH one before they

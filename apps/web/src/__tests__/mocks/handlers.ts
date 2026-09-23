@@ -301,6 +301,8 @@ export const handlers = [
         maxDurationMs: 7_200_000,
         acceptedExtensions: ['.m4a', '.mp3'],
         acceptedMimeTypes: ['audio/mp4', 'audio/mpeg'],
+        keytermsSupported: true,
+        maxKeyterms: 200,
       },
     });
   }),

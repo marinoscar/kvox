@@ -174,6 +174,13 @@ export interface TranscriptionConfig {
   maxDurationMs: number;
   acceptedExtensions: string[];
   acceptedMimeTypes: string[];
+  /**
+   * Whether the active provider can be told which names and terms to expect
+   * (#327). Offer a keyterms field only when this is true.
+   */
+  keytermsSupported: boolean;
+  /** Most keyterms the create call will forward. 0 when unsupported. */
+  maxKeyterms: number;
 }
 
 const BASE = '/transcription-settings';
