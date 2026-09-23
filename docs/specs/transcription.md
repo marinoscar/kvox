@@ -129,11 +129,15 @@ is a request to remove, not a soft state a later request reverses."
 
 `failed` is reachable from `processing` only. There is no `failed` from
 `uploading`: an upload that never completes is not the transcript's failure
-to record, it is `storage-cleanup.handler.ts`'s stale-upload sweep (extended
-by #21, §9) freeing the abandoned `storage_objects` row, and
-`transcripts.housekeeping` (§1.5) is what notices the orphaned transcript row
-and moves *it* to `failed` with a reason naming the cleanup, rather than the
-upload path trying to detect its own abandonment.
+to record. It is either the user cancelling — `ObjectsService.abortUpload`
+marks the (managed) source object `failed` and emits
+`storage.object.upload_aborted`, which `TranscriptsUploadAbortedListener`
+turns into an immediate `transcript.purge` (§9.3, §9.4) — or the upload
+simply going quiet, which `transcripts.housekeeping` (§1.5.8) notices by the
+source object's own `updated_at` and reconciles the same way, on
+`transcription.abandonedUploadHours`' clock (issue #322). Either path
+**purges** the transcript rather than failing it: there is no audio to retry
+with, so a `failed` card here would be permanent and un-retryable.
 
 ### 1.2 `transcription_status` — the provider round trip
 
@@ -525,10 +529,25 @@ things:
    reaper has no way to know to do — it reasons about jobs, not about
    transcripts. This sweep is the second, transcript-aware layer above the
    reaper's job-aware one.
-2. **Fails transcripts whose upload was cleaned up.** A transcript stuck in
-   `uploading` whose backing `storage_objects` row was removed by the
-   activity-based stale-upload sweep (§9.4) is failed here, with a reason
-   naming the cleanup — the reconciliation §1.1 already promises.
+2. **Purges transcripts whose upload was abandoned (issue #322).** A
+   transcript stuck in `uploading` whose source upload has gone IDLE — no
+   part-URL batch, no status poll, so `storage_objects.updated_at` hasn't
+   moved — for longer than `transcription.abandonedUploadHours` (default 3,
+   1–720; §9.4) is soft-deleted to `deleting` and handed to
+   `transcript.purge`, which aborts the multipart upload and frees the
+   object. Measured from the source object's last **activity**, never from
+   the transcript's creation, so an upload being actively pushed is never
+   killed however long it takes. **Purged, not failed** — the earlier design
+   failed these rows after a hardcoded 96 hours, which left a permanent card
+   nobody could retry (there is no audio to retry with); the same step also
+   purges the legacy rows that behavior left behind (`failed` +
+   `transcription_status: waiting_input` with no completed audio). This
+   sweep is the *only* thing that reclaims an abandoned upload — the generic
+   stale-upload sweep (§9.4) now skips managed objects entirely, since
+   deleting one would violate `transcripts.source_object_id`'s `Restrict`
+   foreign key. A **cancelled** upload does not wait for this sweep at all:
+   `TranscriptsUploadAbortedListener` purges it immediately on
+   `storage.object.upload_aborted` (§9.3).
 3. **Expires exports.** Deletes `transcript_exports` rows and their storage
    objects past their `expires_at` (§8.4).
 
@@ -1617,6 +1636,18 @@ same ownership boundary §3.1 gives `transcripts.source_object_id`'s
 transcript side: a file a feature depends on must be invisible and
 untouchable to a generic operation that has no idea what depends on it.
 
+`DELETE /api/storage/objects/:id/upload/abort` respects the same boundary
+(issue #322): for a managed object it cannot delete the row — the same FK
+that blocks the generic `DELETE` blocks this too — so it aborts the
+multipart upload, marks the object `failed`, and emits
+`storage.object.upload_aborted` instead. The module named by `managed_by`
+listens and reconciles its own record; for a transcript,
+`TranscriptsUploadAbortedListener` soft-deletes it (`deleting`) and queues
+`transcript.purge`, the one path allowed to free the object. **400** if the
+managed upload already completed (`processing`/`ready`) — that is never
+silently downgraded to `failed`. Unmanaged objects are unaffected: their
+abort still deletes the row as before.
+
 ### 9.4 Adaptive part size, limits, and activity-based stale cleanup
 
 Part size at `init` is `max(STORAGE_PART_SIZE, ceil(size / 10000))`, rounded
@@ -1651,6 +1682,16 @@ app, resume the next day" survive at all: the timestamp only goes stale when
 nothing — no presign call, no status check, no part upload — has touched
 the row in three days, which is a real absence of interest rather than
 merely the passage of time.
+
+This sweep now selects **unmanaged** rows only (`managed_by: null`, issue
+#322): deleting a managed row here would violate the owning module's
+`Restrict` foreign key (`transcripts.source_object_id`, for one), the exact
+mistake the earlier design made. A managed object's own abandoned-upload
+reconciliation belongs to the module named by `managed_by` — for transcripts,
+that is `transcripts.housekeeping` §1.5.8's own activity-based check against
+`transcription.abandonedUploadHours`, deliberately a *separate* setting from
+`STORAGE_STALE_UPLOAD_HOURS` rather than a reuse of it, since the two now
+govern disjoint sets of rows.
 
 ### 9.5 CSP and S3 CORS
 
