@@ -79,13 +79,16 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useUploadManager } from '../../hooks/useUploadManager';
+import { liveUploadTranscriptIds } from '../../hooks/useLiveUploadTranscriptIds';
 import type { ManagedUpload } from '../../hooks/useUploadManager';
 import { UploadSessionMismatchError } from '../../services/uploadSessions';
 import type { UploadSessionRecord } from '../../services/uploadSessions';
 import type { NoteListItem } from '../../services/notes';
 import type { TranscriptListItem } from '../../services/transcripts';
 import {
+  UPLOAD_INTERRUPTED_LABEL,
   formatBytes,
+  isUploadInterrupted,
   processingStageLabel,
   transcriptStatusDescriptor,
 } from '../../utils/transcriptDisplay';
@@ -303,7 +306,15 @@ function ProcessingRow({ item }: { item: TranscriptListItem }) {
   // is "processing" by definition, so a chip saying so is a chip carrying no
   // information. `processingStageLabel` falls back to the status word only when
   // it genuinely has nothing more specific to say.
-  const stage = processingStageLabel(item) ?? transcriptStatusDescriptor(item.status).label;
+  // Read through `useUploadManager` (not the tolerant hook) because this whole
+  // section already requires the provider.
+  const { uploads } = useUploadManager();
+  // Issue #322: an `uploading` row with no live upload in this browser is not
+  // moving, so it says so and drops the indeterminate bar that would claim it is.
+  const interrupted = isUploadInterrupted(item, liveUploadTranscriptIds(uploads));
+  const stage = interrupted
+    ? UPLOAD_INTERRUPTED_LABEL
+    : (processingStageLabel(item) ?? transcriptStatusDescriptor(item.status).label);
 
   return (
     <Card variant="outlined" component="li" sx={{ listStyle: 'none' }}>
@@ -319,7 +330,9 @@ function ProcessingRow({ item }: { item: TranscriptListItem }) {
           </Box>
           <Chip size="small" color="warning" variant="outlined" label={stage} />
         </Stack>
-        <LinearProgress aria-hidden sx={{ mt: 1, height: 4, borderRadius: 2 }} />
+        {!interrupted && (
+          <LinearProgress aria-hidden sx={{ mt: 1, height: 4, borderRadius: 2 }} />
+        )}
       </CardActionArea>
     </Card>
   );

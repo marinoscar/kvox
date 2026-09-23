@@ -13,17 +13,26 @@
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 
+import { useLiveUploadTranscriptIds } from '../../hooks/useLiveUploadTranscriptIds';
 import type { TranscriptListItem } from '../../services/transcripts';
 import {
+  UPLOAD_INTERRUPTED_LABEL,
+  isUploadInterrupted,
   processingStageLabel,
   transcriptStatusDescriptor,
 } from '../../utils/transcriptDisplay';
 
 interface TranscriptStatusChipProps {
+  /**
+   * `id` is optional so every existing caller keeps compiling, but it is what
+   * lets an `uploading` transcript with no live upload in this browser read as
+   * "Upload interrupted" (issue #322). Without it the chip cannot tell, and
+   * renders as it always did.
+   */
   transcript: Pick<
     TranscriptListItem,
     'status' | 'transcriptionStatus' | 'playbackStatus'
-  >;
+  > & { id?: string };
   /**
    * Append the sub-pipeline stage ("Processing · Transcribing").
    *
@@ -40,6 +49,24 @@ export function TranscriptStatusChip({
   showStage = false,
   size = 'small',
 }: TranscriptStatusChipProps) {
+  const liveTranscriptIds = useLiveUploadTranscriptIds();
+
+  // Issue #322: an `uploading` transcript nothing in this browser is uploading
+  // is not "still moving" — it is stuck, and a spinner would say otherwise
+  // forever. Warning colour, no spinner, no stage clause; the row's own ⋮ menu
+  // still offers Delete, and the server purges it after
+  // `transcription.abandonedUploadHours` regardless.
+  if (isUploadInterrupted(transcript, liveTranscriptIds)) {
+    return (
+      <Chip
+        size={size}
+        color="warning"
+        variant="outlined"
+        label={UPLOAD_INTERRUPTED_LABEL}
+      />
+    );
+  }
+
   const descriptor = transcriptStatusDescriptor(transcript.status);
   const stage = showStage ? processingStageLabel(transcript) : null;
   const label = stage ? `${descriptor.label} · ${stage}` : descriptor.label;
