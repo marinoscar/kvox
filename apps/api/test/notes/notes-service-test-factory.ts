@@ -39,6 +39,8 @@ export interface NotesServiceTestDeps {
   sources: ConstructorParameters<typeof NotesService>[5];
   jobs: ConstructorParameters<typeof NotesService>[6];
   searchIndex: ConstructorParameters<typeof NotesService>[7];
+  /** #309's origin resolver. Optional: only single-note responses reach it. */
+  origins?: ConstructorParameters<typeof NotesService>[8];
 }
 
 /** Build a `NotesService` for a test, naming every collaborator by role. */
@@ -52,5 +54,6 @@ export function buildNotesService(deps: NotesServiceTestDeps): NotesService {
     deps.sources,
     deps.jobs,
     deps.searchIndex,
+    deps.origins ?? (null as never),
   );
 }

@@ -7,6 +7,7 @@ import { JobsService } from '../jobs/jobs.service';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteAccessService } from './access/note-access.service';
+import { NoteOriginService } from './note-origin.service';
 import { NoteSourceNameService } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import { noteResponseSchema, RETITLE_SWEEP_LIMIT } from './dto/note.dto';
@@ -177,6 +178,9 @@ describe('NotesService', () => {
         { provide: NoteSourceService, useValue: sources },
         { provide: JobsService, useValue: jobs },
         { provide: SearchIndexService, useValue: searchIndex },
+        // #309. Stubbed to `null` — a real production answer (no readable
+        // origin) — for the same reason the source-name resolver is stubbed.
+        { provide: NoteOriginService, useValue: { resolve: jest.fn().mockResolvedValue(null) } },
       ],
     }).compile();
 

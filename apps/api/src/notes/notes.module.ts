@@ -10,6 +10,7 @@ import { StorageModule } from '../storage/storage.module';
 import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { NoteAccessService } from './access/note-access.service';
+import { NoteOriginService } from './note-origin.service';
 import { NoteSourceNameService } from './note-source-name.service';
 import { NoteGenerationAccessService } from './access/note-generation-access.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
@@ -147,6 +148,9 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // queries, scoped to what the caller may read (#192). It replaces a
     // per-source request the web client used to issue.
     NoteSourceNameService,
+    // The transcript a note ultimately came from (#309) — detail responses
+    // only, walking a chain of source notes as far as the caller may read.
+    NoteOriginService,
     NotesService,
     // What a generation sent to its provider (#307), read back for
     // `GET /api/notes/:id/context` and `/generations/:generationId/context`.

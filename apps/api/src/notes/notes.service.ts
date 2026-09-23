@@ -75,6 +75,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../search/indexing/job-types';
 import { SearchIndexService } from '../search/indexing/search-index.service';
 import { NoteAccessService } from './access/note-access.service';
+import { NoteOriginService, type NoteOriginTranscript } from './note-origin.service';
 import { NoteSourceNameService, noteSourceNameKey } from './note-source-name.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
 import { HOUSEKEEPING_PRIORITY } from '../jobs/housekeeping.enqueue';
@@ -163,6 +164,7 @@ export class NotesService {
     private readonly sources: NoteSourceService,
     private readonly jobs: JobsService,
     private readonly searchIndex: SearchIndexService,
+    private readonly origins: NoteOriginService,
   ) {}
 
   // ===========================================================================
@@ -1324,7 +1326,7 @@ export class NotesService {
   private async shape(note: Note): Promise<NoteResponse> {
     // Both reads in parallel: they are independent, and the detail route is the
     // one a user waits on with a spinner.
-    const [template, sourceName] = await Promise.all([
+    const [template, sourceName, originTranscript] = await Promise.all([
       note.templateId
         ? this.prisma.noteTemplate.findUnique({
             where: { id: note.templateId },
@@ -1335,9 +1337,13 @@ export class NotesService {
       // epic, so the only caller who reaches a shaped note IS its owner —
       // `NoteAccessService.require` has already answered 404 to anyone else.
       this.sourceNames.resolveOne(note, note.ownerId),
+      // #309. Detail-only: `shape` serves single-note responses, never a list
+      // or summary page (those go through `listShape`), so the per-hop reads
+      // this may cost are paid once per request, not once per row.
+      this.origins.resolve(note, note.ownerId),
     ]);
 
-    return detailShape(note, template?.name ?? null, sourceName);
+    return detailShape(note, template?.name ?? null, sourceName, originTranscript);
   }
 
   /** One audit row. `targetType: 'note'`, matching the subject naming. */
@@ -1364,6 +1370,7 @@ export function detailShape(
   note: Note,
   templateName: string | null,
   sourceName: string | null = null,
+  originTranscript: NoteOriginTranscript | null = null,
 ): NoteResponse {
   return {
     id: note.id,
@@ -1381,6 +1388,7 @@ export function detailShape(
     templateId: note.templateId,
     templateName,
     sourceName,
+    originTranscript,
     contextText: note.contextText,
     currentGenerationId: note.currentGenerationId,
     failureReason: note.failureReason,
@@ -1397,7 +1405,7 @@ export function listShape(
   // called once per row, which is the N+1 this field exists to remove.
   sourceName: string | null = null,
 ): NoteListItem {
-  const { body, contextText, ...rest } = detailShape(
+  const { body, contextText, originTranscript, ...rest } = detailShape(
     note,
     note.template?.name ?? null,
     sourceName,
@@ -1405,6 +1413,7 @@ export function listShape(
 
   void body;
   void contextText;
+  void originTranscript;
 
   return { ...rest, excerpt: excerpt(note.body) };
 }
