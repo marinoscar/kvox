@@ -3935,6 +3935,38 @@ from.
 
 **Response:** `304` on an `If-None-Match` match to `W/"v<currentVersion>"`, otherwise the note. `404` with no access — never 403.
 
+The note also carries **`originTranscript`** (issue #309) — the transcript it
+was ultimately generated from, resolved server-side across a chain of source
+notes so a client never has to walk `sourceNoteId` itself:
+
+```json
+{
+  "originTranscript": {
+    "id": "…",
+    "title": "Q3 planning call",
+    "durationMs": 1830000,
+    "status": "ready",
+    "playbackStatus": "ready",
+    "via": "note_chain",
+    "hops": 2
+  }
+}
+```
+
+`via` is `"direct"` (`sourceType: "transcript"`, `hops: 0`) or `"note_chain"`
+(`sourceType: "note"`, walked up to `hops` intermediate notes, capped at 5).
+**`originTranscript: null`** — for a document source, a chain longer than 5
+notes, a cycle, an intermediate note the caller can no longer read (each must
+be their own, not deleting or soft-deleted), or a transcript that is deleted,
+`deleting`, or no longer shared with the caller. It is all-or-nothing: there
+is no partial object, and any break in the chain answers `null` for the whole
+field rather than a title with no id or an id the caller may not follow.
+
+⚠ **`originTranscript` is detail-only** — it is on this response and on
+create/update/regenerate/restore/retitle, and deliberately **not** on
+`GET /notes` or `GET /notes/summary` rows, where resolving it per row would
+be an N+1. See [`docs/specs/notes.md`](specs/notes.md) §4.8.
+
 ---
 
 #### GET /notes/{id}/versions

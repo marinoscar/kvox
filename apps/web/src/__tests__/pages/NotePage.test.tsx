@@ -995,6 +995,48 @@ describe('NotePage — provenance', () => {
 });
 
 // =============================================================================
+// #309 — the source recording card
+// =============================================================================
+
+describe('NotePage — the source recording card', () => {
+  it('renders it when the note carries an originTranscript', async () => {
+    current = note({
+      status: 'ready',
+      body: 'Done.',
+      currentVersion: 1,
+      originTranscript: {
+        id: 't1',
+        title: 'Weekly standup',
+        durationMs: 83_000,
+        status: 'ready',
+        playbackStatus: 'ready',
+        via: 'direct',
+        hops: 0,
+      },
+    });
+    renderNote();
+
+    expect(await screen.findByTestId('note-source-media')).toBeInTheDocument();
+  });
+
+  it('is absent when originTranscript is null', async () => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1, originTranscript: null });
+    renderNote();
+
+    await screen.findByRole('heading', { name: 'Q3 planning — decisions', level: 1 });
+    expect(screen.queryByTestId('note-source-media')).not.toBeInTheDocument();
+  });
+
+  it('is absent when originTranscript is undefined (not carried on this row)', async () => {
+    current = note({ status: 'ready', body: 'Done.', currentVersion: 1 });
+    renderNote();
+
+    await screen.findByRole('heading', { name: 'Q3 planning — decisions', level: 1 });
+    expect(screen.queryByTestId('note-source-media')).not.toBeInTheDocument();
+  });
+});
+
+// =============================================================================
 // #58 — export
 // =============================================================================
 
