@@ -79,6 +79,7 @@ import UserNoteTemplatesPage from '../../pages/UserNoteTemplatesPage';
 import { getAiConfig } from '../../services/ai';
 import { getTranscripts } from '../../services/transcripts';
 import {
+  createNoteTemplate,
   duplicateNoteTemplate,
   getNoteTemplates,
   hideNoteTemplate,
@@ -93,6 +94,8 @@ import type { TranscriptListItem } from '../../services/transcripts';
 const mockGetAiConfig = vi.mocked(getAiConfig);
 const mockGetTranscripts = vi.mocked(getTranscripts);
 const mockGetTemplates = vi.mocked(getNoteTemplates);
+const mockCreate = vi.mocked(createNoteTemplate);
+const mockUpdate = vi.mocked(updateNoteTemplate);
 const mockDuplicate = vi.mocked(duplicateNoteTemplate);
 const mockPreview = vi.mocked(previewNoteTemplate);
 const mockHide = vi.mocked(hideNoteTemplate);
@@ -208,6 +211,8 @@ function setup(options: { config?: Partial<AiConfig>; templates?: NoteTemplate[]
   mockPreview.mockResolvedValue(queued);
   mockHide.mockResolvedValue(undefined);
   mockUnhide.mockResolvedValue(undefined);
+  mockCreate.mockResolvedValue(template({ id: 'tpl-new', name: 'New one' }));
+  mockUpdate.mockResolvedValue(template());
 }
 
 async function renderPage() {
@@ -752,6 +757,168 @@ describe('UserNoteTemplatesPage', () => {
       await screen.findByText('Hidden one');
 
       expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+    });
+  });
+
+  // ==========================================================================
+  // The editor's footer action row and the Ctrl/⌘+S shortcut — issue #331
+  // ==========================================================================
+
+  describe('editor footer actions', () => {
+    /** Open the editor on a brand-new, empty template. */
+    async function openNewTemplate(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(await screen.findByRole('button', { name: /new template/i }));
+      await screen.findByRole('heading', { level: 2, name: 'Preview' });
+    }
+
+    /** The `NoteTemplateEditor` Paper, whose `footer` prop is where these
+     *  buttons live — scoping to it is what tells the footer button apart
+     *  from the top-bar Save button, which jsdom keeps in the DOM too. */
+    function editorRegion() {
+      return screen.getByRole('region', { name: 'Template' });
+    }
+
+    it('labels the footer button "Create template" for a new template', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openNewTemplate(user);
+
+      expect(
+        within(editorRegion()).getByRole('button', { name: 'Create template' }),
+      ).toBeInTheDocument();
+    });
+
+    it('labels the footer button "Save changes" for an existing template', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openEditor(user);
+
+      expect(
+        within(editorRegion()).getByRole('button', { name: 'Save changes' }),
+      ).toBeInTheDocument();
+    });
+
+    it('disables the footer button and explains why when name and instructions are both empty', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openNewTemplate(user);
+
+      expect(
+        within(editorRegion()).getByRole('button', { name: 'Create template' }),
+      ).toBeDisabled();
+      expect(
+        within(editorRegion()).getByText('Name and instructions are required'),
+      ).toBeInTheDocument();
+    });
+
+    it('says "Add a name to save" when only the name is missing', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openNewTemplate(user);
+
+      await user.type(screen.getByLabelText(/^instructions/i), 'Write it up.');
+
+      expect(within(editorRegion()).getByText('Add a name to save')).toBeInTheDocument();
+      expect(
+        within(editorRegion()).getByRole('button', { name: 'Create template' }),
+      ).toBeDisabled();
+    });
+
+    it('says "Add instructions to save" when only instructions are missing', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openNewTemplate(user);
+
+      await user.type(screen.getByLabelText(/^name/i), 'My template');
+
+      expect(within(editorRegion()).getByText('Add instructions to save')).toBeInTheDocument();
+      expect(
+        within(editorRegion()).getByRole('button', { name: 'Create template' }),
+      ).toBeDisabled();
+    });
+
+    it('clicking the footer button creates a new template', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openNewTemplate(user);
+
+      await user.type(screen.getByLabelText(/^name/i), 'My template');
+      await user.type(screen.getByLabelText(/^instructions/i), 'Write it up.');
+      await user.click(within(editorRegion()).getByRole('button', { name: 'Create template' }));
+
+      await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'My template', instructions: 'Write it up.' }),
+      );
+    });
+
+    it('clicking the footer button saves an existing template', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openEditor(user);
+
+      await user.click(within(editorRegion()).getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() =>
+        expect(mockUpdate).toHaveBeenCalledWith(
+          'tpl-owned',
+          expect.objectContaining({ name: 'My meeting notes' }),
+        ),
+      );
+    });
+
+    it('the footer Cancel button returns to the list', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openEditor(user);
+
+      await user.click(within(editorRegion()).getByRole('button', { name: 'Cancel' }));
+
+      expect(
+        await screen.findByRole('button', { name: /new template/i }),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Template' })).not.toBeInTheDocument();
+    });
+
+    it('Ctrl+S saves the current draft while editing', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openEditor(user);
+
+      await user.keyboard('{Control>}s{/Control}');
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    });
+
+    it('Meta+S (⌘S) saves the current draft while editing', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openEditor(user);
+
+      await user.keyboard('{Meta>}s{/Meta}');
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+    });
+
+    it('Ctrl+S does not save an invalid draft', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await openNewTemplate(user);
+
+      await user.keyboard('{Control>}s{/Control}');
+
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('does not save on Ctrl+S while on the list', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await screen.findByText('My meeting notes');
+
+      await user.keyboard('{Control>}s{/Control}');
+
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
     });
   });
 
