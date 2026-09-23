@@ -427,6 +427,32 @@ describe('Notes API (#53)', () => {
       expect(response.body.data.items).toHaveLength(1);
     });
 
+    // ========================================================================
+    // `originTranscript` is DETAIL ONLY — issue #309
+    // ========================================================================
+
+    it('omits `originTranscript` from list rows and never resolves it', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([
+        noteRow({ ownerId: user.id, sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT_ID }),
+      ]);
+      prismaMock.note.count.mockResolvedValue(1);
+
+      const response = await request(context.app.getHttpServer())
+        .get(NOTES)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.items).toHaveLength(1);
+      expect('originTranscript' in response.body.data.items[0]).toBe(false);
+      // Robust proxy for "the origin resolver never ran": a list row that
+      // named a transcript source would trigger `NoteOriginService.resolve`'s
+      // own `transcript.findFirst` if `listShape` ever stopped omitting the
+      // field, so its absence here is the N+1 this test exists to catch.
+      expect(prismaMock.transcript.findFirst).not.toHaveBeenCalled();
+    });
+
     it('counts over the FILTERS, never over the keyset-bounded page', async () => {
       // ⚠ THE ASSERTION THIS FILE EXISTS TO MAKE about `total`. A count over
       // the page predicate would shrink as the client pages, so a feed showing
@@ -688,6 +714,32 @@ describe('Notes API (#53)', () => {
         .set(authHeader(user.accessToken))
         .expect(200);
     });
+
+    it('omits `originTranscript` from summary rows and never resolves it', async () => {
+      const user = await createMockTestUser(context);
+
+      prismaMock.note.findMany.mockResolvedValue([
+        noteRow({ ownerId: user.id, sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT_ID }),
+      ]);
+      prismaMock.note.count.mockResolvedValue(1);
+
+      const response = await request(context.app.getHttpServer())
+        .get(`${NOTES}/summary`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      const allRows = [
+        ...response.body.data.inProgress,
+        ...response.body.data.recent,
+        ...response.body.data.failed,
+      ];
+
+      expect(allRows.length).toBeGreaterThan(0);
+      allRows.forEach((row: Record<string, unknown>) => {
+        expect('originTranscript' in row).toBe(false);
+      });
+      expect(prismaMock.transcript.findFirst).not.toHaveBeenCalled();
+    });
   });
 
   // ==========================================================================
@@ -785,6 +837,57 @@ describe('Notes API (#53)', () => {
         .set(authHeader(user.accessToken))
         .set('If-None-Match', 'W/"v1"')
         .expect(200);
+    });
+
+    // ========================================================================
+    // `originTranscript` — issue #309
+    // ========================================================================
+
+    it('carries `originTranscript` for a transcript-sourced note', async () => {
+      const user = await createMockTestUser(context);
+
+      ownedNote(user.id, { sourceType: 'transcript', sourceTranscriptId: TRANSCRIPT_ID });
+      prismaMock.transcript.findFirst.mockResolvedValue({
+        id: TRANSCRIPT_ID,
+        title: 'Kestrel weekly',
+        durationMs: 120_000,
+        status: 'ready',
+        playbackStatus: 'ready',
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .get(`${NOTES}/${NOTE_ID}`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.originTranscript).toEqual({
+        id: TRANSCRIPT_ID,
+        title: 'Kestrel weekly',
+        durationMs: 120_000,
+        status: 'ready',
+        playbackStatus: 'ready',
+        via: 'direct',
+        hops: 0,
+      });
+    });
+
+    it('answers `originTranscript: null` for a document-sourced note', async () => {
+      const user = await createMockTestUser(context);
+
+      ownedNote(user.id, {
+        sourceType: 'document',
+        sourceTranscriptId: null,
+        sourceNoteId: null,
+        sourceObjectId: 'object-1',
+      });
+
+      const response = await request(context.app.getHttpServer())
+        .get(`${NOTES}/${NOTE_ID}`)
+        .set(authHeader(user.accessToken))
+        .expect(200);
+
+      expect(response.body.data.originTranscript).toBeNull();
+      expect(prismaMock.transcript.findFirst).not.toHaveBeenCalled();
     });
   });
 
