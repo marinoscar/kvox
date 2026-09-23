@@ -1148,6 +1148,17 @@ still needs. `SetNull` means the reverse: the job can go, and the generation
 simply loses a link to a job that no longer matters, exactly as `note_exports
 .job_id` already does for exports.
 
+**Four more columns, added by issue #307, snapshot what was actually sent to
+the AI provider**: `system_prompt?`, `user_content?` (the two halves of
+`assemblePrompt`'s output), `source_version?` (the transcript/source-note
+`current_version` actually materialized — `NULL` for a document source) and
+`context_captured_at?`. All four are written **before** the provider call, so
+a generation that fails still records what it asked; all four are `NULL`
+together on a row that predates issue #307, and deliberately never
+backfilled — re-materializing the source today would fabricate history, since
+the source may have been corrected and the template edited since. See
+`NoteGenerationContextService` and `GET /notes/{id}/context` in `docs/API.md`.
+
 ### 4.5 `note_versions`
 
 Mirrors `transcript_versions` (`docs/specs/transcription.md` §3, §4.4–4.5)
@@ -1722,6 +1733,19 @@ as the stream ends. Deleting a note therefore only ever has to remove
 **this application's own** rows and storage objects, which is why §8.5's
 `note.purge` is a lighter job than `transcript.purge` in this one specific
 respect.
+
+**A generation now durably stores a copy of the source text it sent, for the
+note's lifetime (issue #307).** `note_generations.user_content` (§4.4) holds
+the complete source material that reached the provider, not just a pointer to
+it — so `GET /notes/{id}/context` can show it back later even after the
+source transcript is edited, unshared, or deleted. That copy is deleted with
+the note: `note_generations.note_id` cascades, and `note.purge`/
+`user.data.purge` deleting the note row takes every one of its generations,
+snapshot included, with it — there is no separate retention window for this
+column. If `ai.maxInputTokens` grows enough to make storing full prompt text
+in the database costly, offloading `system_prompt`/`user_content` to object
+storage (mirroring how source documents already work) is a future option;
+nothing about §307's design requires it today.
 
 **The user is told before every generation which provider and model their
 content is being sent to.** `GET /api/ai/config` (§6.4) exposes the

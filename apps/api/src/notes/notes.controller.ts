@@ -85,6 +85,7 @@ import {
   CreateNoteResultDto,
   NoteConflictDto,
   NoteDto,
+  NoteGenerationContextDto,
   NoteListDto,
   NoteSummaryDto,
   NoteVersionDetailDto,
@@ -118,6 +119,7 @@ import {
   type CreateNoteExportDto,
 } from './dto/note-export.dto';
 import { NoteExportService } from './export/note-export.service';
+import { NoteGenerationContextService } from './note-generation-context.service';
 import { NotesService } from './notes.service';
 
 @ApiTags('Notes')
@@ -126,6 +128,7 @@ export class NotesController {
   constructor(
     private readonly notes: NotesService,
     private readonly exports: NoteExportService,
+    private readonly generationContext: NoteGenerationContextService,
   ) {}
 
   // ===========================================================================
@@ -431,6 +434,64 @@ export class NotesController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.notes.getVersion(id, version, user);
+  }
+
+  @Get(':id/context')
+  @Auth({ permissions: [PERMISSIONS.NOTES_READ] })
+  @ApiOperation({
+    summary: 'What the current generation sent to the AI',
+    description:
+    'The exact system prompt and user message a generation sent to its AI provider, ' +
+      'recorded immediately before the request — so a generation that failed still shows ' +
+      'what it asked.\n\n' +
+      '**`stored: false`** marks a generation that predates this record: `systemPrompt` is ' +
+      'rebuilt from the template **as it is today** (or `null` if the template is gone) and ' +
+      '`userContent` is `null`. The source is never re-read.\n\n' +
+      '**`sourceRedacted: true`** means the caller can no longer read the source (unshared, ' +
+      'deleted, removed): the source material is withheld from `userContent`.\n\n' +
+      'A caller with no access to the note gets **404**, never 403. No ETag.' +
+      '\n\nReads the note\'s **current** generation. A note with none answers 404 with ' +
+      '`details.reason: "no_generation"`.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiDataResponse(NoteGenerationContextDto, { description: 'The generation\'s context' })
+  @ApiResponse({
+    status: 404,
+    description: 'No such note, no access to it, or no generation (`details.reason: "no_generation"`)',
+  })
+  async context(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.generationContext.forNote(user, id);
+  }
+
+  @Get(':id/generations/:generationId/context')
+  @Auth({ permissions: [PERMISSIONS.NOTES_READ] })
+  @ApiOperation({
+    summary: 'What one generation sent to the AI',
+    description:
+    'The exact system prompt and user message a generation sent to its AI provider, ' +
+      'recorded immediately before the request — so a generation that failed still shows ' +
+      'what it asked.\n\n' +
+      '**`stored: false`** marks a generation that predates this record: `systemPrompt` is ' +
+      'rebuilt from the template **as it is today** (or `null` if the template is gone) and ' +
+      '`userContent` is `null`. The source is never re-read.\n\n' +
+      '**`sourceRedacted: true`** means the caller can no longer read the source (unshared, ' +
+      'deleted, removed): the source material is withheld from `userContent`.\n\n' +
+      'A caller with no access to the note gets **404**, never 403. No ETag.' +
+      '\n\nThe generation must belong to this note; one that does not answers 404.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiParam({ name: 'generationId', type: String, format: 'uuid' })
+  @ApiDataResponse(NoteGenerationContextDto, { description: 'The generation\'s context' })
+  @ApiResponse({ status: 404, description: 'No such note or generation, or no access to it' })
+  async generationContextFor(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('generationId', ParseUUIDPipe) generationId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.generationContext.forNote(user, id, generationId);
   }
 
   // ===========================================================================

@@ -605,6 +605,68 @@ export const noteVersionDetailResponseSchema = noteVersionSchema.extend({
 
 export class NoteVersionDetailDto extends createZodDto(noteVersionDetailResponseSchema) {}
 
+/**
+ * `GET /api/notes/{id}/context` and `GET /api/notes/{id}/generations/{generationId}/context`
+ * — what one generation sent to its AI provider (issue #307).
+ */
+export const noteGenerationContextResponseSchema = z.object({
+  generationId: z.string().describe('The generation this context belongs to.'),
+  kind: z
+    .enum(['create', 'regenerate', 'preview'])
+    .describe('Which entry point started the generation.'),
+  status: z
+    .enum(['pending', 'streaming', 'succeeded', 'failed'])
+    .describe('Where the generation is now. A failed generation still shows what it sent.'),
+  stored: z
+    .boolean()
+    .describe(
+      '`true` when the exact prompt was recorded at generation time. `false` for a generation ' +
+        'that predates this feature: `systemPrompt` is then **rebuilt from the template as it ' +
+        'is today** (or `null` if the template is gone) and `userContent` is `null` — the ' +
+        'source is never re-read, because it may have been corrected since.',
+    ),
+  capturedAt: z
+    .string()
+    .nullable()
+    .describe('When the prompt was recorded (ISO 8601); `null` when `stored` is `false`.'),
+  templateId: z.string().nullable().describe('The template used, or `null` if it has since been deleted.'),
+  templateNameSnapshot: z
+    .string()
+    .nullable()
+    .describe('The template\'s name as it was when the generation was requested.'),
+  provider: z.string().nullable().describe('The AI provider id the generation was submitted to.'),
+  model: z.string().nullable().describe('The model it was submitted to.'),
+  contextText: z.string().nullable().describe('The optional Context the user supplied for this generation.'),
+  sourceType: z.enum(['transcript', 'note', 'document']).describe('What kind of source it was generated from.'),
+  sourceVersion: z
+    .number()
+    .nullable()
+    .describe(
+      'The transcript or source-note version materialized into the prompt. `null` for a ' +
+        'document source, or for a generation that predates this feature.',
+    ),
+  sourceRedacted: z
+    .boolean()
+    .describe(
+      '`true` when the caller can no longer read the source (it was unshared, deleted, or ' +
+        'removed). The source material is then withheld from `userContent`.',
+    ),
+  systemPrompt: z.string().nullable().describe('The system prompt sent (or rebuilt — see `stored`).'),
+  userContent: z
+    .string()
+    .nullable()
+    .describe(
+      'The user message sent: the Context, then the source material. Cut at the ' +
+        '`Source material:` heading when `sourceRedacted` is `true`; `null` when `stored` is `false`.',
+    ),
+  promptTokens: z.number().nullable().describe('Input tokens the provider reported, once known.'),
+  completionTokens: z.number().nullable().describe('Output tokens the provider reported, once known.'),
+});
+
+export type NoteGenerationContextResponse = z.infer<typeof noteGenerationContextResponseSchema>;
+
+export class NoteGenerationContextDto extends createZodDto(noteGenerationContextResponseSchema) {}
+
 /** `POST /api/notes/{id}/retitle` — the job queued for one note. */
 export const retitleNoteResponseSchema = z.object({
   noteId: z.string().describe('The note a title was queued for.'),

@@ -141,7 +141,7 @@ describe('NotesService', () => {
     };
 
     sources = {
-      resolve: jest.fn().mockResolvedValue({ text: 'the transcript text', describe: 'transcript' }),
+      resolve: jest.fn().mockResolvedValue({ text: 'the transcript text', describe: 'transcript', sourceVersion: 1 }),
     };
 
     jobs = {

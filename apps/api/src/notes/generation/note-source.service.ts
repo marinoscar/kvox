@@ -72,6 +72,13 @@ export interface ResolvedSource {
   text: string;
   /** Human-readable description of the source, for logs. Never user-facing. */
   describe: string;
+  /**
+   * The version of the source actually materialized into `text` (issue #307):
+   * the transcript version passed to `materialize()`, or the source note's
+   * `currentVersion` at the moment its body was read. `null` for a document,
+   * which carries no version.
+   */
+  sourceVersion: number | null;
 }
 
 /** What one resolution needs. Exactly the denormalized columns on a generation. */
@@ -208,6 +215,7 @@ export class NoteSourceService {
     return {
       text,
       describe: `transcript ${transcript.id} at version ${transcript.currentVersion}`,
+      sourceVersion: transcript.currentVersion,
     };
   }
 
@@ -244,7 +252,7 @@ export class NoteSourceService {
 
     const source = await this.prisma.note.findUnique({
       where: { id: noteId },
-      select: { id: true, title: true, body: true, deletedAt: true },
+      select: { id: true, title: true, body: true, currentVersion: true, deletedAt: true },
     });
 
     if (!source || source.deletedAt !== null) {
@@ -257,7 +265,11 @@ export class NoteSourceService {
       );
     }
 
-    return { text: source.body, describe: `note ${source.id}` };
+    return {
+      text: source.body,
+      describe: `note ${source.id}`,
+      sourceVersion: source.currentVersion,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -342,7 +354,11 @@ export class NoteSourceService {
       );
     }
 
-    return { text, describe: `document ${object.id} (extracted text ${extractedObjectId})` };
+    return {
+      text,
+      describe: `document ${object.id} (extracted text ${extractedObjectId})`,
+      sourceVersion: null,
+    };
   }
 
   /**
