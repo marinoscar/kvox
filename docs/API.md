@@ -3956,6 +3956,59 @@ retrievable.**
 
 ---
 
+#### GET /notes/{id}/context
+#### GET /notes/{id}/generations/{generationId}/context
+The exact system prompt and user message a generation sent to its AI
+provider (issue #307), recorded immediately before the request — so a
+generation that failed still shows what it asked. The first form reads the
+note's **current** generation; the second reads any generation of this note
+by id. Neither is included in `GET /notes/{id}`, and neither carries an
+ETag.
+
+**Requires:** `notes:read`
+
+**Response:**
+```json
+{
+  "data": {
+    "generationId": "…",
+    "kind": "create",
+    "status": "succeeded",
+    "stored": true,
+    "capturedAt": "…",
+    "templateId": "…",
+    "templateNameSnapshot": "Meeting notes",
+    "provider": "openai",
+    "model": "gpt-4o",
+    "contextText": "Focus on decisions, not discussion.",
+    "sourceType": "transcript",
+    "sourceVersion": 3,
+    "sourceRedacted": false,
+    "systemPrompt": "…",
+    "userContent": "…",
+    "promptTokens": 812,
+    "completionTokens": 240
+  }
+}
+```
+
+`stored: false` marks a generation from before this feature existed:
+`systemPrompt` is then **rebuilt from the template as it stands today** (or
+`null` if the template has since been deleted) and `userContent` is `null`
+— the source is never re-materialized, since it may have been corrected
+since and showing today's text as "what was sent" would fabricate history.
+
+`sourceRedacted: true` means the caller can no longer read the source (it
+was unshared, deleted, or removed): `userContent` is cut at the `Source
+material:` heading and a notice sentence takes its place, while the user's
+own Context above it stays. Fails closed — a row assembled by a build this
+service does not recognise is redacted in full.
+
+**Error Cases:**
+- `404` - No such note, no access to it (never 403), the generation is not this note's, or the note has no generation yet (`details.reason: "no_generation"`)
+
+---
+
 #### PATCH /notes/{id}
 Changes the title, the body, or both. A **body** change requires
 `baseVersion` and appends a `note_versions` row with the caller as its
