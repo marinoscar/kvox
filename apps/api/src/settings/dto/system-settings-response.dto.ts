@@ -74,6 +74,7 @@ export const systemSettingsResponseSchema = z.object({
     deleteRemoteAfterIngest: z.boolean(),
     defaultLanguage: z.string().nullable(),
     transcodeNodeOffloadEnabled: z.boolean(),
+    abandonedUploadHours: z.number(),
     playback: z.object({
       bitrateKbps: z.number(),
     }),
