@@ -67,6 +67,13 @@ model User {
   transcriptSharesReceived   TranscriptShare[]       @relation("TranscriptShareUser")
   transcriptSharesGranted    TranscriptShare[]       @relation("TranscriptShareGrantedBy")
   transcriptExportsRequested TranscriptExport[]      @relation("TranscriptExportRequestedBy")
+  // AI name checks (issue #328, epic #326). Two relations, split by role for
+  // the same reason the six transcript relations above are: "asked for this
+  // run" and "accepted/rejected this suggestion" are different acts. See the
+  // block comment above the `TranscriptNameCheck` model for the full
+  // reasoning behind each `onDelete`.
+  transcriptNameChecksRequested     TranscriptNameCheck[]       @relation("TranscriptNameCheckRequestedBy")
+  transcriptNameSuggestionsDecided  TranscriptNameSuggestion[]  @relation("TranscriptNameSuggestionDecidedBy")
   // Notes (issue #48, epic #45). Four relations to the note tables, split by
   // role for the identical reason the six transcript relations above are:
   // "owns this note", "owns this custom template", "wrote this version" and
@@ -1366,6 +1373,15 @@ model Job {
   // this row.
   noteGeneration NoteGeneration?
 
+  // The `transcript_name_checks` row this job ran, when `type` is
+  // `'name.check'` (issue #328, epic #326). Same one-to-one shape as
+  // `transcriptExport`/`noteExport`/`noteGeneration` above, for the same
+  // reason: `TranscriptNameCheck.jobId` is `@unique`/nullable/`SetNull`
+  // because a run's own lifetime (read by the review UI long after job
+  // history is purged) is independent of `job.history.purge`'s schedule for
+  // this row.
+  transcriptNameCheck TranscriptNameCheck?
+
   // See the block comment above ("Prisma-expressible indexes...") for why
   // these eight are declared here and three more exist only in
   // migration.sql.
@@ -2393,6 +2409,9 @@ model Transcript {
   // dependent note cannot be deleted until `notes.service.ts`'s own delete
   // guard clears it. See the block comment above the `Note` model.
   notesAsSource Note[] @relation("NoteSourceTranscript")
+  // AI name-check runs against this transcript (issue #328, epic #326). See
+  // the block comment above the `TranscriptNameCheck` model.
+  nameChecks    TranscriptNameCheck[]
 
   // "This owner's transcripts, newest first" — the transcript list view.
   @@index([ownerId, updatedAt(sort: Desc)])
@@ -2501,6 +2520,10 @@ model TranscriptSegment {
   // "who last hand-edited this line" is an audit fact about the segment, not
   // something the segment's own existence depends on.
   editedBy   User?             @relation("TranscriptSegmentEditor", fields: [editedById], references: [id], onDelete: SetNull)
+
+  // AI name-check suggestions proposed against this segment (issue #328,
+  // epic #326). See the block comment above the `TranscriptNameCheck` model.
+  nameSuggestions TranscriptNameSuggestion[]
 
   // The compound order both a segment list and a time-window query
   // (`GET /:id/words?fromMs&toMs`) need (spec §3.3).
@@ -2676,6 +2699,173 @@ model TranscriptExport {
   // live database to diff against.
   @@index([transcriptId, version, format, optionsHash], map: "transcript_exports_lookup_idx")
   @@map("transcript_exports")
+}
+
+// =============================================================================
+// Transcript Name Checks (issue #328, epic #326)
+// =============================================================================
+//
+// AI-assisted detection of misspelled/mis-transcribed proper names and terms
+// across a transcript's segments. A `TranscriptNameCheck` is one AI run —
+// the request, its cost accounting, and its terminal state — and a
+// `TranscriptNameSuggestion` is one PROPOSED edit that run produced. Both
+// tables are deliberately never a second source of truth for transcript
+// content: accepting a suggestion turns it into an ordinary
+// `segment.update_text` op recorded through the exact same `/operations`
+// path and `TranscriptVersion` history every other correction uses (see the
+// block comment above `TranscriptVersion`) — these rows never write
+// `transcript_segments.text` directly, only propose a change to it.
+// `segmentRev` on a suggestion pins the `TranscriptSegment.rev` its offsets
+// were computed against, the identical optimistic-concurrency shape
+// `TranscriptVersion`'s `rev` split already uses elsewhere in this schema,
+// so a suggestion whose segment was edited out from under it is detectable
+// at apply time rather than silently misapplied at the wrong offset —
+// `status: stale` is that outcome, not a bug report.
+
+enum TranscriptNameCheckMode {
+  standard
+  thorough
+}
+
+enum TranscriptNameCheckStatus {
+  pending
+  running
+  ready
+  failed
+}
+
+model TranscriptNameCheck {
+  id           String @id @default(uuid()) @db.Uuid
+  transcriptId String @map("transcript_id") @db.Uuid
+
+  // Who asked for this run. SetNull, not Cascade/Restrict — unlike
+  // `TranscriptExport.requestedById` (a disposable, re-renderable artifact
+  // deleted with its requester), a name-check run and the suggestions it
+  // produced are worth keeping as transcript history even after the
+  // requesting account is gone, the same audit posture
+  // `TranscriptVersion.authorId` already takes.
+  requestedById String? @map("requested_by_id") @db.Uuid
+
+  // `standard` (segments only) vs `thorough` (a wider discovery pass) — a
+  // closed, spec-defined pair, worth a real enum rather than a string.
+  mode   TranscriptNameCheckMode
+  status TranscriptNameCheckStatus @default(pending)
+
+  // The `Transcript.currentVersion` this run read segment text from,
+  // matching `TranscriptExport.version`'s reasoning: a run started against
+  // one version must not be silently reinterpreted against a later one once
+  // edits land mid-run.
+  basedOnVersion Int @map("based_on_version")
+
+  // The target names/terms this run checked for — a string array, opaque
+  // JSONB for the same reason `TranscriptSegment.words` and
+  // `Transcript.providerOptions` are: the caller-supplied or AI-discovered
+  // term list has no shape this table needs to enforce.
+  terms Json @db.JsonB
+
+  // Which AI provider/model produced this run's suggestions — plain
+  // strings, not an enum/FK, matching `Transcript.provider`'s own
+  // open-registry reasoning: a new provider must cost zero migrations here.
+  providerId String? @map("provider_id")
+  model      String?
+
+  // Denormalized off `transcript_name_suggestions` so a list/detail read
+  // never joins and counts on every request, matching
+  // `Transcript.speakerCount`/`.wordCount`'s "cheap to read often,
+  // recomputed by the one write path that changes the true count" shape.
+  candidateCount  Int @default(0) @map("candidate_count")
+  suggestionCount Int @default(0) @map("suggestion_count")
+
+  // Cost accounting for this run's own AI call(s), the same pair
+  // `NoteGeneration` tracks per generation.
+  inputTokens  Int @default(0) @map("input_tokens")
+  outputTokens Int @default(0) @map("output_tokens")
+
+  // A closed-in-spirit taxonomy kept as a plain string rather than a second
+  // copy of `NoteGenerationErrorClass`'s enum, matching `Job.type`'s own
+  // "plain string, code-owned set" reasoning.
+  errorClass String? @map("error_class")
+  error      String?
+
+  // The `name.check` job that ran this check, when one did. `@unique`/
+  // nullable/`SetNull`, mirroring `TranscriptExport.jobId`/
+  // `DatabaseBackupRun.jobId` exactly: this row's own lifetime (read by the
+  // review UI long after job history is purged) is independent of
+  // `job.history.purge`'s schedule for the underlying `jobs` row.
+  jobId String? @unique @map("job_id") @db.Uuid
+
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  startedAt   DateTime? @map("started_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+
+  transcript  Transcript @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
+  requestedBy User?      @relation("TranscriptNameCheckRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  job         Job?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  suggestions TranscriptNameSuggestion[]
+
+  // "This transcript's name-check runs, newest first" — the run history
+  // list.
+  @@index([transcriptId, createdAt(sort: Desc)])
+  @@map("transcript_name_checks")
+}
+
+enum TranscriptNameSuggestionStatus {
+  pending
+  accepted
+  rejected
+  stale
+}
+
+model TranscriptNameSuggestion {
+  id      String @id @default(uuid()) @db.Uuid
+  checkId String @map("check_id") @db.Uuid
+
+  // Cascade, matching `TranscriptSegment`'s own relation to `Transcript`: a
+  // suggestion against a segment that no longer exists (a later
+  // `segment.split`/`segment.join`/delete) has nothing left to apply to.
+  segmentId String @map("segment_id") @db.Uuid
+  // The `TranscriptSegment.rev` these offsets were computed against — see
+  // the block comment above for why a mismatch at apply time means `stale`,
+  // never a silently wrong offset.
+  segmentRev Int   @map("segment_rev")
+
+  // UTF-16 offsets into `TranscriptSegment.text` at `segmentRev` — matching
+  // JavaScript string indexing end to end, so the editor, the API and this
+  // column all agree on one encoding.
+  start Int
+  end   Int
+
+  original    String
+  replacement String
+
+  confidence Float?
+  reason     String?
+  // `'phonetic' | 'discovery'` today — plain string, not an enum, matching
+  // `Transcript.provider`'s own open-registry reasoning: which detection
+  // strategies exist is code, not schema.
+  source      String
+
+  status      TranscriptNameSuggestionStatus @default(pending)
+  decidedAt   DateTime?                      @map("decided_at") @db.Timestamptz
+  // SetNull, matching `TranscriptSegment.editedById`: "who accepted or
+  // rejected this suggestion" is an audit fact about the suggestion, not
+  // something its own existence depends on.
+  decidedById String?                        @map("decided_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  check     TranscriptNameCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  segment   TranscriptSegment   @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  decidedBy User?               @relation("TranscriptNameSuggestionDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  // "This run's suggestions, filtered by status" — the review UI's default
+  // list.
+  @@index([checkId, status])
+  // "Every suggestion touching this segment" — applying/staling suggestions
+  // when a segment is edited elsewhere.
+  @@index([segmentId])
+  @@map("transcript_name_suggestions")
 }
 
 // =============================================================================
