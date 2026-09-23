@@ -105,6 +105,12 @@ describe('NoteSourceService', () => {
       expect(resolved.text).not.toContain(AI_ORIGINAL);
     });
 
+    it('reports the materialized version as `sourceVersion` (issue #307)', async () => {
+      const resolved = await service.resolve(transcriptSelector);
+
+      expect(resolved.sourceVersion).toBe(7);
+    });
+
     it('renders the corrected speaker name, not the diarization letter', async () => {
       const resolved = await service.resolve(transcriptSelector);
 
@@ -162,12 +168,27 @@ describe('NoteSourceService', () => {
         id: 'note-2',
         title: 'Kestrel summary',
         body: '# Kestrel\n\nWe ship Friday.',
+        currentVersion: 3,
         deletedAt: null,
       });
 
       const resolved = await service.resolve(selector);
 
       expect(resolved.text).toBe('# Kestrel\n\nWe ship Friday.');
+    });
+
+    it('reports the source note\'s `currentVersion` as `sourceVersion` (issue #307)', async () => {
+      prisma.note.findUnique.mockResolvedValue({
+        id: 'note-2',
+        title: 'Kestrel summary',
+        body: '# Kestrel\n\nWe ship Friday.',
+        currentVersion: 5,
+        deletedAt: null,
+      });
+
+      const resolved = await service.resolve(selector);
+
+      expect(resolved.sourceVersion).toBe(5);
     });
 
     it('refuses an empty source note rather than generating from nothing', async () => {
@@ -205,6 +226,8 @@ describe('NoteSourceService', () => {
       // metadata — spec §4.7's whole contract in one assertion.
       expect(objects.downloadBuffer).toHaveBeenCalledWith('object-2');
       expect(objects.downloadBuffer).not.toHaveBeenCalledWith('object-1');
+      // A document carries no version (issue #307).
+      expect(resolved.sourceVersion).toBeNull();
     });
 
     it('selects `name`, the column `storage_objects` actually has', async () => {

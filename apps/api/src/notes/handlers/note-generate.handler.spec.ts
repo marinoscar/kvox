@@ -652,6 +652,134 @@ describe('NoteGenerateHandler — the per-user throttle key', () => {
 });
 
 // -----------------------------------------------------------------------------
+// recordContext() — the snapshot of what was about to be sent (issue #307)
+// -----------------------------------------------------------------------------
+
+describe('NoteGenerateHandler — recordContext (#307)', () => {
+  it('records the EXACT systemPrompt/userContent the provider receives, plus sourceVersion', async () => {
+    const provider = new FakeProvider(helloStream);
+    const { handler, generations } = harness({ provider, sourceText: 'Ana: we ship on Friday.' });
+
+    await handler.process(job());
+
+    expect(generations.recordContext).toHaveBeenCalledWith('gen-1', {
+      systemPrompt: provider.lastRequest?.systemPrompt,
+      userContent: provider.lastRequest?.userContent,
+      sourceVersion: 7,
+    });
+  });
+
+  it('is called BEFORE the provider — recordContext precedes provider.generate', async () => {
+    const order: string[] = [];
+    const provider = new FakeProvider(helloStream);
+    const { handler, generations } = harness({ provider });
+
+    generations.recordContext.mockImplementation(async () => {
+      order.push('recordContext');
+    });
+
+    const originalGenerate = provider.generate.bind(provider);
+    jest.spyOn(provider, 'generate').mockImplementation((...args) => {
+      order.push('provider.generate');
+
+      return originalGenerate(...args);
+    });
+
+    await handler.process(job());
+
+    expect(order).toEqual(['recordContext', 'provider.generate']);
+  });
+
+  it('is called BEFORE markStreaming too', async () => {
+    const order: string[] = [];
+    const { handler, generations } = harness();
+
+    generations.recordContext.mockImplementation(async () => {
+      order.push('recordContext');
+    });
+    generations.markStreaming.mockImplementation(async () => {
+      order.push('markStreaming');
+    });
+
+    await handler.process(job());
+
+    expect(order).toEqual(['recordContext', 'markStreaming']);
+  });
+
+  it('is still recorded when the provider then fails (an auth-shaped refusal)', async () => {
+    async function* filtered(): AsyncIterable<AiDelta> {
+      yield { kind: 'delta', text: 'I cannot' };
+      yield {
+        kind: 'done',
+        finishReason: 'content_filter',
+        usage: { promptTokens: 10, completionTokens: 2 },
+      };
+    }
+
+    const { handler, generations } = harness({ provider: new FakeProvider(filtered) });
+
+    await handler.process(job());
+
+    expect(generations.recordContext).toHaveBeenCalled();
+    expect(generations.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: 'refusal' }),
+    );
+  });
+
+  it('is still recorded when the provider stream throws mid-flight (an unrecognised/timeout-ish failure)', async () => {
+    async function* broken(): AsyncIterable<AiDelta> {
+      yield { kind: 'delta', text: 'partial' };
+      throw new Error('stream timed out');
+      // eslint-disable-next-line no-unreachable
+      yield { kind: 'delta', text: 'unreachable' };
+    }
+
+    const { handler, generations } = harness({ provider: new FakeProvider(broken) });
+
+    await expect(handler.process(job())).rejects.toThrow('stream timed out');
+
+    expect(generations.recordContext).toHaveBeenCalled();
+    expect(generations.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: 'other' }),
+    );
+  });
+
+  it('is NOT called when an AiBudgetError is thrown — a refusal sends nothing, so it records nothing', async () => {
+    const fetchSeam = jest.fn(() => {
+      throw new Error('the provider must not be called for an over-budget prompt');
+    });
+
+    const { handler, generations } = harness({
+      provider: new OpenAiProvider(new AiProviderRegistry(), fetchSeam as never),
+      policyOverride: { maxInputTokens: 256 },
+      sourceText: 'word '.repeat(5_000),
+    });
+
+    await handler.process(job());
+
+    expect(generations.recordContext).not.toHaveBeenCalled();
+    expect(generations.markFailed).toHaveBeenCalledWith(
+      expect.objectContaining({ errorClass: 'refusal', category: 'Too large' }),
+    );
+  });
+
+  it('records the context for a PREVIEW generation (kind: preview) too', async () => {
+    const provider = new FakeProvider(helloStream);
+    const { handler, generations } = harness({
+      provider,
+      generation: generationRow({ id: 'gen-preview', kind: 'preview', noteId: null, note: null }),
+    });
+
+    await handler.process(job({ generationId: 'gen-preview', userId: OWNER_A }));
+
+    expect(generations.recordContext).toHaveBeenCalledWith(
+      'gen-preview',
+      expect.objectContaining({ sourceVersion: 7 }),
+    );
+  });
+});
+
+// -----------------------------------------------------------------------------
 // The classifier and its helpers
 // -----------------------------------------------------------------------------
 

@@ -156,6 +156,11 @@ describe('Prisma.NoteGenerationScalarFieldEnum', () => {
       'lastEventId',
       'promptTokens',
       'completionTokens',
+      // #307: the snapshot of what was sent to the provider.
+      'systemPrompt',
+      'userContent',
+      'sourceVersion',
+      'contextCapturedAt',
       'jobId',
       'expiresAt',
       'startedAt',

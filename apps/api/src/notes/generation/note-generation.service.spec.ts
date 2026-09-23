@@ -103,6 +103,7 @@ function harness(options: { noteAfterRead?: Record<string, unknown> | null } = {
 
   const prisma = {
     $transaction: jest.fn(async (callback: (tx: Tx) => unknown) => callback(tx)),
+    noteGeneration: { update: jest.fn().mockResolvedValue({}) },
   };
 
   const notifications = { notify: jest.fn().mockResolvedValue(undefined) };
@@ -259,5 +260,44 @@ describe('commit() — the never-throws property, enforced at the call site too'
       OWNER_ID,
       expect.objectContaining({ title: 'Meeting notes' }),
     );
+  });
+});
+
+// -----------------------------------------------------------------------------
+// recordContext() — the snapshot of what was about to be sent (issue #307)
+// -----------------------------------------------------------------------------
+
+describe('recordContext()', () => {
+  it('writes systemPrompt, userContent, sourceVersion and a fresh contextCapturedAt', async () => {
+    const before = Date.now();
+    const { service, prisma } = harness();
+
+    await service.recordContext('gen-1', {
+      systemPrompt: 'You write meeting notes.',
+      userContent: 'Source material:\nAna: we ship on Friday.',
+      sourceVersion: 7,
+    });
+
+    expect(prisma.noteGeneration.update).toHaveBeenCalledTimes(1);
+    const call = prisma.noteGeneration.update.mock.calls[0][0];
+
+    expect(call.where).toEqual({ id: 'gen-1' });
+    expect(call.data.systemPrompt).toBe('You write meeting notes.');
+    expect(call.data.userContent).toBe('Source material:\nAna: we ship on Friday.');
+    expect(call.data.sourceVersion).toBe(7);
+    expect(call.data.contextCapturedAt).toBeInstanceOf(Date);
+    expect(call.data.contextCapturedAt.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('writes a `null` sourceVersion for a document source', async () => {
+    const { service, prisma } = harness();
+
+    await service.recordContext('gen-1', {
+      systemPrompt: 'You write meeting notes.',
+      userContent: 'Source material:\nThe extracted contract text.',
+      sourceVersion: null,
+    });
+
+    expect(prisma.noteGeneration.update.mock.calls[0][0].data.sourceVersion).toBeNull();
   });
 });

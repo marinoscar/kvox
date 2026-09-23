@@ -104,6 +104,10 @@ const MIGRATIONS_AT_288 = [
   // `notification-events.ts` like every other event, with no migration and no
   // row anywhere, which is precisely the property this spec exists to keep.
   '20260918120000_add_allowlist_reminder_tracking',
+  // #307 (epic #306): four nullable snapshot columns on `note_generations`
+  // recording the assembled prompt a generation sent. Nothing to do with
+  // notifications.
+  '20260923120000_add_note_generation_context_snapshot',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
