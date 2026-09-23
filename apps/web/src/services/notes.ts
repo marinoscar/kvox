@@ -51,6 +51,7 @@
  */
 
 import { api, ApiError } from './api';
+import type { PlaybackStatus, TranscriptStatus } from './transcripts';
 
 // =============================================================================
 // The shapes (mirrors of `dto/note.dto.ts`)
@@ -90,6 +91,25 @@ export type NoteConflictReason =
 export type NoteTitleSource = 'ai' | 'user' | 'template';
 
 /** One note, as `GET /api/notes/{id}` returns it. */
+/**
+ * The transcript a note was ultimately generated from — issue #309.
+ *
+ * Mirrors `originTranscript` in `apps/api/src/notes/dto/note.dto.ts`. DETAIL
+ * ONLY: the single-note responses carry it, list and summary rows do not.
+ * `via: 'note_chain'` means the note was generated from a note that
+ * (eventually) was generated from this transcript; `hops` counts the notes in
+ * between (0 for `direct`).
+ */
+export interface NoteOriginTranscript {
+  id: string;
+  title: string;
+  durationMs: number | null;
+  status: TranscriptStatus;
+  playbackStatus: PlaybackStatus;
+  via: 'direct' | 'note_chain';
+  hops: number;
+}
+
 export interface Note {
   id: string;
   title: string;
@@ -123,6 +143,12 @@ export interface Note {
   failureReason: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The transcript this note ultimately came from (#309), or `null` when there
+   * is none the caller can read. Optional because only the detail responses
+   * carry it — list and summary rows never do.
+   */
+  originTranscript?: NoteOriginTranscript | null;
 }
 
 /**

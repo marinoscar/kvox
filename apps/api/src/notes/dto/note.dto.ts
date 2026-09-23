@@ -6,6 +6,7 @@ import {
   MAX_NAME_CHARS,
   previewSourceSchema,
 } from './note-template.dto';
+import { PLAYBACK_STATUSES, TRANSCRIPT_STATUSES } from '../../transcripts/dto/transcript.dto';
 
 // =============================================================================
 // Note request/response shapes (issue #53, epic #45)
@@ -461,6 +462,45 @@ export const noteResponseSchema = z.object({
       'The name of the transcript, note or document this note was generated from, or `null` ' +
         'when it no longer exists or the caller may no longer read it. Never a bare id.',
     ),
+  /**
+   * The transcript this note ultimately came from — issue #309.
+   *
+   * DETAIL ONLY: resolved by `NoteOriginService`, which may walk a chain of
+   * notes one read per hop, so the list and summary schemas omit it rather
+   * than pay that per row. All or nothing — `null` whenever any link of the
+   * chain (or the transcript itself) is not readable by the caller right now.
+   */
+  originTranscript: z
+    .object({
+      id: z.string().describe('The transcript id.'),
+      title: z.string().describe('The transcript\'s title.'),
+      durationMs: z
+        .number()
+        .int()
+        .nullable()
+        .describe('The recording\'s duration in milliseconds, once known.'),
+      status: z.enum(TRANSCRIPT_STATUSES).describe('The transcript\'s coarse status.'),
+      playbackStatus: z
+        .enum(PLAYBACK_STATUSES)
+        .describe('Whether a playable rendition of the recording is ready.'),
+      via: z
+        .enum(['direct', 'note_chain'])
+        .describe(
+          '`direct` when this note was generated from the transcript itself; `note_chain` when ' +
+            'it was generated from a note that (eventually) was.',
+        ),
+      hops: z
+        .number()
+        .int()
+        .describe('How many notes lie between this note and the transcript: 0 for `direct`.'),
+    })
+    .nullable()
+    .describe(
+      'The transcript this note was ultimately generated from, following a chain of up to 5 ' +
+        'source notes. `null` for a document source, or when the transcript or any note in the ' +
+        'chain no longer exists or is not readable by the caller. Only on single-note responses, ' +
+        'never on list or summary rows.',
+    ),
   contextText: z.string().nullable().describe('The free-text context carried into every generation.'),
   currentGenerationId: z
     .string()
@@ -479,7 +519,9 @@ export class NoteDto extends createZodDto(noteResponseSchema) {}
 
 /** One row of `GET /api/notes`. The body is an excerpt, never the whole thing. */
 export const noteListItemSchema = noteResponseSchema
-  .omit({ body: true, contextText: true })
+  // `originTranscript` is detail-only (#309): resolving it can cost a read per
+  // hop, which on a page of rows is an N+1.
+  .omit({ body: true, contextText: true, originTranscript: true })
   .extend({
     excerpt: z
       .string()

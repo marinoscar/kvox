@@ -125,6 +125,7 @@ import { NoteConflictDialog } from '../components/notes/NoteConflictDialog';
 import { NoteExportDialog } from '../components/notes/NoteExportDialog';
 import { NoteGenerationContext } from '../components/notes/NoteGenerationContext';
 import { NoteProvenance } from '../components/notes/NoteProvenance';
+import { NoteSourceMedia } from '../components/notes/NoteSourceMedia';
 import { NoteStatusChip } from '../components/notes/NoteStatusChip';
 import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNoteDialogContainer';
 import { useAiConfig } from '../hooks/useAiConfig';
@@ -828,6 +829,12 @@ export function NotePage() {
       <Box sx={{ mb: 2 }}>
         <NoteProvenance note={note} sourceName={sourceName} />
       </Box>
+
+      {/* The recording itself, one press away (#309). Lazy: nothing is signed
+          until Play is pressed. Keyed so a different origin gets a fresh player. */}
+      {note.originTranscript ? (
+        <NoteSourceMedia key={note.originTranscript.id} origin={note.originTranscript} />
+      ) : null}
 
       {/* The long form of the same question (#109): the template's actual
           recipe, the free-text context — which is rendered NOWHERE else in this

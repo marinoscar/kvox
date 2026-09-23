@@ -794,7 +794,7 @@ all three roles; **404, never 403**, for a note the caller cannot see. See
 - `GET /api/notes/summary` - Three lists and four counts for the home page, in one round trip (`notes:read`)
 - `GET /api/notes/exporters` - Every registered note export format, with its options (`notes:read`)
 - `GET /api/notes/exports/{exportId}/download` - Short-lived signed download URL for a rendered export (`notes:read`)
-- `GET /api/notes/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with no body on a match (`notes:read`)
+- `GET /api/notes/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with no body on a match (`notes:read`). Carries `originTranscript` (issue #309) — the transcript this note was ultimately generated from, resolved across a chain of source notes; detail-only, `null` on any unreadable/deleted/document-sourced/cycle/over-5-hop link
 - `GET /api/notes/{id}/versions` - Version history, newest first, cursor-paginated (`notes:read`)
 - `GET /api/notes/{id}/versions/{version}` - One full-body version snapshot (`notes:read`)
 - `GET /api/notes/{id}/context` - What the current generation sent to the AI: exact system prompt and user message, recorded before the provider call (`notes:read`)
