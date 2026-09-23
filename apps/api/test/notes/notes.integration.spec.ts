@@ -825,6 +825,7 @@ describe('Notes API (#53)', () => {
 
       expect(current.body.data.body).toBe(detail.body.data.body);
       expect(current.body.data.isCurrent).toBe(true);
+      expect(current.body.data.bodyFormat).toBe(detail.body.data.bodyFormat);
     });
 
     it('still answers 200 when the version moved on', async () => {

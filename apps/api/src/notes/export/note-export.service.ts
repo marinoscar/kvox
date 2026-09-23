@@ -375,6 +375,7 @@ export class NoteExportService {
       noteId: note.id,
       title: note.title,
       body: version.body,
+      bodyFormat: note.bodyFormat,
       version: row.version,
       createdAt: version.createdAt,
       exportedAt: new Date(),

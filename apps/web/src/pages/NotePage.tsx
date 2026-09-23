@@ -113,11 +113,12 @@ import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 
 import { AiKeyRequired } from '../components/ai/AiKeyRequired';
-import { MarkdownView } from '../components/notes/MarkdownView';
+import { NoteBody } from '../components/notes/NoteBody';
+import { NoteCopyButton } from '../components/notes/NoteCopyButton';
 import { NoteBodyEditor } from '../components/notes/NoteBodyEditor';
 import type { NoteEditorView } from '../components/notes/NoteBodyEditor';
 import { NoteConflictDialog } from '../components/notes/NoteConflictDialog';
@@ -138,6 +139,7 @@ import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { ApiError } from '../services/api';
 import { connectNoteStream, describeStreamError } from '../services/noteGenerationStream';
 import type { SseConnection } from '../services/noteGenerationStream';
+import { effectiveBodyFormat } from '../services/noteTemplates';
 import {
   getNote,
   noteConflictCurrentVersion,
@@ -269,7 +271,9 @@ export function NotePage() {
   // --- Editing -------------------------------------------------------------
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const [editorView, setEditorView] = useState<NoteEditorView>('write');
+  const [editorView, setEditorView] = useState<NoteEditorView>('visual');
+  /** The rendered body, read by the copy controls at click time (issue #334). */
+  const renderedBodyRef = useRef<HTMLDivElement | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -391,7 +395,9 @@ export function NotePage() {
   const startEditing = useCallback(() => {
     if (!note) return;
     setDraft(note.body);
-    setEditorView('write');
+    // Issue #334: the visual editor is the default for a markdown note. A
+    // plain-text note has only a textarea, so its view is irrelevant.
+    setEditorView('visual');
     setSaveError(null);
     setIsEditing(true);
   }, [note]);
@@ -682,6 +688,7 @@ export function NotePage() {
   // Never both, and never the buffer once the row has the real thing.
   const body = inFlight && streamed ? streamed : note.body;
   const canEdit = !inFlight && note.status !== 'deleting';
+  const bodyFormat = effectiveBodyFormat(note.bodyFormat);
 
   // `undefined` means pressable — see `suggestTitleBlockedReason`.
   const suggestTitleReason = suggestTitleBlockedReason(note.status, retitlePending);
@@ -761,6 +768,14 @@ export function NotePage() {
           sx={{ alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}
         >
           <NoteStatusChip status={note.status} />
+          {/* Copying is a READ, like Export — available whenever there is a
+              settled body to copy, and never while it is still being written. */}
+          <NoteCopyButton
+            markdown={note.body}
+            getRendered={() => renderedBodyRef.current}
+            bodyFormat={bodyFormat}
+            disabled={inFlight || isEditing}
+          />
           <Button
             size="small"
             startIcon={<FileDownloadOutlinedIcon />}
@@ -982,6 +997,7 @@ export function NotePage() {
               onChange={setDraft}
               view={editorView}
               onViewChange={setEditorView}
+              bodyFormat={bodyFormat}
               disabled={isSaving}
             />
             <Stack
@@ -1013,13 +1029,23 @@ export function NotePage() {
           </Stack>
         ) : body ? (
           <>
-            <MarkdownView>{body}</MarkdownView>
+            <NoteBody ref={renderedBodyRef} bodyFormat={bodyFormat}>
+              {body}
+            </NoteBody>
             {canEdit && (
               <>
                 <Divider sx={{ my: 2 }} />
-                <Button size="small" startIcon={<EditIcon />} onClick={startEditing}>
-                  Edit
-                </Button>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  <Button size="small" startIcon={<EditIcon />} onClick={startEditing}>
+                    Edit
+                  </Button>
+                  <NoteCopyButton
+                    variant="icon"
+                    markdown={note.body}
+                    getRendered={() => renderedBodyRef.current}
+                    bodyFormat={bodyFormat}
+                  />
+                </Stack>
               </>
             )}
           </>

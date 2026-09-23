@@ -70,7 +70,7 @@ import RestoreIcon from '@mui/icons-material/Restore';
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 
-import { MarkdownView } from '../components/notes/MarkdownView';
+import { NoteBody } from '../components/notes/NoteBody';
 import { useIsMounted } from '../hooks/useIsMounted';
 import { ApiError } from '../services/api';
 import {
@@ -368,7 +368,7 @@ export function NoteHistoryPage() {
                 </Stack>
 
                 {detail.body.trim() ? (
-                  <MarkdownView>{detail.body}</MarkdownView>
+                  <NoteBody bodyFormat={detail.bodyFormat}>{detail.body}</NoteBody>
                 ) : (
                   <Typography color="text.secondary">This version is empty.</Typography>
                 )}

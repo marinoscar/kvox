@@ -1,4 +1,11 @@
-import { parseMarkdown, parseInline, spansText, type MdBlock } from './markdown-ast';
+import {
+  parseBody,
+  parseInline,
+  parseMarkdown,
+  parsePlainText,
+  spansText,
+  type MdBlock,
+} from './markdown-ast';
 
 // =============================================================================
 // The markdown parser the PDF and DOCX renderers lay out (issue #54, §8.3)
@@ -165,3 +172,26 @@ function text(block: MdBlock | undefined): string {
 
   return '';
 }
+
+describe('parsePlainText (issue #334)', () => {
+  it('splits on blank lines and keeps single line breaks, interpreting nothing', () => {
+    expect(parsePlainText('# not a heading\n*not bold*\n\n\n- not a bullet\r\n')).toEqual([
+      { type: 'paragraph', spans: [{ text: '# not a heading\n*not bold*' }] },
+      { type: 'paragraph', spans: [{ text: '- not a bullet' }] },
+    ]);
+  });
+
+  it('is total: empty and whitespace-only input yield no blocks', () => {
+    expect(parsePlainText('')).toEqual([]);
+    expect(parsePlainText('  \n\n \t\n')).toEqual([]);
+  });
+});
+
+describe('parseBody', () => {
+  it('parses Markdown unless the format is exactly `plain_text`', () => {
+    expect(parseBody('# Title', 'markdown')).toEqual(parseMarkdown('# Title'));
+    expect(parseBody('# Title', undefined)).toEqual(parseMarkdown('# Title'));
+    expect(parseBody('# Title', 'rtf')).toEqual(parseMarkdown('# Title'));
+    expect(parseBody('# Title', 'plain_text')).toEqual(parsePlainText('# Title'));
+  });
+});

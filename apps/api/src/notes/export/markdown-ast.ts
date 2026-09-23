@@ -417,3 +417,41 @@ function matchListMarker(
 
   return null;
 }
+
+/**
+ * A PLAIN-TEXT body as blocks (issue #334) — the same node shape
+ * {@link parseMarkdown} returns, so the PDF and DOCX renderers draw it with
+ * the code they already have, but with NO Markdown interpretation at all.
+ *
+ * A note whose template asked for `plain_text` was written to be read
+ * literally: a line that happens to start with `#` or `-`, or a phrase wrapped
+ * in `*`, is text the user sees verbatim, never a heading, a bullet or bold.
+ * So the only structure recognised is the one plain text itself has — blank
+ * lines separate paragraphs — and every paragraph is exactly one unmarked span
+ * whose single line breaks are kept as `\n` for the renderer to honour.
+ *
+ * Total, like `parseMarkdown`: every input yields a (possibly empty) list.
+ */
+export function parsePlainText(source: string): MdBlock[] {
+  return source
+    .replace(/\r\n?/g, '\n')
+    .split(/\n[ \t]*\n/)
+    .map((block) =>
+      block
+        .split('\n')
+        .map((line) => line.replace(/\s+$/, ''))
+        .join('\n')
+        .replace(/^\n+|\n+$/g, ''),
+    )
+    .filter((block) => block.trim().length > 0)
+    .map((text): MdBlock => ({ type: 'paragraph', spans: [{ text }] }));
+}
+
+/**
+ * The body as blocks, by its declared format. `plain_text` is taken literally;
+ * anything else — `markdown`, or a value this build does not recognise — is
+ * parsed as Markdown, which is what every note written before #334 is.
+ */
+export function parseBody(source: string, bodyFormat: string | undefined): MdBlock[] {
+  return bodyFormat === 'plain_text' ? parsePlainText(source) : parseMarkdown(source);
+}

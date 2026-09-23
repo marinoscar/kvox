@@ -120,6 +120,10 @@ const MIGRATIONS_AT_288 = [
   // the AI name-correction runs and the proposals they produced. Transcript
   // editing, and equally not about notifications.
   '20260923150000_transcript_name_checks',
+  // #334: `note_templates.body_format` / `notes.body_format`, whether a note
+  // body is Markdown or plain text. Note rendering, and equally not about
+  // notifications.
+  '20260923160000_add_note_body_format',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

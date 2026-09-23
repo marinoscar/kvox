@@ -205,7 +205,10 @@ test.describe('Note editor', () => {
 
       await page.getByRole('button', { name: 'Edit' }).click();
 
-      await expect(page.getByRole('textbox', { name: 'Note' })).toBeVisible();
+      // The Visual editor is lazy-loaded (issue #334): wait for its toolbar so
+      // the capture never lands on the Suspense spinner.
+      await expect(page.getByRole('toolbar', { name: 'Formatting' })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Note body' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
 
       await expect(page).toHaveScreenshot(`notes-edit-${name}.png`);

@@ -351,6 +351,24 @@ describe('UserNoteTemplatesPage', () => {
       expect(screen.getByLabelText('Section 1')).toHaveValue('Decisions');
       expect(screen.getByLabelText('Section 2')).toHaveValue('Overview');
     });
+
+    it('choosing Body format "Plain text" sends bodyFormat: \'plain_text\' on save (issue #334)', async () => {
+      const user = userEvent.setup();
+      mockUpdate.mockResolvedValue(template({ bodyFormat: 'plain_text' }));
+      await renderPage();
+      await openEditor(user);
+
+      await user.click(screen.getByRole('combobox', { name: 'Body format' }));
+      await user.click(await screen.findByRole('option', { name: 'Plain text' }));
+
+      await user.click(within(screen.getByRole('region', { name: 'Template' })).getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(mockUpdate).toHaveBeenCalledWith(
+        'tpl-owned',
+        expect.objectContaining({ bodyFormat: 'plain_text' }),
+      );
+    });
   });
 
   // ==========================================================================
@@ -409,6 +427,8 @@ describe('UserNoteTemplatesPage', () => {
           // The typed text, not `'Write up the meeting.'` from the fixture.
           instructions: 'Only list decisions.',
           outputFormat: 'meeting_notes',
+          // Issue #334: a fixture without `bodyFormat` reads as markdown.
+          bodyFormat: 'markdown',
           structure: ['Outcomes', 'Decisions'],
           tone: 'direct',
           length: 'short',
