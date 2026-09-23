@@ -33,6 +33,7 @@
  * changed away from.
  */
 
+import type { ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
@@ -89,6 +90,12 @@ export interface NoteTemplateEditorProps {
   /** The deployment default, named in the "use the default" option. */
   defaultModel: string | null;
   disabled?: boolean;
+  /**
+   * Rendered as the Paper's last child, after every field — where the form
+   * ends. The page passes its `TemplateEditorActions` row here (issue #331), so
+   * Save/Create is reachable without scrolling back to the top bar.
+   */
+  footer?: ReactNode;
 }
 
 export function NoteTemplateEditor({
@@ -97,6 +104,7 @@ export function NoteTemplateEditor({
   models,
   defaultModel,
   disabled = false,
+  footer,
 }: NoteTemplateEditorProps) {
   const set = <K extends keyof NoteTemplateDraft>(key: K, value: NoteTemplateDraft[K]) => {
     onChange({ ...draft, [key]: value });
@@ -227,6 +235,8 @@ export function NoteTemplateEditor({
           )}
         </TextField>
       </Stack>
+
+      {footer}
     </Paper>
   );
 }
