@@ -797,6 +797,8 @@ all three roles; **404, never 403**, for a note the caller cannot see. See
 - `GET /api/notes/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with no body on a match (`notes:read`)
 - `GET /api/notes/{id}/versions` - Version history, newest first, cursor-paginated (`notes:read`)
 - `GET /api/notes/{id}/versions/{version}` - One full-body version snapshot (`notes:read`)
+- `GET /api/notes/{id}/context` - What the current generation sent to the AI: exact system prompt and user message, recorded before the provider call (`notes:read`)
+- `GET /api/notes/{id}/generations/{generationId}/context` - Same, for one specific generation of this note (`notes:read`)
 - `PATCH /api/notes/{id}` - Rename and/or edit the body. A body edit requires `baseVersion`; a stale one is a **409** naming `details.currentVersion` (`notes:write`)
 - `POST /api/notes/{id}/regenerate` - The only retry path (`note.generate` is `maxAttempts: 1`). Appends a new version; history is kept (`notes:write`)
 - `POST /api/notes/{id}/retitle` - Queue `note.retitle` for one note — the "Suggest a title" action. **202**, 409 while `generating`. ⚠ The **only** path that renames a `titleSource: user` note: asking for a suggestion about a note in front of you is an explicit choice (`notes:write`)
@@ -1127,7 +1129,10 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   at its 10-minute TTL. `errorClass` is a proper enum (`auth`/`refusal`/`rate_limit`/`other`)
   matching `ai-errors.ts`'s taxonomy — the SSE layer's own `NoteStreamErrorClass` adds two
   wire-only values, `timeout` and `gone`, that never exist in this column because neither is a
-  property of the generation (see the new Common Patterns section below).
+  property of the generation (see the new Common Patterns section below). `systemPrompt`/
+  `userContent`/`sourceVersion`/`contextCapturedAt` (issue #307) snapshot exactly what was sent
+  to the AI provider, written before the call so a failure still records it; `NULL` on a row
+  from before this feature, deliberately never backfilled.
 - `note_versions` - The append-only correction history (issue #48, epic #45). **A full body
   snapshot per row, not an operation log** — unlike `transcript_versions`, deliberately: a
   note is a page or two of prose, so storing the whole markdown body per save costs kilobytes

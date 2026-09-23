@@ -3149,6 +3149,21 @@ model NoteGeneration {
   promptTokens     Int? @map("prompt_tokens")
   completionTokens Int? @map("completion_tokens")
 
+  // A snapshot of WHAT WAS SENT to the AI provider — the exact
+  // `assemblePrompt()` output (apps/api/src/notes/generation/prompt.ts) —
+  // written BEFORE the provider call so a failed generation still records
+  // it (issue #307). `sourceVersion` is the transcript `currentVersion` /
+  // source note `currentVersion` actually materialized into the prompt;
+  // NULL for a document source, which carries no version. NULL across all
+  // four columns means the generation predates issue #307 — deliberately
+  // no backfill, because re-materializing the source today would fabricate
+  // history: the source transcript/note may have been corrected since, and
+  // the template may have been edited since.
+  systemPrompt      String?   @map("system_prompt") @db.Text
+  userContent       String?   @map("user_content") @db.Text
+  sourceVersion     Int?      @map("source_version")
+  contextCapturedAt DateTime? @map("context_captured_at") @db.Timestamptz
+
   // The `note.generate` job that produced (or is producing) this row, when
   // one exists. `@unique`/nullable/`SetNull`, mirroring `DatabaseBackupRun
   // .jobId` and `TranscriptExport.jobId` (issue #48): this row's own

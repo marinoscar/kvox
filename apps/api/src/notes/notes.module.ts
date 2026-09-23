@@ -40,6 +40,7 @@ import { NoteTemplatePreviewService } from './note-template-preview.service';
 import { NoteTemplatesController } from './note-templates.controller';
 import { NoteTemplatesService } from './note-templates.service';
 import { NotesController } from './notes.controller';
+import { NoteGenerationContextService } from './note-generation-context.service';
 import { NotesService } from './notes.service';
 import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
 
@@ -147,6 +148,9 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // per-source request the web client used to issue.
     NoteSourceNameService,
     NotesService,
+    // What a generation sent to its provider (#307), read back for
+    // `GET /api/notes/:id/context` and `/generations/:generationId/context`.
+    NoteGenerationContextService,
     // `note.purge` and `notes.housekeeping`, plus the ten-minute `@Cron` that
     // only ENQUEUES the latter (CLAUDE.md rule 1).
     NotePurgeHandler,
