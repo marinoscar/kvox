@@ -125,6 +125,13 @@ export class TranscriptSnapshotHandler implements JobHandler, OnModuleInit {
 
         if (!version || version.snapshotObjectId) return null;
 
+        // ⚠ LIVE NAMES, INCLUDING IDENTIFIED ONES (#323). A speaker named
+        // "Oscar" without a version is stored as "Oscar" in this snapshot, not
+        // as the "Speaker A" a pure replay would give. That is harmless, and
+        // deliberately not "corrected": `materialize()` overlays the same name
+        // onto the placeholder anyway (the overlay is idempotent), and the
+        // speaker's `rev` — the only thing later ops are checked against — is
+        // identical either way, because an identification never bumps it.
         const { state } = await this.materialize.loadLiveState(transcriptId, 'all', tx);
 
         return { transcript, version, state };

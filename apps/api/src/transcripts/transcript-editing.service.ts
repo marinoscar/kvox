@@ -40,6 +40,29 @@
 //     waits for a typo correction to save.
 //
 // -----------------------------------------------------------------------------
+// NAMING A SPEAKER FOR THE FIRST TIME IS NOT A VERSION (issue #323)
+// -----------------------------------------------------------------------------
+//
+// A batch made ONLY of `speaker.rename` ops that each either replace an
+// ingest placeholder with a real name ("Speaker A" → "Oscar") or change
+// nothing at all takes a second, unversioned path: `saveIdentifications`. It
+// writes the name to the live speaker row and to
+// `transcripts.speaker_identities`, and nothing else — no `current_version`
+// bump, no `transcript_versions` row, no snapshot. `materialize()` overlays the
+// map on every version, so history shows "Oscar" too. Renaming Oscar to Joe is
+// a correction and stays versioned. `editing/speaker-identity.ts` carries the
+// full argument; the two invariants this file must keep for it are:
+//
+//   • an identification NEVER bumps the speaker's `rev` — the version log has
+//     no record of the naming, so a rev it caused would be one replay cannot
+//     reproduce, and the next versioned op on that speaker would 409 forever
+//     in `replay` mode;
+//   • a versioned batch that puts a speaker BACK on its placeholder deletes
+//     that speaker's identity entry in the same transaction — otherwise the
+//     overlay would turn the live "Speaker A" back into "Oscar" and
+//     `materialize(current) == live` would break.
+//
+// -----------------------------------------------------------------------------
 // WHAT IS DELIBERATELY NOT LOCKED
 // -----------------------------------------------------------------------------
 //
@@ -73,7 +96,13 @@ import { MAX_SEARCH_MATCHES } from './dto/transcript-editing.dto';
 import {
   OP_TYPES,
   OpError,
+  applyIdentities,
   applyOps,
+  classifyRename,
+  defaultSpeakerName,
+  isIdentificationBatch,
+  isUnidentified,
+  parseSpeakerIdentities,
   countStateWords,
   diffState,
   findMatches,
@@ -91,6 +120,7 @@ import {
   type MergeUndoRecord,
   type OpConflict,
   type RecordedOp,
+  type RenameSpeakerOp,
   type RequestOp,
   type StateDiff,
 } from './editing';
@@ -200,6 +230,16 @@ export class TranscriptEditingService {
       // Recording an empty version would put a no-op in the history a restore
       // could later "undo" into nothing.
       return this.currentResult(transcript.id, transcript.currentVersion, 'No changes');
+    }
+
+    // ---- 2b. Identifications take the unversioned path (#323) ---------------
+    // Classified against the live speakers OUTSIDE the transaction as a cheap
+    // routing decision only; `saveIdentifications` re-classifies under the row
+    // lock and 409s anything that moved in between, so a stale answer here can
+    // never write the wrong thing — at worst it routes a batch to a path that
+    // then refuses it honestly.
+    if (await this.isIdentificationOnly(transcript.id, expanded.ops)) {
+      return this.identify(transcript.id, user, expanded.ops as RenameSpeakerOp[]);
     }
 
     // ---- 3-5. The write, retried past a lost version race --------------------
@@ -484,6 +524,7 @@ export class TranscriptEditingService {
 
     const nextVersion = transcript.currentVersion + 1;
     const summary = `Restored version ${version}`;
+    let restored = target.state;
 
     try {
       await this.prisma.$transaction(
@@ -495,6 +536,17 @@ export class TranscriptEditingService {
 
           if (bumped.count === 0) throw new VersionRaceError();
 
+          // ⚠ RE-OVERLAY WITH THE MAP AS IT STANDS UNDER THE LOCK (#323).
+          // `target` was materialized outside this transaction, and an
+          // identification — which does not move `current_version`, so the
+          // bump above cannot see it — may have committed since. Writing the
+          // placeholder back into live while the map names that speaker would
+          // leave live saying "Speaker A" where `materialize(current)` says
+          // "Oscar". The overlay is idempotent, so re-applying it is free.
+          const identities = await this.readIdentities(tx, transcript.id);
+
+          restored = applyIdentities(target.state, identities);
+
           // ⚠ SEGMENTS BEFORE SPEAKERS, ALWAYS. `transcript_segments.speaker_id`
           // is `onDelete: Restrict` (spec §3.3), so a speaker with segments
           // still pointing at it cannot be deleted — which is the schema
@@ -503,7 +555,7 @@ export class TranscriptEditingService {
           await tx.transcriptSpeaker.deleteMany({ where: { transcriptId: transcript.id } });
 
           await tx.transcriptSpeaker.createMany({
-            data: target.state.speakers.map((speaker) => ({
+            data: restored.speakers.map((speaker) => ({
               id: speaker.id,
               transcriptId: transcript.id,
               label: speaker.label,
@@ -514,7 +566,7 @@ export class TranscriptEditingService {
           });
 
           await tx.transcriptSegment.createMany({
-            data: target.state.segments.map((segment) => ({
+            data: restored.segments.map((segment) => ({
               id: segment.id,
               transcriptId: transcript.id,
               speakerId: segment.speakerId,
@@ -549,8 +601,8 @@ export class TranscriptEditingService {
           await tx.transcript.update({
             where: { id: transcript.id },
             data: {
-              speakerCount: target.state.speakers.length,
-              wordCount: countStateWords(target.state),
+              speakerCount: restored.speakers.length,
+              wordCount: countStateWords(restored),
             },
           });
         },
@@ -593,8 +645,8 @@ export class TranscriptEditingService {
       version: nextVersion,
       summary,
       idempotentReplay: false,
-      speakers: [...target.state.speakers].sort((a, b) => a.colorIndex - b.colorIndex),
-      segments: sortForRead(target.state.segments).map((segment) => segmentShape(segment, now)),
+      speakers: [...restored.speakers].sort((a, b) => a.colorIndex - b.colorIndex),
+      segments: sortForRead(restored.segments).map((segment) => segmentShape(segment, now)),
       merges: [],
     };
   }
@@ -646,6 +698,23 @@ export class TranscriptEditingService {
         const now = new Date();
 
         await this.persist(tx, transcriptId, diff, user.id, now);
+
+        // ⚠ A VERSIONED RENAME BACK TO THE PLACEHOLDER RETIRES THE IDENTITY
+        // (#323). Read AFTER the bump above, because an identification does
+        // not move `current_version` and the bump's lock is the only thing
+        // ordering this read after one that committed a moment ago.
+        //
+        // Without this, "Oscar" → "Speaker A" would be written to live and
+        // then overlaid straight back to "Oscar" by every `materialize()`,
+        // breaking `materialize(current) == live`. The honest consequence of
+        // deleting the entry: every OLDER version that replays to the
+        // placeholder for this speaker now shows "Speaker A" too, where it
+        // showed "Oscar" before — the user has, in effect, withdrawn the
+        // identification, and the overlay can only express "identified" or
+        // "not" for the whole history, never per version. (Versions whose
+        // snapshot was taken from live tables after the naming keep "Oscar"
+        // baked in; that is the only place the old name survives.)
+        await this.retireIdentities(tx, transcriptId, applied.state);
 
         const speakerNames = new Map(
           applied.state.speakers.map((speaker) => [speaker.id, speaker.displayName]),
@@ -877,6 +946,250 @@ export class TranscriptEditingService {
     }
   }
 
+  // ===========================================================================
+  // The unversioned path: naming an AI-detected speaker (#323)
+  // ===========================================================================
+
+  /** Every op a `speaker.rename`, and each one an identification or a no-op? */
+  private async isIdentificationOnly(
+    transcriptId: string,
+    ops: readonly RecordedOp[],
+  ): Promise<boolean> {
+    // The common case — any batch with a text edit in it — answers without a
+    // query at all.
+    if (ops.length === 0 || ops.some((op) => op.op !== OP_TYPES.RENAME_SPEAKER)) return false;
+
+    const speakers = await this.prisma.transcriptSpeaker.findMany({
+      where: { transcriptId },
+      select: { id: true, label: true, displayName: true, colorIndex: true, rev: true },
+    });
+
+    return isIdentificationBatch({ speakers, segments: [] }, ops);
+  }
+
+  /**
+   * Apply an identification-only batch, and turn its conflicts into the same
+   * 409 body a versioned batch's conflicts produce — a client resolves both
+   * the same way, and must not need to know which path its save took.
+   */
+  private async identify(
+    transcriptId: string,
+    user: RequestUser,
+    ops: RenameSpeakerOp[],
+  ): Promise<OperationsResult> {
+    let saved: { result: OperationsResult; identified: IdentifiedSpeaker[] };
+
+    try {
+      saved = await this.saveIdentifications(transcriptId, ops);
+    } catch (error) {
+      if (error instanceof BatchConflictError) {
+        // `details`, not top level — see the identical throw in
+        // `applyOperations` for why the envelope demands it.
+        throw new ConflictException({
+          message: error.message,
+          details: { currentVersion: error.currentVersion, conflicts: error.conflicts },
+        });
+      }
+
+      throw error;
+    }
+
+    if (saved.identified.length > 0) {
+      // The search index chunks carry speaker names, so a naming changes what
+      // a search for "Oscar" should find — for the same reason `afterCommit`
+      // enqueues it unconditionally. There is deliberately NO snapshot: no
+      // version was created, so there is nothing new to compact.
+      await this.pipeline.enqueueSearchIndex(transcriptId);
+
+      // AUDITED because it is the one change to what a transcript says that
+      // leaves no row in its version history: without this, "who decided that
+      // voice was Oscar?" would have no answer anywhere.
+      await this.audit(user.id, 'transcript.speaker_identified', transcriptId, {
+        speakers: saved.identified,
+      });
+
+      this.logger.log(
+        `Transcript ${transcriptId}: ${saved.identified.length} speaker(s) identified by ` +
+          `${user.id} (unversioned, v${saved.result.version})`,
+      );
+    }
+
+    return saved.result;
+  }
+
+  /**
+   * The write. One transaction, the transcript row locked, nothing versioned.
+   *
+   * ⚠ `FOR UPDATE` ON THE TRANSCRIPT ROW IS THE LOCK. The versioned path's
+   * conditional `current_version` bump takes the same row lock, so the two
+   * paths serialise against each other even though this one never moves the
+   * version — which is what makes the re-classification below trustworthy.
+   * It is one row, held for a handful of statements; the "nothing is locked"
+   * argument in the file header is about the SEGMENT table, which this path
+   * never touches.
+   */
+  private async saveIdentifications(
+    transcriptId: string,
+    ops: RenameSpeakerOp[],
+  ): Promise<{ result: OperationsResult; identified: IdentifiedSpeaker[] }> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const locked = await tx.$queryRaw<
+          Array<{ current_version: number; speaker_identities: unknown }>
+        >`
+          SELECT current_version, speaker_identities
+            FROM transcripts
+           WHERE id = ${transcriptId}::uuid
+             FOR UPDATE
+        `;
+
+        if (locked.length === 0) throw new NotFoundException('Transcript not found');
+
+        const currentVersion = Number(locked[0].current_version);
+        const identities = parseSpeakerIdentities(locked[0].speaker_identities);
+
+        const speakers = await tx.transcriptSpeaker.findMany({
+          where: { transcriptId, id: { in: [...new Set(ops.map((op) => op.speakerId))] } },
+          select: { id: true, label: true, displayName: true, colorIndex: true, rev: true },
+        });
+
+        // A working copy, walked in batch order: a second rename of the same
+        // speaker is classified against the name the first one gave it, the
+        // same sequential semantics the reducers apply.
+        const working = new Map(speakers.map((speaker) => [speaker.id, { ...speaker }]));
+        const conflicts: OpConflict[] = [];
+        const identified: IdentifiedSpeaker[] = [];
+
+        for (const op of ops) {
+          const speaker = working.get(op.speakerId);
+          const kind = classifyRename(speaker, op);
+
+          if (!speaker) {
+            conflicts.push({ entity: 'speaker', id: op.speakerId, current: null });
+            continue;
+          }
+
+          if (kind === 'noop') continue;
+
+          // ⚠ A RENAME THAT IS NO LONGER AN IDENTIFICATION IS A CONFLICT, not
+          // a silent fallback to the versioned path. It means somebody else
+          // named or renamed this speaker between the routing read and this
+          // lock — and because an identification leaves `rev` alone, a rev
+          // check alone might not notice. Proceeding would overwrite their
+          // "Joe" with this client's "Oscar" without either of them seeing
+          // the other's choice.
+          if (kind !== 'identification' || speaker.rev !== op.rev) {
+            conflicts.push({ entity: 'speaker', id: speaker.id, current: speaker.rev });
+            continue;
+          }
+
+          const name = op.displayName.trim();
+          const placeholder = defaultSpeakerName(speaker.label as string);
+
+          identified.push({
+            speakerId: speaker.id,
+            label: speaker.label,
+            previousName: placeholder,
+            displayName: name,
+          });
+          speaker.displayName = name;
+          identities[speaker.id] = name;
+        }
+
+        if (conflicts.length > 0) throw new BatchConflictError(currentVersion, conflicts);
+
+        for (const entry of identified) {
+          // ⚠ `rev` IS NOT INCREMENTED. See the file header: the version log
+          // has no record of this write, so a rev it produced would be one
+          // `materialize()` cannot reproduce, and the next versioned rename of
+          // this speaker would fail replay as a corrupt history. The rev and
+          // the placeholder in the predicate make this a compare-and-set
+          // against exactly what was classified above.
+          const written = await tx.transcriptSpeaker.updateMany({
+            where: {
+              id: entry.speakerId,
+              transcriptId,
+              rev: working.get(entry.speakerId)?.rev,
+              displayName: entry.previousName,
+            },
+            data: { displayName: entry.displayName },
+          });
+
+          if (written.count === 0) {
+            throw new BatchConflictError(currentVersion, [
+              {
+                entity: 'speaker',
+                id: entry.speakerId,
+                current: working.get(entry.speakerId)?.rev ?? null,
+              },
+            ]);
+          }
+        }
+
+        if (identified.length > 0) {
+          await tx.transcript.update({
+            where: { id: transcriptId },
+            data: { speakerIdentities: identities as Prisma.InputJsonValue },
+          });
+        }
+
+        const summary =
+          identified.length === 0
+            ? 'No changes'
+            : identified
+                .map((entry) => `Named ${entry.previousName} as ${entry.displayName}`)
+                .join('; ');
+
+        // Built INSIDE the transaction, so the state and the version it is
+        // labelled with are one consistent read — a versioned save committing
+        // straight after this one cannot slip its segments under our number.
+        const result = await this.currentResult(transcriptId, currentVersion, summary, false, tx);
+
+        return { result, identified };
+      },
+      { timeout: 60_000 },
+    );
+  }
+
+  /** The `speaker_identities` map, read inside `tx`. */
+  private async readIdentities(
+    tx: Prisma.TransactionClient,
+    transcriptId: string,
+  ): Promise<Record<string, string>> {
+    const row = await tx.transcript.findUnique({
+      where: { id: transcriptId },
+      select: { speakerIdentities: true },
+    });
+
+    return parseSpeakerIdentities(row?.speakerIdentities);
+  }
+
+  /**
+   * Delete the identity entry of every speaker `state` has put back on its
+   * placeholder. See the call site in `saveBatch` for why, and for the
+   * consequence for older versions.
+   */
+  private async retireIdentities(
+    tx: Prisma.TransactionClient,
+    transcriptId: string,
+    state: EditingState,
+  ): Promise<void> {
+    const identities = await this.readIdentities(tx, transcriptId);
+
+    const retired = state.speakers.filter(
+      (speaker) => identities[speaker.id] !== undefined && isUnidentified(speaker),
+    );
+
+    if (retired.length === 0) return;
+
+    for (const speaker of retired) delete identities[speaker.id];
+
+    await tx.transcript.update({
+      where: { id: transcriptId },
+      data: { speakerIdentities: identities as Prisma.InputJsonValue },
+    });
+  }
+
   /** `sum(octet_length(ops::text))` for every version after the last snapshot. */
   private async opBytesSince(transcriptId: string, upToVersion: number): Promise<number> {
     const rows = await this.prisma.$queryRaw<Array<{ bytes: bigint | number | null }>>`
@@ -1096,8 +1409,13 @@ export class TranscriptEditingService {
     version: number,
     summary: string,
     idempotentReplay = false,
+    client: Prisma.TransactionClient | PrismaService = this.prisma,
   ): Promise<OperationsResult> {
-    const { state, editedAt } = await this.materialize.loadLiveState(transcriptId, new Set());
+    const { state, editedAt } = await this.materialize.loadLiveState(
+      transcriptId,
+      new Set(),
+      client,
+    );
 
     return {
       version,
@@ -1128,6 +1446,14 @@ export class TranscriptEditingService {
       },
     });
   }
+}
+
+/** One speaker an identification-only batch named, for the audit row and summary. */
+interface IdentifiedSpeaker {
+  speakerId: string;
+  label: string | null;
+  previousName: string;
+  displayName: string;
 }
 
 /** The expanded, recordable form of one request batch. */

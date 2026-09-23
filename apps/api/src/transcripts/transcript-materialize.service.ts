@@ -49,6 +49,42 @@
 // live tables are that answer, by definition) and answers `409` for anything
 // older — a temporary, self-healing state with an honest message, rather than a
 // silent wrong answer assembled from an empty base.
+//
+// -----------------------------------------------------------------------------
+// SPEAKER IDENTITIES ARE AN OVERLAY, NOT AN OP (issue #323)
+// -----------------------------------------------------------------------------
+//
+// Naming an AI-detected speaker for the first time ("Speaker A" → "Oscar") does
+// not create a version (see `editing/speaker-identity.ts` for why that is the
+// right line to draw). It is written to the live speaker row and to the
+// `transcripts.speaker_identities` map — and NOWHERE in the version log. So a
+// replay alone would say "Speaker A" where the live table says "Oscar", and
+// `materialize(current) == live` would be false.
+//
+// Every answer this service returns therefore has the map overlaid on it,
+// once, at the outermost return: any speaker still carrying its ingest
+// placeholder at the requested version takes its identified name. Three things
+// make that correct rather than merely convenient:
+//
+//   • it is RETROACTIVE ON PURPOSE — Oscar was Oscar in the recording, so v1
+//     viewed today says "Oscar" too, which is exactly what the user asked for;
+//   • it is REV-NEUTRAL — the identification write does not bump the speaker's
+//     `rev`, and the overlay does not either, so a later versioned op carries
+//     the rev a replay will actually reproduce and the log stays replayable;
+//   • it is IDEMPOTENT — an identified speaker is no longer unidentified, so a
+//     state that already carries the name (a snapshot taken from live tables
+//     after the naming, or a restore that wrote overlaid names back into live)
+//     passes through unchanged.
+//
+// Why not record it as an op in a version nobody sees? Because an op in the
+// log IS a version: it would move `current_version`, bust every ETag, show up
+// in the history list and be something a restore could "undo" — every
+// consequence the user asked us not to have. And why not rewrite the snapshots?
+// Because a snapshot is a compaction of replay work, never a second source of
+// truth (CLAUDE.md, correction rule 3); patching one would make it the latter.
+//
+// `loadLiveState` is deliberately NOT overlaid: the live row already carries the
+// name, and the write paths diff against exactly what is in the table.
 // =============================================================================
 
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -57,7 +93,9 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  applyIdentities,
   applyOps,
+  parseSpeakerIdentities,
   recordedOpSchema,
   sortByOrdinal,
   type EditableSegment,
@@ -205,11 +243,25 @@ export class TranscriptMaterializeService {
   // materialize
   // ---------------------------------------------------------------------------
 
-  async materialize(
+  async materialize(transcriptId: string, version: number): Promise<MaterializedTranscript> {
+    const { state, identities } = await this.materializeRaw(transcriptId, version, 0);
+
+    // ONCE, at the outermost return — see "SPEAKER IDENTITIES ARE AN OVERLAY"
+    // in the file header. A restore chain's inner hops return raw states, so
+    // the overlay is applied exactly once, using the map as it stands NOW
+    // (identities are not versioned, so "now" is the only map there is).
+    return { transcriptId, version, state: applyIdentities(state, identities) };
+  }
+
+  /**
+   * The replay itself, WITHOUT the identities overlay, plus the map read off
+   * the same transcript row so the caller need not read it twice.
+   */
+  private async materializeRaw(
     transcriptId: string,
     version: number,
-    depth = 0,
-  ): Promise<MaterializedTranscript> {
+    depth: number,
+  ): Promise<{ state: EditingState; identities: Record<string, string> }> {
     if (depth > MAX_RESTORE_DEPTH) {
       throw new ConflictException(
         `This version's history follows more than ${MAX_RESTORE_DEPTH} chained restores`,
@@ -218,12 +270,14 @@ export class TranscriptMaterializeService {
 
     const transcript = await this.prisma.transcript.findUnique({
       where: { id: transcriptId },
-      select: { id: true, currentVersion: true, deletedAt: true },
+      select: { id: true, currentVersion: true, deletedAt: true, speakerIdentities: true },
     });
 
     if (!transcript || transcript.deletedAt !== null) {
       throw new NotFoundException(TRANSCRIPT_NOT_FOUND_MESSAGE);
     }
+
+    const identities = parseSpeakerIdentities(transcript.speakerIdentities);
 
     if (version < 1 || version > transcript.currentVersion) {
       throw new NotFoundException(`Version ${version} does not exist for this transcript`);
@@ -260,7 +314,7 @@ export class TranscriptMaterializeService {
         );
       }
 
-      state = (await this.materialize(transcriptId, from, depth + 1)).state;
+      state = (await this.materializeRaw(transcriptId, from, depth + 1)).state;
       base = restore.version;
     } else if (snapshot?.snapshotObjectId) {
       state = await this.readSnapshot(snapshot.snapshotObjectId, transcriptId);
@@ -268,7 +322,7 @@ export class TranscriptMaterializeService {
     } else if (version === transcript.currentVersion) {
       // No snapshot anywhere at or before the target, but the target IS the
       // live state — which is the answer, with nothing to replay.
-      return { transcriptId, version, state: (await this.loadLiveState(transcriptId)).state };
+      return { state: (await this.loadLiveState(transcriptId)).state, identities };
     } else {
       throw new ConflictException(
         `Version ${version} cannot be rebuilt yet: no snapshot has been written at or before ` +
@@ -289,7 +343,7 @@ export class TranscriptMaterializeService {
       }
     }
 
-    return { transcriptId, version, state: { ...state, segments: sortByOrdinal(state.segments) } };
+    return { state: { ...state, segments: sortByOrdinal(state.segments) }, identities };
   }
 
   // ---------------------------------------------------------------------------
