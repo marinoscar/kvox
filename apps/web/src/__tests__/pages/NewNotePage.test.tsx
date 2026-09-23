@@ -599,7 +599,7 @@ describe('NewNotePage — layout and accessibility', () => {
     renderPage();
     await waitForForm();
 
-    expect(screen.getByRole('link', { name: 'Manage your templates' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Manage or hide templates' })).toHaveAttribute(
       'href',
       '/settings/note-templates',
     );

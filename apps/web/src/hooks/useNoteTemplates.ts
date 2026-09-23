@@ -13,7 +13,7 @@
  * caller can act on success without re-reading the list.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ApiError } from '../services/api';
 import {
@@ -22,6 +22,8 @@ import {
   duplicateNoteTemplate,
   getNoteTemplate,
   getNoteTemplates,
+  hideNoteTemplate,
+  unhideNoteTemplate,
   updateNoteTemplate,
 } from '../services/noteTemplates';
 import type {
@@ -67,9 +69,28 @@ export interface UseNoteTemplatesReturn {
   update: (id: string, input: UpdateNoteTemplateInput) => Promise<NoteTemplate | null>;
   duplicate: (id: string) => Promise<NoteTemplate | null>;
   archive: (id: string) => Promise<DeleteNoteTemplateResult | null>;
+  /**
+   * Hide a template from (or show it in) the caller's template pickers — issue
+   * #311. OPTIMISTIC: the row flips (or, in a list that excludes hidden rows,
+   * disappears) before the request is sent, and is put back if it fails, with
+   * the reason in `actionError`. Resolves `true` on success.
+   */
+  setHidden: (id: string, hidden: boolean) => Promise<boolean>;
 }
 
-export function useNoteTemplates(): UseNoteTemplatesReturn {
+export interface UseNoteTemplatesOptions {
+  /**
+   * Include templates the caller has hidden. Default `false`, which is what
+   * every PICKER wants — a hidden template must never be offered, least of all
+   * pre-selected. Only the template manager asks for them.
+   */
+  includeHidden?: boolean;
+}
+
+export function useNoteTemplates(
+  options: UseNoteTemplatesOptions = {},
+): UseNoteTemplatesReturn {
+  const includeHidden = options.includeHidden ?? false;
   const [templates, setTemplates] = useState<NoteTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -82,7 +103,7 @@ export function useNoteTemplates(): UseNoteTemplatesReturn {
     try {
       setIsLoading(true);
       setLoadError(null);
-      const list = await getNoteTemplates();
+      const list = await getNoteTemplates(includeHidden ? { includeHidden: true } : {});
       if (isMounted()) setTemplates(list.items);
     } catch (err) {
       if (isMounted()) {
@@ -92,11 +113,16 @@ export function useNoteTemplates(): UseNoteTemplatesReturn {
     } finally {
       if (isMounted()) setIsLoading(false);
     }
-  }, [isMounted]);
+  }, [includeHidden, isMounted]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // The latest list, readable from inside `setHidden` without making the
+  // callback's identity change on every render.
+  const templatesRef = useRef(templates);
+  templatesRef.current = templates;
 
   /**
    * Every mutation runs through here, so the in-flight flag, the error reset
@@ -147,6 +173,48 @@ export function useNoteTemplates(): UseNoteTemplatesReturn {
     [run],
   );
 
+  const setHidden = useCallback(
+    async (id: string, hidden: boolean): Promise<boolean> => {
+      const index = templatesRef.current.findIndex((template) => template.id === id);
+      const original = index >= 0 ? templatesRef.current[index] : null;
+      const removeLocally = hidden && !includeHidden;
+
+      setActionError(null);
+      setTemplates((current) =>
+        removeLocally
+          ? current.filter((template) => template.id !== id)
+          : current.map((template) => (template.id === id ? { ...template, hidden } : template)),
+      );
+
+      try {
+        await (hidden ? hideNoteTemplate(id) : unhideNoteTemplate(id));
+        return true;
+      } catch (err) {
+        if (!isMounted()) return false;
+        // Roll back THIS ROW only, not the whole list: another toggle may be in
+        // flight, and restoring a stale snapshot would undo it too.
+        setTemplates((current) => {
+          if (current.some((template) => template.id === id)) {
+            return current.map((template) =>
+              template.id === id ? { ...template, hidden: !hidden } : template,
+            );
+          }
+          if (!original) return current;
+          const next = [...current];
+          next.splice(Math.min(index, next.length), 0, original);
+          return next;
+        });
+        setActionError(
+          err instanceof ApiError && err.status === 404
+            ? 'This template no longer exists.'
+            : messageFor(err, hidden ? 'Failed to hide the template' : 'Failed to show the template'),
+        );
+        return false;
+      }
+    },
+    [includeHidden, isMounted],
+  );
+
   return {
     templates,
     isLoading,
@@ -159,6 +227,7 @@ export function useNoteTemplates(): UseNoteTemplatesReturn {
     update,
     duplicate,
     archive,
+    setHidden,
   };
 }
 
