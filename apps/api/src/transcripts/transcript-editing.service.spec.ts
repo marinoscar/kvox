@@ -83,18 +83,28 @@ const segmentRows = [
 describe('TranscriptEditingService', () => {
   let service: TranscriptEditingService;
   let prisma: Record<string, never> & Record<string, unknown>;
+  let tx: Record<string, any>;
   let versionCreate: jest.Mock;
   let access: { require: jest.Mock };
   let pipeline: { enqueueSnapshot: jest.Mock; enqueueSearchIndex: jest.Mock };
   let transcript: { id: string; currentVersion: number };
+  /** `transcripts.speaker_identities`, as both the tx-locked read and the
+   * out-of-transaction read see it — a `let` so a test can set it BEFORE
+   * calling the service and have every mock that reads the row see the
+   * change (#323). */
+  let speakerIdentities: Record<string, string>;
 
   beforeEach(async () => {
     transcript = { id: TRANSCRIPT_ID, currentVersion: 3 };
+    speakerIdentities = {};
     versionCreate = jest.fn().mockResolvedValue({});
 
-    const tx = {
+    tx = {
       transcript: {
-        findUnique: jest.fn().mockImplementation(async () => ({ currentVersion: transcript.currentVersion })),
+        findUnique: jest.fn().mockImplementation(async () => ({
+          currentVersion: transcript.currentVersion,
+          speakerIdentities,
+        })),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockResolvedValue({}),
       },
@@ -102,6 +112,9 @@ describe('TranscriptEditingService', () => {
         findMany: jest.fn().mockResolvedValue(speakerRows),
         createMany: jest.fn().mockResolvedValue({ count: 0 }),
         update: jest.fn().mockResolvedValue({}),
+        // Only `saveIdentifications` (#323) writes through `updateMany`; the
+        // versioned path always uses the individual `update` above.
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       transcriptSegment: {
@@ -112,6 +125,10 @@ describe('TranscriptEditingService', () => {
       },
       transcriptVersion: { create: versionCreate },
       $executeRaw: jest.fn().mockResolvedValue(1),
+      // `saveIdentifications`'s `SELECT … FOR UPDATE` (#323).
+      $queryRaw: jest.fn().mockImplementation(async () => [
+        { current_version: transcript.currentVersion, speaker_identities: speakerIdentities },
+      ]),
     };
 
     prisma = {
@@ -247,6 +264,210 @@ describe('TranscriptEditingService', () => {
       expect(versionCreate).not.toHaveBeenCalled();
       expect(result.version).toBe(3);
       expect(result.summary).toBe('No changes');
+    });
+  });
+
+  // ===========================================================================
+  // Naming a speaker for the first time is not a version (issue #323)
+  // ===========================================================================
+  //
+  // `speakerRows` (this file's fixture) already carries the ingest placeholder
+  // for speaker `A` — `displayName: 'Speaker A'` — so an unmodified batch
+  // renaming `A` is, by construction, an identification unless a test says
+  // otherwise.
+  // ===========================================================================
+
+  describe('naming a speaker (#323)', () => {
+    const identifyBatch = (
+      displayName: string,
+      overrides: Record<string, unknown> = {},
+      clientBatchId = 'identify-batch',
+    ) => ({
+      baseVersion: 3,
+      clientBatchId,
+      ops: [
+        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName, ...overrides },
+      ] as never,
+    });
+
+    it('writes the name and the identities map, bumps neither the version nor the rev, and never creates a transcript_versions row', async () => {
+      const result = await service.applyOperations(
+        TRANSCRIPT_ID,
+        identifyBatch('Oscar') as never,
+        USER,
+      );
+
+      expect(versionCreate).not.toHaveBeenCalled();
+      expect(tx.transcript.updateMany).not.toHaveBeenCalled();
+      expect(result.version).toBe(3);
+      expect(result.summary).toBe('Named Speaker A as Oscar');
+
+      // ⚠ `rev` IS NOT PART OF THE PREDICATE'S UPDATE — only the placeholder
+      // name and the rev the routing decision saw are, so a rev bump here
+      // would be visible in the assertion below and it is not.
+      expect(tx.transcriptSpeaker.updateMany).toHaveBeenCalledWith({
+        where: { id: 'A', transcriptId: TRANSCRIPT_ID, rev: 1, displayName: 'Speaker A' },
+        data: { displayName: 'Oscar' },
+      });
+
+      expect(tx.transcript.update).toHaveBeenCalledWith({
+        where: { id: TRANSCRIPT_ID },
+        data: { speakerIdentities: { A: 'Oscar' } },
+      });
+    });
+
+    it('enqueues the search index and an audit event, but never a snapshot', async () => {
+      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar') as never, USER);
+
+      expect(pipeline.enqueueSearchIndex).toHaveBeenCalledWith(TRANSCRIPT_ID);
+      expect(pipeline.enqueueSnapshot).not.toHaveBeenCalled();
+
+      expect((prisma.auditEvent as { create: jest.Mock }).create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'transcript.speaker_identified',
+            targetType: 'transcript',
+            targetId: TRANSCRIPT_ID,
+            meta: { speakers: [{ speakerId: 'A', label: 'A', previousName: 'Speaker A', displayName: 'Oscar' }] },
+          }),
+        }),
+      );
+    });
+
+    it('is idempotent: retrying an identification the speaker already carries writes nothing and enqueues nothing', async () => {
+      const alreadyIdentified = [
+        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        speakerRows[1],
+      ];
+
+      (prisma.transcriptSpeaker as { findMany: jest.Mock }).findMany.mockResolvedValue(
+        alreadyIdentified,
+      );
+      tx.transcriptSpeaker.findMany.mockResolvedValue(alreadyIdentified);
+
+      const result = await service.applyOperations(
+        TRANSCRIPT_ID,
+        identifyBatch('Oscar', {}, 'identify-retry') as never,
+        USER,
+      );
+
+      expect(result.summary).toBe('No changes');
+      expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
+      expect(tx.transcript.update).not.toHaveBeenCalled();
+      expect(pipeline.enqueueSearchIndex).not.toHaveBeenCalled();
+      expect((prisma.auditEvent as { create: jest.Mock }).create).not.toHaveBeenCalled();
+    });
+
+    it('answers a stale rev with the exact 409 shape a versioned conflict uses', async () => {
+      // The routing read (outside the lock, still the placeholder) says this
+      // is an identification; the LOCKED read inside the transaction sees a
+      // rev someone else already moved — the honest 409, not a silent
+      // overwrite of whatever they wrote.
+      tx.transcriptSpeaker.findMany.mockResolvedValue([
+        { id: 'A', label: 'A', displayName: 'Speaker A', colorIndex: 0, rev: 2 },
+        speakerRows[1],
+      ]);
+
+      const conflict = await service
+        .applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar', {}, 'identify-stale') as never, USER)
+        .catch((error: unknown) => error);
+
+      expect(conflict).toBeInstanceOf(ConflictException);
+
+      const body = (conflict as ConflictException).getResponse() as {
+        details: { currentVersion: number; conflicts: Array<Record<string, unknown>> };
+      };
+
+      expect(body.details).toEqual({
+        currentVersion: 3,
+        conflicts: [{ entity: 'speaker', id: 'A', current: 2 }],
+      });
+      expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
+      expect(tx.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('keeps a batch versioned when a rename rides along with a text edit', async () => {
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'mixed-batch',
+          ops: [
+            { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Oscar' },
+            { op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'updated text' },
+          ],
+        } as never,
+        USER,
+      );
+
+      expect(versionCreate).toHaveBeenCalled();
+      expect(recordedOps().map((op) => op.op)).toEqual([
+        OP_TYPES.RENAME_SPEAKER,
+        OP_TYPES.UPDATE_TEXT,
+      ]);
+      // The identification-only path never ran, so nothing was written to the
+      // identities map for this rename — it rode along as an ordinary
+      // recorded op instead.
+      expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('records renaming an already-identified speaker (Oscar -> Joe) as a version, not an identification', async () => {
+      const identified = [
+        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        speakerRows[1],
+      ];
+
+      (prisma.transcriptSpeaker as { findMany: jest.Mock }).findMany.mockResolvedValue(identified);
+      tx.transcriptSpeaker.findMany.mockResolvedValue(identified);
+
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'oscar-to-joe',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+        } as never,
+        USER,
+      );
+
+      expect(versionCreate).toHaveBeenCalled();
+      expect(recordedOps()).toEqual([
+        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
+      ]);
+      expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('retires the identity entry when a versioned rename puts the speaker back on its placeholder', async () => {
+      speakerIdentities = { A: 'Oscar' };
+
+      const identified = [
+        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        speakerRows[1],
+      ];
+
+      (prisma.transcriptSpeaker as { findMany: jest.Mock }).findMany.mockResolvedValue(identified);
+      tx.transcriptSpeaker.findMany.mockResolvedValue(identified);
+
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'back-to-placeholder',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Speaker A' }],
+        } as never,
+        USER,
+      );
+
+      expect(versionCreate).toHaveBeenCalled();
+      // The versioned rename itself:
+      expect(recordedOps()).toEqual([
+        { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Speaker A' },
+      ]);
+      // ...and, in the SAME transaction, the now-stale identity entry is gone.
+      expect(tx.transcript.update).toHaveBeenCalledWith({
+        where: { id: TRANSCRIPT_ID },
+        data: { speakerIdentities: {} },
+      });
     });
   });
 
