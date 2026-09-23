@@ -306,64 +306,105 @@ export class TranscriptNameCheckService {
     });
     const byId = new Map(segments.map((s) => [s.id, s]));
 
-    // ---- Resolve each suggestion against the CURRENT text ---------------------
+    // ---- Deterministic chunks, fixed BEFORE any span is resolved ---------------
+    // A chunk's `clientBatchId` must come out identical on a retry, including a
+    // retry after a crash between a chunk's commit and its suggestions being
+    // marked accepted. By then the segment text already carries the
+    // replacement, so resolving spans would call every one of them stale — the
+    // chunk therefore cannot depend on span resolution, only on suggestion ids:
+    // sort the pending ids, group by segment in order of each segment's lowest
+    // id, cut every MAX_OPS_PER_BATCH segments (≤ one op per segment), and hash
+    // the chunk's sorted ids. Chunks whose suggestions were all marked accepted
+    // drop out as a whole prefix, so the remaining chunks keep their boundaries.
+    const bySegment = new Map<string, typeof suggestions>();
+    for (const s of [...suggestions].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+      const list = bySegment.get(s.segmentId) ?? [];
+      list.push(s);
+      bySegment.set(s.segmentId, list);
+    }
+    const segmentOrder = [...bySegment.keys()];
+
     const stale = new Set<string>();
-    const perSegment = new Map<string, Array<{ id: string; start: number; end: number; replacement: string }>>();
-    for (const s of suggestions) {
-      const segment = byId.get(s.segmentId);
-      const span = segment ? resolveSpan(segment.text, s) : null;
-      if (!segment || !span) {
-        stale.add(s.id);
-        continue;
-      }
-      const list = perSegment.get(segment.id) ?? [];
-      list.push({ id: s.id, start: span.start, end: span.end, replacement: s.replacement });
-      perSegment.set(segment.id, list);
-    }
-
-    // ---- One `segment.update_text` per segment, current rev -------------------
-    const edits: Array<{ op: { op: typeof OP_TYPES.UPDATE_TEXT; segmentId: string; rev: number; text: string }; ids: string[] }> = [];
-    for (const segment of segments) {
-      const splices = perSegment.get(segment.id);
-      if (!splices) continue;
-      const result = applySplices(segment.text, splices);
-      for (const id of result.skipped) stale.add(id);
-      if (result.applied.length === 0 || result.text === segment.text) {
-        for (const id of result.applied) stale.add(id);
-        continue;
-      }
-      edits.push({
-        op: { op: OP_TYPES.UPDATE_TEXT, segmentId: segment.id, rev: segment.rev, text: result.text },
-        ids: result.applied,
-      });
-    }
-
-    // ---- Apply in chunks of ≤ 200 ops, each its own idempotent batch ----------
     let applied = 0;
     let last: OperationsResult | null = null;
     let baseVersion = transcript.currentVersion;
 
-    for (let i = 0; i < edits.length; i += MAX_OPS_PER_BATCH) {
-      const chunk = edits.slice(i, i + MAX_OPS_PER_BATCH);
-      const ids = chunk.flatMap((e) => e.ids).sort();
+    for (let i = 0; i < segmentOrder.length; i += MAX_OPS_PER_BATCH) {
+      const chunkSegmentIds = new Set(segmentOrder.slice(i, i + MAX_OPS_PER_BATCH));
+      const chunkSuggestions = [...chunkSegmentIds].flatMap((id) => bySegment.get(id) ?? []);
+      const ids = chunkSuggestions.map((s) => s.id).sort();
       const clientBatchId =
         `namecheck:${checkId}:` + createHash('sha256').update(ids.join(',')).digest('hex').slice(0, 24);
+
+      // ---- Already committed by an earlier, interrupted apply? ----------------
+      const committed = await this.prisma.transcriptVersion.findUnique({
+        where: { transcriptId_clientBatchId: { transcriptId: transcript.id, clientBatchId } },
+        select: { ops: true },
+      });
+      if (committed) {
+        // Suggestions on a segment the recorded batch edited were applied;
+        // the rest of the chunk was stale then and is stale now.
+        const touched = editedSegmentIds(committed.ops);
+        const accepted: string[] = [];
+        for (const s of chunkSuggestions) {
+          if (touched.has(s.segmentId)) accepted.push(s.id);
+          else stale.add(s.id);
+        }
+        // Same clientBatchId: the editing service answers from its replay path
+        // before looking at `ops`, so the response shape is the ordinary one.
+        last = await this.editing.applyOperations(transcript.id, { baseVersion, clientBatchId, ops: [] }, user);
+        baseVersion = Math.max(baseVersion, last.version);
+        await this.markAccepted(checkId, accepted, user.id);
+        applied += accepted.length;
+        continue;
+      }
+
+      // ---- Resolve each suggestion against the CURRENT text -------------------
+      const perSegment = new Map<string, Array<{ id: string; start: number; end: number; replacement: string }>>();
+      for (const s of chunkSuggestions) {
+        const segment = byId.get(s.segmentId);
+        const span = segment ? resolveSpan(segment.text, s) : null;
+        if (!segment || !span) {
+          stale.add(s.id);
+          continue;
+        }
+        const list = perSegment.get(segment.id) ?? [];
+        list.push({ id: s.id, start: span.start, end: span.end, replacement: s.replacement });
+        perSegment.set(segment.id, list);
+      }
+
+      // ---- One `segment.update_text` per segment, current rev -----------------
+      const edits: Array<{ op: { op: typeof OP_TYPES.UPDATE_TEXT; segmentId: string; rev: number; text: string }; ids: string[] }> = [];
+      for (const segment of segments) {
+        const splices = perSegment.get(segment.id);
+        if (!splices) continue;
+        const result = applySplices(segment.text, splices);
+        for (const id of result.skipped) stale.add(id);
+        if (result.applied.length === 0 || result.text === segment.text) {
+          for (const id of result.applied) stale.add(id);
+          continue;
+        }
+        edits.push({
+          op: { op: OP_TYPES.UPDATE_TEXT, segmentId: segment.id, rev: segment.rev, text: result.text },
+          ids: result.applied,
+        });
+      }
+      if (edits.length === 0) continue;
+
+      const acceptedIds = edits.flatMap((e) => e.ids);
 
       // A 409 (stale rev) propagates unchanged: earlier chunks are committed
       // and marked, this one and later ones stay pending for a re-review.
       last = await this.editing.applyOperations(
         transcript.id,
-        { baseVersion, clientBatchId, ops: chunk.map((e) => e.op) },
+        { baseVersion, clientBatchId, ops: edits.map((e) => e.op) },
         user,
-        { summary: `Applied ${ids.length} AI name correction${ids.length === 1 ? '' : 's'}` },
+        { summary: `Applied ${acceptedIds.length} AI name correction${acceptedIds.length === 1 ? '' : 's'}` },
       );
       baseVersion = last.version;
 
-      await this.prisma.transcriptNameSuggestion.updateMany({
-        where: { id: { in: ids }, checkId, status: 'pending' },
-        data: { status: 'accepted', decidedAt: new Date(), decidedById: user.id },
-      });
-      applied += ids.length;
+      await this.markAccepted(checkId, acceptedIds, user.id);
+      applied += acceptedIds.length;
     }
 
     if (stale.size > 0) {
@@ -488,6 +529,14 @@ export class TranscriptNameCheckService {
     }
   }
 
+  private async markAccepted(checkId: string, ids: string[], userId: string): Promise<void> {
+    if (ids.length === 0) return;
+    await this.prisma.transcriptNameSuggestion.updateMany({
+      where: { id: { in: ids }, checkId, status: 'pending' },
+      data: { status: 'accepted', decidedAt: new Date(), decidedById: userId },
+    });
+  }
+
   private async requireCheck(transcriptId: string, checkId: string): Promise<void> {
     const check = await this.prisma.transcriptNameCheck.findFirst({
       where: { id: checkId, transcriptId },
@@ -500,6 +549,21 @@ export class TranscriptNameCheckService {
 // -----------------------------------------------------------------------------
 // Pure helpers
 // -----------------------------------------------------------------------------
+
+/**
+ * The segments a recorded name-check batch edited, read from its version's
+ * `ops` — which are only ever `segment.update_text`, one per segment.
+ */
+function editedSegmentIds(ops: Prisma.JsonValue): Set<string> {
+  const ids = new Set<string>();
+  if (!Array.isArray(ops)) return ids;
+  for (const op of ops) {
+    if (op && typeof op === 'object' && !Array.isArray(op) && typeof op.segmentId === 'string') {
+      ids.add(op.segmentId);
+    }
+  }
+  return ids;
+}
 
 function runningConflict(checkId?: string): ConflictException {
   return new ConflictException({
