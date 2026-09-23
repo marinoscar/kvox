@@ -144,6 +144,7 @@ export class NoteGenerationContextService {
     return assemblePrompt({
       templateInstructions: template.instructions,
       templateOutputFormat: template.outputFormat,
+      templateBodyFormat: template.bodyFormat,
       templateStructure: parseTemplateStructure(template.structure),
       templateTone: template.tone,
       templateLength: template.length,

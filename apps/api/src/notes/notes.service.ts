@@ -98,6 +98,7 @@ import {
   type ResolvedModel,
 } from './generation/note-generation-request.service';
 import { NoteSourceService, type SourceSelector } from './generation/note-source.service';
+import { toNoteBodyFormat } from './dto/note-template.dto';
 import { assemblePrompt, parseTemplateStructure } from './generation/prompt';
 import {
   NOTE_GENERATE_JOB_TYPE,
@@ -241,6 +242,10 @@ export class NotesService {
           sourceNoteId: selector.sourceNoteId,
           sourceObjectId: selector.sourceObjectId,
           templateId: template.id,
+          // ⚠ The note's body format is the template's, captured here (issue
+          // #334): it is what the generated body will be written in, and what
+          // the exporters read to decide whether to parse it as Markdown.
+          bodyFormat: toNoteBodyFormat(template.bodyFormat),
           contextText,
         },
       });
@@ -742,6 +747,12 @@ export class NotesService {
     const queued = await this.prisma.$transaction(async (tx) => {
       const refreshed = await tx.note.update({
         where: { id: note.id },
+        // ⚠ NOT `bodyFormat` (#334), although a regeneration may switch to a
+        // template with a different one: the format describes the BODY, and
+        // the body does not change until the job commits a new one — which is
+        // where `NoteGenerationService.commit` writes the new format. Writing
+        // it here would mislabel the current body for the whole run, and
+        // forever if the run fails.
         data: { templateId: template.id, contextText, failureReason: null },
       });
 
@@ -1203,6 +1214,7 @@ export class NotesService {
     template: {
       instructions: string;
       outputFormat: string;
+      bodyFormat?: string | null;
       structure: Prisma.JsonValue;
       tone: string | null;
       length: string | null;
@@ -1218,6 +1230,7 @@ export class NotesService {
     const prompt = assemblePrompt({
       templateInstructions: input.template.instructions,
       templateOutputFormat: input.template.outputFormat,
+      templateBodyFormat: input.template.bodyFormat,
       templateStructure: parseTemplateStructure(input.template.structure),
       templateTone: input.template.tone,
       templateLength: input.template.length,
@@ -1377,6 +1390,7 @@ export function detailShape(
     title: note.title,
     titleSource: note.titleSource,
     body: note.body,
+    bodyFormat: toNoteBodyFormat(note.bodyFormat),
     status: note.status,
     currentVersion: note.currentVersion,
     provider: note.provider,
