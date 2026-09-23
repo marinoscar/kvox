@@ -42,7 +42,7 @@ export default defineConfig({
   //
   // ⚠ DEFINED, BUT PINNED — never the live `package.json` version. The hub
   // footer prints it, so reading the real version made every release commit
-  // (`chore(release): vX.Y.Z`, cut by `kvox deploy update`) a pixel diff on
+  // (`chore(release): vX.Y.Z`, cut by the CLI's `deploy update`) a pixel diff on
   // all seven hub baselines: `main` went red at v1.0.2 with nothing but
   // "Version 1.0.1" → "Version 1.0.2" changed. A baseline is a picture of the
   // layout, not of the release number, so the harness renders the one value
