@@ -328,14 +328,30 @@ else): a `failed` note always offers **Regenerate**, which is `POST
 one-attempt budget — regeneration is the queue's manual retry, deliberately
 placed one explicit user action away from ever happening automatically.
 
-**The dialog behind that button is a form, not a confirmation** (issue #109,
-epic #105). It is prefilled with the note's current template, context text
-and model, and it sends a **diff**: an untouched form posts `{}` — byte for
-byte what the confirmation-only dialog always sent — a cleared context box
-posts `contextText: null`, and a moved template or model posts only that
-field. The endpoint's own fallback rule ("every omitted field is what the
-note already records") is what makes a diff safe; sending the whole form
-would rewrite rows the user never touched.
+**Regenerate is a split button with two paths, not one dialog** (issue #109,
+epic #105; split in two by issue #312). The common case — regenerate with
+the note's existing template, context and model unchanged — is one click and
+a short confirm dialog that posts `{}`, with no form to review. The main
+segment of the button, and the button on a `failed` note, take this path
+directly; only "Regenerate with another template…" opens the full options
+dialog, focused on the template picker. A regeneration that turns out to need
+a template the note no longer has (`409 template_required` — the template was
+deleted) is routed to the same options dialog instead of failing outright,
+whichever path the user started from.
+
+**The options dialog is a form, not a confirmation.** It is prefilled with
+the note's current template, context text and model, and it sends a **diff**:
+an untouched form posts `{}` — byte for byte what the same-template path
+always sends — a cleared context box posts `contextText: null`, and a moved
+template or model posts only that field. The endpoint's own fallback rule
+("every omitted field is what the note already records") is what makes a
+diff safe; sending the whole form would rewrite rows the user never touched.
+The template picker itself groups choices as Current / Your templates /
+Built-in, hides archived-or-hidden templates by default behind a per-viewer
+"Show hidden templates" checkbox, and always keeps the note's current
+template selectable and clearly labelled even when it is itself hidden or
+archived — a regeneration must never be blocked by a template picker that
+quietly dropped the one template the note is already using.
 
 Two branches the dialog must handle rather than assume away: a template that
 no longer exists blocks confirmation until one is chosen, and a server `409
