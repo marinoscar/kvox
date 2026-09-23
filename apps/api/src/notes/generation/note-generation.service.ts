@@ -105,6 +105,12 @@ export interface CommitInput {
   completionTokens: number | null;
   /** `AiProvider.label`, for the notification only. */
   providerLabel: string;
+  /**
+   * The generating template's body format (issue #334), snapshotted onto the
+   * note together with the body it describes. Omitted (or unrecognised) means
+   * `markdown`.
+   */
+  bodyFormat?: string | null;
 }
 
 @Injectable()
@@ -275,6 +281,11 @@ export class NoteGenerationService {
         where: { id: note.id },
         data: {
           body: content,
+          // ⚠ Written WITH the body it describes, in the same transaction
+          // (#334): a regeneration that switched templates changes the format
+          // only if it actually produces a new body, so a failed run can never
+          // leave the old body labelled with the new template's format.
+          bodyFormat: input.bodyFormat === 'plain_text' ? 'plain_text' : 'markdown',
           currentVersion: version,
           status: 'ready',
           failureReason: null,
@@ -517,6 +528,11 @@ export function countWords(text: string): number {
 export interface PayloadTemplateSnapshot {
   instructions: string;
   outputFormat: string;
+  /**
+   * `markdown` or `plain_text` (issue #334). A payload written before the
+   * field existed, or carrying anything unrecognised, reads as `markdown`.
+   */
+  bodyFormat: 'markdown' | 'plain_text';
   structure: string[];
   tone: string | null;
   length: string | null;
@@ -573,6 +589,7 @@ export function readPayloadTemplate(
   return {
     instructions,
     outputFormat,
+    bodyFormat: template.bodyFormat === 'plain_text' ? 'plain_text' : 'markdown',
     structure: Array.isArray(template.structure)
       ? template.structure.filter((entry): entry is string => typeof entry === 'string')
       : [],

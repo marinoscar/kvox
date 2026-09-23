@@ -1,6 +1,6 @@
 import type { Note, NoteGeneration } from '@prisma/client';
 
-import { NoteGenerationService, type GenerationWithNote } from './note-generation.service';
+import { NoteGenerationService, readPayloadTemplate, type GenerationWithNote } from './note-generation.service';
 import { NoteTitleService } from './note-title.service';
 
 // =============================================================================
@@ -299,5 +299,86 @@ describe('recordContext()', () => {
     });
 
     expect(prisma.noteGeneration.update.mock.calls[0][0].data.sourceVersion).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// commit() — `bodyFormat` (issue #334)
+// -----------------------------------------------------------------------------
+//
+// Written onto the note in the SAME `note.update` call as `body`/
+// `currentVersion` (the transaction's last write), never a separate one — so a
+// regenerated note can never end up with a body from one commit and a
+// bodyFormat from another. `input.bodyFormat === 'plain_text' ? 'plain_text' :
+// 'markdown'` means anything other than the literal string `'plain_text'`
+// (including `undefined`/`null`, an omitted field) is written as `'markdown'`
+// — the note's bodyFormat is ALWAYS overwritten by this call, it is never
+// preserved from the row's prior value.
+// -----------------------------------------------------------------------------
+
+describe('commit() — bodyFormat (#334)', () => {
+  it('writes bodyFormat onto the note in the same update call as body and currentVersion', async () => {
+    const { service, tx } = harness();
+
+    await service.commit({ ...commitInput(generationRow()), bodyFormat: 'plain_text' });
+
+    expect(tx.note.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: NOTE_ID },
+        data: expect.objectContaining({
+          body: '# Kestrel\n\nWe ship on Friday.',
+          currentVersion: 1,
+          bodyFormat: 'plain_text',
+        }),
+      }),
+    );
+  });
+
+  it('writes `markdown` when bodyFormat is omitted, overwriting whatever the note previously had', async () => {
+    const { service, tx } = harness();
+
+    await service.commit(commitInput(generationRow()));
+
+    expect(tx.note.update.mock.calls[0][0].data.bodyFormat).toBe('markdown');
+  });
+
+  it('writes `markdown` for any value other than the literal `plain_text`', async () => {
+    const { service, tx } = harness();
+
+    await service.commit({ ...commitInput(generationRow()), bodyFormat: 'html' });
+
+    expect(tx.note.update.mock.calls[0][0].data.bodyFormat).toBe('markdown');
+  });
+});
+
+// -----------------------------------------------------------------------------
+// readPayloadTemplate() — the preview-of-an-unsaved-template seam (issue #334)
+// -----------------------------------------------------------------------------
+
+describe('readPayloadTemplate() — bodyFormat', () => {
+  const basePayload = (bodyFormat?: unknown) => ({
+    template: {
+      instructions: 'Write meeting notes.',
+      outputFormat: 'Meeting notes',
+      ...(bodyFormat === undefined ? {} : { bodyFormat }),
+    },
+  });
+
+  it('reads `plain_text` through unchanged', () => {
+    const result = readPayloadTemplate(basePayload('plain_text'));
+
+    expect(result?.bodyFormat).toBe('plain_text');
+  });
+
+  it('maps a payload written before the field existed (no bodyFormat at all) to `markdown`', () => {
+    const result = readPayloadTemplate(basePayload());
+
+    expect(result?.bodyFormat).toBe('markdown');
+  });
+
+  it('maps anything unrecognised to `markdown`', () => {
+    const result = readPayloadTemplate(basePayload('html'));
+
+    expect(result?.bodyFormat).toBe('markdown');
   });
 });

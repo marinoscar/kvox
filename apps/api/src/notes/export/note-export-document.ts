@@ -72,8 +72,13 @@ export interface NoteExportProvider {
 export interface NoteExportDocument {
   noteId: string;
   title: string;
-  /** The exported version's markdown, exactly as stored. */
+  /** The exported version's body, exactly as stored. */
   body: string;
+  /**
+   * How `body` is written (issue #334): `markdown` is parsed, `plain_text` is
+   * rendered literally. Read from the note row; unknown values read as markdown.
+   */
+  bodyFormat: 'markdown' | 'plain_text';
   version: number;
   /** When the exported VERSION was saved — not when this file was rendered. */
   createdAt: Date;
@@ -85,8 +90,13 @@ export interface NoteExportDocument {
   source: NoteExportSource;
 }
 
-/** Everything the builder needs. Identical to the document minus the derivation. */
-export type BuildNoteExportDocumentInput = NoteExportDocument;
+/**
+ * Everything the builder needs. Identical to the document minus the derivation;
+ * `bodyFormat` may be omitted (or be any stored string) and defaults to markdown.
+ */
+export type BuildNoteExportDocumentInput = Omit<NoteExportDocument, 'bodyFormat'> & {
+  bodyFormat?: string | null;
+};
 
 /**
  * Build the document. Pure and total.
@@ -102,6 +112,7 @@ export function buildNoteExportDocument(
     ...input,
     title: input.title.trim().length > 0 ? input.title : 'Untitled note',
     body: input.body ?? '',
+    bodyFormat: input.bodyFormat === 'plain_text' ? 'plain_text' : 'markdown',
     source: { ...input.source, title: input.source.title.trim() || 'Untitled source' },
   };
 }

@@ -353,6 +353,7 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
     const prompt = assemblePrompt({
       templateInstructions: template.instructions,
       templateOutputFormat: template.outputFormat,
+      templateBodyFormat: template.bodyFormat,
       templateStructure: parseTemplateStructure(template.structure),
       templateTone: template.tone,
       templateLength: template.length,
@@ -477,6 +478,7 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       promptTokens: usagePromptTokens ?? promptTokens,
       completionTokens: usageCompletionTokens,
       providerLabel: provider.label,
+      bodyFormat: template.bodyFormat,
     });
 
     this.logger.log(

@@ -77,6 +77,30 @@ export const NOTE_OUTPUT_FORMAT_LABELS: Record<NoteOutputFormat, string> = {
   custom: 'Custom',
 };
 
+/**
+ * `note_templates.body_format` — issue #334. What shape of text the AI is asked
+ * to produce: `markdown` (headings, lists, bold) or `plain_text` (no formatting
+ * symbols at all). Mirrors the API's own enum; `markdown` is the default, and a
+ * row read from a server that predates the field is treated as `markdown`.
+ */
+export const NOTE_BODY_FORMATS = ['markdown', 'plain_text'] as const;
+
+export type NoteBodyFormat = (typeof NOTE_BODY_FORMATS)[number];
+
+/** How each body format is named on screen. */
+export const NOTE_BODY_FORMAT_LABELS: Record<NoteBodyFormat, string> = {
+  markdown: 'Markdown (rich text)',
+  plain_text: 'Plain text',
+};
+
+/** The default body format, and what an absent field means. */
+export const DEFAULT_NOTE_BODY_FORMAT: NoteBodyFormat = 'markdown';
+
+/** A possibly-absent wire value, normalised — missing means `markdown`. */
+export function effectiveBodyFormat(value: NoteBodyFormat | null | undefined): NoteBodyFormat {
+  return value === 'plain_text' ? 'plain_text' : 'markdown';
+}
+
 /** The API's own ceilings, mirrored so the form can refuse before the server does. */
 export const MAX_INSTRUCTIONS_CHARS = 20_000;
 export const MAX_STRUCTURE_SECTIONS = 40;
@@ -99,6 +123,11 @@ export interface NoteTemplate {
   description: string;
   instructions: string;
   outputFormat: NoteOutputFormat;
+  /**
+   * Issue #334. Optional on the wire type only because a server predating the
+   * field omits it; read it through {@link effectiveBodyFormat}.
+   */
+  bodyFormat?: NoteBodyFormat;
   structure: string[];
   tone: string | null;
   length: string | null;
@@ -128,6 +157,7 @@ export interface CreateNoteTemplateInput {
   description?: string;
   instructions: string;
   outputFormat: NoteOutputFormat;
+  bodyFormat?: NoteBodyFormat;
   structure?: string[];
   tone?: string | null;
   length?: string | null;
@@ -169,6 +199,7 @@ export interface InlineNoteTemplate {
   name?: string;
   instructions: string;
   outputFormat: NoteOutputFormat;
+  bodyFormat?: NoteBodyFormat;
   structure?: string[];
   tone?: string | null;
   length?: string | null;
@@ -304,6 +335,7 @@ export interface NoteTemplateDraft {
   description: string;
   instructions: string;
   outputFormat: NoteOutputFormat;
+  bodyFormat: NoteBodyFormat;
   structure: string[];
   tone: string;
   length: string;
@@ -340,6 +372,7 @@ export function toInlineTemplate(draft: NoteTemplateDraft): InlineNoteTemplate {
     name: draft.name.trim() === '' ? 'Untitled template' : draft.name.trim(),
     instructions: draft.instructions,
     outputFormat: draft.outputFormat,
+    bodyFormat: draft.bodyFormat,
     structure: cleanStructure(draft.structure),
     tone: hintOrNull(draft.tone),
     length: hintOrNull(draft.length),
@@ -354,6 +387,7 @@ export function toCreateInput(draft: NoteTemplateDraft): CreateNoteTemplateInput
     description: draft.description.trim(),
     instructions: draft.instructions,
     outputFormat: draft.outputFormat,
+    bodyFormat: draft.bodyFormat,
     structure: cleanStructure(draft.structure),
     tone: hintOrNull(draft.tone),
     length: hintOrNull(draft.length),
@@ -373,6 +407,7 @@ export function draftFromTemplate(template: NoteTemplate): NoteTemplateDraft {
     description: template.description,
     instructions: template.instructions,
     outputFormat: template.outputFormat,
+    bodyFormat: effectiveBodyFormat(template.bodyFormat),
     structure: [...template.structure],
     tone: template.tone ?? '',
     length: template.length ?? '',
@@ -387,6 +422,7 @@ export function emptyDraft(): NoteTemplateDraft {
     description: '',
     instructions: '',
     outputFormat: 'meeting_notes',
+    bodyFormat: DEFAULT_NOTE_BODY_FORMAT,
     structure: [],
     tone: '',
     length: '',

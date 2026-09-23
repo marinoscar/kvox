@@ -3962,6 +3962,7 @@ body in the same call. A body-only save never touches it.
 |---|---|
 | `notes.status` | `draft` → `generating` → `ready`/`failed`, plus `deleting`. `draft` means "never generated even once"; a note that already produced content goes back to `generating`, never to `draft` |
 | `notes.titleSource` | `user` — a person typed this name, so it is **sticky and never overwritten by an AI titling path**; `template` — nobody named the note and it inherited the template's name; `ai` — a titling pass named it from the generated content |
+| `notes.bodyFormat` | `markdown` (default) or `plain_text` (issue #334) — how `body` is written. Read-only on every note endpoint: it is never sent by a client, only snapshotted from the generating template's own `bodyFormat` |
 | `note_generations.status` | `pending` → `streaming` → `succeeded`/`failed` |
 
 #### POST /notes
@@ -3991,7 +3992,10 @@ behind.
 members. There is **no `body` field, and there never may be one**: a note's
 first version is `ai_generated` by construction, so a client that could
 supply the initial body could mint a note whose history claims the AI wrote
-text a user pasted in.
+text a user pasted in. There is likewise **no `bodyFormat` field** (issue
+#334): the note's body format is taken from `templateId`'s own `bodyFormat`
+at generation time, never chosen by the caller independently of the template
+that will actually produce the text.
 
 **Response:** `201`
 ```json
@@ -4117,13 +4121,18 @@ answers the same **404** a non-existent export id gets.
 ---
 
 #### GET /notes/{id}
-The note as it stands: its markdown `body`, `status`, `currentVersion`, which
-provider and model produced the current text, and what it was generated
-from.
+The note as it stands: its `body`, `status`, `currentVersion`, which provider
+and model produced the current text, and what it was generated from.
 
 **Requires:** `notes:read`
 
 **Response:** `304` on an `If-None-Match` match to `W/"v<currentVersion>"`, otherwise the note. `404` with no access — never 403.
+
+`bodyFormat` (issue #334) is `markdown` or `plain_text` — how `body` is
+written, snapshotted from the generating template at create/regenerate time
+and carried on list, summary and version-detail responses too. `plain_text`
+means "render this literally, never as Markdown" — the PDF/Word exporters and
+the web note view both branch on it.
 
 The note also carries **`originTranscript`** (issue #309) — the transcript it
 was ultimately generated from, resolved server-side across a chain of source
@@ -4171,10 +4180,17 @@ deletes a version row short of the note being purged.
 #### GET /notes/{id}/versions/{version}
 The note **as it was** at this version, in full — a stored full-body
 snapshot, not an operation-log replay: a note is a page or two of prose, so
-every version holds the whole markdown body. **Version 1 is always
-retrievable.**
+every version holds the whole body. **Version 1 is always retrievable.**
 
 **Requires:** `notes:read`
+
+⚠ **`bodyFormat` is the note's, not the version's** (issue #334):
+`note_versions` carries no format column of its own, so this response reports
+the note's *current* `bodyFormat`. A note whose current format differs from
+what an older body was actually written in — a regenerate that switched the
+generating template's `bodyFormat` — reports every version, old and new, with
+today's format. There is no way to ask "what format was version 3 rendered
+in at the time."
 
 ---
 
@@ -4448,10 +4464,20 @@ the note UI shows. Optical character recognition is not supported.
 
 ### Note Templates
 
-CRUD over the reusable "recipe" (instructions, output format, structure,
-tone, length, an optional per-template model override) a note is generated
-from, plus preview — issue #50, epic #45. See
-[`docs/specs/notes.md`](specs/notes.md) §4.3, §7.
+CRUD over the reusable "recipe" (instructions, output format, body format,
+structure, tone, length, an optional per-template model override) a note is
+generated from, plus preview — issue #50, epic #45; `bodyFormat` added by
+issue #334. See [`docs/specs/notes.md`](specs/notes.md) §4.3, §7, §10.
+
+**`bodyFormat`** is `markdown` (default) or `plain_text` — a second axis
+beside `outputFormat`: `outputFormat` names the document's *shape* (meeting
+notes, email, …), `bodyFormat` names the *syntax* its text is written in.
+Optional on `POST /note-templates` and the inline `template` body
+`POST /note-templates/preview` accepts, defaulting to `markdown`; optional on
+`PATCH /note-templates/{id}`, where omitting it leaves the stored value
+unchanged. `POST /note-templates/{id}/duplicate` copies it like every other
+field. Every note generated from a template snapshots that template's
+`bodyFormat` at generation time — see `### Notes` above.
 
 Two permissions, `note_templates:read` and `note_templates:write`, both
 seeded to all three roles — a **separate pair from `notes:*`**, not folded
@@ -4554,7 +4580,7 @@ which is exactly how a user would mint a built-in.
 
 **Requires:** `note_templates:write`
 
-**Request:** `{ "name": "Meeting notes", "instructions": "…", "outputFormat": "meeting_notes", "structure": ["Overview", "Decisions"], "tone": null, "length": null, "model": null }`
+**Request:** `{ "name": "Meeting notes", "instructions": "…", "outputFormat": "meeting_notes", "bodyFormat": "markdown", "structure": ["Overview", "Decisions"], "tone": null, "length": null, "model": null }`
 
 Names are unique among the caller's own templates only. `instructions` over
 its 20,000-character ceiling is a **400** naming both the submitted size and

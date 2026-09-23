@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   MAX_CONTEXT_CHARS,
   MAX_NAME_CHARS,
+  bodyFormatSchema,
   previewSourceSchema,
 } from './note-template.dto';
 import { PLAYBACK_STATUSES, TRANSCRIPT_STATUSES } from '../../transcripts/dto/transcript.dto';
@@ -417,6 +418,10 @@ export const noteResponseSchema = z.object({
   title: z.string().describe('The note\'s title.'),
   titleSource: noteTitleSourceSchema,
   body: z.string().describe('The live markdown body — by invariant, the version at `currentVersion`.'),
+  bodyFormat: bodyFormatSchema.describe(
+    'How `body` is written (issue #334): `markdown`, or `plain_text` — render it literally, never ' +
+      'as Markdown. Taken from the template when the note is created or regenerated.',
+  ),
   status: noteStatusSchema,
   currentVersion: z
     .number()
@@ -642,6 +647,12 @@ export const noteVersionDetailResponseSchema = noteVersionSchema.extend({
         'replay: a note is a page or two of prose, so storing the whole body per save costs ' +
         'kilobytes and needs no reducer to read back (spec §4.5).',
     ),
+  bodyFormat: bodyFormatSchema.describe(
+    'How `body` is written (issue #334): `markdown`, or `plain_text` — render it literally, never ' +
+      'as Markdown. This is the note\'s own body format, snapshotted from the template at ' +
+      'generation time; versions do not record a format of their own, so every version of a ' +
+      'note is reported with the note\'s current one.',
+  ),
   isCurrent: z.boolean().describe('Whether this version is the note\'s current one.'),
 });
 

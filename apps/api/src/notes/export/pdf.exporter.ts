@@ -56,7 +56,7 @@ import {
   type ExportOptions,
 } from '../../export/export-options';
 import { PDF_FONTS, assertFontsPresent, registerExportFonts } from '../../export/pdf-fonts';
-import { parseMarkdown, type MdBlock, type MdSpan } from './markdown-ast';
+import { parseBody, type MdBlock, type MdSpan } from './markdown-ast';
 import {
   provenanceEntries,
   type NoteExportDocument,
@@ -158,7 +158,7 @@ export class PdfNoteExporter implements NoteExporter, OnModuleInit {
       pdf.pipe(out);
 
       drawTitleBlock(pdf, doc);
-      drawBlocks(pdf, parseMarkdown(doc.body), MARGIN, contentWidth(pdf));
+      drawBlocks(pdf, parseBody(doc.body, doc.bodyFormat), MARGIN, contentWidth(pdf));
       decoratePages(pdf, doc, options.includePageNumbers !== false);
       pdf.end();
     } catch (error) {

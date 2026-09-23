@@ -3118,6 +3118,13 @@ model Note {
   // in that write path, not an expected state.
   body String @default("") @db.Text
 
+  // The markdown-vs-plain-text syntax `body` is written in, SNAPSHOTTED from
+  // the generating template's `bodyFormat` at generation time (never a live
+  // read of the template) — so a later edit to the template's body format
+  // never changes how an already-generated note renders. Plain String, not
+  // an enum, mirroring `NoteTemplate.bodyFormat` exactly.
+  bodyFormat String @default("markdown") @map("body_format")
+
   status NoteStatus @default(draft)
 
   // Bumped only by the write path that commits a new `note_versions` row
@@ -3270,6 +3277,12 @@ model NoteTemplate {
   // for why these six are stored beside `instructions` rather than composed
   // into it.
   outputFormat String  @map("output_format")
+  // The markdown-vs-plain-text SYNTAX the AI is asked to write in — a
+  // separate axis from `outputFormat` above, which names the document TYPE
+  // (meeting notes, summary, …) rather than how its text is styled. Plain
+  // String, not an enum: same reasoning as `outputFormat` — validated by
+  // Zod in the API ('markdown' | 'plain_text'), not by a database enum.
+  bodyFormat   String  @default("markdown") @map("body_format")
   // Ordered array of section/heading strings, e.g. `["Overview", "Key
   // Points", "Decisions"]` — the shape #56's editable ordered list edits.
   structure    Json    @db.JsonB

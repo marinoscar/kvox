@@ -20,7 +20,11 @@ import Typography from '@mui/material/Typography';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { NOTE_OUTPUT_FORMAT_LABELS } from '../../services/noteTemplates';
+import {
+  NOTE_BODY_FORMAT_LABELS,
+  NOTE_OUTPUT_FORMAT_LABELS,
+  effectiveBodyFormat,
+} from '../../services/noteTemplates';
 import type { NoteTemplate } from '../../services/noteTemplates';
 
 /** How many sections are listed before the rest collapse into "+N more". */
@@ -118,6 +122,13 @@ export function TemplateSummary({ template, state }: TemplateSummaryProps) {
             Format:{' '}
           </Box>
           {NOTE_OUTPUT_FORMAT_LABELS[template.outputFormat] ?? template.outputFormat}
+        </Typography>
+
+        <Typography variant="body2">
+          <Box component="span" sx={{ color: 'text.secondary' }}>
+            Body format:{' '}
+          </Box>
+          {NOTE_BODY_FORMAT_LABELS[effectiveBodyFormat(template.bodyFormat)]}
         </Typography>
 
         {shown.length > 0 && (

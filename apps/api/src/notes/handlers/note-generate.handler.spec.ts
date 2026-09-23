@@ -365,6 +365,54 @@ describe('NoteGenerateHandler — a successful generation', () => {
     expect(provider.lastRequest?.userContent).toContain('Ana: we ship on Friday.');
   });
 
+  // -----------------------------------------------------------------------------
+  // `template.bodyFormat` (issue #334) — one value, two destinations
+  // -----------------------------------------------------------------------------
+  //
+  // The template snapshot's bodyFormat is passed BOTH into `assemblePrompt`
+  // (as `templateBodyFormat`, which shapes the system prompt's instructions)
+  // AND into `commit` (which snapshots it onto the note). One read of the
+  // template, two consumers — never re-derived at the second site.
+
+  it('passes the template\'s bodyFormat into assemblePrompt as templateBodyFormat', async () => {
+    const provider = new FakeProvider(helloStream);
+    const { handler, prisma } = harness({ provider });
+
+    prisma.noteTemplate.findUnique.mockResolvedValue({ ...template, bodyFormat: 'plain_text' });
+
+    await handler.process(job());
+
+    // `plain_text` instructions steer the model away from Markdown syntax
+    // (`prompt.spec.ts` pins the exact wording); this just pins that the value
+    // travelled from the template row into the assembled prompt at all.
+    expect(provider.lastRequest?.systemPrompt).not.toContain('in Markdown');
+    expect(provider.lastRequest?.systemPrompt).toContain('no Markdown syntax');
+  });
+
+  it('passes the template\'s bodyFormat into commit, unchanged', async () => {
+    const provider = new FakeProvider(helloStream);
+    const { handler, generations, prisma } = harness({ provider });
+
+    prisma.noteTemplate.findUnique.mockResolvedValue({ ...template, bodyFormat: 'plain_text' });
+
+    await handler.process(job());
+
+    expect(generations.commit).toHaveBeenCalledWith(
+      expect.objectContaining({ bodyFormat: 'plain_text' }),
+    );
+  });
+
+  it('a template row with no bodyFormat (a build from before #334) reads as markdown in commit', async () => {
+    const provider = new FakeProvider(helloStream);
+    const { handler, generations } = harness({ provider });
+
+    await handler.process(job());
+
+    expect(generations.commit).toHaveBeenCalledWith(
+      expect.objectContaining({ bodyFormat: undefined }),
+    );
+  });
+
   it('does nothing for a job naming no generation, and for one already settled', async () => {
     const { handler, generations } = harness();
 

@@ -16,9 +16,27 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 export type CopyState = 'idle' | 'done' | 'failed';
 
+/** Two representations of one piece of content — issue #334. */
+export interface RichClipboardContent {
+  /** What a plain-text target (a terminal, a code editor) receives. */
+  text: string;
+  /** What a rich-text target (a mail client, a document editor) receives. */
+  html: string;
+}
+
 export interface UseCopyToClipboardResult {
   state: CopyState;
   copy: (text: string) => Promise<boolean>;
+  /**
+   * Put BOTH `text/html` and `text/plain` on the clipboard (issue #334), so a
+   * paste into a rich editor keeps headings and lists while a paste into a
+   * plain field gets readable text. Where `ClipboardItem` or
+   * `navigator.clipboard.write` is unavailable (an insecure context, an older
+   * browser) or the write is refused, it falls back to {@link copy} with
+   * `text` — a plain copy is a better outcome than none. Never throws, and
+   * shares {@link state} with `copy`.
+   */
+  copyRich: (content: RichClipboardContent) => Promise<boolean>;
 }
 
 function legacyCopy(text: string): boolean {
@@ -101,7 +119,35 @@ export function useCopyToClipboard(resetMs = 2000): UseCopyToClipboardResult {
     [settle],
   );
 
-  return { state, copy };
+  const copyRich = useCallback(
+    async ({ text, html }: RichClipboardContent): Promise<boolean> => {
+      try {
+        if (
+          typeof window !== 'undefined' &&
+          window.isSecureContext &&
+          typeof ClipboardItem !== 'undefined' &&
+          typeof navigator !== 'undefined' &&
+          navigator.clipboard &&
+          typeof navigator.clipboard.write === 'function'
+        ) {
+          const item = new ClipboardItem({
+            'text/html': new Blob([html], { type: 'text/html' }),
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+          });
+          await navigator.clipboard.write([item]);
+          settle('done');
+          return true;
+        }
+      } catch {
+        // Fall through to the plain-text path below: some browsers expose
+        // `write` but refuse `text/html`, and plain text still beats nothing.
+      }
+      return copy(text);
+    },
+    [copy, settle],
+  );
+
+  return { state, copy, copyRich };
 }
 
 export default useCopyToClipboard;

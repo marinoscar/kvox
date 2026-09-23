@@ -232,6 +232,34 @@ describe('NotesService', () => {
     });
   });
 
+  describe('create — bodyFormat (#334)', () => {
+    const dto = {
+      templateId: TEMPLATE_ID,
+      source: { type: 'transcript' as const, transcriptId: 'transcript-1' },
+    };
+
+    it('sets the note\'s bodyFormat from a markdown template', async () => {
+      await service.create(dto, USER);
+
+      expect(prisma.note.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bodyFormat: 'markdown' }) }),
+      );
+    });
+
+    it('sets the note\'s bodyFormat to plain_text from a plain_text template', async () => {
+      templates.require.mockResolvedValue({
+        template: templateRow({ bodyFormat: 'plain_text' }),
+        builtIn: true,
+      });
+
+      await service.create(dto, USER);
+
+      expect(prisma.note.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bodyFormat: 'plain_text' }) }),
+      );
+    });
+  });
+
   describe('update — a rename always claims the change', () => {
     it('marks the title user-chosen on a metadata-only rename', async () => {
       await service.update(NOTE_ID, { title: 'Renamed by hand' }, USER);
@@ -306,6 +334,39 @@ describe('NotesService', () => {
       // And the body IS the restored one — confirms this is the real commit
       // path, not a call that happened to skip both keys for another reason.
       expect(call.data).toEqual(expect.objectContaining({ body: 'An older body.' }));
+    });
+  });
+
+  describe('getVersion — bodyFormat (#334)', () => {
+    const versionRow = {
+      noteId: NOTE_ID,
+      version: 2,
+      kind: 'edit',
+      summary: null,
+      author: null,
+      generationId: null,
+      restoredFromVersion: null,
+      body: 'Plain text, *not* emphasis.',
+      createdAt: new Date('2026-01-03T00:00:00.000Z'),
+    };
+
+    it('reports the note\'s plain_text format on a version', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'plain_text' }), role: 'owner' });
+      prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
+
+      const result = await service.getVersion(NOTE_ID, 2, USER);
+
+      expect(result.bodyFormat).toBe('plain_text');
+      expect(result.isCurrent).toBe(false);
+    });
+
+    it('defaults an unrecognised stored format to markdown', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'html' }), role: 'owner' });
+      prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
+
+      const result = await service.getVersion(NOTE_ID, 2, USER);
+
+      expect(result.bodyFormat).toBe('markdown');
     });
   });
 

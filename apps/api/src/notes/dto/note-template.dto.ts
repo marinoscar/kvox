@@ -52,6 +52,24 @@ export const NOTE_OUTPUT_FORMATS = [
 
 export type NoteOutputFormat = (typeof NOTE_OUTPUT_FORMATS)[number];
 
+/**
+ * How a generated note's BODY is written (issue #334) — a second axis beside
+ * `outputFormat`, which is the note's shape (meeting notes, email, …).
+ *
+ * `markdown` is the default and every row that predates the column carries it.
+ * `plain_text` asks the model for text with no Markdown syntax, and tells the
+ * exporters to render the body literally rather than parse it — an email body
+ * pasted into a mail client must not arrive full of `**` and `#`.
+ */
+export const NOTE_BODY_FORMATS = ['markdown', 'plain_text'] as const;
+
+export type NoteBodyFormat = (typeof NOTE_BODY_FORMATS)[number];
+
+/** Narrow a stored `body_format` string, reading anything unrecognised as `markdown`. */
+export function toNoteBodyFormat(value: unknown): NoteBodyFormat {
+  return value === 'plain_text' ? 'plain_text' : 'markdown';
+}
+
 /** Characters `instructions` may hold. See the header for where it is enforced. */
 export const MAX_INSTRUCTIONS_CHARS = 20_000;
 
@@ -124,6 +142,13 @@ const outputFormatSchema = z
   .enum(NOTE_OUTPUT_FORMATS)
   .describe('Which of the fixed output shapes this template produces.');
 
+export const bodyFormatSchema = z
+  .enum(NOTE_BODY_FORMATS)
+  .describe(
+    'How the generated note body is written: `markdown` (the default) or `plain_text` — no ' +
+      'Markdown syntax, and exported literally rather than parsed.',
+  );
+
 const toneSchema = z
   .string()
   .trim()
@@ -169,6 +194,7 @@ export const createNoteTemplateSchema = z
     description: descriptionSchema.optional().default(''),
     instructions: instructionsSchema,
     outputFormat: outputFormatSchema,
+    bodyFormat: bodyFormatSchema.optional().default('markdown'),
     structure: structureSchema.optional().default([]),
     tone: toneSchema.optional().default(null),
     length: lengthSchema.optional().default(null),
@@ -193,6 +219,7 @@ export const updateNoteTemplateSchema = z
     description: descriptionSchema.optional(),
     instructions: instructionsSchema.optional(),
     outputFormat: outputFormatSchema.optional(),
+    bodyFormat: bodyFormatSchema.optional(),
     structure: structureSchema.optional(),
     tone: toneSchema.optional(),
     length: lengthSchema.optional(),
@@ -246,6 +273,7 @@ export const inlineNoteTemplateSchema = z
     name: nameSchema.optional().default('Untitled template'),
     instructions: instructionsSchema,
     outputFormat: outputFormatSchema,
+    bodyFormat: bodyFormatSchema.optional().default('markdown'),
     structure: structureSchema.optional().default([]),
     tone: toneSchema.optional().default(null),
     length: lengthSchema.optional().default(null),
@@ -339,6 +367,7 @@ export const noteTemplateResponseSchema = z.object({
   description: descriptionSchema,
   instructions: z.string().describe('The free-text prompt body, verbatim.'),
   outputFormat: outputFormatSchema,
+  bodyFormat: bodyFormatSchema,
   structure: structureSchema,
   tone: toneSchema,
   length: lengthSchema,

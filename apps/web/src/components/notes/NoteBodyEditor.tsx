@@ -1,57 +1,81 @@
 /**
- * The markdown editor — issue #58, epic #45.
+ * The note body editor — issue #58, epic #45; reworked by issue #334.
  *
  * =============================================================================
- * ⚠ A TEXTAREA, NOT A WYSIWYG, AND THAT IS A DESIGN DECISION
+ * #58 CHOSE A TEXTAREA. #334 REVERSES THAT, AT THE USER'S REQUEST.
  * =============================================================================
  *
- * Markdown is the storage format (`notes.body`), the model's own output format,
- * and the source every exporter renders from (`notes/export/markdown-ast.ts`).
- * A rich-text layer in the middle would mean a lossy conversion in BOTH
- * directions on every save — markdown in, a document model, markdown back out —
- * for no capability this feature needs. #58 rejects it explicitly, and the
- * repository has a documented reluctance to add dependencies of that size.
+ * #58 shipped a markdown textarea plus a preview and rejected a WYSIWYG layer
+ * explicitly: markdown is the storage format (`notes.body`), the model's own
+ * output format and the source every exporter renders from
+ * (`notes/export/markdown-ast.ts`), and a rich-text layer means a conversion
+ * in both directions. Issue #334 reverses that decision at the user's request —
+ * editing headings and lists by hand in raw markup was the friction — and adds
+ * a Tiptap-based visual editor (`VisualMarkdownEditor`) as the default view.
  *
- * So the editor is the markdown, and the PREVIEW is how a user sees what it
- * will look like. Same renderer as the read view (`MarkdownView`), because a
- * preview drawn by a second renderer is a preview that can disagree with the
- * page it is previewing.
+ * WHAT DID NOT CHANGE: markdown is still the storage and export format. The
+ * visual editor is a VIEW over the same string the Markdown tab edits; there is
+ * one draft, owned by the parent, and all three views read and write it.
+ *
+ * ⚠ ROUND-TRIP NORMALISATION. Tiptap re-serialises the whole document on an
+ * edit, so the first visual edit may re-spell bullets (`*` → `-`), escaping or
+ * blank lines elsewhere in the body. Merely OPENING the visual view never does
+ * this — the draft becomes dirty only after a real edit (see
+ * `VisualMarkdownEditor`'s header). The Markdown tab edits the source exactly,
+ * byte for byte, for anyone who needs that.
+ *
+ * The Preview uses the same renderer as the read view (`MarkdownView`),
+ * because a preview drawn by a second renderer can disagree with the page it
+ * is previewing.
  *
  * =============================================================================
- * BOTH HALVES ARE KEYBOARD-OPERABLE, AND THE TOGGLE SAYS WHICH IS SHOWING
+ * PLAIN-TEXT NOTES HAVE NO VIEWS
  * =============================================================================
  *
- * The toggle is a `ToggleButtonGroup` of two real buttons in a group with an
- * accessible name, so it is reachable by Tab and operable by Enter/Space —
- * rather than an icon button whose pressed state a screen reader cannot read.
- * `aria-pressed` comes from MUI's `selected`, so the state is announced rather
- * than only coloured.
+ * A note whose `bodyFormat` is `plain_text` has no markup to render or edit
+ * visually, so the toggle is not shown at all: one textarea, in the body font
+ * rather than monospace, because nothing about its alignment carries meaning.
  *
- * The textarea keeps its value when the preview is shown: switching to the
- * preview and back must not be a way to lose a paragraph. That is why the
- * preview is a SIBLING that replaces the textarea in the layout while the
- * component's own `value` prop stays the single source of truth — the parent
- * owns the draft, and this component never holds a second copy of it.
+ * =============================================================================
+ * THE TOGGLE IS KEYBOARD-OPERABLE AND SAYS WHICH VIEW IS SHOWING
+ * =============================================================================
+ *
+ * A `ToggleButtonGroup` of real buttons with an accessible group name —
+ * reachable by Tab, operable by Enter/Space, `aria-pressed` from `selected`.
+ * Switching views never loses text: the parent's `value` is the only copy.
  */
 
 import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
+import { lazy, Suspense } from 'react';
 
 import { MarkdownView } from './MarkdownView';
+import type { NoteBodyFormat } from '../../services/noteTemplates';
 
-/** Which half of the editor is on screen. */
-export type NoteEditorView = 'write' | 'preview';
+// Lazy: Tiptap and ProseMirror load only when somebody opens the editor, never
+// on the read-only note page.
+const VisualMarkdownEditor = lazy(() => import('./VisualMarkdownEditor'));
+
+/**
+ * Which view of the markdown draft is on screen. `'write'` is the raw
+ * markdown textarea (labelled "Markdown"); the name predates #334 and is kept
+ * to avoid churn.
+ */
+export type NoteEditorView = 'visual' | 'write' | 'preview';
 
 export interface NoteBodyEditorProps {
-  /** The draft markdown. The PARENT owns it — this component holds no copy. */
+  /** The draft body. The PARENT owns it — this component holds no copy. */
   value: string;
   onChange: (value: string) => void;
   view: NoteEditorView;
   onViewChange: (view: NoteEditorView) => void;
+  /** The note's body format. Absent means `markdown`. */
+  bodyFormat?: NoteBodyFormat;
   /** While a save is in flight. The text stays readable, just not editable. */
   disabled?: boolean;
 }
@@ -61,14 +85,38 @@ export function NoteBodyEditor({
   onChange,
   view,
   onViewChange,
+  bodyFormat = 'markdown',
   disabled = false,
 }: NoteBodyEditorProps) {
+  if (bodyFormat === 'plain_text') {
+    return (
+      <Box>
+        <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 1.5 }}>
+          This note is plain text — what you type is exactly what is saved.
+        </Typography>
+        <TextField
+          multiline
+          fullWidth
+          minRows={14}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+          label="Note"
+        />
+      </Box>
+    );
+  }
+
   return (
     <Box>
       <Stack
-        direction="row"
+        direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
-        sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}
+        sx={{
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          justifyContent: 'space-between',
+          mb: 1.5,
+        }}
       >
         <Typography variant="caption" color="text.secondary">
           This note is markdown. Headings, lists and tables all work.
@@ -78,15 +126,17 @@ export function NoteBodyEditor({
           exclusive
           value={view}
           // ⚠ `null` arrives when the user clicks the already-selected button;
-          // ignoring it keeps a view always selected rather than leaving the
-          // editor showing neither half.
+          // ignoring it keeps a view always selected.
           onChange={(_event, next: NoteEditorView | null) => {
             if (next) onViewChange(next);
           }}
           aria-label="Editor view"
         >
-          <ToggleButton value="write" aria-label="Write">
-            Write
+          <ToggleButton value="visual" aria-label="Visual">
+            Visual
+          </ToggleButton>
+          <ToggleButton value="write" aria-label="Markdown">
+            Markdown
           </ToggleButton>
           <ToggleButton value="preview" aria-label="Preview">
             Preview
@@ -94,7 +144,17 @@ export function NoteBodyEditor({
         </ToggleButtonGroup>
       </Stack>
 
-      {view === 'write' ? (
+      {view === 'visual' ? (
+        <Suspense
+          fallback={
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={28} aria-label="Loading the editor" />
+            </Box>
+          }
+        >
+          <VisualMarkdownEditor value={value} onChange={onChange} disabled={disabled} />
+        </Suspense>
+      ) : view === 'write' ? (
         <TextField
           multiline
           fullWidth

@@ -72,7 +72,7 @@ import {
   type ExportOptionField,
   type ExportOptions,
 } from '../../export/export-options';
-import { parseMarkdown, type MdBlock, type MdSpan } from './markdown-ast';
+import { parseBody, type MdBlock, type MdSpan } from './markdown-ast';
 import {
   provenanceEntries,
   type NoteExportDocument,
@@ -152,7 +152,7 @@ export function buildWordDocument(doc: NoteExportDocument, pageNumbers: boolean)
       spacing: { after: 240 },
       children: [],
     }),
-    ...renderBlocks(parseMarkdown(doc.body), 0),
+    ...renderBlocks(parseBody(doc.body, doc.bodyFormat), 0),
   ];
 
   return new Document({
@@ -327,17 +327,27 @@ const HEADINGS: Record<number, (typeof HeadingLevel)[keyof typeof HeadingLevel]>
 
 /** Spans → Word runs, with a hyperlink wrapper where one is called for. */
 function runs(spans: readonly MdSpan[]): (TextRun | ExternalHyperlink)[] {
-  return spans.map((span) => {
-    const run = new TextRun({
-      text: span.text,
+  return spans.flatMap((span): (TextRun | ExternalHyperlink)[] => {
+    const marks = {
       bold: span.bold === true,
       italics: span.italic === true,
       strike: span.strike === true,
       ...(span.code === true ? { font: 'Courier New' } : {}),
       ...(span.href ? { style: 'Hyperlink' } : {}),
-    });
+    };
 
-    return span.href ? new ExternalHyperlink({ children: [run], link: span.href }) : run;
+    // A `\n` inside a span is a line break the body meant (a plain-text
+    // paragraph keeps its single line breaks, #334). Word ignores a newline
+    // inside a run's text, so each line after the first becomes its own run
+    // carrying a `break`. A Markdown paragraph never contains one — its lines
+    // are joined with spaces — so this changes nothing for Markdown.
+    const lines = span.text.split('\n');
+    const built = lines.map(
+      (line, index) =>
+        new TextRun({ text: line, ...marks, ...(index > 0 ? { break: 1 } : {}) }),
+    );
+
+    return span.href ? [new ExternalHyperlink({ children: built, link: span.href })] : built;
   });
 }
 

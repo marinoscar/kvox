@@ -3,7 +3,8 @@ import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { NoteTemplateAccessService } from './access/note-template-access.service';
-import { NoteTemplatesService } from './note-templates.service';
+import { createNoteTemplateSchema } from './dto/note-template.dto';
+import { NoteTemplatesService, toResponse } from './note-templates.service';
 
 // =============================================================================
 // NoteTemplatesService (issue #50, epic #45; per-user hiding is issue #310)
@@ -183,6 +184,7 @@ describe('NoteTemplatesService', () => {
         description: '',
         instructions: 'Write meeting notes.',
         outputFormat: 'meeting_notes',
+        bodyFormat: 'markdown',
         structure: [],
         tone: null,
         length: null,
@@ -192,6 +194,87 @@ describe('NoteTemplatesService', () => {
       expect(response.hidden).toBe(false);
       // No lookup performed — the fact is known, not queried.
       expect(prisma.userHiddenNoteTemplate.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // bodyFormat (issue #334)
+  // ===========================================================================
+
+  describe('bodyFormat (issue #334)', () => {
+    const createDto = {
+      name: 'Email',
+      description: '',
+      instructions: 'Write an email.',
+      outputFormat: 'email' as const,
+      structure: [],
+      tone: null,
+      length: null,
+      model: null,
+    };
+
+    it('defaults to `markdown` when the create schema omits it', () => {
+      const parsed = createNoteTemplateSchema.parse({
+        name: 'Email',
+        instructions: 'Write an email.',
+        outputFormat: 'email',
+      });
+
+      expect(parsed.bodyFormat).toBe('markdown');
+    });
+
+    it('rejects a body format outside the fixed set', () => {
+      expect(
+        createNoteTemplateSchema.safeParse({
+          name: 'Email',
+          instructions: 'Write an email.',
+          outputFormat: 'email',
+          bodyFormat: 'html',
+        }).success,
+      ).toBe(false);
+    });
+
+    it('persists `plain_text` on create and reports it back', async () => {
+      prisma.noteTemplate.create.mockResolvedValue(ownedRow({ bodyFormat: 'plain_text' }));
+
+      const response = await service.create(USER_ID, { ...createDto, bodyFormat: 'plain_text' });
+
+      expect(prisma.noteTemplate.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ bodyFormat: 'plain_text' }) }),
+      );
+      expect(response.bodyFormat).toBe('plain_text');
+    });
+
+    it('writes `bodyFormat` on update only when it was sent', async () => {
+      access.require.mockResolvedValue({ template: ownedRow(), builtIn: false });
+      prisma.noteTemplate.update.mockResolvedValue(ownedRow({ bodyFormat: 'plain_text' }));
+      prisma.userHiddenNoteTemplate.findUnique.mockResolvedValue(null);
+
+      await service.update(USER_ID, OWNED_ID, { bodyFormat: 'plain_text' });
+      expect(prisma.noteTemplate.update.mock.calls[0][0].data).toEqual({ bodyFormat: 'plain_text' });
+
+      await service.update(USER_ID, OWNED_ID, { instructions: 'Rewritten.' });
+      expect(prisma.noteTemplate.update.mock.calls[1][0].data).not.toHaveProperty('bodyFormat');
+    });
+
+    it('copies the source\'s body format on duplicate', async () => {
+      access.require.mockResolvedValue({
+        template: builtInRow({ bodyFormat: 'plain_text' }),
+        builtIn: true,
+      });
+      prisma.noteTemplate.findMany.mockResolvedValue([]);
+      prisma.noteTemplate.create.mockResolvedValue(ownedRow({ id: 'copy-1', bodyFormat: 'plain_text' }));
+
+      await service.duplicate(USER_ID, BUILT_IN_ID);
+
+      expect(prisma.noteTemplate.create.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+    });
+
+    it('reads a missing or unrecognised stored value as `markdown`', () => {
+      expect(toResponse(ownedRow() as never, false).bodyFormat).toBe('markdown');
+      expect(toResponse(ownedRow({ bodyFormat: 'rtf' }) as never, false).bodyFormat).toBe(
+        'markdown',
+      );
     });
   });
 

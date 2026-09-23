@@ -156,6 +156,7 @@ export class NoteTemplatePreviewService {
     const prompt = assemblePrompt({
       templateInstructions: template.fields.instructions,
       templateOutputFormat: template.fields.outputFormat,
+      templateBodyFormat: template.fields.bodyFormat,
       templateStructure: parseTemplateStructure(template.fields.structure),
       templateTone: template.fields.tone,
       templateLength: template.fields.length,
@@ -278,6 +279,7 @@ export class NoteTemplatePreviewService {
         fields: {
           instructions: template.instructions,
           outputFormat: template.outputFormat,
+          bodyFormat: template.bodyFormat === 'plain_text' ? 'plain_text' : 'markdown',
           structure: parseTemplateStructure(template.structure),
           tone: template.tone,
           length: template.length,
@@ -299,6 +301,7 @@ export class NoteTemplatePreviewService {
       fields: {
         instructions: inline.instructions,
         outputFormat: inline.outputFormat,
+        bodyFormat: inline.bodyFormat ?? 'markdown',
         structure: inline.structure,
         tone: inline.tone,
         length: inline.length,

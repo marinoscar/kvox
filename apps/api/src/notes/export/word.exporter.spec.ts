@@ -109,6 +109,36 @@ describe('WordNoteExporter', () => {
     expect(text).toContain('Template: Concise Meeting Notes');
   });
 
+  it('renders a `plain_text` body literally — no heading, no bold, no bullet (#334)', async () => {
+    const PLAIN_BODY = ['# not a heading', 'second line of *not bold*', '', '- not a bullet'].join('\n');
+    const bytes = await collect(
+      exporter,
+      noteDocument({ body: PLAIN_BODY, bodyFormat: 'plain_text' }),
+    );
+    const xml = readZipEntry(bytes, 'word/document.xml')?.toString('utf8') ?? '';
+    const text = docxText(bytes);
+
+    expect(text).toContain('# not a heading');
+    expect(text).toContain('*not bold*');
+    expect(text).toContain('- not a bullet');
+    // No run is bold and no paragraph is numbered: nothing was interpreted.
+    expect(xml).not.toMatch(/<w:numPr>/);
+    expect(xml).not.toContain('Heading1');
+    // The single line break inside the first paragraph survives as a break.
+    expect(xml).toContain('<w:br/>');
+  });
+
+  it('still parses a `markdown` body as Markdown', async () => {
+    const xml =
+      readZipEntry(
+        await collect(exporter, noteDocument({ body: '# A heading', bodyFormat: 'markdown' })),
+        'word/document.xml',
+      )?.toString('utf8') ?? '';
+
+    expect(xml).toContain('Heading1');
+    expect(xml).not.toContain('# A heading');
+  });
+
   it('escapes XML-special characters in the body rather than emitting them raw', async () => {
     const bytes = await collect(
       exporter,

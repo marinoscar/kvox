@@ -79,6 +79,27 @@ describe('PdfNoteExporter', () => {
     expect(text).toContain('Closing paragraph.');
   });
 
+  it('renders a `plain_text` body literally — markup characters stay text (#334)', async () => {
+    const PLAIN_BODY = ['# not a heading', 'second line of *not bold*', '', '- not a bullet'].join('\n');
+    const text = await extractPdfText(
+      await collect(exporter, noteDocument({ body: PLAIN_BODY, bodyFormat: 'plain_text' })),
+    );
+
+    expect(text).toContain('# not a heading');
+    expect(text).toContain('*not bold*');
+    expect(text).toContain('- not a bullet');
+  });
+
+  it('strips Markdown syntax from a `markdown` body, as before', async () => {
+    const text = await extractPdfText(
+      await collect(exporter, noteDocument({ body: '# A heading\n\n*emphasis*' })),
+    );
+
+    expect(text).toContain('A heading');
+    expect(text).not.toContain('# A heading');
+    expect(text).not.toContain('*emphasis*');
+  });
+
   it('stamps a footer naming the page, the version and the product', async () => {
     const text = await extractPdfText(await collect(exporter, noteDocument()));
 
