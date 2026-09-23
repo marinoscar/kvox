@@ -100,7 +100,6 @@ const mockDuplicate = vi.mocked(duplicateNoteTemplate);
 const mockPreview = vi.mocked(previewNoteTemplate);
 const mockHide = vi.mocked(hideNoteTemplate);
 const mockUnhide = vi.mocked(unhideNoteTemplate);
-const mockUpdate = vi.mocked(updateNoteTemplate);
 
 const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
@@ -362,7 +361,7 @@ describe('UserNoteTemplatesPage', () => {
       await user.click(screen.getByRole('combobox', { name: 'Body format' }));
       await user.click(await screen.findByRole('option', { name: 'Plain text' }));
 
-      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+      await user.click(within(screen.getByRole('region', { name: 'Template' })).getByRole('button', { name: 'Save changes' }));
 
       await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
       expect(mockUpdate).toHaveBeenCalledWith(
