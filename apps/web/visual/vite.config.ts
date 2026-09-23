@@ -7,6 +7,9 @@ import { appVersionDefine } from '../app-version.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+/** The version string the committed hub baselines show — see `define` below. */
+const VISUAL_APP_VERSION = '1.0.1';
+
 /**
  * Vite config for the visual regression harness (issue #107) ONLY.
  *
@@ -36,7 +39,16 @@ export default defineConfig({
   // threw during render, `ErrorBoundary` replaced the WHOLE application, and
   // all eight hub/rail specs failed with `element(s) not found` rather than
   // a pixel diff — a crash wearing a locator timeout's clothes.
-  define: appVersionDefine(),
+  //
+  // ⚠ DEFINED, BUT PINNED — never the live `package.json` version. The hub
+  // footer prints it, so reading the real version made every release commit
+  // (`chore(release): vX.Y.Z`, cut by `kvox deploy update`) a pixel diff on
+  // all seven hub baselines: `main` went red at v1.0.2 with nothing but
+  // "Version 1.0.1" → "Version 1.0.2" changed. A baseline is a picture of the
+  // layout, not of the release number, so the harness renders the one value
+  // the committed baselines were captured with. `appVersionDefine()` still
+  // supplies the key, so the #296 ReferenceError above cannot come back.
+  define: { ...appVersionDefine(), __APP_VERSION__: JSON.stringify(VISUAL_APP_VERSION) },
   // Serve `apps/web/public` — the REAL application's static asset directory —
   // as this harness's public dir, overriding Vite's `<root>/public` default
   // (which would be `visual/public`, a directory that does not and must not
