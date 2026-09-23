@@ -1374,7 +1374,7 @@ model Job {
   noteGeneration NoteGeneration?
 
   // The `transcript_name_checks` row this job ran, when `type` is
-  // `'name.check'` (issue #328, epic #326). Same one-to-one shape as
+  // `'transcript.name_check'` (issue #328, epic #326). Same one-to-one shape as
   // `transcriptExport`/`noteExport`/`noteGeneration` above, for the same
   // reason: `TranscriptNameCheck.jobId` is `@unique`/nullable/`SetNull`
   // because a run's own lifetime (read by the review UI long after job
@@ -2787,7 +2787,7 @@ model TranscriptNameCheck {
   errorClass String? @map("error_class")
   error      String?
 
-  // The `name.check` job that ran this check, when one did. `@unique`/
+  // The `transcript.name_check` job that ran this check, when one did. `@unique`/
   // nullable/`SetNull`, mirroring `TranscriptExport.jobId`/
   // `DatabaseBackupRun.jobId` exactly: this row's own lifetime (read by the
   // review UI long after job history is purged) is independent of
