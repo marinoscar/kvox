@@ -1237,6 +1237,84 @@ exactly as `job-handler.interface.ts` requires, following
 extracted text is a durable, externally-referenced artifact, not scratch
 output nothing outside the job will ever name again.
 
+### 4.8 Resolving the ultimate origin transcript (issue #309)
+
+`source_transcript_id`/`source_note_id`/`source_object_id` (§4.1) record only
+the *immediate* source. A note generated from a transcript names it directly;
+a note generated from another note names only that note, and the recording
+behind it — if there is one — is one or more hops further up the chain. The
+"play the source recording" affordance on a note's detail page needs that
+recording's id whether the note is one hop away or five, so
+`NoteOriginService.resolve()` (`apps/api/src/notes/note-origin.service.ts`)
+walks the chain server-side once per request, rather than having a client
+walk `sourceNoteId` with a request per hop.
+
+**The rule, precisely:**
+
+- `sourceType: 'transcript'` — the transcript itself, `via: 'direct'`,
+  `hops: 0`.
+- `sourceType: 'note'` — walk `sourceNoteId` up the chain. Each intermediate
+  note must be the **caller's own** (the identical ownership check
+  `NoteAccessService` applies — there is no `notes:read_any`, §6.1) and not
+  `deleting`/soft-deleted; the walk is cycle-safe (a visited-id set) and gives
+  up at `MAX_NOTE_HOPS = 5`. The first `sourceType: 'transcript'` note
+  encountered ends the walk with `via: 'note_chain'` and `hops` set to how
+  many notes were walked to reach it.
+- `sourceType: 'document'`, any unreadable or missing link in the chain, a
+  cycle, or a chain longer than 5 hops — `null`.
+
+**All or nothing, never partial.** The transcript itself must additionally be
+one the caller may **view right now** — owned or shared, not deleted or
+`deleting` — the same reach `TranscriptAccessService` grants for `view` and
+`NoteSourceNameService` already checks for `sourceName`. A break anywhere —
+a document source, a note the caller cannot read, an unshared or deleting
+transcript — answers `null` for the whole field. There is deliberately no
+partial object: a title without an id, or an id the caller does not actually
+have the right to follow, would be either a leak (a chain running through a
+note the caller cannot open) or a dead link (a transcript that has since been
+unshared).
+
+**Five hops, not unbounded.** The cap exists for the same reason `note.purge`
+and the transcript pipeline bound their own work: an unbounded walk turns one
+request for one note into an unbounded number of database reads if a chain of
+notes-generated-from-notes ever grows that long. Five is generous for the
+product's actual usage (a note generated from a note is already an unusual
+second-order action) while keeping the walk's cost bounded and predictable.
+
+**Detail only, never a list.** The walk costs up to one read per hop plus one
+for the transcript — cheap for the single note a caller is looking at, an N+1
+on a page of twenty. `NotesService.shape()` (the detail projection every
+single-note route shares — create, get, update, regenerate, restore, retitle)
+calls `resolve()`; `NotesService.listShape()` never does, and
+`noteListItemSchema` (`apps/api/src/notes/dto/note.dto.ts`) `.omit()`s
+`originTranscript` outright rather than leaving list rows to carry `null` by
+convention. See `docs/API.md`'s `### Notes` group for the wire shape.
+
+**The lazy-audio rationale.** Resolving `originTranscript` never signs
+anything — it is a `transcripts` row read, not a call to
+`GET /api/transcripts/:id/audio`. Opening a note page is far more common than
+playing its source recording, so `apps/web/src/hooks/useSourceAudio.ts`
+fetches the signed audio URL **lazily, on the first Play press**, never on
+render: a signed URL per note-page view would be a signature minted for audio
+nobody asked to hear. The hook also re-signs near the URL's `expiresAt` (a
+press within a minute of expiry) or once, automatically, on a media `error`
+during playback — the same "lazy, cached, re-fetched once" shape
+`useLibraryAudioPreview` uses for the transcript library's own inline
+previews, kept as a sibling implementation rather than a shared one because
+the two players' contracts genuinely differ: one is "one element shared by a
+list, always from the start," the other is "one recording, seekable,
+resumable."
+
+⚠ **The note's ETag is unaffected by a revoked share.** `originTranscript` is
+part of the note's `W/"v<currentVersion>"` ETag payload, and nothing about a
+transcript share changes a note's `current_version` — so a 304 served from
+cache can still be handed out after the underlying share is revoked. This is
+accepted rather than fixed: `GET /api/transcripts/:id/audio` re-checks access
+on every call regardless of what a cached note response claims, so the actual
+capability — playing the recording — is never granted on stale information,
+even if a stale `originTranscript.id` briefly outlives the share that once
+made it reachable.
+
 ## 5. The streaming contract
 
 ### 5.1 The durable buffer
