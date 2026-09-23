@@ -24,6 +24,7 @@ import { PdfTranscriptExporter } from './export/pdf.exporter';
 import { TranscriptExportService } from './export/transcript-export.service';
 import { TranscriptExporterRegistry } from './export/transcript-exporter.interface';
 import { TranscriptJobFailureListener } from './listeners/transcript-job-failure.listener';
+import { TranscriptsUploadAbortedListener } from './listeners/transcripts-upload-aborted.listener';
 import { TranscriptsUploadListener } from './listeners/transcripts-upload.listener';
 import { FfmpegService } from './media/ffmpeg.service';
 import { TranscriptsHousekeepingTask } from './tasks/transcripts-housekeeping.task';
@@ -143,6 +144,8 @@ import { TranscriptsService } from './transcripts.service';
     TranscriptPipelineService,
     TranscriptionRuntimeService,
     TranscriptsUploadListener,
+    // #322: purges a transcript whose source upload the user cancelled.
+    TranscriptsUploadAbortedListener,
     // #95: fails a transcript whose provider-facing job gave up.
     TranscriptJobFailureListener,
     FfmpegService,

@@ -59,6 +59,7 @@ import {
   type TranscriptListQueryDto,
   type TranscriptWordsQueryDto,
 } from './dto/transcript.dto';
+import { parseSpeakerIdentities } from './editing/speaker-identity';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
 import {
   TranscriptAccessService,
@@ -414,13 +415,45 @@ export class TranscriptsService {
 
   /** `GET /api/transcripts/:id`. */
   async detail(id: string, user: RequestUser) {
+    return (await this.detailConditional(id, user)).payload;
+  }
+
+  /**
+   * `GET /api/transcripts/:id`, plus what the controller's weak ETag is built
+   * from.
+   *
+   * ⚠ THE VERSION IS NOT ENOUGH ON ITS OWN ANY MORE (#323). Naming "Speaker A"
+   * as "Oscar" changes this response's `speakers` without moving
+   * `currentVersion`, so a validator built from the version alone would answer
+   * a polling editor `304` forever and they would never see the name. The
+   * identities map comes off the SAME row the access check already read, so
+   * this costs no extra query.
+   */
+  async detailConditional(id: string, user: RequestUser) {
     const { transcript, role } = await this.access.require(user.id, id, 'view');
 
-    return this.detailShape(transcript, role);
+    return {
+      payload: await this.detailShape(transcript, role),
+      version: transcript.currentVersion,
+      identities: parseSpeakerIdentities(transcript.speakerIdentities),
+    };
   }
 
   /** `GET /api/transcripts/:id/segments` — compact, no word timings. */
   async segments(id: string, user: RequestUser) {
+    return (await this.segmentsConditional(id, user)).payload;
+  }
+
+  /**
+   * `GET /api/transcripts/:id/segments`, plus the ETag inputs.
+   *
+   * The segment list itself carries no speaker NAMES, only ids, so strictly it
+   * does not change on an identification. It shares `GET /:id`'s validator
+   * anyway: the controller header promises the two routes carry the same one,
+   * and a client that pairs them (`useTranscript` does) should never have to
+   * learn that the equivalence holds only sometimes.
+   */
+  async segmentsConditional(id: string, user: RequestUser) {
     const { transcript } = await this.access.require(user.id, id, 'view');
 
     const rows = await this.prisma.transcriptSegment.findMany({
@@ -442,11 +475,15 @@ export class TranscriptsService {
     });
 
     return {
-      currentVersion: transcript.currentVersion,
-      segments: rows.map((row) => ({
-        ...row,
-        editedAt: row.editedAt ? row.editedAt.toISOString() : null,
-      })),
+      payload: {
+        currentVersion: transcript.currentVersion,
+        segments: rows.map((row) => ({
+          ...row,
+          editedAt: row.editedAt ? row.editedAt.toISOString() : null,
+        })),
+      },
+      version: transcript.currentVersion,
+      identities: parseSpeakerIdentities(transcript.speakerIdentities),
     };
   }
 

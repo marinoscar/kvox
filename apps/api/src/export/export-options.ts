@@ -135,8 +135,26 @@ export function hashExportRequest(input: {
   format: string;
   version: number;
   options: ExportOptions;
+  /**
+   * Anything OTHER than the version that changes what the rendered file says.
+   *
+   * A transcript's speaker identities (#323) are the case that needed it: naming
+   * "Speaker A" as "Oscar" changes every export's speaker column without moving
+   * the version, so an export of v7 rendered before the naming must not be
+   * handed back after it. Included in the hash ONLY when present, so that every
+   * existing row's hash — and every note export's, which never passes one —
+   * stays byte-for-byte what it was.
+   */
+  contentFingerprint?: string | null;
 }): string {
   return createHash('sha256')
-    .update(canonicalJson({ format: input.format, version: input.version, options: input.options }))
+    .update(
+      canonicalJson({
+        format: input.format,
+        version: input.version,
+        options: input.options,
+        ...(input.contentFingerprint ? { contentFingerprint: input.contentFingerprint } : {}),
+      }),
+    )
     .digest('hex');
 }

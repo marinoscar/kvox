@@ -636,6 +636,82 @@ describe('TranscriptsService', () => {
       expect(detail.access).toBe('viewer');
     });
   });
+
+  // ===========================================================================
+  // detailConditional / segmentsConditional — the controller's ETag inputs
+  // (issue #323)
+  // ===========================================================================
+
+  describe('detailConditional', () => {
+    it('reports an empty identities map when nobody has named a speaker', async () => {
+      const { version, identities } = await service.detailConditional(TRANSCRIPT_ID, USER);
+
+      expect(version).toBe(transcriptRow().currentVersion);
+      expect(identities).toEqual({});
+    });
+
+    it('parses the speaker_identities column off the SAME row the access check read', async () => {
+      access.require.mockResolvedValue({
+        transcript: transcriptRow({ speakerIdentities: { A: 'Oscar' } }),
+        role: 'owner',
+      });
+
+      const { identities } = await service.detailConditional(TRANSCRIPT_ID, USER);
+
+      expect(identities).toEqual({ A: 'Oscar' });
+      // No second read of the transcript for this — the row access.require()
+      // already fetched is enough.
+      expect(prisma.transcript.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('is total over a malformed column — an empty map, never a throw', async () => {
+      access.require.mockResolvedValue({
+        transcript: transcriptRow({ speakerIdentities: 'not-an-object' }),
+        role: 'owner',
+      });
+
+      const { identities } = await service.detailConditional(TRANSCRIPT_ID, USER);
+
+      expect(identities).toEqual({});
+    });
+
+    it('detail() is exactly detailConditional()\'s payload', async () => {
+      access.require.mockResolvedValue({
+        transcript: transcriptRow({ speakerIdentities: { A: 'Oscar' } }),
+        role: 'owner',
+      });
+
+      const [detail, conditional] = await Promise.all([
+        service.detail(TRANSCRIPT_ID, USER),
+        service.detailConditional(TRANSCRIPT_ID, USER),
+      ]);
+
+      expect(detail).toEqual(conditional.payload);
+    });
+  });
+
+  describe('segmentsConditional', () => {
+    it('carries the same version and identities as detailConditional, off the same access check', async () => {
+      access.require.mockResolvedValue({
+        transcript: transcriptRow({ currentVersion: 7, speakerIdentities: { A: 'Oscar' } }),
+        role: 'owner',
+      });
+
+      const { version, identities } = await service.segmentsConditional(TRANSCRIPT_ID, USER);
+
+      expect(version).toBe(7);
+      expect(identities).toEqual({ A: 'Oscar' });
+    });
+
+    it('segments() is exactly segmentsConditional()\'s payload', async () => {
+      const [segments, conditional] = await Promise.all([
+        service.segments(TRANSCRIPT_ID, USER),
+        service.segmentsConditional(TRANSCRIPT_ID, USER),
+      ]);
+
+      expect(segments).toEqual(conditional.payload);
+    });
+  });
 });
 
 describe('defaultTitle', () => {

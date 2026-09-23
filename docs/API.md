@@ -1542,6 +1542,17 @@ non-browser client that already has the ETags and would rather avoid the extra
 
 **Requires Authentication** - Cancel an in-progress upload and clean up resources.
 
+For an **unmanaged** object, the row is deleted after the multipart upload is
+aborted, exactly as before. For an object **managed by another module**
+(`managed_by` set — a transcript's source audio, for one), the row cannot be
+deleted here: the owning module's table points at it with a `Restrict`
+foreign key. Instead the multipart upload is aborted, the object is marked
+`failed`, and `storage.object.upload_aborted` is emitted for the owning
+module to reconcile its own record — for a transcript, that means
+soft-deleting it and queuing `transcript.purge`, the one path allowed to free
+the object (issue #322). **400** if the managed upload already completed
+(`processing`/`ready`) — that is never silently downgraded to `failed`.
+
 **Response:** HTTP 204 No Content
 
 ---
@@ -3086,13 +3097,24 @@ set is `GET /transcripts?status=failed&scope=owned`.
 Metadata, speakers, all three pipeline statuses, `currentVersion`, and the role
 the caller holds.
 
-Carries a **weak ETag**, `W/"v<currentVersion>"`, and honours `If-None-Match`
-with a `304` carrying **no body**. Issue #30's transcript view polls this route
-on an adaptive schedule while a transcript is in flight; the ETag is what makes
-the common case — nothing has moved — cost headers instead of a payload. It is
-*weak* because two responses at the same version are semantically, not
-byte-for-byte, equivalent: `updatedAt` moves when a poll writes
-`lastPolledAt`, and the version does not identify that.
+Carries a **weak ETag** — `W/"v<currentVersion>"`, or
+`W/"v<currentVersion>-<fingerprint>"` once a speaker has been named (issue
+#323) — and honours `If-None-Match` with a `304` carrying **no body**. Issue
+#30's transcript view polls this route on an adaptive schedule while a
+transcript is in flight; the ETag is what makes the common case — nothing has
+moved — cost headers instead of a payload. It is *weak* because two responses
+at the same version are semantically, not byte-for-byte, equivalent:
+`updatedAt` moves when a poll writes `lastPolledAt`, and the version does not
+identify that.
+
+Naming an AI-detected speaker for the first time ("Speaker A" → "Oscar")
+changes this response's `speakers` without moving `currentVersion` — it is an
+identification, not a version (see `POST /operations` below) — so the
+validator carries a **fingerprint**: the first twelve hex digits of a SHA-256
+over the sorted `speakerIdentities` map, present only while that map is
+non-empty. Every ETag issued before issue #323 stays a valid `W/"v<n>"`.
+Treat the whole value as **opaque** — never parse a version number out of
+it.
 
 Weak comparison is used, which is the only comparison RFC 9110 permits for
 `If-None-Match`, so `"v3"` from a proxy that stripped the prefix still matches
@@ -3212,6 +3234,23 @@ Server-assigned identity is chosen **before** recording, never at replay time �
 a split's `newSegmentId` and resolved `atWordIndex`, a `speaker.create`'s
 `speakerId` and `colorIndex` — so replaying a version produces the same ids at
 the same seams.
+
+**A batch made only of `speaker.rename` ops that each identify a
+still-placeholder speaker ("Speaker A" → "Oscar"), or change nothing, does
+not create a version** (issue #323). Naming a speaker is metadata about the
+recording, not a correction of it, so it is written straight to the live
+speaker and to `speakerIdentities`, without bumping `currentVersion`, `rev`,
+or the version history. The response's `version` equals the transcript's
+**current** version, unchanged, and `summary` reads `"Named Speaker A as
+Oscar"` (joined with `; ` for more than one) or `"No changes"`. Renaming an
+already-identified speaker ("Oscar" → "Joe") is an ordinary correction and
+stays versioned as before, and any batch mixing an identification with
+another op — including a text edit — is one version, exactly like any other
+mixed batch. Stale-`rev` conflicts on this path answer the identical `409`
+shape as a versioned batch's. A **versioned** rename that puts a speaker back
+on its placeholder retires its identification, so history before that point
+shows the placeholder again too — see `docs/specs/transcription.md` §4.6 for
+the full rule and its edge case.
 
 **Concurrency.** `baseVersion` is *informational* and may be stale; what
 actually guards each write is the per-entity `rev` on every op, checked inside
@@ -3379,8 +3418,11 @@ inline one breaks the day a short recording turns out to have a dense correction
 history, at the one moment nobody is watching for it. It also means an export
 survives the phone that asked for it being backgrounded.
 
-**Reuse is content-addressed**, on `sha256({ format, version, options })` with
-the options **as parsed** — so `{}` and an explicit set of every default are the
+**Reuse is content-addressed**, on `sha256({ format, version, options })` —
+plus, since issue #323, a fingerprint of `speakerIdentities` whenever that map
+is non-empty, because naming a speaker changes what the same version renders
+(§4.6) without a fresh render request otherwise being able to tell — with the
+options **as parsed** — so `{}` and an explicit set of every default are the
 same export and share one render. A `failed` row is **never** reused: a retry
 must actually retry.
 
@@ -3642,6 +3684,12 @@ are dropped on read; if nothing remains, the default list
 `"universal"` keeps working with no migration (2026-09-14, issue #95 — see
 `docs/specs/transcription.md` §2.7).
 
+`abandonedUploadHours` (default 3, 1–720) is how long a transcript's source
+upload may sit idle — no part-URL batch, no status poll — before
+`transcripts.housekeeping` purges the transcript. Measured from the source
+object's `updated_at`, i.e. last upload activity, never from when the
+transcript was created (issue #322; see `docs/specs/transcription.md` §1.5.8).
+
 **Requires:** `system_settings:read`
 
 **Response:**
@@ -3659,6 +3707,7 @@ are dropped on read; if nothing remains, the default list
       "deleteRemoteAfterIngest": true,
       "defaultLanguage": null,
       "transcodeNodeOffloadEnabled": true,
+      "abandonedUploadHours": 3,
       "playback": { "bitrateKbps": 64 }
     },
     "keyStatuses": [
