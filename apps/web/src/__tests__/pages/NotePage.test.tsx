@@ -1171,9 +1171,11 @@ describe('NotePage — regenerating', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Regenerate this note?' });
     // FACT 1 — it is the user's own money, again.
     expect(within(dialog).getByText(/costs you money again/i)).toBeInTheDocument();
-    // FACT 2 — the current body is kept as a version, not lost.
-    expect(within(dialog).getByText(/version 2/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Nothing is lost/i)).toBeInTheDocument();
+    // FACT 2 — the current body is kept as a version, not lost. #312: the
+    // one-click confirmation says it as "stays in History" and names the
+    // template it will reuse; the version number is in the options dialog.
+    expect(within(dialog).getByText(/current version stays in History/i)).toBeInTheDocument();
+    expect(within(dialog).getByText('Meeting minutes')).toBeInTheDocument();
     // Nothing has been spent while the question is still on screen.
     expect(regenerateCalls).toBe(0);
   });
@@ -1241,6 +1243,11 @@ describe('NotePage — regenerating', () => {
     await screen.findByRole('button', { name: 'Regenerate' });
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    // #312: the main button confirms "the same again"; the controls are one
+    // click further, behind "Change options…".
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Change options…' }),
+    );
     const dialog = await screen.findByRole('dialog');
 
     // The template list has to have landed for a second option to exist.
@@ -1278,9 +1285,14 @@ describe('NotePage — regenerating', () => {
     await screen.findByRole('button', { name: 'Regenerate' });
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
-    const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Regenerate' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Regenerate' }),
+    );
 
+    // #312: the one-click confirmation has no select to answer with, so the
+    // options dialog takes over — a different dialog element, carrying the
+    // same question.
+    const dialog = await screen.findByRole('dialog');
     expect(
       await within(dialog).findByText('Choose a template to regenerate with'),
     ).toBeInTheDocument();
@@ -1308,9 +1320,81 @@ describe('NotePage — regenerating', () => {
     expect(listReads).toBe(0);
 
     await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    // #312: the one-click confirmation reads nothing either — only the options
+    // dialog needs the list.
     await screen.findByRole('dialog');
+    expect(listReads).toBe(0);
+    await user.click(screen.getByRole('button', { name: 'Change options…' }));
 
     await waitFor(() => expect(listReads).toBe(1));
+  });
+
+  // ===========================================================================
+  // #312 — the split button, at both entry points
+  // ===========================================================================
+
+  it('renders the split button at the bottom of a ready note', async () => {
+    renderNote();
+
+    await screen.findByRole('button', { name: 'Regenerate' });
+    expect(screen.getByRole('button', { name: 'More regenerate options' })).toBeInTheDocument();
+  });
+
+  it('renders the split button in the failed-note alert’s action slot too', async () => {
+    current = note({ status: 'failed', failureReason: 'The provider timed out.' });
+    renderNote();
+
+    await screen.findByText('The provider timed out.');
+    expect(screen.getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More regenerate options' })).toBeInTheDocument();
+  });
+
+  it('"Regenerate with another template…" opens the options dialog with the template select focused', async () => {
+    const user = userEvent.setup();
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'More regenerate options' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Regenerate with another template…' }),
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Regenerate this note?' });
+    await waitFor(() => expect(within(dialog).getByLabelText('Template')).toHaveFocus());
+    expect(regenerateCalls).toBe(0);
+  });
+
+  it('a 409 `template_required` from the SAME-TEMPLATE path switches to the options dialog', async () => {
+    // ⚠ Reached via the split button's MAIN click, not "Change options…" — the
+    // one-click path has no select to answer with, so the options dialog takes
+    // over entirely.
+    const user = userEvent.setup();
+    server.use(
+      http.post(`${API_BASE}/notes/:id/regenerate`, () =>
+        HttpResponse.json(
+          {
+            statusCode: 409,
+            code: 'CONFLICT',
+            message: 'This note has no template.',
+            details: { reason: 'template_required' },
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+    renderNote();
+    await screen.findByRole('button', { name: 'Regenerate' });
+
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Regenerate' }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      await within(dialog).findByText('Choose a template to regenerate with'),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Template')).toBeInTheDocument();
   });
 });
 

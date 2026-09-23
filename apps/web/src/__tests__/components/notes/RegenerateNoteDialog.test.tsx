@@ -334,3 +334,170 @@ describe('RegenerateNoteDialog — errors and accessibility', () => {
     expect(await axe(document.body, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+// =============================================================================
+// #312 — the template select gained groups, hidden-template labelling, a
+// "Show hidden templates" checkbox and a change-template caption
+// =============================================================================
+
+describe('RegenerateNoteDialog — the option groups', () => {
+  it('shows Current, Your templates and Built-in subheaders, in that order', async () => {
+    const user = userEvent.setup();
+    renderDialog({
+      templates: [
+        template('tpl-1', 'Meeting minutes'),
+        template('tpl-2', 'Executive brief'),
+        template('tpl-3', 'Weekly digest', { builtIn: true }),
+      ],
+    });
+
+    await user.click(screen.getByLabelText('Template'));
+
+    const listbox = await screen.findByRole('listbox');
+    const headings = within(listbox)
+      .getAllByText(/^(Current|Your templates|Built-in)$/)
+      .map((el) => el.textContent);
+    expect(headings).toEqual(['Current', 'Your templates', 'Built-in']);
+  });
+
+  it('renders each group heading as a subheader, not as a selectable menu item', async () => {
+    const user = userEvent.setup();
+    renderDialog({
+      templates: [template('tpl-1', 'Meeting minutes'), template('tpl-2', 'Executive brief')],
+    });
+
+    await user.click(screen.getByLabelText('Template'));
+
+    const heading = await screen.findByText('Your templates');
+    // A real choice is a `MenuItem` (`MuiMenuItem-root`); a group heading is a
+    // `ListSubheader` (`MuiListSubheader-root`) — a different element entirely,
+    // whatever ARIA role MUI's Select happens to stamp onto its children.
+    expect(heading.className).toContain('MuiListSubheader-root');
+    expect(heading.className).not.toContain('MuiMenuItem-root');
+  });
+});
+
+describe('RegenerateNoteDialog — hidden-template labelling', () => {
+  it('labels a hidden current template "(current, hidden)", and it stays selectable', async () => {
+    const user = userEvent.setup();
+    renderDialog({
+      currentTemplate: template('tpl-1', 'Meeting minutes', { hidden: true }),
+      templates: [template('tpl-1', 'Meeting minutes', { hidden: true }), TEMPLATES[1]],
+    });
+
+    expect(screen.getByLabelText('Template')).toHaveTextContent(
+      'Meeting minutes (current, hidden)',
+    );
+
+    await user.click(screen.getByLabelText('Template'));
+    const option = await screen.findByRole('option', {
+      name: 'Meeting minutes (current, hidden)',
+    });
+    await user.click(option);
+
+    expect(screen.getByLabelText('Template')).toHaveTextContent(
+      'Meeting minutes (current, hidden)',
+    );
+  });
+
+  it('labels a current template that is both archived and hidden "(current, archived, hidden)"', () => {
+    renderDialog({
+      templates: [TEMPLATES[1]],
+      currentTemplate: template('tpl-1', 'Meeting minutes', { isArchived: true, hidden: true }),
+    });
+
+    expect(screen.getByLabelText('Template')).toHaveTextContent(
+      'Meeting minutes (current, archived, hidden)',
+    );
+  });
+
+  it('labels any other hidden entry "<name> (hidden)"', async () => {
+    const user = userEvent.setup();
+    renderDialog({
+      templates: [TEMPLATES[0], template('tpl-2', 'Executive brief', { hidden: true })],
+    });
+
+    await user.click(screen.getByLabelText('Template'));
+
+    expect(await screen.findByRole('option', { name: 'Executive brief (hidden)' })).toBeInTheDocument();
+  });
+});
+
+describe('RegenerateNoteDialog — the summary tracks the selection', () => {
+  it('updates the template summary when a different template is chosen', async () => {
+    const user = userEvent.setup();
+    renderDialog({
+      templates: [
+        TEMPLATES[0],
+        template('tpl-2', 'Executive brief', { description: 'A one-paragraph readout.' }),
+      ],
+    });
+
+    expect(screen.queryByText('A one-paragraph readout.')).not.toBeInTheDocument();
+
+    await choose(user, 'Template', 'Executive brief');
+
+    expect(await screen.findByText('A one-paragraph readout.')).toBeInTheDocument();
+  });
+
+  it('shows the change-template caption only once the selection differs from the note’s own', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    expect(screen.queryByText(/Changing the template rewrites/)).not.toBeInTheDocument();
+
+    await choose(user, 'Template', 'Executive brief');
+
+    expect(screen.getByText(/Changing the template rewrites/)).toBeInTheDocument();
+  });
+});
+
+describe('RegenerateNoteDialog — initialFocus', () => {
+  it('focuses the template select when initialFocus is "template"', () => {
+    renderDialog({ initialFocus: 'template' });
+
+    expect(screen.getByLabelText('Template')).toHaveFocus();
+  });
+
+  it('does not autofocus the template select otherwise', () => {
+    renderDialog();
+
+    expect(screen.getByLabelText('Template')).not.toHaveFocus();
+  });
+});
+
+describe('RegenerateNoteDialog — "Show hidden templates"', () => {
+  it('renders only when onShowHiddenTemplatesChange is given', () => {
+    renderDialog({ onShowHiddenTemplatesChange: undefined });
+
+    expect(screen.queryByRole('checkbox', { name: 'Show hidden templates' })).not.toBeInTheDocument();
+  });
+
+  it('calls the handler with the new value when toggled', async () => {
+    const user = userEvent.setup();
+    const onShowHiddenTemplatesChange = vi.fn();
+    renderDialog({ showHiddenTemplates: false, onShowHiddenTemplatesChange });
+
+    await user.click(screen.getByRole('checkbox', { name: 'Show hidden templates' }));
+
+    expect(onShowHiddenTemplatesChange).toHaveBeenCalledWith(true);
+  });
+
+  it('reflects `showHiddenTemplates` as checked', () => {
+    renderDialog({ showHiddenTemplates: true, onShowHiddenTemplatesChange: vi.fn() });
+
+    expect(screen.getByRole('checkbox', { name: 'Show hidden templates' })).toBeChecked();
+  });
+});
+
+describe('RegenerateNoteDialog — confirming a changed template only', () => {
+  it('sends only { templateId } when just the template changed', async () => {
+    const user = userEvent.setup();
+    const { onConfirm } = renderDialog();
+
+    await choose(user, 'Template', 'Executive brief');
+    await confirm(user);
+
+    expect(onConfirm).toHaveBeenCalledWith({ templateId: 'tpl-2' });
+  });
+});

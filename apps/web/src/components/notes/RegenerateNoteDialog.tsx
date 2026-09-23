@@ -60,21 +60,27 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
+import Checkbox from '@mui/material/Checkbox';
 import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import FormHelperText from '@mui/material/FormHelperText';
 import InputLabel from '@mui/material/InputLabel';
+import ListSubheader from '@mui/material/ListSubheader';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, useState } from 'react';
+import type { ReactElement } from 'react';
 
+import type { UseNoteTemplateDetailResult } from '../../hooks/useNoteTemplates';
 import type { AiConfigModel } from '../../services/ai';
 import type { Note, RegenerateNoteInput } from '../../services/notes';
 import type { NoteTemplate } from '../../services/noteTemplates';
 import { ModelSelect } from './ModelSelect';
-import { buildRegenerateInput } from './regenerateInput';
+import { REGENERATE_COST_SENTENCE, buildRegenerateInput } from './regenerateInput';
+import { TemplateSummary } from './TemplateSummary';
 
 /**
  * `MAX_CONTEXT_CHARS` in `apps/api/src/notes/dto/note-template.dto.ts`.
@@ -102,6 +108,22 @@ export interface RegenerateNoteDialogProps {
    * to change a template they never asked to change.
    */
   currentTemplate: NoteTemplate | null;
+  /**
+   * Where the read of `currentTemplate` stands (#312), so the summary under the
+   * select can say "loading" or "no longer available" rather than nothing.
+   * Defaults to `loaded` when a row is given and `idle` when none is.
+   */
+  currentTemplateState?: UseNoteTemplateDetailResult['state'];
+  /** `template` focuses the template select on open — the "another template…" door (#312). */
+  initialFocus?: 'template';
+  /**
+   * Whether the list includes templates the user has hidden (#312). The
+   * checkbox is rendered only when `onShowHiddenTemplatesChange` is given: the
+   * list itself is fetched by the caller, which is the only one that can
+   * re-read it with the option flipped.
+   */
+  showHiddenTemplates?: boolean;
+  onShowHiddenTemplatesChange?: (value: boolean) => void;
   models: AiConfigModel[];
   defaultModel: string | null;
   busy: boolean;
@@ -149,6 +171,10 @@ export function RegenerateNoteDialog({
   templates,
   templatesLoading,
   currentTemplate,
+  currentTemplateState,
+  initialFocus,
+  showHiddenTemplates = false,
+  onShowHiddenTemplatesChange,
   models,
   defaultModel,
   busy,
@@ -197,20 +223,107 @@ export function RegenerateNoteDialog({
     if (resolved !== '') setModel(resolved);
   }, [currentTemplate, defaultModel, model, models, note, open]);
 
-  // The note's template, when the list does not carry it — see the prop's own
-  // comment. Also covers the frame before the list has arrived at all, which
-  // keeps MUI from warning about a Select value with no matching option and
-  // keeps the user's actual template on screen rather than a blank box.
-  const listHasTemplate = templates.some((template) => template.id === templateId);
-  const synthesisedOption =
-    templateId !== '' && !listHasTemplate
-      ? {
-          id: templateId,
-          label: currentTemplate
-            ? `${currentTemplate.name} (current, archived)`
-            : (note.templateName ?? 'Current template'),
-        }
-      : null;
+  /**
+   * A selection the list stopped carrying goes back to the note's own template.
+   *
+   * The one way to get there is to pick a HIDDEN template with "Show hidden
+   * templates" ticked and then untick it: the list is re-read without that row,
+   * and a select holding a value with no option would show a blank box over a
+   * choice the user can no longer see. The note's own template is exempt — it
+   * is always offered, below — and so is the frame while the list is loading,
+   * which still holds the previous answer.
+   */
+  useEffect(() => {
+    if (!open || templatesLoading) return;
+    if (templateId === '' || templateId === note.templateId) return;
+    if (templates.some((template) => template.id === templateId)) return;
+
+    setTemplateId(note.templateId ?? '');
+  }, [note.templateId, open, templateId, templates, templatesLoading]);
+
+  // --- The options, grouped (#312) -----------------------------------------
+  //
+  // ⚠ THE NOTE'S OWN TEMPLATE IS ALWAYS OFFERED, whether or not the list
+  // carries it. `GET /api/note-templates` excludes ARCHIVED rows always and
+  // HIDDEN rows by default, so a note generated from either has a perfectly
+  // valid `templateId` that appears nowhere in the list. Without this option the
+  // select would render blank over a real choice and force the user to change a
+  // template they never asked to change — and hiding a template is a listing
+  // preference, never a reason it cannot be used again.
+  //
+  // ⚠ A FLAT ARRAY, NOT FRAGMENTS. MUI's Select reads its options off its
+  // direct children; a `<>…</>` would hide every option inside it.
+  const currentId = note.templateId;
+  const currentInList = currentId
+    ? (templates.find((template) => template.id === currentId) ?? null)
+    : null;
+  const currentRow = currentInList ?? currentTemplate;
+
+  const currentLabel = (() => {
+    if (!currentRow) return note.templateName ?? 'Current template';
+    const flags = [
+      currentRow.isArchived ? 'archived' : null,
+      currentRow.hidden ? 'hidden' : null,
+    ].filter((flag): flag is string => flag !== null);
+    return flags.length > 0
+      ? `${currentRow.name} (current, ${flags.join(', ')})`
+      : currentRow.name;
+  })();
+
+  const optionLabel = (template: NoteTemplate) =>
+    template.hidden ? `${template.name} (hidden)` : template.name;
+
+  const others = templates.filter((template) => template.id !== currentId);
+  const own = others.filter((template) => !template.builtIn);
+  const builtIns = others.filter((template) => template.builtIn);
+
+  const options: ReactElement[] = [];
+  if (currentId) {
+    options.push(
+      <ListSubheader key="h-current">Current</ListSubheader>,
+      <MenuItem key={`t-${currentId}`} value={currentId}>
+        {currentLabel}
+      </MenuItem>,
+    );
+  }
+  if (own.length > 0) {
+    options.push(<ListSubheader key="h-own">Your templates</ListSubheader>);
+    for (const template of own) {
+      options.push(
+        <MenuItem key={`t-${template.id}`} value={template.id}>
+          {optionLabel(template)}
+        </MenuItem>,
+      );
+    }
+  }
+  if (builtIns.length > 0) {
+    options.push(<ListSubheader key="h-builtin">Built-in</ListSubheader>);
+    for (const template of builtIns) {
+      options.push(
+        <MenuItem key={`t-${template.id}`} value={template.id}>
+          {optionLabel(template)}
+        </MenuItem>,
+      );
+    }
+  }
+
+  // --- What the selected template is (#312) ---------------------------------
+  // The list row when there is one — it is already in memory, so no request —
+  // and the by-id read only for the note's own template when the list does not
+  // carry it.
+  const selectedInList = templates.find((template) => template.id === templateId) ?? null;
+  const summary: { template: NoteTemplate | null; state: UseNoteTemplateDetailResult['state'] } =
+    templateId === ''
+      ? { template: null, state: 'idle' }
+      : selectedInList
+        ? { template: selectedInList, state: 'loaded' }
+        : templateId === currentId
+          ? {
+              template: currentTemplate,
+              state: currentTemplateState ?? (currentTemplate ? 'loaded' : 'idle'),
+            }
+          : { template: null, state: 'idle' };
+  const templateChanged = templateId !== '' && templateId !== note.templateId;
 
   // ⚠ NO MODELS MEANS NO REQUEST. Either the config is still in flight or this
   // deployment permits nothing; in both cases a confirm would send a
@@ -226,8 +339,8 @@ export function RegenerateNoteDialog({
     models.find((candidate) => candidate.id === model)?.label ?? model;
 
   const selectedTemplateName =
-    templates.find((template) => template.id === templateId)?.name ??
-    (templateId === note.templateId ? note.templateName : null);
+    selectedInList?.name ??
+    (templateId === note.templateId ? (currentRow?.name ?? note.templateName) : null);
 
   return (
     <Dialog
@@ -244,9 +357,9 @@ export function RegenerateNoteDialog({
           <Typography variant="body2" component="p">
             Your AI provider will write this note again
             {selectedTemplateName ? ` using ${selectedTemplateName}` : ''}.{' '}
-            {/* FACT 1 — the cost, in the user's own terms. */}
-            <strong>This runs on your own provider account and costs you money again</strong>,
-            the same as the first generation did.
+            {/* FACT 1 — the cost, in the user's own terms. Shared with the
+                one-click confirmation so the two cannot drift (#312). */}
+            <strong>{REGENERATE_COST_SENTENCE}</strong>
           </Typography>
           <Typography variant="body2" component="p" sx={{ mt: 1.5 }}>
             {/* FACT 2 — what happens to what is already here. */}
@@ -264,16 +377,10 @@ export function RegenerateNoteDialog({
               label="Template"
               value={templateId}
               disabled={busy}
+              autoFocus={initialFocus === 'template'}
               onChange={(event) => setTemplateId(event.target.value)}
             >
-              {templates.map((template) => (
-                <MenuItem key={template.id} value={template.id}>
-                  {template.name}
-                </MenuItem>
-              ))}
-              {synthesisedOption && (
-                <MenuItem value={synthesisedOption.id}>{synthesisedOption.label}</MenuItem>
-              )}
+              {options}
             </Select>
             <FormHelperText>
               {templateMissing
@@ -285,6 +392,27 @@ export function RegenerateNoteDialog({
                   ? 'Loading your templates…'
                   : 'The recipe the note is written from — its sections, its tone, its length.'}
             </FormHelperText>
+            {onShowHiddenTemplatesChange && (
+              <FormControlLabel
+                sx={{ mt: 0.5 }}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={showHiddenTemplates}
+                    disabled={busy}
+                    onChange={(event) => onShowHiddenTemplatesChange(event.target.checked)}
+                  />
+                }
+                label={<Typography variant="body2">Show hidden templates</Typography>}
+              />
+            )}
+            <TemplateSummary template={summary.template} state={summary.state} />
+            {templateChanged && (
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                Changing the template rewrites the note&apos;s structure; the current version
+                stays in History.
+              </Typography>
+            )}
           </FormControl>
 
           <TextField

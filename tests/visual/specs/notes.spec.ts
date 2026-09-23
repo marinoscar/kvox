@@ -148,7 +148,9 @@ test.describe('Note generation view', () => {
     await waitForInter(page);
 
     await expect(page.getByText('This note could not be generated')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Regenerate' })).toBeVisible();
+    // `exact`: since #312 Regenerate is a split button, and its arrow's
+    // accessible name ("More regenerate options") also contains the word.
+    await expect(page.getByRole('button', { name: 'Regenerate', exact: true })).toBeVisible();
 
     await expect(page).toHaveScreenshot('notes-failed-phone-390.png');
   });
