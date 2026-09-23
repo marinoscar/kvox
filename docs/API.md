@@ -4258,9 +4258,11 @@ role.
 
 **Requires:** `note_templates:read`
 
-**Query:** `includeArchived` (default `false`) — include the caller's own archived templates; built-ins are never archived.
+**Query:**
+- `includeArchived` (default `false`) — include the caller's own archived templates; built-ins are never archived.
+- `includeHidden` (default `false`, issue #310) — include templates the caller has hidden via `PUT /{id}/hidden` (built-ins included). Omitted, hidden templates are excluded from the list; every item, hidden or not, carries `hidden` for the caller.
 
-**Response:** `{ "data": { "items": [...], "total": 12 } }` — not paginated.
+**Response:** `{ "data": { "items": [...], "total": 12 } }` — not paginated. Each item includes `"hidden": false` (or `true` when `includeHidden=true` surfaced it).
 
 ---
 
@@ -4378,6 +4380,41 @@ row owned by the caller, with a suffixed name. The original is untouched.
 Every column is copied, not just `instructions`. No lineage is recorded.
 
 **Requires:** `note_templates:write` · **Response:** `201`
+
+**Error Cases:**
+- `404` - No such template, for the caller
+
+---
+
+#### PUT /note-templates/{id}/hidden
+Hides the template from **the caller's own** `GET /note-templates` list
+(issue #310). Works on any template the caller can read — **built-ins
+included**, since hiding changes nothing on the shared row and the built-in
+403 immutability rule above does not apply here. Nobody else's list is
+affected. A hidden template still works exactly as before: it can still be
+read, generated from, previewed and duplicated by id, and notes already
+generated from it are unaffected.
+
+**Requires:** `note_templates:write` (the access check performed is
+`'read'`, not the built-in-immutability check — this is a listing
+preference, not an edit to the template)
+
+**Response:** `204`, idempotent — hiding an already-hidden template still
+answers `204`.
+
+**Error Cases:**
+- `404` - No such template, for the caller
+
+---
+
+#### DELETE /note-templates/{id}/hidden
+Un-hides a template in the caller's own picker (issue #310). Built-ins
+included.
+
+**Requires:** `note_templates:write`
+
+**Response:** `204`, idempotent — un-hiding a template that is not hidden
+still answers `204`.
 
 **Error Cases:**
 - `404` - No such template, for the caller
