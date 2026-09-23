@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
+import { Prisma, StorageObject } from '@prisma/client';
 import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
 import type { StorageProvider } from '../providers/storage-provider.interface';
 import {
@@ -42,6 +42,10 @@ import {
   OBJECT_UPLOADED_EVENT,
   ObjectUploadedEvent,
 } from '../processing/events/object-uploaded.event';
+import {
+  OBJECT_UPLOAD_ABORTED_EVENT,
+  ObjectUploadAbortedEvent,
+} from '../processing/events/object-upload-aborted.event';
 import {
   PresignPartsDto,
   PresignedPartDto,
@@ -559,6 +563,16 @@ export class ObjectsService {
       throw new BadRequestException('Upload ID not found');
     }
 
+    // A MANAGED object's row is not ours to delete (issue #322). The owning
+    // module points at it with a `Restrict` foreign key
+    // (`transcripts.source_object_id`), so the delete below would fail, the
+    // client's cancel with it, and the owning record would sit in `uploading`
+    // forever. Mark it `failed` and let the owner reconcile.
+    if (storageObject.managedBy) {
+      await this.abortManagedUpload(storageObject, userId);
+      return;
+    }
+
     this.logger.log(`Aborting upload ${objectId}`);
 
     // Abort with storage provider
@@ -579,6 +593,59 @@ export class ObjectsService {
     });
 
     this.logger.log(`Upload aborted: ${objectId}`);
+  }
+
+  /**
+   * Abort the upload of an object another module owns (issue #322).
+   *
+   * THE ROW STAYS, marked `failed`, and {@link OBJECT_UPLOAD_ABORTED_EVENT}
+   * tells the module named by `managedBy` to reconcile its own record — for a
+   * transcript, soft-delete it and queue `transcript.purge`, which is the one
+   * path allowed to free the object. Deleting the row here would violate that
+   * module's `Restrict` foreign key.
+   *
+   * Idempotent on purpose: a second cancel (a double click, a retried request)
+   * of an already-`failed` upload skips the provider abort, re-marks nothing
+   * new and re-emits; the owner's reconciliation is conditional on its own
+   * state, so hearing the event twice is harmless. An upload that already
+   * COMPLETED (`processing`/`ready`) cannot be aborted — that is a 400, never a
+   * silent downgrade of real audio to `failed`.
+   */
+  private async abortManagedUpload(
+    storageObject: StorageObject,
+    userId: string,
+  ): Promise<void> {
+    if (
+      storageObject.status === 'processing' ||
+      storageObject.status === 'ready'
+    ) {
+      throw new BadRequestException('Upload has already completed');
+    }
+
+    this.logger.log(
+      `Aborting managed upload ${storageObject.id} (managed by ${storageObject.managedBy})`,
+    );
+
+    // Tolerates `NoSuchUpload`, and is a no-op for an already-`failed` row.
+    await this.abortActiveMultipartUpload(storageObject);
+
+    const updated = await this.prisma.storageObject.update({
+      where: { id: storageObject.id },
+      data: { status: 'failed' },
+    });
+
+    this.eventEmitter.emit(
+      OBJECT_UPLOAD_ABORTED_EVENT,
+      new ObjectUploadAbortedEvent(updated),
+    );
+
+    await this.createAuditEvent(userId, 'storage:upload:abort', storageObject.id, {
+      name: storageObject.name,
+      status: storageObject.status,
+      managedBy: storageObject.managedBy,
+    });
+
+    this.logger.log(`Managed upload aborted: ${storageObject.id}`);
   }
 
   /**

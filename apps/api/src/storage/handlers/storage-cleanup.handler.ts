@@ -38,6 +38,14 @@
 // goes, which is the shape `job-handler.interface.ts` names as server-only by
 // nature — there is no result for a remote machine to compute and post back.
 //
+// ⚠ MANAGED OBJECTS ARE NOT THIS SWEEP'S TO DELETE (issue #322). An object
+// whose `managed_by` is set belongs to another module, whose table points at it
+// with a `Restrict` foreign key (`transcripts.source_object_id`). Deleting one
+// here violated that FK on every run and left the owning record stuck. The
+// owning module reconciles its own abandoned uploads — `transcripts.housekeeping`
+// does it for transcripts, through `transcript.purge` — so this sweep selects
+// unmanaged rows only.
+//
 // NO PROFILE: the work is idempotent (a row already deleted is simply not found
 // next time) and short, so the deployment-wide ceiling and attempt budget are
 // right for it.
@@ -154,6 +162,11 @@ export class StorageCleanupHandler implements JobHandler, OnModuleInit {
       where: {
         status: { in: ['pending', 'uploading'] },
         updatedAt: { lt: cleanupBefore },
+        // Unmanaged only (issue #322). The owning module reconciles its own
+        // uploads — `transcripts.housekeeping` does for transcripts — and
+        // deleting a managed row here would violate that module's `Restrict`
+        // foreign key (`transcripts.source_object_id`) on every run.
+        managedBy: null,
       },
       select: {
         id: true,
