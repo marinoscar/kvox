@@ -124,27 +124,34 @@ export interface MarkdownViewProps {
   children: string;
 }
 
+/**
+ * The wrapper styling every rendered markdown body shares — exported (issue
+ * #334) so the visual editor (`VisualMarkdownEditor`) lays out tables, lists
+ * and code exactly as this read view does. It styles CONTAINERS only; the
+ * element typography comes from `COMPONENTS` above, which the editor mirrors
+ * with its own selectors because Tiptap renders raw elements, not MUI ones.
+ */
+export const MARKDOWN_CONTAINER_SX = {
+  // Tables are the one GFM construct that can legitimately exceed the
+  // panel, and the page body must never scroll horizontally because of
+  // one. Scoped to this container rather than applied to the page.
+  '& table': { borderCollapse: 'collapse', width: '100%', display: 'block', overflowX: 'auto' },
+  '& th, & td': { border: 1, borderColor: 'divider', px: 1, py: 0.5, textAlign: 'left' },
+  '& ul, & ol': { pl: 3, mt: 0, mb: 1.5 },
+  '& code': {
+    fontFamily: 'monospace',
+    fontSize: '0.85em',
+    bgcolor: 'action.hover',
+    px: 0.5,
+    borderRadius: 0.5,
+  },
+  '& pre': { overflowX: 'auto', bgcolor: 'action.hover', p: 1.5, borderRadius: 1 },
+  '& > :first-of-type': { mt: 0 },
+} as const;
+
 export function MarkdownView({ children }: MarkdownViewProps) {
   return (
-    <Box
-      sx={{
-        // Tables are the one GFM construct that can legitimately exceed the
-        // panel, and the page body must never scroll horizontally because of
-        // one. Scoped to this container rather than applied to the page.
-        '& table': { borderCollapse: 'collapse', width: '100%', display: 'block', overflowX: 'auto' },
-        '& th, & td': { border: 1, borderColor: 'divider', px: 1, py: 0.5, textAlign: 'left' },
-        '& ul, & ol': { pl: 3, mt: 0, mb: 1.5 },
-        '& code': {
-          fontFamily: 'monospace',
-          fontSize: '0.85em',
-          bgcolor: 'action.hover',
-          px: 0.5,
-          borderRadius: 0.5,
-        },
-        '& pre': { overflowX: 'auto', bgcolor: 'action.hover', p: 1.5, borderRadius: 1 },
-        '& > :first-of-type': { mt: 0 },
-      }}
-    >
+    <Box sx={MARKDOWN_CONTAINER_SX}>
       {/* ⚠ NO `rehypePlugins`. See this file's header — adding `rehype-raw`
           here would enable raw HTML from model output. */}
       <Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
