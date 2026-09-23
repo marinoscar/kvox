@@ -32,6 +32,10 @@ export interface KeytermsFieldProps {
   /** Offered, never pre-selected. */
   suggestions?: readonly string[];
   disabled?: boolean;
+  /** Overrides for reuse outside the upload form (the name-check dialog, #329). */
+  label?: string;
+  placeholder?: string;
+  helperText?: string;
 }
 
 const HELPER_TEXT =
@@ -43,6 +47,9 @@ export function KeytermsField({
   maxKeyterms,
   suggestions = [],
   disabled = false,
+  label = 'Names & terms in this recording',
+  placeholder = 'e.g. Ana Solís, Kvox, OKRs',
+  helperText = HELPER_TEXT,
 }: KeytermsFieldProps) {
   const [inputValue, setInputValue] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -115,10 +122,10 @@ export function KeytermsField({
       renderInput={(params) => (
         <TextField
           {...params}
-          label="Names & terms in this recording"
-          placeholder={value.length === 0 ? 'e.g. Ana Solís, Kvox, OKRs' : undefined}
+          label={label}
+          placeholder={value.length === 0 ? placeholder : undefined}
           error={error !== null}
-          helperText={error ?? HELPER_TEXT}
+          helperText={error ?? helperText}
           slotProps={{
             ...params.slotProps,
             htmlInput: {

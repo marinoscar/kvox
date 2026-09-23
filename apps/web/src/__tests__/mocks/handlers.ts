@@ -292,6 +292,20 @@ export const handlers = [
     });
   }),
 
+  // `GET /api/transcripts/:id/name-checks/latest` (#329) — the transcript page
+  // reads this for every editor, so every suite rendering that page makes the
+  // request. `run: null` is the quietest answer: no badge, no panel content.
+  // A suite that cares overrides it with `server.use(...)`.
+  http.get(`${API_BASE}/transcripts/:id/name-checks/latest`, () => {
+    return HttpResponse.json({
+      data: {
+        run: null,
+        suggestions: [],
+        counts: { pending: 0, accepted: 0, rejected: 0, stale: 0 },
+      },
+    });
+  }),
+
   http.get(`${API_BASE}/transcription/config`, () => {
     return HttpResponse.json({
       data: {

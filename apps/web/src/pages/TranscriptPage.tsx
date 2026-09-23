@@ -80,12 +80,33 @@
  * Cmd/Ctrl+F is bound SEPARATELY and is deliberately NOT subject to that guard:
  * "find" is exactly the thing a user reaches for while their cursor is in a
  * field, and it is the one shortcut here that must beat the browser's own.
+ *
+ * =============================================================================
+ * "FIX NAMES WITH AI" (issues #329 and #330, epic #326)
+ * =============================================================================
+ *
+ * Offered to anyone who can edit, by the same discoverability argument as
+ * Create note: the page does NOT read `useAiConfig()` for it. The start dialog
+ * (`NameCheckDialog`) reads the config when opened and renders `AiKeyRequired`
+ * itself. The one exception is the post-rename nudge, which is only worth
+ * showing when a check could actually run — `NameCheckRenamePrompt` reads the
+ * config, and is mounted only after a rename has been SAVED.
+ *
+ * The suggestions panel and find & replace share one slot and are never open
+ * together: both highlight spans through `SegmentList`'s one set of match
+ * props, and two sets of highlights in one list would be unreadable.
+ *
+ * Accepting suggestions writes through a DIFFERENT endpoint from the edit
+ * outbox, so the outbox is SETTLED first (every typed edit saved), and the
+ * response's segments are adopted into the same working copy the outbox feeds.
  */
 
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import Alert from '@mui/material/Alert';
+import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -113,6 +134,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { TranscriptNotesSection } from '../components/notes/TranscriptNotesSection';
 import { ConflictCards } from '../components/transcripts/ConflictCard';
 import { FindReplacePanel } from '../components/transcripts/FindReplacePanel';
+import { NameCheckDialog } from '../components/transcripts/NameCheckDialog';
+import { NameCheckRenamePrompt } from '../components/transcripts/NameCheckRenamePrompt';
+import { NameSuggestionsPanel } from '../components/transcripts/NameSuggestionsPanel';
 import { SaveIndicator } from '../components/transcripts/SaveIndicator';
 import { SegmentActions } from '../components/transcripts/SegmentActions';
 import { SegmentList } from '../components/transcripts/SegmentList';
@@ -131,12 +155,16 @@ import { TranscriptStatusChip } from '../components/transcripts/TranscriptStatus
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { usePlaybackEngine, SKIP_MS } from '../hooks/usePlaybackEngine';
+import { useNameCheck } from '../hooks/useNameCheck';
 import { useTranscriptOperations } from '../hooks/useTranscriptOperations';
 import { useTranscriptSearch, EMPTY_FIND_QUERY } from '../hooks/useTranscriptSearch';
 import type { FindQuery } from '../hooks/useTranscriptSearch';
 import { useTranscript, useTranscriptSegments } from '../hooks/useTranscripts';
 import { useTranscriptWords } from '../hooks/useTranscriptWords';
 import { ApiError } from '../services/api';
+import { parseOperationsConflict } from '../services/transcriptEditing';
+import { isGenericSpeakerName } from '../services/transcriptNameChecks';
+import type { NameSuggestion } from '../services/transcriptNameChecks';
 import { deleteTranscript, retryTranscript } from '../services/transcripts';
 import { removeShare } from '../services/transcriptShares';
 import { ExportDialog } from '../components/transcripts/ExportDialog';
@@ -280,6 +308,142 @@ export function TranscriptPage() {
   const [findQuery, setFindQuery] = useState<FindQuery>(EMPTY_FIND_QUERY);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // ---------------------------------------------------------------------------
+  // Fix names with AI (#329, #330)
+  // ---------------------------------------------------------------------------
+  const nameCheck = useNameCheck({ transcriptId: id, enabled: canEdit && isReady });
+  const [nameDialog, setNameDialog] = useState<{ speakerIds: string[] | null } | null>(null);
+  const [namePanelOpen, setNamePanelOpen] = useState(false);
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameNotice, setNameNotice] = useState<string | null>(null);
+  const [nameJump, setNameJump] = useState<NameSuggestion | null>(null);
+  const [renamePrompt, setRenamePrompt] = useState<{
+    speakerId: string;
+    name: string;
+    key: number;
+  } | null>(null);
+
+  // One panel slot: opening find closes the name panel, whatever opened find
+  // (the button, Cmd/Ctrl+F).
+  useEffect(() => {
+    if (findOpen) setNamePanelOpen(false);
+  }, [findOpen]);
+
+  const openNamePanel = useCallback(() => {
+    setFindOpen(false);
+    setNamePanelOpen(true);
+  }, []);
+
+  const openNameDialog = useCallback((speakerIds: string[] | null = null) => {
+    setRenamePrompt(null);
+    setNameDialog({ speakerIds });
+  }, []);
+
+  const nameSuggestions = useMemo(
+    () => nameCheck.latest?.suggestions ?? [],
+    [nameCheck.latest?.suggestions],
+  );
+  const nameHighlightsOn = namePanelOpen && !findOpen;
+
+  const nameMatchesBySegment = useMemo(() => {
+    const map = new Map<string, TextRange[]>();
+    for (const suggestion of nameSuggestions) {
+      if (suggestion.stale) continue;
+      const list = map.get(suggestion.segmentId) ?? [];
+      list.push({ start: suggestion.start, end: suggestion.end });
+      map.set(suggestion.segmentId, list);
+    }
+    return map;
+  }, [nameSuggestions]);
+
+  /**
+   * The header action: straight to the results when there are some to look
+   * at (a check running, or suggestions waiting), else to the start dialog.
+   */
+  const handleFixNamesClick = useCallback(() => {
+    if (nameCheck.isRunning || nameSuggestions.length > 0) {
+      if (namePanelOpen) setNamePanelOpen(false);
+      else openNamePanel();
+      return;
+    }
+    openNameDialog(null);
+  }, [nameCheck.isRunning, nameSuggestions.length, namePanelOpen, openNameDialog, openNamePanel]);
+
+  /**
+   * Rename a speaker from EITHER menu, and offer the name check once the
+   * rename has actually saved — never for a generic label like "Speaker B".
+   */
+  const handleRenameSpeaker = useCallback(
+    async (speakerId: string, displayName: string) => {
+      const saved = await ops.renameSpeaker(speakerId, displayName);
+      const name = displayName.trim();
+      if (!saved || isGenericSpeakerName(name)) return;
+      setRenamePrompt({ speakerId, name, key: Date.now() });
+    },
+    [ops],
+  );
+
+  const handleNameAccept = useCallback(
+    async (suggestionIds: string[]) => {
+      if (suggestionIds.length === 0) return;
+      setNameBusy(true);
+      try {
+        // Every typed edit must reach the server first: the apply is computed
+        // against the server's text, and would otherwise either miss the
+        // user's edit or be overwritten by it.
+        const settled = await ops.settle();
+        if (!settled) {
+          setNameNotice(
+            'Your latest edits have not been saved yet. Try again once they are.',
+          );
+          return;
+        }
+        const result = await nameCheck.apply(suggestionIds);
+        if (!result) return;
+        ops.adoptServerState(result);
+        const applied = `Applied ${result.applied} ${
+          result.applied === 1 ? 'correction' : 'corrections'
+        }`;
+        setNameNotice(
+          result.stale > 0
+            ? `${applied} — ${result.stale} skipped because the text changed`
+            : applied,
+        );
+      } catch (err) {
+        if (parseOperationsConflict(err)) {
+          await ops.reload();
+          setNameNotice(
+            'Some of these lines were changed at the same time. The transcript has been refreshed — review the remaining suggestions.',
+          );
+          return;
+        }
+        setNameNotice(
+          err instanceof ApiError ? err.message : 'The corrections could not be applied.',
+        );
+      } finally {
+        setNameBusy(false);
+      }
+    },
+    [nameCheck, ops],
+  );
+
+  const handleNameReject = useCallback(
+    async (suggestionIds: string[]) => {
+      if (suggestionIds.length === 0) return;
+      setNameBusy(true);
+      try {
+        await nameCheck.reject(suggestionIds);
+      } catch (err) {
+        setNameNotice(
+          err instanceof ApiError ? err.message : 'The suggestions could not be rejected.',
+        );
+      } finally {
+        setNameBusy(false);
+      }
+    },
+    [nameCheck],
+  );
+
   const search = useTranscriptSearch(id, findQuery, findOpen && isReady);
   const matches = search.result?.matches ?? [];
   const activeMatch = matches[activeIndex] ?? null;
@@ -403,6 +567,14 @@ export function TranscriptPage() {
       });
     },
     [matches.length],
+  );
+
+  const handleNameJump = useCallback(
+    (suggestion: NameSuggestion) => {
+      setNameJump(suggestion);
+      engine.seekToMs(suggestion.startMs);
+    },
+    [engine],
   );
 
   const handleReplaceOne = useCallback(() => {
@@ -644,6 +816,25 @@ export function TranscriptPage() {
             <SearchIcon />
           </IconButton>
         )}
+        {isReady && canEdit && (
+          <Tooltip title="Fix names with AI">
+            <IconButton
+              aria-label="Fix names with AI"
+              aria-pressed={namePanelOpen}
+              onClick={handleFixNamesClick}
+            >
+              <Badge
+                color="primary"
+                variant={nameSuggestions.length > 0 ? 'standard' : 'dot'}
+                badgeContent={nameSuggestions.length > 0 ? nameSuggestions.length : undefined}
+                invisible={!nameCheck.isRunning && nameSuggestions.length === 0}
+                max={99}
+              >
+                <AutoFixHighIcon />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+        )}
         <IconButton
           aria-label="Transcript actions"
           onClick={(event) => setPageMenuAnchor(event.currentTarget)}
@@ -783,9 +974,23 @@ export function TranscriptPage() {
           ? (speakerId, anchor) => setSpeakerMenu({ speakerId, anchor })
           : undefined
       }
-      matchesBySegment={findOpen ? matchesBySegment : undefined}
-      activeMatch={findOpen && activeMatch ? activeMatch : null}
-      scrollToSegmentId={findOpen ? (activeMatch?.segmentId ?? null) : null}
+      matchesBySegment={
+        findOpen ? matchesBySegment : nameHighlightsOn ? nameMatchesBySegment : undefined
+      }
+      activeMatch={
+        findOpen
+          ? (activeMatch ?? null)
+          : nameHighlightsOn && nameJump
+            ? { segmentId: nameJump.segmentId, start: nameJump.start, end: nameJump.end }
+            : null
+      }
+      scrollToSegmentId={
+        findOpen
+          ? (activeMatch?.segmentId ?? null)
+          : nameHighlightsOn
+            ? (nameJump?.segmentId ?? null)
+            : null
+      }
     />
   );
 
@@ -805,6 +1010,24 @@ export function TranscriptPage() {
       onClose={() => setFindOpen(false)}
     />
   );
+
+  const namePanel = canEdit ? (
+    <NameSuggestionsPanel
+      open={nameHighlightsOn}
+      latest={nameCheck.latest}
+      isLoading={nameCheck.isLoading}
+      loadError={nameCheck.loadError}
+      busy={nameBusy}
+      onAccept={(ids) => void handleNameAccept(ids)}
+      onReject={(ids) => void handleNameReject(ids)}
+      onJump={handleNameJump}
+      onStartNew={() => openNameDialog(null)}
+      onClose={() => {
+        setNamePanelOpen(false);
+        setNameJump(null);
+      }}
+    />
+  ) : null;
 
   const corrections = canEdit ? (
     <>
@@ -827,7 +1050,7 @@ export function TranscriptPage() {
         // All lines — the same `speaker.rename` op the chip rail issues, so the
         // two entry points cannot drift apart (#220).
         onRenameSpeaker={(displayName) => {
-          if (activeSegment) void ops.renameSpeaker(activeSegment.speakerId, displayName);
+          if (activeSegment) void handleRenameSpeaker(activeSegment.speakerId, displayName);
         }}
         onSetSpeaker={(speakerId) => {
           if (activeSegment) void ops.setSpeaker(activeSegment.id, speakerId);
@@ -859,7 +1082,7 @@ export function TranscriptPage() {
         }
         onClose={() => setSpeakerMenu(null)}
         onRename={(displayName) => {
-          if (activeSpeaker) void ops.renameSpeaker(activeSpeaker.id, displayName);
+          if (activeSpeaker) void handleRenameSpeaker(activeSpeaker.id, displayName);
         }}
         onMergeInto={(targetId) => {
           if (activeSpeaker) handleMergeInto(activeSpeaker.id, targetId);
@@ -923,6 +1146,39 @@ export function TranscriptPage() {
         </DialogActions>
       </Dialog>
 
+      {id ? (
+        <NameCheckDialog
+          open={nameDialog !== null}
+          transcriptId={id}
+          speakers={speakers}
+          initialSpeakerIds={nameDialog?.speakerIds ?? null}
+          onClose={() => setNameDialog(null)}
+          onStart={nameCheck.start}
+          onOpenResults={() => {
+            void nameCheck.refresh();
+            openNamePanel();
+          }}
+        />
+      ) : null}
+
+      {renamePrompt ? (
+        <NameCheckRenamePrompt
+          key={renamePrompt.key}
+          name={renamePrompt.name}
+          onCheck={() => openNameDialog([renamePrompt.speakerId])}
+          onDismiss={() => setRenamePrompt(null)}
+        />
+      ) : null}
+
+      <Snackbar
+        open={nameNotice !== null}
+        onClose={(_event, reason) => {
+          if (reason !== 'clickaway') setNameNotice(null);
+        }}
+        autoHideDuration={8_000}
+        message={nameNotice ?? ''}
+      />
+
       <Snackbar
         open={Boolean(ops.undoableMerge)}
         onClose={ops.dismissUndo}
@@ -975,6 +1231,7 @@ export function TranscriptPage() {
               }}
             >
               {findPanel}
+              {namePanel}
               {playerNotice}
               {!playerBlocked && (
                 <TranscriptPlayer
@@ -1038,6 +1295,7 @@ export function TranscriptPage() {
       {playerNotice && <Box sx={{ mb: 2 }}>{playerNotice}</Box>}
       {segmentList}
       {findPanel}
+      {namePanel}
       {notesSection ? <Box sx={{ mt: 2 }}>{notesSection}</Box> : null}
 
       {!playerBlocked && (
