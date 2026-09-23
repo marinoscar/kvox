@@ -594,6 +594,9 @@ async function openEditor(user: ReturnType<typeof userEvent.setup>) {
   renderNote();
   await screen.findByRole('button', { name: 'Edit' });
   await user.click(screen.getByRole('button', { name: 'Edit' }));
+  // Issue #334: the editor opens on the Visual view; these tests drive the
+  // Markdown source view, which is the plain textarea over the stored string.
+  await user.click(screen.getByRole('button', { name: 'Markdown' }));
 
   return screen.getByRole('textbox', { name: 'Note' });
 }
@@ -603,13 +606,13 @@ describe('NotePage — editing the body', () => {
     current = note({ status: 'ready', body: '# Decisions\n\nWe agreed.', currentVersion: 3 });
   });
 
-  it('edits as MARKDOWN in a textarea, not a rich-text surface', async () => {
+  it('the Markdown view edits the stored MARKDOWN in a textarea', async () => {
     const user = userEvent.setup();
     const textarea = await openEditor(user);
 
     // The literal markdown — the storage format, the model's output format and
-    // the export source. A WYSIWYG would have shown a rendered heading here and
-    // would have had to convert it back on save.
+    // the export source. (#334 added a Visual view beside it; this one stays
+    // byte-exact.)
     expect(textarea).toHaveValue('# Decisions\n\nWe agreed.');
     expect(textarea.tagName).toBe('TEXTAREA');
   });
@@ -630,7 +633,7 @@ describe('NotePage — editing the body', () => {
 
     // ⚠ AND BACK, WITH THE TEXT INTACT. Toggling to the preview must never be a
     // way to lose a paragraph.
-    await user.click(screen.getByRole('button', { name: 'Write' }));
+    await user.click(screen.getByRole('button', { name: 'Markdown' }));
     expect(screen.getByRole('textbox', { name: 'Note' })).toHaveValue('## Later');
   });
 
@@ -650,7 +653,7 @@ describe('NotePage — editing the body', () => {
       'true',
     );
 
-    const write = screen.getByRole('button', { name: 'Write' });
+    const write = screen.getByRole('button', { name: 'Markdown' });
     write.focus();
     await user.keyboard('{Enter}');
     expect(screen.getByRole('textbox', { name: 'Note' })).toBeInTheDocument();
@@ -1588,6 +1591,7 @@ describe('NotePage — with no AI key saved', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
 
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: 'Markdown' }));
     expect(await screen.findByRole('textbox', { name: 'Note' })).toHaveValue(
       '# Kept\n\nMy own note.',
     );
