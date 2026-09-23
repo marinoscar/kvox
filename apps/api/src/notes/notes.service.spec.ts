@@ -309,6 +309,39 @@ describe('NotesService', () => {
     });
   });
 
+  describe('getVersion — bodyFormat (#334)', () => {
+    const versionRow = {
+      noteId: NOTE_ID,
+      version: 2,
+      kind: 'edit',
+      summary: null,
+      author: null,
+      generationId: null,
+      restoredFromVersion: null,
+      body: 'Plain text, *not* emphasis.',
+      createdAt: new Date('2026-01-03T00:00:00.000Z'),
+    };
+
+    it('reports the note\'s plain_text format on a version', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'plain_text' }), role: 'owner' });
+      prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
+
+      const result = await service.getVersion(NOTE_ID, 2, USER);
+
+      expect(result.bodyFormat).toBe('plain_text');
+      expect(result.isCurrent).toBe(false);
+    });
+
+    it('defaults an unrecognised stored format to markdown', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'html' }), role: 'owner' });
+      prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
+
+      const result = await service.getVersion(NOTE_ID, 2, USER);
+
+      expect(result.bodyFormat).toBe('markdown');
+    });
+  });
+
   // ===========================================================================
   // Retitle (issue #184, epic #163)
   // ===========================================================================

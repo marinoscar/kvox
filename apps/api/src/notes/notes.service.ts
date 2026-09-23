@@ -474,6 +474,9 @@ export class NotesService {
       ...versionShape(row),
       noteId: note.id,
       body: row.body,
+      // The NOTE's format (#334) — `note_versions` carries no format column,
+      // so every version renders with the format the note holds now.
+      bodyFormat: toNoteBodyFormat(note.bodyFormat),
       isCurrent: row.version === note.currentVersion,
     };
   }
