@@ -324,6 +324,7 @@ export const DEFAULT_SYSTEM_SETTINGS = {
     deleteRemoteAfterIngest: true,
     defaultLanguage: null as string | null,
     transcodeNodeOffloadEnabled: true,
+    abandonedUploadHours: 3,
     playback: {
       bitrateKbps: 64,
     },

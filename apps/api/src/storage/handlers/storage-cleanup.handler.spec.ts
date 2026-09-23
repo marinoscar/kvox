@@ -104,6 +104,16 @@ describe('StorageCleanupHandler', () => {
     expect(where.createdAt).toBeUndefined();
   });
 
+  // Issue #322: a managed object belongs to its module, whose `Restrict` FK
+  // would reject the delete; that module reconciles its own uploads.
+  it('never selects managed objects', async () => {
+    const { handler, findMany } = makeHandler({ staleUploadHours: 72 });
+
+    await handler.sweep();
+
+    expect(findMany.mock.calls[0][0].where.managedBy).toBeNull();
+  });
+
   it('defaults the window to 72 hours when nothing is configured', async () => {
     const { handler, findMany } = makeHandler({});
 

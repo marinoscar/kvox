@@ -41,6 +41,7 @@ import type { StorageProvider } from '../../src/storage/providers/storage-provid
 import type { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import type { JobsService } from '../../src/jobs/jobs.service';
 import type { TranscriptPipelineService } from '../../src/transcripts/transcript-pipeline.service';
+import type { TranscriptionSettingsService } from '../../src/transcription/transcription-settings.service';
 import type { RequestUser } from '../../src/auth/interfaces/authenticated-user.interface';
 import { TranscriptAccessService } from '../../src/transcripts/transcript-access.service';
 import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
@@ -169,6 +170,10 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       service,
       { enqueueFirstPoll: jest.fn(), markFailed: jest.fn() } as unknown as TranscriptPipelineService,
       objects,
+      // #322: the abandoned-upload window is read from settings each sweep.
+      {
+        get: jest.fn().mockResolvedValue({ abandonedUploadHours: 3 }),
+      } as unknown as TranscriptionSettingsService,
     );
 
     editing = new TranscriptEditingService(service, access, materialize, {

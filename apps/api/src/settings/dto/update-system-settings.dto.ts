@@ -131,6 +131,7 @@ const transcriptionSettingsSchema = z.object({
   deleteRemoteAfterIngest: z.boolean(),
   defaultLanguage: z.string().trim().min(2).max(16).nullable(),
   transcodeNodeOffloadEnabled: z.boolean(),
+  abandonedUploadHours: z.number().int().min(1).max(720),
   playback: z.object({
     bitrateKbps: z.number().int().min(16).max(320),
   }),
@@ -326,6 +327,7 @@ export const patchSystemSettingsSchema = z.object({
       deleteRemoteAfterIngest: z.boolean().optional(),
       defaultLanguage: z.string().trim().min(2).max(16).nullable().optional(),
       transcodeNodeOffloadEnabled: z.boolean().optional(),
+      abandonedUploadHours: z.number().int().min(1).max(720).optional(),
       playback: z
         .object({
           bitrateKbps: z.number().int().min(16).max(320).optional(),

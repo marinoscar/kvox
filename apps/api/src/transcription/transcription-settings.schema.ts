@@ -212,6 +212,28 @@ export const systemTranscriptionSchema = z.object({
    */
   transcodeNodeOffloadEnabled: z.boolean(),
 
+  /**
+   * Hours an upload may sit IDLE before its transcript is purged (issue #322).
+   *
+   * MEASURED FROM THE SOURCE UPLOAD'S LAST ACTIVITY, NOT FROM CREATION. The
+   * clock is `storage_objects.updated_at` on the transcript's source object,
+   * which every part-URL batch and every status poll refreshes — so an upload
+   * that is actively being pushed is never killed, however many hours a
+   * multi-gigabyte file takes on a slow link. Only an upload that has gone
+   * quiet (a closed tab, a paused upload never resumed) for longer than this is
+   * abandoned: `transcripts.housekeeping` soft-deletes the transcript and
+   * queues `transcript.purge`, which aborts the multipart upload and frees the
+   * object. A cancelled upload does not wait for this at all — the abort
+   * endpoint purges it immediately.
+   *
+   * Three hours by default: long enough to survive a lunch break or a laptop
+   * lid, short enough that the library does not fill with dead cards. Bounded
+   * at 720 (thirty days), past which an idle upload is not "paused" in any
+   * sense a person would recognise, and floored at 1 so a typo cannot purge an
+   * upload between two part batches.
+   */
+  abandonedUploadHours: z.number().int().min(1).max(720),
+
   /** Playback rendition preferences. See {@link transcriptionPlaybackSchema}. */
   playback: transcriptionPlaybackSchema,
 });
@@ -248,6 +270,7 @@ export const systemTranscriptionPatchSchema = z.object({
   // switching back to detection impossible to express.
   defaultLanguage: z.string().trim().min(2).max(16).nullable().optional(),
   transcodeNodeOffloadEnabled: z.boolean().optional(),
+  abandonedUploadHours: z.number().int().min(1).max(720).optional(),
   playback: z
     .object({
       bitrateKbps: z.number().int().min(16).max(320).optional(),

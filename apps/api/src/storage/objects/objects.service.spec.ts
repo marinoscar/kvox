@@ -15,6 +15,7 @@ import { STORAGE_PROVIDER } from '../providers/storage-provider.interface';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 import { createMockStorageProvider } from '../../../test/mocks/storage-provider.mock';
 import { OBJECT_UPLOADED_EVENT } from '../processing/events/object-uploaded.event';
+import { OBJECT_UPLOAD_ABORTED_EVENT } from '../processing/events/object-upload-aborted.event';
 
 describe('ObjectsService', () => {
   let service: ObjectsService;
@@ -1178,6 +1179,72 @@ describe('ObjectsService', () => {
       await expect(
         service.abortUpload(mockStorageObject.id, testUserId),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('abortUpload of a managed object (issue #322)', () => {
+    const managedUpload = {
+      ...mockStorageObject,
+      status: 'uploading',
+      s3UploadId: 'upload-123',
+      managedBy: 'transcripts',
+    };
+
+    beforeEach(() => {
+      mockPrisma.storageObject.update.mockResolvedValue({
+        ...managedUpload,
+        status: 'failed',
+      } as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+    });
+
+    it('aborts, marks the row failed, emits the event, and never deletes the row', async () => {
+      mockPrisma.storageObject.findUnique.mockResolvedValue(managedUpload as any);
+      mockStorageProvider.abortMultipartUpload.mockResolvedValue(undefined);
+
+      await service.abortUpload(managedUpload.id, testUserId);
+
+      expect(mockStorageProvider.abortMultipartUpload).toHaveBeenCalledWith(
+        managedUpload.storageKey,
+        'upload-123',
+      );
+      expect(mockPrisma.storageObject.update).toHaveBeenCalledWith({
+        where: { id: managedUpload.id },
+        data: { status: 'failed' },
+      });
+      expect(mockPrisma.storageObject.delete).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        OBJECT_UPLOAD_ABORTED_EVENT,
+        expect.objectContaining({ objectId: managedUpload.id, managedBy: 'transcripts' }),
+      );
+      expect(mockPrisma.auditEvent.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ action: 'storage:upload:abort' }),
+      });
+    });
+
+    it('tolerates an upload the provider no longer knows about', async () => {
+      mockPrisma.storageObject.findUnique.mockResolvedValue(managedUpload as any);
+      mockStorageProvider.abortMultipartUpload.mockRejectedValue(
+        Object.assign(new Error('gone'), { name: 'NoSuchUpload' }),
+      );
+
+      await service.abortUpload(managedUpload.id, testUserId);
+
+      expect(mockPrisma.storageObject.update).toHaveBeenCalled();
+      expect(mockEventEmitter.emit).toHaveBeenCalled();
+    });
+
+    it('refuses to abort an upload that already completed', async () => {
+      mockPrisma.storageObject.findUnique.mockResolvedValue({
+        ...managedUpload,
+        status: 'ready',
+      } as any);
+
+      await expect(
+        service.abortUpload(managedUpload.id, testUserId),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.storageObject.update).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 

@@ -172,6 +172,41 @@ export function transcriptStatusDescriptor(status: TranscriptStatus): StatusDesc
 }
 
 /**
+ * The label an `uploading` transcript wears when no upload in THIS browser is
+ * carrying its bytes — issue #322.
+ */
+export const UPLOAD_INTERRUPTED_LABEL = 'Upload interrupted';
+
+/**
+ * Is this transcript stuck in `uploading` with nothing moving its bytes?
+ *
+ * Issue #322. The server only knows a transcript is `uploading`; whether the
+ * bytes are actually moving is known ONLY to the browser doing the upload (the
+ * app-wide upload manager, #22). So "interrupted" is a LOCAL judgement:
+ * `uploading`, and no live upload in this browser's manager names this
+ * transcript id.
+ *
+ * `liveTranscriptIds === null` means "no upload manager to ask" (a surface
+ * rendered outside the authenticated shell, or a test without the provider) —
+ * the answer is then `false`, so the rendering is exactly what it was before
+ * this issue rather than a guess. A missing `id` is treated the same way.
+ *
+ * ⚠ An upload running in ANOTHER tab or on another device reads as interrupted
+ * here. That is the honest limit of a per-browser fact, and the cost is a
+ * warning chip on a row that will flip to `processing` on the next refetch;
+ * the server's own abandoned-upload purge (`transcription.abandonedUploadHours`)
+ * is what actually decides whether the transcript is dead.
+ */
+export function isUploadInterrupted(
+  item: Pick<TranscriptListItem, 'status'> & { id?: string },
+  liveTranscriptIds: ReadonlySet<string> | null,
+): boolean {
+  if (item.status !== 'uploading') return false;
+  if (!liveTranscriptIds || !item.id) return false;
+  return !liveTranscriptIds.has(item.id);
+}
+
+/**
  * The sub-pipeline stage a PROCESSING transcript is actually in, as one short
  * phrase — or `null` when there is nothing more specific to say.
  *
