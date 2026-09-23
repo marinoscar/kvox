@@ -56,6 +56,7 @@ import type { RequestUser } from '../../auth/interfaces/authenticated-user.inter
 import { JobsService } from '../../jobs/jobs.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateTranscriptExportDto } from '../dto/transcript-export.dto';
+import { identitiesFingerprint, parseSpeakerIdentities } from '../editing/speaker-identity';
 import {
   TRANSCRIPT_EXPORT_JOB_TYPE,
   TRANSCRIPT_SUBJECT_TYPE,
@@ -162,7 +163,21 @@ export class TranscriptExportService {
     }
 
     const options = this.parseOptions(exporter, dto.options);
-    const optionsHash = hashExportRequest({ format: exporter.format, version, options });
+    // ⚠ THE SPEAKER IDENTITIES ARE PART OF THE CONTENT ADDRESS (#323). Naming a
+    // speaker does not create a version, but `materialize()` overlays the name
+    // onto every version — so "v7 as JSON" rendered before "Speaker A" became
+    // "Oscar" and "v7 as JSON" rendered after it are different files. Without
+    // the fingerprint the second request would be served the first file.
+    // `identitiesFingerprint` is `null` for an empty map, which is what keeps
+    // every pre-#323 export's hash — and so its reuse — exactly as it was.
+    const optionsHash = hashExportRequest({
+      format: exporter.format,
+      version,
+      options,
+      contentFingerprint: identitiesFingerprint(
+        parseSpeakerIdentities(transcript.speakerIdentities),
+      ),
+    });
     const now = new Date();
 
     const existing = await this.prisma.transcriptExport.findFirst({

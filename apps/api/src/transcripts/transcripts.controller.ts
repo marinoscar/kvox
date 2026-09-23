@@ -46,14 +46,23 @@
 // THE WEAK ETAG, AND WHY THE TWO POLLING ROUTES CARRY ONE
 // -----------------------------------------------------------------------------
 //
-// `GET /:id` and `GET /:id/segments` answer `W/"v<currentVersion>"` and honour
-// `If-None-Match` with a `304`. Issue #30's `useTranscript` hook polls those
+// `GET /:id` and `GET /:id/segments` answer a weak ETag (`W/"v<currentVersion>"`,
+// see below) and honour `If-None-Match` with a `304`. Issue #30's `useTranscript` hook polls those
 // two routes on a 5s/20s adaptive schedule while a transcript is in flight and
 // while an editor has it open; the ETag is what makes the common case — the
 // answer has not moved — cost headers instead of a body. It is WEAK because
 // the representation is semantically, not byte-for-byte, equivalent across
 // two responses at the same version: `updatedAt` and the signed URLs inside
 // it move without the version doing so.
+//
+// ⚠ AND IT IS NOT ONLY THE VERSION (#323). Naming an AI-detected speaker for
+// the first time ("Speaker A" → "Oscar") deliberately does NOT create a
+// version, yet it changes what `GET /:id` says. So the validator is
+// `W/"v<currentVersion>"` while nobody has named a speaker — every ETag issued
+// before #323 stays valid — and `W/"v<currentVersion>-<fingerprint>"` once
+// somebody has, where the fingerprint is the first twelve hex digits of a
+// SHA-256 over the sorted identities map (`transcriptETag`). Clients treat the
+// value as opaque; nothing may parse a version number out of it.
 // =============================================================================
 
 import {
@@ -147,6 +156,7 @@ import {
   type CreateTranscriptExportDto,
 } from './dto/transcript-export.dto';
 import { TranscriptExportService } from './export/transcript-export.service';
+import { identitiesFingerprint } from './editing/speaker-identity';
 import { TranscriptEditingService } from './transcript-editing.service';
 import { TranscriptSharingService } from './transcript-sharing.service';
 import { TranscriptsService } from './transcripts.service';
@@ -162,6 +172,25 @@ import { TranscriptsService } from './transcripts.service';
  */
 export function versionETag(version: number): string {
   return `W/"v${version}"`;
+}
+
+/**
+ * The weak validator for a transcript's two polling routes (#323).
+ *
+ * `versionETag(version)` exactly while the identities map is empty — so every
+ * validator a client already holds keeps matching — and the version plus a
+ * fingerprint of the map once a speaker has been named, because naming one
+ * changes the response without moving the version. See the file header.
+ * `versionETag` itself stays as it was: `notes.controller.ts` reuses it, and a
+ * note has no speakers to identify.
+ */
+export function transcriptETag(
+  version: number,
+  identities: Readonly<Record<string, string>>,
+): string {
+  const fingerprint = identitiesFingerprint(identities);
+
+  return fingerprint === null ? versionETag(version) : `W/"v${version}-${fingerprint}"`;
 }
 
 /**
@@ -311,7 +340,10 @@ export class TranscriptsController {
     description:
       'Metadata, speakers, all three pipeline statuses, `currentVersion` and the role this ' +
       "caller holds on it.\n\n" +
-      'Carries a **weak ETag**, `W/"v<currentVersion>"`. A conditional request whose ' +
+      'Carries a **weak ETag** — `W/"v<currentVersion>"`, or ' +
+      '`W/"v<currentVersion>-<fingerprint>"` once a speaker has been named, because naming ' +
+      'a speaker for the first time changes this response without creating a version. ' +
+      'Treat it as opaque. A conditional request whose ' +
       '`If-None-Match` matches is answered `304` with no body, which is what makes polling ' +
       'this route while nothing changes nearly free.\n\n' +
       'A caller with no access gets **404**, never 403: the existence of a specific ' +
@@ -327,9 +359,9 @@ export class TranscriptsController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    const transcript = await this.transcripts.detail(id, user);
+    const { payload, version, identities } = await this.transcripts.detailConditional(id, user);
 
-    return this.conditional(transcript.currentVersion, transcript, request, reply);
+    return this.conditional(transcriptETag(version, identities), payload, request, reply);
   }
 
   @Get(':id/segments')
@@ -354,9 +386,9 @@ export class TranscriptsController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    const segments = await this.transcripts.segments(id, user);
+    const { payload, version, identities } = await this.transcripts.segmentsConditional(id, user);
 
-    return this.conditional(segments.currentVersion, segments, request, reply);
+    return this.conditional(transcriptETag(version, identities), payload, request, reply);
   }
 
   @Get(':id/words')
@@ -871,20 +903,19 @@ export class TranscriptsController {
   // ===========================================================================
 
   /**
-   * Stamp the ETag, and answer `304` when the caller already has this version.
+   * Stamp the ETag, and answer `304` when the caller already has this
+   * representation (`transcriptETag` — the version, and the speaker names).
    *
    * The `undefined` return is what `TransformInterceptor` recognises — it
    * skips the `{ data, meta }` envelope entirely once the status is 304, so
    * the response carries no body, which is what RFC 9110 requires of one.
    */
   private conditional<T>(
-    version: number,
+    etag: string,
     payload: T,
     request: FastifyRequest,
     reply: FastifyReply,
   ): T | undefined {
-    const etag = versionETag(version);
-
     reply.header('ETag', etag);
     // A conditional request is only useful if an intermediary does not serve a
     // cached copy without asking; `private, no-cache` says "re-validate every

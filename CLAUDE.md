@@ -707,7 +707,7 @@ here.
 - `POST /api/transcripts` - Create the transcript **and** its resumable upload in one call (`transcripts:write`). 409 when transcription is not configured (the deployment is not ready — not the caller's fault), 400 over the active provider's size ceiling. The upload object is created `managed_by: 'transcripts'`, which a client cannot ask for
 - `GET /api/transcripts` - List, cursor-paginated over `(updatedAt, id)` — every pipeline transition rewrites `updatedAt`, so offset paging would skip and repeat rows (`transcripts:read`)
 - `GET /api/transcripts/summary` - Four lists and four counts for the home page, in one round trip (`transcripts:read`). The fourth list is `failed` — the caller's **own** failed transcripts, owner-scoped (retry is owner-only) and capped at eight, while `counts.failed` stays the true total
-- `GET /api/transcripts/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, 304 with **no body** on a match
+- `GET /api/transcripts/{id}` - Detail. Weak ETag `W/"v<currentVersion>"`, or `W/"v<currentVersion>-<fingerprint>"` once a speaker has been named (issue #323, opaque, treat as such), 304 with **no body** on a match
 - `GET /api/transcripts/{id}/segments` - Compact, **no word timings** (the largest thing in this schema); same ETag
 - `GET /api/transcripts/{id}/words?fromMs&toMs` - Word timings for one window, selected by **overlap** not containment; capped at 30 minutes and silently narrowed rather than refused
 - `GET /api/transcripts/{id}/audio` - Signed URL, 6 h TTL: the rendition when ready, else the original
@@ -715,13 +715,13 @@ here.
 - `DELETE /api/transcripts/{id}` - Owner only. Soft-deletes to `deleting` and queues `transcript.purge`; there is no path back
 - `POST /api/transcripts/{id}/retry` - Owner only. **The stage is derived from the row, not chosen by the caller** — a transcript the provider already accepted is re-polled, never re-submitted, so one recording never becomes two remote jobs
 - `POST /api/transcripts/{id}/cancel` - Owner only. Cancels on the provider when it can, and marks the transcript either way
-- `POST /api/transcripts/{id}/operations` - Apply up to 200 correction ops in **one transaction** and record them as a version (`transcripts:write` + `edit`). `baseVersion` is informational; the per-entity `rev` on every op is the real check, so two editors correcting **different** lines both succeed. A stale `rev` is a **409** whose `details` carries `{ currentVersion, conflicts: [{ entity, id, current }] }` — every conflict at once, `current: null` for an entity somebody deleted. A repeated `clientBatchId` returns the **original** result and creates no second version
+- `POST /api/transcripts/{id}/operations` - Apply up to 200 correction ops in **one transaction** and record them as a version (`transcripts:write` + `edit`). `baseVersion` is informational; the per-entity `rev` on every op is the real check, so two editors correcting **different** lines both succeed. A stale `rev` is a **409** whose `details` carries `{ currentVersion, conflicts: [{ entity, id, current }] }` — every conflict at once, `current: null` for an entity somebody deleted. A repeated `clientBatchId` returns the **original** result and creates no second version. **A batch of only `speaker.rename` identifications (or no-ops) creates no version at all** (issue #323) — naming an AI-detected speaker is metadata, not a correction; `version` in the response equals the current version unchanged, `rev` is untouched, and it's audited as `transcript.speaker_identified`
 - `GET /api/transcripts/{id}/search?q&matchCase&wholeWord&speakerId` - Literal match list and an **exact** total, for the find & replace preview (`transcripts:read`)
 - `GET /api/transcripts/{id}/versions?cursor` - The history, newest first. `author: null` **means the AI**, not a missing value
 - `GET /api/transcripts/{id}/versions/{v}` - One materialized version, without word timings
 - `POST /api/transcripts/{id}/versions/{v}/restore` - Appends a `restore` version; **history is never rewritten** and v1 is always retrievable. `baseVersion` here **must match** `currentVersion` (unlike `/operations`), because a restore carries no per-op expectations and a stale view would discard edits the caller never saw
 - `GET /api/transcripts/exporters` - Every registered export format with the options it accepts, so a client builds its export UI from the server's answer rather than from a list of formats compiled into it (`transcripts:read`)
-- `POST /api/transcripts/{id}/exports` - Render one version into one format. **202** when a render was queued, **200** when an identical unexpired export already exists — `reused` says which, for a client that cannot see the status line. Reuse is content-addressed on `sha256({format, version, options})` with the options **as parsed**, so an omitted option and an explicit default share one render; a `failed` row is never reused. Requires **view** access, which a `viewer` share satisfies: taking a conversation you were shown out of this application is a read
+- `POST /api/transcripts/{id}/exports` - Render one version into one format. **202** when a render was queued, **200** when an identical unexpired export already exists — `reused` says which, for a client that cannot see the status line. Reuse is content-addressed on `sha256({format, version, options})` — plus a fingerprint of `speakerIdentities` when non-empty (issue #323), since naming a speaker changes what the same version renders — with the options **as parsed**, so an omitted option and an explicit default share one render; a `failed` row is never reused. Requires **view** access, which a `viewer` share satisfies: taking a conversation you were shown out of this application is a read
 - `GET /api/transcripts/{id}/exports/{exportId}` - Status, and once ready a short-lived signed `downloadUrl` serving the file as `<title> (v<n>).<ext>`. The `Content-Disposition` is signed **into** the URL, so a client cannot add the filename afterwards
 
 Three correction rules that are easy to break from a neighbouring file:
@@ -1045,7 +1045,11 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   replica`, so a restored database would come back with a silently empty search index. Hand-written
   in `migration.sql` only — Prisma has no DSL for a generated column's expression — the same
   intentional schema drift as `jobs`/`database_backup_runs`/`transcript_speakers`. See
-  `docs/specs/search.md` §2.
+  `docs/specs/search.md` §2. `speaker_identities` (JSONB, default `{}`, issue #323) maps speaker
+  id to display name for a speaker **identified** rather than corrected — naming "Speaker A" as
+  "Oscar" writes here and to the live speaker row without bumping `current_version`, and
+  `materialize()` overlays this map onto any speaker still at its placeholder at every version;
+  see `docs/specs/transcription.md` §4.6.
 - `transcript_speakers` - One row per diarized voice in a transcript. `label` is nullable —
   the provider's own diarization letter (`"A"`) for an AI-detected speaker, `NULL` for one a
   user created directly. Unique per transcript **among labelled rows only**, via the same

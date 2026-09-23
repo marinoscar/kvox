@@ -2363,6 +2363,17 @@ model Transcript {
   speakerCount   Int     @default(0) @map("speaker_count")
   wordCount      Int     @default(0) @map("word_count")
 
+  // A map `speakerId → displayName` recording the first time a user named an
+  // AI-detected speaker (e.g. "Speaker A" -> "Oscar") — issue #323. That
+  // naming is an IDENTIFICATION, metadata about the recording like `title`,
+  // not a correction to its content, so it is deliberately NOT versioned:
+  // `materialize()` overlays this map onto any speaker still at its ingest
+  // default name (`Speaker <label>`) at ANY version, the same way a rename
+  // applies uniformly regardless of which version is being viewed. Keys are
+  // speaker ids with no FK — an entry for a speaker later merged or deleted
+  // is simply ignored on overlay, which is harmless and needs no cleanup.
+  speakerIdentities Json @default("{}") @map("speaker_identities") @db.JsonB
+
   // GENERATED ALWAYS AS (to_tsvector('english'::regconfig, coalesce(title,
   // ''))) STORED, plus a GIN index — issue #174, epic #164. Hand-written in
   // `20260915120000_add_search_vectors/migration.sql` (Prisma has no DSL for

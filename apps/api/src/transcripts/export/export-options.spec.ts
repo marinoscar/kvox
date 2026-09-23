@@ -127,4 +127,39 @@ describe('hashExportRequest', () => {
       }),
     );
   });
+
+  // ===========================================================================
+  // `contentFingerprint` — a transcript's speaker identities (#323)
+  // ===========================================================================
+
+  describe('contentFingerprint', () => {
+    it('is byte-for-byte the pre-#323 hash when omitted', () => {
+      // Every export row written before this feature, and every note export
+      // (which never passes one), must keep reusing exactly as they did.
+      expect(hashExportRequest(base)).toBe(
+        hashExportRequest({ ...base, contentFingerprint: undefined }),
+      );
+    });
+
+    it('is unchanged by an explicit null or empty string — only a truthy fingerprint counts', () => {
+      expect(hashExportRequest({ ...base, contentFingerprint: null })).toBe(
+        hashExportRequest(base),
+      );
+      expect(hashExportRequest({ ...base, contentFingerprint: '' })).toBe(
+        hashExportRequest(base),
+      );
+    });
+
+    it('changes the hash once a fingerprint is present', () => {
+      expect(hashExportRequest({ ...base, contentFingerprint: 'abc123abc123' })).not.toBe(
+        hashExportRequest(base),
+      );
+    });
+
+    it('changes the hash again when the fingerprint itself changes, at the same format/version/options', () => {
+      expect(hashExportRequest({ ...base, contentFingerprint: 'abc123abc123' })).not.toBe(
+        hashExportRequest({ ...base, contentFingerprint: 'def456def456' }),
+      );
+    });
+  });
 });

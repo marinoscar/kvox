@@ -5,6 +5,7 @@ import type { RequestUser } from '../../auth/interfaces/authenticated-user.inter
 import type { JobsService } from '../../jobs/jobs.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { TranscriptAccessService } from '../transcript-access.service';
+import { identitiesFingerprint } from '../editing/speaker-identity';
 import type { TranscriptMaterializeService } from '../transcript-materialize.service';
 import type { TranscriptObjectsService } from '../transcript-objects.service';
 import { JsonTranscriptExporter } from './json.exporter';
@@ -298,6 +299,63 @@ describe('requestExport', () => {
     });
     expect(where.expiresAt).toEqual({ gt: expect.any(Date) });
     expect(where.optionsHash).toEqual(expect.any(String));
+  });
+
+  // ===========================================================================
+  // The speaker identities fingerprint is part of the content address (#323)
+  // ===========================================================================
+
+  it('folds the speaker identities fingerprint into the reuse hash once a speaker is named', async () => {
+    const { service, prisma, access } = build();
+
+    access.require.mockResolvedValue({
+      transcript: { ...TRANSCRIPT, speakerIdentities: { A: 'Oscar' } },
+      role: 'owner',
+    });
+    primeCreate(prisma);
+
+    await service.requestExport('tr-1', { format: 'markdown' }, USER);
+
+    const data = prisma.transcriptExport.create.mock.calls[0][0].data as Record<string, unknown>;
+
+    expect(data.optionsHash).toBe(
+      hashExportRequest({
+        format: 'markdown',
+        version: 4,
+        options: { includeTimestamps: true, mergeConsecutive: false },
+        contentFingerprint: identitiesFingerprint({ A: 'Oscar' }),
+      }),
+    );
+    // Different from a request against the SAME transcript before anyone was
+    // named — an export rendered before the naming must not be handed back
+    // after it.
+    expect(data.optionsHash).not.toBe(
+      hashExportRequest({
+        format: 'markdown',
+        version: 4,
+        options: { includeTimestamps: true, mergeConsecutive: false },
+      }),
+    );
+  });
+
+  it('leaves the hash exactly as it was pre-#323 when nobody has named a speaker', async () => {
+    // `TRANSCRIPT` carries no `speakerIdentities` at all — the ordinary case
+    // for every transcript that predates this feature.
+    const { service, prisma } = build();
+
+    primeCreate(prisma);
+
+    await service.requestExport('tr-1', { format: 'markdown' }, USER);
+
+    const data = prisma.transcriptExport.create.mock.calls[0][0].data as Record<string, unknown>;
+
+    expect(data.optionsHash).toBe(
+      hashExportRequest({
+        format: 'markdown',
+        version: 4,
+        options: { includeTimestamps: true, mergeConsecutive: false },
+      }),
+    );
   });
 });
 

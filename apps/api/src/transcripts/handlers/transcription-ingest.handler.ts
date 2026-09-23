@@ -47,6 +47,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { isTerminalProviderError, ProviderAuthError } from '../../transcription/errors';
 import type { NormalizedTranscript } from '../../transcription/normalized-transcript';
 import { ORDINAL_GAP } from '../editing/ordinals';
+import { defaultSpeakerName } from '../editing/speaker-identity';
 import {
   TRANSCRIPTION_INGEST_JOB_TYPE,
   TRANSCRIPTION_THROTTLE_KEY,
@@ -392,7 +393,13 @@ export function buildSpeakers(
     // "Speaker A" rather than "A": the provider's label is an identifier, and
     // a transcript whose speaker column reads "A / B / C" is one a reader has
     // to decode. Renaming it is #28's job; this is the starting point.
-    displayName: `Speaker ${label}`,
+    //
+    // ⚠ THROUGH `defaultSpeakerName`, NEVER AN INLINE TEMPLATE (#323). Naming
+    // a speaker for the first time is unversioned precisely because it
+    // replaces THIS placeholder, and `isUnidentified` recognises the
+    // placeholder by comparing against that same function. Two spellings would
+    // make every speaker look already named, and every naming a version again.
+    displayName: defaultSpeakerName(label),
     colorIndex: index,
   }));
 }
