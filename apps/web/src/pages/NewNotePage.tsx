@@ -89,6 +89,8 @@ import {
   uploadNoteSourceDocument,
 } from '../services/notes';
 import type { NoteDocumentExtraction, NoteListItem } from '../services/notes';
+import { getNoteTemplate } from '../services/noteTemplates';
+import type { NoteTemplate } from '../services/noteTemplates';
 import { getTranscripts } from '../services/transcripts';
 import type { TranscriptListItem } from '../services/transcripts';
 import {
@@ -124,7 +126,20 @@ export function NewNotePage() {
   const [searchParams] = useSearchParams();
 
   const { config, keyConfigured, available, isLoading: aiLoading } = useAiConfig();
+  // ⚠ The DEFAULT hook: hidden templates are excluded (issue #311), so the
+  // pre-selection below can never land on one the user chose to hide.
   const { templates, isLoading: templatesLoading } = useNoteTemplates();
+
+  /**
+   * `?templateId=` — a template the link that brought the user here named.
+   *
+   * Read once, like `transcriptId` below. It may be one the user has HIDDEN,
+   * which the list above deliberately omits; an explicit request for it is
+   * still honoured, by reading it on its own (`requestedTemplate`) and offering
+   * it labelled as hidden, rather than silently swapping in a different one.
+   */
+  const [requestedTemplateId] = useState(() => searchParams.get('templateId'));
+  const [requestedTemplate, setRequestedTemplate] = useState<NoteTemplate | null>(null);
 
   /**
    * `?transcriptId=` — the whole reason a transcript page can offer "Make a
@@ -138,8 +153,12 @@ export function NewNotePage() {
    */
   const [draft, setDraft] = useState<NewNoteDraft>(() => {
     const transcriptId = searchParams.get('transcriptId');
+    const templateId = searchParams.get('templateId');
     const base = emptyNewNoteDraft();
-    return transcriptId ? { ...base, kind: 'transcript', transcriptId } : base;
+    const withTemplate = templateId ? { ...base, templateId } : base;
+    return transcriptId
+      ? { ...withTemplate, kind: 'transcript', transcriptId }
+      : withTemplate;
   });
 
   const [transcripts, setTranscripts] = useState<TranscriptListItem[]>([]);
@@ -217,6 +236,41 @@ export function NewNotePage() {
    * they were asked; every account has at least the seeded built-ins, so there
    * is always something correct to start on.
    */
+  /**
+   * The requested template, when the list does not carry it (it is hidden).
+   *
+   * A request that fails — the id is not the caller's to read — drops the
+   * choice, so the ordinary pre-selection below takes over instead of leaving
+   * the picker pointed at nothing.
+   */
+  useEffect(() => {
+    if (!requestedTemplateId || templatesLoading) return;
+    if (templates.some((template) => template.id === requestedTemplateId)) return;
+    let cancelled = false;
+    void getNoteTemplate(requestedTemplateId)
+      .then((template) => {
+        if (!cancelled && isMounted()) setRequestedTemplate(template);
+      })
+      .catch(() => {
+        if (cancelled || !isMounted()) return;
+        setDraft((current) =>
+          current.templateId === requestedTemplateId ? { ...current, templateId: '' } : current,
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isMounted, requestedTemplateId, templates, templatesLoading]);
+
+  /** What the picker offers: the list, plus the requested template if it is not in it. */
+  const templateOptions = useMemo(
+    () =>
+      requestedTemplate && !templates.some((template) => template.id === requestedTemplate.id)
+        ? [...templates, requestedTemplate]
+        : templates,
+    [requestedTemplate, templates],
+  );
+
   useEffect(() => {
     if (draft.templateId || templates.length === 0) return;
     setDraft((current) =>
@@ -308,13 +362,13 @@ export function NewNotePage() {
    * Otherwise the deployment's default.
    */
   const defaultModel = useMemo(() => {
-    const chosen = templates.find((template) => template.id === draft.templateId);
+    const chosen = templateOptions.find((template) => template.id === draft.templateId);
     const pinned = chosen?.model;
 
     if (pinned && models.some((model) => model.id === pinned)) return pinned;
 
     return config?.defaultModel ?? '';
-  }, [config, draft.templateId, models, templates]);
+  }, [config, draft.templateId, models, templateOptions]);
 
   const model = modelOverride ?? defaultModel;
 
@@ -557,26 +611,53 @@ export function NewNotePage() {
     </Stack>
   );
 
+  /**
+   * Every template hidden (issue #311): there is nothing to pick, and an empty
+   * Select would read as a broken form. Say why, and link to the one place the
+   * user can fix it. Generate stays disabled — no template, no note.
+   */
+  const noTemplatesToPick = !templatesLoading && templateOptions.length === 0;
+
   const templateStep = (
     <Stack spacing={1.5}>
-      <FormControl fullWidth size="small">
-        <InputLabel id="note-template">Template</InputLabel>
-        <Select
-          labelId="note-template"
-          label="Template"
-          value={draft.templateId}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, templateId: event.target.value }))
+      {noTemplatesToPick ? (
+        <Alert
+          severity="info"
+          action={
+            <Button component={RouterLink} to={TEMPLATE_MANAGER_PATH} color="inherit" size="small">
+              Manage templates
+            </Button>
           }
         >
-          {templates.map((template) => (
-            <MenuItem key={template.id} value={template.id}>
-              {template.name}
-              {template.builtIn ? ' (built-in)' : ''}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+          All your templates are hidden.
+        </Alert>
+      ) : (
+        <FormControl fullWidth size="small">
+          <InputLabel id="note-template">Template</InputLabel>
+          <Select
+            labelId="note-template"
+            label="Template"
+            // Only a value the menu actually offers: a requested id still being
+            // read would otherwise be an out-of-range value for a moment.
+            value={
+              templateOptions.some((template) => template.id === draft.templateId)
+                ? draft.templateId
+                : ''
+            }
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, templateId: event.target.value }))
+            }
+          >
+            {templateOptions.map((template) => (
+              <MenuItem key={template.id} value={template.id}>
+                {template.name}
+                {template.builtIn ? ' (built-in)' : ''}
+                {template.hidden ? ' (hidden)' : ''}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
       {templatesLoading && (
         <Typography variant="caption" color="text.secondary">
           Loading your templates…
@@ -593,7 +674,7 @@ export function NewNotePage() {
         The template decides the shape of the note — its sections, its tone, its
         length.{' '}
         <Link component={RouterLink} to={TEMPLATE_MANAGER_PATH}>
-          Manage your templates
+          Manage or hide templates
         </Link>
         .
       </Typography>
@@ -707,7 +788,13 @@ export function NewNotePage() {
                     <Button onClick={() => setActiveStep(index - 1)}>Back</Button>
                   )}
                   {index < steps.length - 1 ? (
-                    <Button variant="contained" onClick={() => setActiveStep(index + 1)}>
+                    <Button
+                      variant="contained"
+                      onClick={() => setActiveStep(index + 1)}
+                      // Nothing to choose on the Template step means nothing
+                      // to go on to (issue #311).
+                      disabled={step.label === 'Template' && noTemplatesToPick}
+                    >
                       Next
                     </Button>
                   ) : (

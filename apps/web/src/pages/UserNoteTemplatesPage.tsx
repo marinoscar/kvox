@@ -50,6 +50,8 @@ import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Typography from '@mui/material/Typography';
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -82,6 +84,37 @@ const PAGE_DESCRIPTION =
 /** How many recordings the source picker offers. Newest first, from the API's own order. */
 const SOURCE_PAGE_SIZE = 20;
 
+/** Which rows the list shows (issue #311). Remembered per viewer, per browser. */
+type VisibilityFilter = 'all' | 'shown' | 'hidden';
+
+const VISIBILITY_FILTER_KEY = 'noteTemplates.visibilityFilter';
+
+/**
+ * A per-viewer convenience, so every access is guarded: storage can be absent
+ * or throw (private windows, blocked site data), and the page must still work.
+ */
+function readVisibilityFilter(): VisibilityFilter {
+  try {
+    const stored = window.localStorage.getItem(VISIBILITY_FILTER_KEY);
+    return stored === 'shown' || stored === 'hidden' || stored === 'all' ? stored : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function writeVisibilityFilter(value: VisibilityFilter): void {
+  try {
+    window.localStorage.setItem(VISIBILITY_FILTER_KEY, value);
+  } catch {
+    // Not remembered this time; nothing else depends on it.
+  }
+}
+
+/** The hide/show snackbar: a result the user can undo, or the reason it failed. */
+type ToggleNotice =
+  | { kind: 'done'; template: NoteTemplate; hidden: boolean }
+  | { kind: 'error' };
+
 /** Which half of the page is on screen. A saved row and a new one share the editor. */
 type Mode = { kind: 'list' } | { kind: 'edit'; template: NoteTemplate | null };
 
@@ -104,7 +137,8 @@ export default function UserNoteTemplatesPage() {
     update,
     duplicate,
     archive,
-  } = useNoteTemplates();
+    setHidden,
+  } = useNoteTemplates({ includeHidden: true });
 
   const preview = useTemplatePreview();
   const isMounted = useIsMounted();
@@ -112,6 +146,50 @@ export default function UserNoteTemplatesPage() {
   const [mode, setMode] = useState<Mode>({ kind: 'list' });
   const [draft, setDraft] = useState<NoteTemplateDraft>(emptyDraft);
   const [message, setMessage] = useState<string | null>(null);
+  const [visibilityFilter, setVisibilityFilter] =
+    useState<VisibilityFilter>(readVisibilityFilter);
+  const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [toggleNotice, setToggleNotice] = useState<ToggleNotice | null>(null);
+
+  const hiddenCount = templates.filter((template) => template.hidden).length;
+  const shownCount = templates.length - hiddenCount;
+  const visibleTemplates = useMemo(
+    () =>
+      visibilityFilter === 'all'
+        ? templates
+        : templates.filter((template) => template.hidden === (visibilityFilter === 'hidden')),
+    [templates, visibilityFilter],
+  );
+
+  const changeVisibilityFilter = (value: VisibilityFilter | null) => {
+    // An exclusive group reports `null` when the selected button is pressed
+    // again; the filter always has a value, so that press is ignored.
+    if (!value) return;
+    setVisibilityFilter(value);
+    writeVisibilityFilter(value);
+  };
+
+  /**
+   * Hide or show one row. The flip itself (and its rollback) is the hook's;
+   * this only tracks the in-flight row and reports the outcome.
+   */
+  const toggleHidden = async (template: NoteTemplate, hidden: boolean) => {
+    setPendingIds((current) => new Set(current).add(template.id));
+    const ok = await setHidden(template.id, hidden);
+    if (!isMounted()) return;
+    setPendingIds((current) => {
+      const next = new Set(current);
+      next.delete(template.id);
+      return next;
+    });
+    setMessage(null);
+    setToggleNotice(ok ? { kind: 'done', template, hidden } : { kind: 'error' });
+  };
+
+  const closeToggleNotice = () => {
+    if (toggleNotice?.kind === 'error') clearActionError();
+    setToggleNotice(null);
+  };
 
   // ---------------------------------------------------------------------------
   // The preview's sources
@@ -284,7 +362,8 @@ export default function UserNoteTemplatesPage() {
             {templatesError}
           </Alert>
         )}
-        {actionError && (
+        {/* A failed hide/show reports through its own snackbar instead. */}
+        {actionError && toggleNotice?.kind !== 'error' && (
           <Alert severity="error" sx={{ mb: 3 }} onClose={clearActionError}>
             {actionError}
           </Alert>
@@ -310,16 +389,56 @@ export default function UserNoteTemplatesPage() {
               </Button>
             </Stack>
 
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Hidden templates don&apos;t appear when you create or regenerate a note. You can
+              still use them from here.
+            </Typography>
+
             {isTemplatesLoading ? (
               <LoadingSpinner />
             ) : (
-              <NoteTemplateList
-                templates={templates}
-                busy={isSaving}
-                onEdit={openExisting}
-                onDuplicate={(template) => void handleDuplicate(template)}
-                onArchive={(template) => void handleArchive(template)}
-              />
+              <>
+                {templates.length > 0 && hiddenCount === templates.length && (
+                  <Alert severity="warning" sx={{ mb: 2 }}>
+                    All templates are hidden — you&apos;ll need to unhide one to create a note.
+                  </Alert>
+                )}
+
+                {templates.length > 0 && (
+                  <ToggleButtonGroup
+                    exclusive
+                    size="small"
+                    value={visibilityFilter}
+                    onChange={(_event, value: VisibilityFilter | null) =>
+                      changeVisibilityFilter(value)
+                    }
+                    aria-label="Show templates"
+                    sx={{ mb: 2, flexWrap: 'wrap' }}
+                  >
+                    <ToggleButton value="all">All ({templates.length})</ToggleButton>
+                    <ToggleButton value="shown">Shown ({shownCount})</ToggleButton>
+                    <ToggleButton value="hidden">Hidden ({hiddenCount})</ToggleButton>
+                  </ToggleButtonGroup>
+                )}
+
+                {templates.length > 0 && visibleTemplates.length === 0 ? (
+                  <Typography color="text.secondary">
+                    {visibilityFilter === 'hidden'
+                      ? 'No hidden templates.'
+                      : 'No shown templates.'}
+                  </Typography>
+                ) : (
+                  <NoteTemplateList
+                    templates={visibleTemplates}
+                    busy={isSaving}
+                    onEdit={openExisting}
+                    onDuplicate={(template) => void handleDuplicate(template)}
+                    onArchive={(template) => void handleArchive(template)}
+                    onToggleHidden={(template) => void toggleHidden(template, !template.hidden)}
+                    pendingIds={pendingIds}
+                  />
+                )}
+              </>
             )}
           </>
         ) : (
@@ -379,6 +498,36 @@ export default function UserNoteTemplatesPage() {
           autoHideDuration={4000}
           onClose={() => setMessage(null)}
           message={message}
+        />
+
+        <Snackbar
+          open={!!toggleNotice}
+          autoHideDuration={toggleNotice?.kind === 'error' ? 6000 : 5000}
+          onClose={(_event, reason) => {
+            // Undo must stay reachable while the pointer is on its way to it.
+            if (reason === 'clickaway') return;
+            closeToggleNotice();
+          }}
+          message={
+            toggleNotice?.kind === 'done'
+              ? `“${toggleNotice.template.name}” ${toggleNotice.hidden ? 'hidden' : 'shown'}`
+              : actionError
+          }
+          action={
+            toggleNotice?.kind === 'done' ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  const { template, hidden } = toggleNotice;
+                  setToggleNotice(null);
+                  void toggleHidden(template, !hidden);
+                }}
+              >
+                Undo
+              </Button>
+            ) : undefined
+          }
         />
       </Box>
     </Container>

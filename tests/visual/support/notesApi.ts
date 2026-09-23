@@ -113,6 +113,8 @@ const TEMPLATES = [
     model: null,
     isArchived: false,
     builtIn: true,
+    // #310/#311: every template response carries the caller's `hidden` flag.
+    hidden: false,
     createdAt: FIXED_ISO,
     updatedAt: FIXED_ISO,
   },
@@ -128,6 +130,7 @@ const TEMPLATES = [
     model: null,
     isArchived: false,
     builtIn: false,
+    hidden: false,
     createdAt: FIXED_ISO,
     updatedAt: FIXED_ISO,
   },

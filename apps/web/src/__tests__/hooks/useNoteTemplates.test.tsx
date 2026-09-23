@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 vi.mock('../../services/noteTemplates', () => ({
   getNoteTemplate: vi.fn(),
@@ -8,11 +8,18 @@ vi.mock('../../services/noteTemplates', () => ({
   updateNoteTemplate: vi.fn(),
   duplicateNoteTemplate: vi.fn(),
   deleteNoteTemplate: vi.fn(),
+  hideNoteTemplate: vi.fn(),
+  unhideNoteTemplate: vi.fn(),
 }));
 
-import { getNoteTemplate } from '../../services/noteTemplates';
+import {
+  getNoteTemplate,
+  getNoteTemplates,
+  hideNoteTemplate,
+  unhideNoteTemplate,
+} from '../../services/noteTemplates';
 import type { NoteTemplate } from '../../services/noteTemplates';
-import { useNoteTemplateDetail } from '../../hooks/useNoteTemplates';
+import { useNoteTemplateDetail, useNoteTemplates } from '../../hooks/useNoteTemplates';
 import { ApiError } from '../../services/api';
 
 /**
@@ -34,6 +41,9 @@ import { ApiError } from '../../services/api';
  */
 
 const mockGetNoteTemplate = vi.mocked(getNoteTemplate);
+const mockGetNoteTemplates = vi.mocked(getNoteTemplates);
+const mockHideNoteTemplate = vi.mocked(hideNoteTemplate);
+const mockUnhideNoteTemplate = vi.mocked(unhideNoteTemplate);
 
 function template(overrides: Partial<NoteTemplate> = {}): NoteTemplate {
   return {
@@ -48,6 +58,7 @@ function template(overrides: Partial<NoteTemplate> = {}): NoteTemplate {
     model: null,
     isArchived: false,
     builtIn: false,
+    hidden: false,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
     ...overrides,
@@ -163,5 +174,151 @@ describe('useNoteTemplateDetail — error', () => {
 
     await waitFor(() => expect(result.current.state).toBe('error'));
     expect(result.current.error).toBe('This template could not be loaded');
+  });
+});
+
+// =============================================================================
+// useNoteTemplates — the list hook, and `setHidden` — issue #311
+// =============================================================================
+
+/**
+ * `setHidden` is OPTIMISTIC and its rollback is SCOPED TO ONE ROW. Both claims
+ * only really mean something under a concurrency scenario, so most of this
+ * suite drives the mocked service call by hand (resolving/rejecting a held
+ * promise) rather than letting `mockResolvedValue` settle immediately — that
+ * is the only way to observe the state the UI actually sees mid-flight.
+ */
+
+describe('useNoteTemplates — the default request', () => {
+  it('asks for the bare list, with no includeHidden, by default', async () => {
+    mockGetNoteTemplates.mockResolvedValue({ items: [template()], total: 1 });
+    const { result } = renderHook(() => useNoteTemplates());
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(mockGetNoteTemplates).toHaveBeenCalledWith({});
+  });
+
+  it('sends includeHidden: true when asked for', async () => {
+    mockGetNoteTemplates.mockResolvedValue({ items: [template()], total: 1 });
+    const { result } = renderHook(() => useNoteTemplates({ includeHidden: true }));
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(mockGetNoteTemplates).toHaveBeenCalledWith({ includeHidden: true });
+  });
+});
+
+describe('useNoteTemplates — setHidden, optimism and rollback', () => {
+  it('flips the row in place when the list includes hidden rows', async () => {
+    const rows = [template({ id: 'a', hidden: false }), template({ id: 'b', hidden: false })];
+    mockGetNoteTemplates.mockResolvedValue({ items: rows, total: rows.length });
+    let resolveHide!: () => void;
+    mockHideNoteTemplate.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveHide = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useNoteTemplates({ includeHidden: true }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let ok: Promise<boolean>;
+    act(() => {
+      ok = result.current.setHidden('a', true);
+    });
+
+    // Optimistic: the row is flipped BEFORE the request settles, and the other
+    // row is untouched.
+    await waitFor(() =>
+      expect(result.current.templates.find((t) => t.id === 'a')?.hidden).toBe(true),
+    );
+    expect(result.current.templates.find((t) => t.id === 'b')?.hidden).toBe(false);
+    expect(result.current.templates).toHaveLength(2);
+
+    resolveHide();
+    await expect(ok!).resolves.toBe(true);
+  });
+
+  it('removes the row locally when the default (hidden-excluding) list is hiding it', async () => {
+    const rows = [template({ id: 'a', hidden: false }), template({ id: 'b', hidden: false })];
+    mockGetNoteTemplates.mockResolvedValue({ items: rows, total: rows.length });
+    let resolveHide!: () => void;
+    mockHideNoteTemplate.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveHide = resolve;
+      }),
+    );
+    const { result } = renderHook(() => useNoteTemplates());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.templates).toHaveLength(2);
+
+    act(() => {
+      void result.current.setHidden('a', true);
+    });
+
+    // Optimistic REMOVAL — a default picker list never shows a hidden row.
+    await waitFor(() => expect(result.current.templates.map((t) => t.id)).toEqual(['b']));
+
+    resolveHide();
+  });
+
+  it('rolls back ONLY the row that failed, restored at its original index, on a 500', async () => {
+    const rows = [
+      template({ id: 'a', hidden: false }),
+      template({ id: 'b', hidden: false }),
+      template({ id: 'c', hidden: false }),
+    ];
+    mockGetNoteTemplates.mockResolvedValue({ items: rows, total: rows.length });
+    mockHideNoteTemplate.mockRejectedValue(new ApiError('Server error', 500));
+    const { result } = renderHook(() => useNoteTemplates());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    // Hide the MIDDLE row, so "restored at its original index" is a real
+    // assertion rather than one a push-to-the-end implementation would also
+    // satisfy.
+    let ok: boolean;
+    await act(async () => {
+      ok = await result.current.setHidden('b', true);
+    });
+
+    expect(ok!).toBe(false);
+    // Back exactly where it was, not appended at the end.
+    expect(result.current.templates.map((t) => t.id)).toEqual(['a', 'b', 'c']);
+    expect(result.current.templates.find((t) => t.id === 'b')?.hidden).toBe(false);
+    // `messageFor` prefers the ApiError's own message for a non-403/404 status.
+    expect(result.current.actionError).toBe('Server error');
+  });
+
+  it('rolls back an in-place flip (includeHidden list) on failure too', async () => {
+    const rows = [template({ id: 'a', hidden: true }), template({ id: 'b', hidden: false })];
+    mockGetNoteTemplates.mockResolvedValue({ items: rows, total: rows.length });
+    mockUnhideNoteTemplate.mockRejectedValue(new ApiError('Server error', 500));
+    const { result } = renderHook(() => useNoteTemplates({ includeHidden: true }));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let ok: boolean;
+    await act(async () => {
+      ok = await result.current.setHidden('a', false);
+    });
+
+    expect(ok!).toBe(false);
+    expect(result.current.templates.find((t) => t.id === 'a')?.hidden).toBe(true);
+    expect(result.current.actionError).toBe('Server error');
+  });
+
+  it('reports "This template no longer exists." on a 404, distinct from every other failure', async () => {
+    const rows = [template({ id: 'a', hidden: false })];
+    mockGetNoteTemplates.mockResolvedValue({ items: rows, total: rows.length });
+    mockHideNoteTemplate.mockRejectedValue(new ApiError('Not found', 404));
+    const { result } = renderHook(() => useNoteTemplates());
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let ok: boolean;
+    await act(async () => {
+      ok = await result.current.setHidden('a', true);
+    });
+
+    expect(ok!).toBe(false);
+    expect(result.current.actionError).toBe('This template no longer exists.');
   });
 });

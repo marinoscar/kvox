@@ -33,12 +33,16 @@
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
 import { NOTE_OUTPUT_FORMAT_LABELS } from '../../services/noteTemplates';
 import type { NoteTemplate } from '../../services/noteTemplates';
@@ -49,6 +53,14 @@ export interface NoteTemplateListProps {
   onEdit: (template: NoteTemplate) => void;
   onDuplicate: (template: NoteTemplate) => void;
   onArchive: (template: NoteTemplate) => void;
+  /**
+   * Hide a shown row, or show a hidden one (issue #311). Offered on EVERY row,
+   * built-ins included: hiding is the viewer's preference, not an edit of the
+   * template, so the "absent, not disabled" rule for Edit does not apply.
+   */
+  onToggleHidden?: (template: NoteTemplate) => void;
+  /** Rows whose hide/show request is in flight; their toggle is disabled. */
+  pendingIds?: ReadonlySet<string>;
 }
 
 export function NoteTemplateList({
@@ -57,6 +69,8 @@ export function NoteTemplateList({
   onEdit,
   onDuplicate,
   onArchive,
+  onToggleHidden,
+  pendingIds,
 }: NoteTemplateListProps) {
   if (templates.length === 0) {
     return (
@@ -77,7 +91,14 @@ export function NoteTemplateList({
           >
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                <Typography variant="subtitle1" component="h3">
+                {/* A hidden row's name is secondary TEXT colour rather than a
+                    faded row: opacity would drop the contrast of the controls
+                    too, which still work. */}
+                <Typography
+                  variant="subtitle1"
+                  component="h3"
+                  color={template.hidden ? 'text.secondary' : undefined}
+                >
                   {template.name}
                 </Typography>
                 {template.builtIn && (
@@ -92,6 +113,7 @@ export function NoteTemplateList({
                   />
                 )}
                 {template.isArchived && <Chip size="small" label="Archived" color="warning" />}
+                {template.hidden && <Chip size="small" label="Hidden" variant="outlined" />}
               </Stack>
 
               {template.description && (
@@ -108,7 +130,30 @@ export function NoteTemplateList({
               </Typography>
             </Box>
 
-            <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: 'wrap' }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}
+            >
+              {onToggleHidden && (
+                <Tooltip
+                  title={template.hidden ? 'Show in template pickers' : 'Hide from template pickers'}
+                >
+                  {/* The span keeps the tooltip working while the button is
+                      disabled (MUI cannot attach listeners to a disabled one). */}
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-pressed={template.hidden}
+                      aria-label={`${template.hidden ? 'Show' : 'Hide'} ${template.name}`}
+                      onClick={() => onToggleHidden(template)}
+                      disabled={pendingIds?.has(template.id) ?? false}
+                    >
+                      {template.hidden ? <VisibilityIcon /> : <VisibilityOffIcon />}
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )}
               {/* ⚠ ONLY on owned rows. See the header — a built-in's Edit is
                   absent, not disabled. */}
               {!template.builtIn && (

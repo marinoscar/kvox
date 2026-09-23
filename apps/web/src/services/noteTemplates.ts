@@ -105,6 +105,13 @@ export interface NoteTemplate {
   model: string | null;
   isArchived: boolean;
   builtIn: boolean;
+  /**
+   * Hidden from the CALLER's template pickers (issue #311). A per-viewer
+   * preference, not a property of the template: a built-in can be hidden too,
+   * and hiding never changes what anybody else sees. The list endpoint omits
+   * hidden rows unless asked with `includeHidden`.
+   */
+  hidden: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -204,12 +211,21 @@ export interface NoteTemplatePreview {
 
 const BASE = '/note-templates';
 
-/** `GET /api/note-templates` — `note_templates:read`. */
+/**
+ * `GET /api/note-templates` — `note_templates:read`.
+ *
+ * Hidden templates are EXCLUDED unless `includeHidden` is set — the default is
+ * what a picker wants, so only the template manager has to ask for more. Each
+ * flag is sent only when set, so the default request stays the bare path.
+ */
 export async function getNoteTemplates(
-  options: { includeArchived?: boolean } = {},
+  options: { includeArchived?: boolean; includeHidden?: boolean } = {},
 ): Promise<NoteTemplateList> {
-  const suffix = options.includeArchived ? '?includeArchived=true' : '';
-  return api.get<NoteTemplateList>(`${BASE}${suffix}`);
+  const params = new URLSearchParams();
+  if (options.includeArchived) params.set('includeArchived', 'true');
+  if (options.includeHidden) params.set('includeHidden', 'true');
+  const query = params.toString();
+  return api.get<NoteTemplateList>(`${BASE}${query ? `?${query}` : ''}`);
 }
 
 /** `GET /api/note-templates/{id}`. Anything not yours and not a built-in is a 404. */
@@ -237,6 +253,21 @@ export async function deleteNoteTemplate(
   id: string,
 ): Promise<DeleteNoteTemplateResult> {
   return api.delete<DeleteNoteTemplateResult>(`${BASE}/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `PUT /api/note-templates/{id}/hidden` — **204**, idempotent.
+ *
+ * Allowed on built-ins (hiding is the caller's preference, not an edit of the
+ * row); a template the caller cannot read is a 404.
+ */
+export async function hideNoteTemplate(id: string): Promise<void> {
+  await api.put<void>(`${BASE}/${encodeURIComponent(id)}/hidden`, {});
+}
+
+/** `DELETE /api/note-templates/{id}/hidden` — **204**, idempotent. */
+export async function unhideNoteTemplate(id: string): Promise<void> {
+  await api.delete<void>(`${BASE}/${encodeURIComponent(id)}/hidden`);
 }
 
 /**

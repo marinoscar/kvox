@@ -1720,6 +1720,26 @@ and no shared column.
   Reusing `is_archived` would mean the first user to hide a built-in
   archives it for the entire deployment.
 
+**Web (issue #311).** The template manager
+(`apps/web/src/pages/UserNoteTemplatesPage.tsx`,
+`apps/web/src/components/notes/NoteTemplateList.tsx`) exposes this API
+through a per-row eye toggle (own templates and built-ins alike), a "Hidden"
+chip, and an All/Shown/Hidden filter whose counts and last-selected tab are
+remembered per browser in `localStorage` — a viewer preference about a
+viewer preference, not server state. Toggling shows a snackbar with an Undo
+action, and hiding every template surfaces a standing warning rather than
+letting the list go silently empty. The picker in
+`apps/web/src/pages/NewNotePage.tsx` reads
+`useNoteTemplates({ includeHidden })` (which applies `setHidden` optimistically,
+rolling back the one affected row on failure) and, matching the API's
+listing-not-access-control posture above, simply excludes hidden templates
+from its default choices and never preselects one — except a `?templateId=`
+deep link, which may still select a hidden template and labels it
+"(hidden)" in the picker so the choice is visible rather than mysterious. A
+caller whose entire library is hidden sees an "All your templates are
+hidden" empty state linking to the manager ("Manage or hide templates")
+instead of an empty picker with no way out.
+
 ## 8. Export
 
 ### 8.1 The registry is extracted, not re-implemented
