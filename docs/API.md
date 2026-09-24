@@ -4171,7 +4171,8 @@ be an N+1. See [`docs/specs/notes.md`](specs/notes.md) §4.8.
 #### GET /notes/{id}/versions
 Every save, newest first, cursor-paginated. `author: null` means the AI —
 version 1 is always the provider's own output. Nothing in this API ever
-deletes a version row short of the note being purged.
+deletes a version row short of the note being purged. Each row carries its
+own **`bodyFormat`** (issue #337) — see below.
 
 **Requires:** `notes:read`
 
@@ -4184,13 +4185,19 @@ every version holds the whole body. **Version 1 is always retrievable.**
 
 **Requires:** `notes:read`
 
-⚠ **`bodyFormat` is the note's, not the version's** (issue #334):
-`note_versions` carries no format column of its own, so this response reports
-the note's *current* `bodyFormat`. A note whose current format differs from
-what an older body was actually written in — a regenerate that switched the
-generating template's `bodyFormat` — reports every version, old and new, with
-today's format. There is no way to ask "what format was version 3 rendered
-in at the time."
+**`bodyFormat` is this version's own format** (issue #337), fixed when the
+version was written — not a live read of the note's current `bodyFormat`. A
+generation commit records the template's format; a manual edit records the
+note's current format; a restore records the *restored* version's own
+format. So a note whose current format differs from what an older version
+was actually written in — a regenerate that switched the generating
+template's `bodyFormat` — still reports each older version with the format
+it was actually written in, and restoring that version brings its format
+back onto the note along with its body (see `POST
+/notes/{id}/versions/{version}/restore` below). Before issue #337,
+`note_versions` carried no format column of its own and every version was
+reported with the note's current format instead; the column is now
+backfilled `'markdown'` for every pre-#337 version.
 
 ---
 
@@ -4365,6 +4372,13 @@ At most **100** notes per call.
 whose body is the old one's, recording `restoredFromVersion`. Every version
 in between stays exactly as it was.
 
+**Restores the version's `bodyFormat` too** (issue #337), not just its body:
+the new version is written with the restored version's own format, and
+`notes.bodyFormat` is set to match in the same write — so restoring, say, a
+markdown version into a note a later regeneration had switched to
+`plain_text` correctly brings the note back to markdown along with the text,
+rather than leaving markdown source labelled `plain_text`.
+
 **Requires:** `notes:write`
 
 **Request:** `{ "baseVersion": 5, "summary": "Reverted to Tuesday's draft" }` — `baseVersion` **must equal** the note's current version; a mismatch is a **409** naming `details.currentVersion`.
@@ -4403,7 +4417,11 @@ unexpired export already exists. The `reused` field on the body says which
 happened. Every rendered format carries a **provenance header** naming the
 source, the template used, the version exported and the generation
 timestamp — there is no option to suppress it. Exports expire after **7
-days**.
+days**. Rendering reads the exported **version's own** `bodyFormat` (issue
+#337) — a markdown version exports as markdown, and a `plain_text` version
+renders literally, regardless of what the note's current format is now. The
+`(noteId, version, format, options)` reuse key already fixes the version, so
+it fixes the format too, at no extra cost.
 
 **Error Cases:**
 - `400` - Unknown format, or an option that format does not accept

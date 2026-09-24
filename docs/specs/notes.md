@@ -49,6 +49,11 @@
 > editor around it, and reverses #58's textarea-only decision at the user's
 > request — see §10.
 >
+> **Issue #337** makes that format per-version: `note_versions.body_format`
+> records each version's own format rather than deferring to the note's
+> current one, and a restore brings the format back with the body — see
+> §4.5 and §10.5.
+>
 > **Suggested build order** (from the epic): #46 (this document) →
 > (#47 provider framework + keys, #48 data model + RBAC + built-ins, both
 > depending only on this document) → (#49 generation pipeline, #51 document
@@ -1237,7 +1242,8 @@ exactly in spirit, with one deliberate structural difference:
 |---|---|
 | `id`, `note_id` (**Cascade**), `version` (int) | |
 | `kind` (`'ai_generated' \| 'edit' \| 'restore'`) | |
-| `body` (`@db.Text`) | **The full body**, not an operation log — see below. Carries **no format column of its own** — `GET /api/notes/:id/versions/:version` reports the *note's current* `body_format` (§10) for every version, since #334 landed after this table shipped and a per-version format was not worth a migration for the one known consequence (a regenerate that switches format relabels older versions too) |
+| `body` (`@db.Text`) | **The full body**, not an operation log — see below |
+| `body_format` (default `'markdown'`, issue #337) | **This version's own format**, fixed when the version was written — not a live read of the note's current `body_format` (§10, §10.5). A generation commit records the template's format; an edit records the note's current format (an edit changes prose, not syntax); a restore records the **target** version's format, which the same write also copies back onto `notes.body_format` (§10.5). Plain `text`, not an enum, same reasoning as `notes.body_format` |
 | `summary?` | A short, one-line description of what this version changed — *"Regenerated with a shorter, more formal tone"*; *"Restored to version 1"*; *"Fixed the action items list"* — read by the version history list so it can render one line per row without loading `body` for every version listed, the same "a list renders a snippet, not the whole document" reasoning §4.1 makes for denormalizing `notes.body` itself, applied here to history rather than to the current row |
 | `author_id?` (FK `users`, `SetNull`) | `NULL` means "the AI," the identical convention `transcript_versions.author_id` uses |
 | `generation_id?` (FK `note_generations`, `SetNull`) | Which generation produced this version, for `kind: 'ai_generated'`; `NULL` for `edit`/`restore` |
@@ -1822,7 +1828,7 @@ interface NoteExportDocument {
   noteId: string;
   title: string;
   body: string;              // the version's body, as stored
-  bodyFormat: 'markdown' | 'plain_text'; // the note's format (§10, issue #334); unknown reads as markdown
+  bodyFormat: 'markdown' | 'plain_text'; // the exported VERSION's own format (§10.5, issue #337); unknown reads as markdown
   version: number;
   createdAt: Date;           // when this version was saved
   exportedAt: Date;
@@ -2121,6 +2127,48 @@ Two more surfaces exist only because of #334, both `apps/web`:
   `NoteBodyEditor` shows it exactly one view, a plain textarea in the body
   font rather than monospace, with no toggle at all.
 
+### 10.5 Per-version format, and the restore rule (issue #337)
+
+**History of the change**: #334 introduced `bodyFormat` onto `notes` and
+`note_templates` only — `note_versions` carried no format column of its own,
+so every version of a note was reported with whatever format the note
+currently held. #337 makes the format per-version: `note_versions
+.body_format` (§4.5) records each version's own format at the moment it was
+written, and `GET /api/notes/:id/versions`/`:version` (and the export path,
+§8.2) now read the **version's** format rather than the note's current one.
+
+Each version-writing path records the format that actually describes the
+body it is about to write, mirroring exactly how it already decides `body`:
+
+- **A generation commit** (`NoteGenerationService.commit`, §10.1) writes the
+  **template's** format — the same value written to `notes.body_format` in
+  the same transaction, so the two never disagree for the version that just
+  became current.
+- **An edit** (`PATCH /api/notes/:id` with a body) writes the **note's
+  current** format — an edit changes the words, not the syntax they are
+  written in, so the version it appends is labelled exactly as the note
+  already was.
+- **A restore** writes the **target version's own** `body_format` — not the
+  note's current one. This is the rule the per-version column exists to make
+  correct: before #337, restoring an older markdown version into a note a
+  later regeneration had switched to `plain_text` left the restored markdown
+  body permanently mislabelled `plain_text` (rendered literally instead of
+  parsed, exported the same way) until the *next* regeneration or edit
+  happened to fix it. Since the restored version's `body_format` travels with
+  its `body`, the restore write sets **both** the new version's `body_format`
+  and `notes.body_format` to the target version's format, in the same
+  transaction that copies the target's body forward — the identical
+  "written together or not at all" discipline §10.1 already establishes for
+  a generation commit.
+
+The export path benefits for free: `POST /api/notes/:id/exports` renders the
+**version's** `body_format` (§8.2's `NoteExportDocument.bodyFormat`), so an
+export of an older markdown version stays markdown even after a later
+regeneration or restore has changed what the note's current format is. The
+`(note_id, version, format, options_hash)` reuse key (§4.6) already fixes the
+version, so it needed no format term added — two requests for the same
+version were always going to render in that version's one format.
+
 ## Notifying somebody about a note
 
 Three events, added to `NOTIFICATION_EVENTS`
@@ -2306,6 +2354,6 @@ the list this spec was designed against — the same purpose
 | A note's `bodyFormat` is set at create from the template and, on (re)generation, is written by `NoteGenerationService.commit` in the same transaction as `body` — never at regenerate request time | `apps/api/src/notes/notes.service.spec.ts` and `note-generation.service.spec.ts`, asserting the note's `body_format` is unchanged immediately after `POST /:id/regenerate` is accepted and only updates once the job commits |
 | `assemblePrompt`'s Markdown closing line is byte-for-byte unchanged when `templateBodyFormat` is absent, `'markdown'`, or unrecognised; `'plain_text'` produces `PLAIN_TEXT_CLOSING_LINE` and leaves the user role untouched | `apps/api/src/notes/generation/prompt.spec.ts` |
 | `parseBody`/`parsePlainText` recognise no Markdown syntax at all — a `plain_text` body's `#`/`*`/`-` characters and line breaks reach the PDF and Word output literally — while a `markdown` body renders exactly as before | `apps/api/src/notes/export/markdown-ast.spec.ts`, `pdf.exporter.spec.ts`, `word.exporter.spec.ts` |
-| `GET /api/notes/:id/versions/:version` reports the note's *current* `bodyFormat` for every version, including ones written before a regenerate switched format | `apps/api/test/notes/notes.integration.spec.ts` |
+| `GET /api/notes/:id/versions/:version` reports each version's *own* `bodyFormat`, fixed when it was written; a generation commit records the template's format, an edit the note's current format, and a restore the *target* version's format — which the same write also copies onto `notes.body_format` (issue #337) | `apps/api/src/notes/notes.service.spec.ts` and `apps/api/test/notes/notes.integration.spec.ts` |
 | A `plain_text` note's copy button offers only its raw text (no format menu); a `markdown` note's default copy carries both `text/html` and `text/plain`, read from the rendered `MarkdownView` element | `apps/web/src/__tests__/components/notes/NoteCopyButton.test.tsx` (or equivalent) |
 | The visual editor is a view over the same draft string the Markdown tab edits — switching views loses no text — and a `plain_text` note shows no view toggle at all | `apps/web/src/__tests__/pages/NotePage.test.tsx`, extended |
