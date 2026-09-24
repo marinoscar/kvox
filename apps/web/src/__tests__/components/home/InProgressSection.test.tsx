@@ -18,7 +18,10 @@ import {
   InProgressSection,
   dedupeServerItems,
 } from '../../../components/home/InProgressSection';
-import { UploadSessionMismatchError } from '../../../services/uploadSessions';
+import {
+  UploadSessionGoneError,
+  UploadSessionMismatchError,
+} from '../../../services/uploadSessions';
 import { AXE_OPTIONS, manager, note, session, transcript, upload } from './homeFixtures';
 
 /**
@@ -308,6 +311,27 @@ describe('InProgressSection — an interrupted session', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/does not match/i);
+  });
+
+  it('shows no error when the upload turns out to be gone (issue #339)', async () => {
+    // The manager has already discarded the session; the row is on its way
+    // out and an error about it would describe something that no longer exists.
+    const resumeFromSession = vi
+      .fn()
+      .mockRejectedValue(new UploadSessionGoneError(session()));
+    mockUseUploadManager.mockReturnValue(
+      manager({ sessions: [session()], resumeFromSession }),
+    );
+    const user = userEvent.setup();
+    render(<InProgressSection items={[]} />);
+
+    await user.upload(
+      screen.getByLabelText('Choose board-meeting.m4a again to resume'),
+      new File(['x'], 'board-meeting.m4a'),
+    );
+
+    await waitFor(() => expect(resumeFromSession).toHaveBeenCalled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('reports an unexpected failure in plain words', async () => {
