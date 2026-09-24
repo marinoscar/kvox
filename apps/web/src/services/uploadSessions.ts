@@ -201,6 +201,22 @@ export class UploadSessionMismatchError extends Error {
 }
 
 /**
+ * The upload a session points at no longer exists on the server — issue #339.
+ *
+ * Since #322 the server purges a transcript whose upload was abandoned, which
+ * takes its storage object with it, so a persisted session can outlive the
+ * only thing it could ever resume into. By the time this is thrown the
+ * session has ALREADY been discarded, so its card is gone: a caller treats it
+ * as "nothing to show", never as an error message about a row that vanished.
+ */
+export class UploadSessionGoneError extends Error {
+  constructor(readonly session: UploadSessionRecord) {
+    super(`The upload of "${session.fileName}" no longer exists on the server.`);
+    this.name = 'UploadSessionGoneError';
+  }
+}
+
+/**
  * Is this the same file the session was started for?
  *
  * Name + size + `lastModified`, all three.

@@ -23,7 +23,13 @@ import {
   type UploadManagerContextValue,
 } from '../../contexts/UploadManagerContext';
 import { useUploadManager } from '../../hooks/useUploadManager';
-import { UploadSessionMismatchError } from '../../services/uploadSessions';
+import {
+  UploadSessionGoneError,
+  UploadSessionMismatchError,
+  listUploadSessions,
+  saveUploadSession,
+  type UploadSessionRecord,
+} from '../../services/uploadSessions';
 import { KeepScreenAwakeToggle } from '../../components/upload/KeepScreenAwakeToggle';
 import { createFakeXhrFactory, type FakeXhrController } from '../utils/fakeXhr';
 import { installFakeIndexedDB, type FakeIndexedDbControl } from '../utils/fakeIndexedDB';
@@ -357,6 +363,168 @@ describe('UploadManagerProvider', () => {
 
       // Nothing was uploaded, and nothing was asked of the API: the check runs
       // before a single byte of the wrong file can reach the object.
+      expect(xhr.requests).toHaveLength(0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+
+  describe('discarding sessions whose transcript is gone (issue #339)', () => {
+    const TRANSCRIPT_ID = 't-stale';
+    let transcriptRequests: number;
+
+    const storedSession: UploadSessionRecord = {
+      objectId: 'obj-stale',
+      transcriptId: TRANSCRIPT_ID,
+      fileName: 'OpenAI.m4a',
+      size: PART_SIZE * TOTAL_PARTS,
+      lastModified: 111,
+      partSize: PART_SIZE,
+      createdAt: 1,
+    };
+
+    /** Answer `GET /api/transcripts/:id` with whatever `respond` returns. */
+    function transcriptAnswers(respond: () => Response) {
+      transcriptRequests = 0;
+      server.use(
+        http.get(`${API}/transcripts/:id`, () => {
+          transcriptRequests += 1;
+          return respond();
+        }),
+      );
+    }
+
+    function transcriptWithStatus(status: string) {
+      return () => HttpResponse.json({ data: { id: TRANSCRIPT_ID, status } });
+    }
+
+    async function renderWithSession() {
+      // Persisted by a "previous visit", before the provider ever mounts.
+      await saveUploadSession(storedSession);
+      render(
+        <MemoryRouter>
+          <UploadManagerProvider>
+            <Capture />
+          </UploadManagerProvider>
+        </MemoryRouter>,
+      );
+      await flushUi();
+    }
+
+    /** Wait for the reconcile request, then let whatever it decided settle. */
+    async function afterReconcile() {
+      await waitFor(() => expect(transcriptRequests).toBeGreaterThan(0));
+      await flushUi();
+      await flushUi();
+    }
+
+    it('discards a session whose transcript answers 404 (purged)', async () => {
+      transcriptAnswers(() =>
+        HttpResponse.json({ message: 'Not found' }, { status: 404 }),
+      );
+      await renderWithSession();
+
+      await waitFor(() => expect(screen.getByTestId('sessions')).toHaveTextContent('0'));
+      expect(await listUploadSessions()).toEqual([]);
+      expect(transcriptRequests).toBe(1);
+    });
+
+    it('discards a session whose transcript is being deleted', async () => {
+      transcriptAnswers(transcriptWithStatus('deleting'));
+      await renderWithSession();
+
+      await waitFor(() => expect(screen.getByTestId('sessions')).toHaveTextContent('0'));
+      expect(await listUploadSessions()).toEqual([]);
+    });
+
+    it('discards a session whose transcript no longer needs its upload', async () => {
+      transcriptAnswers(transcriptWithStatus('processing'));
+      await renderWithSession();
+
+      await waitFor(() => expect(screen.getByTestId('sessions')).toHaveTextContent('0'));
+    });
+
+    it('keeps a session whose transcript is still uploading — Resume is valid', async () => {
+      transcriptAnswers(transcriptWithStatus('uploading'));
+      await renderWithSession();
+      await afterReconcile();
+
+      expect(screen.getByTestId('sessions')).toHaveTextContent('1');
+      expect(await listUploadSessions()).toHaveLength(1);
+    });
+
+    it('keeps the session on a network error — it is retried on the next reconcile', async () => {
+      transcriptAnswers(() => HttpResponse.error());
+      await renderWithSession();
+      await afterReconcile();
+
+      expect(screen.getByTestId('sessions')).toHaveTextContent('1');
+      expect(await listUploadSessions()).toHaveLength(1);
+    });
+
+    it('keeps the session on a server error', async () => {
+      transcriptAnswers(() => HttpResponse.json({ message: 'boom' }, { status: 503 }));
+      await renderWithSession();
+      await afterReconcile();
+
+      expect(screen.getByTestId('sessions')).toHaveTextContent('1');
+    });
+
+    it('never asks about a session with no transcript attached', async () => {
+      transcriptAnswers(() => HttpResponse.json({ message: 'Not found' }, { status: 404 }));
+      await saveUploadSession({ ...storedSession, transcriptId: null });
+      render(
+        <MemoryRouter>
+          <UploadManagerProvider>
+            <Capture />
+          </UploadManagerProvider>
+        </MemoryRouter>,
+      );
+      await flushUi();
+      await flushUi();
+
+      expect(transcriptRequests).toBe(0);
+      expect(screen.getByTestId('sessions')).toHaveTextContent('1');
+    });
+
+    it('reconciles again when the tab becomes visible', async () => {
+      let status = 'uploading';
+      transcriptAnswers(() => transcriptWithStatus(status)());
+      await renderWithSession();
+      await afterReconcile();
+      expect(screen.getByTestId('sessions')).toHaveTextContent('1');
+
+      // Hours in a background tab: the purge ran meanwhile.
+      status = 'deleting';
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+
+      await waitFor(() => expect(screen.getByTestId('sessions')).toHaveTextContent('0'));
+      expect(transcriptRequests).toBe(2);
+    });
+
+    it('discards the session when Resume finds the upload gone', async () => {
+      // The transcript check still says "uploading" (a purge racing the
+      // reconcile), but the object itself is already gone.
+      transcriptAnswers(transcriptWithStatus('uploading'));
+      server.use(
+        http.get(`${API}/storage/objects/:id/upload/status`, () =>
+          HttpResponse.json({ message: 'Not found' }, { status: 404 }),
+        ),
+      );
+      await renderWithSession();
+      await afterReconcile();
+
+      const session = manager.sessions[0];
+      await act(async () => {
+        await expect(
+          manager.resumeFromSession(session, makeFile('OpenAI.m4a'), { runtime }),
+        ).rejects.toBeInstanceOf(UploadSessionGoneError);
+      });
+
+      expect(screen.getByTestId('sessions')).toHaveTextContent('0');
+      expect(await listUploadSessions()).toEqual([]);
       expect(xhr.requests).toHaveLength(0);
     });
   });
