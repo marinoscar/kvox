@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { render } from '../../utils/test-utils';
@@ -484,6 +484,30 @@ describe('TranscriptionSettingsPage', () => {
 
       await waitFor(() => expect(save).toHaveBeenCalled());
       expect(save.mock.calls[0][0].abandonedUploadHours).toBe(48);
+    });
+
+    it('puts the abandoned-upload window in its own Uploads card, not Processing (issue #339)', async () => {
+      setHook();
+      render(<TranscriptionSettingsPage />);
+
+      const uploadsHeading = await screen.findByRole('heading', { name: 'Uploads' });
+      const uploadsCard = uploadsHeading.closest('.MuiPaper-root') as HTMLElement;
+      expect(uploadsCard).not.toBeNull();
+      expect(
+        within(uploadsCard).getByLabelText('Abandoned upload cleanup (hours)'),
+      ).toBeInTheDocument();
+      expect(
+        within(uploadsCard).getByText(/never resumed are deleted automatically/),
+      ).toBeInTheDocument();
+
+      const processingCard = screen
+        .getByRole('heading', { name: 'Processing' })
+        .closest('.MuiPaper-root') as HTMLElement;
+      expect(
+        within(processingCard).queryByLabelText('Abandoned upload cleanup (hours)'),
+      ).not.toBeInTheDocument();
+      // Directly after Processing: the next card in document order.
+      expect(processingCard.nextElementSibling).toBe(uploadsCard);
     });
 
     it('refuses to save an out-of-range abandoned-upload window', async () => {

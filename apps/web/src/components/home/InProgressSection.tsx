@@ -81,7 +81,10 @@ import { useNavigate } from 'react-router-dom';
 import { useUploadManager } from '../../hooks/useUploadManager';
 import { liveUploadTranscriptIds } from '../../hooks/useLiveUploadTranscriptIds';
 import type { ManagedUpload } from '../../hooks/useUploadManager';
-import { UploadSessionMismatchError } from '../../services/uploadSessions';
+import {
+  UploadSessionGoneError,
+  UploadSessionMismatchError,
+} from '../../services/uploadSessions';
 import type { UploadSessionRecord } from '../../services/uploadSessions';
 import type { NoteListItem } from '../../services/notes';
 import type { TranscriptListItem } from '../../services/transcripts';
@@ -244,6 +247,10 @@ function SessionRow({ session }: { session: UploadSessionRecord }) {
       try {
         await resumeFromSession(session, file);
       } catch (err) {
+        // Issue #339: the upload was purged server-side. The manager has
+        // already discarded this session, so this row is on its way out —
+        // an error message on it would describe something that no longer exists.
+        if (err instanceof UploadSessionGoneError) return;
         setError(
           err instanceof UploadSessionMismatchError
             ? err.message

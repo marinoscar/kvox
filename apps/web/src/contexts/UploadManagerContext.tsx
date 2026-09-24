@@ -60,8 +60,11 @@ import {
   deleteUploadSession,
   listUploadSessions,
   saveUploadSession,
+  UploadSessionGoneError,
   type UploadSessionRecord,
 } from '../services/uploadSessions';
+import { ApiError } from '../services/api';
+import { getTranscript } from '../services/transcripts';
 import { useScreenWakeLock } from '../hooks/useScreenWakeLock';
 import { useIsMounted } from '../hooks/useIsMounted';
 
@@ -149,6 +152,41 @@ export const UploadManagerContext = createContext<UploadManagerContextValue | nu
 /** Phases that mean "this upload still needs the network (and the screen)". */
 const ACTIVE_PHASES = new Set(['uploading', 'completing']);
 
+/**
+ * Phases in which an engine in THIS tab still owns its upload — the user can
+ * pause, resume or cancel it right here. Reconciliation (#339) never touches
+ * one of these: this tab is the authority on it, not a persisted record.
+ */
+const LIVE_HERE_PHASES = new Set(['idle', 'uploading', 'paused', 'completing']);
+
+/**
+ * Is the transcript behind a persisted session gone, or past needing its
+ * upload? Issue #339.
+ *
+ * `true` ONLY on a definite answer from the server:
+ *
+ *   * **404** — `transcript.purge` hard-deleted the row (#322 purges abandoned
+ *     uploads), or it was never this user's to see. Either way there is
+ *     nothing to resume into.
+ *   * **any status but `uploading`** — `deleting` is the purge on its way;
+ *     `processing`/`ready`/`failed` mean the server already has (or gave up
+ *     on) the bytes. Resuming would re-send parts into an upload nobody wants.
+ *
+ * Everything else — offline, a 5xx, a 401 the refresh could not fix — answers
+ * `false`, and the session stays for the next reconcile. Discarding on a
+ * transient failure would throw away a genuinely resumable multi-gigabyte
+ * upload because the Wi-Fi blinked on page load.
+ */
+async function isTranscriptUploadGone(transcriptId: string): Promise<boolean> {
+  try {
+    const result = await getTranscript(transcriptId);
+    // No etag was sent, so `not-modified` cannot happen; treated as "unknown".
+    return result.status === 'ok' && result.data.status !== 'uploading';
+  } catch (err) {
+    return err instanceof ApiError && err.status === 404;
+  }
+}
+
 export const KEEP_SCREEN_AWAKE_STORAGE_KEY = 'upload.keepScreenAwake';
 
 /**
@@ -187,16 +225,105 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
   const enginesRef = useRef(new Map<string, ResumableUpload>());
   const unsubscribersRef = useRef(new Map<string, () => void>());
 
-  const refreshSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (): Promise<UploadSessionRecord[]> => {
     const records = await listUploadSessions();
-    if (!isMounted()) return;
+    if (!isMounted()) return records;
     setSessions(records);
     setSessionsLoading(false);
+    return records;
   }, [isMounted]);
 
+  const refreshSessions = useCallback(async () => {
+    await loadSessions();
+  }, [loadSessions]);
+
+  /** Session object ids with a reconcile request in flight — see `reconcileSessions`. */
+  const reconcilingRef = useRef(new Set<string>());
+
+  const isLiveHere = useCallback((objectId: string) => {
+    const engine = enginesRef.current.get(objectId);
+    return Boolean(engine && LIVE_HERE_PHASES.has(engine.getProgress().phase));
+  }, []);
+
+  /**
+   * Forget a session whose upload can never be resumed — issue #339.
+   *
+   * The same removal cancel and dismiss already perform, in one place: drop
+   * any settled engine and its row, delete the persisted record, and take the
+   * card off screen. Re-checks liveness first, because the answer it acts on
+   * was fetched a round trip ago and the user may have resumed in between.
+   */
+  const discardSession = useCallback(
+    async (objectId: string) => {
+      if (isLiveHere(objectId)) return;
+
+      unsubscribersRef.current.get(objectId)?.();
+      unsubscribersRef.current.delete(objectId);
+      enginesRef.current.delete(objectId);
+      setUploads((current) => current.filter((upload) => upload.id !== objectId));
+
+      await deleteUploadSession(objectId);
+      if (!isMounted()) return;
+      setSessions((current) => current.filter((session) => session.objectId !== objectId));
+    },
+    [isLiveHere, isMounted],
+  );
+
+  /**
+   * Discard persisted sessions whose transcript is gone — issue #339.
+   *
+   * Since #322 the server purges an abandoned upload's transcript, so an
+   * IndexedDB record can outlive it indefinitely and offer a "Resume upload"
+   * that can only fail. The SERVER is the authority here exactly as it is for
+   * which parts landed: this asks it once per session, per reconcile.
+   *
+   * BOUNDED BY CONSTRUCTION. Only sessions carrying a `transcriptId` are asked
+   * about, never one whose upload is live in this tab, and never one already
+   * being asked about (a visibility flip mid-request would otherwise double
+   * it). There is no timer: it runs on load, when the tab comes back into
+   * view, and when an upload fails — each a moment the answer may have changed.
+   */
+  const reconcileSessions = useCallback(
+    async (records: Pick<UploadSessionRecord, 'objectId' | 'transcriptId'>[]) => {
+      const inFlight = reconcilingRef.current;
+      const stale = records.filter(
+        (record) =>
+          record.transcriptId !== null &&
+          !isLiveHere(record.objectId) &&
+          !inFlight.has(record.objectId),
+      );
+
+      await Promise.all(
+        stale.map(async (record) => {
+          inFlight.add(record.objectId);
+          try {
+            if (await isTranscriptUploadGone(record.transcriptId as string)) {
+              await discardSession(record.objectId);
+            }
+          } finally {
+            inFlight.delete(record.objectId);
+          }
+        }),
+      );
+    },
+    [discardSession, isLiveHere],
+  );
+
   useEffect(() => {
-    void refreshSessions();
-  }, [refreshSessions]);
+    void loadSessions().then(reconcileSessions);
+  }, [loadSessions, reconcileSessions]);
+
+  // Back in view after hours in a background tab (or a phone's app switcher)
+  // is precisely when the purge may have run. Re-read the store too: another
+  // tab may have finished or cancelled one of these in the meantime.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      void loadSessions().then(reconcileSessions);
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [loadSessions, reconcileSessions]);
 
   // Unsubscribe on teardown. Deliberately does NOT cancel the uploads: this
   // provider unmounts when the app shell does (sign-out, tab close), and
@@ -241,10 +368,18 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
           // abandoned one is forgotten.
           await deleteUploadSession(record.id);
           await refreshSessions();
+          return;
+        }
+        // …unless the failure was the upload ceasing to exist (#339): a
+        // presign or complete call answering 404 because the purge got there
+        // first. Then there is nothing to resume into, and a failed row with
+        // a Resume prompt would be offering a dead end. Ask the server once.
+        if (record.transcriptId) {
+          await reconcileSessions([record]);
         }
       });
     },
-    [patchProgress, refreshSessions],
+    [patchProgress, reconcileSessions, refreshSessions],
   );
 
   const startUpload = useCallback(
@@ -304,7 +439,19 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       // THE SERVER IS THE AUTHORITY on what has landed — never the local
       // record, which describes what this browser believed it sent before it
       // stopped being able to observe anything.
-      const status = await fetchUploadStatus(session.objectId);
+      let status;
+      try {
+        status = await fetchUploadStatus(session.objectId);
+      } catch (err) {
+        // The object is gone (#339): the purge removed the transcript and its
+        // upload together. Forget the session so its card disappears, and
+        // tell the caller there is nothing to report rather than an error.
+        if (err instanceof ApiError && err.status === 404) {
+          await discardSession(session.objectId);
+          throw new UploadSessionGoneError(session);
+        }
+        throw err;
+      }
       const upload = resumeUploadEngine(file, session.objectId, status, engineOptions);
 
       const record: ManagedUpload = {
@@ -321,7 +468,7 @@ export function UploadManagerProvider({ children }: { children: ReactNode }) {
       register(upload, record);
       return record;
     },
-    [register],
+    [discardSession, register],
   );
 
   const pauseUpload = useCallback((id: string) => {
