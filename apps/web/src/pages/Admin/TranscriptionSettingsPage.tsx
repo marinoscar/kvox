@@ -490,6 +490,22 @@ export default function TranscriptionSettingsPage() {
                 }
               />
             </Stack>
+          </Paper>
+
+          {/* ================================================================
+              UPLOADS — what happens to a recording whose upload never ends.
+              Its own card (#339) rather than the tail of Processing: it is
+              about bytes that never arrived, not about what happens to them
+              once they have.
+              ============================================================= */}
+          <Paper sx={{ mt: 3, p: { xs: 2, sm: 3 } }}>
+            <Typography variant="h6" gutterBottom>
+              Uploads
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Recordings whose upload stops and is never resumed are deleted automatically,
+              so they don&apos;t linger in the library.
+            </Typography>
 
             <TextField
               fullWidth
@@ -504,7 +520,6 @@ export default function TranscriptionSettingsPage() {
                 abandonedHoursError ??
                 'Uploads with no activity for this long are deleted automatically. Default 3.'
               }
-              sx={{ mt: 2 }}
             />
           </Paper>
 
