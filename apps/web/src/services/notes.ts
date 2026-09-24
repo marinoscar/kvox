@@ -279,6 +279,11 @@ export interface NoteVersion {
   generationId: string | null;
   restoredFromVersion: number | null;
   createdAt: string;
+  /**
+   * This version's own body format (issue #337); absent from an older server
+   * means `markdown`.
+   */
+  bodyFormat?: NoteBodyFormat;
 }
 
 export interface NoteVersionsResponse {
@@ -302,8 +307,9 @@ export interface NoteVersionDetail extends NoteVersion {
   body: string;
   isCurrent: boolean;
   /**
-   * Issue #334 — the note's body format, if the server includes it here.
-   * Absent means `markdown`, which is also what every note predating #334 is.
+   * This VERSION's own body format (issue #337) — not the note's current one,
+   * since a note's format can change between versions. Absent means
+   * `markdown`, which is also what every version predating #334 is.
    */
   bodyFormat?: NoteBodyFormat;
 }
