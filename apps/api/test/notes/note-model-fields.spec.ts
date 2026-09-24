@@ -199,6 +199,8 @@ describe('Prisma.NoteVersionScalarFieldEnum', () => {
       'generationId',
       'restoredFromVersion',
       'clientBatchId',
+      // #337: the version's own body format, fixed when it was written.
+      'bodyFormat',
       'createdAt',
     ]);
   });

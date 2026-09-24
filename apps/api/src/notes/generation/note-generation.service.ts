@@ -263,6 +263,7 @@ export class NoteGenerationService {
       }
 
       const version = note.currentVersion + 1;
+      const bodyFormat = input.bodyFormat === 'plain_text' ? 'plain_text' : 'markdown';
 
       await tx.noteVersion.create({
         data: {
@@ -274,6 +275,9 @@ export class NoteGenerationService {
           // the identical convention `transcript_versions.author_id` uses.
           authorId: null,
           generationId: generation.id,
+          // The version carries its own format (#337), the same value written
+          // to the note below, so a later restore brings the format back too.
+          bodyFormat,
         },
       });
 
@@ -285,7 +289,7 @@ export class NoteGenerationService {
           // (#334): a regeneration that switched templates changes the format
           // only if it actually produces a new body, so a failed run can never
           // leave the old body labelled with the new template's format.
-          bodyFormat: input.bodyFormat === 'plain_text' ? 'plain_text' : 'markdown',
+          bodyFormat,
           currentVersion: version,
           status: 'ready',
           failureReason: null,

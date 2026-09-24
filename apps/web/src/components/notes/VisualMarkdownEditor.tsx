@@ -93,6 +93,13 @@ const EDITOR_SURFACE_SX = {
   '& p': { typography: 'body2', mt: 0, mb: 1.5 },
   '& li': { typography: 'body2', mb: 0.5 },
   '& li > p': { mb: 0 },
+  // Tiptap wraps every table cell's content in a <p>, which the `'& p'` rule
+  // above would restyle as body text with a bottom margin — making rows taller,
+  // text smaller and the header row non-bold versus MarkdownView's table
+  // (issue #337). `th > p` / `td > p` out-rank `p` on specificity (0,1,2 vs
+  // 0,1,1 under emotion's class prefix), so the cell's own font wins.
+  '& th > p, & td > p': { m: 0, font: 'inherit', fontWeight: 'inherit' },
+  '& th': { fontWeight: 700 },
   '& hr': { border: 0, borderTop: 1, borderColor: 'divider', my: 2 },
   '& a': { color: 'primary.main' },
   '& blockquote': {

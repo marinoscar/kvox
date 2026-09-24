@@ -3497,6 +3497,14 @@ model NoteVersion {
   // The full markdown, as stored — see the block comment above the enums.
   body String @db.Text
 
+  // The syntax THIS version's body is written in ('markdown'|'plain_text',
+  // validated by Zod in the API, not by a database enum) — issue #337.
+  // Immutable once written: the source of truth for rendering/exporting
+  // that version, not a live read of the note's or template's current
+  // format. Restoring a version brings its format back onto the note,
+  // exactly as it brings the body back.
+  bodyFormat String @default("markdown") @map("body_format")
+
   // A short, optional human- or AI-authored description of what changed in
   // this version (issue #48) — e.g. "fixed the attendee list" for an
   // `edit`, or left unset for most `ai_generated`/`restore` rows. Purely a

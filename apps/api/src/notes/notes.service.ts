@@ -98,7 +98,7 @@ import {
   type ResolvedModel,
 } from './generation/note-generation-request.service';
 import { NoteSourceService, type SourceSelector } from './generation/note-source.service';
-import { toNoteBodyFormat } from './dto/note-template.dto';
+import { toNoteBodyFormat, type NoteBodyFormat } from './dto/note-template.dto';
 import { assemblePrompt, parseTemplateStructure } from './generation/prompt';
 import {
   NOTE_GENERATE_JOB_TYPE,
@@ -474,9 +474,6 @@ export class NotesService {
       ...versionShape(row),
       noteId: note.id,
       body: row.body,
-      // The NOTE's format (#334) — `note_versions` carries no format column,
-      // so every version renders with the format the note holds now.
-      bodyFormat: toNoteBodyFormat(note.bodyFormat),
       isCurrent: row.version === note.currentVersion,
     };
   }
@@ -576,6 +573,9 @@ export class NotesService {
       body,
       title,
       kind: 'edit',
+      // An edit keeps the note's current format — it changes the words, not
+      // how they are meant to be read.
+      bodyFormat: toNoteBodyFormat(note.bodyFormat),
       authorId: user.id,
       summary: dto.summary?.trim() || null,
       clientBatchId: dto.clientBatchId ?? null,
@@ -644,6 +644,10 @@ export class NotesService {
     const updated = await this.commitVersion({
       note,
       body: target.body,
+      // ⚠ THE RESTORED VERSION'S OWN FORMAT (#337), never the note's current
+      // one: restoring a markdown version into a note a later regeneration made
+      // plain_text would otherwise label markdown source as plain text.
+      bodyFormat: toNoteBodyFormat(target.bodyFormat),
       kind: 'restore',
       authorId: user.id,
       summary: dto.summary?.trim() || `Restored version ${version}`,
@@ -1070,6 +1074,8 @@ export class NotesService {
     note: Note;
     body: string;
     title?: string;
+    /** Written to BOTH the note and the new version row, together (#337). */
+    bodyFormat: NoteBodyFormat;
     kind: 'edit' | 'restore';
     authorId: string;
     summary: string | null;
@@ -1088,6 +1094,7 @@ export class NotesService {
         data: {
           currentVersion: nextVersion,
           body: input.body,
+          bodyFormat: input.bodyFormat,
           // ⚠ `titleSource` MOVES ONLY WITH THE TITLE. A body-only save (and a
           // restore, which supplies none) must leave the provenance exactly as
           // it was — otherwise every edit would quietly claim the user named a
@@ -1116,6 +1123,7 @@ export class NotesService {
           version: nextVersion,
           kind: input.kind,
           body: input.body,
+          bodyFormat: input.bodyFormat,
           summary: input.summary,
           // ⚠ A REAL AUTHOR ID HERE, ALWAYS. `null` means the AI (spec §4.5) —
           // a convention, not a missing value — so a human edit recorded with a
@@ -1461,6 +1469,9 @@ export function versionShape(
       : null,
     generationId: row.generationId,
     restoredFromVersion: row.restoredFromVersion,
+    // This version's own format, fixed when it was written (#337) — not the
+    // note's current one, which a later regeneration may have changed.
+    bodyFormat: toNoteBodyFormat(row.bodyFormat),
     createdAt: row.createdAt.toISOString(),
   };
 }

@@ -125,6 +125,23 @@ describe('NoteHistoryPage', () => {
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
+
+  // ===========================================================================
+  // Issue #337 — each version carries its OWN body format
+  // ===========================================================================
+
+  it('marks a plain_text version with a "Plain text" chip in the list', async () => {
+    respondWith([
+      version({ version: 2, kind: 'edit', bodyFormat: 'plain_text' }),
+      version({ bodyFormat: 'markdown' }),
+    ]);
+    renderPage();
+
+    await screen.findByText('Version 2');
+
+    // Only the plain_text row is marked; the markdown row stays unlabelled.
+    expect(screen.getAllByText('Plain text')).toHaveLength(1);
+  });
 });
 
 // =============================================================================
@@ -188,6 +205,18 @@ describe('NoteHistoryPage — reading one version', () => {
     await screen.findByText(/window.__histPwned = true;/);
     expect(container.querySelector('script')).toBeNull();
     expect((window as unknown as { __histPwned?: boolean }).__histPwned).toBeUndefined();
+  });
+
+  it('renders a plain_text version literally, never as markdown', async () => {
+    // Issue #337 — the VERSION's own bodyFormat, not the note's current one.
+    const user = userEvent.setup();
+    respondWithDetail('# not heading', { bodyFormat: 'plain_text' });
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Read version 1' }));
+
+    expect(await screen.findByText('# not heading')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'not heading' })).not.toBeInTheDocument();
   });
 
   it('reports a version that cannot be read, without blaming the reader', async () => {

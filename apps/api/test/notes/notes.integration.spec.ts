@@ -125,6 +125,7 @@ const versionRow = (overrides: Record<string, unknown> = {}) => ({
   generationId: GENERATION_ID,
   restoredFromVersion: null,
   clientBatchId: null,
+  bodyFormat: 'markdown',
   createdAt: new Date('2026-09-14T00:30:00.000Z'),
   ...overrides,
 });
@@ -825,7 +826,8 @@ describe('Notes API (#53)', () => {
 
       expect(current.body.data.body).toBe(detail.body.data.body);
       expect(current.body.data.isCurrent).toBe(true);
-      expect(current.body.data.bodyFormat).toBe(detail.body.data.bodyFormat);
+      // The VERSION's own format (#337), fixed when it was written.
+      expect(current.body.data.bodyFormat).toBe('markdown');
     });
 
     it('still answers 200 when the version moved on', async () => {

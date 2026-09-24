@@ -352,6 +352,45 @@ describe('commit() — bodyFormat (#334)', () => {
 });
 
 // -----------------------------------------------------------------------------
+// commit() — the VERSION row also carries its own bodyFormat (issue #337)
+// -----------------------------------------------------------------------------
+//
+// So a later restore of THIS version brings the format back with the body,
+// even if a subsequent regeneration changed the note's current format.
+// -----------------------------------------------------------------------------
+
+describe('commit() — noteVersion.create carries bodyFormat (#337)', () => {
+  it('passes bodyFormat: plain_text through to the version row', async () => {
+    const { service, tx } = harness();
+
+    await service.commit({ ...commitInput(generationRow()), bodyFormat: 'plain_text' });
+
+    expect(tx.noteVersion.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ bodyFormat: 'plain_text' }),
+      }),
+    );
+  });
+
+  it('defaults the version row to markdown when bodyFormat is absent', async () => {
+    const { service, tx } = harness();
+
+    await service.commit(commitInput(generationRow()));
+
+    expect(tx.noteVersion.create.mock.calls[0][0].data.bodyFormat).toBe('markdown');
+  });
+
+  it('writes the SAME bodyFormat to both the note and the version, in one commit', async () => {
+    const { service, tx } = harness();
+
+    await service.commit({ ...commitInput(generationRow()), bodyFormat: 'plain_text' });
+
+    expect(tx.note.update.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+    expect(tx.noteVersion.create.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+  });
+});
+
+// -----------------------------------------------------------------------------
 // readPayloadTemplate() — the preview-of-an-unsaved-template seam (issue #334)
 // -----------------------------------------------------------------------------
 

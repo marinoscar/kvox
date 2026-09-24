@@ -626,6 +626,12 @@ export const noteVersionSchema = z.object({
     .describe('Who saved it. **`null` means the AI** — a statement, not a missing value.'),
   generationId: z.string().nullable().describe('Which generation produced it, for `ai_generated` rows.'),
   restoredFromVersion: z.number().nullable().describe('Which version this one restored, for `restore` rows.'),
+  bodyFormat: bodyFormatSchema.describe(
+    'How this version\'s body is written (issues #334, #337): `markdown`, or `plain_text` — render ' +
+      'it literally, never as Markdown. This version\'s own body format, fixed when the version ' +
+      'was written; it can differ from the note\'s current `bodyFormat` when a later regeneration ' +
+      'switched templates, and a restore brings it back with the body.',
+  ),
   createdAt: z.string().describe('When it was recorded (ISO 8601).'),
 });
 
@@ -647,12 +653,6 @@ export const noteVersionDetailResponseSchema = noteVersionSchema.extend({
         'replay: a note is a page or two of prose, so storing the whole body per save costs ' +
         'kilobytes and needs no reducer to read back (spec §4.5).',
     ),
-  bodyFormat: bodyFormatSchema.describe(
-    'How `body` is written (issue #334): `markdown`, or `plain_text` — render it literally, never ' +
-      'as Markdown. This is the note\'s own body format, snapshotted from the template at ' +
-      'generation time; versions do not record a format of their own, so every version of a ' +
-      'note is reported with the note\'s current one.',
-  ),
   isCurrent: z.boolean().describe('Whether this version is the note\'s current one.'),
 });
 
