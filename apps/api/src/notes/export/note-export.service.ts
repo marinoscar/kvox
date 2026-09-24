@@ -375,7 +375,9 @@ export class NoteExportService {
       noteId: note.id,
       title: note.title,
       body: version.body,
-      bodyFormat: note.bodyFormat,
+      // The VERSION's own format (#337): `(noteId, version)` now fixes the
+      // format too, so the content-addressed optionsHash needs no format term.
+      bodyFormat: version.bodyFormat,
       version: row.version,
       createdAt: version.createdAt,
       exportedAt: new Date(),

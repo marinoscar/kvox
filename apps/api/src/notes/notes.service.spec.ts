@@ -337,7 +337,7 @@ describe('NotesService', () => {
     });
   });
 
-  describe('getVersion — bodyFormat (#334)', () => {
+  describe('getVersion — bodyFormat (#334, #337)', () => {
     const versionRow = {
       noteId: NOTE_ID,
       version: 2,
@@ -347,11 +347,12 @@ describe('NotesService', () => {
       generationId: null,
       restoredFromVersion: null,
       body: 'Plain text, *not* emphasis.',
+      bodyFormat: 'plain_text',
       createdAt: new Date('2026-01-03T00:00:00.000Z'),
     };
 
-    it('reports the note\'s plain_text format on a version', async () => {
-      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'plain_text' }), role: 'owner' });
+    it('reports the VERSION\'s own format, not the note\'s current one', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'markdown' }), role: 'owner' });
       prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
 
       const result = await service.getVersion(NOTE_ID, 2, USER);
@@ -361,8 +362,8 @@ describe('NotesService', () => {
     });
 
     it('defaults an unrecognised stored format to markdown', async () => {
-      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'html' }), role: 'owner' });
-      prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'plain_text' }), role: 'owner' });
+      prisma.noteVersion.findUnique.mockResolvedValue({ ...versionRow, bodyFormat: 'html' });
 
       const result = await service.getVersion(NOTE_ID, 2, USER);
 
