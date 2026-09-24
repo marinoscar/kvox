@@ -291,6 +291,12 @@ export function NoteHistoryPage() {
                           {version.version === currentVersion && (
                             <Chip size="small" color="primary" label="Current" />
                           )}
+                          {/* Issue #337 — only plain-text versions are
+                              marked; markdown (or an older server's absent
+                              field) stays unlabelled. */}
+                          {version.bodyFormat === 'plain_text' && (
+                            <Chip size="small" variant="outlined" label="Plain text" />
+                          )}
                         </Stack>
                       }
                       secondary={

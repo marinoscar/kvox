@@ -106,6 +106,7 @@ describe('NotesService', () => {
       noteVersion: {
         create: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       noteGeneration: {
         create: jest.fn().mockResolvedValue({ id: 'generation-1' }),
@@ -312,6 +313,18 @@ describe('NotesService', () => {
       expect(call.data).not.toHaveProperty('titleSource');
       expect(call.data).not.toHaveProperty('title');
     });
+
+    it('writes the NOTE\'S CURRENT bodyFormat onto the new version (#337) — an edit changes the words, not the format', async () => {
+      access.require.mockResolvedValue({
+        note: noteRow({ currentVersion: 3, status: 'ready', bodyFormat: 'plain_text' }),
+        role: 'owner',
+      });
+
+      await service.update(NOTE_ID, { body: 'Just fixing a typo.', baseVersion: 3 }, USER);
+
+      expect(prisma.note.updateMany.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+      expect(prisma.noteVersion.create.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+    });
   });
 
   describe('restore', () => {
@@ -323,6 +336,7 @@ describe('NotesService', () => {
       prisma.noteVersion.findUnique.mockResolvedValue({
         version: 3,
         body: 'An older body.',
+        bodyFormat: 'markdown',
       });
 
       await service.restore(NOTE_ID, 3, { baseVersion: 5 }, USER);
@@ -335,9 +349,79 @@ describe('NotesService', () => {
       // path, not a call that happened to skip both keys for another reason.
       expect(call.data).toEqual(expect.objectContaining({ body: 'An older body.' }));
     });
+
+    it('writes the RESTORED VERSION\'S format (#337), not the note\'s current one, to both the note and the new version', async () => {
+      // The note is currently plain_text, but the version being restored was
+      // written as markdown — the note must come back markdown too.
+      access.require.mockResolvedValue({
+        note: noteRow({ currentVersion: 5, status: 'ready', bodyFormat: 'plain_text' }),
+        role: 'owner',
+      });
+      prisma.noteVersion.findUnique.mockResolvedValue({
+        version: 3,
+        body: 'A *markdown* body.',
+        bodyFormat: 'markdown',
+      });
+
+      await service.restore(NOTE_ID, 3, { baseVersion: 5 }, USER);
+
+      expect(prisma.note.updateMany.mock.calls[0][0].data.bodyFormat).toBe('markdown');
+      expect(prisma.noteVersion.create.mock.calls[0][0].data.bodyFormat).toBe('markdown');
+    });
+
+    it('writes plain_text to both the note and the new version when restoring a plain_text version', async () => {
+      access.require.mockResolvedValue({
+        note: noteRow({ currentVersion: 5, status: 'ready', bodyFormat: 'markdown' }),
+        role: 'owner',
+      });
+      prisma.noteVersion.findUnique.mockResolvedValue({
+        version: 3,
+        body: 'A plain body.',
+        bodyFormat: 'plain_text',
+      });
+
+      await service.restore(NOTE_ID, 3, { baseVersion: 5 }, USER);
+
+      expect(prisma.note.updateMany.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+      expect(prisma.noteVersion.create.mock.calls[0][0].data.bodyFormat).toBe('plain_text');
+    });
   });
 
-  describe('getVersion — bodyFormat (#334)', () => {
+  describe('listVersions — bodyFormat (#337)', () => {
+    it('returns each row\'s own bodyFormat, not the note\'s current one', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'markdown' }), role: 'owner' });
+      prisma.noteVersion.findMany.mockResolvedValue([
+        {
+          noteId: NOTE_ID,
+          version: 2,
+          kind: 'edit',
+          summary: null,
+          author: null,
+          generationId: null,
+          restoredFromVersion: null,
+          bodyFormat: 'plain_text',
+          createdAt: new Date('2026-01-03T00:00:00.000Z'),
+        },
+        {
+          noteId: NOTE_ID,
+          version: 1,
+          kind: 'ai_generated',
+          summary: null,
+          author: null,
+          generationId: 'generation-1',
+          restoredFromVersion: null,
+          bodyFormat: 'markdown',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ]);
+
+      const result = await service.listVersions(NOTE_ID, { limit: 20 } as never, USER);
+
+      expect(result.items.map((item) => item.bodyFormat)).toEqual(['plain_text', 'markdown']);
+    });
+  });
+
+  describe('getVersion — bodyFormat (#334, #337)', () => {
     const versionRow = {
       noteId: NOTE_ID,
       version: 2,
@@ -347,11 +431,12 @@ describe('NotesService', () => {
       generationId: null,
       restoredFromVersion: null,
       body: 'Plain text, *not* emphasis.',
+      bodyFormat: 'plain_text',
       createdAt: new Date('2026-01-03T00:00:00.000Z'),
     };
 
-    it('reports the note\'s plain_text format on a version', async () => {
-      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'plain_text' }), role: 'owner' });
+    it('reports the VERSION\'s own format, not the note\'s current one', async () => {
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'markdown' }), role: 'owner' });
       prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
 
       const result = await service.getVersion(NOTE_ID, 2, USER);
@@ -361,8 +446,8 @@ describe('NotesService', () => {
     });
 
     it('defaults an unrecognised stored format to markdown', async () => {
-      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'html' }), role: 'owner' });
-      prisma.noteVersion.findUnique.mockResolvedValue(versionRow);
+      access.require.mockResolvedValue({ note: noteRow({ bodyFormat: 'plain_text' }), role: 'owner' });
+      prisma.noteVersion.findUnique.mockResolvedValue({ ...versionRow, bodyFormat: 'html' });
 
       const result = await service.getVersion(NOTE_ID, 2, USER);
 

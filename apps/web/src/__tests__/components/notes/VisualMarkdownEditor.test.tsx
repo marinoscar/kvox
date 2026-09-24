@@ -109,6 +109,19 @@ describe('VisualMarkdownEditor', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('renders a markdown table with real header cells', async () => {
+    const onChange = vi.fn();
+    const table = '| A | B |\n| --- | --- |\n| 1 | 2 |';
+    render(<VisualMarkdownEditor value={table} onChange={onChange} />);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('columnheader')).toHaveLength(2);
+    });
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('B')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
   it('disabled makes the editor not editable', async () => {
     const onChange = vi.fn();
     render(<VisualMarkdownEditor value={'Some text'} onChange={onChange} disabled />);

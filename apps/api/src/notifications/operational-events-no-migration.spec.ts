@@ -124,6 +124,10 @@ const MIGRATIONS_AT_288 = [
   // body is Markdown or plain text. Note rendering, and equally not about
   // notifications.
   '20260923160000_add_note_body_format',
+  // #337: `note_versions.body_format`, each version's own body format so a
+  // restore brings the format back with the body. Note rendering, and equally
+  // not about notifications.
+  '20260923170000_add_note_version_body_format',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
