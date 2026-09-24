@@ -44,6 +44,9 @@ describe('NoteExportService', () => {
       create: jest.Mock;
       update: jest.Mock;
     };
+    note: { findUnique: jest.Mock };
+    noteVersion: { findUnique: jest.Mock };
+    transcript: { findUnique: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
   let access: { require: jest.Mock };
@@ -88,6 +91,9 @@ describe('NoteExportService', () => {
         create: jest.fn().mockImplementation(async ({ data }) => row(data)),
         update: jest.fn().mockImplementation(async ({ data }) => row(data)),
       },
+      note: { findUnique: jest.fn().mockResolvedValue(null) },
+      noteVersion: { findUnique: jest.fn().mockResolvedValue(null) },
+      transcript: { findUnique: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
 
@@ -322,6 +328,77 @@ describe('NoteExportService', () => {
       expect(prisma.noteExport.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { noteId: NOTE_ID }, orderBy: { createdAt: 'desc' } }),
       );
+    });
+  });
+
+  // ===========================================================================
+  // buildDocument — bodyFormat comes from the VERSION, not the note (#337)
+  // ===========================================================================
+
+  describe('buildDocument — bodyFormat (#337)', () => {
+    it('uses the exported VERSION\'s own bodyFormat, even when the note\'s current format differs', async () => {
+      // The note is currently plain_text (e.g. a later regeneration switched
+      // templates), but the old version being exported was written as markdown.
+      prisma.note.findUnique.mockResolvedValue({
+        id: NOTE_ID,
+        title: 'Weekly Sync Recap',
+        bodyFormat: 'plain_text',
+        provider: null,
+        model: null,
+        sourceType: 'transcript',
+        sourceTranscriptId: 't1',
+        sourceNoteId: null,
+        sourceObjectId: null,
+        deletedAt: null,
+        template: null,
+      });
+      prisma.noteVersion.findUnique.mockResolvedValue({
+        version: 2,
+        body: '# A heading\n\nSome markdown.',
+        bodyFormat: 'markdown',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        author: null,
+      });
+      prisma.transcript.findUnique.mockResolvedValue({
+        title: 'Weekly sync',
+        createdAt: new Date('2025-12-01T00:00:00.000Z'),
+      });
+
+      const document = await service.buildDocument(row({ version: 2 }) as never);
+
+      expect(document.bodyFormat).toBe('markdown');
+      expect(document.body).toBe('# A heading\n\nSome markdown.');
+    });
+
+    it('uses plain_text when the exported version\'s row is plain_text', async () => {
+      prisma.note.findUnique.mockResolvedValue({
+        id: NOTE_ID,
+        title: 'Weekly Sync Recap',
+        bodyFormat: 'markdown',
+        provider: null,
+        model: null,
+        sourceType: 'transcript',
+        sourceTranscriptId: 't1',
+        sourceNoteId: null,
+        sourceObjectId: null,
+        deletedAt: null,
+        template: null,
+      });
+      prisma.noteVersion.findUnique.mockResolvedValue({
+        version: 2,
+        body: 'Plain text, *not* emphasis.',
+        bodyFormat: 'plain_text',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        author: null,
+      });
+      prisma.transcript.findUnique.mockResolvedValue({
+        title: 'Weekly sync',
+        createdAt: new Date('2025-12-01T00:00:00.000Z'),
+      });
+
+      const document = await service.buildDocument(row({ version: 2 }) as never);
+
+      expect(document.bodyFormat).toBe('plain_text');
     });
   });
 });
