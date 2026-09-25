@@ -279,7 +279,7 @@ is itself a question this product exists to answer, and deleting the earlier
 row would erase the very history a temporal graph is for.
 
 **3.5 A narrow schema, not a broad one.** Six entity types plus `Meeting`
-and evidence, roughly fifteen relationship types, one join table for facts —
+and evidence, roughly sixteen relationship types, one join table for facts —
 against the v0.2 draft's 80-odd node labels across seven layers. Every type
 in §5 exists because a real product surface (an entity page, a brief, a
 feedback loop) reads it; nothing is speculative inventory for a use case
@@ -428,18 +428,20 @@ name that could drift from the first.
 
 ### 5.2 Relationship types
 
-Every relationship below has **one fixed direction**, carries `valid_from`/
-`valid_to` (§5.4) when validity can meaningfully change, and every instance
-carries at least one evidence row (§5.3) once it is `accepted`/`edited`.
-There is deliberately **no inverse pair stored for any of them** — see below
-for why — and **no `RELATED_TO` catch-all** — see "Rejected alternatives" for
-why a relation with no stated meaning is worse than no relation at all.
+Every relationship below has **one fixed direction**, carries a `valid`
+range with a precision (§5.4) when validity can meaningfully change, and
+every instance carries at least one evidence row (§5.3) once it is
+`accepted`/`edited`. There is deliberately **no inverse pair stored for any
+of them** — see below for why — and **no `RELATED_TO` catch-all** — see
+"Rejected alternatives" for why a relation with no stated meaning is worse
+than no relation at all.
 
 | Relationship | From → To | Notes |
 |---|---|---|
 | `ATTENDED` | Person → Meeting | |
-| `WORKS_FOR` | Person → Organization | |
-| `HAS_ROLE` | Person → Organization | Props: `{ title }` |
+| `WORKS_FOR` | Person → Organization | Temporal (§5.4); normally exclusive (soft) |
+| `HAS_ROLE` | Person → Organization | Props: `{ title }`; temporal (§5.4), one edge per role period; normally exclusive (soft) |
+| `REPORTS_TO` | Person → Person | Temporal (§5.4); normally exclusive (soft) |
 | `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
 | `DISCUSSED` | Meeting → Project | |
 | `ABOUT` | Claim \| Decision \| Commitment → Person \| Organization \| Project | |
@@ -538,11 +540,120 @@ Zep's temporal-graph paper argues for the distinction: a note is written
 have to sort by when the thing actually happened, not by when kvox happened
 to find out about it.
 
-Relations carry `valid_from`/`valid_to`, with `NULL` meaning "still open" —
-a `WORKS_FOR` edge with no `valid_to` is a current employment; one is set
-when a later `Claim` or extraction states it ended.
+**Two clocks, bitemporal.** Every relation and every `kg_items` row carries
+two independent notions of time: *valid* time (when the fact was true in the
+world) and `asserted_at` (when kvox learned it). `asserted_at` is not a
+column of its own — it is **derived** from the row's evidence: the
+`occurred_at` of the meeting or note whose `kg_evidence` (§5.3) supports the
+row, read at query time rather than duplicated into a second stored
+timestamp that could drift from the evidence it is supposed to summarize.
+Every "latest"/"as of" query in this document (§9.1, this section) reads
+**valid** time; `asserted_at` is provenance, surfaced on the entity page, and
+is the tiebreaker when two sources disagree about the same period and
+neither is curated. The reason for keeping both, rather than collapsing to
+one: notes are written after the meeting they describe, sometimes days
+after, and a recording can be uploaded weeks late — the same "how kvox
+learned something is not when it became true" argument Zep's temporal-graph
+paper makes for its own `valid_from`/`valid_to`/"invalid" window pattern,
+cited above and adopted here for the identical reason.
 
-`SUPERSEDES` is how a reversal is recorded on `Decision`, `Claim`, and
+**Ranges with precision, not two nullable timestamps.** `valid` is a single
+Postgres `tstzrange` column, paired with `valid_precision`
+(`day | month | year | unknown`) recording how exact the source actually
+was. "In 2026" becomes `valid = [2026-01-01, 2027-01-01)` with
+`valid_precision = 'year'` — the UI renders "2026" from the precision rather
+than a synthetic January 1st date, `valid @> $date` still answers a point
+containment query exactly, the column is GiST-indexable (§10), and an
+overlap check (below) is a native range operator rather than a pair of
+comparisons an extractor or a migration could get backwards. `unknown` is a
+legitimate value, not a gap to be filled in later — the extractor is
+required to write `unknown` rather than guess a plausible-looking range when
+the source text does not state one, because a guessed precision is a
+fabricated fact carrying the same authority in the UI as a real one.
+
+**State is derived from dated facts, not edited in place.** A `Claim` is the
+record — a dated, evidenced statement. A relation edge (`WORKS_FOR`,
+`HAS_ROLE`, `REPORTS_TO`, and every other temporal relationship in §5.2) is
+the *index* built from the current set of `Claim`s and extractions about
+that edge, never a row a later note is allowed to mutate directly. A new
+fact never rewrites an existing edge's `valid` range in place; it is added
+as its own dated row, and the edge set — which edges are open, which are
+closed, which supersede which — follows from replaying the facts, the
+identical "derive, never mutate" discipline `materialize()` already applies
+to transcript corrections (`docs/specs/transcription.md` §4.4) and
+`kg_entity_digests` (§9.2) applies to summaries.
+
+**Closing rule.** For a relationship type marked *normally exclusive*
+(`WORKS_FOR`, `REPORTS_TO`, `HAS_ROLE` within one organization — §5.2),
+accepting a new fact with a `valid` start date closes that person's
+still-open edge of the same type at the new fact's start: the open edge's
+`valid` upper bound is set, and the new edge records `SUPERSEDES` against it
+(§3.4). The closing is never applied silently — it surfaces in the review
+panel as its own proposal row ("Closes: Joe works for Acme, 2019 → Mar
+2026") and is accepted, edited, or rejected exactly like any other proposed
+item (§8); a reviewer who rejects the close leaves both edges open, which
+the overlap tolerance below then treats as a legitimate (if unusual)
+concurrent pair rather than an error state.
+
+**Out-of-order rule.** Facts are inserted by **valid** time, never by
+arrival order. A note about a 2020 meeting, reviewed and committed in 2026,
+saying "Joe works for Acme" that lands inside an already-accepted
+`[2019, 2026)` edge is additional evidence for that edge — it is attached to
+it (the same "known, skipped" collapsing §8 already gives a restated fact)
+and never reopens or splits it. A fact whose valid period lands **outside**
+every known interval for that person and relationship type is a new edge,
+proposed as such; it is flagged `overlaps` in the review panel specifically
+when its valid range overlaps an already-accepted edge of the same type, so
+a reviewer sees the conflict rather than two silently coexisting edges with
+no signal that anything needs a look.
+
+**Overlap tolerance is soft, not enforced.** "Normally exclusive" describes
+the common case, not a database constraint: a consultant or a board member
+can legitimately hold two concurrent `WORKS_FOR` edges, and a person can
+genuinely report to two managers during a reorg. The schema never rejects an
+overlapping pair of edges of the same type for the same person — it only
+ever warns, in the review panel, at the moment an overlap is proposed.
+Making this a hard constraint would force a reviewer to falsify one of two
+true facts just to satisfy the schema, which is a worse outcome than an
+accurate graph with a flagged overlap in it.
+
+**Worked examples.**
+
+- *A promotion.* Joe holds `HAS_ROLE { title: "Engineer" }` at Acme,
+  `valid = [2019-01-01, )`. A meeting in March 2026 says he was promoted to
+  "Staff Engineer" that month. The closing rule ends the Engineer edge at
+  `2026-03-01` and proposes a new `HAS_ROLE { title: "Staff Engineer" }`
+  edge starting the same day, `SUPERSEDES` linking the two — one person, one
+  role at a time, two edges, full history kept.
+- *A manager change.* Joe `REPORTS_TO` Jane, `valid = [2020-01-01,
+  2026-03-01)`; from March 2026 he `REPORTS_TO` Will. Both edges are real
+  and both stay in the graph; the entity page reads the second as current
+  and the first as history, and an "as of January 2024" query (below) reads
+  the first.
+- *A company change, with its two side effects.* Joe leaves Acme for a new
+  employer: the `WORKS_FOR` edge closes, a new one opens. Two things the
+  closing rule alone does not handle, both worth stating because they are
+  easy to miss: any **open `Commitment`** where Joe is owner or
+  counterparty is flagged in the review panel for a second look — a
+  commitment made to an employee who has since left is not automatically
+  void, but it is exactly the kind of fact a reviewer should be asked about
+  rather than have silently carry over unremarked; and every **`PersonFact`**
+  about Joe carries over unchanged, because a `PersonFact` is about Joe as a
+  person, not about his employer, and has no relationship to the
+  `WORKS_FOR` edge closing at all.
+- *An as-of question.* "What was Joe's role when the Q2 pilot was decided?"
+  is answered by intersecting the `Decision`'s own `occurred_at` with every
+  `HAS_ROLE` edge's `valid` range for Joe and returning the one range that
+  contains it — the same range-containment operator the "in 2026" example
+  above uses for a point query, applied here to a derived point (the
+  decision's date) rather than "now."
+
+Relations that are not marked temporal in §5.2 (`ATTENDED`, `DISCUSSED`,
+`ABOUT`, and the rest) carry no `valid` range at all — attaching one to a
+relationship with no meaningful notion of "still open" would be a column
+every writer has to remember to leave `unknown` for no reason.
+
+`SUPERSEDES` remains how a reversal is recorded on `Decision`, `Claim`, and
 `Commitment` alike: a new row, linked to the old one it replaces, never an
 in-place edit of the row it corrects (§3.4). Every "latest on X" query in §9
 sorts on `occurred_at`, descending, and reads the chain of `SUPERSEDES` edges
@@ -669,7 +780,15 @@ provider's structured-output mode (JSON schema / tool-call, whichever the
 active `AiProvider` supports) and Zod-validated regardless: a malformed
 answer is a **failed proposal**, never a partial commit, the identical
 posture `docs/specs/notes.md` §2.2's error taxonomy takes for every
-provider-calling job in this codebase. **The model cites evidence ids it was
+provider-calling job in this codebase. Every temporal relation and every `kg_items` row also carries
+`valid_from`/`valid_to`/`precision` in the extractor's structured output
+(§5.4); `precision: 'unknown'` is a legitimate answer the extractor is
+required to give rather than guess a plausible-looking date, and it is
+preserved as `unknown` unchanged all the way through review and commit — no
+later step in this pipeline is permitted to upgrade a guess into a false
+precision on the extractor's behalf.
+
+**The model cites evidence ids it was
 given, never invents new ones** — an entity or item whose cited segment id
 is not among the ones handed to it in this run is dropped outright, counted
 in the proposal's `stats` (so a reviewer can see "3 items were dropped for
@@ -802,6 +921,17 @@ that turns "the pilot moved to Q2" arriving twice, once as the original
 statement and once as a later correction, into one `Claim` chain rather than
 two unrelated rows that silently disagree.
 
+**Closing a temporal edge is a proposal row, not a side effect.** When
+§5.4's closing rule fires — a new fact with a `valid` start closing an
+existing exclusive edge — the close is itself a `kg_proposal_items` row
+("Closes: Joe works for Acme, 2019 → Mar 2026") that goes through the same
+`pending | accept | edit | reject | merge_into` decision as everything else
+in §8; nothing closes an edge outside a proposal a reviewer acts on. An
+overlap between two edges of the same normally-exclusive type is a warning
+surfaced in the panel, never a rejection — §5.4's overlap tolerance is
+enforced here, at the one place a conflicting pair would otherwise commit
+unremarked.
+
 ## 8. The proposal and "Send to graph"
 
 **`kg_proposals`** (§10) records one row per extraction run: `note_id`,
@@ -864,8 +994,8 @@ proposal to wrap it.
 
 ### 9.1 Entity brief
 
-`GET /api/graph/entities/:id/brief?since=` (§12, planned) answers "what's
-the latest on Company A" (or a person, or a project) in one call:
+`GET /api/graph/entities/:id/brief?since=&as_of=` (§12, planned) answers
+"what's the latest on Company A" (or a person, or a project) in one call:
 
 1. **Entity → 1–2-hop walk**, bounded, over `kg_relations` — direct
    connections and, where the first hop is another entity rather than an
@@ -889,7 +1019,20 @@ the latest on Company A" (or a person, or a project) in one call:
    segment or note span a reader can click through to.
 
 Sections, in order: **What changed** · **Decisions** · **Open commitments
-(theirs / yours)** · **Risks / claims** · **People changes**.
+(theirs / yours)** · **Risks / claims** · **People changes**. **People
+changes** reads directly off §5.4's closing rule: every edge of a normally
+exclusive type closed since the window's start — a promotion, a manager
+change, a company change — surfaces here by name, rather than being left for
+a reader to notice buried in the raw relation list.
+
+**`as_of`, on this endpoint and on the neighbourhood endpoint (§12, §13),
+answers the identical brief or neighbourhood walk as of a past date instead
+of now** — the same range-containment query §5.4's "an as-of question"
+worked example uses, exposed here as a first-class query parameter rather
+than a one-off. `since` and `as_of` answer different questions and are not
+interchangeable: `since` bounds which **items** are new enough to include;
+`as_of` changes which **edges** are considered open at all, by evaluating
+every `valid` range against that date instead of the present moment.
 
 ### 9.2 Entity digest (`kg.entity_digest`)
 
@@ -960,12 +1103,18 @@ summary):
   column can hold the strings but not which of three very different origins
   each one came from, and that provenance is exactly what §7's "learning"
   step needs to record. `entity_id` **Cascade**.
-- **`kg_relations`** — `type` (§5.2's fifteen), `from_id`, `to_id`, `props`
-  JSONB, `valid_from`/`valid_to` (§5.4), `review_status` (§5.5),
+- **`kg_relations`** — `type` (§5.2's sixteen), `from_id`, `to_id`, `props`
+  JSONB, `valid tstzrange` + `valid_precision` (`day | month | year |
+  unknown`, §5.4 — `valid_from`/`valid_to` name the range's lower and upper
+  bound throughout this document's prose, but there is exactly one stored
+  column, a range, never two nullable timestamps), `review_status` (§5.5),
   `confidence`. No inverse row is ever stored (§5.2). `owner_id` Cascade.
 - **`kg_items`** — `Commitment`, `Decision`, `Claim`, and `PersonFact` **in
   one table**, not four, distinguished by a `kind` enum: `subject_id`,
-  `statement`/`title`, `status`, `occurred_at`, `due_at`, `owner_id`
+  `statement`/`title`, `status`, `occurred_at`, `due_at`, `valid tstzrange` +
+  `valid_precision` alongside `occurred_at` (§5.4 — the same bitemporal pair
+  `kg_relations` carries, so an item's own valid period, when it has one, is
+  never a second stored shape from its edges' shape), `owner_id`
   (Person), `counterparty_id`, `superseded_by_id`, `sensitivity` (nullable —
   only meaningful when `kind = 'person_fact'`, §5.6), `statement_hash` (§7's
   dedup and suppression key), `embedding`. One table because all four kinds
@@ -1005,9 +1154,12 @@ hand-written index discipline (verified above — Prisma cannot express
 same pattern `jobs`, `database_backup_runs`, `transcript_speakers`, and
 `SearchEmbedding` itself already establish); `(owner_id, from_id, type)` and
 `(owner_id, to_id, type)` on `kg_relations` (§5.2's "joins are symmetric"
-argument, made concrete); `(owner_id, subject_id, occurred_at desc)` on
-`kg_items` (§9.1's brief query); a partial unique on
-`kg_entity_views(user_id, entity_id)`.
+argument, made concrete); a **GiST index on `valid`**, on both `kg_relations`
+and `kg_items` (§5.4 — the range-containment (`@>`) and overlap (`&&`)
+queries §5.4's worked examples and closing rule depend on need this, not the
+plain b-tree a bare pair of timestamp columns would have used);
+`(owner_id, subject_id, occurred_at desc)` on `kg_items` (§9.1's brief
+query); a partial unique on `kg_entity_views(user_id, entity_id)`.
 
 **`pg_trgm` is a new migration requirement for this codebase — pgvector
 already is not** (`SearchEmbedding` already depends on it, verified above),
@@ -1329,6 +1481,27 @@ child-issue breakdown for the pattern).
   exactly four non-pinned destinations by design, and a fifth is "not an
   addition, it is a redesign" (the file's own words, verified above). The
   graph is reached from within existing surfaces instead.
+- **Editing an edge in place when a newer note contradicts it.** Rejected
+  per §5.4's "state is derived from dated facts" rule: overwriting a
+  `WORKS_FOR` edge's `valid` range in place the moment a newer note
+  disagrees would erase the very "what did we used to think, and when did
+  that change" history §3.4 exists to keep, and would make an edge's value
+  depend on which note happened to be reviewed last rather than on the facts
+  actually in evidence for each period. A new dated fact is added instead,
+  and the edge set is derived from the full set of facts, exactly as
+  `materialize()` derives a transcript's current text from its version log
+  rather than editing a segment's row in place.
+- **Two nullable timestamps (`valid_from`, `valid_to`) instead of a range
+  with a precision.** This was this document's own original design for
+  §5.4 and is rejected here in favor of a single `tstzrange` +
+  `valid_precision` pair: two nullable columns cannot express "true
+  throughout 2026" without inventing a synthetic January 1st start and a
+  synthetic January 1st end the UI then has to know to reconstruct as
+  "2026" rather than display as two fabricated exact dates; a range column
+  carries the precision it actually has, is GiST-indexable for the overlap
+  and containment queries §5.4 and §10 both depend on, and makes an overlap
+  check a native range operator instead of a pair of open-coded comparisons
+  a migration or an extractor could get backwards.
 
 ## Verification
 
@@ -1347,6 +1520,8 @@ serve for their own epics.
 | Curated (`accepted`/`edited`) entities are never auto-merged with each other; when one side of a merge is curated, it is always the survivor | `apps/api/src/graph/resolution/resolution.service.spec.ts` |
 | A merge is fully reversible: `POST .../merges/:id/reverse` restores the tombstoned entity, its reassigned relations/evidence/aliases, and re-queues the pair for review | An integration test performing a merge, reversing it, and asserting the graph state is byte-for-byte the pre-merge state |
 | A confirmed-distinct pair is never re-proposed by a later `kg.resolve` run | `apps/api/src/graph/resolution/candidates.spec.ts` |
+| An `as_of` query against the entity brief and the neighbourhood endpoint returns the edge open at that date, not the currently-open edge, for an entity with a closed and a superseding edge (§5.4's "as-of question" worked example) | An integration test seeding a person with two sequential `HAS_ROLE`/`REPORTS_TO` edges and asserting `as_of` inside the first edge's `valid` range returns it, not the second |
+| Out-of-order ingestion — a note about an earlier meeting, reviewed and committed after a later meeting's note — attaches to the existing edge its `valid` range falls inside rather than reopening or splitting it, and proposes a new edge only when its `valid` range falls outside every known interval for that person and relationship type | An integration test committing a later-meeting note first, then an earlier-meeting note whose fact falls inside the resulting edge's `valid` range, asserting one edge with two evidence rows results, not two edges |
 | A `sensitive` `PersonFact` is never pre-checked in a proposal, never appears in a note-generation prompt under any setting, and never appears in an entity brief unless directly requested | An RBAC/data-flow test sweeping every prompt-assembly and brief-composition call site for a `sensitive` fixture fact |
 | `graph:read`/`graph:write` are seeded for Admin, Contributor and Viewer; no `graph:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
 | No access to a graph entity, relation, or proposal is ever a 403 | An RBAC matrix e2e distinguishing "no access" (404) from "wrong permission" (403) for every graph route |
