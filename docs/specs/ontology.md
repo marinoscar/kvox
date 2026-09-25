@@ -1,0 +1,1400 @@
+# Connected Knowledge → The kvox Ontology
+
+> Epic not yet filed — this document **is** the spec the epic is filed from,
+> per CLAUDE.md's Issue-Driven Development rule and the precedent
+> `docs/specs/notes.md` set for issue #46 and `docs/specs/transcription.md`
+> set for issue #20. **Nothing described below is merged.** There are no
+> `kg_*` tables, no `graph.*` job types, no `/api/graph/*` controller, and no
+> graph UI anywhere in this codebase today. Every file path named below is
+> where the implementing issue commits to putting the code, marked *planned*
+> on first use in each section; a handful of existing files this design reads
+> from or extends are named without that marker because they are verified
+> against the current tree as of this document's writing (2026-09) —
+> `apps/api/prisma/schema.prisma`'s `Transcript.speakerIdentities` (line
+> ~2391), `TranscriptSegment`, `TranscriptNameSuggestion`, `NoteGeneration`
+> and `SearchEmbedding` models; `apps/api/src/search/search-fusion.ts`
+> (`reciprocalRankFusion`, `RRF_K = 60`); `apps/api/src/notes/job-types.ts`
+> (`aiProviderThrottleKey`); `apps/api/src/transcription/keyterms.ts`
+> (`MAX_TRANSCRIPT_KEYTERMS`); and `apps/web/src/config/destinations.ts`
+> (the four-tab ceiling). Everything under `apps/api/src/graph/`,
+> `apps/web/src/pages/graph/` (or wherever §13 lands it), and every `kg_*`
+> table is *planned*.
+>
+> Builds on: `docs/specs/transcription.md` (segment stability, the version
+> log, `materialize()`, speaker identification), `docs/specs/notes.md`
+> (the AI provider framework, per-user credentials, the token budget, the
+> durable-stream pattern), `docs/specs/search.md` (the hybrid retrieval
+> architecture and `reciprocalRankFusion` this design reuses directly),
+> `docs/specs/transcript-name-correction.md` (the phonetic/discovery/
+> adjudication pipeline shape this design's resolution step is modelled on),
+> and CLAUDE.md's MANDATORY job-queue and Settings UI Pattern rules, both of
+> which this document commits to following rather than restating.
+>
+> This document supersedes a broader draft (project name `knotes`,
+> `docs/ONTOLOGY.md` v0.2 in that repository — 80-odd node labels, a Neo4j
+> graph-database projection, an agent-execution-trace layer, and a
+> problem/resolution layer) that was never implemented against kvox. "Why
+> this shape, and not the obvious one" below states exactly what was kept,
+> what was cut, and why; nothing from that draft is assumed as background —
+> every decision this document depends on is restated here in full.
+
+## Why this shape, and not the obvious one
+
+VISION.md's "Knowledge Graph" section states the intent — *"the graph should
+draw knowledge from transcripts, generated notes, imported documents, user
+context and user corrections,"* and its purpose is *"helping users understand
+relationships across information that would otherwise remain isolated"* — and
+then explicitly defers everything else: *"the exact ontology and structure of
+this graph should be defined later."* In the meantime a full draft ontology
+*was* written, for a different, more ambitious product than the one kvox
+actually is. This document is the reconciliation: what of that draft still applies to kvox, cut
+down to what kvox's own workflow — record, correct, generate a note, done —
+actually needs, and grounded in outside evidence about where a graph helps
+retrieval and where it does not.
+
+**What the v0.2 draft got right, and is kept.** Three of its structural
+choices survive unchanged into this document because nothing about narrowing
+the scope invalidates them: content is evidence, not knowledge, so nothing
+enters the graph without a citation back to the transcript segment or note
+span that supports it (v0.2 §3.2, kept as this document's §5.3); a
+user-curated fact always outranks a machine-extracted one and is never
+silently overwritten (v0.2 §9.2, kept as §7's resolution rules and §5.5's
+review lifecycle); and a review-status lifecycle — `unreviewed → accepted |
+edited | rejected`, with `merged`/`superseded` as terminal states reached only
+from an already-curated row (v0.2 §9.3) — is kept nearly verbatim as §5.5,
+because it is the mechanism that makes the first two promises actually
+enforceable rather than aspirational.
+
+**What is cut, and why.** Two whole layers of the v0.2 draft do not appear
+below at all:
+
+- **The agent-execution-trace layer** (`AgentRun`, `AgentStep`, `ToolUse`,
+  `CommandRun`, `FileChange`, `CodeChange`, and a dozen more, v0.2 §7) modelled
+  a coding agent's own actions — commands run, files touched, diffs produced
+  — as first-class graph nodes. kvox has no coding-agent surface: it
+  transcribes conversations and generates notes from them. There is nothing
+  in this product for that layer to describe, and importing forty node types
+  built for a different product's execution model would be exactly the
+  "invent structure nobody's data will ever populate" mistake this document's
+  §3 argues against on its own terms.
+- **The problem-resolution layer** (`Problem`, `Symptom`, `Hypothesis`,
+  `Attempt`, `RootCause`, `Resolution`, `Runbook`, `LessonLearned`, v0.2 §6)
+  modelled operational troubleshooting memory — "did I already try this,"
+  "what worked instead." kvox's meetings are not incident retros by default,
+  and forcing every "we tried X, it didn't work, we did Y instead" into a
+  five-type mini-ontology when the same fact is already representable as two
+  ordinary `Claim`s and a `SUPERSEDES` edge (§5.2) buys nothing an
+  organization actually using this product for meeting notes would use.
+
+Both layers remain named here, in this paragraph and in "Rejected
+alternatives," specifically so a future contributor tempted to reintroduce
+them for a genuinely operational use case finds the reasoning that removed
+them rather than silence. Everything below, correspondingly, targets exactly
+one product statement — the north star this whole document optimises for:
+
+> **Remember the work, not just the words.**
+
+A transcript remembers what was *said*. A note remembers what was *written*
+about what was said. Neither remembers, across dozens of meetings over
+months, that Acme's CIO is leaving in March, that the Q2 pilot was already
+pushed once, or that Sarah owns the vendor migration and it is three weeks
+overdue. That is the specific gap this document's graph closes — nothing more
+ambitious, and (per the research below) nothing less either.
+
+**The research summary, and what each source actually contributed.** Before
+committing to *any* graph, four independent findings were checked against the
+"just do better vector search" alternative, because a knowledge graph is a
+second store, a second access-control surface, and a second thing that can
+disagree with the truth — expensive enough that it should not be built on
+vibes.
+
+A large systematic evaluation of RAG versus GraphRAG
+(arxiv.org/html/2502.11371v3) found single-hop retrieval-augmented generation
+scores 64.8 F1 against graph-based methods' 60–63 — **plain vector/lexical
+retrieval wins the common case outright**, and graph-based methods only pull
+ahead by 1–6% on genuinely multi-hop questions ("who took over from the
+person Acme mentioned leaving in March?"). The same study's most load-bearing
+number for this document's design is that only 65.8%/65.5% of the entities a
+correct answer actually needed were present in the graphs those systems had
+built — **extraction is the bottleneck, not retrieval**, which is why §6
+below treats extraction quality as a first-class deliverable with a golden
+set and precision/recall targets *before* any retrieval feature ships, and
+why §9.4 makes graph-only retrieval structurally impossible rather than
+merely discouraged. The same paper found hybrid integration — combining a
+graph signal with the existing FTS/vector legs — adding +6.4% over either
+alone, which is the empirical basis for §9's fusion design rather than a
+graph-replaces-search design.
+
+GraphRAG-Bench (github.com/GraphRAG-Bench/GraphRAG-Benchmark, feeding ICLR'26's
+"When to Use Graphs in RAG") frames the same result as a decision rule rather
+than a single number: graphs earn their cost specifically on multi-hop
+reasoning and corpus-wide sensemaking questions, and lose or tie on
+single-fact lookup. A VentureBeat practitioner summary of the same body of
+work (venturebeat.com/orchestration/stop-graphing-everything-when-graphrag-actually-beats-vector-rag)
+adds concrete numbers this document leans on directly: multi-hop recall rising
+73.4%→87.8% with a graph in the loop, global "comprehensiveness" questions
+winning 72–83% of head-to-head comparisons, roughly $48 to index a
+benchmark-scale corpus, and — the single most relevant data point for §6's
+architecture — a "LazyGraphRAG" strategy that defers entity resolution to
+query time scoring within 0.1% of full GraphRAG on quality while resolving
+nothing at write time. That is a real engineering option for a system with no
+review step; §"Rejected alternatives" explains why it is wrong for kvox
+specifically, where resolving "is this the same Sarah" *is* the review step
+a human already has to do once per meeting, and deferring it to every future
+query would just repeat that decision, unreviewed, forever.
+
+Zep's temporal-knowledge-graph paper (arxiv.org/abs/2501.13956) is cited for
+one mechanism, not its headline benchmark: representing facts with
+valid/invalid time windows rather than a single timestamp measurably improved
+long-context memory recall (+18.5% on LongMemEval) and cut retrieval latency
+~90% relative to a full-context baseline. Its `valid_from`/`valid_to` +
+"superseded" pattern is the direct model for §5.4's temporal design. Its own
+LoCoMo benchmark numbers are disputed in public discussion of that paper and
+are **not** relied on here — kvox's own golden set (§6) is the quality bar
+this project measures itself against, not a third party's disputed leaderboard.
+Finally, a study on LLM extraction against scholarly Wikidata
+(arxiv.org/pdf/2411.08696) reports precision around 0.80 and recall 0.81–0.97
+for structured entity/relation extraction from real text with a capable
+model — evidence that the ≥0.95 auto-link precision and ≥0.85 commitment
+recall targets §6 sets are realistic engineering targets, not optimistic
+ones, for a domain (meeting transcripts) that is considerably more
+structured than open scholarly text.
+
+The synthesis these four sources converge on, and the one sentence this whole
+document is an elaboration of: **a knowledge graph over meeting content is
+worth building because it wins on multi-hop and temporal questions
+specifically — "what's changed since I last checked on Acme," "who inherited
+this when Sarah left" — and it is worth building *carefully* because its
+single biggest failure mode, in every source that measured it, is
+under-extraction, not bad ranking.** Hybrid retrieval that never depends on
+the graph alone (§9.4) is not a hedge against this design being wrong; it is
+the design responding directly to what the evidence says about where graphs
+fail.
+
+## 1. Scope and non-goals
+
+**In scope for this document and its filed epic:** six entity types plus
+`Meeting` and evidence (§5.1); one direction per relationship, always with
+provenance (§5.2); an evidence contract anchored to a stable transcript
+segment id or a note version and character range (§5.3); a review-gated
+extraction pipeline running once per note (§6); three-stage entity resolution
+with reversible merges (§7); a proposal object and an explicit "Send to
+graph" commit — nothing enters the graph any other way, with two narrow
+exceptions named in §8 (§8); hybrid retrieval that fuses a graph walk with the
+existing FTS/vector legs, never a graph-only answer (§9); an entity page and
+a bounded, entity-centred neighbourhood view (§13); and feedback loops back
+into transcription's keyterms and name-check and into the note-generation
+prompt (§14).
+
+**Out of scope, permanently, not merely "not yet":**
+
+- **Any second database.** §3.2 and "Rejected alternatives" state the
+  argument in full; the summary is that PostgreSQL, `pg_trgm`, pgvector and
+  bounded recursive CTEs are sufficient for the query shapes this product
+  needs, and a second store buys graph-algorithm and long-path capabilities
+  this product does not use.
+- **An agent-execution-trace layer.** See "Why this shape" above. kvox has no
+  coding-agent surface for this layer to describe.
+- **A problem/resolution layer** (`Problem`, `Symptom`, `Attempt`,
+  `Resolution`, `Runbook`). See "Why this shape" above; the same facts are
+  representable as `Claim`s and `SUPERSEDES` edges when they actually occur in
+  a meeting.
+- **Free-form graph query access** — no endpoint ever accepts or generates
+  Cypher, SQL, or any other query language from a model or a user; every
+  graph read is one of the fixed shapes in §9 and §12.
+
+**Deferred to v2, not rejected — listed in full in §5.7:** a `Concept`/topic
+layer distinct from `Project`, corpus-wide sensemaking summaries, and a
+neighbourhood-graph rendering library choice (§13 names candidates, installs
+none).
+
+## 2. Standards profile
+
+kvox's ontology reuses established vocabularies **as naming and
+disambiguation guidance**, not as a schema kvox's Postgres tables are bound
+to today. Nothing below requires an RDF store, a SPARQL endpoint, or any
+runtime dependency on these vocabularies; they exist so that a future export
+(§16) has an honest target rather than an invented one.
+
+| Area | Vocabulary | How kvox aligns |
+|---|---|---|
+| Core entities | Schema.org | `Person`, `Organization` map to `schema:Person`/`schema:Organization` by name and by the properties each entry keeps (§5.1) |
+| Concepts and taxonomies | SKOS | Named as the alignment target for the *deferred* `Concept`/topic layer (§5.7) — not used by anything in scope today |
+| Provenance | PROV-O | `kg_evidence` (§10) is structurally a `prov:wasDerivedFrom`/`prov:used` pair — an entity or item "used" a segment or note span as its evidence — without importing `prov:Agent`/`prov:Activity` as graph nodes, because kvox's own `jobs`/`audit_events` tables already record who/what generated a row |
+
+**Namespace.** `kv:` / `https://kvox.app/ns#` is named here as the *future*
+IRI base for a JSON-LD/RDF export (§16), and it is a placeholder only: it
+binds no running system today, resolves no real endpoint, and is not read or
+written by any code in this repository. Choosing it now costs nothing and
+avoids a later rename if export is ever built; deferring the choice would
+not have made the eventual export any easier and would have left one more
+undecided detail hanging over a document whose entire purpose is to stop
+deferring decisions.
+
+## 3. Design principles
+
+**3.1 Content is evidence, not knowledge, by itself.** A transcript segment
+or a note is a primary source; the graph is what a human reviewed and decided
+those sources mean. This is not a stylistic preference — it is what makes
+§5.3's evidence contract and §8's "nothing enters without a commit" rule
+possible at all: if raw content and curated knowledge lived in the same
+table with the same trust level, there would be nothing to distinguish "the
+model guessed this" from "a person confirmed this," which is exactly the
+distinction VISION.md's "AI proposes. The user controls the truth" thesis
+exists to preserve at every other layer of this product.
+
+**3.2 PostgreSQL is the only store — a graph database is a rejected
+alternative with named re-open triggers, not a future default.** The v0.2
+draft ran a Neo4j projection beside Postgres, and its own §9.1 spent thirty
+lines specifying the "no-orphans" invariant a two-store design needs and two
+more mechanisms (a cascading accept, a projection-time fallback) to actually
+hold it, plus a one-time backfill migration to heal cases where it briefly
+didn't. That is not a report of a design working — it is a report of a
+sync-consistency bug class that a two-store architecture manufactures and
+then has to keep re-closing. This document's design has exactly one system
+of record and nothing to keep in sync with it, because there is nothing else
+to sync. `pg_trgm` handles fuzzy name matching, pgvector (already a
+dependency — `SearchEmbedding`, verified above) handles semantic similarity,
+and a bounded `WITH RECURSIVE` CTE handles the 1–2-hop neighbourhood walks
+§9.1 and §13 need — kvox's graph questions are shallow by construction
+(§9.1's brief, §13's neighbourhood view), and a shallow, indexed graph walk
+in Postgres has no measured latency problem at this scale. "Rejected
+alternatives" names the three conditions that would actually justify
+revisiting this — none of which this product's roadmap currently states as
+a goal.
+
+**3.3 No orphans.** Every `accepted`/`edited` entity, relation, and item has
+at least one `kg_evidence` row, enforced inside the same transaction that
+commits it (§8, tested per §"Verification"). An entity or fact with no
+citation back to a segment or note span is not knowledge kvox can stand
+behind — it is an unsupported assertion wearing the UI of a supported one,
+which is the specific failure "AI proposes, the user controls the truth"
+exists to prevent everywhere else in this product.
+
+**3.4 Failed and superseded facts are kept, never deleted.** A `Decision`
+that was later reversed, a `Claim` that turned out to be wrong, a
+`Commitment` that was dropped — all stay in the graph, linked by `SUPERSEDES`
+(§5.2, §5.4), because "what did we used to think, and when did that change"
+is itself a question this product exists to answer, and deleting the earlier
+row would erase the very history a temporal graph is for.
+
+**3.5 A narrow schema, not a broad one.** Six entity types plus `Meeting`
+and evidence, roughly fifteen relationship types, one join table for facts —
+against the v0.2 draft's 80-odd node labels across seven layers. Every type
+in §5 exists because a real product surface (an entity page, a brief, a
+feedback loop) reads it; nothing is speculative inventory for a use case
+this document cannot name. "Rejected alternatives" states the 44-type
+`graph_nodes` catalogue this replaces and exactly why precision, not
+completeness, was the deciding factor.
+
+**3.6 Human in the loop by construction, not by policy.** §8's commit gate is
+not a permission check that a future flag could disable — it is the only
+write path into `kg_entities`/`kg_relations`/`kg_items` that exists at all,
+with two narrow, explicitly named exceptions (the speaker-naming write and a
+manual edit on an entity page, §8).
+A design that made auto-commit *possible* and merely defaulted it off would
+be one config change away from silently reintroducing the exact
+unsupported-assertion failure §3.3 rules out; a design where the write path
+itself does not exist cannot be misconfigured into that state.
+
+## 4. The workflow
+
+Connected knowledge attaches to kvox's existing note-generation flow — it
+adds one step at the end, and reuses two moments that already exist for
+other reasons:
+
+1. **Upload a recording** (`docs/specs/transcription.md`) — unchanged.
+2. **Name speakers** — unchanged, but this is **resolution moment #1**: the
+   instant a user types "Sarah Chen" against "Speaker A," they have just
+   performed the single highest-confidence entity-resolution act this whole
+   design will ever see, for free, as a side effect of a feature that already
+   exists (`Transcript.speakerIdentities`, verified above). §5.1 and §7 both
+   depend on this moment rather than duplicating it.
+3. **Add context** — unchanged (`docs/specs/notes.md` §3.1's Context field),
+   but its free text is now also **resolved to entities** where it names one
+   the graph already knows, feeding §6's known-entities list for this
+   meeting.
+4. **A note is generated** — unchanged (`note.generate`, `docs/specs/notes.md`
+   §1–§3).
+5. **A graph proposal is produced** — new. `kg.extract` (§6) runs
+   automatically the moment the note reaches `ready`, reading the committed
+   note body, its source transcript's segments, and the meeting's known
+   entities, and produces a *draft* — nothing visible in the graph yet.
+6. **A review panel** — new (§8, §13). The proposal's entities, relations and
+   items are shown grouped by type, pre-checked where resolution is
+   confident (§7), with every row's evidence one click away.
+7. **"Send to graph" commits** — new (§8). One transaction. Before this
+   click, nothing the note generated exists as a graph row anywhere; after
+   it, every accepted/edited item does, each with its evidence attached.
+
+**Where resolution happens, restated as one list because it is easy to lose
+track of across §6–§8:** at speaker-naming time (step 2, free, already
+built); at extraction time, against the known-entities list assembled for
+this specific meeting (§6, inside `kg.extract`); and as a standalone,
+on-demand `kg.resolve` pass over already-committed rows (§7, for a bulk
+re-scan, a merge reversal, or a threshold change). Nothing about this list is
+a fourth place — every resolution decision this design ever makes happens in
+one of these three moments.
+
+## 5. The ontology
+
+### 5.1 Entity types
+
+Six entity types, one event anchor, and one fact type with its own handling
+— eight labels total, each with a one-line disambiguation rule against its
+nearest neighbour, because the failure mode a narrow ontology exists to
+prevent (§3.5) is precisely two people creating two entities for the same
+real-world thing because nothing told them which label to reach for.
+
+**Person** — a human being. Never a role ("the CIO"), never a team, never an
+organization acting collectively. *Positive:* "Sarah Chen," "the Acme CIO
+whose name was given as Marcus Webb." *Negative:* "the data team at EY" (an
+`Organization`, or a `Person` if and only if one specific human is meant);
+"whoever's on call" (no specific human named — nothing to create).
+
+**Organization** — a company, client, vendor, institution, or an internal
+team specifically when that team acts as a party to a commitment or decision
+rather than merely being mentioned. *Positive:* "EY" (a company); "the data
+team at EY," when a commitment is owed *to* that team specifically rather
+than to an individual within it. *Negative:* "the data team at EY," mentioned
+only in passing with no commitment or decision naming it as a party — that
+mention lives as evidence on whatever it actually relates to, not as a new
+`Organization` row created speculatively.
+
+**Project** — a named effort with a start and an expected (even if fuzzy) end
+that meetings, decisions and commitments attach to. *Positive:* "Q2 pilot,"
+"the vendor migration." *Negative:* "AI code review" as a recurring meeting
+topic with no start/end and nothing else attaching to it as a unit of work —
+that is a topic, not a project, and it lives today as a free-text entry in
+`Meeting.topics[]` (a plain string array property, never a graph node) rather
+than as the deferred `Concept` type §5.7 names. The line is deliberately
+conservative: creating a `Project` for every recurring conversation subject
+would flood the graph with nodes that never anchor a `Commitment` or
+`Decision`, the exact "invented structure nobody's data populates" failure
+§3.5 exists to prevent.
+
+**Meeting** — the event anchor: a date, its attendees, and the source
+transcript(s) and/or note(s) it was drawn from. Every `Commitment`,
+`Decision`, and `Claim` attaches to exactly one `Meeting` through
+`CREATED_IN`/`DECIDED_IN`/`ABOUT`'s temporal grounding (§5.4). One `Meeting`
+per transcript by default (a transcript already has one date and one
+attendee list). A note with no source audio — created from another note or
+an uploaded document — still gets a `Meeting`: its date is whatever the user
+supplied in Context if that names one, else the note's own `createdAt`, and
+either way `Meeting.dateSource` records which (`'stated' | 'note_created_at'`)
+so a later "why does this say September when the call was in July" question
+has a straight answer rather than a silent guess.
+
+**Commitment** — a task with an *owner* and, optionally, a *counterparty* and
+a *due date*, stated or clearly implied by the source text. `status`:
+`open | done | dropped | superseded`. *Positive:* "Sarah will send the
+updated proposal by Friday" (owner: Sarah, due: Friday). *Negative:* "we
+should probably look into that at some point" — no owner named or clearly
+implied is **not** a `Commitment`; it is either a `Claim` (a statement that
+this was discussed) or nothing at all, never force-fit into a task type
+because a sentence sounded task-shaped.
+
+**Decision** — a choice that was made, with what was chosen and, when the
+source states it, the option that was rejected. A later reversal is **a new
+`Decision`** that `SUPERSEDES` the old one (§5.4) — a `Decision` row is never
+edited in place to record a change of mind, because that would erase exactly
+the "what did we used to think, and when did that change" history §3.4 exists
+to keep.
+
+**Claim** — a dated statement of fact about an entity that is neither a
+decision nor a commitment: "Acme's CIO is leaving in March," "the budget was
+cut 20%," "the pilot moved to Q2." Properties: `subject` (the entity it is
+about), `statement`, `occurred_at`, `superseded_by`. This is the unit of
+"what's changed" — §9's entity brief is, structurally, mostly a query over
+`Claim`s newer than the reader's last visit.
+
+**PersonFact** — a `Claim` whose `subject` is a `Person` and whose content is
+about that person as an individual rather than about their work: an
+interest, a preference, a personal-life detail, a note on communication
+style. It is its own type, not merely a `Claim` with a `Person` subject,
+specifically because of §5.6's sensitivity handling — folding it into
+`Claim` would mean every `Claim` reader has to remember to check a field that
+usually does not apply, instead of a type whose very existence signals "this
+one needs the extra care."
+
+**Speaker is deliberately not a graph entity of its own.** It is the
+existing per-transcript diarization row (`TranscriptSegment.speakerId`,
+`TranscriptSpeaker`, both verified above); `IDENTIFIED_AS` (§5.2) links it to
+a `Person`, and the identification itself is read from
+`Transcript.speakerIdentities` rather than duplicated into a graph-owned
+copy — the map issue #323 already built *is* where the user's naming lives,
+and this design reads it rather than re-storing the same fact under a second
+name that could drift from the first.
+
+### 5.2 Relationship types
+
+Every relationship below has **one fixed direction**, carries `valid_from`/
+`valid_to` (§5.4) when validity can meaningfully change, and every instance
+carries at least one evidence row (§5.3) once it is `accepted`/`edited`.
+There is deliberately **no inverse pair stored for any of them** — see below
+for why — and **no `RELATED_TO` catch-all** — see "Rejected alternatives" for
+why a relation with no stated meaning is worse than no relation at all.
+
+| Relationship | From → To | Notes |
+|---|---|---|
+| `ATTENDED` | Person → Meeting | |
+| `WORKS_FOR` | Person → Organization | |
+| `HAS_ROLE` | Person → Organization | Props: `{ title }` |
+| `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
+| `DISCUSSED` | Meeting → Project | |
+| `ABOUT` | Claim \| Decision \| Commitment → Person \| Organization \| Project | |
+| `PART_OF` | Project → Organization; Meeting → Project | Two endpoints pairs sharing one relation type, disambiguated by the endpoint types actually present |
+| `DECIDED_IN` | Decision → Meeting | |
+| `CREATED_IN` | Commitment → Meeting | |
+| `ASSIGNED_TO` | Commitment → Person | The owner |
+| `OWED_TO` | Commitment → Person \| Organization | The counterparty, when one is stated |
+| `SUPERSEDES` | Decision → Decision; Claim → Claim; Commitment → Commitment | §5.4 |
+| `MENTIONS` | Note \| Transcript → any entity | The coarse, overview-level shortcut — "everything this note touches," one hop, no evidence detail beyond "somewhere in this document" |
+| `SUPPORTED_BY` | any generated entity/relation/item → its evidence | The fine-grained link — *which* segment or span, §5.3 |
+
+**Why there is no inverse relation stored for any of these — no
+`EMPLOYS` beside `WORKS_FOR`, no `HAS_COMMITMENT` beside `ASSIGNED_TO`.**
+The v0.2 draft, running on a graph database, stored both directions for
+several relation types because a property-graph traversal engine benefits
+from having an edge to walk in either direction without a join. Postgres
+joins are symmetric by construction — `WHERE from_id = $1` and
+`WHERE to_id = $1` cost the same, indexed either way (§10's
+`(owner_id, from_id, type)`/`(owner_id, to_id, type)` index pair) — so
+storing both directions here would buy zero query-time benefit and one
+concrete cost the v0.2 draft actually paid: two rows that can disagree.
+Reversing a relation, correcting one endpoint, or merging one side (§7) all
+become two writes that must stay in lockstep instead of one, and nothing
+enforces that they do. One row, one direction, joined from either side, is
+strictly simpler and cannot drift from itself.
+
+**Why `RELATED_TO` does not exist.** A relation whose *meaning* is "these two
+things are related, somehow" is not a fact an evidence-anchored graph can
+support any claim about — it is a hedge. Concretely, offering it as an
+extraction option would give `kg.extract` (§6) an escape hatch for every
+ambiguous case, and an escape hatch a model can reach for is one it *will*
+reach for, disproportionately, on exactly the sentences worth getting
+specific about. Every relationship above states a real, checkable claim
+("X is assigned to Y," "X supersedes Y"); a proposed link the extractor
+cannot express as one of them is a link that should not be proposed at all.
+
+### 5.3 Evidence contract
+
+Every generated entity, relation, and item points back to the specific
+material that supports it, via `kg_evidence` (§10) rows shaped:
+
+```
+(subject_kind: 'entity' | 'relation' | 'proposal_item',
+ subject_id,
+ transcript_id?, segment_id?, segment_rev?, start_ms?, end_ms?,
+ note_id?, note_version?, char_start?, char_end?,
+ quote)
+```
+
+**Segment anchoring reuses a mechanism that already exists and is already
+proven stable across edits.** `docs/specs/transcription.md` establishes that
+`TranscriptSegment.id` is stable across a `segment.split`/`segment.join` — a
+split keeps the id on the earlier half specifically so a stale reference
+still names something real (verified in the schema's own comment, quoted
+above) — and `TranscriptNameSuggestion.segmentId` + `segmentRev` (verified
+above) is the exact precedent for citing "this segment, as it read at this
+revision" rather than "this segment, as it reads right now." `kg_evidence`
+copies that shape unchanged: `segment_id` + `segment_rev` says *which*
+segment and *which version of its text* the citation was drawn from, so the
+UI can say "this citation's text has changed since" exactly the way a
+name-check suggestion already can, without inventing a second anchoring
+scheme for the same underlying stability guarantee.
+
+**Note anchoring is the identical idea over a note's own version history.**
+`note_id` + `note_version` + `char_start`/`char_end` names a span in a
+specific `note_versions` row (`docs/specs/notes.md` §4.5) — a note's body is
+immutable once a version is written, so an offset pair into a fixed version
+is exactly as durable as a segment id + rev pair into a fixed transcript
+state.
+
+**`quote` is the exact text at anchoring time, kept even though the source
+it points to might move or be corrected later.** A citation is only useful if
+it stays legible after the underlying segment is edited or the note is
+regenerated; `quote` is what lets a reviewer read what the model actually
+saw, even once the live text at that offset has changed underneath it, the
+same "the text has changed since" affordance §7 of
+`docs/specs/transcript-name-correction.md` already gives its own stale
+suggestions.
+
+**The invariant: an `accepted`/`edited` entity, relation, or proposal item has
+at least one evidence row, always.** Enforced inside the same transaction
+that commits it (§8) — never a background check that could catch a violation
+after the fact — and covered by a dedicated test (§"Verification").
+
+### 5.4 Temporal model
+
+`occurred_at` is set on `Meeting` (its date), and on `Commitment`,
+`Decision`, and `Claim` — defaulting to the meeting's own date unless the
+source text names another, with relative dates ("next Tuesday," "in three
+weeks") resolved **against the meeting's date**, never against the date the
+note happened to be written or reviewed. This is a distinct field from
+`created_at` (when the graph row itself was written) for the identical reason
+Zep's temporal-graph paper argues for the distinction: a note is written
+*after* the meeting it describes, sometimes days after, and "latest" queries
+have to sort by when the thing actually happened, not by when kvox happened
+to find out about it.
+
+Relations carry `valid_from`/`valid_to`, with `NULL` meaning "still open" —
+a `WORKS_FOR` edge with no `valid_to` is a current employment; one is set
+when a later `Claim` or extraction states it ended.
+
+`SUPERSEDES` is how a reversal is recorded on `Decision`, `Claim`, and
+`Commitment` alike: a new row, linked to the old one it replaces, never an
+in-place edit of the row it corrects (§3.4). Every "latest on X" query in §9
+sorts on `occurred_at`, descending, and reads the chain of `SUPERSEDES` edges
+to present the current state plus its history — never on `created_at`, which
+would misorder any note written out of order relative to the meetings it
+covers.
+
+### 5.5 Review status lifecycle
+
+```
+unreviewed → accepted | edited | rejected
+accepted | edited → merged (tombstone, merged_into_id)
+accepted | edited → superseded
+```
+
+`unreviewed` rows exist **only inside a proposal** (§8) — nothing unreviewed
+is ever visible to retrieval, the entity page, a brief, or a prompt (§9.4,
+§14). `accepted` means committed with no change from what the model
+proposed; `edited` means committed after a reviewer corrected a field before
+accepting — both are equally "real" from every downstream reader's
+perspective, and the distinction exists purely as a UI/audit signal, not a
+trust tier. `rejected` rows are kept (never deleted) so a re-extraction does
+not propose the identical rejected fact again with no memory of the earlier
+"no" (§7's suppression mechanism). `merged` is a tombstone: the row still
+exists, points at `merged_into_id`, and is excluded from every read path;
+`POST /api/graph/merges/:id/reverse` (§12) restores it. `superseded` marks a
+`Decision`/`Claim`/`Commitment` a later row has replaced (§5.4); it stays
+fully readable, because history is the point.
+
+Content rows — transcripts and notes themselves — are **evidence**, not
+graph rows, and carry no review status of their own: a transcript is trusted
+or not trusted by kvox's existing correction workflow entirely independently
+of whether anything was ever extracted from it into this graph.
+
+### 5.6 Sensitivity
+
+`PersonFact.sensitivity`: `business | personal | sensitive`.
+
+- **`business`** — work-relevant personal context ("prefers async updates,"
+  "based in the Austin office"). Used freely in retrieval, briefs, and the
+  note-generation feedback loop (§14).
+- **`personal`** — non-work personal context (a hobby, a family detail, a
+  personal preference unrelated to how they work). Surfaced in retrieval and
+  the entity page; used in the note-prompt feedback loop **only when the
+  user has opted in** (§14) — the default is off, because feeding a
+  stranger's family details into a generation prompt without being asked is
+  a step further than this product's existing bring-your-own-key privacy
+  posture (`docs/specs/notes.md` §9) has ever taken.
+- **`sensitive`** — anything a reasonable person would not expect repeated
+  back to them in an AI-generated summary: health, legal, financial, or
+  similarly weighty personal information. **Never used in any prompt
+  enrichment, under any setting, ever** (§14, §15) — there is no toggle that
+  turns this on, because the harm of getting this default wrong (a sensitive
+  fact about a third party who never consented to being profiled quietly
+  surfacing in someone else's generated note) is asymmetric with the benefit
+  of getting it right slightly more often.
+
+**`sensitive` is never pre-checked in the review panel** (§8) — every
+`PersonFact` at that level requires an explicit, deliberate accept, the same
+"never silently on by default" posture the review pipeline gives every
+uncertain resolution (§7).
+
+### 5.7 Deferred to v2
+
+- **A `Concept`/topic layer**, distinct from `Project`, aligned to SKOS
+  (§2). Today a meeting's subject lives as a free-text entry in
+  `Meeting.topics[]` — a plain string property, not a graph node — which is
+  enough to answer "what came up" without committing to a topic taxonomy
+  this document has no evidence kvox's users need yet. See "Rejected
+  alternatives."
+- **Corpus-wide sensemaking** ("what are the recurring themes across all my
+  meetings this quarter") — the specific question Microsoft GraphRAG's
+  community-summary architecture answers and this design deliberately does
+  not attempt; §9's per-entity digest is the narrow, cheap answer to "what's
+  new about *this one thing*," not to "summarize everything."
+- **A neighbourhood-graph rendering library choice** — §13 names candidates
+  (`react-force-graph`, `sigma`, `cytoscape`) and the criteria for choosing
+  among them; none is installed by this document, and the choice is deferred
+  to the P5 issue that actually builds the view.
+
+## 6. Extraction (`kg.extract`)
+
+**Trigger and subject.** `kg.extract` is enqueued automatically the moment a
+note reaches `status: 'ready'` (`docs/specs/notes.md` §1.1) and on an
+explicit user "Re-extract" action; it is **never** enqueued for a transcript
+with no note. A transcript with no generated note has nothing curated to
+extract *from* — the note is the reviewed signal a user has already spent
+attention shaping (§3.1's instructions, §3.1's context, a possible manual
+edit before it settles); the transcript underneath it is evidence the
+extraction step cites into, never the thing it reads primary content from.
+Subject: `note`, payload `{ noteId, noteVersion }` — deduplicated on subject
+while `pending`/`running`, the ordinary queue dedup, `skipDedup` never
+needed because there is no self-re-enqueue pattern here the way
+`transcription.poll` has (`docs/specs/transcription.md` §1's own warning
+about that specific pattern does not apply to this job type at all).
+
+**Inputs, assembled by a pure `buildExtractionContext()` (planned:
+`apps/api/src/graph/extraction/extraction-context.ts`):**
+
+- The note body at the version the job was enqueued for (never a live
+  re-read mid-job — the same "assemble once, act on that snapshot" posture
+  `docs/specs/notes.md` §3.1's `assemblePrompt` takes for generation itself).
+- The note's source transcript's segments, compact — ids and millisecond
+  ranges included, full word-level timing omitted, mirroring
+  `docs/specs/transcription.md`'s own segment-compaction discipline for
+  `GET /api/transcripts/:id/segments`.
+- `Transcript.speakerIdentities` (verified above) — who was actually
+  identified as whom, read directly rather than re-derived.
+- The meeting context the user typed (`docs/specs/notes.md` §3.1's Context
+  field).
+- A **known-entities list**, scoped to this meeting: the attendees' `Person`
+  rows, their `Organization`s, any `Project`(s) already named in Context,
+  plus the top-N entities by recent mention across the user's own graph —
+  each with its id and known aliases, so the model can answer "this is
+  entity `kg:<id>`" for something it already knows and "this is new" for
+  something it does not, rather than inventing a fresh entity for every
+  mention regardless of whether one already exists.
+
+**One provider call, structured output.** A single request per extraction
+run — `entities[]`, `relations[]`, `items[]` (the `kg_items` kinds:
+`commitment | decision | claim | person_fact`), each carrying an
+`evidence[]` array of segment ids and character ranges — using the
+provider's structured-output mode (JSON schema / tool-call, whichever the
+active `AiProvider` supports) and Zod-validated regardless: a malformed
+answer is a **failed proposal**, never a partial commit, the identical
+posture `docs/specs/notes.md` §2.2's error taxonomy takes for every
+provider-calling job in this codebase. **The model cites evidence ids it was
+given, never invents new ones** — an entity or item whose cited segment id
+is not among the ones handed to it in this run is dropped outright, counted
+in the proposal's `stats` (so a reviewer can see "3 items were dropped for
+uncited evidence" rather than silently losing them), enforcing §3.3's
+no-orphans rule at the extraction boundary itself rather than trusting a
+later check to catch it.
+
+**The prompt/answer exchange is snapshotted on the proposal, exactly as
+`NoteGeneration.systemPrompt`/`userContent` (verified above, issue #307)
+already snapshots generation's own exchange** — recorded before the provider
+call returns, so a failed extraction still records what was asked, and a
+reviewer questioning why a particular item was (or wasn't) proposed can see
+the exact context the model reasoned from.
+
+**Job execution profile:** `{ maxRuntimeMs: 10 * 60_000, maxAttempts: 1 }`.
+One attempt, for the identical reason `note.generate` carries `maxAttempts:
+1` (`docs/specs/notes.md` §1.3 decision 3, restated by
+`docs/specs/transcript-name-correction.md` §6 for `transcript.name_check`):
+the call spends the user's own AI provider credit, and a completion is
+non-deterministic, so an automatic retry would silently re-spend the user's
+money to propose a *different* set of entities than the draft they may
+already be reviewing. Throttled on `aiProviderThrottleKey(userId)` (verified
+above) — the per-user key, not a shared deployment bucket, for the same
+reason `docs/specs/notes.md` §2.3 gives: every user brings their own vendor
+account, so a 429 against one user's key is evidence about that user alone.
+**Server-only, permanently** — no `nodeResultSchema`/`persistNodeResult` is
+declared, so `JobHandlerRegistry.serverOnlyTypes()` reports it and no worker
+node can ever claim it (CLAUDE.md rule 2), for the identical reason
+`note.generate` is server-only: the credential in play is the user's own
+long-lived vendor key, and no AI vendor here offers a job-scoped sub-key a
+`nodeSecretBroker` could mint and hand to a remote machine — the same
+argument `docs/specs/notes.md`'s own "Rejected alternatives" makes for
+itself.
+
+**Quality bar, stated as a first-class deliverable rather than an
+afterthought — per the research summary above.** A golden set of 30
+hand-labelled meetings, kept under `apps/api/test/fixtures/kg-golden/`
+(planned), and an eval script (planned: `apps/api/scripts/kg-eval.ts`) that
+runs `kg.extract`'s prompt against every fixture and reports per-type
+precision/recall plus auto-link precision. Targets: **auto-link precision ≥
+0.95**, **`Commitment` recall ≥ 0.85**, **entity coverage ≥ 0.90** — chosen
+against the scholarly-extraction baseline (arXiv 2411.08696's 0.80/0.81–0.97
+range for a considerably less structured domain than a meeting transcript)
+and against the systematic-evaluation finding that under-extraction, not
+ranking, is where graph systems actually fail in practice (§"Why this
+shape"). These targets are **gates on relaxing §7's resolution thresholds**
+— a lower auto-link threshold is only defensible once measured precision
+supports it — **not gates on shipping the review UI itself**: the review
+panel (§8) exists specifically to catch what extraction gets wrong, so it
+ships regardless of where the numbers land, and the numbers are what
+determine how much the panel can safely pre-check versus leave for a human.
+
+## 7. Entity resolution (`kg.resolve`)
+
+Resolution runs in two places: **inline**, inside `kg.extract` itself, so
+the review panel can already show proposed matches rather than a wall of
+"new" rows the user has to link by hand; and **on demand**, as a standalone
+`kg.resolve` job, for a bulk re-scan, a re-check after a merge reversal, or a
+re-check after a threshold change in the `graph` settings namespace (§10).
+
+**Candidate generation** unions three signals, deliberately over-generating
+candidates for the scoring step below to narrow rather than trying to be
+precise at this stage:
+
+- **Alias exact match**, case-insensitive (`citext`), against
+  `kg_entity_aliases` (§10).
+- **`pg_trgm` similarity** ≥ 0.4 over label + aliases — catches
+  misspellings and near-matches exact lookup misses.
+- **pgvector kNN** (k = 10) over each entity's own profile embedding — label,
+  type, organization, role, and top co-mentions concatenated and embedded
+  through the existing `SearchQueryEmbedder`
+  (`apps/api/src/search/search-query-embedder.service.ts`, verified above) —
+  reused rather than duplicated, because a second embedder for the same
+  model and dimension contract is a second place for those two facts to
+  drift apart.
+
+**Scoring** combines name similarity with context signals, weighted
+qualitatively (strong/medium/weak) rather than as a single opaque number,
+because the signals genuinely differ in kind: **same-meeting
+attendee/speaker match** (strong — the two "Sarah"s were in the same room),
+**organization co-mention** (strong — both "Sarah"s work at Acme),
+**shared-neighbour overlap** (medium — both connect to the same `Project`),
+**recency** (weak — a tie-breaker only, never a deciding signal on its own).
+
+**Thresholds**, stored in the `graph` system-settings namespace (§10,
+default values given here): **auto-link ≥ 0.90**, **new < 0.55**, and
+everything between routed to **LLM adjudication** — a small, bounded request
+carrying a dossier per candidate (its 1–2-hop neighbourhood plus its
+supporting quotes, matching the "small, bounded, verification-shaped, never
+generation-shaped" call discipline
+`docs/specs/transcript-name-correction.md` §12's own "Rejected alternatives"
+argues for) that answers `same | different | uncertain` plus a rationale.
+`uncertain` goes to the review panel **unchecked** — the same "never
+pre-check an uncertain result" posture §5.6 gives sensitive `PersonFact`s.
+
+**Learning, so the same ambiguity is not re-litigated on every future
+extraction:** an accepted link becomes an alias row on the survivor, with
+provenance recording it came from a confirmed resolution rather than from
+the model's own guess; a confirmed "not the same" verdict is recorded in
+`kg_distinct_pairs` (§10) and every future candidate-generation pass skips
+that pair outright; a rejected `PersonFact` is suppressed by its statement
+hash so the identical fact is never re-proposed verbatim after a user has
+already said no to it once.
+
+**Curated entities are protected, always.** An entity at `accepted` or
+`edited` review status is never auto-merged with *another* curated entity,
+regardless of score — merging two things a human has each separately
+confirmed requires a human decision, not a score crossing a line. When
+exactly one side of a merge is curated, that side is **always** the
+survivor, unconditionally.
+
+**Merge mechanics.** A merge tombstones the redundant entity
+(`review_status: 'merged'`, `merged_into_id` set, §5.5) and reassigns its
+relations, evidence, mentions, and aliases onto the survivor, all inside one
+transaction. Every merge is logged in `kg_merges` (§10) with a full reversal
+payload — the pre-merge state of the redundant entity and every row that was
+reassigned — so `POST /api/graph/merges/:id/reverse` (§12) can restore
+exactly what a merge undid, not an approximation of it.
+
+**Work-item dedup — Commitments, Decisions, and Claims are deduplicated
+too, not just Person/Organization/Project.** A newly proposed item is
+matched against open or otherwise-live items sharing the same `subject` and
+owner/organization, using the same embedding-plus-type-filter approach as
+entity resolution, and adjudication returns one of three verdicts:
+**`same`** (attach the new evidence to the existing row; update its status
+or due date if the new text actually says something changed), **`new`** (an
+unrelated item, create it), or **`supersedes`** (link the two via
+`SUPERSEDES`, §5.4, and mark the earlier one superseded) — the mechanism
+that turns "the pilot moved to Q2" arriving twice, once as the original
+statement and once as a later correction, into one `Claim` chain rather than
+two unrelated rows that silently disagree.
+
+## 8. The proposal and "Send to graph"
+
+**`kg_proposals`** (§10) records one row per extraction run: `note_id`,
+`note_version`, the generation-context snapshot (§6), `status`
+(`draft | committed | discarded | failed`), and `stats` (counts of proposed,
+dropped-for-uncited-evidence, and — post-commit — accepted/edited/rejected
+items). **`kg_proposal_items`** holds one row per proposed entity, relation,
+or item: `kind`, `payload`, a `resolution` object (`{ ref, score,
+candidates[] }` from §7), a per-item `decision`
+(`pending | accept | edit | reject | merge_into`), and its `evidence[]`.
+
+**Review panel rows are grouped by type** (People, Organizations, Projects,
+Decisions, Commitments, Claims, Person Facts), each row showing its proposed
+value, its evidence (one click to the exact ▶ segment or note span), and —
+where §7's resolution produced one — its matched entity.
+
+**Pre-check rule.** A row is pre-checked (defaulted to `accept`) exactly
+when: its resolution score is at or above the auto-link threshold **and**
+its kind is not `PersonFact` **and** it is not flagged as a possible
+duplicate by §7's own uncertain-adjudication path. `PersonFact` is
+categorically excluded from pre-checking regardless of resolution
+confidence — resolving *who* the fact is about being confident says nothing
+about whether surfacing the fact itself was the reviewer's intent, which is
+exactly §5.6's sensitivity handling restated as a UI default rather than a
+storage rule.
+
+**"Known, skipped" rows.** A proposed relation or claim that already exists
+verbatim — the same endpoints, the same statement hash — is shown collapsed
+rather than proposed as a duplicate row to accept, and its evidence is
+appended to the existing row's evidence set even though nothing new is
+created: a second meeting restating "Sarah owns the vendor migration" is
+additional support for a fact the graph already has, not a second fact.
+
+**Commit semantics.** `POST /api/graph/proposals/:id/commit` (§12) applies
+every `accept | edit | merge_into` item **in one transaction**: entities,
+relations, items, and evidence are upserted, aliases and distinct pairs are
+recorded, `kg.entity_digest` (§9.2) is enqueued for every touched entity, and
+`kg.embed` (§11) is enqueued for every new or edited one. The commit is
+audited as `graph.proposal_committed`. **This is the transaction §3.3's
+no-orphans invariant is enforced inside** — an item committed with no
+evidence row is a bug in this transaction, not a state the schema merely
+discourages, and it is covered by a dedicated test (§"Verification").
+
+**Re-extraction on an already-committed note** produces a **new draft**
+whose items are diffed against the current graph — only genuinely new or
+changed rows are shown, so re-running extraction after an edit to the note
+does not re-present everything the first pass already committed as if it
+were new.
+
+**Nothing else writes to the graph.** The commit above is the only general
+write path, with exactly two named exceptions: the **speaker-naming write**
+(`IDENTIFIED_AS` plus a `Person` row, because the user typing a name against
+"Speaker A" *is itself* the review — there is no separate confirmation step
+that act could sensibly wait for), and a **manual edit on an entity page**
+(§13) — a person directly correcting a `Person`'s name or an `Organization`'s
+label after the fact, which is curation by construction and needs no
+proposal to wrap it.
+
+## 9. Retrieval
+
+### 9.1 Entity brief
+
+`GET /api/graph/entities/:id/brief?since=` (§12, planned) answers "what's
+the latest on Company A" (or a person, or a project) in one call:
+
+1. **Entity → 1–2-hop walk**, bounded, over `kg_relations` — direct
+   connections and, where the first hop is another entity rather than an
+   item, one hop further (never deeper — §3.5's "narrow schema" principle
+   extended to query shape: an unbounded walk over a graph this size answers
+   a question nobody asked and costs latency nobody budgeted).
+2. **Items in the requested window** (`occurred_at > since`, or the digest's
+   `covers_until` when no `since` is given, §9.2) — the `Claim`s,
+   `Decision`s, and `Commitment`s that actually changed.
+3. **FTS + pgvector over segments and notes**, fused with
+   **`reciprocalRankFusion()`** (`apps/api/src/search/search-fusion.ts`,
+   verified above, `RRF_K = 60`) — the *exact same* fusion function
+   `docs/specs/search.md` already uses for its two retrieval arms, reused
+   rather than re-implemented, because a second RRF implementation that
+   could disagree with the first about how two rankings combine is exactly
+   the kind of drift `docs/specs/notes.md`'s own "one function, two callers"
+   discipline (§2.5) argues against wherever it recurs in this codebase.
+4. **× recency × confidence**, then an **LLM composition step** that writes
+   the brief with **mandatory citations** — every stated fact traces, through
+   its item id, to the evidence (§5.3) that supports it, down to the ▶
+   segment or note span a reader can click through to.
+
+Sections, in order: **What changed** · **Decisions** · **Open commitments
+(theirs / yours)** · **Risks / claims** · **People changes**.
+
+### 9.2 Entity digest (`kg.entity_digest`)
+
+A per-entity rolling summary, so a busy entity's brief does not have to
+re-read and re-summarize its entire history on every view. Deduplicated per
+entity (one pending digest job per entity at a time — the ordinary queue
+dedup, no `skipDedup` needed), it writes `kg_entity_digests (entity_id,
+summary, citations, covers_until, generated_at)` — the running summary plus
+the timestamp up to which it accounts for everything. A brief request is
+then: the digest, plus whatever items are newer than `covers_until`, never a
+full re-summarization from scratch. Enqueued after every commit that touches
+the entity (§8), and its `covers_until` is what makes the entity brief cheap
+even for an entity mentioned in fifty meetings.
+
+**"Since I last looked"** is a separate, per-viewer fact: `kg_entity_views
+(user_id, entity_id, last_viewed_at)` (§10), read to compute what's "new"
+*for this specific reader* on top of the shared digest — two different
+users looking at the same entity see the same underlying digest but a
+different "what's changed since you last checked" delta.
+
+### 9.3 Agent tools
+
+The endpoints in §12 are re-exposed as a typed toolset — `search`,
+`get_entity`, `neighbors`, `evidence`, `timeline`, `entity_brief` — for any
+future agent-style consumer of this graph. **No free-form SQL or Cypher is
+ever generated by a model, for any purpose, at any point in this design.**
+Every tool call resolves to one of the fixed, parameterized query shapes
+already described above; there is no tool that hands a model a query
+language and asks it to write one.
+
+### 9.4 Graph-only is forbidden by design, not merely discouraged
+
+Nothing in this document's design ever answers a retrieval question from the
+graph alone. Every brief, every entity page, every search result fuses the
+graph signal with the existing FTS+vector legs (§9.1's step 3) — because the
+research this design rests on (§"Why this shape") found that only 65.8%/65.5%
+of the entities a correct answer actually needed were present in graphs
+comparable systems had built, meaning a graph-only design silently fails on
+roughly a third of real questions with no visible symptom beyond an
+incomplete answer that looks complete. The FTS+vector leg is not a fallback
+bolted on for robustness — it is the leg that covers exactly the extraction
+misses §6's own quality bar cannot fully close no matter how well it is
+tuned, and treating it as load-bearing rather than optional is the direct,
+mechanical response to that specific finding.
+
+## 10. Data model
+
+Eleven tables (all `snake_case`-mapped Prisma models, planned — column-level
+reasoning to live in the block comment above each model in
+`apps/api/prisma/schema.prisma`, following the discipline `notes.md` §4 and
+`transcript-name-correction.md` §8 already establish; this section is the
+summary):
+
+- **`kg_entities`** — `Person`, `Organization`, `Project`, `Meeting` (`type`
+  enum, `label`, `props` JSONB, `embedding vector(1536)` — reusing the exact
+  model/dimension contract `SearchEmbedding` already carries, verified above,
+  rather than a second embedding convention — `review_status` (§5.5),
+  `merged_into_id` (self-relation, nullable), `occurred_at` (`Meeting` only).
+  `owner_id` **Cascade** — the same reasoning `notes.owner_id`/
+  `transcripts.owner_id` already establish: an entity has no meaning and no
+  permission path to read it once its owner is gone, and there is no
+  `graph:read_any` (§12) for the identical reason there is no
+  `notes:read_any`.
+- **`kg_entity_aliases`** — a separate table, not an array column on
+  `kg_entities`, specifically because an alias needs its own indexed
+  exact/`citext` lookup *and* its own provenance (`source`:
+  `user | extraction | speaker_naming`, plus `evidence`) — a plain array
+  column can hold the strings but not which of three very different origins
+  each one came from, and that provenance is exactly what §7's "learning"
+  step needs to record. `entity_id` **Cascade**.
+- **`kg_relations`** — `type` (§5.2's fifteen), `from_id`, `to_id`, `props`
+  JSONB, `valid_from`/`valid_to` (§5.4), `review_status` (§5.5),
+  `confidence`. No inverse row is ever stored (§5.2). `owner_id` Cascade.
+- **`kg_items`** — `Commitment`, `Decision`, `Claim`, and `PersonFact` **in
+  one table**, not four, distinguished by a `kind` enum: `subject_id`,
+  `statement`/`title`, `status`, `occurred_at`, `due_at`, `owner_id`
+  (Person), `counterparty_id`, `superseded_by_id`, `sensitivity` (nullable —
+  only meaningful when `kind = 'person_fact'`, §5.6), `statement_hash` (§7's
+  dedup and suppression key), `embedding`. One table because all four kinds
+  share the same lifecycle (§5.5), the same evidence and dedup mechanics
+  (§7), and the same `occurred_at`-sorted "what's changed" query (§9.1) —
+  four separate tables would mean writing that query, that dedup pass, and
+  that review-status transition four times over rather than once. `owner_id`
+  Cascade.
+- **`kg_evidence`** — the §5.3 contract, exactly as specified there.
+  Foreign keys into `transcripts`/`transcript_segments`/`notes` are
+  **`SetNull`**, not `Restrict` — a deliberate divergence from
+  `notes.source_transcript_id`'s `Restrict` (`docs/specs/notes.md` §4.1):
+  that FK is `Restrict` because a note's *source* is a dependency a delete
+  must not silently break, while an evidence row's link to its segment or
+  note is a **pointer** a citation can survive losing — `quote` (§5.3) is
+  precisely what keeps the citation readable once the thing it pointed to is
+  gone, which is the entire reason `quote` is stored rather than resolved
+  live on every read.
+- **`kg_mentions`** — `(note_id | transcript_id, entity_id, span)` — the
+  coarse `MENTIONS` shortcut (§5.2), what an entity page's "notes about Joe"
+  section reads. `entity_id`/`note_id`/`transcript_id` **Cascade** — a
+  mention has no meaning once either side is gone, unlike evidence's
+  pointer relationship above.
+- **`kg_proposals`** / **`kg_proposal_items`** — §8, exactly as specified
+  there.
+- **`kg_merges`** — one row per merge (§7), with the full reversal payload.
+- **`kg_distinct_pairs`** — confirmed-not-the-same pairs (§7), skipped by
+  every future candidate-generation pass.
+- **`kg_entity_digests`** — §9.2.
+- **`kg_entity_views`** — `(user_id, entity_id, last_viewed_at)`, partial
+  unique on `(user_id, entity_id)` (§9.2).
+
+**Indexes.** `pg_trgm` GIN on `label`/`alias` (§7's candidate generation);
+HNSW cosine on every embedding column, matching `SearchEmbedding`'s own
+hand-written index discipline (verified above — Prisma cannot express
+`USING hnsw`, so this is intentional schema drift in the migration only, the
+same pattern `jobs`, `database_backup_runs`, `transcript_speakers`, and
+`SearchEmbedding` itself already establish); `(owner_id, from_id, type)` and
+`(owner_id, to_id, type)` on `kg_relations` (§5.2's "joins are symmetric"
+argument, made concrete); `(owner_id, subject_id, occurred_at desc)` on
+`kg_items` (§9.1's brief query); a partial unique on
+`kg_entity_views(user_id, entity_id)`.
+
+**`pg_trgm` is a new migration requirement for this codebase — pgvector
+already is not** (`SearchEmbedding` already depends on it, verified above),
+worth stating plainly because it is the one new PostgreSQL extension this
+epic's foundation phase (§16, P1) actually needs to enable.
+
+## 11. Job types
+
+Five types, all under `apps/api/src/graph/handlers/` (planned):
+
+| Job type | Profile | Node-eligible? | Reasoning |
+|---|---|---|---|
+| `kg.extract` | `{ maxRuntimeMs: 10m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it |
+| `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
+| `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — same credential reasoning; deduplicated per entity |
+| `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
+| `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 3 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead |
+
+**Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
+watching the review panel for their note fill in, the same "someone is
+watching a spinner" reasoning `transcript.export`'s −10 and `note.export`'s
+−10 both state for themselves, though slightly less urgent than an export
+download because a proposal panel is a review step, not a wait-for-a-file
+moment. Every other type in this table runs at the deployment default;
+`kg.entity_digest` is specifically enqueued **after** a commit settles, never
+before, so it always summarizes the post-commit state rather than racing it.
+
+**`kg.purge` also serves the Danger Zone.** `docs/specs/user-data-deletion.md`'s
+scope matrix (`content` and `everything`) gains the graph as a category once
+this epic ships: deleting a user's content deletes their graph rows too,
+through the identical fan-out-to-existing-handlers pattern that document's
+§2 (the scope matrix) already establishes for transcripts and notes — `kg.purge` is the handler
+that fan-out calls, never a second implementation of bulk deletion.
+
+## 12. Endpoints
+
+`apps/api/src/graph/graph.controller.ts` (planned), prefix `/api/graph`,
+gated by a **new permission pair**, `graph:read`/`graph:write`, seeded to all
+three roles (Admin, Contributor, Viewer) — the same posture
+`notes:read`/`write` and `transcripts:read`/`write` already take, and for
+the identical reason: building and reading one's own connected knowledge is
+this feature's core product action, not an operational surface, and this
+app's default role is Viewer.
+
+- **`graph:read`** — entity list/search/get/brief/neighbourhood/timeline,
+  proposal get, mentions.
+- **`graph:write`** — proposal commit/discard, re-extract, entity
+  create/edit/merge/reverse-merge/forget-a-person, relation edit, resolution
+  settings.
+
+`GraphAccessService` (planned) mirrors `NoteAccessService`
+(`apps/api/src/notes/access/note-access.service.ts`, verified above) exactly:
+**owner-only, 404 never 403, no `read_any`** — the identical reasoning
+transcripts and notes already state for themselves, applied to this graph's
+rows: a private conversation's derived facts are not shared infrastructure,
+and confirming a specific entity id exists (a 403 would do exactly that) is
+itself information a stranger has no business learning.
+
+**Sharing does not propagate.** A transcript share (`docs/specs/
+transcription.md`'s `transcript_shares`, `viewer`/`editor`) does **not**
+share the graph rows derived from that transcript. The graph is the owner's
+own curated memory built *from* the recording; the share was of the
+recording itself, a different object entirely. The stated consequence:
+revoking a transcript share revokes nothing on the graph side, because
+nothing was ever shared there to revoke.
+
+## 13. Web surfaces
+
+**Proposal panel** — a side sheet on the note page, **not a tab**. Per
+Settings UI Pattern rule 2 (CLAUDE.md), a tab gate is about *content*
+within one destination, while reachability is about the *route*; the
+proposal panel is neither a destination nor parallel content to the note
+itself — it is a transient review surface over the note that is already
+open, which is exactly what a side sheet is for and a tab strip is not.
+
+**Entity page**, at `/graph/:id` (planned) — "everything about Joe": the
+entity's properties, its 1–2-hop neighbourhood (below), its open commitments,
+its recent claims and decisions, and the entity brief (§9.1).
+
+**Neighbourhood view**, inside the entity page — 1–2 hops, entity-centred,
+never a whole-graph rendering (§3.5's "narrow schema" extended to the UI: a
+whole-graph view for a shallow, meeting-scoped graph is a view nobody asked
+for and a rendering cost nobody budgeted). The rendering library is a
+deferred decision (§5.7) — candidates named for the P5 issue that builds it
+are `react-force-graph`, `sigma`, and `cytoscape`; none is installed by this
+document, and the criteria for choosing among them (bundle size, canvas vs.
+SVG rendering at this node count, licensing) belong to that issue, not this
+spec.
+
+**No new bottom-bar destination.** `apps/web/src/config/destinations.ts`
+(verified above) is at its four-tab ceiling by design — `home`,
+`transcripts`, `notes`, `settings`, with `console` pinned rather than
+occupying a fifth slot — and this document does not ask for a sixth. The
+graph is reached from three existing surfaces instead: the proposal panel on
+a note, an entity chip added to a transcript's speaker list (linking a named
+speaker to their `Person` page), and from search results that resolve to a
+graph entity.
+
+**A user-settings card, `Knowledge graph`** (thresholds, resolution mode,
+gated `graph:write`) is the **only** registry entry this document adds, in
+`apps/web/src/config/userSettingsSections.tsx`'s `USER_SETTINGS_SECTIONS`
+(Settings UI Pattern rule 1) — no admin card, because resolution thresholds
+and extraction behaviour are a per-user preference over one's own graph, not
+a deployment-wide policy.
+
+## 14. Feedback into transcription and notes
+
+Three feedback loops close the circle between what the graph already knows
+and what the transcription/notes pipeline does with a *future* meeting —
+each reusing an existing mechanism rather than inventing a new one:
+
+- **Aliases feed `keyterms` at submission time.** The names of a meeting's
+  expected attendees' `Person` entities, their `Organization`s, and any
+  named `Project`s become the `keyterms` hint
+  (`docs/specs/transcript-name-correction.md` §2) `POST /api/transcripts`
+  submits with the recording, capped by `MAX_TRANSCRIPT_KEYTERMS` (verified
+  above, = 200) — the graph is, concretely, a better source for "who's
+  probably in this recording" than asking the user to type names by hand
+  every time.
+- **The same list feeds the name-check dictionary.** The identical set of
+  names becomes `terms` for `POST /api/transcripts/:id/name-checks`
+  (`docs/specs/transcript-name-correction.md` §3), so a name the graph
+  already knows about a person is a name the phonetic/discovery pipeline is
+  specifically looking for, rather than one it has to rediscover cold on
+  every transcript.
+- **Accepted facts feed the note-generation prompt, gated by sensitivity.**
+  `business`-sensitivity `Claim`s and `PersonFact`s about a meeting's
+  attendees are added to the note prompt's context block (§5.6);
+  `personal`-sensitivity facts are added only when the user has explicitly
+  opted in; `sensitive` facts are **never** added, under any setting — the
+  same rule §5.6 and §15 both state, restated here as the concrete point
+  where it would otherwise be tempting to relax it "just this once" for a
+  better summary.
+
+## 15. Privacy — what leaves the deployment, under whose key
+
+**What leaves, and to whom.** A note's body, its source transcript's
+segments, its identified speaker names, and the labels of the known
+entities assembled for a meeting (§6) go to **the user's own AI provider
+account** — the identical bring-your-own-key posture `docs/specs/notes.md`
+§9 already establishes for note generation itself, extended unchanged to
+extraction, because extraction is, mechanically, another provider call
+billed to and authorised by the same account. Embeddings (§7, §11's
+`kg.embed`) go to the user's own embedding provider, for the same reason.
+
+**What never leaves, under any setting.** `sensitive`-classified
+`PersonFact`s (§5.6) — never sent for extraction context enrichment, never
+sent in a note prompt (§14), never surfaced in a brief unless a user
+explicitly opens the entity page and asks. Another user's graph data —
+`graph:read_any` does not exist (§12), so there is no path by which one
+user's extraction, resolution, or brief could ever read a second user's
+rows.
+
+**Third-party consent, stated honestly rather than glossed over.**
+`PersonFact`s describe people who did not themselves consent to being
+profiled by this system — the subject of a `PersonFact` is very often
+someone other than the account holder generating the note. The mitigations
+this design applies, restated together because no single one of them is
+sufficient alone: sensitivity **defaults to `personal`** for anything not
+plainly work-related (§5.6), rather than defaulting to the lower-friction
+`business`; nothing at `sensitive` level is ever pre-checked in the review
+panel (§8); and **"Forget this person"** (`kg.purge`, §11, scope `person`)
+removes that `Person` entity, its aliases, every relation naming it, every
+item where it is `subject`/`owner`/`counterparty`, its mentions, and its
+evidence — **the underlying transcript or note text is left untouched**,
+because that recording is the account holder's own content, not the third
+party's, and this design's authority to delete stops at the graph it built,
+not at the primary source it was built from.
+
+**The Danger Zone scopes gain the graph** (§11's `kg.purge` note) — deleting
+one's own `content` or `everything` now includes one's own graph rows,
+through the same fan-out-to-existing-handler pattern `docs/specs/
+user-data-deletion.md` already establishes for transcripts and notes.
+
+## 16. Phasing and the epic to file
+
+Five phases, each a child-issue list with acceptance criteria, filed as
+child issues of one epic once this document lands — the same "spec first,
+epic and issues after" sequencing `docs/specs/notes.md` (issue #46) and
+`docs/specs/transcription.md` (issue #20) already established.
+
+**P1 — Foundation.** Schema and migrations (including the new `pg_trgm`
+extension, §10), `GraphAccessService`, the `graph:read`/`graph:write`
+permission seed, `kg_*` CRUD, the golden set and eval harness (§6).
+*Acceptance:* the eval script runs against the 30-meeting fixture set and
+prints per-type precision/recall with no extraction pipeline behind it yet
+— proving the measurement tooling exists before the thing it measures does.
+
+**P2 — Extraction, proposal, "Send to graph."** `kg.extract` (§6), the
+proposal API and panel (§8), the commit transaction with the no-orphan
+invariant enforced and tested (§3.3), the speaker-naming write (§8's named
+exception). *Acceptance:* a real note produces a proposal, a reviewer can
+accept/edit/reject each row, and a commit leaves no accepted/edited row
+without at least one evidence citation.
+
+**P3 — Resolution and dedup.** Candidate generation, scoring, LLM
+adjudication, aliases, distinct pairs, merges and reversal, work-item
+dedup, the `Knowledge graph` settings card (§13). *Acceptance:* the same
+person named twice across two meetings resolves to one `Person`, a
+confirmed-distinct pair is never re-proposed, and a merge can be reversed
+losslessly.
+
+**P4 — Claims, digest, brief.** `occurred_at` handling end to end (§5.4),
+`kg.entity_digest` (§9.2), the brief endpoint with mandatory citations
+(§9.1), "since I last looked" (§9.2). *Acceptance:* the entity brief for a
+seeded fixture entity names every fact it states with a working citation
+down to a segment or note span.
+
+**P5 — Views, tools, feedback loops.** The entity page, the neighbourhood
+view (library choice made here, §13), the timeline, the agent toolset
+(§9.3), the keyterms/name-check/prompt feedback loops (§14), the Danger Zone
+graph scope (§15). *Acceptance:* a user can open an entity from a
+transcript's speaker list, see its brief, and see a subsequent transcript's
+keyterms include names drawn from the graph.
+
+Each phase is expected to break into 4–8 child issues at filing time, one
+line each with its own acceptance criterion, following the existing
+epic-authoring convention this codebase already uses (see epic #45's own
+child-issue breakdown for the pattern).
+
+## Rejected alternatives
+
+- **A Neo4j (or other graph-database) projection beside PostgreSQL.**
+  Rejected per §3.2: a second store means sync invariants to hold (the v0.2
+  draft's own §9.1 spent thirty lines specifying the no-orphans cascade and
+  its projection-time fallback, plus a one-time backfill migration to heal a
+  case where it briefly didn't), a second access-control surface to keep
+  404-never-403 correct on, and a second backup/restore story. Named,
+  concrete re-open triggers, none of which this product's roadmap states as
+  a current goal: this product needing ≥4-hop path queries as a user-facing
+  feature, needing graph algorithms (community detection, centrality) as a
+  feature, or measuring p95 latency above 200ms on an indexed 2-hop walk at
+  real scale — and even then, Apache AGE (a graph extension *inside*
+  PostgreSQL) is the next thing to evaluate before reaching for a wholly
+  separate server.
+- **Full-corpus long-context Q&A instead of any structured store** — hand
+  every transcript and note to a long-context model on every question.
+  Rejected on cost and scale (this grows linearly with corpus size, forever,
+  on every query) and because it performs no write-time entity resolution at
+  all — every question re-derives "is this the same Sarah" from scratch,
+  which is strictly worse than doing it once at review time (§7) and
+  reusing the answer.
+- **Microsoft GraphRAG's community-summary architecture.** Rejected because
+  its target question — corpus-wide sensemaking, "what are the themes
+  across everything" — is not the question this product's users are asking
+  (§5.7); it is also the more expensive of the two designs to run
+  (community detection plus a summary pass per community, repeated as the
+  corpus grows), and a per-entity digest (§9.2) answers the actually-asked
+  question ("what's new about *this*") for a fraction of the cost.
+- **LazyGraphRAG-style deferred resolution** — resolve entities at query
+  time instead of at write time, which the VentureBeat summary reports
+  scoring within 0.1% of full GraphRAG on quality in that benchmark.
+  Rejected specifically for kvox, despite that number, because entity
+  resolution here is not pure overhead to be deferred — it **is** the review
+  step a human already performs once, deliberately, over their own curated
+  facts (§7, §8). Deferring it to query time would mean re-asking "is this
+  the same Sarah" on every future question instead of once at commit time,
+  discarding the one thing a human-in-the-loop design (§3.6) is supposed to
+  buy: an answer, decided once, that stays decided.
+- **The 44-type `graph_nodes` catalogue** the v0.2 draft used for every
+  node type beyond `Person`/`Organization`/`Concept`. Rejected on precision:
+  the catalogue's own boundaries were blurry by its own admission (a
+  recurring meeting topic versus a `Project`, a `Task` versus a
+  `Commitment`, an `Outcome` versus a `Decision`) in ways that would have
+  made two reasonable extractors label the identical sentence two different
+  ways with no test able to say which was "correct." §3.5's narrow,
+  disambiguation-rule-per-type ontology exists specifically to make that
+  kind of ambiguity structurally rare rather than merely documented against.
+- **Extraction folded into the note-generation call itself**, as one more
+  instruction in `note.generate`'s prompt. Rejected on three counts: it
+  removes the template author's freedom to write instructions without also
+  reasoning about graph extraction; it makes "re-extract after an edit"
+  mean "regenerate the whole note," which is not what a user asking to
+  re-run extraction wants; and it collapses two independent failure modes
+  (a bad note, a bad extraction) into one job whose single failure could be
+  either, defeating the specific, narrow error taxonomies `docs/specs/
+  notes.md` §2.2 and this document's §6 each build for their own job.
+- **Auto-commit above a confidence threshold, with no review panel at
+  all.** Rejected outright as a default, not merely as a starting
+  configuration: a silently wrong link committed with no review step is
+  exactly the unsupported-assertion failure §3.3 and §3.6 exist to make
+  structurally impossible, and "structurally impossible" cannot coexist
+  with a code path that skips the only gate enforcing it. A *later*,
+  narrowly-scoped, per-type, opt-in, default-off auto-commit setting is not
+  ruled out as a future addition once §6's extraction metrics support it —
+  but the write path that makes review skippable does not exist in this
+  design at all, which is the point.
+- **Bidirectional relation storage** — storing `EMPLOYS` beside `WORKS_FOR`,
+  and similarly for every pair. Rejected per §5.2: Postgres joins are
+  symmetric, so the only effect of storing both directions is a second row
+  that can disagree with the first about a merge, a correction, or a
+  reversal.
+- **Chunk-based evidence anchoring**, following a generic RAG-style
+  fixed-size-chunk convention rather than kvox's own segment ids. Rejected
+  because chunks, in a generic chunking scheme, are rebuilt whenever the
+  chunking strategy changes — re-chunking silently invalidates every
+  citation that pointed into the old chunk boundaries. kvox's transcript
+  segments are already stable across edits by construction
+  (`docs/specs/transcription.md`, verified above), which is a strictly
+  better anchor already sitting in this codebase; inventing a second,
+  weaker anchoring scheme on top of a better one already available would be
+  pure regression.
+- **Storing anything user-owned in the existing `credentials` table.**
+  Not directly applicable to this graph's own data, but named here because
+  the same reasoning `docs/specs/notes.md`'s "Rejected alternatives" gives
+  for `user_ai_credentials` (CLAUDE.md's Notes rule 5, the cascade argument) generalizes to
+  every table this document defines: `credentials` has no foreign key to
+  `users` and cannot grow one without complicating a table that exists to
+  hold infrastructure secrets outliving whichever administrator configured
+  them. Every `kg_*` table's `owner_id` **Cascade**s for the identical
+  reason `user_ai_credentials.userId` does.
+- **A `Concept`/topic layer in v1.** Deferred, not permanently rejected
+  (§5.7) — today's `Meeting.topics[]` free-text property answers "what came
+  up" without committing to a taxonomy this document has no evidence users
+  need yet; promoting it to a graph node is a natural, low-risk v2 addition
+  once real usage shows which topics recur enough to be worth linking.
+- **A new bottom-bar destination for the graph.** Rejected per §13 and
+  `apps/web/src/config/destinations.ts`'s own stated ceiling: the bar is at
+  exactly four non-pinned destinations by design, and a fifth is "not an
+  addition, it is a redesign" (the file's own words, verified above). The
+  graph is reached from within existing surfaces instead.
+
+## Verification
+
+How this document's decisions will be checked against the code that
+eventually implements them — the same purpose `docs/specs/transcription.md`'s
+own Verification table and `docs/specs/transcript-name-correction.md` §13
+serve for their own epics.
+
+| Claim | Will be covered by |
+|---|---|
+| All five job types (`kg.extract`, `kg.resolve`, `kg.entity_digest`, `kg.embed`, `kg.purge`) declare no `nodeResultSchema`/`persistNodeResult`, and each declares exactly the `{ maxRuntimeMs, maxAttempts }` profile §11's table states | Unit assertions over each handler's declared members, mirroring `job-handler.registry.spec.ts`'s existing pattern |
+| Every graph-touching `@Cron` (if any is added, e.g. a `graph.housekeeping` sweep) only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended |
+| An `accepted`/`edited` entity, relation, or proposal item always has ≥ 1 `kg_evidence` row after a commit — the no-orphans invariant (§3.3, §8) | A dedicated integration test committing a proposal and asserting every resulting row's evidence count, plus a negative test asserting the commit transaction refuses to write an evidence-less row |
+| The eval harness runs against the 30-meeting golden set and reports per-type precision/recall and auto-link precision, before any retrieval feature is built | `apps/api/scripts/kg-eval.ts` run in CI against `apps/api/test/fixtures/kg-golden/`, gating the targets stated in §6 |
+| The rate-limit throttle key for `kg.extract`/`kg.resolve`/`kg.entity_digest` is `aiProviderThrottleKey(userId)`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the run's `userId`, mirroring `note-generate.handler.spec.ts`'s existing pattern |
+| Curated (`accepted`/`edited`) entities are never auto-merged with each other; when one side of a merge is curated, it is always the survivor | `apps/api/src/graph/resolution/resolution.service.spec.ts` |
+| A merge is fully reversible: `POST .../merges/:id/reverse` restores the tombstoned entity, its reassigned relations/evidence/aliases, and re-queues the pair for review | An integration test performing a merge, reversing it, and asserting the graph state is byte-for-byte the pre-merge state |
+| A confirmed-distinct pair is never re-proposed by a later `kg.resolve` run | `apps/api/src/graph/resolution/candidates.spec.ts` |
+| A `sensitive` `PersonFact` is never pre-checked in a proposal, never appears in a note-generation prompt under any setting, and never appears in an entity brief unless directly requested | An RBAC/data-flow test sweeping every prompt-assembly and brief-composition call site for a `sensitive` fixture fact |
+| `graph:read`/`graph:write` are seeded for Admin, Contributor and Viewer; no `graph:read_any` exists anywhere | `apps/api/test/prisma/seed-data.spec.ts`, extended |
+| No access to a graph entity, relation, or proposal is ever a 403 | An RBAC matrix e2e distinguishing "no access" (404) from "wrong permission" (403) for every graph route |
+| A transcript share does not expose the graph rows derived from it; revoking a share affects nothing on the graph side | An integration test sharing a transcript, asserting the sharee's `graph:read` cannot see entities derived from it |
+| `GET /api/graph/entities/:id/brief` names a working citation (segment or note span) for every fact it states | An integration test against a seeded fixture entity, asserting every sentence in the composed brief carries a resolvable evidence reference |
+| `reciprocalRankFusion()` is the same function instance `docs/specs/search.md`'s own retrieval and this document's entity brief both call — never a second implementation | A test importing both call sites' compiled output and asserting they resolve to the same module export |
+| `kg.purge` scope `person` removes the entity, aliases, relations, items where subject/owner/counterparty, mentions and evidence, and leaves the source transcript/note text completely untouched | `apps/api/src/graph/handlers/kg-purge.handler.spec.ts` |
+| The Danger Zone's `content`/`everything` scopes include graph rows after this epic ships | `apps/api/test/user-data/user-data-deletion.e2e.spec.ts`, extended |
+| `pg_trgm` is enabled by the P1 migration and `kg_entity_aliases`'s trigram index is present and used by `EXPLAIN` for a fuzzy-alias query | A migration test plus a query-plan assertion, mirroring the existing HNSW-index verification discipline `SearchEmbedding`'s own migration takes |
+
+## Sources
+
+- RAG vs. GraphRAG systematic evaluation —
+  https://arxiv.org/html/2502.11371v3. Taken: single-hop RAG at 64.8 F1
+  against graph-based methods' 60–63; multi-hop graph gains of +1–6%; only
+  65.8%/65.5% of answer entities present in the built knowledge graphs
+  (the extraction-coverage finding §9.4's design responds to directly);
+  hybrid integration adding +6.4% over either arm alone.
+- GraphRAG-Bench / "When to Use Graphs in RAG" (ICLR'26) —
+  https://github.com/GraphRAG-Bench/GraphRAG-Benchmark. Taken: the framing
+  of graph value as concentrated in multi-hop and corpus-wide sensemaking
+  questions specifically, informing §1's scope line and §5.7's deferral of
+  sensemaking features.
+- VentureBeat practitioner summary of the same benchmark work —
+  https://venturebeat.com/orchestration/stop-graphing-everything-when-graphrag-actually-beats-vector-rag.
+  Taken: multi-hop recall rising 73.4%→87.8% with a graph in the loop; global
+  comprehensiveness questions winning 72–83% of head-to-head comparisons;
+  ~$48 indexing cost at benchmark scale; the LazyGraphRAG 0.1%-quality-gap
+  figure this document's "Rejected alternatives" engages with directly.
+- Zep: a temporal knowledge graph architecture for agent memory —
+  https://arxiv.org/abs/2501.13956. Taken: the `valid_from`/`valid_to` +
+  supersession pattern §5.4 adopts; +18.5% on LongMemEval and ~90% latency
+  reduction over full-context baselines, cited for the *mechanism*, not as
+  a benchmark this design claims to reproduce — its own LoCoMo numbers are
+  publicly disputed and are explicitly not relied on here (§"Why this
+  shape"); kvox measures itself against its own golden set (§6) instead.
+- LLM extraction against scholarly Wikidata —
+  https://arxiv.org/pdf/2411.08696. Taken: precision ≈ 0.80, recall
+  0.81–0.97 for structured entity/relation extraction from real text with a
+  capable model, used as the evidence base for §6's ≥0.95 auto-link
+  precision and ≥0.85 commitment recall targets being realistic for a more
+  structured domain (meeting transcripts) than the one this study measured.
+- The superseded draft — `docs/ONTOLOGY.md` v0.2 (project name `knotes`,
+  never implemented against kvox). Taken: the review-status lifecycle
+  (§5.5), the "content is evidence" and "curated wins" principles (§3.1,
+  §3.2 of that draft, restated as this document's §3.1 and §7), and the
+  profile-based disambiguation approach to entity resolution (that draft's
+  §9.8, restated as this document's §7). Explicitly not carried forward: the
+  agent-execution-trace layer, the problem-resolution layer, the Neo4j
+  projection, and the 44-type `graph_nodes` catalogue — see "Why this
+  shape" and "Rejected alternatives" above for each.

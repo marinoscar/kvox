@@ -361,7 +361,7 @@ For example, a user should eventually be able to understand:
 * how a topic evolved over time;
 * where a piece of knowledge originated.
 
-The exact ontology and structure of this graph should be defined later.
+The exact ontology and structure of this graph are defined in [`docs/specs/ontology.md`](docs/specs/ontology.md).
 
 KVox should remain flexible enough to allow the knowledge model to evolve as the product develops.
 

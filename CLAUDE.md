@@ -1892,6 +1892,26 @@ go through `normalizeCaller`/`toRequestUser`, exactly as `onboarding.service.ts`
 file's `OnboardingCaller` type for the full trap, and the spec for why only an integration test
 through the real guard stack, not a unit test constructing a `RequestUser` by hand, can catch it.
 
+### Connected Knowledge (the ontology)
+
+Turning transcripts and notes into a durable, entity-and-relationship graph
+of the work itself — people, organizations, projects, meetings, decisions,
+commitments and dated claims — rather than just searchable text. Full design
+(the ontology, the extraction/resolution pipeline, the review-and-commit
+gate, retrieval, privacy) is [`docs/specs/ontology.md`](docs/specs/ontology.md).
+**Nothing described there is built** — no `kg_*` tables, no `graph.*` jobs,
+no `/api/graph/*` routes, no graph UI. Five rules a neighbouring file can
+break once it is: no orphans — an accepted/edited graph row always carries
+evidence back to a transcript segment or note span; nothing enters the graph
+except through a reviewed proposal's commit, with two named exceptions (the
+speaker-naming write and a manual edit on an entity page); retrieval never
+answers from the graph alone —
+FTS/vector fusion is mandatory, not a fallback; every `kg.*` job runs
+server-only, on the calling user's own AI provider key, exactly like
+`note.generate`; and a `sensitive`-classified `PersonFact` never leaves this
+deployment for any purpose, under any setting. Don't restate any of that
+here; extend the spec instead.
+
 ## Specialized Subagents (MANDATORY)
 
 **CRITICAL REQUIREMENT**: This project uses specialized subagents for all development work. You MUST delegate tasks to the appropriate subagent. Do NOT attempt to perform development tasks directly without using the designated agent.
