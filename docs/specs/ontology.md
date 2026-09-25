@@ -350,7 +350,8 @@ real-world thing because nothing told them which label to reach for.
 organization acting collectively. *Positive:* "Sarah Chen," "the Acme CIO
 whose name was given as Marcus Webb." *Negative:* "the data team at EY" (an
 `Organization`, or a `Person` if and only if one specific human is meant);
-"whoever's on call" (no specific human named — nothing to create).
+"whoever's on call" (no specific human named — nothing to create). *Domain:*
+`core` (§17.2).
 
 **Organization** — a company, client, vendor, institution, or an internal
 team specifically when that team acts as a party to a commitment or decision
@@ -359,7 +360,7 @@ team at EY," when a commitment is owed *to* that team specifically rather
 than to an individual within it. *Negative:* "the data team at EY," mentioned
 only in passing with no commitment or decision naming it as a party — that
 mention lives as evidence on whatever it actually relates to, not as a new
-`Organization` row created speculatively.
+`Organization` row created speculatively. *Domain:* `core` (§17.2).
 
 **Project** — a named effort with a start and an expected (even if fuzzy) end
 that meetings, decisions and commitments attach to. *Positive:* "Q2 pilot,"
@@ -371,7 +372,7 @@ than as the deferred `Concept` type §5.7 names. The line is deliberately
 conservative: creating a `Project` for every recurring conversation subject
 would flood the graph with nodes that never anchor a `Commitment` or
 `Decision`, the exact "invented structure nobody's data populates" failure
-§3.5 exists to prevent.
+§3.5 exists to prevent. *Domain:* `work` (§17.2).
 
 **Meeting** — the event anchor: a date, its attendees, and the source
 transcript(s) and/or note(s) it was drawn from. Every `Commitment`,
@@ -383,7 +384,7 @@ an uploaded document — still gets a `Meeting`: its date is whatever the user
 supplied in Context if that names one, else the note's own `createdAt`, and
 either way `Meeting.dateSource` records which (`'stated' | 'note_created_at'`)
 so a later "why does this say September when the call was in July" question
-has a straight answer rather than a silent guess.
+has a straight answer rather than a silent guess. *Domain:* `core` (§17.2).
 
 **Commitment** — a task with an *owner* and, optionally, a *counterparty* and
 a *due date*, stated or clearly implied by the source text. `status`:
@@ -392,21 +393,21 @@ updated proposal by Friday" (owner: Sarah, due: Friday). *Negative:* "we
 should probably look into that at some point" — no owner named or clearly
 implied is **not** a `Commitment`; it is either a `Claim` (a statement that
 this was discussed) or nothing at all, never force-fit into a task type
-because a sentence sounded task-shaped.
+because a sentence sounded task-shaped. *Domain:* `work` (§17.2).
 
 **Decision** — a choice that was made, with what was chosen and, when the
 source states it, the option that was rejected. A later reversal is **a new
 `Decision`** that `SUPERSEDES` the old one (§5.4) — a `Decision` row is never
 edited in place to record a change of mind, because that would erase exactly
 the "what did we used to think, and when did that change" history §3.4 exists
-to keep.
+to keep. *Domain:* `work` (§17.2).
 
 **Claim** — a dated statement of fact about an entity that is neither a
 decision nor a commitment: "Acme's CIO is leaving in March," "the budget was
 cut 20%," "the pilot moved to Q2." Properties: `subject` (the entity it is
 about), `statement`, `occurred_at`, `superseded_by`. This is the unit of
 "what's changed" — §9's entity brief is, structurally, mostly a query over
-`Claim`s newer than the reader's last visit.
+`Claim`s newer than the reader's last visit. *Domain:* `core` (§17.2).
 
 **PersonFact** — a `Claim` whose `subject` is a `Person` and whose content is
 about that person as an individual rather than about their work: an
@@ -415,7 +416,7 @@ style. It is its own type, not merely a `Claim` with a `Person` subject,
 specifically because of §5.6's sensitivity handling — folding it into
 `Claim` would mean every `Claim` reader has to remember to check a field that
 usually does not apply, instead of a type whose very existence signals "this
-one needs the extra care."
+one needs the extra care." *Domain:* `core` (§17.2).
 
 **Speaker is deliberately not a graph entity of its own.** It is the
 existing per-transcript diarization row (`TranscriptSegment.speakerId`,
@@ -450,7 +451,7 @@ than no relation at all.
 | `CREATED_IN` | Commitment → Meeting | |
 | `ASSIGNED_TO` | Commitment → Person | The owner |
 | `OWED_TO` | Commitment → Person \| Organization | The counterparty, when one is stated |
-| `SUPERSEDES` | Decision → Decision; Claim → Claim; Commitment → Commitment | §5.4 |
+| `SUPERSEDES` | Decision → Decision; Claim → Claim; Commitment → Commitment; `HAS_ROLE` → `HAS_ROLE`; `WORKS_FOR` → `WORKS_FOR`; `REPORTS_TO` → `REPORTS_TO` | §5.4. The relation-to-relation form is what the closing rule (§5.4) writes when a new fact closes a still-open exclusive edge |
 | `MENTIONS` | Note \| Transcript → any entity | The coarse, overview-level shortcut — "everything this note touches," one hop, no evidence detail beyond "somewhere in this document" |
 | `SUPPORTED_BY` | any generated entity/relation/item → its evidence | The fine-grained link — *which* segment or span, §5.3 |
 
@@ -543,9 +544,11 @@ to find out about it.
 **Two clocks, bitemporal.** Every relation and every `kg_items` row carries
 two independent notions of time: *valid* time (when the fact was true in the
 world) and `asserted_at` (when kvox learned it). `asserted_at` is not a
-column of its own — it is **derived** from the row's evidence: the
-`occurred_at` of the meeting or note whose `kg_evidence` (§5.3) supports the
-row, read at query time rather than duplicated into a second stored
+column of its own — it is **derived** from the row's evidence: the **latest**
+`occurred_at` among the meetings or notes whose `kg_evidence` (§5.3) supports
+the row — "when kvox most recently learned it," so a second meeting restating
+an existing fact moves the tiebreaker forward even though the fact itself is
+unchanged — read at query time rather than duplicated into a second stored
 timestamp that could drift from the evidence it is supposed to summarize.
 Every "latest"/"as of" query in this document (§9.1, this section) reads
 **valid** time; `asserted_at` is provenance, surfaced on the entity page, and
@@ -764,6 +767,13 @@ about that specific pattern does not apply to this job type at all).
   identified as whom, read directly rather than re-derived.
 - The meeting context the user typed (`docs/specs/notes.md` §3.1's Context
   field).
+- **The caller's effective schema** — core plus their enabled domains plus
+  their own attribute definitions (§17) — which entity types, relation
+  types, and attributes this run is allowed to propose at all. A type or
+  attribute outside the effective schema is never offered to the model in
+  the first place, the same "closed by default" discipline §17.1's `props`
+  validation applies to what a proposal may *contain* applied here to what
+  extraction may *propose*.
 - A **known-entities list**, scoped to this meeting: the attendees' `Person`
   rows, their `Organization`s, any `Project`(s) already named in Context,
   plus the top-N entities by recent mention across the user's own graph —
@@ -1080,7 +1090,7 @@ mechanical response to that specific finding.
 
 ## 10. Data model
 
-Eleven tables (all `snake_case`-mapped Prisma models, planned — column-level
+Twelve tables (all `snake_case`-mapped Prisma models, planned — column-level
 reasoning to live in the block comment above each model in
 `apps/api/prisma/schema.prisma`, following the discipline `notes.md` §4 and
 `transcript-name-correction.md` §8 already establish; this section is the
@@ -1090,8 +1100,9 @@ summary):
   enum, `label`, `props` JSONB, `embedding vector(1536)` — reusing the exact
   model/dimension contract `SearchEmbedding` already carries, verified above,
   rather than a second embedding convention — `review_status` (§5.5),
-  `merged_into_id` (self-relation, nullable), `occurred_at` (`Meeting` only).
-  `owner_id` **Cascade** — the same reasoning `notes.owner_id`/
+  `merged_into_id` (self-relation, nullable), `occurred_at` (`Meeting` only),
+  `ontology_version` (§17.4 — the definition-file version this row was
+  written against). `owner_id` **Cascade** — the same reasoning `notes.owner_id`/
   `transcripts.owner_id` already establish: an entity has no meaning and no
   permission path to read it once its owner is gone, and there is no
   `graph:read_any` (§12) for the identical reason there is no
@@ -1108,7 +1119,8 @@ summary):
   unknown`, §5.4 — `valid_from`/`valid_to` name the range's lower and upper
   bound throughout this document's prose, but there is exactly one stored
   column, a range, never two nullable timestamps), `review_status` (§5.5),
-  `confidence`. No inverse row is ever stored (§5.2). `owner_id` Cascade.
+  `confidence`, `ontology_version` (§17.4). No inverse row is ever stored
+  (§5.2). `owner_id` Cascade.
 - **`kg_items`** — `Commitment`, `Decision`, `Claim`, and `PersonFact` **in
   one table**, not four, distinguished by a `kind` enum: `subject_id`,
   `statement`/`title`, `status`, `occurred_at`, `due_at`, `valid tstzrange` +
@@ -1117,7 +1129,8 @@ summary):
   never a second stored shape from its edges' shape), `owner_id`
   (Person), `counterparty_id`, `superseded_by_id`, `sensitivity` (nullable —
   only meaningful when `kind = 'person_fact'`, §5.6), `statement_hash` (§7's
-  dedup and suppression key), `embedding`. One table because all four kinds
+  dedup and suppression key), `embedding`, `ontology_version` (§17.4). One
+  table because all four kinds
   share the same lifecycle (§5.5), the same evidence and dedup mechanics
   (§7), and the same `occurred_at`-sorted "what's changed" query (§9.1) —
   four separate tables would mean writing that query, that dedup pass, and
@@ -1146,6 +1159,10 @@ summary):
 - **`kg_entity_digests`** — §9.2.
 - **`kg_entity_views`** — `(user_id, entity_id, last_viewed_at)`, partial
   unique on `(user_id, entity_id)` (§9.2).
+- **`kg_attribute_defs`** — one row per user-defined attribute (§17.3):
+  `(id, owner_id, entity_type, key, label, kind, options jsonb, extractable,
+  extraction_hint, sensitivity, sort_order, deprecated_at)`. `owner_id`
+  Cascade, the same reasoning every other `kg_*` table's `owner_id` follows.
 
 **Indexes.** `pg_trgm` GIN on `label`/`alias` (§7's candidate generation);
 HNSW cosine on every embedding column, matching `SearchEmbedding`'s own
@@ -1168,7 +1185,7 @@ epic's foundation phase (§16, P1) actually needs to enable.
 
 ## 11. Job types
 
-Five types, all under `apps/api/src/graph/handlers/` (planned):
+Six types, all under `apps/api/src/graph/handlers/` (planned):
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
@@ -1177,6 +1194,7 @@ Five types, all under `apps/api/src/graph/handlers/` (planned):
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 3 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead |
+| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped |
 
 **Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
 watching the review panel for their note fill in, the same "someone is
@@ -1205,10 +1223,13 @@ this feature's core product action, not an operational surface, and this
 app's default role is Viewer.
 
 - **`graph:read`** — entity list/search/get/brief/neighbourhood/timeline,
-  proposal get, mentions.
+  proposal get, mentions, `GET /api/graph/ontology` (§17.4 — the caller's own
+  effective schema).
 - **`graph:write`** — proposal commit/discard, re-extract, entity
   create/edit/merge/reverse-merge/forget-a-person, relation edit, resolution
-  settings.
+  settings, `kg_attribute_defs` CRUD (§17.3 — adding, editing, and
+  deprecating a user-defined attribute is authoring the schema one proposes
+  against, gated the same as every other write to it).
 
 `GraphAccessService` (planned) mirrors `NoteAccessService`
 (`apps/api/src/notes/access/note-access.service.ts`, verified above) exactly:
@@ -1259,11 +1280,21 @@ speaker to their `Person` page), and from search results that resolve to a
 graph entity.
 
 **A user-settings card, `Knowledge graph`** (thresholds, resolution mode,
-gated `graph:write`) is the **only** registry entry this document adds, in
+domain toggles, a user-defined-attribute browser, gated `graph:write`) is
+the **only** registry entry this document adds, in
 `apps/web/src/config/userSettingsSections.tsx`'s `USER_SETTINGS_SECTIONS`
 (Settings UI Pattern rule 1) — no admin card, because resolution thresholds
 and extraction behaviour are a per-user preference over one's own graph, not
 a deployment-wide policy.
+
+**Every form on these surfaces is schema-driven, never hand-coded per
+type.** The proposal panel (§8), the entity page's edit form, and this
+settings card's attribute browser are all generated from
+`GET /api/graph/ontology`'s payload (§17.4) — a control per declared
+attribute, its `kind` choosing the widget — rather than each shipping its own
+per-type form component. A type added to the definition file after this
+section is written renders correctly in all three surfaces with zero web
+changes, because none of them was ever coded against a fixed list of types.
 
 ## 14. Feedback into transcription and notes
 
@@ -1336,17 +1367,21 @@ user-data-deletion.md` already establishes for transcripts and notes.
 
 ## 16. Phasing and the epic to file
 
-Five phases, each a child-issue list with acceptance criteria, filed as
+Six phases, each a child-issue list with acceptance criteria, filed as
 child issues of one epic once this document lands — the same "spec first,
 epic and issues after" sequencing `docs/specs/notes.md` (issue #46) and
 `docs/specs/transcription.md` (issue #20) already established.
 
 **P1 — Foundation.** Schema and migrations (including the new `pg_trgm`
 extension, §10), `GraphAccessService`, the `graph:read`/`graph:write`
-permission seed, `kg_*` CRUD, the golden set and eval harness (§6).
-*Acceptance:* the eval script runs against the 30-meeting fixture set and
-prints per-type precision/recall with no extraction pipeline behind it yet
-— proving the measurement tooling exists before the thing it measures does.
+permission seed, `kg_*` CRUD, the golden set and eval harness (§6), **and the
+definition file, its `core`/`work` module registry, and its parity test**
+(§17.1, §17.2, §17.4) — the ontology-as-code foundation everything else in
+this phasing reads from, built here rather than retrofitted once types
+already have rows depending on them. *Acceptance:* the eval script runs
+against the 30-meeting fixture set and prints per-type precision/recall with
+no extraction pipeline behind it yet — proving the measurement tooling
+exists before the thing it measures does.
 
 **P2 — Extraction, proposal, "Send to graph."** `kg.extract` (§6), the
 proposal API and panel (§8), the commit transaction with the no-orphan
@@ -1375,10 +1410,282 @@ graph scope (§15). *Acceptance:* a user can open an entity from a
 transcript's speaker list, see its brief, and see a subsequent transcript's
 keyterms include names drawn from the graph.
 
+**P6 — Personal domain.** The `personal` module (§17.2: `SPOUSE_OF`,
+`PARENT_OF`, `FRIEND_OF`, `Interest`, `Trip`, `Milestone`), the domain-toggle
+setting on the `Knowledge graph` settings card (§13), and the
+`sensitivity: personal` default every `personal`-domain type carries so §15
+applies to it automatically from the moment the domain is turned on.
+*Acceptance:* a user who enables `personal` sees its types offered by
+extraction on their next note; a user who never enables it sees no change
+anywhere, including in the effective-schema payload §17.4 publishes.
+
 Each phase is expected to break into 4–8 child issues at filing time, one
 line each with its own acceptance criterion, following the existing
 epic-authoring convention this codebase already uses (see epic #45's own
 child-issue breakdown for the pattern).
+
+## 17. Ontology definition, domains and user-defined attributes
+
+### 17.1 The definition file — ontology as code
+
+The ontology is not a fixed set of Prisma enums and a hand-maintained
+extraction prompt kept in step with them by discipline alone — it is a single
+TypeScript + Zod declaration, planned at `packages/shared/ontology/` (a new
+shared package, because both `apps/api` and `apps/web` need the same types:
+the API to validate and extract against, the web app to render a form from).
+Zod is not a new dependency reached for here — it is already this codebase's
+single source of truth for settings (CLAUDE.md's Adding a Setting rule, and
+the six-file settings-parity discipline `settings-parity.spec.ts` enforces),
+and the same argument that makes it right for a system-settings namespace
+makes it right here: one declaration yields runtime validation of a `props`
+object, a JSON Schema for the extraction prompt's structured-output mode,
+TypeScript types the API and web share without a second hand-copied
+interface, and the `GET /api/graph/ontology` (§12) payload the UI builds a
+form from — the same "one registry entry, several consumers" principle
+`docs/specs/transcription.md`'s exporter registry and this codebase's job
+handler registry both already follow, applied to type definitions instead of
+export formats or job types.
+
+**Shape**, following `defineEntityType`/`defineRelationType` factories:
+
+```ts
+defineEntityType({
+  key: 'Person',              // permanent once rows exist — see below,
+                               // same discipline Job.type already carries
+  domain: 'core',              // §17.2
+  label: 'Person',
+  description: 'A human being...',   // used verbatim in the extraction prompt
+  disambiguation: ['Never a role...', 'Never a team...'],
+  attributes: {
+    title: {
+      kind: 'text',
+      required: false,
+      extractable: true,
+      description: "The person's job title, if stated",
+      sensitivity: 'business',
+    },
+    // ...
+  },
+  sensitivityDefault: 'business',
+  alignment: 'schema:Person',  // §18
+});
+
+defineRelationType({
+  key: 'WORKS_FOR',
+  domain: 'work',
+  from: ['Person'],
+  to: ['Organization'],
+  temporal: true,
+  exclusive: 'soft',            // 'soft' | 'none' — §5.4's overlap tolerance,
+                                 // as a declared property of the type rather
+                                 // than a hardcoded list the closing rule
+                                 // has to know about separately
+  props: { /* none for WORKS_FOR */ },
+  alignment: 'schema:worksFor', // §18
+});
+```
+
+**Closed by default.** A `props` object may carry only keys declared by the
+type itself or by the caller's own attribute registry (§17.3); an undeclared
+key is a validation error, not a warning and not a silently-dropped field.
+This is what actually keeps the extractor from inventing structure: a model
+asked for structured output against an *open* schema will, over enough runs,
+propose a field nobody declared because it seemed useful in the moment — the
+same "an escape hatch a model can reach for is one it will reach for"
+argument §5.2 makes against `RELATED_TO` applies identically here to an
+undeclared property.
+
+**A `key` is permanent once rows exist**, the identical discipline
+`Job.type` already carries in this codebase (CLAUDE.md's Adding a Job Type
+recipe): renaming `WORKS_FOR` after real relations of that type exist would
+either orphan every existing row's `type` string or require a data migration
+indistinguishable from adding a new type and retiring the old one — §17.4
+states the retirement path (deprecate, never delete) this constraint forces.
+
+**Credit and deliberate non-adoption.** Two prior systems' ideas are taken
+here, and named because pretending this shape was invented from nothing would
+misattribute the actual design work: **LinkML** contributes the shape of the
+declaration itself — typed classes, reusable slots, `is_a` inheritance,
+mixins, `imports`, and critically the **closed-by-default** class semantics
+this section adopts outright. **Graphiti** contributes the entity/edge-type
+pattern specifically for LLM extraction — Pydantic-typed entity and edge
+definitions, an `edge_type_map` restricting which relation types are valid
+between which entity types (the direct model for `from`/`to` above),
+protected field names, and the operating principle "add attributes without
+breaking existing nodes; a genuinely new type needs re-ingestion" that
+directly motivates §17.4's versioning rules. **LinkML itself is not
+adopted as a dependency** — it is a Python toolchain, and this codebase is
+TypeScript end to end (CLAUDE.md's Technology Stack); the ideas worth taking
+(closed classes, slots, mixins) cost nothing to reimplement in Zod, while the
+toolchain itself would be a second language's build step wired into a
+Node/TypeScript monorepo for no capability this document's design actually
+needs from it.
+
+### 17.2 Domains as modules
+
+The definition file is not one flat list of types — it is modules that
+self-register, mirroring the exact "one file, `onModuleInit`, no central
+dispatch table" shape CLAUDE.md's Adding a Job Type and Adding a Notification
+recipes already establish for their own registries:
+
+- **`core.ts`** — `Person`, `Organization`, `Meeting`, `Claim`, `PersonFact`,
+  plus the evidence/review/temporal machinery (§5.3–§5.5) every other domain
+  depends on. **Always on**, for every user, unconditionally.
+- **`work.ts`** — `Project`, `Commitment`, `Decision`, and the relation types
+  `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
+- **`personal.ts`** — `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, `Interest`,
+  `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6).
+- **`index.ts`** — the registry: every module calls `register()` from its own
+  `onModuleInit`-equivalent at startup, and a user's **effective schema** is
+  computed as `core ∪ {enabled domains}` — never hand-assembled per caller.
+
+**Why `Person` and `Organization` are `core` rather than `work`, specifically
+— this is the reason to design domains at all rather than ship one flat
+list.** A person exists whether or not `work` is ever enabled; putting
+`Person` in `work` would mean the identical human Joe becomes two different,
+unrelated rows depending on which domain proposed him — one from a
+`work`-domain `WORKS_FOR` edge, a second from a `personal`-domain
+`SPOUSE_OF` edge — with nothing to say they are the same Joe. Keeping
+`Person`/`Organization` in `core` and letting `work` and `personal` each add
+*relations* onto them (and, via a mixin, *attributes* onto them) is what
+guarantees one Joe across every domain a user ever turns on.
+
+**Rules:**
+
+- A user enables a domain in the `Knowledge graph` settings card (§13); the
+  extraction prompt (§6) includes only the types and relations from `core`
+  plus the user's currently-enabled domains — a disabled domain's types are
+  not merely hidden in the UI, they are never sent to the model at all,
+  which is what keeps a `personal.ts` `Interest` from ever being proposed for
+  a user who never turned that domain on.
+- A domain may add attributes to a `core` type via a **mixin**, namespaced by
+  domain, rather than editing `core.ts` itself — `work` adding a `title`
+  attribute to `Person`, say, lives declared in `work.ts` and is merged onto
+  `Person`'s effective attribute set only when `work` is enabled, so `core.ts`
+  never has to know what any domain built on top of it chooses to add.
+- Every `personal`-domain type defaults to `sensitivity: 'personal'` (§5.6),
+  so §15's privacy handling — never pre-checked, opt-in for prompt
+  enrichment — applies automatically the moment the domain is turned on,
+  with no second setting a user has to separately remember to configure.
+
+### 17.3 User-defined attributes
+
+A user can add an attribute to an entity type with **no code change and no
+migration** — the same promise the settings-hub registry and the job/exporter
+registries make on their own axes, extended here to the ontology's own
+shape.
+
+**Storage: JSONB `props`, not an EAV table.** The alternative — a generic
+`(entity_id, attribute_key, value)` rows-as-columns table — was rejected on
+the same grounds the wider industry has settled on for this exact tradeoff:
+JSONB is indexable (GIN, or a targeted expression index on a hot key), its
+read/write performance is on par with typed columns at this codebase's
+scale, and it avoids EAV's characteristic failure mode of slow, deeply
+self-joined queries once an entity accumulates more than a handful of
+dynamic attributes. The one caveat every JSONB-over-EAV comparison names —
+JSONB has no schema of its own to validate against — is handled in the API
+layer, against a definition row, exactly as `props`' closed-by-default
+validation (§17.1) already handles it for built-in attributes; user-defined
+attributes are validated by the identical mechanism, not a second one.
+
+**Model: Notion's property model**, per user, per entity type — a stable id
+that survives a label rename (so a report or a saved view built against
+"Nickname" keeps working after someone renames the column to "Preferred
+Name"), a `kind` drawn from a fixed list, and per-kind options (a `select`'s
+choices, say). New table:
+
+```
+kg_attribute_defs (
+  id, owner_id, entity_type, key, label, kind, options jsonb,
+  extractable, extraction_hint, sensitivity, sort_order, deprecated_at
+)
+```
+
+`kind ∈ text | number | date | boolean | select | multi_select | url |
+entity_ref`. **Values are keyed by definition id, never by label** — the
+same "stable id, renameable label" property that makes a rename safe in
+Notion's model makes it safe here.
+
+**`extractable: true` plus a hint is what makes extraction ask for it.** The
+worked example: a user adds a "Nickname" attribute to `Person` with
+`extraction_hint: "how this person is addressed informally, e.g. by
+teammates"`; the next `kg.extract` run over a transcript where everyone
+calls someone "JJ" fills it in as an ordinary proposal row, reviewed exactly
+like any built-in attribute — a user-defined attribute is not a second-class
+citizen of the extraction pipeline, it is a field the effective schema (§17.4)
+handed the model like any other.
+
+**`entity_ref` is a light link, not a relation type.** It lets a
+user-defined attribute point at another entity (a `Person`'s "Assistant,"
+say) without going through §5.2's fixed relation-type list and its
+`from`/`to` endpoint typing — appropriate for a genuinely per-user,
+lightweight cross-reference, and deliberately not a way to sneak a new
+relation *type* past the constraint below.
+
+**Deprecate, never delete.** A `deprecated_at` timestamp hides an attribute
+from new proposals and new forms without invalidating rows that already
+carry a value under its id — deleting the definition instead would leave
+existing `props` values keyed by an id nothing can any longer render a label
+for.
+
+**Users do not get new entity types in v1, and user-defined relation types
+are v2 under the same constraint.** A genuinely new *type* — as opposed to a
+new attribute on an existing type — needs a prompt description precise
+enough for consistent extraction, a disambiguation rule against its nearest
+neighbour (§5.1's own discipline), evidence rules, and a place in the golden
+eval set (§6) before it can be trusted at all; none of that is something a
+settings-form text field can produce, and shipping user-defined entity types
+without it would reintroduce exactly the blurry-boundary failure §3.5's
+"Rejected alternatives" documents for the v0.2 draft's 44-type catalogue,
+except invented per-user instead of once centrally. Attributes on an
+*existing*, already-disambiguated type carry none of that risk, which is the
+line this document draws for v1.
+
+### 17.4 Versioning and maintenance
+
+**Semver on the definition file.** Every graph row — `kg_entities`,
+`kg_relations`, `kg_items` — carries the `ontology_version` it was written
+against (a v0.2 idea kept, per this document's own opening credit to that
+draft). **Major** means a type's *meaning* changed (a redefinition an old
+row can no longer be assumed to satisfy); **minor** means a type or attribute
+was *added*; **patch** means only descriptions or extraction hints changed —
+text a model reads, never a structural change a stored row depends on. A key
+is permanent once rows exist (§17.1); deprecate before delete, always.
+
+**Maintenance discipline.** A `CHANGELOG` lives in the definition file
+itself, and a parity test in the style of `settings-parity.spec.ts`
+(CLAUDE.md's Database Tables section) checks the properties that keep the
+file internally honest: every type has a description, every relation
+declares its endpoint types, every attribute declares a `kind`, and no key
+that ever shipped is ever removed from the file (only deprecated).
+
+**Reshaping is a job, never a migration.** When the ontology changes in a
+way that requires touching existing rows — a type is deprecated and its rows
+need re-tagging, an attribute's `kind` is corrected — that reshape runs as
+`kg.migrate` (§11), a resumable job visible in the admin job list like any
+other, operating **per user, per row**, never as a `prisma migrate` step.
+This is deliberate and structural, not a style preference: the physical
+`kg_*` tables do not change shape when the ontology changes — `props` is
+JSONB either way — so there is no schema migration to write in the first
+place, and enabling `personal` for the fleet, say, is a deploy of the
+definition file, not a database migration at all. Treating an ontology bump
+as a Prisma migration would be modelling application-level, per-user data as
+if it were the physical schema, and would additionally spend the *user's*
+own AI provider key inside a `migrate deploy` step run on the operator's
+behalf, precisely the objection CLAUDE.md's `note.retitle` entry (⚠ "a job
+and deliberately not a migration") already raises for a different feature
+facing the identical shape of mistake.
+
+**`GET /api/graph/ontology`** (§12) publishes the caller's own effective
+schema — `core` plus their enabled domains plus their own
+`kg_attribute_defs` rows — and every form this feature ships is generated
+from that one payload: the proposal panel (§8), the entity page's edit form
+(§13), and the `Knowledge graph` settings card's own type/attribute browser.
+There is no hand-coded form per entity type anywhere in `apps/web` — a form
+for a type that does not yet exist when this section is written renders
+correctly the day that type is added to the definition file, with zero web
+changes, because it was never coded against a fixed list of types to begin
+with.
 
 ## Rejected alternatives
 
@@ -1502,6 +1809,47 @@ child-issue breakdown for the pattern).
   and containment queries §5.4 and §10 both depend on, and makes an overlap
   check a native range operator instead of a pair of open-coded comparisons
   a migration or an extractor could get backwards.
+- **LinkML/YAML as the definition format**, rather than TypeScript + Zod.
+  Rejected per §17.1: LinkML is a Python toolchain, and this codebase is
+  TypeScript end to end (CLAUDE.md's Technology Stack) — adopting it would
+  mean a second language's build step wired into a Node/TypeScript monorepo,
+  for capabilities (closed classes, slots, mixins) this design gets for free
+  by reimplementing the *ideas* in Zod, the tool this codebase already uses
+  as its single source of truth for settings. The ideas are credited in
+  §17.1; the dependency is not taken.
+- **EAV for user-defined attributes**, a generic
+  `(entity_id, attribute_key, value)` table instead of JSONB `props`.
+  Rejected per §17.3 on the same grounds the wider industry has settled on
+  for this exact tradeoff: EAV's characteristic failure mode is slow,
+  deeply self-joined queries once an entity accumulates more than a handful
+  of dynamic attributes, while JSONB is indexable and on par with typed
+  columns at this codebase's scale — the one real EAV advantage, schema
+  validation for free, is not actually free (EAV still needs a definition
+  row to validate a value's shape against), so JSONB plus an API-layer
+  validation step against `kg_attribute_defs` gives the same safety with
+  none of EAV's join cost.
+- **User-defined entity types in v1.** Rejected per §17.3: a genuinely new
+  type needs a prompt description precise enough for consistent extraction,
+  a disambiguation rule against its nearest neighbour, evidence rules, and a
+  place in the golden eval set (§6) before it can be trusted — none of which
+  a settings-form text field can produce. Shipping this in v1 would
+  reintroduce, per-user and uncentrally, exactly the blurry-boundary failure
+  the 44-type `graph_nodes` catalogue rejection above documents for the v0.2
+  draft's centrally-invented one. User-defined *attributes* on an
+  already-disambiguated type carry none of that risk, which is the line
+  drawn for v1; user-defined relation types wait for v2 under the identical
+  constraint.
+- **A Prisma migration per ontology change.** Rejected per §17.4: the
+  physical `kg_*` tables do not change shape when the ontology changes —
+  `props` is JSONB either way — so there is no schema migration to write in
+  the first place, and modelling a per-user, application-level change (a
+  user's own domain toggle, an ontology bump requiring row reshaping) as a
+  `prisma migrate` step run by an operator would additionally spend a user's
+  own AI provider key inside a deploy step performed on their behalf,
+  exactly the mistake CLAUDE.md's `note.retitle` entry already documents
+  and rejects for a different feature facing the identical shape of problem.
+  `kg.migrate` (§11), a per-user, per-row, resumable job, is the actual
+  mechanism.
 
 ## Verification
 
