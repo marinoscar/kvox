@@ -387,8 +387,8 @@ would flood the graph with nodes that never anchor a `Commitment` or
 transcript(s) and/or note(s) it was drawn from. Every `Commitment`,
 `Decision`, and `Claim` attaches to exactly one `Meeting` through
 `CREATED_IN`/`DECIDED_IN`/`ABOUT`'s temporal grounding (§5.4). One `Meeting`
-per transcript by default (a transcript already has one date and one
-attendee list). A note with no source audio — created from another note or
+per transcript by default (a transcript carries one recorded date —
+`Transcript.recordedAt`, §5.4 — and one attendee list). A note with no source audio — created from another note or
 an uploaded document — still gets a `Meeting`: its date is whatever the user
 supplied in Context if that names one, else the note's own `createdAt`, and
 either way `Meeting.dateSource` records which (`'stated' | 'note_created_at'`)
@@ -543,7 +543,16 @@ after the fact — and covered by a dedicated test (§"Verification").
 `Decision`, and `Claim` — defaulting to the meeting's own date unless the
 source text names another, with relative dates ("next Tuesday," "in three
 weeks") resolved **against the meeting's date**, never against the date the
-note happened to be written or reviewed. This is a distinct field from
+note happened to be written or reviewed. For a `Meeting` backed by a
+transcript, that date is **`Transcript.recordedAt`** — a column this epic
+adds (§16, P1) precisely because the existing `transcripts` table has no
+notion of *when the recording happened* distinct from `createdAt` (when it
+was uploaded, verified above): using `createdAt` for a transcript uploaded a
+day or a week late would silently mistake upload time for meeting time on
+every such recording. `recorded_at` backfills to `createdAt` at migration
+time and defaults to it on every future transcript, and is editable on the
+transcript page exactly like its title, so a late upload is correctable the
+same way a late title already is. This is a distinct field from
 `created_at` (when the graph row itself was written) for the identical reason
 Zep's temporal-graph paper argues for the distinction: a note is written
 *after* the meeting it describes, sometimes days after, and "latest" queries
@@ -741,10 +750,13 @@ uncertain resolution (§7).
   community-summary architecture answers and this design deliberately does
   not attempt; §9's per-entity digest is the narrow, cheap answer to "what's
   new about *this one thing*," not to "summarize everything."
-- **A neighbourhood-graph rendering library choice** — §13 names candidates
-  (`react-force-graph`, `sigma`, `cytoscape`) and the criteria for choosing
-  among them; none is installed by this document, and the choice is deferred
-  to the P5 issue that actually builds the view.
+- ~~A neighbourhood-graph rendering library choice~~ — **no longer
+  deferred.** An earlier draft of this document left this open for the P5
+  issue that builds the neighbourhood view; §22 (added once the explorer and
+  whole-graph overview were specified) makes the choice for both surfaces at
+  once — sigma.js + graphology — because a library chosen twice, once per
+  view, would risk two different in-memory graph representations for what is
+  conceptually one graph.
 
 ## 6. Extraction (`kg.extract`)
 
@@ -794,12 +806,26 @@ about that specific pattern does not apply to this job type at all).
 **One provider call, structured output.** A single request per extraction
 run — `entities[]`, `relations[]`, `items[]` (the `kg_items` kinds:
 `commitment | decision | claim | person_fact`), each carrying an
-`evidence[]` array of segment ids and character ranges — using the
-provider's structured-output mode (JSON schema / tool-call, whichever the
-active `AiProvider` supports) and Zod-validated regardless: a malformed
-answer is a **failed proposal**, never a partial commit, the identical
-posture `docs/specs/notes.md` §2.2's error taxonomy takes for every
-provider-calling job in this codebase. Every temporal relation and every `kg_items` row also carries
+`evidence[]` array of segment ids and character ranges — using a new
+`AiProvider.generateStructured()` method (§20). This codebase's `AiProvider`
+interface has neither a structured-output mode nor tool calling today
+(verified above: the only provider, OpenAI, is called through Chat
+Completions with `response_format: {type: 'json_object'}`, a bare JSON mode
+with no schema enforcement) — adding `generateStructured` (OpenAI's
+`response_format: {type: 'json_schema', json_schema: {name, strict: true,
+schema}}`) is itself foundation work this epic ships before `kg.extract` can
+exist at all, gated behind a `structuredOutput` capability flag on the
+resolved model (§20.2) so a model that cannot honour a JSON Schema is never
+offered for this task in the first place. Zod-validated regardless of the
+provider's own enforcement: a malformed answer is a **failed proposal**,
+never a partial commit, the identical posture `docs/specs/notes.md` §2.2's
+error taxonomy takes for every provider-calling job in this codebase. The
+model that runs this call is `AiTaskModelResolver.resolve(userId,
+'graph.extract', requestedModel?)` (§20.3) — the administrator's configured
+default for this task unless the calling user has overridden it with another
+model their own allow-list permits — and is recorded on the resulting
+`kg_proposals.model`/`.provider` (§10) exactly as `NoteGeneration` already
+records its own (verified above). Every temporal relation and every `kg_items` row also carries
 `valid_from`/`valid_to`/`precision` in the extractor's structured output
 (§5.4); `precision: 'unknown'` is a legitimate answer the extractor is
 required to give rather than guess a plausible-looking date, and it is
@@ -844,10 +870,22 @@ itself.
 
 **Quality bar, stated as a first-class deliverable rather than an
 afterthought — per the research summary above.** A golden set of 30
-hand-labelled meetings, kept under `apps/api/test/fixtures/kg-golden/`
-(planned), and an eval script (planned: `apps/api/scripts/kg-eval.ts`) that
-runs `kg.extract`'s prompt against every fixture and reports per-type
-precision/recall plus auto-link precision. Targets: **auto-link precision ≥
+**synthetic**, hand-authored meeting transcripts — invented conversations,
+never real recordings or real customer data — kept under
+`apps/api/test/fixtures/kg-golden/` (planned) and committed to the
+repository like any other fixture, specifically because a real transcript
+can never be checked into a repository or run inside CI's shared
+environment without becoming exactly the third-party-consent problem §15
+already argues against creating even for the product's own users. An eval
+script (planned: `apps/api/scripts/kg-eval.ts`) runs `kg.extract`'s prompt
+against every fixture and reports per-type precision/recall plus auto-link
+precision, run in CI on every change to the extraction prompt or the
+ontology definition file. A **second, separate mode of the same script** —
+local-only, opt-in, and never run in CI — lets an individual developer point
+it at their *own* real transcripts, through their own AI key, on their own
+machine, to sanity-check extraction quality against real data before relying
+on it; nothing from that local run is ever collected, uploaded, or compared
+against the committed synthetic set. Targets: **auto-link precision ≥
 0.95**, **`Commitment` recall ≥ 0.85**, **entity coverage ≥ 0.90** — chosen
 against the scholarly-extraction baseline (arXiv 2411.08696's 0.80/0.81–0.97
 range for a considerably less structured domain than a meeting transcript)
@@ -1004,7 +1042,11 @@ were new.
 write path, with exactly two named exceptions: the **speaker-naming write**
 (`IDENTIFIED_AS` plus a `Person` row, because the user typing a name against
 "Speaker A" *is itself* the review — there is no separate confirmation step
-that act could sensibly wait for), and a **manual edit on an entity page**
+that act could sensibly wait for), enqueued as **`kg.speaker_link`** (§11)
+from `TranscriptEditingService.identify()` (verified above) rather than
+performed inline in that request — CLAUDE.md's job-queue rule applies here
+exactly as everywhere else, however small the write — and a **manual edit on
+an entity page**
 (§13) — a person directly correcting a `Person`'s name or an `Organization`'s
 label after the fact, which is curation by construction and needs no
 proposal to wrap it.
@@ -1099,7 +1141,7 @@ mechanical response to that specific finding.
 
 ## 10. Data model
 
-Twelve tables (all `snake_case`-mapped Prisma models, planned — column-level
+This section's tables (all `snake_case`-mapped Prisma models, planned — column-level
 reasoning to live in the block comment above each model in
 `apps/api/prisma/schema.prisma`, following the discipline `notes.md` §4 and
 `transcript-name-correction.md` §8 already establish; this section is the
@@ -1160,8 +1202,56 @@ summary):
   section reads. `entity_id`/`note_id`/`transcript_id` **Cascade** — a
   mention has no meaning once either side is gone, unlike evidence's
   pointer relationship above.
-- **`kg_proposals`** / **`kg_proposal_items`** — §8, exactly as specified
-  there.
+- **`kg_proposals`** — one row per extraction (or import, §18.3) run:
+  `note_id`/`note_version` (null for an import), `kind` (`extraction |
+  import` — the value §18.3's own prose already assumed for an import row;
+  made an explicit column here rather than left implicit), `status` (`draft |
+  committed | discarded | failed | reverted` — `reverted` added by §19's
+  revert-commit), `model`/`provider` (§20 — which task-model resolution
+  actually ran, recorded rather than re-derived, so an administrator
+  changing the default tomorrow never rewrites what an already-committed
+  proposal used yesterday), `system_prompt`/`user_content` (the generation-
+  context snapshot, §6), `user_guidance` JSONB (§19.1 — pinned entities, a
+  type selection, free text, read by `kg.extract`'s prompt builder), `stats`
+  JSONB, `committed_at`/`reverted_at`, `job_id`. `owner_id` Cascade.
+- **`kg_proposal_items`** — one row per proposed entity, relation, or item:
+  `kind` (`entity | relation | item | closing` — `closing` is §7's "closing
+  a temporal edge is a proposal row" case), `payload`, `resolution` JSONB
+  (§7's `{ ref, score, candidates[] }`), a per-item `decision` (`pending |
+  accept | edit | reject | merge_into`), `edited_payload` (set when
+  `decision: edit`), `flags` text[] (§7's `overlaps`, an uncertain-
+  adjudication flag, a possible-duplicate flag — read by the review panel's
+  pre-check rule, §8), `origin` (`ai | user` — `user` for a row created by
+  §19.3's "Add to graph" from a text selection or by a reviewer's own manual
+  add, never proposed by the model, and excluded from `kg.extract`'s own
+  precision/recall accounting in §6's eval harness for the identical reason
+  a human's own correction is never scored as a model error), `committed_ref_id`
+  (the `kg_entities`/`kg_relations`/`kg_items` row this item became once
+  committed — §19.4's revert reads this to know exactly what to undo).
+- **`kg_graph_layouts`** — one row per computed whole-graph layout (§22):
+  `computed_at`, `node_count`, `edge_count`, `clusters` JSONB (which
+  community each node belongs to), `positions` JSONB (precomputed 2D
+  coordinates per node), `ontology_version`. Exactly one *latest* row per
+  `owner_id` — `GET /api/graph/overview` (§22.3) always reads the newest,
+  never recomputes at request time, the same "precompute once, read
+  cheaply" economy `kg_entity_digests` already gives the entity brief.
+  `owner_id` Cascade. Added in its own migration (§16, P4/P5), after the
+  tables above.
+- **`ask_conversations`** / **`ask_messages`** — §21's own tables, added in
+  their own migration because Ask is a separate module from the core `kg_*`
+  set, not a graph table itself: a saved back-and-forth with the read-only
+  graph agent. `ask_conversations`: `owner_id`, `title`, `scope_entity_id`
+  nullable (set when a conversation was started from an entity page's Ask
+  panel, §21.5), `created_at`/`updated_at`. `ask_messages`:
+  `conversation_id` (Cascade), `role` (`user | assistant`), `content`,
+  `status` (`pending | streaming | complete | failed` — the identical shape
+  `note_generations` already uses, verified above), `tool_calls` JSONB (the
+  agent's own tool-call trace, read by the citation-validity check in
+  §"Verification"), `citations` JSONB, `model`/`provider` (§20.3), token
+  counts, `error_class`, `job_id`. `owner_id`-equivalent access runs through
+  `ask_conversations.owner_id`; `ask_messages` has no owner column of its
+  own, mirroring how `note_generations.noteId` (verified above) carries
+  ownership through its parent rather than duplicating it.
 - **`kg_merges`** — one row per merge (§7), with the full reversal payload.
 - **`kg_distinct_pairs`** — confirmed-not-the-same pairs (§7), skipped by
   every future candidate-generation pass.
@@ -1194,7 +1284,10 @@ epic's foundation phase (§16, P1) actually needs to enable.
 
 ## 11. Job types
 
-Eight types, all under `apps/api/src/graph/handlers/` (planned):
+Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
+`ask.respond`, which lives under `apps/api/src/ask/handlers/` (planned) —
+Ask is its own module (§21), reusing the graph's job-queue conventions
+rather than being folded into a handler directory it does not belong in:
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
@@ -1202,17 +1295,25 @@ Eight types, all under `apps/api/src/graph/handlers/` (planned):
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
+| `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued from `TranscriptEditingService.identify()` (verified above) rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
+| `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 3 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead |
 | `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
+| `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table |
 
 **Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
 watching the review panel for their note fill in, the same "someone is
 watching a spinner" reasoning `transcript.export`'s −10 and `note.export`'s
 −10 both state for themselves, though slightly less urgent than an export
 download because a proposal panel is a review step, not a wait-for-a-file
-moment. Every other type in this table runs at the deployment default;
+moment. `ask.respond` runs at priority **−10**, the identical download-and-
+wait urgency `note.export`/`transcript.export` state for themselves — a
+person is watching the agent's own answer stream in real time. `kg.graph_layout`
+and `kg.speaker_link` run at the deployment default: neither is watched
+synchronously the way an extraction proposal or an agent answer is. Every
+other type in this table runs at the deployment default;
 `kg.entity_digest` is specifically enqueued **after** a commit settles, never
 before, so it always summarizes the post-commit state rather than racing it.
 
@@ -1262,6 +1363,56 @@ recording itself, a different object entirely. The stated consequence:
 revoking a transcript share revokes nothing on the graph side, because
 nothing was ever shared there to revoke.
 
+**Additional routes §19–§22 add, under the same two permissions.**
+`graph:read` also gates the read side of proposal review — `GET
+/api/graph/proposals`, `GET /api/graph/proposals/:id`, `GET
+/api/graph/notes/:noteId/proposal`, and `GET /api/graph/extract/estimate`
+(§19 — a cost estimate before spending a run, the same shape `GET
+/api/transcripts/:id/name-checks/estimate` already gives its own AI-calling
+feature) — as well as `GET /api/graph/overview` (§22.3's whole-graph
+snapshot) and `POST /api/graph/explore/expand` (§22.2 — a read of the
+caller's own graph even though it is a `POST`, because the node-id list it
+accepts does not fit a query string). `graph:write` also gates every
+proposal decision — `PATCH .../items/:itemId`, `POST .../items` (add-missing
+from a selection, §19.3), `POST .../items/bulk` (§19.2's group actions),
+`POST .../commit`, `POST .../discard`, and `POST .../revert` (§19.4) —
+`POST /api/graph/notes/:noteId/extract` (§6, taking §20.3's optional model
+override), entity `merge`/`merges/:id/reverse`/`distinct-pairs` (§7),
+`entities/:id/forget` (§15), and `POST /api/graph/overview/refresh` (§22.3, a
+manual re-cluster).
+
+**Ask is a separate controller and OpenAPI tag (`Ask`,
+`apps/api/src/ask/ask.controller.ts`, planned) but a reused permission.**
+`GET/POST/PATCH/DELETE /api/ask/conversations[...]`, `POST .../messages`, and
+`GET /api/ask/messages/:id/stream` (§21) are gated on `graph:read` alone,
+with no `ask:*` pair — asking a question of one's own graph is a read of it,
+the identical reasoning that already lets `notes:read` cover `GET
+/api/notes/:id/stream` rather than a `notes:read`/`stream:read` split. There
+is deliberately no write permission for Ask: a conversation and its messages
+are the caller's own scratch history over data they can already read, not a
+second surface with its own authority.
+
+**Task-model configuration reuses the existing AI settings routes rather
+than adding new ones (§20).** `ai.taskModels` and `ai.graphEnabled` are two
+more fields on the `ai` system-settings namespace, read and written through
+the existing `GET`/`PUT /api/ai-settings` (`system_settings:read`/`:write`)
+exactly as every other `ai` field already is — and `GET /api/ai/config`
+gains the caller's own resolved `taskModels` (which model each graph task
+will actually run with, after applying any override the caller is permitted)
+and `graphEnabled`, the identical "what does this deployment permit and does
+the caller have a key" contract that endpoint already answers for
+`docs/specs/notes.md`'s own feature.
+
+**New 409 `details.reason` values this epic adds:** `graph_disabled`
+(`ai.graphEnabled` is off), `extraction_running` (a draft proposal already
+exists for this note version), `proposal_not_draft` (acting on a
+committed/discarded/reverted proposal), `stale_note_version` (extracting
+against a note version that has since changed), `revert_conflict` (§19.4 —
+one or more of the proposal's committed rows has been touched since commit),
+and `model_lacks_capability` (§20.2 — the requested model does not report
+`structuredOutput` for an extraction/adjudication/digest/brief task or
+`toolCalling` for the agent).
+
 ## 13. Web surfaces
 
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
@@ -1278,21 +1429,35 @@ its recent claims and decisions, and the entity brief (§9.1).
 **Neighbourhood view**, inside the entity page — 1–2 hops, entity-centred,
 never a whole-graph rendering (§3.5's "narrow schema" extended to the UI: a
 whole-graph view for a shallow, meeting-scoped graph is a view nobody asked
-for and a rendering cost nobody budgeted). The rendering library is a
-deferred decision (§5.7) — candidates named for the P5 issue that builds it
-are `react-force-graph`, `sigma`, and `cytoscape`; none is installed by this
-document, and the criteria for choosing among them (bundle size, canvas vs.
-SVG rendering at this node count, licensing) belong to that issue, not this
-spec.
+for and a rendering cost nobody budgeted). The rendering library named as a
+deferred decision here in an earlier draft of this document is deferred no
+longer — §22 chooses sigma.js + graphology and records `react-force-graph`
+and `cytoscape` as rejected, once this document actually had to build the
+whole-graph overview (§22) and could no longer leave the neighbourhood
+widget's own library unstated without also leaving the overview's unstated.
+
+**Route ownership.** None of this needs a new bottom-bar destination (below),
+but every route this epic adds is still a route, and `apps/web/src/config/
+destinations.ts`'s own route-ownership test (verified above) fails an
+unowned one — so `/graph`, `/graph/entities/:id`, `/graph/explore`,
+`/graph/overview`, `/ask`, and `/ask/:conversationId` (§21.5, §22) are all
+declared under the **`home`** destination's `DESTINATION_ROUTES` prefix: none
+of them is a natural extension of `transcripts`, `notes`, or `settings`, and
+`home` is already where a user arrives from before reaching any of the entry
+points below. `/settings/knowledge-graph` (below) is the one exception — a
+settings-card route, owned through `USER_SETTINGS_SECTIONS` the way every
+other settings route already is, not through `DESTINATION_ROUTES`.
 
 **No new bottom-bar destination.** `apps/web/src/config/destinations.ts`
 (verified above) is at its four-tab ceiling by design — `home`,
 `transcripts`, `notes`, `settings`, with `console` pinned rather than
 occupying a fifth slot — and this document does not ask for a sixth. The
-graph is reached from three existing surfaces instead: the proposal panel on
-a note, an entity chip added to a transcript's speaker list (linking a named
-speaker to their `Person` page), and from search results that resolve to a
-graph entity.
+graph and Ask are reached from within existing surfaces instead: a new
+**Knowledge** section on `HomePage.tsx` (verified above) surfacing recent
+entities, the "Waiting for review" card (§19.5), and an Ask entry point; the
+proposal panel on a note (§8, §19); an entity chip added to a transcript's
+speaker list (linking a named speaker to their `Person` page); and from
+search results that resolve to a graph entity.
 
 **A user-settings card, `Knowledge graph`** (thresholds, resolution mode,
 domain toggles, a user-defined-attribute browser, gated `graph:write`) is
@@ -1300,7 +1465,14 @@ the **only** registry entry this document adds, in
 `apps/web/src/config/userSettingsSections.tsx`'s `USER_SETTINGS_SECTIONS`
 (Settings UI Pattern rule 1) — no admin card, because resolution thresholds
 and extraction behaviour are a per-user preference over one's own graph, not
-a deployment-wide policy.
+a deployment-wide policy. This is not the same claim as "no admin surface at
+all": the two knobs that genuinely are deployment policy —
+`ai.graphEnabled` and the per-task model defaults (§20) — get **no new card
+either**, registry or otherwise; they land as two new sections on the
+*existing* `/admin/settings/ai` page (`AiSettingsPage.tsx`, already
+registered on `system_settings:read`/`:write`, verified above), because they
+are two more fields on a policy that page already owns, not a graph-specific
+surface Settings UI Pattern rule 1 would require its own card for.
 
 **Every form on these surfaces is schema-driven, never hand-coded per
 type.** The proposal panel (§8), the entity page's edit form, and this
@@ -1398,12 +1570,17 @@ against the 30-meeting fixture set and prints per-type precision/recall with
 no extraction pipeline behind it yet — proving the measurement tooling
 exists before the thing it measures does.
 
-**P2 — Extraction, proposal, "Send to graph."** `kg.extract` (§6), the
-proposal API and panel (§8), the commit transaction with the no-orphan
-invariant enforced and tested (§3.3), the speaker-naming write (§8's named
-exception). *Acceptance:* a real note produces a proposal, a reviewer can
-accept/edit/reject each row, and a commit leaves no accepted/edited row
-without at least one evidence citation.
+**P2 — Extraction, proposal, "Send to graph."** The `generateStructured`/
+`chat` `AiProvider` capabilities and task-model resolution (§20 — foundation
+work `kg.extract` cannot run without), `kg.extract` (§6), the proposal API
+and review panel including guide-the-graph, row-level overrides, "Add to
+graph" from a selection, and revert-commit (§8, §19), the commit transaction
+with the no-orphan invariant enforced and tested (§3.3), the speaker-naming
+write via `kg.speaker_link` (§8's named exception, §11), and the Home
+"Waiting for review" card (§19.5). *Acceptance:* a real note produces a
+proposal, a reviewer can accept/edit/reject/re-type/re-link each row, add a
+missed fact from a text selection, commit, revert that commit, and a commit
+leaves no accepted/edited row without at least one evidence citation.
 
 **P3 — Resolution and dedup.** Candidate generation, scoring, LLM
 adjudication, aliases, distinct pairs, merges and reversal, work-item
@@ -1414,16 +1591,24 @@ losslessly.
 
 **P4 — Claims, digest, brief.** `occurred_at` handling end to end (§5.4),
 `kg.entity_digest` (§9.2), the brief endpoint with mandatory citations
-(§9.1), "since I last looked" (§9.2). *Acceptance:* the entity brief for a
-seeded fixture entity names every fact it states with a working citation
-down to a segment or note span.
+(§9.1), "since I last looked" (§9.2), and `kg.graph_layout` — the job that
+precomputes the whole-graph overview's clusters and positions (§22.3), built
+here because it depends on nothing P5 adds and the overview it feeds has no
+reason to wait for the rest of P5's web work. *Acceptance:* the entity brief
+for a seeded fixture entity names every fact it states with a working
+citation down to a segment or note span, and `kg.graph_layout` produces a
+stored snapshot for a seeded fixture graph.
 
-**P5 — Views, tools, feedback loops.** The entity page, the neighbourhood
-view (library choice made here, §13), the timeline, the agent toolset
-(§9.3), the keyterms/name-check/prompt feedback loops (§14), the Danger Zone
-graph scope (§15). *Acceptance:* a user can open an entity from a
-transcript's speaker list, see its brief, and see a subsequent transcript's
-keyterms include names drawn from the graph.
+**P5 — Views, tools, feedback loops, Ask.** The entity page, the sigma.js +
+graphology neighbourhood view and the explorer (§22.1, §22.2), the whole-
+graph overview UI reading P4's precomputed snapshot (§22.3), the timeline,
+the agent toolset (§9.3) built out as Ask — conversations, `ask.respond`,
+its SSE stream, the `/ask` page and the entity-page Ask panel (§21) — the
+keyterms/name-check/prompt feedback loops (§14), and the Danger Zone graph
+and Ask scopes (§15, §21.6). *Acceptance:* a user can open an entity from a
+transcript's speaker list, see its brief, drill from the whole-graph overview
+into the explorer, ask Ask a cited question about that entity, and see a
+subsequent transcript's keyterms include names drawn from the graph.
 
 **P6 — Personal domain.** The `personal` module (§17.2: `SPOUSE_OF`,
 `PARENT_OF`, `FRIEND_OF`, `Interest`, `Trip`, `Milestone`), the domain-toggle
@@ -1837,6 +2022,434 @@ because §1's non-goals already rule out any endpoint accepting or generating
 a query language from a model or a user, and pulling a SPARQL engine into
 the request path would be the first step toward exactly that.
 
+## 19. Review UI and overrides
+
+§8 established the commit gate; this section is everything a reviewer can
+*do* before that gate, and the one thing they can undo after it. Nothing
+here opens a second write path into the graph — every action below still
+lands as a `kg_proposal_items` row decision or, for a revert, as an explicit
+reversal of a specific committed row; §8's "nothing else writes to the
+graph" rule holds unchanged.
+
+### 19.1 Guide the graph, before extraction runs
+
+A reviewer is not limited to reacting to whatever `kg.extract` (§6) proposed
+— `POST /api/graph/notes/:noteId/extract` accepts an optional `userGuidance`
+object, persisted onto the resulting `kg_proposals.user_guidance` (§10) and
+read by the prompt builder (`buildExtractionContext`, §6) on this run:
+**pinned entities** (force specific known-entities-list rows to the top
+regardless of recency, for a meeting about someone the recency heuristic
+would otherwise miss), a **type selection** (narrow this run to a subset of
+the caller's effective schema — useful for "just re-check Commitments"
+without re-litigating everything else), and **free-text instructions**
+appended verbatim to the extraction prompt, the identical "an extra
+paragraph the model reads, never a second code path" shape
+`docs/specs/notes.md` §3.1's own Context field already takes for generation.
+Guidance is never itself evidence — it steers what the model looks for, and
+every row it helps produce still needs its own citation (§5.3) exactly like
+any other proposed row.
+
+### 19.2 Row-level overrides in the review panel
+
+Every proposed row supports six actions beyond the plain accept/reject §8
+already describes, each recorded as the item's `decision`/`edited_payload`/
+`flags` (§10):
+
+- **Edit**, including **changing the proposed type** — a row the model
+  proposed as a `Claim` can be re-typed to a `PersonFact` (or the reverse)
+  before acceptance, validated against the caller's effective schema
+  (§17.4) exactly as a freshly-proposed row of that type would be; changing
+  a *relation's* type re-validates its endpoints against the new type's
+  declared `from`/`to` (§17.1) and is refused, inline, if they no longer fit.
+- **Re-link** — replace §7's proposed entity match with a different one
+  (search the caller's own graph), for the case where automatic resolution
+  picked a plausible but wrong "Sarah."
+- **Evidence add/remove** — a reviewer who read further in the transcript
+  than the model's own cited range can attach another segment or note span
+  as additional support, or remove a citation that does not actually say
+  what the model claimed; the no-orphans invariant (§3.3) still applies at
+  commit time, so removing a row's last remaining evidence line without
+  adding another blocks that row's commit rather than silently committing an
+  unsupported one.
+- **Reject** — unchanged from §8, still kept and suppressed by statement
+  hash (§7) rather than deleted.
+- **Group actions** — `POST /api/graph/proposals/:id/items/bulk` applies one
+  decision (`accept | reject`) to a set of `itemIds` in one call, for the
+  ordinary case of clearing a whole type's worth of confidently-correct rows
+  in one tap rather than one row at a time; a bulk `accept` still respects
+  §8's `PersonFact` pre-check exclusion — a `PersonFact` row is never swept
+  into a bulk accept, even when explicitly selected, without a distinct
+  confirmation naming that it is about to expose a personal fact.
+- **Add a missing item from a text selection** — §19.3, below.
+
+### 19.3 "Add to graph" from a text selection
+
+A reviewer reading the note or the transcript can select a span of text the
+model missed entirely and turn it directly into a proposal row: `POST
+/api/graph/proposals/:id/items` with the selection's `{ noteId, noteVersion,
+charStart, charEnd }` (or the transcript equivalent, `{ transcriptId,
+segmentId, segmentRev, startMs, endMs }`) and the entity/relation/item the
+reviewer typed. **The selection itself becomes the row's evidence** — there
+is no separate "now find a citation" step, because the reviewer's own act of
+selecting the text *is* the citation, the identical "the review step and the
+evidence step are the same click" economy §4's speaker-naming moment already
+gets for free. The resulting row's `origin` is `user` (§10) — it never
+counts toward `kg.extract`'s own precision/recall accounting (§6's eval
+harness), for the same reason a human's typed correction is never scored as
+a model error: this row was never proposed by the model to get wrong in the
+first place.
+
+### 19.4 Reverting a commit
+
+`POST /api/graph/proposals/:id/revert` undoes exactly what that proposal's
+commit did, and no more. Every `kg_proposal_items` row committed by this
+proposal carries `committed_ref_id` (§10) — the exact
+`kg_entities`/`kg_relations`/`kg_items` row it became — and revert walks
+that list: a row **untouched since commit** (no edit, no new evidence, no
+merge, no superseding fact recorded against it) is deleted outright, or, for
+a relation that closed an earlier edge (§5.4's closing rule), the closed
+edge is reopened; a row that **has** been touched since — a later proposal
+added evidence to it, a merge folded another entity into it, a newer fact
+superseded it — is left alone and named in the response's `untouched: false`
+list, because undoing it here would silently discard work a later,
+independent review step performed in good faith. A revert that could not
+fully undo its commit is not a partial failure — it is reported as exactly
+that, a proposal `status: reverted` (§10) whose `stats` records what came
+back and what could not, so a reviewer sees the honest boundary of what
+"undo" means once other work has happened downstream. Revert is audited as
+`graph.proposal_reverted`.
+
+### 19.5 Where review surfaces before a reviewer opens the note
+
+`HomePage.tsx`'s (verified above) new **Knowledge** section carries a
+**"Waiting for review"** card — every `draft` proposal the caller owns, most
+recent first, each opening straight into that note's review panel — so a
+proposal produced automatically the moment a note reaches `ready` (§6) does
+not require a reviewer to remember which note it was attached to and go find
+it. A proposal with no reviewer action taken is not chased by a notification
+— reviewing one's own extraction is a pull action a user reaches for on
+their own schedule, the same posture `docs/specs/notes.md` gives its own
+`titleSource: template` sweep rather than nagging a user every time a note
+finishes generating.
+
+### 19.6 Phone layout
+
+The review panel is a right-anchored side sheet at `sm` and above (§13); on
+phone it takes the bottom-sheet-or-full-screen shape `NameSuggestionsPanel.tsx`
+(verified above) already establishes for a page-level review surface — a
+`Drawer` from the bottom for a short list of pending rows, promoted to a
+full-screen route when a proposal is large enough that a partial-height
+sheet would make scanning it worse than not showing it at all. This is the
+page-level `down('sm')` read `LibraryPageFrame.tsx` already takes (CLAUDE.md's
+Settings UI Pattern rule 5's own footnote) — a layout choice inside one page,
+never a sixth breakpoint gate on app chrome.
+
+## 20. Task models
+
+Every AI-calling job type this document defines — `kg.extract`, `kg.resolve`'s
+adjudication step, `kg.entity_digest`, the entity brief's composition step
+(§9.1), and `ask.respond` (§21) — needs a model, and none of them should
+share `NoteGenerationRequestService.resolveModel()`'s notion of "the" model,
+because a deployment reasonably wants a cheap, fast model doing bulk
+extraction and a stronger one composing a brief a person actually reads, and
+a user reasonably wants to override either with their own choice on their
+own key. This section is the one place that policy is decided, read by every
+call site above rather than several independent `resolveModel`-style
+implementations drifting apart the way `note-generation-request.service.ts`
+and `transcript-name-check.service.ts`'s own `resolveAi()` (verified above)
+already have from each other.
+
+### 20.1 The setting
+
+`ai.taskModels: Partial<Record<TaskKey, { model: string; reasoningEffort?:
+'low'|'medium'|'high' }>>` — a new field on the existing `ai` system-settings
+namespace (CLAUDE.md's Database Tables section), following the identical
+six-place settings-parity discipline every other `ai` field already follows
+(verified above). `TaskKey` is `'graph.extract' | 'graph.adjudicate' |
+'graph.digest' | 'graph.brief' | 'graph.agent'` — one key per AI-calling
+*shape* this design has, not one per job type, because `kg.resolve`'s
+LLM-adjudication step (§7) and `kg.entity_digest` (§9.2) are different
+shapes of call even though a deployment might reasonably point them at the
+same model. A task with no entry falls back to `ai.defaultModel` (the
+existing field), so enabling connected knowledge for the first time needs
+zero new configuration to work at all — `ai.taskModels` is where an
+administrator narrows the default per task, never a required setup step.
+
+A second new field, `ai.graphEnabled: boolean`, default **`false`** —
+connected knowledge is off for a fresh deployment until an administrator
+turns it on, the identical "off by default until configured" posture
+`nodes.jobSecretBrokerEnabled` and `databaseBackup.nodeOffloadEnabled`
+(CLAUDE.md's Environment Variables section) already establish for a feature
+with a real blast radius: turning this on is the moment every eligible note
+starts spending the *owning user's own* AI provider credit on an extraction
+they did not explicitly request per-note. `kg.extract` is never enqueued
+while `ai.graphEnabled` is `false` (409 `graph_disabled`, §12).
+
+### 20.2 Capability flags
+
+`generateStructured` (§6) and the tool-calling loop `ask.respond` needs
+(§21) are both new `AiProvider` capabilities this epic adds to
+`apps/api/src/ai/providers/ai-provider.interface.ts` — OpenAI's Chat
+Completions path this codebase uses today (verified above: no tool calling,
+no `json_schema` mode) gains `generateStructured(ctx, req)` using
+`response_format: {type: 'json_schema', json_schema: {name, strict: true,
+schema}}`, and `chat(ctx, req)` returning an `AsyncIterable` of
+delta/tool-call/done events for the agent loop. Every model descriptor a
+provider reports (`AiProvider.listModels`/`deriveModelDescriptor`, verified
+above) carries two new boolean flags, `structuredOutput` and `toolCalling`,
+alongside its existing context-window/output-ceiling numbers
+(`ai-model-resolution.ts`'s five-rank chain, CLAUDE.md's `ai` namespace
+entry) — a model with `structuredOutput: false` is not offered for
+`graph.extract`/`graph.adjudicate`/`graph.digest`/`graph.brief`, and one with
+`toolCalling: false` is not offered for `graph.agent`, at both save time
+(§20.4) and resolution time (§20.3), so an unusable pairing is
+unrepresentable rather than merely discouraged.
+
+### 20.3 Resolution and the user override
+
+`AiTaskModelResolver.resolve(userId, task, requested?)` (planned:
+`apps/api/src/ai/ai-task-model-resolver.service.ts`) is the one function
+every AI-calling call site in this feature calls, extracted from
+`NoteGenerationRequestService.resolveModel()`'s own shape (verified above)
+rather than reimplemented per call site: it resolves `ai.taskModels[task]`
+(or `ai.defaultModel`) to a concrete `{ providerId, model, reasoningEffort,
+countTokens }`, the same 409 `ai_not_configured`/`ai_key_missing` semantics
+`resolveModel` already gives. When `requested` names a model the calling
+user's own allow-list permits (the existing `allowedModels` mechanism,
+unchanged by this epic), that model is used instead of the admin's per-task
+default — **the user's own key pays for it either way**, so an override
+changes which model runs, never who is billed. A `requested` model lacking
+the capability the task needs (`structuredOutput` for the four
+extraction/adjudication/digest/brief tasks, `toolCalling` for `graph.agent`)
+is refused with 409 `model_lacks_capability` (§12) rather than silently
+falling back to the admin default — a silent fallback would mean a user who
+explicitly asked for a specific model never learns their choice was ignored.
+
+**Recorded, not just applied.** Every proposal (`kg_proposals.model`/
+`.provider`, §10) and every agent turn (`ask_messages.model`/`.provider`,
+§10) records exactly which model actually ran it — never re-derived from the
+current setting at read time, because an administrator changing the default
+tomorrow must not silently rewrite what an already-committed proposal used
+yesterday, the identical "record the exchange, don't re-derive it"
+discipline `NoteGeneration.systemPrompt`/`userContent` (verified above)
+already establishes for generation's own history.
+
+### 20.4 Admin UI
+
+Per §13's own correction, above: two new sections — **Connected knowledge**
+(the `graphEnabled` toggle) and **Task models** (one model picker per
+`TaskKey`, each showing only models the active provider reports with the
+capability that task requires) — are added to the *existing*
+`AiSettingsPage.tsx` (`/admin/settings/ai`, verified above), never a new
+registry card. Save-time validation runs the identical capability check
+§20.3 gives at resolution time, so a deployment can never save a
+`graph.agent` entry pointing at a model with no `toolCalling` — the error
+surfaces on save, not months later on the first agent turn that tries to use
+it.
+
+## 21. Ask — the read-only graph agent
+
+§9.3 named the toolset — `search`, `get_entity`, `neighbors`, `evidence`,
+`timeline`, `entity_brief` — as re-exposable "for any future agent-style
+consumer of this graph." Ask is that consumer, built now rather than left as
+a forward reference: a conversational surface over the caller's own graph
+that can take several steps (search, then look at what it found, then check
+a timeline) before answering, always citing what it read, and never writing
+anything.
+
+### 21.1 Read-only, by construction, not by prompt instruction
+
+**The agent never generates SQL, Cypher, or any other query language, for
+the identical reason §1's non-goals and §9.3 already state for the toolset
+it calls** — every tool it can invoke resolves to one of the fixed,
+parameterized read shapes §12 already defines (a search, a neighbourhood
+walk of a bounded depth, a timeline slice, an evidence lookup), so there is
+no query surface for a prompt-injected instruction to escape into even in
+principle. **It never writes to the graph, under any tool, at any
+confidence.** This is the same "the write path itself does not exist"
+posture §3.6 takes for extraction's own commit gate, extended here to a
+second AI-calling surface: adding a `propose_entity`-shaped tool to the
+agent's toolset — even one that only *drafted* a `kg_proposal_items` row for
+a human to later review — would make Ask a second, parallel path into the
+review pipeline, with its own prompt, its own failure modes, and its own
+chance of quietly normalizing "the agent found something, so add it" as a
+habit that erodes exactly the deliberate friction §3.6 built the single
+commit gate to preserve. Ask answers questions; `kg.extract` and the review
+panel (§19) are still the only way anything enters the graph.
+
+### 21.2 Conversations
+
+`ask_conversations` / `ask_messages` (§10) — a saved back-and-forth, listed
+and reopened like any other saved item in this application, never ephemeral.
+`scope_entity_id` (nullable) records when a conversation was started from an
+entity page's Ask panel (§21.5) rather than the standalone `/ask` page, so a
+scoped conversation's first turn is pre-seeded with that entity in context
+without the user having to name it. `GET/POST/PATCH/DELETE
+/api/ask/conversations[/:id]` (§12) are ordinary owner-scoped CRUD, gated on
+`graph:read` alone (§12) — there is no `ask:*` permission pair, because a
+conversation is the caller's own scratch history over data they can already
+read.
+
+### 21.3 One turn, one job
+
+`POST /api/ask/conversations/:id/messages` `{ content, model? }` enqueues
+**`ask.respond`** (§11) and returns **202** with both the new user message
+and a `pending` assistant message — the identical two-row-per-turn shape a
+chat UI needs to render immediately without waiting on the job.
+`ask.respond` runs the tool-calling loop (§20.2's `chat()`) against the
+resolved `graph.agent` model (§20.3, with the caller's own override honoured
+exactly as §20.3 describes), reading prior turns in the conversation as the
+message history, calling tools as needed, and writing every delta into
+`ask_messages.content` on the way past — **the identical durable-buffer-not-
+delivery-mechanism discipline** `note_generations` already establishes
+(CLAUDE.md's Notes rule 1): a turn completes identically whether or not the
+SSE stream below is open, and closing the tab loses nothing.
+
+**Caps.** A hard **step cap** (a fixed number of tool calls per turn) and a
+**token cap** (per turn, drawn from the resolved model's own output ceiling,
+§20.2) bound a single turn's cost and latency; a turn that hits either cap
+ends with its best answer so far and a `finishReason` the client can render
+as "stopped early" rather than pretending the answer is complete. `profile:
+{ maxRuntimeMs: 5m, maxAttempts: 1 }` (§11) — one attempt, for the identical
+reason `note.generate`/`kg.extract` carry it: a retried turn would silently
+re-spend the user's own provider credit to produce a different,
+non-deterministic answer to a question whose partial stream the user may
+already be reading. Throttled on `aiProviderThrottleKey(userId)` (§11), the
+same per-user key every other AI-calling type in this design uses, for the
+identical reason: every user brings their own vendor account.
+
+**Citations are validated, not merely requested.** Every claim in an
+assistant message names the tool result it came from (an entity id, an
+evidence id, an item id); `ask.respond` checks each cited id against the ids
+the tools it actually called returned in *this* turn before the message is
+marked `complete` — a citation to something never fetched is dropped from
+the rendered answer and counted in the message's own stats, the identical
+"the model cites what it was given, never invents a new id" discipline §6
+already enforces for extraction, applied here to an agent's answer instead
+of a proposal.
+
+### 21.4 The stream
+
+`GET /api/ask/messages/:id/stream` — the same `delta | done | error` frame
+contract, `Last-Event-ID` resume, and offset-addressed content
+`src/notes/generation/note-stream.ts` (verified above) already defines for
+`note_generations`, reused rather than reimplemented for the identical
+reason §9.4's fusion discipline reuses `reciprocalRankFusion()`: a second,
+independently-written SSE frame format for the same "stream durable text as
+it is written" problem is a second place the two could quietly disagree
+about what "resume from here" means.
+
+### 21.5 Web surfaces
+
+An **`/ask`** page (conversation list, a streaming answer view, citation
+chips that open the exact ▶ segment, note span, or entity page a claim came
+from, and a model picker honouring §20.3's override) and, on the entity page
+(§13), an **Ask panel** pre-scoped to that entity (`scope_entity_id`, §21.2)
+for "what does the graph know about Joe, and can I ask it something" without
+leaving the page. Both routes — `/ask` and `/ask/:conversationId` — are
+owned by the `home` destination exactly as §13 states for the rest of this
+epic's routes; there is no new bottom-bar tab for Ask any more than there is
+one for the graph itself.
+
+### 21.6 Deletion
+
+Ask's conversations are the caller's own generated content over their own
+graph, so the Danger Zone (`docs/specs/user-data-deletion.md`) gains
+coverage alongside `transcripts`/`notes`/`files`/the graph: deleting
+`content` or `everything` removes the caller's `ask_conversations` (and, by
+cascade, their `ask_messages`) — the identical fan-out pattern that
+document's scope matrix already uses for every other category, with no new
+purge job needed because a plain cascading delete is sufficient here —
+unlike a transcript or a note, an Ask conversation has no external storage
+object or provider-side state to clean up alongside the row.
+
+## 22. Visualization — explorer and overview
+
+Two views, one underlying graph model, deliberately not one: §13's
+neighbourhood widget already answers "everything around this one entity,"
+bounded and cheap; this section adds a dedicated **explorer** for navigating
+that neighbourhood interactively across more than one entity, and a
+**whole-graph overview** for the different question neither the entity page
+nor the explorer answers — "what does my *whole* graph look like." Both
+resolve the rendering-library decision §5.7 and §13 previously left open.
+
+### 22.1 Library: sigma.js + graphology, chosen here
+
+**sigma.js** (WebGL rendering) **+ graphology** (the graph data structure
+and algorithm library both the client and, via
+`graphology-communities-louvain`, the server's own `kg.graph_layout` job
+use) is the one library choice this document makes rather than defers.
+WebGL rendering is what makes the whole-graph overview's node count
+tractable at all — an SVG-based renderer redraws every element on every
+pan/zoom, which stops being smooth well before this design's own explorer
+cap (below); a single graphology graph object, shared between the two views,
+is what lets the overview's "drill into the explorer" transition (§22.3)
+hand off an already-loaded subgraph instead of re-fetching it.
+**react-force-graph and cytoscape**, both named as candidates in an earlier
+draft of §5.7/§13, are recorded as rejected in "Rejected alternatives,"
+below, rather than left open any further.
+
+### 22.2 Explorer (`/graph/explore`)
+
+Seeded from an entity page, a search result, or a bare visit to
+`/graph/explore` itself (in which case it seeds from the caller's
+most-recently-viewed entities, `kg_entity_views`, §9.2); **expand-on-click**
+grows the visible graph one hop at a time from `POST /api/graph/explore/expand`
+(§12) rather than ever fetching the whole graph up front, so a click always
+costs one bounded request instead of the client silently downloading more of
+the graph than the screen can usefully show. Filters — **entity/relation
+type**, **domain** (§17.2 — hiding `personal`-domain rows for a user who has
+that domain enabled but does not want it cluttering this particular view),
+and an **`as_of` slider** (§9.1 — rendering the graph as it stood on a past
+date, reusing the identical range-containment query the entity brief already
+runs) — narrow what expansion is allowed to add, not merely what is
+displayed, so a filtered-out type is never fetched at all. **A hard
+300-node cap** — past it, expansion is refused with a message naming the cap
+rather than silently degrading into an unreadable hairball or a frozen tab;
+300 is chosen against sigma.js's own practical WebGL ceiling for a
+force-directed layout that still redraws smoothly on an ordinary laptop, not
+against any property of this design's own graph size, which §3.5's "shallow
+by construction" scope means rarely approaches it during ordinary use.
+
+### 22.3 Whole-graph overview (`/graph/overview`)
+
+**Never computed client-side, and never client-side even in principle.** A
+force-directed layout of an entire graph is $O(n^2)$-ish per frame and a
+client cannot be trusted to have a machine capable of running it smoothly
+the moment the graph crosses a few hundred nodes — exactly the "300-node
+cap" reasoning above, but for a view whose entire purpose is showing
+*everything*, which is precisely the case a client-side layout cannot
+gracefully degrade out of. `kg.graph_layout` (§11) instead runs graphology's
+Louvain community detection plus a force-directed layout **on the server**,
+once, and writes the result — `clusters` (which community each node belongs
+to) and `positions` (precomputed 2D coordinates) — to `kg_graph_layouts`
+(§10); `GET /api/graph/overview` (§12) always reads the latest stored
+snapshot, never recomputes at request time, the identical "precompute once,
+read cheaply forever" economy `kg_entity_digests` (§9.2) already gives the
+entity brief. `POST /api/graph/overview/refresh` (§12, `graph:write`) lets a
+user ask for a fresh snapshot after a large commit changes the shape of
+their graph enough to be worth re-clustering; it is never triggered
+automatically on every commit, because a whole-graph re-layout is not the
+kind of work that should run on every note a user finishes reviewing.
+
+The overview itself renders clusters as the zoomed-out unit — a cluster's
+size and label (its most central entities) rather than every individual
+node at once — and **drilling into a cluster hands its member node ids
+straight to the explorer** (§22.2) as its seed set, so the transition from
+"here's the shape of my whole graph" to "let me look closely at this part of
+it" is one click, sharing the same graphology graph object (§22.1) rather
+than a second fetch.
+
+### 22.4 What neither view ever does
+
+Consistent with §9.4: neither the explorer nor the overview is ever the
+thing a retrieval feature reads *from* — both are read-only navigation
+surfaces over the same `GET /api/graph/...` endpoints §9 and §12 already
+define, and neither renders `sensitive`-classified rows any differently
+than the entity page already does not (§5.6's "never pre-checked" and §15's
+"never leaves" apply identically to a node drawn on a canvas as to a fact
+printed in a brief).
+
 ## Rejected alternatives
 
 - **A Neo4j (or other graph-database) projection beside PostgreSQL.**
@@ -2021,6 +2634,48 @@ the request path would be the first step toward exactly that.
   export could plant unreviewed "knowledge" directly into a user's graph,
   the identical unsupported-assertion failure §3.3 and §3.6 exist to rule
   out everywhere else in this design.
+- **The agent generating SQL, Cypher, or any other query language.**
+  Rejected per §21.1 for the identical reason §1's non-goals and §9.3
+  already state for the toolset itself: a model that can be asked to *write*
+  a query is a model that can be prompt-injected into writing a different
+  one than intended, and every question this design needs to answer already
+  fits one of a small number of fixed, parameterized shapes — there is
+  nothing a free-form query buys that the fixed toolset does not already
+  cover, and a great deal it would put at risk.
+- **The agent writing to the graph, even a draft `kg_proposal_items` row a
+  human still has to accept.** Rejected per §21.1 and, more fundamentally,
+  per §3.6: the single commit gate's entire value is that it is the *only*
+  way in, and a second, agent-shaped door into the same review pipeline —
+  however gated — is still a second door, with its own prompt and its own
+  chance of the "the agent found something, so add it" habit `note.generate`'s
+  own bring-your-own-key discipline was built to keep at arm's length.
+- **react-force-graph and cytoscape**, both named as open candidates in an
+  earlier draft of §5.7 and §13. Rejected in favor of sigma.js + graphology
+  (§22.1) once this document actually had to choose: react-force-graph
+  renders to SVG/Canvas2D by default, which does not scale to the
+  whole-graph overview's node counts as cleanly as sigma's WebGL renderer;
+  cytoscape.js is a capable and mature library but ships its own graph-model
+  abstraction rather than sharing one with a server-side layout algorithm,
+  which would mean maintaining two different in-memory graph representations
+  — one for the client's rendering library, one for the server's
+  `graphology-communities-louvain` clustering — for what is conceptually the
+  same graph.
+- **Rendering the whole-graph overview client-side, without server-
+  precomputed clusters.** Rejected per §22.3: a force-directed layout over
+  an entire graph is exactly the workload §22.2's 300-node explorer cap
+  already draws a line against, and the overview's whole purpose is showing
+  more than that cap allows — computing it in the browser on every visit
+  would either silently degrade into a frozen tab on a large graph or
+  require the client to impose its own undocumented second cap, defeating
+  the point of a *whole*-graph view.
+- **A per-task model hardcoded by the administrator with no user override.**
+  Rejected per §20.3: every AI-calling call site in this design already runs
+  on the calling user's own provider key (§15) — an administrator's per-task
+  default that a user could never override would mean the person paying for
+  a call has no say in which model spends their money, the identical
+  objection that already governs `NoteGenerationRequestService.resolveModel()`'s
+  own user-choice-from-an-allow-list shape (verified above), extended here
+  rather than special-cased away for this one feature.
 
 ## Verification
 
@@ -2053,6 +2708,10 @@ serve for their own epics.
 | An export round-trips through import losslessly on a fixture graph — the same entity UUIDs, the same relations, and the same evidence citations come back after `kg.export` then `kg.import` into a second fixture account and accepting the resulting proposal in full | An integration test exporting a seeded fixture graph, importing it into a second account, accepting every proposed item, and asserting the two accounts' graphs are identical on entity id, relation set, and evidence set |
 | A `sensitive` `PersonFact` never appears in any export format (JSON-LD, Turtle, or n-quads), under any setting | A test seeding a `sensitive` fixture fact alongside `business`/`personal` ones, running `kg.export` in each format, and asserting the sensitive fact's IRI and statement text appear in none of the three outputs |
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
+| A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
+| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest/brief, `toolCalling` for agent) | `apps/api/src/ai/ai-task-model-resolver.service.spec.ts` and a `PUT /api/ai-settings` integration test asserting the save is rejected, not merely warned about |
+| Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `apps/api/src/ask/ask-respond.handler.spec.ts`, asserting a deliberately fabricated citation id is stripped before the message is marked `complete` and counted in its stats |
+| `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 
 ## Sources
 

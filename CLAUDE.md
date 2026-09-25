@@ -1899,6 +1899,9 @@ of the work itself — people, organizations, projects, meetings, decisions,
 commitments and dated claims — rather than just searchable text. Full design
 (the ontology, the extraction/resolution pipeline, the review-and-commit
 gate, retrieval, privacy) is [`docs/specs/ontology.md`](docs/specs/ontology.md).
+The same document also specifies a review UI for overriding extraction,
+per-task-and-per-user AI model selection, a read-only "Ask" agent over the
+graph, and an explorer/whole-graph visualization (§19–§22).
 **Nothing described there is built** — no `kg_*` tables, no `graph.*` jobs,
 no `/api/graph/*` routes, no graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
