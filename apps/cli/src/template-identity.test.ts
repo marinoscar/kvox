@@ -204,6 +204,13 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // other Markdown document here.
   'docs/specs/notes.md',
 
+  // Added by `docs(docs): add knowledge-graph ontology spec`. Same standing as
+  // `docs/specs/notes.md` directly above: a design document arguing about
+  // what this product does has to name it, and Markdown cannot import from
+  // `@app/shared`. A `scripts/rename.mjs` codemod target like every other
+  // Markdown document here.
+  'docs/specs/ontology.md',
+
   // ---------------------------------------------------------------------
   // Added when the rebrand was finished across the CLI's own source.
   //
