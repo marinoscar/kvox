@@ -111,6 +111,8 @@ function harness(options: { noteAfterRead?: Record<string, unknown> | null } = {
   const titles = { titleNote: jest.fn().mockResolvedValue('AI-proposed title') };
   // #188: a committed note queues its own semantic re-index, after titling.
   const searchIndex = { enqueue: jest.fn().mockResolvedValue(undefined) };
+  // #363: a ready note may queue one graph extraction.
+  const graphExtraction = { enqueueForReadyNote: jest.fn().mockResolvedValue(null) };
 
   const service = new NoteGenerationService(
     prisma as never,
@@ -118,9 +120,10 @@ function harness(options: { noteAfterRead?: Record<string, unknown> | null } = {
     config as never,
     titles as unknown as NoteTitleService,
     searchIndex as never,
+    graphExtraction as never,
   );
 
-  return { service, prisma, tx, notifications, config, titles, searchIndex };
+  return { service, prisma, tx, notifications, config, titles, searchIndex, graphExtraction };
 }
 
 const commitInput = (generation: GenerationWithNote) => ({
@@ -260,6 +263,51 @@ describe('commit() — the never-throws property, enforced at the call site too'
       OWNER_ID,
       expect.objectContaining({ title: 'Meeting notes' }),
     );
+  });
+});
+
+// -----------------------------------------------------------------------------
+// The graph-extraction hook (issue #363)
+// -----------------------------------------------------------------------------
+
+describe('commit() — the graph-extraction hook (#363)', () => {
+  it('asks for an extraction of the note, for its owner, after the transaction committed', async () => {
+    const { service, prisma, graphExtraction } = harness();
+    let committed = false;
+    prisma.$transaction.mockImplementation(async (callback: (tx: Tx) => unknown) => {
+      const out = await callback(harness().tx);
+      committed = true;
+      return out;
+    });
+    graphExtraction.enqueueForReadyNote.mockImplementation(async () => {
+      expect(committed).toBe(true);
+      return 'proposal-1';
+    });
+
+    await service.commit(commitInput(generationRow()));
+
+    expect(graphExtraction.enqueueForReadyNote).toHaveBeenCalledTimes(1);
+    expect(graphExtraction.enqueueForReadyNote).toHaveBeenCalledWith(NOTE_ID, OWNER_ID);
+  });
+
+  it('a throwing hook leaves the note ready: commit resolves and the owner is still notified', async () => {
+    const { service, tx, notifications, graphExtraction } = harness();
+    graphExtraction.enqueueForReadyNote.mockRejectedValue(new Error('queue unavailable'));
+
+    await expect(service.commit(commitInput(generationRow()))).resolves.toBeUndefined();
+
+    expect(tx.note.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'ready' }) }),
+    );
+    expect(notifications.notify).toHaveBeenCalledWith('notes.note_ready', OWNER_ID, expect.anything());
+  });
+
+  it('is never called for a preview generation', async () => {
+    const { service, graphExtraction } = harness();
+
+    await service.commit(commitInput(generationRow({ noteId: null, note: null })));
+
+    expect(graphExtraction.enqueueForReadyNote).not.toHaveBeenCalled();
   });
 });
 

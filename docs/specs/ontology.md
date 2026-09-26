@@ -922,10 +922,32 @@ determine how much the panel can safely pre-check versus leave for a human.
 coverage list are in its `README.md`), and the harness is `npm run kg:eval
 --workspace=api`: `--predictions gold` is the self-test that must print 1.000
 everywhere, `--predictions <dir>` scores a runner's output, `--run <runner>`
-runs a registered `KgEvalRunner` (none until `kg.extract` registers `extract`),
+runs a registered `KgEvalRunner` (`extract`, issue #363, below),
 `--enforce` fails on a missed target for local use (CI reports only), and
 `--real-dir`/`--export-note` are the local, opt-in real-data mode, which
 refuses any path inside the git work tree.
+
+**As built (issue #363).** `apps/api/src/graph/extraction/` holds the pure
+core — `buildExtractionContext` (short aliases: segments `s1…sN` in ordinal
+order, known entities `k1…kM`, the note `N`; the offered schema; the
+known-entities list, max 60: pinned → speakers' identified Persons → their
+`WORKS_FOR` organizations → entities named in Context → most-mentioned in 90
+days; the meeting date and whether it was `stated`), `assembleExtractionPrompt`,
+`buildExtractionOutputSchema` (strict JSON Schema, one `anyOf` branch per
+offered type) and `validateExtraction` (the envelope, per-row type/props/
+endpoint/date checks, quote location within the cited segment's text,
+whole-segment fallback flagged `quote_not_located`, the `dangling` cascade) —
+plus `ExtractionInputLoader`, the only database reader, and
+`ProposalWriter`. The model never emits the meeting: the validator adds one
+`Meeting` row (ref `meeting`, linked to an existing Meeting whose
+`props.transcriptId`/`noteId` matches) and one `ATTENDED` per identified
+speaker, and gives every commitment and decision `meeting: { ref: 'meeting' }`.
+Between persisting the rows and pre-checking them, the job runs every stage
+registered with `ProposalStageRegistry`, in order — #364's `resolution`,
+#365's `work-item-dedup`, `temporal-closing`, `rejection-memory`. The payload
+shapes every later issue imports are `graph/proposals/proposal-payload.schema.ts`.
+`npm run kg:eval -- --run extract --model <id>` runs this same pure pipeline
+against the golden set with `KG_EVAL_OPENAI_API_KEY` and no database.
 
 ## 7. Entity resolution (`kg.resolve`)
 
@@ -1026,9 +1048,16 @@ unremarked.
 
 **`kg_proposals`** (§10) records one row per extraction run: `note_id`,
 `note_version`, the generation-context snapshot (§6), `status`
-(`draft | committed | discarded | failed`), and `stats` (counts of proposed,
-dropped-for-uncited-evidence, and — post-commit — accepted/edited/rejected
-items). **`kg_proposal_items`** holds one row per proposed entity, relation,
+(`extracting | draft | committed | discarded | failed | reverted` — the
+lifecycle is §10's), and `stats` (counts of proposed rows, rows dropped and
+why — `uncited`, `invalid`, `unknownType`, `dangling` — located-quote misses,
+provider usage, a failure class when the run failed, and — post-commit —
+accepted/edited/rejected items). The row is created by the request, in
+`extracting`, **before** the job runs (issue #363): the caller gets an id to
+poll, and "an extraction is already running" is decided by a partial unique
+index at insert rather than by a lookup before it. A newer draft for the same
+note discards the older one (`stats.discardReason: 'superseded'`) in the
+transaction that makes it a draft. **`kg_proposal_items`** holds one row per proposed entity, relation,
 or item: `kind`, `payload`, a `resolution` object (`{ ref, score,
 candidates[] }` from §7), a per-item `decision`
 (`pending | accept | edit | reject | merge_into`), and its `evidence[]`.
@@ -1041,7 +1070,19 @@ where §7's resolution produced one — its matched entity.
 **Pre-check rule.** A row is pre-checked (defaulted to `accept`) exactly
 when: its resolution score is at or above the auto-link threshold **and**
 its kind is not `PersonFact` **and** it is not flagged as a possible
-duplicate by §7's own uncertain-adjudication path. `PersonFact` is
+duplicate by §7's own uncertain-adjudication path. As implemented
+(issue #363, `apps/api/src/graph/extraction/precheck.ts`, run once after
+every pipeline stage): nothing is pre-checked under the `review_all`
+resolution mode; an **entity** is pre-checked when it links to an existing
+entity at or above `autoLinkThreshold` with an adjudication that is not
+`uncertain`, or is new with no candidate at or above `newThreshold` — never
+with a `possible_duplicate`, `ambiguous` or `model_claimed_match` flag (a
+model saying "this is `k3`" is re-scored by §7, never taken at its word); a
+**relation or item** is pre-checked when every entity endpoint is an existing
+entity or a pre-checked proposal entity and it carries none of
+`possible_duplicate`, `overlaps`, `unordered`, `supersedes`,
+`previously_rejected`, `stale_ontology`; a `person_fact` and a `closing` row
+are **never** pre-checked. `PersonFact` is
 categorically excluded from pre-checking regardless of resolution
 confidence — resolving *who* the fact is about being confident says nothing
 about whether surfacing the fact itself was the reviewer's intent, which is
@@ -1280,11 +1321,27 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   (`extraction | import | resolution` — `resolution` landed by issue #351
   alongside every other proposal-model column below, so #364 needs no schema
   change of its own; #364 owns the prose for what a `resolution` proposal
-  is), `status` (`draft | extracting | committed | discarded | failed |
-  reverted` — `extracting` landed by issue #351 for the identical
-  no-later-migration reason; #363 owns the prose for the `extracting`
-  lifecycle: `extracting → draft | failed`, `draft → committed | discarded`,
-  `failed → discarded`, `committed → reverted`), `model`/`provider` (§20 — which task-model resolution
+  is — see the `resolution` kind below), `status` (`draft | extracting |
+  committed | discarded | failed | reverted` — `extracting` landed by issue
+  #351 for the identical no-later-migration reason). **The `extracting`
+  lifecycle (issue #363):** `POST /api/graph/notes/:noteId/extract` (or the
+  note-ready hook) inserts the row in `extracting`, with its `job_id`, in the
+  same transaction as the `kg.extract` job; `kg_proposals_note_extracting_
+  uniq_idx` makes a second concurrent insert for the note fail, which is the
+  409 `extraction_running`. The job moves it `extracting → draft` (items,
+  evidence, stats written, stages run, pre-check applied — and any older
+  `draft` for the note moved to `discarded` with `stats.discardReason:
+  'superseded'` first, in the same transaction, because
+  `kg_proposals_note_draft_uniq_idx` allows one draft per note) or
+  `extracting → failed` (`stats.failure: { errorClass, message }`, the
+  prompt still recorded). A rate-limited run stays `extracting` while the
+  queue defers it. Then `draft → committed | discarded`, `failed →
+  discarded`, `committed → reverted` (#366). **The `resolution` kind** is a
+  proposal with no note (`note_id`/`note_version` NULL): #364's bulk
+  resolution suggestions — "these entities look like the same person" found
+  across the whole graph rather than inside one extraction — reviewed and
+  committed through the same panel and the same commit path as an
+  extraction. `model`/`provider` (§20 — which task-model resolution
   actually ran, recorded rather than re-derived, so an administrator
   changing the default tomorrow never rewrites what an already-committed
   proposal used yesterday), `system_prompt`/`user_content` (the generation-
@@ -1529,8 +1586,9 @@ the caller have a key" contract that endpoint already answers for
 `docs/specs/notes.md`'s own feature.
 
 **New 409 `details.reason` values this epic adds:** `graph_disabled`
-(`ai.graphEnabled` is off), `extraction_running` (a draft proposal already
-exists for this note version), `proposal_not_draft` (acting on a
+(`ai.graphEnabled` is off), `extraction_running` (a proposal for this note is
+already `extracting`), `note_not_ready` (issue #363 — extracting a note whose
+status is not `ready`), `proposal_not_draft` (acting on a
 committed/discarded/reverted proposal), `stale_note_version` (extracting
 against a note version that has since changed), `revert_conflict` (§19.4 —
 one or more of the proposal's committed rows has been touched since commit),

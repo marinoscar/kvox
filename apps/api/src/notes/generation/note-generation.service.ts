@@ -7,6 +7,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { PrismaService } from '../../prisma/prisma.service';
 import { SEARCH_DOC_NOTE } from '../../search/indexing/job-types';
 import { SearchIndexService } from '../../search/indexing/search-index.service';
+import { GraphExtractionService } from '../../graph/extraction/graph-extraction.service';
 import { NoteTitleService } from './note-title.service';
 
 // =============================================================================
@@ -123,6 +124,7 @@ export class NoteGenerationService {
     private readonly config: ConfigService,
     private readonly titles: NoteTitleService,
     private readonly searchIndex: SearchIndexService,
+    private readonly graphExtraction: GraphExtractionService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -379,6 +381,24 @@ export class NoteGenerationService {
     } catch (error) {
       this.logger.warn(
         `Could not queue a semantic index of note ${note.id}: ${String(error)}`,
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Graph extraction (#363, docs/specs/ontology.md §6). AFTER THE INDEX.
+    // -------------------------------------------------------------------------
+    //
+    // A ready note is the curated signal connected knowledge reads, so it gets
+    // one `kg.extract` — when the deployment's graph switch, the owner's
+    // `graph:write`, their auto-extract preference and a resolvable task model
+    // all agree; `enqueueForReadyNote` is a silent no-op otherwise. Wrapped
+    // for exactly the reason the two blocks above are: the note is already
+    // durable and `ready`, and nothing here may turn it into a failed one.
+    try {
+      await this.graphExtraction.enqueueForReadyNote(note.id, note.ownerId);
+    } catch (error) {
+      this.logger.warn(
+        `Could not queue a graph extraction of note ${note.id}: ${String(error)}`,
       );
     }
 

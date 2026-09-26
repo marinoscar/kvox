@@ -124,7 +124,7 @@ async function run(argv: string[], io: Io): Promise<number> {
       ? KG_EVAL_RUNNERS[runnerName]
       : undefined;
   if (runnerName !== undefined && !runnerFactory) {
-    io.err(`kg:eval: no runner '${runnerName}' registered (lands with the kg.extract issue)`);
+    io.err(`kg:eval: no runner '${runnerName}' registered (known: ${Object.keys(KG_EVAL_RUNNERS).join(', ')})`);
     return EXIT.usage;
   }
 

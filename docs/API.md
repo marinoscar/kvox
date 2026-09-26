@@ -5343,7 +5343,9 @@ your transcripts and notes (issue #354, epic #344). Full design (the
 ontology, extraction, review, retrieval, privacy) is
 [`docs/specs/ontology.md`](specs/ontology.md). Today this group carries the
 effective ontology, the manual entity edit, and your own attribute
-definitions (issue #355), plus "forget this person" (issue #357); entity
+definitions (issue #355), plus "forget this person" (issue #357) and
+extraction — asking for, and estimating, a draft proposal from a note
+(issue #363); entity
 reads, relation, fact and search routes arrive with later issues and follow
 the access posture below.
 
@@ -5374,8 +5376,9 @@ you can already see the row and a 404 would only mislead you.
 **Conflicts.** A 409 from a graph route names its cause in
 `details.reason` (`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
 `extraction_running`, `proposal_not_draft`, `stale_note_version`,
-`revert_conflict`, `model_lacks_capability`); none is raised by the routes
-below.
+`revert_conflict`, `model_lacks_capability`, `note_not_ready`); the
+extraction routes below raise the AI four plus `extraction_running` and
+`note_not_ready`.
 
 **Every write goes through one service, and every fact keeps a citation.**
 Nothing writes an entity, relation or fact except `GraphWriteService`, and an
@@ -5595,6 +5598,119 @@ just asked this deployment to forget).
 entity is not a Person · `401` · `403` your own entity without
 `graph:write` · `404` `Entity not found` — no such entity, another user's,
 or merged.
+
+#### POST /graph/notes/{noteId}/extract
+
+Extract a **draft proposal** from one of your notes (issue #363;
+`docs/specs/ontology.md` §6, §8, §19, §20). Queues a `kg.extract` job that
+reads the note at its current version, its source transcript (segments and
+identified speakers), the meeting context you typed and your **effective
+ontology**, makes **one** structured-output call on **your own** AI key, and
+writes a proposal: people, organizations, projects, relations, decisions,
+commitments, claims and person facts, each citing the transcript line or note
+span it came from. **Nothing is added to your graph** until you review and
+commit the proposal. A ready note is also extracted automatically once, when
+connected knowledge is on, you hold `graph:write` and your
+`extraction.autoExtract` preference is on (the default) — the same job,
+`reason: "note_ready"`.
+
+**Requires:** `graph:write`. The note must be yours (`404` otherwise).
+
+**Request** (every field optional; an empty body is `{}`):
+```json
+{
+  "model": "gpt-5.4-mini",
+  "userGuidance": {
+    "pinnedEntityIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
+    "entityTypes": ["Person", "Organization", "Commitment"],
+    "relationTypes": ["WORKS_FOR"],
+    "instructions": "Only the commitments Northwind made."
+  }
+}
+```
+
+- `model` — run on this model instead of the `graph.extract` task model. It
+  must be one this deployment permits (`400` otherwise) and support
+  structured output (`409 model_lacks_capability`).
+- `userGuidance` — narrows the run (§19.1): `pinnedEntityIds` (≤ 50) are
+  live entities of yours to focus on; `entityTypes` / `relationTypes` (≤ 50
+  each, ontology keys) limit what is proposed — absent means every type in
+  your ontology; `instructions` (≤ 2,000 characters) are preferences that
+  narrow or focus the proposal and never override the extraction rules. It is
+  stored on the proposal.
+
+**Response:** `202`
+```json
+{
+  "data": {
+    "proposal": {
+      "id": "5d1c…",
+      "noteId": "8a2f…",
+      "noteVersion": 3,
+      "status": "extracting",
+      "model": "gpt-5.4-mini",
+      "providerId": "openai",
+      "createdAt": "2026-09-26T12:00:00.000Z"
+    },
+    "estimate": {
+      "providerId": "openai",
+      "model": "gpt-5.4-mini",
+      "inputTokens": 11840,
+      "maxOutputTokens": 8000,
+      "availableInputTokens": 120000,
+      "fits": true,
+      "requests": 1,
+      "keyConfigured": true
+    }
+  },
+  "meta": { "timestamp": "2026-09-26T12:00:00.000Z" }
+}
+```
+
+The proposal exists at once with `status: "extracting"`; it becomes `draft`
+when the job finishes (or `failed`, with `stats.failure.errorClass` one of
+`auth`, `refusal`, `rate_limit`, `budget`, `invalid_output`, `other` and a
+message). A newer draft for the same note **discards** the older one
+(`stats.discardReason: "superseded"`). The model, provider, exact system
+prompt and user content are recorded on the proposal **before** the provider
+is called, so a failed run still shows what was asked. Every proposed row
+cites at least one piece of evidence it was actually given; rows that do not —
+or that name a type outside your ontology, break its attribute rules, or
+point at a dropped row — are dropped and counted in `stats.dropped`
+(`uncited`, `invalid`, `unknownType`, `dangling`). The request is audited as
+`graph.extraction_requested` (`proposalId`, `model`, `reason`, and whether
+guidance was given — never its text). The job is `maxAttempts: 1`: a
+re-extraction is a person asking again, never an automatic retry on your key.
+
+**Errors:**
+- `400` — a model this deployment does not permit; an unknown type key
+  (`details.unknownTypes: string[]`); a pinned id that is not a live entity
+  of yours (`details.invalidPinnedIds: string[]`); the prompt is over the
+  token budget (the message names the numbers, and `details` carries
+  `{ promptTokens, availableInputTokens, model }`) — refused, never
+  truncated.
+- `401` · `403` without `graph:write`.
+- `404` `Note not found` — no such note, deleted, or not yours (the same
+  answer for all three).
+- `409` `details.reason`: `graph_disabled` (connected knowledge is switched
+  off for this deployment), `ai_not_configured`, `ai_key_missing` (the run
+  uses your own key), `model_lacks_capability`, `extraction_running` (this
+  note already has an extraction in progress — decided by the database at
+  insert, so two concurrent requests get one `202` and one `409`),
+  `note_not_ready` (the note is not `ready`).
+
+#### GET /graph/extract/estimate?noteId=&model=
+
+What extracting a note would cost, without running it: tokens counted with
+the provider's own tokenizer over the **exact** prompt a run would send
+(reviewer guidance excluded — it is at most 2,000 characters), the budget it
+must fit, and `requests: 1`. **Needs no API key** — `keyConfigured` reports
+whether you have one rather than refusing.
+
+**Requires:** `graph:read`. **Response:** `200` the `estimate` object shown
+above. **Errors:** `400` an invalid `noteId` or a model this deployment does
+not permit · `401` · `404` no such note, deleted, or not yours · `409`
+`graph_disabled`, `ai_not_configured`, `model_lacks_capability`.
 
 #### Attribute definitions
 

@@ -1,7 +1,7 @@
 /**
  * `npm run kg:eval` end to end (issue #362): the CLI is spawned exactly as
  * the npm script runs it, plus an in-process check of the `--run` path with a
- * stub runner (no runner is registered until the kg.extract issue).
+ * stub runner (`extract`, #363, is the one real runner).
  */
 
 import { spawnSync } from 'child_process';
@@ -63,10 +63,16 @@ describe('kg:eval CLI (issue #362)', () => {
     expect(res.stdout).toMatch(/fixtures=2 /);
   });
 
-  it('--run extract exits 2 until the kg.extract issue registers a runner', () => {
-    const res = cli(['--run', 'extract', '--model', 'any-model']);
+  it('--run with an unregistered runner exits 2, naming the registered ones', () => {
+    const res = cli(['--run', 'nope', '--model', 'any-model']);
     expect(res.status).toBe(2);
-    expect(res.stderr).toContain("no runner 'extract' registered (lands with the kg.extract issue)");
+    expect(res.stderr).toContain("no runner 'nope' registered (known: extract)");
+  });
+
+  it('--run extract (#363) is registered, and exits 2 without its API key', () => {
+    const res = cli(['--run', 'extract', '--model', 'any-model'], { KG_EVAL_OPENAI_API_KEY: '' });
+    expect(res.status).toBe(2);
+    expect(res.stderr).toContain('--run reads its API key from KG_EVAL_OPENAI_API_KEY; it is not set');
   });
 
   it('--real-dir inside the repository is refused with exit 3', () => {
