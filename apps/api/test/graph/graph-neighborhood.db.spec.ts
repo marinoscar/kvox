@@ -20,7 +20,8 @@
 //   - `sensitive` person facts are never in a slice; expand is all-or-nothing
 //     404; another owner's entity is a 404;
 //   - the perf fixture: a 2-hop, cap-300 walk on a 10k-entity / 40k-relation
-//     owner (p95 logged, asserted < 2 s).
+//     owner (p95 logged, asserted < 500 ms — the epic #347 success criterion,
+//     measured against CI Postgres rather than a looser CI-flake margin).
 // =============================================================================
 
 import { BadRequestException, NotFoundException } from '@nestjs/common';
@@ -66,11 +67,13 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     await prisma?.$disconnect();
   });
 
-  // Generous: the perf fixture's 50k rows each fire the deferred evidence trigger on delete.
+  // `cleanupGraphFixtures` disables triggers for the delete (see its own header), so the
+  // perf fixture's ~50k rows no longer pay a per-row deferred-trigger lookup on teardown;
+  // this timeout stays generous only for a slow CI runner, not for that cost.
   afterEach(async () => {
     if (!dbReachable) return;
     await cleanupGraphFixtures(prisma, EMAIL_PREFIX);
-  }, 300_000);
+  }, 60_000);
 
   async function owner(suffix = 'a') {
     const user = await createUser(prisma, EMAIL_PREFIX, suffix);
@@ -409,6 +412,8 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     console.log(`[graph-neighborhood perf] 2-hop cap-300: p50=${timings[10].toFixed(1)}ms p95=${p95.toFixed(1)}ms nodes=${last?.nodes.length}`);
     expect(last!.nodes.length).toBeGreaterThan(10);
     expect(last!.nodes.length).toBeLessThanOrEqual(300);
-    expect(p95).toBeLessThan(2000);
+    // Epic #347's success criterion: p95 < 500ms on CI Postgres for a 2-hop,
+    // cap-300 walk over a 10k-entity fixture (measured locally ~44ms).
+    expect(p95).toBeLessThan(500);
   }, 180_000);
 });

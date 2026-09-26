@@ -30,25 +30,48 @@ export async function createUser(prisma: PrismaClient, prefix: string, suffix: s
   });
 }
 
-/** Delete every row these fixtures create for users whose email starts with `prefix`. */
+/**
+ * Delete every row these fixtures create for users whose email starts with
+ * `prefix`.
+ *
+ * Runs inside one transaction with `SET LOCAL session_replication_role =
+ * replica` (the same technique `docs/specs/search.md` §2 cites for why the
+ * search-vector columns are `GENERATED` rather than trigger-maintained: a
+ * `replica`-role session skips `ORIGIN`-mode triggers, which is what every
+ * trigger here is by default). That disables `kg_assert_has_evidence`
+ * (`kg_evidence_invariant` migration) for the duration of the cleanup: each
+ * of the perf fixture's ~50k evidence-row deletes stops firing a per-row
+ * deferred-trigger `SELECT … FROM kg_entities/kg_relations/kg_items WHERE id
+ * = $1` lookup, which is what made this teardown take ~95s. The invariant
+ * itself is irrelevant to a teardown that is about to delete every row on
+ * both sides of it anyway — this is cleanup, not a write path any production
+ * code exercises, so skipping the check is safe. `SET LOCAL` is
+ * transaction-scoped and never leaks to the connection pool's next borrower.
+ */
 export async function cleanupGraphFixtures(prisma: PrismaClient, prefix: string): Promise<void> {
   const owner = { owner: { email: { startsWith: prefix } } };
-  // Subjects BEFORE evidence (the trigger refuses an accepted row losing its last citation).
-  await prisma.kgEntityView.deleteMany({ where: { user: { email: { startsWith: prefix } } } });
-  await prisma.kgMention.deleteMany({ where: owner });
-  await prisma.kgRelation.deleteMany({ where: owner });
-  await prisma.kgItem.deleteMany({ where: owner });
-  await prisma.kgEntityAlias.deleteMany({ where: owner });
-  await prisma.kgEntity.deleteMany({ where: owner });
-  await prisma.kgEvidence.deleteMany({ where: owner });
-  await prisma.transcriptShare.deleteMany({ where: { transcript: owner } });
-  await prisma.transcriptSegment.deleteMany({ where: { transcript: owner } });
-  await prisma.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
-  await prisma.transcript.deleteMany({ where: owner });
-  await prisma.storageObject.deleteMany({ where: { uploadedBy: { email: { startsWith: prefix } } } });
-  await prisma.noteVersion.deleteMany({ where: { note: owner } });
-  await prisma.note.deleteMany({ where: owner });
-  await prisma.user.deleteMany({ where: { email: { startsWith: prefix } } });
+  const userFilter = { email: { startsWith: prefix } };
+  await prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SET LOCAL session_replication_role = replica`;
+      await tx.kgEntityView.deleteMany({ where: { user: userFilter } });
+      await tx.kgMention.deleteMany({ where: owner });
+      await tx.kgEvidence.deleteMany({ where: owner });
+      await tx.kgRelation.deleteMany({ where: owner });
+      await tx.kgItem.deleteMany({ where: owner });
+      await tx.kgEntityAlias.deleteMany({ where: owner });
+      await tx.kgEntity.deleteMany({ where: owner });
+      await tx.transcriptShare.deleteMany({ where: { transcript: owner } });
+      await tx.transcriptSegment.deleteMany({ where: { transcript: owner } });
+      await tx.transcriptSpeaker.deleteMany({ where: { transcript: owner } });
+      await tx.transcript.deleteMany({ where: owner });
+      await tx.storageObject.deleteMany({ where: { uploadedBy: userFilter } });
+      await tx.noteVersion.deleteMany({ where: { note: owner } });
+      await tx.note.deleteMany({ where: owner });
+      await tx.user.deleteMany({ where: userFilter });
+    },
+    { timeout: 120_000 },
+  );
 }
 
 export interface EntityOpts {
