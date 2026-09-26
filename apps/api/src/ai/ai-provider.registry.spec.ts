@@ -29,6 +29,8 @@ function stubProvider(overrides: Partial<AiProvider<unknown>> = {}): AiProvider<
           label: 'Stub 1',
           contextWindowTokens: 8000,
           maxOutputTokens: 2000,
+          structuredOutput: false,
+          toolCalling: false,
         },
       ],
       streaming: true,
@@ -108,6 +110,8 @@ describe('AiProviderRegistry', () => {
                 label: 'Stub 1',
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
+                structuredOutput: false,
+                toolCalling: false,
               },
             ],
             streaming: true,
@@ -130,6 +134,8 @@ describe('AiProviderRegistry', () => {
                 label: 'Stub 1',
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
+                structuredOutput: false,
+                toolCalling: false,
               },
             ],
             streaming: true,
@@ -139,6 +145,206 @@ describe('AiProviderRegistry', () => {
         }),
       ),
     ).not.toThrow();
+  });
+
+  describe('structuredOutput boot check (#358)', () => {
+    const flagged = (structuredOutput: boolean) => [
+      {
+        id: 'stub-1',
+        label: 'Stub 1',
+        contextWindowTokens: 8000,
+        maxOutputTokens: 2000,
+        structuredOutput,
+        toolCalling: false,
+      },
+    ];
+
+    it('REFUSES a provider flagging a model structuredOutput with no generateStructured()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+            },
+          }),
+        ),
+      ).toThrow(/"stub" declares structuredOutput .* implements no generateStructured/);
+    });
+
+    it('REFUSES a provider whose defaultModelFeatures floor claims it with no generateStructured()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: true, toolCalling: false },
+            },
+          }),
+        ),
+      ).toThrow(/implements no generateStructured/);
+    });
+
+    it('accepts the flag when generateStructured() is implemented', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: true, toolCalling: false },
+            },
+            generateStructured: jest.fn(),
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('accepts a provider that claims nothing and implements nothing — presence is the declaration', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: false },
+            },
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('publishes each model\'s flag and the floor through describeAll()', () => {
+      registry.register(
+        stubProvider({
+          capabilities: {
+            models: flagged(true),
+            streaming: true,
+            modelDiscovery: false,
+            defaultModelFeatures: { structuredOutput: false, toolCalling: false },
+          },
+          generateStructured: jest.fn(),
+        }),
+      );
+
+      const [described] = registry.describeAll();
+
+      expect(described.capabilities.models[0].structuredOutput).toBe(true);
+      expect(described.capabilities.defaultModelFeatures).toEqual({
+        structuredOutput: false,
+        toolCalling: false,
+      });
+    });
+  });
+
+  describe('toolCalling boot check (#359)', () => {
+    const flagged = (toolCalling: boolean) => [
+      {
+        id: 'stub-1',
+        label: 'Stub 1',
+        contextWindowTokens: 8000,
+        maxOutputTokens: 2000,
+        structuredOutput: false,
+        toolCalling,
+      },
+    ];
+
+    it('REFUSES a provider flagging a model toolCalling with no chat()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+            },
+          }),
+        ),
+      ).toThrow(/"stub" declares toolCalling .* implements no chat\(\)/);
+    });
+
+    it('REFUSES a provider whose defaultModelFeatures floor claims it with no chat()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: true },
+            },
+          }),
+        ),
+      ).toThrow(/implements no chat\(\)/);
+    });
+
+    it('is independent of generateStructured — implementing that does not satisfy it', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+            },
+            generateStructured: jest.fn(),
+          }),
+        ),
+      ).toThrow(/implements no chat\(\)/);
+    });
+
+    it('accepts the flag when chat() is implemented', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: true },
+            },
+            chat: jest.fn(),
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('accepts a provider that claims nothing and implements nothing — presence is the declaration', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: false },
+            },
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('publishes each model\'s flag through describeAll()', () => {
+      registry.register(
+        stubProvider({
+          capabilities: {
+            models: flagged(true),
+            streaming: true,
+            modelDiscovery: false,
+          },
+          chat: jest.fn(),
+        }),
+      );
+
+      const [described] = registry.describeAll();
+
+      expect(described.capabilities.models[0].toolCalling).toBe(true);
+    });
   });
 
   it('accepts a provider that declares modelDiscovery: false with no listModels', () => {
@@ -272,6 +478,8 @@ describe('AiProviderRegistry', () => {
                 label: 'Stub 1',
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
+                structuredOutput: false,
+                toolCalling: false,
               },
             ],
             streaming: true,
@@ -313,6 +521,8 @@ describe('AiProviderRegistry', () => {
         label: 'Injected',
         contextWindowTokens: 1,
         maxOutputTokens: 1,
+        structuredOutput: false,
+        toolCalling: false,
       });
       described.fieldDescriptors.length = 0;
 

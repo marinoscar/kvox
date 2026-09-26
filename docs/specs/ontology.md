@@ -592,6 +592,18 @@ required to write `unknown` rather than guess a plausible-looking range when
 the source text does not state one, because a guessed precision is a
 fabricated fact carrying the same authority in the UI as a real one.
 
+Three conventions follow from the half-open range and are fixed by the
+temporal engine (`apps/api/src/graph/temporal/`, issue #353). A **start-only
+statement** is one of two different facts, and the extractor must say which:
+a *point* ("in March 2026") spans its one precision unit, `[2026-03-01,
+2026-04-01)`, while a *continuing state* ("has worked there since 2019") is
+open, `[2019-01-01, )`. A stated **end** is inclusive in speech and exclusive
+in the column: "2019 to 2025" is `[2019-01-01, 2026-01-01)`. And the UI
+renders an upper bound as the **last unit included**, so that range reads
+"2019 → 2025", and a year-precision edge closed at `2026-03-01` reads
+"2019 → Feb 2026" — the bound is shown at the finest unit it needs, never
+rounded to the edge's own precision.
+
 **State is derived from dated facts, not edited in place.** A `Claim` is the
 record — a dated, evidenced statement. A relation edge (`WORKS_FOR`,
 `HAS_ROLE`, `REPORTS_TO`, and every other temporal relationship in §5.2) is
@@ -610,7 +622,7 @@ accepting a new fact with a `valid` start date closes that person's
 still-open edge of the same type at the new fact's start: the open edge's
 `valid` upper bound is set, and the new edge records `SUPERSEDES` against it
 (§3.4). The closing is never applied silently — it surfaces in the review
-panel as its own proposal row ("Closes: Joe works for Acme, 2019 → Mar
+panel as its own proposal row ("Closes: Joe works for Acme, 2019 → Feb
 2026") and is accepted, edited, or rejected exactly like any other proposed
 item (§8); a reviewer who rejects the close leaves both edges open, which
 the overlap tolerance below then treats as a legitimate (if unusual)
@@ -626,7 +638,14 @@ every known interval for that person and relationship type is a new edge,
 proposed as such; it is flagged `overlaps` in the review panel specifically
 when its valid range overlaps an already-accepted edge of the same type, so
 a reviewer sees the conflict rather than two silently coexisting edges with
-no signal that anything needs a look.
+no signal that anything needs a look. That includes a new period of the
+**same** fact that straddles a known one (Acme `[2023, 2025)` against an
+accepted Acme `[2019, 2024)`): it is not contained, so it is a new edge —
+ranges are never merged automatically — and it is flagged against the period
+it overlaps. An accepted edge whose `valid` is `unknown` cannot be ordered
+against a dated fact at all, so it is never closed by one; the proposal is
+flagged `unordered` instead and a reviewer decides, exactly as for a new fact
+whose own start is unknown.
 
 **Overlap tolerance is soft, not enforced.** "Normally exclusive" describes
 the common case, not a database constraint: a consultant or a board member
@@ -981,7 +1000,7 @@ two unrelated rows that silently disagree.
 **Closing a temporal edge is a proposal row, not a side effect.** When
 §5.4's closing rule fires — a new fact with a `valid` start closing an
 existing exclusive edge — the close is itself a `kg_proposal_items` row
-("Closes: Joe works for Acme, 2019 → Mar 2026") that goes through the same
+("Closes: Joe works for Acme, 2019 → Feb 2026") that goes through the same
 `pending | accept | edit | reject | merge_into` decision as everything else
 in §8; nothing closes an edge outside a proposal a reviewer acts on. An
 overlap between two edges of the same normally-exclusive type is a warning
@@ -1141,16 +1160,19 @@ mechanical response to that specific finding.
 
 ## 10. Data model
 
-This section's tables (all `snake_case`-mapped Prisma models, planned — column-level
-reasoning to live in the block comment above each model in
+This section's tables (all `snake_case`-mapped Prisma models — built by issue #351,
+epic #344; column-level reasoning lives in the block comment above each model in
 `apps/api/prisma/schema.prisma`, following the discipline `notes.md` §4 and
 `transcript-name-correction.md` §8 already establish; this section is the
-summary):
+summary, kept in sync with that schema by issue #351's own "definition of done"):
 
 - **`kg_entities`** — `Person`, `Organization`, `Project`, `Meeting` (`type`
-  enum, `label`, `props` JSONB, `embedding vector(1536)` — reusing the exact
+  is plain text, not a Prisma enum — an ontology key, §17.4, not a schema-owned
+  state machine), `label`, `props` JSONB, `embedding vector(1536)` — reusing the exact
   model/dimension contract `SearchEmbedding` already carries, verified above,
-  rather than a second embedding convention — `review_status` (§5.5),
+  rather than a second embedding convention — plus `embedding_model`/
+  `embedding_hash` (#364's `kg.embed` re-embed key, mirroring
+  `SearchChunk.contentHash`) — `review_status` (§5.5),
   `merged_into_id` (self-relation, nullable), `occurred_at` (`Meeting` only),
   `ontology_version` (§17.4 — the definition-file version this row was
   written against). `owner_id` **Cascade** — the same reasoning `notes.owner_id`/
@@ -1171,16 +1193,30 @@ summary):
   bound throughout this document's prose, but there is exactly one stored
   column, a range, never two nullable timestamps), `review_status` (§5.5),
   `confidence`, `ontology_version` (§17.4). No inverse row is ever stored
-  (§5.2). `owner_id` Cascade.
+  (§5.2). `owner_id` Cascade. **`from_speaker_id`** (uuid, nullable, FK
+  `transcript_speakers` Cascade) is a contract addition landed by issue #351:
+  the `IDENTIFIED_AS` edge's source is a diarized speaker, not a resolved
+  entity, so `from_id` and `from_speaker_id` are exactly-one-of (a CHECK, not
+  a polymorphic `from_kind`/`from_id` pair without FKs — the rejected
+  alternative below), and `from_speaker_id` is restricted to the one relation
+  type whose source is a speaker.
 - **`kg_items`** — `Commitment`, `Decision`, `Claim`, and `PersonFact` **in
   one table**, not four, distinguished by a `kind` enum: `subject_id`,
   `statement`/`title`, `status`, `occurred_at`, `due_at`, `valid tstzrange` +
   `valid_precision` alongside `occurred_at` (§5.4 — the same bitemporal pair
   `kg_relations` carries, so an item's own valid period, when it has one, is
-  never a second stored shape from its edges' shape), `owner_id`
+  never a second stored shape from its edges' shape), `owner_person_id`
   (Person), `counterparty_id`, `superseded_by_id`, `sensitivity` (nullable —
-  only meaningful when `kind = 'person_fact'`, §5.6), `statement_hash` (§7's
-  dedup and suppression key), `embedding`, `ontology_version` (§17.4). One
+  only meaningful when `kind = 'person_fact'`, §5.6, enforced by a CHECK), a
+  matching CHECK requiring `subject_id` on `claim`/`person_fact` rows,
+  `statement_hash` (§7's
+  dedup and suppression key), `embedding` plus `embedding_model`/
+  `embedding_hash` (mirroring `kg_entities` above), `ontology_version` (§17.4).
+  **`meeting_id`** (uuid, nullable, FK `kg_entities` SetNull) is a contract
+  addition landed by issue #351: it backs `CREATED_IN`/`DECIDED_IN` (§5.2)
+  directly on the item rather than as a stored edge — the same "items carry
+  their own links" argument this section's own rejected-alternatives entry
+  makes for `ABOUT`/`ASSIGNED_TO`/`OWED_TO`. One
   table because all four kinds
   share the same lifecycle (§5.5), the same evidence and dedup mechanics
   (§7), and the same `occurred_at`-sorted "what's changed" query (§9.1) —
@@ -1202,18 +1238,35 @@ summary):
   section reads. `entity_id`/`note_id`/`transcript_id` **Cascade** — a
   mention has no meaning once either side is gone, unlike evidence's
   pointer relationship above.
-- **`kg_proposals`** — one row per extraction (or import, §18.3) run:
-  `note_id`/`note_version` (null for an import), `kind` (`extraction |
-  import` — the value §18.3's own prose already assumed for an import row;
-  made an explicit column here rather than left implicit), `status` (`draft |
-  committed | discarded | failed | reverted` — `reverted` added by §19's
-  revert-commit), `model`/`provider` (§20 — which task-model resolution
+- **`kg_proposals`** — one row per extraction, import, or resolution run:
+  `note_id`/`note_version` (null for `import`/`resolution`), `kind`
+  (`extraction | import | resolution` — `resolution` landed by issue #351
+  alongside every other proposal-model column below, so #364 needs no schema
+  change of its own; #364 owns the prose for what a `resolution` proposal
+  is), `status` (`draft | extracting | committed | discarded | failed |
+  reverted` — `extracting` landed by issue #351 for the identical
+  no-later-migration reason; #363 owns the prose for the `extracting`
+  lifecycle: `extracting → draft | failed`, `draft → committed | discarded`,
+  `failed → discarded`, `committed → reverted`), `model`/`provider` (§20 — which task-model resolution
   actually ran, recorded rather than re-derived, so an administrator
   changing the default tomorrow never rewrites what an already-committed
   proposal used yesterday), `system_prompt`/`user_content` (the generation-
   context snapshot, §6), `user_guidance` JSONB (§19.1 — pinned entities, a
   type selection, free text, read by `kg.extract`'s prompt builder), `stats`
-  JSONB, `committed_at`/`reverted_at`, `job_id`. `owner_id` Cascade.
+  JSONB, `committed_at`/`reverted_at`, `job_id`. **`commit_log`** (JSONB,
+  nullable) is a contract addition landed by issue #351: #366's internal
+  undo record — the commit writes it, the revert reads it — never
+  serialized to clients (`stats` is the display copy). A CHECK
+  (`kg_proposals_note_source_chk`) requires `note_version` on every
+  `extraction` proposal and both `note_id`/`note_version` NULL on
+  `import`/`resolution`; it keys on `note_version`, never `note_id`, because
+  `note_id` is `SetNull` and can go NULL later (a hard-deleted note) while
+  `note_version` never does. Two hand-written partial unique indexes cap
+  concurrency beyond the existing "at most one open draft per note" one:
+  **at most one `extracting` proposal per note**, and **at most one
+  `extracting` `import` proposal per owner** (scoped by `owner_id`, since an
+  import has no note) — both landed by issue #351 for #363's/#387's 409s.
+  `owner_id` Cascade.
 - **`kg_proposal_items`** — one row per proposed entity, relation, or item:
   `kind` (`entity | relation | item | closing` — `closing` is §7's "closing
   a temporal edge is a proposal row" case), `payload`, `resolution` JSONB
@@ -1228,6 +1281,14 @@ summary):
   a human's own correction is never scored as a model error), `committed_ref_id`
   (the `kg_entities`/`kg_relations`/`kg_items` row this item became once
   committed — §19.4's revert reads this to know exactly what to undo).
+  **`merge_into_id`** (uuid, nullable, FK `kg_entities` SetNull) and
+  **`distinct_from`** (uuid[], default `{}`) are contract additions landed by
+  issue #351 for #366's reviewer overrides: `merge_into_id` is set **iff**
+  `decision = 'merge_into'` (a CHECK), SetNull so losing the target entity
+  clears the override rather than blocking its delete — #366 refuses a
+  `merge_into` row with no target at commit — and `distinct_from` records the
+  "not the same as" candidates a reviewer ruled out, as plain uuids with no
+  FK (recorded facts about a review decision, not live references).
 - **`kg_graph_layouts`** — one row per computed whole-graph layout (§22):
   `computed_at`, `node_count`, `edge_count`, `clusters` JSONB (which
   community each node belongs to), `positions` JSONB (precomputed 2D
@@ -1639,10 +1700,13 @@ child-issue breakdown for the pattern).
 
 The ontology is not a fixed set of Prisma enums and a hand-maintained
 extraction prompt kept in step with them by discipline alone — it is a single
-TypeScript + Zod declaration, planned at `packages/shared/ontology/` — a new
-`ontology/` directory inside the existing `@app/shared` package
-(`packages/shared/`), because both `apps/api` and `apps/web` already depend
-on that package for exactly this reason: the API to validate and extract
+TypeScript + Zod declaration (issue #350). Sources live at
+`packages/shared/src/ontology/`, a new directory inside the existing
+`@app/shared` package (`packages/shared/`), compiled with
+`npm run build:ontology --workspace=@app/shared` into committed CommonJS +
+`.d.ts` at `packages/shared/ontology/` and consumed via the `@app/shared/ontology`
+subpath export — because both `apps/api` and `apps/web` already depend on
+that package for exactly this reason: the API to validate and extract
 against, the web app to render a form from, one declaration shared rather
 than two hand-copied ones.
 Zod is not a new dependency reached for here — it is already this codebase's
@@ -1735,10 +1799,16 @@ needs from it.
 
 ### 17.2 Domains as modules
 
-The definition file is not one flat list of types — it is modules that
-self-register, mirroring the exact "one file, `onModuleInit`, no central
-dispatch table" shape CLAUDE.md's Adding a Job Type and Adding a Notification
-recipes already establish for their own registries:
+The definition file is not one flat list of types — it is modules listed
+**explicitly** in `index.ts`, never self-registered by import side effect
+(issue #350): `@app/shared` is a CommonJS package pre-bundled by Vite and
+`require()`d by Jest, and registration order under those two module systems
+is not something to depend on. `index.ts` imports each domain module and
+passes it to `buildOntologyRegistry([coreDomain, workDomain, ...], ...)`
+directly — one import and one array entry is the whole cost of adding a
+domain, with the same "one registry entry" simplicity CLAUDE.md's Adding a
+Job Type and Adding a Notification recipes give their own registries, just
+without the runtime self-registration mechanism those use:
 
 - **`core.ts`** — `Person`, `Organization`, `Meeting`, `Claim`, `PersonFact`,
   plus the evidence/review/temporal machinery (§5.3–§5.5) every other domain
@@ -1746,9 +1816,10 @@ recipes already establish for their own registries:
 - **`work.ts`** — `Project`, `Commitment`, `Decision`, and the relation types
   `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
 - **`personal.ts`** — `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, `Interest`,
-  `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6).
-- **`index.ts`** — the registry: every module calls `register()` from its own
-  `onModuleInit`-equivalent at startup, and a user's **effective schema** is
+  `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6), not yet
+  built.
+- **`index.ts`** — the registry: lists every domain module explicitly and
+  builds it via `buildOntologyRegistry`, and a user's **effective schema** is
   computed as `core ∪ {enabled domains}` — never hand-assembled per caller.
 
 **Why `Person` and `Organization` are `core` rather than `work`, specifically

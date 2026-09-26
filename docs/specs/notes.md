@@ -289,6 +289,8 @@ and implements:
 | `testConnection(ctx)` | `{ ok, latencyMs, detail }` | `ctx.apiKey` may be a **saved, decrypted** key or one the user is currently typing and has not saved — never persists anything, never queues a job, following `TranscriptionProvider.testConnection`'s own contract exactly |
 | `countTokens(text, model)` | `number` | Synchronous. Used both by §3's budget check and to report `promptTokens` on the generation row once known |
 | `generate(ctx, { model, systemPrompt, userContent, maxOutputTokens })` | `AsyncIterable<AiGenerateEvent>` | `ctx.apiKey` is the calling user's own decrypted key, resolved just before this call and never written anywhere but into this one outbound HTTPS request (§9) |
+| `generateStructured?<T>(ctx, request)` | `Promise<AiStructuredResult<T>>` | **Optional** — "presence is the declaration," per §2.6 below. One call, one schema-shaped answer, not a stream the caller assembles itself |
+| `chat?(ctx, request)` | `AsyncIterable<AiChatEvent>` | **Optional** — "presence is the declaration," per §2.7 below. A multi-turn, tool-calling chat turn, for the connected-knowledge Ask agent |
 
 ```ts
 type AiGenerateEvent =
@@ -319,6 +321,7 @@ posture `classifyRateLimit` takes for the queue generally
 | `AiAuthError` | The key is invalid, revoked, or lacks the needed scope; the provider returns `401`/`403` | `failed` | **No** — the job returns normally, having correctly diagnosed a permanent condition, the identical posture `docs/specs/transcription.md` §1.6 gives `ProviderAuthError` |
 | `AiRefusalError` | The provider declines the request itself — a content-policy refusal, a model that rejects the input outright, an over-budget input the job's own re-check (§3) catches at run time despite the request-time check passing | `failed` | **No** — same reasoning; retrying an identical refused request gets the identical refusal |
 | `RateLimitError` (429) | The provider's own rate limit, reused verbatim from `apps/api/src/jobs/rate-limit.error.ts` — the same class `docs/specs/transcription.md` §1.6 shares across its three provider-calling handlers | `notes.status` **unchanged** — invisible backoff, not a failure | **No** — deferred through the throttle key in §2.4, exactly as `docs/specs/job-queue.md` §5.3 describes for the queue generally |
+| `AiStructuredOutputError` (`reason: 'truncated' \| 'invalid_json'`, issue #358) | `generateStructured` only: `finish_reason: 'length'` (the answer was cut off mid-object), or a `stop` finish whose accumulated content does not `JSON.parse` (a gateway ignoring `response_format`) | Caller-defined — a note has no structured-output path today; §6/§7 of `docs/specs/ontology.md` treat it as a failed proposal | **No** — terminal, like `AiAuthError`/`AiRefusalError` above: re-sending the identical prompt to the identical model is not expected to change a truncation, since `maxOutputTokens` is policy, not chance |
 | Everything else (default) | A network error, an unexpected exception mid-stream, a `5xx`, a database write failing partway through a flush | `failed` | **Yes** — and because `profile.maxAttempts: 1` (§1.3, decision 3), this is the note's **only** attempt: there is no second automatic try the way an ordinary retryable failure gets elsewhere in this codebase |
 
 **Why the fourth row is the one that matters most, and why it is not merely a
@@ -674,6 +677,248 @@ its own key" became a plausible-sounding one-line change for someone to
 make, and it would be exactly the deployment-wide fallback credential §9
 rejects, hidden two levels deeper in a settings blob every
 `system_settings:read` holder can already read wholesale.
+
+### 2.6 `generateStructured` and the `structuredOutput` capability flag (issue #358)
+
+Connected-knowledge extraction (`docs/specs/ontology.md` §6), resolution
+adjudication (§7), the entity digest (§9.2) and the brief (§9.1) all need one
+provider call that returns a **validated, schema-shaped** answer, not free
+text the caller hopes parses. `generate`'s `responseFormat: 'json'` (OpenAI's
+`json_object` mode) only guarantees syntactically valid JSON — the caller
+gets whatever keys the model felt like — so `AiProvider` gains a second,
+**optional** content-producing method beside `generate`:
+
+```ts
+export type JsonSchema = Record<string, unknown>;
+
+interface AiStructuredRequest {
+  model: string;
+  systemPrompt: string;
+  userContent: string;
+  schema: JsonSchema;          // root must be a strict object schema
+  schemaName: string;          // /^[a-zA-Z0-9_-]{1,64}$/
+  maxOutputTokens: number;
+  timeoutMs?: number;
+  reasoningEffort?: AiReasoningEffort;
+}
+interface AiStructuredResult<T = unknown> {
+  value: unknown;              // parsed JSON, NOT Zod-validated — the caller validates
+  usage: AiUsage;
+  finishReason: AiFinishReason; // always 'stop' — every other ending throws
+}
+
+generateStructured?<T = unknown>(ctx, request: AiStructuredRequest): Promise<AiStructuredResult<T>>;
+```
+
+It is optional for the identical "presence is the declaration" reason
+§2.5 gives `listModels`/`capabilities.modelDiscovery`: a provider without
+strict-schema decoding can still register, and a **registry boot check**
+(`AiProviderRegistry.register`) keeps the advertisement honest — if any
+model or `defaultModelFeatures` declares `structuredOutput: true` while
+`generateStructured` is not a function, registration throws at boot, naming
+the provider, the same posture the existing `modelDiscovery` check already
+takes.
+
+**The schema must be OpenAI's strict subset**, checked by
+`apps/api/src/ai/structured/strict-json-schema.ts`'s
+`assertStrictJsonSchema` before any network call — a violation is a
+programming error and throws a plain `Error` naming the JSON path, not a
+provider error. In brief: the root is `type: 'object'`; every object sets
+`additionalProperties: false` with `required` equal to its `properties`
+keys; an optional value is spelled nullable (`.nullable()`), never
+`.optional()` — a Zod schema using `.optional()` fails the check by design;
+only `type`, `properties`, `required`, `additionalProperties`, `items`,
+`enum`, `anyOf`, `description` and an internal `$defs`/`$ref` are allowed;
+and the schema is capped at 10 levels deep and 5000 properties, OpenAI's own
+documented limits. `zodToStrictJsonSchema` runs `z.toJSONSchema` and then
+the same assertion, so a caller writes one Zod schema and gets both the
+wire schema and its own runtime validator from it. See that file for the
+exact rules and `apps/api/src/ai/structured/strict-json-schema.spec.ts` for
+every rejection case.
+
+**On OpenAI**, `generateStructured` reuses the same streaming core `generate`
+does — `apps/api/src/ai/providers/openai.provider.ts`'s private
+`streamChatCompletion` is extracted from `generate()` without changing its
+behaviour, and both methods consume it — with `response_format: { type:
+'json_schema', json_schema: { name: schemaName, strict: true, schema } }`
+and `stream: true`. **End-of-stream decisions, in this order**: no finish
+reason at all → a plain, retryable `Error`, exactly like `generate()`; a
+non-empty `delta.refusal` or a `content_filter` finish → `AiRefusalError`
+(the message quotes at most 300 chars of the refusal); `finish_reason:
+'length'` → `AiStructuredOutputError` with `reason: 'truncated'`; content
+that fails `JSON.parse` → `AiStructuredOutputError` with `reason:
+'invalid_json'` (a gateway ignoring `response_format` is the ordinary cause);
+otherwise the parsed value is returned with `finishReason: 'stop'`. A `429`
+still maps to `RateLimitError`, `401`/`403` to `AiAuthError`, `400` to
+`AiInputError`, unchanged from `generate()`.
+
+**The `structuredOutput` capability flag** is a `boolean` on
+`AiModelDescriptor` — required, for the identical reason
+`contextWindowTokens`/`maxOutputTokens` are required: "unknown" has no safe
+call-site interpretation. `AiProviderCapabilities` gains an optional
+`defaultModelFeatures?: AiModelFeatureFlags` (today just
+`{ structuredOutput: boolean }`, extended by issue #359 with `toolCalling`),
+the conservative floor for an id the provider cannot place, sitting beside
+`defaultModelLimits`; absent means an unplaceable id resolves the flag to
+`false`. It resolves through the *same* rank chain §2.5 established for the
+two numbers, but capability flags travel their own axis and — unlike the
+numbers — are never overridden by an entry's own typed values: an exact
+catalogue hit takes the catalogue's flag, a derived id takes its family's
+flag, and everything else falls back to `defaultModelFeatures` (or `false`
+with none declared). There is no per-model admin override of a capability
+flag in v1. `GET /api/ai/config` and the admin catalogue in `GET
+/api/ai-settings` both publish it per model — see the `### AI Settings`
+and `GET /ai/config` sections of [`docs/API.md`](../API.md).
+
+### 2.7 `chat` and the `toolCalling` capability flag (issue #359)
+
+The connected-knowledge Ask agent (`docs/specs/ontology.md` §21) needs a
+**conversation**, not a prompt: it sends a growing message list, lets the
+model call read-only typed tools (§9.3), and appends each call and its result
+before asking again. `generate` cannot carry that — it takes exactly one
+system prompt and one user message — so `AiProvider` gains a third, optional
+content-producing method:
+
+```ts
+export interface AiToolDefinition {
+  name: string;                 // /^[a-zA-Z0-9_-]{1,64}$/, unique per request
+  description: string;          // shown to the model; 1..1024 characters
+  parameters: JsonSchema;       // an OBJECT schema in the strict subset (§2.6)
+}
+export type AiToolChoice = 'auto' | 'none' | 'required' | { name: string };
+export interface AiToolCall { id: string; name: string; argumentsJson: string }
+export type AiChatMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string | null; toolCalls?: AiToolCall[] }
+  | { role: 'tool'; toolCallId: string; content: string };
+export interface AiChatRequest {
+  model: string;
+  messages: AiChatMessage[];     // at least one; the first may be 'system'
+  tools?: AiToolDefinition[];    // at most 32, unique names
+  toolChoice?: AiToolChoice;     // default 'auto' with tools; must be absent without
+  maxOutputTokens: number;
+  timeoutMs?: number;
+  reasoningEffort?: AiReasoningEffort;
+}
+export type AiChatFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls';
+export type AiChatEvent =
+  | { kind: 'delta'; text: string }
+  | { kind: 'tool_call'; id: string; name: string; argumentsJson: string }
+  | { kind: 'done'; finishReason: AiChatFinishReason; usage: AiUsage };
+
+chat?(ctx, request: AiChatRequest): AsyncIterable<AiChatEvent>;
+```
+
+**The provider transports; it never executes.** A tool definition goes out
+and a complete tool call comes back as an event — running the tool,
+validating its arguments and deciding whether to loop are the caller's job
+(#377/#378, ontology.md §21). This is the identical division of labour §9.3
+draws for the toolset itself: no free-form SQL/Cypher ever, only typed,
+read-only calls the agent loop executes.
+
+**Message roles.** `system` and `user` carry plain `content`; `assistant`
+carries `content` (`null` when the turn is only tool calls) plus an optional
+`toolCalls[]`; `tool` answers one **preceding** assistant message's
+`toolCalls[].id` via `toolCallId`. An orphan `toolCallId` — one no earlier
+assistant message declared — is refused before any network call (see
+"Request validation" below).
+
+**Tool definitions.** Up to 32 per request, unique names matching
+`/^[a-zA-Z0-9_-]{1,64}$/`, a 1..1024-character `description`, and
+`parameters` checked against the identical strict-subset rules §2.6 states
+for a structured-output schema (`assertStrictJsonSchema`) — the same
+reasoning applies unchanged: a schema the vendor's `strict` mode cannot honor
+is a programming error, not something the vendor should be paid to discover.
+On OpenAI each tool is sent as `{ type: 'function', function: { name,
+description, parameters, strict: true } }`, and **`parallel_tool_calls:
+false`** accompanies every request that carries tools — v1 asks for at most
+one call per turn, because strict schemas are not guaranteed for parallel
+calls and a one-call-per-step agent loop is simpler to reason about (see
+"Alternatives" in issue #359). `tools`, `tool_choice` and
+`parallel_tool_calls` are sent **only when `tools` is present**, so a plain
+chat turn puts no tool vocabulary on the wire for a gateway to reject.
+
+**`toolChoice` mapping.** `'auto'`, `'none'` and `'required'` pass straight
+through as OpenAI's own string values; `{ name }` becomes `{ type:
+'function', function: { name } }`, forcing that one declared tool. Absent
+defaults to `'auto'` whenever `tools` is present, and setting it without
+`tools` is refused up front — a `toolChoice` naming a tool the request never
+declared has nothing to choose between.
+
+**Streamed per-index assembly.** A vendor streams a tool call's arguments in
+fragments shaped `{ index, id?, type?, function: { name?, arguments? } }`;
+assembling them is the provider's job, because the fragment format is the
+vendor's and every caller reimplementing it would be one more chance to get
+interleaving wrong. The implementation accumulates per `index`: `id` and
+`name` from the first fragment that carries them, `arguments` concatenated
+in arrival order — indexes may interleave (a gateway may stream several
+calls' fragments interleaved even with `parallel_tool_calls: false` in the
+request; assembly handles it defensively regardless). Text deltas
+(`choices[0].delta.content`) are yielded as `{ kind: 'delta' }` immediately,
+as they arrive. Only once the stream ends does assembly emit one `tool_call`
+event per index, in ascending index order — **after every text delta and
+before `done`** — so a caller never has to buffer a call itself waiting to
+see whether more fragments are coming. A call still missing `id` or `name`
+at that point is a plain, retryable `Error` ("malformed tool call") — a
+dropped or mangled frame, not a property of the request. `argumentsJson` is
+passed through exactly as streamed, unparsed and unvalidated: see "untrusted
+model output" below.
+
+**Finish reasons — `mapChatFinishReason`, deliberately separate from
+`mapFinishReason`.** `generate()` and `generateStructured()` keep using
+`mapFinishReason` unchanged, where `tool_calls`/`function_call` fold into
+`stop` because neither call shape ever sends tools. Here `tool_calls` is a
+real outcome the agent loop branches on, so `chat` maps through its own
+function:
+
+| Raw value | Result |
+|---|---|
+| `tool_calls`, or the legacy `function_call` | `'tool_calls'` |
+| `stop` | `'stop'` — **unless** at least one tool call was assembled by the end of the stream, in which case it is reported as `'tool_calls'` too, because some gateways say `stop` despite having streamed calls the caller must still act on |
+| `length` | `'length'` |
+| `content_filter` | throws `AiRefusedError`, identical to `generate()` — never reaches the caller as a `done` event |
+| unrecognised | logged with `warn`, then treated as `'stop'` (or promoted to `'tool_calls'` by the same rule as the `stop` row, if calls exist) |
+| none at all (stream closed with no finish reason) | throws a plain `Error` — a truncated stream, exactly like `generate()`'s own "no finish reason" case |
+
+**`argumentsJson` is untrusted model output — the caller validates.** The
+provider never parses or validates it: it may not be JSON at all, and even
+under `strict: true` a gateway may not honor the constraint. `AiToolCall`'s
+own doc comment states this. The caller (#378) `JSON.parse`s it and
+validates the result against the tool's own Zod schema before acting on a
+single field — the identical posture ontology.md §9.3 requires of every tool
+result crossing back into the graph.
+
+**Request validation runs before any fetch**, a plain `Error` for each of:
+an empty `messages` array; a `tool` message whose `toolCallId` matches no
+preceding assistant `toolCalls[].id`; a duplicated or invalid tool name; a
+tool's `parameters` failing `assertStrictJsonSchema`; `toolChoice` set with
+no `tools`; or `toolChoice.name` naming a tool the request does not declare.
+Every one of these is a programming error in the caller's own code, not
+something worth metering a vendor call to discover — the identical posture
+§2.6 states for `generateStructured`'s schema pre-flight.
+
+**Usage** comes from the vendor when it reports it, else a `countTokens`
+estimate over the concatenated message contents (an assistant turn's own
+tool calls included) plus the tool definitions when present, and over the
+streamed completion text plus tool-call arguments on the output side — never
+zero, the same rule `generate`'s own usage fallback follows. A `429` still
+maps to `RateLimitError`; auth and input errors map exactly as `generate()`'s
+do.
+
+**The `toolCalling` capability flag** is a `boolean` on `AiModelFeatureFlags`
+(§2.6), alongside `structuredOutput`, resolved through the identical
+per-model rank chain and never affected by an entry's own typed numbers: an
+exact catalogue hit takes the catalogue's flag, a derived id takes its
+family's, everything else falls back to `defaultModelFeatures` (or `false`
+with none declared). There is no per-model admin override. The **registry
+boot check** that already refuses a provider advertising `structuredOutput`
+without `generateStructured` gains the identical clause for this flag: a
+model or `defaultModelFeatures` floor declaring `toolCalling: true` while
+`chat` is not a function throws at boot, naming the provider. `GET
+/api/ai/config` and the admin catalogue in `GET /api/ai-settings` both
+publish it per model, beside `structuredOutput` — see the `### AI Settings`
+and `GET /ai/config` sections of [`docs/API.md`](../API.md).
 
 ## 3. Prompt assembly and the token budget
 

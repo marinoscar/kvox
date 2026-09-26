@@ -5,6 +5,7 @@ import {
   AiBudgetError,
   AiInputError,
   AiRefusedError,
+  AiStructuredOutputError,
   parseRetryAfterMs,
   RateLimitError,
 } from '../ai-errors';
@@ -18,8 +19,13 @@ import {
   aiProvidersSchema,
   type AiProvidersValue,
 } from '../ai-settings.schema';
+import { assertStrictJsonSchema } from '../structured/strict-json-schema';
 import { EMBEDDING_DIMENSIONS } from './ai-provider.interface';
 import type {
+  AiChatEvent,
+  AiChatFinishReason,
+  AiChatMessage,
+  AiChatRequest,
   AiConnectionTest,
   AiDelta,
   AiDiscoveredModel,
@@ -34,6 +40,8 @@ import type {
   AiProviderCapabilities,
   AiProviderContext,
   AiProviderFieldDescriptor,
+  AiStructuredRequest,
+  AiStructuredResult,
   AiUsage,
 } from './ai-provider.interface';
 
@@ -154,6 +162,20 @@ export const OPENAI_PROVIDER_ID = 'openai';
  * ⚠ RE-VERIFY THE NUMBERS. See the file header: a context window that has grown
  * on the vendor's side makes this application refuse work it could do, and one
  * that has shrunk makes it submit a prompt the vendor rejects.
+ *
+ * ⚠ `structuredOutput: true` ON EVERY ENTRY (#358): each of these seven models
+ * supports `response_format: { type: 'json_schema', strict: true }` per
+ * OpenAI's Structured Outputs documentation as of 2026-09. Re-verify with the
+ * numbers. A catalogued model the vendor does NOT support strict mode for must
+ * say `false` here — a false positive fails a paid extraction — and a dated
+ * snapshot inherits whatever its family says, through
+ * {@link deriveOpenAiModelDescriptor}.
+ *
+ * ⚠ `toolCalling: true` ON EVERY ENTRY (#359): each of these seven models
+ * supports Chat Completions function tools with `strict: true` and
+ * `parallel_tool_calls: false` per OpenAI's function-calling documentation as
+ * of 2026-09. Re-verify with the numbers; a snapshot inherits its family's
+ * flag the same way.
  */
 const MODELS: AiModelDescriptor[] = [
   {
@@ -161,24 +183,32 @@ const MODELS: AiModelDescriptor[] = [
     label: 'GPT-4o',
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
+    structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4o-mini',
     label: 'GPT-4o mini',
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
+    structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4.1',
     label: 'GPT-4.1',
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
+    structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4.1-mini',
     label: 'GPT-4.1 mini',
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
+    structuredOutput: true,
+    toolCalling: true,
   },
   // ---------------------------------------------------------------------------
   // The GPT-5.4 family — the REASONING models (#87)
@@ -206,18 +236,24 @@ const MODELS: AiModelDescriptor[] = [
     label: 'GPT-5.4',
     contextWindowTokens: 1_050_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-5.4-mini',
     label: 'GPT-5.4 mini',
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-5.4-nano',
     label: 'GPT-5.4 nano',
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
+    toolCalling: true,
   },
 ];
 
@@ -250,6 +286,15 @@ const MODELS: AiModelDescriptor[] = [
 export const OPENAI_DEFAULT_MODEL_LIMITS = {
   contextWindowTokens: 128_000,
   maxOutputTokens: 16_384,
+} as const;
+
+/**
+ * The conservative capability floor for an OpenAI model id this build cannot
+ * place (#358). See `capabilities.defaultModelFeatures`.
+ */
+export const OPENAI_DEFAULT_MODEL_FEATURES = {
+  structuredOutput: false,
+  toolCalling: false,
 } as const;
 
 /**
@@ -323,6 +368,10 @@ export function deriveOpenAiModelDescriptor(
     label: trimmed,
     contextWindowTokens: best.contextWindowTokens,
     maxOutputTokens: best.maxOutputTokens,
+    // The family's capability, like its numbers (#358): a dated snapshot of a
+    // strict-schema model is a strict-schema model.
+    structuredOutput: best.structuredOutput,
+    toolCalling: best.toolCalling,
   };
 }
 
@@ -402,6 +451,21 @@ const CHARS_PER_TOKEN = 4;
 /** How long `testConnection` waits before calling the endpoint unreachable. */
 const PROBE_TIMEOUT_MS = 15_000;
 
+/** `json_schema.name`'s documented pattern (#358). Checked before any request. */
+const SCHEMA_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/** A tool name the vendor accepts (#359) — the same pattern as a schema name. */
+const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/** Most tools one chat request may declare (#359). */
+const MAX_TOOLS = 32;
+
+/** Longest tool description one chat request may carry (#359). */
+const MAX_TOOL_DESCRIPTION_LENGTH = 1024;
+
+/** Most characters of a model's refusal text quoted into an `AiRefusedError`. */
+const REFUSAL_QUOTE_LIMIT = 300;
+
 /** Bound on any error-body excerpt that reaches a log line or `Job.lastError`. */
 const BODY_SNIPPET_LIMIT = 500;
 
@@ -459,7 +523,21 @@ interface OpenAiEmbeddingResponse {
 /** One frame of OpenAI's `stream: true` response, as far as this file reads it. */
 interface OpenAiStreamChunk {
   choices?: Array<{
-    delta?: { content?: unknown };
+    /**
+     * `refusal` (#358): under Structured Outputs a model that declines streams
+     * its explanation here INSTEAD of `content`, so a refusal is not an empty
+     * answer that fails `JSON.parse` — it is its own signal.
+     */
+    delta?: {
+      content?: unknown;
+      refusal?: unknown;
+      /**
+       * #359: a tool call arrives as FRAGMENTS keyed by `index` — `id` and
+       * `function.name` on (usually) the first, `function.arguments` split
+       * across many, and the fragments of different indexes may interleave.
+       */
+      tool_calls?: unknown;
+    };
     finish_reason?: unknown;
   }>;
   usage?: {
@@ -554,6 +632,145 @@ function mapFinishReason(raw: unknown): AiFinishReason | null {
       return 'content_filter';
     default:
       return null;
+  }
+}
+
+/**
+ * `finish_reason` for a CHAT turn (#359) — deliberately a separate function
+ * from {@link mapFinishReason}, which `generate` and `generateStructured` keep
+ * using unchanged: there, no tools are ever sent, so `tool_calls` can only be a
+ * vendor quirk and folds into `stop`. Here it is the outcome the agent loop
+ * branches on.
+ *
+ * Returns `null` for a missing or unrecognised value; the caller decides which
+ * of the two it was (a missing one is a truncated stream, an unrecognised one
+ * a warning). The "`stop` despite assembled tool calls" upgrade happens at the
+ * end of the stream, where it is known whether any call was assembled.
+ */
+function mapChatFinishReason(raw: unknown): AiChatFinishReason | null {
+  switch (raw) {
+    case 'tool_calls':
+    case 'function_call': // the legacy name for the same outcome
+      return 'tool_calls';
+    case 'stop':
+      return 'stop';
+    case 'length':
+      return 'length';
+    case 'content_filter':
+      return 'content_filter';
+    default:
+      return null;
+  }
+}
+
+/** One tool call being assembled from stream fragments (#359). */
+interface ToolCallAccumulator {
+  id: string | null;
+  name: string | null;
+  arguments: string;
+}
+
+/**
+ * Refuse a chat request that is a programming error in the CALLER's code
+ * (#359), before any byte is sent and before the user's account is metered.
+ * A plain `Error`, like `generateStructured`'s schema pre-flight.
+ */
+function assertValidChatRequest(request: AiChatRequest): void {
+  if (request.messages.length === 0) {
+    throw new Error('A chat request must carry at least one message.');
+  }
+
+  const seenToolCallIds = new Set<string>();
+  request.messages.forEach((message, position) => {
+    if (message.role === 'assistant') {
+      for (const call of message.toolCalls ?? []) seenToolCallIds.add(call.id);
+    } else if (message.role === 'tool' && !seenToolCallIds.has(message.toolCallId)) {
+      throw new Error(
+        `Chat message ${position} is a tool result for toolCallId ${JSON.stringify(message.toolCallId)}, which no preceding assistant message called.`,
+      );
+    }
+  });
+
+  const tools = request.tools;
+  if (tools === undefined) {
+    if (request.toolChoice !== undefined) {
+      throw new Error('A chat request sets toolChoice but declares no tools.');
+    }
+    return;
+  }
+
+  if (tools.length > MAX_TOOLS) {
+    throw new Error(
+      `A chat request may declare at most ${MAX_TOOLS} tools; this one declares ${tools.length}.`,
+    );
+  }
+
+  const names = new Set<string>();
+  for (const tool of tools) {
+    if (!TOOL_NAME_PATTERN.test(tool.name)) {
+      throw new Error(
+        `Tool name ${JSON.stringify(tool.name)} must match ${TOOL_NAME_PATTERN.source}; the vendor refuses any other name.`,
+      );
+    }
+    if (names.has(tool.name)) {
+      throw new Error(`Tool name ${JSON.stringify(tool.name)} is declared more than once.`);
+    }
+    names.add(tool.name);
+
+    if (
+      tool.description.length < 1 ||
+      tool.description.length > MAX_TOOL_DESCRIPTION_LENGTH
+    ) {
+      throw new Error(
+        `Tool ${JSON.stringify(tool.name)} needs a description of 1..${MAX_TOOL_DESCRIPTION_LENGTH} characters.`,
+      );
+    }
+
+    try {
+      assertStrictJsonSchema(tool.parameters);
+    } catch (error) {
+      throw new Error(
+        `Tool ${JSON.stringify(tool.name)} parameters are not a strict JSON schema: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  const choice = request.toolChoice;
+  if (typeof choice === 'object' && !names.has(choice.name)) {
+    throw new Error(
+      `toolChoice names tool ${JSON.stringify(choice.name)}, which this request does not declare.`,
+    );
+  }
+}
+
+/** One {@link AiChatMessage} in the vendor's wire shape (#359). */
+function toOpenAiMessage(message: AiChatMessage): Record<string, unknown> {
+  switch (message.role) {
+    case 'system':
+    case 'user':
+      return { role: message.role, content: message.content };
+    case 'assistant':
+      return {
+        role: 'assistant',
+        content: message.content,
+        // Spread: an assistant turn without calls carries no `tool_calls` key
+        // at all — some gateways reject an empty array.
+        ...(message.toolCalls && message.toolCalls.length > 0
+          ? {
+              tool_calls: message.toolCalls.map((call) => ({
+                id: call.id,
+                type: 'function',
+                function: { name: call.name, arguments: call.argumentsJson },
+              })),
+            }
+          : {}),
+      };
+    case 'tool':
+      return {
+        role: 'tool',
+        tool_call_id: message.toolCallId,
+        content: message.content,
+      };
   }
 }
 
@@ -667,6 +884,11 @@ export class OpenAiProvider
     // ever un-permittable for want of two numbers. See the constant for why a
     // floor is honest where a guess is not.
     defaultModelLimits: OPENAI_DEFAULT_MODEL_LIMITS,
+    // #358: an id this build cannot place could be any gateway model, so the
+    // floor claims no structured-output support. A false negative is
+    // recoverable (pick a catalogued model); a false positive fails a paid
+    // extraction.
+    defaultModelFeatures: OPENAI_DEFAULT_MODEL_FEATURES,
     // TRUE, AND `listModels` BELOW IS WHAT MAKES THAT LEGAL (#78) — the
     // registry refuses this provider at boot if the two disagree. `GET /models`
     // is the one route every OpenAI-compatible gateway implements, which is a
@@ -1107,90 +1329,40 @@ export class OpenAiProvider
     ctx: AiProviderContext<OpenAiSettings>,
     request: AiGenerateRequest,
   ): AsyncIterable<AiDelta> {
-    const response = await this.fetchImpl(
-      `${this.baseUrl(ctx.settings)}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          ...this.authHeaders(ctx.apiKey),
-          'content-type': 'application/json',
-          accept: 'text/event-stream',
-        },
-        body: JSON.stringify({
-          model: request.model,
-          stream: true,
-          stream_options: { include_usage: true },
-          max_completion_tokens: request.maxOutputTokens,
-          // ⚠ SPREAD, SO THE KEY IS ABSENT AND NOT `'none'` — see
-          // `reasoningEffortBody` for why absent is the only correct shape at
-          // the default, and for why the parameter is the FLAT
-          // `reasoning_effort` string rather than Responses API's
-          // `reasoning: { effort }`.
-          ...this.reasoningEffortBody(request.reasoningEffort),
-          // Spread for the same reason: absent at the default, so a gateway
-          // that rejects unknown parameters never sees `response_format` on
-          // an ordinary prose request. JSON mode is `json_object` (not
-          // `json_schema`) — the caller validates the shape itself (#328).
-          ...(request.responseFormat === 'json'
-            ? { response_format: { type: 'json_object' } }
-            : {}),
-          messages: [
-            { role: 'system', content: request.systemPrompt },
-            { role: 'user', content: request.userContent },
-          ],
-        }),
-        signal:
-          request.timeoutMs && request.timeoutMs > 0
-            ? AbortSignal.timeout(request.timeoutMs)
-            : undefined,
-      },
-    );
-
-    await this.assertOk(response, `generate with model "${request.model}"`);
-
-    if (!response.body) {
-      // A 2xx with no body is either a vendor incident or an API change; both
-      // deserve another attempt before the work is written off, so this is a
-      // plain (retryable) Error.
-      throw new Error(
-        'The provider accepted the completion request but returned no response body to stream.',
-      );
-    }
+    const body = {
+      model: request.model,
+      stream: true,
+      stream_options: { include_usage: true },
+      max_completion_tokens: request.maxOutputTokens,
+      // ⚠ SPREAD, SO THE KEY IS ABSENT AND NOT `'none'` — see
+      // `reasoningEffortBody` for why absent is the only correct shape at
+      // the default, and for why the parameter is the FLAT
+      // `reasoning_effort` string rather than Responses API's
+      // `reasoning: { effort }`.
+      ...this.reasoningEffortBody(request.reasoningEffort),
+      // Spread for the same reason: absent at the default, so a gateway
+      // that rejects unknown parameters never sees `response_format` on
+      // an ordinary prose request. JSON mode is `json_object` (not
+      // `json_schema`) — the caller validates the shape itself (#328).
+      ...(request.responseFormat === 'json'
+        ? { response_format: { type: 'json_object' } }
+        : {}),
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userContent },
+      ],
+    };
 
     let finishReason: AiFinishReason | null = null;
     let usage: AiUsage | null = null;
     let completionText = '';
 
-    for await (const data of parseSseData(response.body)) {
-      // The vendor's end-of-stream sentinel. Not JSON, and parsing it as JSON
-      // is the classic way this loop throws on a perfectly healthy stream.
-      if (data === '[DONE]') break;
-
-      let chunk: OpenAiStreamChunk;
-      try {
-        chunk = JSON.parse(data) as OpenAiStreamChunk;
-      } catch {
-        // A frame this build cannot read. SKIPPED RATHER THAN FATAL: SSE
-        // permits comments and keep-alives, and gateways insert their own
-        // frames. Abandoning a paid-for generation over one unparseable frame
-        // is the worse failure.
-        this.logger.debug('Skipping an unparseable OpenAI stream frame.');
-        continue;
-      }
-
-      // ⚠ A MID-STREAM ERROR FRAME. The request succeeded with a 200 and the
-      // failure arrives inside the stream — which is why `assertOk` above is
-      // not enough on its own, and why this branch exists at all. It is mapped
-      // through the SAME classifier the HTTP path uses, so a content-policy
-      // refusal is an `AiRefusedError` whether the vendor reported it at 400 or
-      // at token 300.
-      if (chunk.error) {
-        throw this.classifyErrorBody(
-          asString(chunk.error.message) ?? 'The provider reported an error mid-stream.',
-          asString(chunk.error.code) ?? asString(chunk.error.type),
-        );
-      }
-
+    for await (const chunk of this.streamChatCompletion(
+      ctx,
+      body,
+      `generate with model "${request.model}"`,
+      request.timeoutMs,
+    )) {
       const choice = chunk.choices?.[0];
 
       const text = choice?.delta?.content;
@@ -1259,6 +1431,463 @@ export class OpenAiProvider
           completionTokens: this.countTokens(completionText, request.model),
         },
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Structured output (#358)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `POST {baseUrl}/chat/completions` with
+   * `response_format: { type: 'json_schema', json_schema: { strict: true } }`,
+   * streamed, accumulated, and parsed into ONE JSON value.
+   *
+   * STREAMED EVEN THOUGH NOTHING IS YIELDED, because the whole error, timeout
+   * and mid-stream-error machinery is stream-based and lives in
+   * `streamChatCompletion` — one parser for every call shape.
+   *
+   * THE END-OF-STREAM DECISIONS, IN ORDER, and why that order:
+   *
+   *   1. No finish reason → a plain (retryable) `Error`: the socket died, the
+   *      same rule `generate` follows.
+   *   2. Refusal text, or `content_filter` → `AiRefusedError`. Checked before
+   *      `length` because a model that refused and then ran out of room still
+   *      refused — "truncated" would send somebody to raise a ceiling.
+   *   3. `length` → `AiStructuredOutputError('truncated')`, EVEN IF THE PARTIAL
+   *      TEXT PARSES. A cut-off object that happens to be valid JSON silently
+   *      drops whatever came after the cut.
+   *   4. Unparseable content → `AiStructuredOutputError('invalid_json')` —
+   *      under strict decoding, a gateway that ignored `response_format`.
+   *   5. Otherwise the parsed value, `finishReason: 'stop'`.
+   *
+   * ⚠ NOTHING HERE LOGS THE PROMPT, THE SCHEMA OR THE OUTPUT. The one `warn`
+   * (for `invalid_json`) names the model and the content's LENGTH only — the
+   * content is derived from a user's private conversation.
+   */
+  async generateStructured<T = unknown>(
+    ctx: AiProviderContext<OpenAiSettings>,
+    request: AiStructuredRequest,
+  ): Promise<AiStructuredResult<T>> {
+    // Pre-flight: both are programming errors in the CALLER's code, refused
+    // before any byte is sent (and before the user's account is metered).
+    assertStrictJsonSchema(request.schema);
+
+    if (!SCHEMA_NAME_PATTERN.test(request.schemaName)) {
+      throw new Error(
+        `Structured-output schemaName ${JSON.stringify(request.schemaName)} must match ${SCHEMA_NAME_PATTERN.source}; the vendor refuses any other name.`,
+      );
+    }
+
+    const body = {
+      model: request.model,
+      stream: true,
+      stream_options: { include_usage: true },
+      max_completion_tokens: request.maxOutputTokens,
+      // Spread — absent, never `'none'`. See `reasoningEffortBody`.
+      ...this.reasoningEffortBody(request.reasoningEffort),
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: request.schemaName,
+          strict: true,
+          schema: request.schema,
+        },
+      },
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userContent },
+      ],
+    };
+
+    let finishReason: AiFinishReason | null = null;
+    let usage: AiUsage | null = null;
+    let content = '';
+    let refusal = '';
+
+    for await (const chunk of this.streamChatCompletion(
+      ctx,
+      body,
+      `generate structured output with model "${request.model}"`,
+      request.timeoutMs,
+    )) {
+      const choice = chunk.choices?.[0];
+
+      const text = choice?.delta?.content;
+      if (typeof text === 'string') content += text;
+
+      const refused = choice?.delta?.refusal;
+      if (typeof refused === 'string') refusal += refused;
+
+      const mapped = mapFinishReason(choice?.finish_reason);
+      if (mapped !== null) {
+        finishReason = mapped;
+      } else if (
+        choice?.finish_reason !== undefined &&
+        choice.finish_reason !== null
+      ) {
+        this.logger.warn(
+          `OpenAI returned an unrecognised finish_reason "${String(choice.finish_reason)}"; treating it as a normal stop.`,
+        );
+        finishReason = 'stop';
+      }
+
+      if (chunk.usage) {
+        const promptTokens = asFiniteNumber(chunk.usage.prompt_tokens);
+        const completionTokens = asFiniteNumber(chunk.usage.completion_tokens);
+        if (promptTokens !== null && completionTokens !== null) {
+          usage = { promptTokens, completionTokens };
+        }
+      }
+    }
+
+    if (finishReason === null) {
+      throw new Error(
+        'The provider closed the structured-output stream without a finish reason; the response was truncated.',
+      );
+    }
+
+    if (refusal.trim().length > 0 || finishReason === 'content_filter') {
+      const quoted = refusal.trim();
+      throw new AiRefusedError(
+        'The provider declined to produce this structured answer. Rewording the instructions or the source, or choosing a different model, is the only thing that changes the answer.',
+        quoted.length > 0
+          ? quoted.slice(0, REFUSAL_QUOTE_LIMIT)
+          : 'finish_reason: content_filter',
+        this.id,
+      );
+    }
+
+    if (finishReason === 'length') {
+      throw new AiStructuredOutputError(
+        `The structured answer from model "${request.model}" was cut off at the ${request.maxOutputTokens}-token output ceiling before the JSON object was complete.`,
+        'truncated',
+        this.id,
+      );
+    }
+
+    let value: unknown;
+    try {
+      value = JSON.parse(content);
+    } catch {
+      this.logger.warn(
+        `Structured output from model "${request.model}" was not valid JSON (${content.length} characters).`,
+      );
+      throw new AiStructuredOutputError(
+        `The provider finished normally but the structured answer from model "${request.model}" is not valid JSON. Something between this application and the model (usually a gateway) ignored the requested response format.`,
+        'invalid_json',
+        this.id,
+      );
+    }
+
+    return {
+      value,
+      usage:
+        usage ?? {
+          // Never zero — see `generate`. The schema travels with the prompt,
+          // so it is counted as prompt.
+          promptTokens: this.countTokens(
+            `${request.systemPrompt}\n${request.userContent}\n${JSON.stringify(request.schema)}`,
+            request.model,
+          ),
+          completionTokens: this.countTokens(content, request.model),
+        },
+      finishReason: 'stop',
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Multi-turn chat and tool calling (#359)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `POST {baseUrl}/chat/completions` with a message list and, optionally,
+   * strict function tools — streamed through the shared
+   * `streamChatCompletion`.
+   *
+   * TEXT IS YIELDED AS IT ARRIVES; TOOL CALLS ARE YIELDED WHOLE. Each
+   * `delta.tool_calls[]` fragment is accumulated by its `index` (`id` and
+   * `name` from the first fragment carrying them, `arguments` concatenated in
+   * arrival order, indexes possibly interleaved). When the stream ends, one
+   * `tool_call` event per index is emitted in ascending order — after every
+   * text delta and before `done`. A call still missing `id` or `name` then is
+   * a plain (retryable) `Error`.
+   *
+   * `tools`, `tool_choice` and `parallel_tool_calls: false` are sent ONLY when
+   * tools are present, so a plain chat turn puts no tool vocabulary on the
+   * wire for a gateway to reject.
+   *
+   * ⚠ `argumentsJson` IS PASSED THROUGH UNPARSED. See `AiToolCall`: the caller
+   * validates it with the tool's own Zod schema.
+   *
+   * ⚠ NOTHING HERE LOGS A MESSAGE, A TOOL ARGUMENT OR A TOOL RESULT. The one
+   * `warn` names the unrecognised finish reason only.
+   */
+  async *chat(
+    ctx: AiProviderContext<OpenAiSettings>,
+    request: AiChatRequest,
+  ): AsyncIterable<AiChatEvent> {
+    assertValidChatRequest(request);
+
+    const tools = request.tools;
+    const choice = request.toolChoice ?? 'auto';
+
+    const body = {
+      model: request.model,
+      stream: true,
+      stream_options: { include_usage: true },
+      max_completion_tokens: request.maxOutputTokens,
+      // Spread — absent, never `'none'`. See `reasoningEffortBody`.
+      ...this.reasoningEffortBody(request.reasoningEffort),
+      messages: request.messages.map(toOpenAiMessage),
+      // Spread: only when tools are present (see the doc comment).
+      ...(tools !== undefined
+        ? {
+            tools: tools.map((tool) => ({
+              type: 'function',
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+                strict: true,
+              },
+            })),
+            tool_choice:
+              typeof choice === 'string'
+                ? choice
+                : { type: 'function', function: { name: choice.name } },
+            // v1 asks for at most one call per turn — see the interface's
+            // MULTI-TURN CHAT section.
+            parallel_tool_calls: false,
+          }
+        : {}),
+    };
+
+    let rawFinish: AiChatFinishReason | null = null;
+    let usage: AiUsage | null = null;
+    let completionText = '';
+    const calls = new Map<number, ToolCallAccumulator>();
+
+    for await (const chunk of this.streamChatCompletion(
+      ctx,
+      body,
+      `chat with model "${request.model}"`,
+      request.timeoutMs,
+    )) {
+      const streamChoice = chunk.choices?.[0];
+
+      const text = streamChoice?.delta?.content;
+      if (typeof text === 'string' && text.length > 0) {
+        completionText += text;
+        yield { kind: 'delta', text };
+      }
+
+      const fragments = streamChoice?.delta?.tool_calls;
+      if (Array.isArray(fragments)) {
+        for (const fragment of fragments as unknown[]) {
+          if (typeof fragment !== 'object' || fragment === null) continue;
+          const f = fragment as {
+            index?: unknown;
+            id?: unknown;
+            function?: { name?: unknown; arguments?: unknown } | null;
+          };
+          const index = asFiniteNumber(f.index);
+          if (index === null) continue;
+
+          let call = calls.get(index);
+          if (!call) {
+            call = { id: null, name: null, arguments: '' };
+            calls.set(index, call);
+          }
+          const id = asString(f.id);
+          if (call.id === null && id) call.id = id;
+          const name = asString(f.function?.name);
+          if (call.name === null && name) call.name = name;
+          const args = asString(f.function?.arguments);
+          if (args !== null) call.arguments += args;
+        }
+      }
+
+      const mapped = mapChatFinishReason(streamChoice?.finish_reason);
+      if (mapped !== null) {
+        rawFinish = mapped;
+      } else if (
+        streamChoice?.finish_reason !== undefined &&
+        streamChoice.finish_reason !== null
+      ) {
+        this.logger.warn(
+          `OpenAI returned an unrecognised finish_reason "${String(streamChoice.finish_reason)}"; treating it as a normal stop.`,
+        );
+        rawFinish = 'stop';
+      }
+
+      if (chunk.usage) {
+        const promptTokens = asFiniteNumber(chunk.usage.prompt_tokens);
+        const completionTokens = asFiniteNumber(chunk.usage.completion_tokens);
+        if (promptTokens !== null && completionTokens !== null) {
+          usage = { promptTokens, completionTokens };
+        }
+      }
+    }
+
+    if (rawFinish === null) {
+      throw new Error(
+        'The provider closed the chat stream without a finish reason; the response was truncated.',
+      );
+    }
+
+    if (rawFinish === 'content_filter') {
+      // Identical to `generate`: a refusal is a throw, never a `done`.
+      throw new AiRefusedError(
+        'The provider declined to complete this request because its content filter matched. Rewording the instructions or the source, or choosing a different model, is the only thing that changes the answer.',
+        'finish_reason: content_filter',
+        this.id,
+      );
+    }
+
+    const assembled = [...calls.entries()].sort(([a], [b]) => a - b);
+    let completionArguments = '';
+    const events: AiChatEvent[] = [];
+    for (const [index, call] of assembled) {
+      if (call.id === null || call.name === null) {
+        // Retryable: a dropped or mangled frame, not a property of the request.
+        throw new Error(
+          `The provider streamed a malformed tool call (index ${index}) with no ${call.id === null ? 'id' : 'name'}.`,
+        );
+      }
+      completionArguments += call.arguments;
+      events.push({
+        kind: 'tool_call',
+        id: call.id,
+        name: call.name,
+        argumentsJson: call.arguments,
+      });
+    }
+    yield* events;
+
+    // Some gateways report `stop` (or something unrecognised) even though they
+    // streamed tool calls; the calls are what the caller must act on.
+    const finishReason: AiChatFinishReason =
+      rawFinish === 'stop' && assembled.length > 0 ? 'tool_calls' : rawFinish;
+
+    yield {
+      kind: 'done',
+      finishReason,
+      usage:
+        usage ?? {
+          // Never zero — see `generate`. Tool definitions travel with the
+          // prompt, so they are counted as prompt.
+          promptTokens: Math.max(
+            1,
+            this.countTokens(
+              [
+                ...request.messages.map((message) =>
+                  message.role === 'assistant'
+                    ? [
+                        message.content ?? '',
+                        ...(message.toolCalls ?? []).map(
+                          (call) => `${call.name} ${call.argumentsJson}`,
+                        ),
+                      ].join('\n')
+                    : message.content,
+                ),
+                ...(tools !== undefined ? [JSON.stringify(tools)] : []),
+              ].join('\n'),
+              request.model,
+            ),
+          ),
+          completionTokens: Math.max(
+            1,
+            this.countTokens(
+              `${completionText}${completionArguments}`,
+              request.model,
+            ),
+          ),
+        },
+    };
+  }
+
+  /**
+   * The streaming core every `/chat/completions` call shape shares (#358).
+   *
+   * `POST {baseUrl}/chat/completions` with `body`, then yield each parsed
+   * stream frame. It owns everything that is about the WIRE rather than about
+   * what a caller does with the frames: the injected `fetchImpl`, `assertOk`'s
+   * HTTP taxonomy, the no-body error, the `[DONE]` sentinel, skipping
+   * unparseable frames, and classifying a mid-stream error frame. `generate`
+   * and `generateStructured` (and #359's tool calling) each consume it and
+   * decide what the frames MEAN — one parser for every call shape, so a
+   * framing fix or a gateway quirk is handled once.
+   *
+   * `label` completes the sentence "…when trying to <label>" in `assertOk`'s
+   * messages. `timeoutMs` arms an `AbortSignal` when positive.
+   *
+   * ⚠ `ctx` REACHES ONLY `authHeaders`. Nothing here logs it, the body, or a
+   * frame's content.
+   */
+  private async *streamChatCompletion(
+    ctx: AiProviderContext<OpenAiSettings>,
+    body: Record<string, unknown>,
+    label: string,
+    timeoutMs?: number,
+  ): AsyncGenerator<OpenAiStreamChunk> {
+    const response = await this.fetchImpl(
+      `${this.baseUrl(ctx.settings)}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          ...this.authHeaders(ctx.apiKey),
+          'content-type': 'application/json',
+          accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+        signal:
+          timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+      },
+    );
+
+    await this.assertOk(response, label);
+
+    if (!response.body) {
+      // A 2xx with no body is either a vendor incident or an API change; both
+      // deserve another attempt before the work is written off, so this is a
+      // plain (retryable) Error.
+      throw new Error(
+        'The provider accepted the completion request but returned no response body to stream.',
+      );
+    }
+
+    for await (const data of parseSseData(response.body)) {
+      // The vendor's end-of-stream sentinel. Not JSON, and parsing it as JSON
+      // is the classic way this loop throws on a perfectly healthy stream.
+      if (data === '[DONE]') return;
+
+      let chunk: OpenAiStreamChunk;
+      try {
+        chunk = JSON.parse(data) as OpenAiStreamChunk;
+      } catch {
+        // A frame this build cannot read. SKIPPED RATHER THAN FATAL: SSE
+        // permits comments and keep-alives, and gateways insert their own
+        // frames. Abandoning a paid-for generation over one unparseable frame
+        // is the worse failure.
+        this.logger.debug('Skipping an unparseable OpenAI stream frame.');
+        continue;
+      }
+
+      // ⚠ A MID-STREAM ERROR FRAME. The request succeeded with a 200 and the
+      // failure arrives inside the stream — which is why `assertOk` above is
+      // not enough on its own, and why this branch exists at all. It is mapped
+      // through the SAME classifier the HTTP path uses, so a content-policy
+      // refusal is an `AiRefusedError` whether the vendor reported it at 400 or
+      // at token 300.
+      if (chunk.error) {
+        throw this.classifyErrorBody(
+          asString(chunk.error.message) ?? 'The provider reported an error mid-stream.',
+          asString(chunk.error.code) ?? asString(chunk.error.type),
+        );
+      }
+
+      yield chunk;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1567,7 +2196,7 @@ export class OpenAiProvider
    * Which terminal class does this error body describe?
    *
    * ONE FUNCTION, TWO CALLERS — the HTTP path (`assertOk`) and the mid-stream
-   * error frame in `generate`. Deliberately shared: the same refusal reported
+   * error frame in `streamChatCompletion`. Deliberately shared: the same refusal reported
    * at 400 and reported at token 300 must produce the same class, or a user
    * gets a different explanation for the same event depending on how fast the
    * vendor noticed.

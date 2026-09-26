@@ -132,6 +132,38 @@ export class AiProviderRegistry {
       );
     }
 
+    // #358: the same "an advertised capability with no method" check, for
+    // structured output. Any model flagged — or the floor claiming it for ids
+    // the provider cannot place — without `generateStructured` would be a
+    // TypeError inside a paid graph-extraction job.
+    const advertisesStructuredOutput =
+      provider.capabilities.models.some((model) => model.structuredOutput === true) ||
+      provider.capabilities.defaultModelFeatures?.structuredOutput === true;
+
+    if (
+      advertisesStructuredOutput &&
+      typeof provider.generateStructured !== 'function'
+    ) {
+      throw new Error(
+        `AI provider "${provider.id}" declares structuredOutput on a model (or in defaultModelFeatures) but implements no generateStructured(). ` +
+          'Either implement it or set every structuredOutput flag to false — an advertised capability with no method is a TypeError inside a structured-output job, the path least likely to have been exercised.',
+      );
+    }
+
+    // #359: the same check for tool calling. A model flagged `toolCalling`
+    // (or the floor claiming it) without `chat` would be a TypeError inside
+    // the Ask agent's job.
+    const advertisesToolCalling =
+      provider.capabilities.models.some((model) => model.toolCalling === true) ||
+      provider.capabilities.defaultModelFeatures?.toolCalling === true;
+
+    if (advertisesToolCalling && typeof provider.chat !== 'function') {
+      throw new Error(
+        `AI provider "${provider.id}" declares toolCalling on a model (or in defaultModelFeatures) but implements no chat(). ` +
+          'Either implement it or set every toolCalling flag to false — an advertised capability with no method is a TypeError inside the Ask agent, the path least likely to have been exercised.',
+      );
+    }
+
     const declaresEmbedding = provider.embedding !== undefined;
     const implementsEmbed = typeof provider.embed === 'function';
 

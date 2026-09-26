@@ -49,6 +49,16 @@ export const aiConfigModelSchema = z.object({
     .describe(
       "The EFFECTIVE output ceiling: the model's own, already narrowed by this deployment's policy.",
     ),
+  structuredOutput: z
+    .boolean()
+    .describe(
+      'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication, digest and brief require it.',
+    ),
+  toolCalling: z
+    .boolean()
+    .describe(
+      'Whether this model supports tool (function) calling. The connected-knowledge Ask agent requires it.',
+    ),
   source: z
     .enum(['explicit', 'catalogue', 'derived', 'default'])
     .describe(

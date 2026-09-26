@@ -159,7 +159,7 @@ describe('AiModelDiscoveryService.discoverModels', () => {
   it('400s for a provider registered but declaring no discovery support', async () => {
     const provider = discoveringProvider({
       capabilities: {
-        models: [{ id: 'x', label: 'x', contextWindowTokens: 1, maxOutputTokens: 1 }],
+        models: [{ id: 'x', label: 'x', contextWindowTokens: 1, maxOutputTokens: 1, structuredOutput: false, toolCalling: false }],
         streaming: true,
         modelDiscovery: false,
       },

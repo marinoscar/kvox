@@ -67,7 +67,7 @@ class FakeProvider implements AiProvider<unknown> {
   readonly label = 'OpenAI';
   readonly capabilities = {
     models: [
-      { id: MODEL, label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+      { id: MODEL, label: 'GPT-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_000, structuredOutput: false, toolCalling: false },
     ],
     streaming: true as const,
     modelDiscovery: false,

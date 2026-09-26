@@ -71,6 +71,23 @@ export interface AiModelDescriptor {
   contextWindowTokens: number;
   /** Most tokens this model will produce in one completion. */
   maxOutputTokens: number;
+  /**
+   * Whether this model supports schema-constrained structured output through
+   * {@link AiProvider.generateStructured} (#358).
+   *
+   * REQUIRED, for the same reason the numbers are: "unknown" has no safe
+   * interpretation at the call site — connected-knowledge extraction must not
+   * be pointed at a model that will fail a paid call. See
+   * {@link AiModelFeatureFlags}.
+   */
+  structuredOutput: boolean;
+  /**
+   * Whether this model supports tool (function) calling through
+   * {@link AiProvider.chat} (#359). REQUIRED, for the reason
+   * `structuredOutput` is: the connected-knowledge Ask agent must not be
+   * pointed at a model that cannot call its tools.
+   */
+  toolCalling: boolean;
 }
 
 /**
@@ -109,6 +126,16 @@ export interface AiProviderCapabilities {
    * a gap to be filled with a number somebody made up.
    */
   defaultModelLimits?: { contextWindowTokens: number; maxOutputTokens: number };
+  /**
+   * The conservative feature floor for a model id this provider cannot place
+   * (#358) — beside `defaultModelLimits`, and asymmetric for the same reason:
+   * a false negative is recoverable (an administrator picks a catalogued
+   * model), a false positive fails a paid structured call.
+   *
+   * OPTIONAL, "PRESENCE IS THE DECLARATION". Absent means an unplaceable id
+   * resolves every flag to `false`.
+   */
+  defaultModelFeatures?: AiModelFeatureFlags;
   /**
    * Whether {@link AiProvider.listModels} is implemented (#78).
    *
@@ -379,6 +406,215 @@ export type AiDelta =
 
 /** docs/specs/notes.md §2.1's name for {@link AiDelta}. The same type. */
 export type AiGenerateEvent = AiDelta;
+
+// =============================================================================
+// STRUCTURED OUTPUT (issue #358, epic #345)
+// =============================================================================
+//
+// One call that returns ONE schema-shaped JSON value — the shape graph
+// extraction, resolution adjudication, the entity digest and the brief all
+// need (docs/specs/ontology.md §6, §7, §9). `responseFormat: 'json'` on
+// {@link AiGenerateRequest} guarantees syntax only; this path asks the vendor
+// to constrain DECODING to a schema, so a missing or renamed key becomes rare
+// rather than routine.
+//
+// ⚠ THE METHOD IS THE CONTRACT, NOT THE MECHANISM. OpenAI implements it with
+// `response_format: { type: 'json_schema', strict: true }`; a future vendor with
+// no JSON-schema mode may implement it with a single forced tool call behind the
+// same signature. Callers never learn which.
+//
+// ⚠ THE RESULT IS PARSED, NEVER VALIDATED. Strict decoding narrows how often a
+// Zod parse fails; it does not remove the need for one — a gateway may ignore
+// `response_format`, and ontology §6 requires Zod validation regardless. The
+// generic parameter on {@link AiStructuredResult} is a HINT for the caller's
+// own variable naming, not a promise, which is why `value` stays `unknown`.
+// =============================================================================
+
+/**
+ * A JSON Schema object in OpenAI's strict subset — see
+ * `../structured/strict-json-schema.ts` for the rules and the checker that
+ * enforces them before any request is sent.
+ */
+export type JsonSchema = Record<string, unknown>;
+
+/** One request for a schema-constrained answer. See the section header. */
+export interface AiStructuredRequest {
+  /** The provider's own model id. Must be permitted by the `ai` policy. */
+  model: string;
+  /** The system role's content, already assembled by the caller. */
+  systemPrompt: string;
+  /** The user role's content, already assembled by the caller. */
+  userContent: string;
+  /**
+   * The answer's shape. The ROOT MUST BE AN OBJECT SCHEMA in the strict subset
+   * — `assertStrictJsonSchema` is run as a pre-flight and a violation throws a
+   * plain `Error` before any network call, because it is a programming error,
+   * not something the vendor should be paid to discover.
+   */
+  schema: JsonSchema;
+  /**
+   * A name for the schema, sent to the vendor alongside it.
+   * `/^[a-zA-Z0-9_-]{1,64}$/` — checked in the same pre-flight.
+   */
+  schemaName: string;
+  /** Upper bound on the completion, in tokens. POLICY — never raised. */
+  maxOutputTokens: number;
+  /** Abandon the request after this many milliseconds. */
+  timeoutMs?: number;
+  /**
+   * Same semantics as {@link AiGenerateRequest.reasoningEffort}, including the
+   * rule that it NEVER raises {@link AiStructuredRequest.maxOutputTokens}.
+   */
+  reasoningEffort?: AiReasoningEffort;
+}
+
+/**
+ * What one {@link AiProvider.generateStructured} call produced.
+ *
+ * `T` IS A HINT ONLY — see the section header. The caller validates `value`.
+ */
+export interface AiStructuredResult<T = unknown> {
+  /** Parsed JSON, NOT validated against a Zod schema — the caller validates. */
+  value: unknown;
+  /**
+   * Vendor-reported usage, else a `countTokens` estimate — never zero, which
+   * would read as "this call was free".
+   */
+  usage: AiUsage;
+  /**
+   * Always `'stop'` on a returned result. Every other ending THROWS: a
+   * refusal is an `AiRefusedError`, a `length` cut-off an
+   * `AiStructuredOutputError('truncated')` — a truncated object that happened
+   * to parse would silently drop entities.
+   */
+  finishReason: AiFinishReason;
+}
+
+/**
+ * Capability flags a model descriptor carries (#358, #359).
+ */
+export interface AiModelFeatureFlags {
+  /**
+   * Whether this model can return schema-constrained structured output through
+   * {@link AiProvider.generateStructured}.
+   */
+  structuredOutput: boolean;
+  /**
+   * Whether this model supports tool (function) calling through
+   * {@link AiProvider.chat} (#359).
+   */
+  toolCalling: boolean;
+}
+
+// =============================================================================
+// MULTI-TURN CHAT AND TOOL CALLING (issue #359, epic #345)
+// =============================================================================
+//
+// A conversation, not a prompt: the Ask agent (docs/specs/ontology.md §21)
+// sends a message list, lets the model call READ-ONLY typed tools (§9.3), and
+// appends each call and its result before asking again. `generate()` cannot
+// carry that — it takes exactly one system prompt and one user message.
+//
+// ⚠ THE PROVIDER TRANSPORTS, IT NEVER EXECUTES. A tool definition goes out, a
+// complete tool call comes back as an event; running the tool, validating its
+// arguments and deciding whether to loop are the caller's job (#377/#378).
+//
+// ⚠ CALLERS SEE COMPLETE CALLS, NEVER FRAGMENTS. A vendor streams a tool call's
+// arguments in pieces; assembling them is the provider's job, because the
+// fragment format is the vendor's, and every caller reimplementing it would be
+// N chances to get interleaving wrong.
+//
+// ⚠ NO PARALLEL TOOL CALLS IN v1. A provider asks its vendor for at most one
+// call per turn (OpenAI: `parallel_tool_calls: false`) — strict schemas are not
+// guaranteed for parallel calls, and the agent's step cap is simpler to reason
+// about with one call per step. Assembly still handles several defensively.
+// =============================================================================
+
+/** One tool the model may call. The provider sends it; it never runs it. */
+export interface AiToolDefinition {
+  /** `/^[a-zA-Z0-9_-]{1,64}$/`, unique within one request. */
+  name: string;
+  /** Shown to the model. 1..1024 characters. */
+  description: string;
+  /**
+   * The arguments' shape: an OBJECT schema in the strict subset, checked by
+   * `assertStrictJsonSchema` before any request is sent.
+   */
+  parameters: JsonSchema;
+}
+
+/**
+ * Whether, and which, tool the model must call. `{ name }` forces one declared
+ * tool. Defaults to `'auto'` when tools are present; MUST be absent when they
+ * are not.
+ */
+export type AiToolChoice = 'auto' | 'none' | 'required' | { name: string };
+
+/**
+ * One complete tool call the model made.
+ *
+ * ⚠ `argumentsJson` IS UNTRUSTED MODEL OUTPUT. The provider passes it through
+ * exactly as the vendor streamed it — unparsed, unvalidated. It may not be
+ * JSON at all, and when it is it may not match the tool's schema even under
+ * strict mode (a gateway may ignore `strict`). The caller MUST parse it and
+ * validate it with the tool's own Zod schema before acting on a single field.
+ */
+export interface AiToolCall {
+  /** The vendor's id for this call — echoed back as `toolCallId`. */
+  id: string;
+  name: string;
+  /** Raw, untrusted JSON text. See above. */
+  argumentsJson: string;
+}
+
+/**
+ * One message of a conversation. A `tool` message answers a PRECEDING
+ * assistant message's `toolCalls[].id` — an orphan `toolCallId` is refused
+ * before any network call.
+ */
+export type AiChatMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string | null; toolCalls?: AiToolCall[] }
+  | { role: 'tool'; toolCallId: string; content: string };
+
+/** One request for a streamed, possibly tool-calling, chat turn. */
+export interface AiChatRequest {
+  /** The provider's own model id. Must be permitted by the `ai` policy. */
+  model: string;
+  /** At least one. The first may be `system`. */
+  messages: AiChatMessage[];
+  /** At most 32, unique names. Absent means a plain chat turn. */
+  tools?: AiToolDefinition[];
+  /** Default `'auto'` when tools are present; must be absent without tools. */
+  toolChoice?: AiToolChoice;
+  /** Upper bound on the completion, in tokens. POLICY — never raised. */
+  maxOutputTokens: number;
+  /** Abandon the request after this many milliseconds. */
+  timeoutMs?: number;
+  /**
+   * Same semantics as {@link AiGenerateRequest.reasoningEffort}, including the
+   * rule that it NEVER raises {@link AiChatRequest.maxOutputTokens}.
+   */
+  reasoningEffort?: AiReasoningEffort;
+}
+
+/**
+ * Why a chat turn ended. Unlike {@link AiFinishReason}, `tool_calls` is a real
+ * outcome here: the model is waiting for tool results. `content_filter` is
+ * listed for vocabulary parity, but a provider THROWS `AiRefusedError` for it
+ * exactly as `generate` does.
+ */
+export type AiChatFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls';
+
+/**
+ * One item yielded by `chat`: text deltas as they arrive, then every complete
+ * tool call (in index order), then exactly one `done`.
+ */
+export type AiChatEvent =
+  | { kind: 'delta'; text: string }
+  | { kind: 'tool_call'; id: string; name: string; argumentsJson: string }
+  | { kind: 'done'; finishReason: AiChatFinishReason; usage: AiUsage };
 
 /** The outcome of `testConnection` — always resolved, never thrown. */
 export interface AiConnectionTest {
@@ -750,6 +986,55 @@ export interface AiProvider<TSettings = unknown> {
     ctx: AiProviderContext<TSettings>,
     request: AiEmbedRequest,
   ): Promise<AiEmbedResult>;
+
+  /**
+   * One schema-constrained answer, parsed (#358). See the STRUCTURED OUTPUT
+   * section above.
+   *
+   * OPTIONAL, AND "PRESENCE IS THE DECLARATION": a provider that declares any
+   * model (or its `defaultModelFeatures` floor) with `structuredOutput: true`
+   * MUST implement it — `AiProviderRegistry.register` refuses the provider at
+   * boot otherwise, the same one-line check `modelDiscovery`/`listModels`
+   * gets.
+   *
+   * THROWS TO FAIL, like `generate`: a plain `Error` for a truncated stream or
+   * a schema that fails the strict pre-flight, `AiRefusedError` for a refusal,
+   * `AiStructuredOutputError` for a `length` cut-off (`'truncated'`) or an
+   * answer that is not JSON (`'invalid_json'`), and the ordinary HTTP taxonomy
+   * (`AiAuthError`, `AiInputError`, `RateLimitError`, …) otherwise.
+   *
+   * ⚠ `ctx.apiKey` IS THE CALLING USER'S OWN KEY, exactly as for `generate`.
+   * Nothing logs it — and nothing logs the prompt, the schema or the output
+   * either.
+   */
+  generateStructured?<T = unknown>(
+    ctx: AiProviderContext<TSettings>,
+    request: AiStructuredRequest,
+  ): Promise<AiStructuredResult<T>>;
+
+  /**
+   * One streamed, multi-turn chat turn that may call tools (#359). See the
+   * MULTI-TURN CHAT AND TOOL CALLING section above.
+   *
+   * OPTIONAL, AND "PRESENCE IS THE DECLARATION": a provider that declares any
+   * model (or its `defaultModelFeatures` floor) with `toolCalling: true` MUST
+   * implement it — `AiProviderRegistry.register` refuses the provider at boot
+   * otherwise, the same check `generateStructured` gets.
+   *
+   * YIELDS `delta` events as text arrives, then one `tool_call` per assembled
+   * call, then exactly one `done`. THROWS TO FAIL, like `generate`: a plain
+   * `Error` for an invalid request (before any network call), a truncated
+   * stream or a malformed tool call; `AiRefusedError` for `content_filter`;
+   * and the ordinary HTTP taxonomy (`AiAuthError`, `AiInputError`,
+   * `RateLimitError`, …) otherwise.
+   *
+   * ⚠ `ctx.apiKey` IS THE CALLING USER'S OWN KEY, exactly as for `generate`.
+   * Nothing logs it — nor any message, tool argument or tool result.
+   */
+  chat?(
+    ctx: AiProviderContext<TSettings>,
+    request: AiChatRequest,
+  ): AsyncIterable<AiChatEvent>;
 }
 
 /** The publishable description of one provider. See `registry.describeAll()`. */
