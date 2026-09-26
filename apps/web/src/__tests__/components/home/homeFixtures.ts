@@ -46,6 +46,7 @@ export function transcript(overrides: Partial<TranscriptListItem> = {}): Transcr
     currentVersion: 1,
     failureReason: null,
     access: 'owner',
+    recordedAt: FIXED_ISO,
     createdAt: FIXED_ISO,
     updatedAt: FIXED_ISO,
     ...overrides,

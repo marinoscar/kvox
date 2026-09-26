@@ -458,24 +458,38 @@ export class TranscriptsController {
   @Patch(':id')
   @Auth({ permissions: [PERMISSIONS.TRANSCRIPTS_WRITE] })
   @ApiOperation({
-    summary: 'Rename a transcript',
+    summary: 'Rename a transcript or set its recording date',
     description:
-      'Changes the title. **Not versioned**: a title is metadata about the recording, not ' +
-      'content of it, so recording a rename as a version would put a no-op in the edit ' +
-      'history that a later restore could "undo" into a name nobody chose.\n\n' +
+      'Changes the title, the recording date (`recordedAt`), or both; only the fields sent ' +
+      'are applied, and an empty body is a 400. **Not versioned**: both are metadata about ' +
+      'the recording, not content of it, so recording either as a version would put a no-op ' +
+      'in the edit history that a later restore could "undo" into a value nobody chose.\n\n' +
+      '`recordedAt` is an ISO 8601 datetime **with an offset** (`Z` or `±hh:mm`), stored ' +
+      'and returned in UTC. It is the meeting date connected knowledge dates anything ' +
+      'extracted from this recording against. A date before 1970-01-01T00:00:00Z, or more ' +
+      'than 24 hours after the server clock, is a 400. A change that actually moves the ' +
+      'date writes a `transcript.recorded_at_changed` audit row with the previous and next ' +
+      'values; a rename is not audited.\n\n' +
       'Requires `edit` access — the owner, or an `editor` share — **and** ' +
       '`transcripts:write`. A share caps the ceiling an RBAC permission can raise a user ' +
       'to; it never raises the floor.',
   })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
-  @ApiDataResponse(TranscriptDetailDto, { description: 'The renamed transcript' })
+  @ApiBody({ type: UpdateTranscriptBodyDto })
+  @ApiDataResponse(TranscriptDetailDto, { description: 'The updated transcript' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Empty body, an invalid or offset-less `recordedAt`, a date before 1970, or one more ' +
+      'than 24 hours in the future',
+  })
   @ApiResponse({ status: 404, description: 'No such transcript, or no edit access to it' })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateTranscriptSchema)) dto: UpdateTranscriptDto,
     @CurrentUser() user: RequestUser,
   ) {
-    return this.transcripts.updateTitle(id, dto.title, user);
+    return this.transcripts.update(id, dto, user);
   }
 
   @Delete(':id')

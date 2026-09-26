@@ -142,6 +142,12 @@ export interface TranscriptListItem {
    * two row types. The API declares it required, so it is not optional here.
    */
   ownerName: string;
+  /**
+   * When the recording was made (ISO 8601), issue #352. Defaults to the upload
+   * instant; the owner or an editor can correct it. Connected knowledge reads
+   * it as the meeting date, so it is never the same fact as `createdAt`.
+   */
+  recordedAt: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -416,12 +422,31 @@ export async function createTranscript(
   return api.post<CreateTranscriptResponse>('/transcripts', input);
 }
 
-/** `PATCH /api/transcripts/:id` — title only, and not versioned. */
+/** Body of `PATCH /api/transcripts/:id`. At least one field must be present. */
+export interface UpdateTranscriptInput {
+  title?: string;
+  /** ISO 8601 with an offset — `Date.prototype.toISOString()` output qualifies. */
+  recordedAt?: string;
+}
+
+/**
+ * `PATCH /api/transcripts/:id` — title and/or recording date. Not versioned:
+ * both are metadata about the recording, not content of it. The 200 body is
+ * the fresh detail, which callers apply directly.
+ */
+export async function updateTranscript(
+  id: string,
+  input: UpdateTranscriptInput,
+): Promise<TranscriptDetail> {
+  return api.patch<TranscriptDetail>(`/transcripts/${encodeURIComponent(id)}`, input);
+}
+
+/** `PATCH /api/transcripts/:id` with a title only. Kept for existing callers. */
 export async function renameTranscript(
   id: string,
   title: string,
 ): Promise<TranscriptDetail> {
-  return api.patch<TranscriptDetail>(`/transcripts/${encodeURIComponent(id)}`, { title });
+  return updateTranscript(id, { title });
 }
 
 /** `DELETE /api/transcripts/:id`. Owner only, and there is no path back. */

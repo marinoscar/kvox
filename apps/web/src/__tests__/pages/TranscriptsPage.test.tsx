@@ -54,6 +54,7 @@ function item(overrides: Partial<TranscriptListItem> = {}): TranscriptListItem {
     currentVersion: 1,
     failureReason: null,
     access: 'owner',
+    recordedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

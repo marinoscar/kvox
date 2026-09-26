@@ -1,4 +1,4 @@
-import { createTranscriptSchema } from './transcript.dto';
+import { createTranscriptSchema, updateTranscriptSchema } from './transcript.dto';
 
 // =============================================================================
 // `POST /api/transcripts` body — the keyterms field (issue #327)
@@ -84,5 +84,66 @@ describe('createTranscriptSchema — keyterms (#327)', () => {
 
   it('rejects a non-string entry', () => {
     expect(parse(['ok', 42]).success).toBe(false);
+  });
+});
+
+// =============================================================================
+// `PATCH /api/transcripts/:id` body — title and/or recordedAt (issue #352)
+// =============================================================================
+
+describe('updateTranscriptSchema (#352)', () => {
+  it('rejects an empty body with a message naming both fields', () => {
+    const result = updateTranscriptSchema.safeParse({});
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      'Nothing to update: send `title`, `recordedAt`, or both.',
+    );
+  });
+
+  it('accepts a title alone, trimmed', () => {
+    const result = updateTranscriptSchema.safeParse({ title: '  Renamed  ' });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ title: 'Renamed' });
+  });
+
+  it('rejects a blank title', () => {
+    expect(updateTranscriptSchema.safeParse({ title: '   ' }).success).toBe(false);
+  });
+
+  it.each([
+    '2026-03-02T15:00:00-05:00',
+    '2026-03-02T20:00:00Z',
+    '2026-03-02T20:00:00.123Z',
+    '2026-03-02T20:00:00+00:00',
+  ])('accepts recordedAt %s, which carries an offset', (recordedAt) => {
+    expect(updateTranscriptSchema.safeParse({ recordedAt }).success).toBe(true);
+  });
+
+  it.each([
+    '2026-03-02T15:00:00',
+    '2026-03-02T15:00',
+    '2026-03-02',
+    'yesterday',
+    '',
+  ])('rejects recordedAt %j — offset-less or not a datetime', (recordedAt) => {
+    expect(updateTranscriptSchema.safeParse({ recordedAt }).success).toBe(false);
+  });
+
+  it('rejects a non-string recordedAt', () => {
+    expect(updateTranscriptSchema.safeParse({ recordedAt: 1_700_000_000_000 }).success).toBe(
+      false,
+    );
+  });
+
+  it('accepts both fields together', () => {
+    const result = updateTranscriptSchema.safeParse({
+      title: 'Both',
+      recordedAt: '2026-03-02T20:00:00Z',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ title: 'Both', recordedAt: '2026-03-02T20:00:00Z' });
   });
 });

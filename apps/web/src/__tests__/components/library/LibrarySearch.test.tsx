@@ -97,6 +97,7 @@ function transcriptItem(overrides: Partial<TranscriptListItem> = {}): Transcript
     failureReason: null,
     access: 'owner',
     ownerName: 'Admin User',
+    recordedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,

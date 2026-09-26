@@ -711,7 +711,7 @@ here.
 - `GET /api/transcripts/{id}/segments` - Compact, **no word timings** (the largest thing in this schema); same ETag
 - `GET /api/transcripts/{id}/words?fromMs&toMs` - Word timings for one window, selected by **overlap** not containment; capped at 30 minutes and silently narrowed rather than refused
 - `GET /api/transcripts/{id}/audio` - Signed URL, 6 h TTL: the rendition when ready, else the original
-- `PATCH /api/transcripts/{id}` - Rename. **Not versioned** — a title is metadata about the recording, not content of it
+- `PATCH /api/transcripts/{id}` - Rename, and/or set `recordedAt`. **Not versioned** — a title and a recording date are metadata about the recording, not content of it
 - `DELETE /api/transcripts/{id}` - Owner only. Soft-deletes to `deleting` and queues `transcript.purge`; there is no path back
 - `POST /api/transcripts/{id}/retry` - Owner only. **The stage is derived from the row, not chosen by the caller** — a transcript the provider already accepted is re-polled, never re-submitted, so one recording never becomes two remote jobs
 - `POST /api/transcripts/{id}/cancel` - Owner only. Cancels on the provider when it can, and marks the transcript either way
@@ -1074,7 +1074,11 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   id to display name for a speaker **identified** rather than corrected — naming "Speaker A" as
   "Oscar" writes here and to the live speaker row without bumping `current_version`, and
   `materialize()` overlays this map onto any speaker still at its placeholder at every version;
-  see `docs/specs/transcription.md` §4.6.
+  see `docs/specs/transcription.md` §4.6. `recorded_at` (issue #352, `timestamptz`, `NOT NULL`,
+  indexed `(owner_id, recorded_at desc)`) is when the recording was made — defaulting to the
+  upload instant and backfilled from `created_at`, owner/editor-correctable via `PATCH
+  /api/transcripts/{id}` without moving `current_version` — and is the meeting date connected
+  knowledge reads (`docs/specs/ontology.md` §5.4).
 - `transcript_speakers` - One row per diarized voice in a transcript. `label` is nullable —
   the provider's own diarization letter (`"A"`) for an AI-detected speaker, `NULL` for one a
   user created directly. Unique per transcript **among labelled rows only**, via the same

@@ -169,6 +169,7 @@ import { deleteTranscript, retryTranscript } from '../services/transcripts';
 import { removeShare } from '../services/transcriptShares';
 import { ExportDialog } from '../components/transcripts/ExportDialog';
 import { ShareDialog } from '../components/transcripts/ShareDialog';
+import { RecordedAtDialog } from '../components/transcripts/RecordedAtDialog';
 import { formatDuration } from '../utils/playbackIntervals';
 import { hasPlaybackRendition } from '../utils/transcriptDisplay';
 
@@ -201,6 +202,17 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+const RECORDED_AT_FORMAT = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
+/** The header's "Recorded …" date, in the viewer's locale and zone (#352). */
+export function formatRecordedAt(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? 'at an unknown time' : RECORDED_AT_FORMAT.format(date);
 }
 
 export function TranscriptPage() {
@@ -300,6 +312,7 @@ export function TranscriptPage() {
   const [pageMenuAnchor, setPageMenuAnchor] = useState<HTMLElement | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [recordedAtOpen, setRecordedAtOpen] = useState(false);
   const [confirm, setConfirm] = useState<'delete' | 'leave' | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -724,6 +737,19 @@ export function TranscriptPage() {
       >
         <ListItemText>Export…</ListItemText>
       </MenuItem>
+      {/* Owner or editor — the same `edit` access the PATCH enforces (#352).
+          A viewer sees the date in the header but is not offered a control
+          the API would refuse. */}
+      {canEdit ? (
+        <MenuItem
+          onClick={() => {
+            setPageMenuAnchor(null);
+            setRecordedAtOpen(true);
+          }}
+        >
+          <ListItemText>Edit recording date</ListItemText>
+        </MenuItem>
+      ) : null}
       {/* Share is owner-only, and the gate is not cosmetic: the four share
           routes answer a stranger's 404 to anyone who is not the owner, so an
           offered-but-failing menu item would be the UI promising something the
@@ -848,6 +874,11 @@ export function TranscriptPage() {
           {formatDuration(transcript.durationMs)} · {transcript.speakerCount}{' '}
           {transcript.speakerCount === 1 ? 'speaker' : 'speakers'}
         </Typography>
+        {/* When the recording was made, not when it was uploaded (#352) — the
+            meeting date connected knowledge dates everything against. */}
+        <Typography variant="caption" color="text.secondary">
+          Recorded {formatRecordedAt(transcript.recordedAt)}
+        </Typography>
         {/* Only once there is something to save. Before the transcript is
             ready there are no segments and no corrections, and a second
             `role="status"` beside the pipeline's own live region would have a
@@ -877,6 +908,14 @@ export function TranscriptPage() {
           onClose={() => setShareOpen(false)}
           transcriptId={transcript.id}
           transcriptTitle={transcript.title}
+        />
+      ) : null}
+      {canEdit ? (
+        <RecordedAtDialog
+          open={recordedAtOpen}
+          onClose={() => setRecordedAtOpen(false)}
+          transcript={transcript}
+          onSaved={setTranscript}
         />
       ) : null}
     </Box>

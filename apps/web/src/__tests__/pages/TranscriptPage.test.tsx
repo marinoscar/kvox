@@ -15,19 +15,21 @@ vi.mock('../../services/transcripts', () => ({
   getTranscriptAudio: vi.fn(),
   getTranscriptWords: vi.fn(),
   retryTranscript: vi.fn(),
+  updateTranscript: vi.fn(),
 }));
 
 vi.mock('../../contexts/NotificationContext', () => ({ useNotifications: () => null }));
 
 import { render, mockAdminUser } from '../utils/test-utils';
 import { setViewportWidth } from '../setup';
-import TranscriptPage, { isTypingTarget } from '../../pages/TranscriptPage';
+import TranscriptPage, { formatRecordedAt, isTypingTarget } from '../../pages/TranscriptPage';
 import {
   getTranscript,
   getTranscriptAudio,
   getTranscriptSegments,
   getTranscriptWords,
   retryTranscript,
+  updateTranscript,
 } from '../../services/transcripts';
 import type {
   TranscriptDetail,
@@ -54,6 +56,7 @@ const mockGetSegments = vi.mocked(getTranscriptSegments);
 const mockGetAudio = vi.mocked(getTranscriptAudio);
 const mockGetWords = vi.mocked(getTranscriptWords);
 const mockRetry = vi.mocked(retryTranscript);
+const mockUpdate = vi.mocked(updateTranscript);
 
 const SPEAKERS: TranscriptSpeaker[] = [
   { id: 'sp1', label: 'A', displayName: 'Ana', colorIndex: 0, rev: 1 },
@@ -74,6 +77,7 @@ function detail(overrides: Partial<TranscriptDetail> = {}): TranscriptDetail {
     currentVersion: 1,
     failureReason: null,
     access: 'owner',
+    recordedAt: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     speakers: SPEAKERS,
@@ -519,6 +523,72 @@ describe('TranscriptPage — keyboard shortcuts', () => {
 
     expect(event.defaultPrevented).toBe(false);
     input.remove();
+  });
+});
+
+describe('TranscriptPage — recording date (#352)', () => {
+  it('shows when the recording was made in the metadata row', async () => {
+    renderPage();
+
+    await screen.findByText('Weekly standup');
+    expect(
+      screen.getByText(`Recorded ${formatRecordedAt('2026-01-01T00:00:00.000Z')}`),
+    ).toBeInTheDocument();
+  });
+
+  it.each(['owner', 'editor'] as const)(
+    'offers "Edit recording date" to an %s',
+    async (access) => {
+      const user = userEvent.setup();
+      mockGetTranscript.mockResolvedValue({
+        status: 'ok',
+        data: detail({ access }),
+        etag: 'W/"v1"',
+      });
+      renderPage();
+      await screen.findByText('Weekly standup');
+
+      await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+
+      expect(
+        await screen.findByRole('menuitem', { name: 'Edit recording date' }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('does not offer "Edit recording date" to a viewer', async () => {
+    const user = userEvent.setup();
+    mockGetTranscript.mockResolvedValue({
+      status: 'ok',
+      data: detail({ access: 'viewer' }),
+      etag: 'W/"v1"',
+    });
+    renderPage();
+    await screen.findByText('Weekly standup');
+
+    await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+
+    expect(await screen.findByRole('menuitem', { name: 'Export…' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Edit recording date' })).toBeNull();
+  });
+
+  it('updates the caption from the saved detail, without a reload', async () => {
+    const user = userEvent.setup();
+    const next = '2025-11-05T14:30:00.000Z';
+    mockUpdate.mockResolvedValue(detail({ recordedAt: next }));
+    renderPage();
+    await screen.findByText('Weekly standup');
+
+    await user.click(screen.getByRole('button', { name: 'Transcript actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit recording date' }));
+    await screen.findByRole('dialog', { name: 'Edit recording date' });
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByText(`Recorded ${formatRecordedAt(next)}`)).toBeInTheDocument();
+    expect(mockUpdate).toHaveBeenCalledWith('t1', {
+      recordedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(mockGetTranscript).toHaveBeenCalledTimes(1);
   });
 });
 

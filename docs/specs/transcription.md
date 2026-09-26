@@ -834,7 +834,8 @@ one `transcripts` row per uploaded recording.
 | Timestamps | `submitted_at?`, `last_polled_at?`, `completed_at?`, `remote_deleted_at?`, `deleted_at?`, `created_at`, `updated_at` |
 | Derived | `duration_ms?`, `failure_reason?`, `current_version` (int, default 0), `speaker_count`, `word_count` |
 | Identities | `speaker_identities` (JSONB, default `{}`; speaker id → display name — §4.6) |
-| Indexes | `(owner_id, updated_at desc)`, `(status)` |
+| Meeting date | `recorded_at` (issue #352; `timestamptz`, `NOT NULL`, default `now()`, backfilled from `created_at`) — when the recording was made, not when it was uploaded. Owner/editor-correctable via `PATCH /transcripts/:id`, never versioned. The meeting date read by `docs/specs/ontology.md` §5.4 |
+| Indexes | `(owner_id, updated_at desc)`, `(status)`, `(owner_id, recorded_at desc)` |
 
 `source_object_id` is `Restrict`, not `Cascade` — a `storage_objects` row a
 transcript still references may never be deleted out from under it by an
