@@ -104,11 +104,13 @@
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
 import Alert from '@mui/material/Alert';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
@@ -129,7 +131,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { TranscriptNotesSection } from '../components/notes/TranscriptNotesSection';
 import { ConflictCards } from '../components/transcripts/ConflictCard';
@@ -154,6 +156,7 @@ import {
 import { TranscriptStatusChip } from '../components/transcripts/TranscriptStatusChip';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { useGraphTranscriptPeople } from '../hooks/useGraphTranscriptPeople';
 import { usePlaybackEngine, SKIP_MS } from '../hooks/usePlaybackEngine';
 import { useNameCheck } from '../hooks/useNameCheck';
 import { useTranscriptOperations } from '../hooks/useTranscriptOperations';
@@ -170,7 +173,7 @@ import { removeShare } from '../services/transcriptShares';
 import { ExportDialog } from '../components/transcripts/ExportDialog';
 import { ShareDialog } from '../components/transcripts/ShareDialog';
 import { RecordedAtDialog } from '../components/transcripts/RecordedAtDialog';
-import { formatDuration } from '../utils/playbackIntervals';
+import { formatDuration, formatTimestamp } from '../utils/playbackIntervals';
 import { hasPlaybackRendition } from '../utils/transcriptDisplay';
 
 /**
@@ -290,6 +293,59 @@ export function TranscriptPage() {
   });
 
   const { wordsBySegment } = useTranscriptWords(id, engine.positionMs, isReady);
+
+  // ---------------------------------------------------------------------------
+  // Knowledge graph (#373): person links on named speakers, and the evidence
+  // deep link `?segment=<id>&t=<ms>` that an EvidenceChip's ▶ lands on.
+  // ---------------------------------------------------------------------------
+  const canReadGraph = hasPermission('graph:read');
+  const speakerEntityIds = useGraphTranscriptPeople(id, canReadGraph && isReady);
+  const openSpeakerEntity = useCallback(
+    (entityId: string) => navigate(`/graph/entities/${encodeURIComponent(entityId)}`),
+    [navigate],
+  );
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [deepLinkSegmentId, setDeepLinkSegmentId] = useState<string | null>(null);
+  const [deepLinkPlayMs, setDeepLinkPlayMs] = useState<number | null>(null);
+  const deepLinkHandled = useRef(false);
+
+  /**
+   * Honour the deep link ONCE, after the segments have loaded: scroll to and
+   * highlight `?segment=`, and SEEK to `?t=` — never autoplay (browsers block
+   * it, and sound starting on its own surprises people). A "Play from m:ss"
+   * chip offers the explicit ▶ instead. An unknown segment still seeks. Then
+   * both params are stripped, so a reload or a shared URL does not replay the
+   * jump over whatever the reader has done since.
+   */
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    const segmentParam = searchParams.get('segment');
+    const tParam = searchParams.get('t');
+    if (!segmentParam && tParam === null) {
+      deepLinkHandled.current = true;
+      return;
+    }
+    if (!isReady || segments.length === 0) return;
+    deepLinkHandled.current = true;
+
+    if (segmentParam && segments.some((segment) => segment.id === segmentParam)) {
+      setDeepLinkSegmentId(segmentParam);
+    }
+    const t = tParam === null ? Number.NaN : Number(tParam);
+    if (Number.isFinite(t) && t >= 0) {
+      engine.seekToMs(t);
+      setDeepLinkPlayMs(t);
+    }
+    setSearchParams({}, { replace: true });
+  }, [engine, isReady, searchParams, segments, setSearchParams]);
+
+  // The highlight is a pointer, not a state: it fades after two seconds.
+  useEffect(() => {
+    if (!deepLinkSegmentId) return undefined;
+    const timer = setTimeout(() => setDeepLinkSegmentId(null), 2000);
+    return () => clearTimeout(timer);
+  }, [deepLinkSegmentId]);
 
   // ---------------------------------------------------------------------------
   // Correction UI state
@@ -978,6 +1034,26 @@ export function TranscriptPage() {
     </Alert>
   ) : null;
 
+  const deepLinkSegment = deepLinkSegmentId
+    ? (segments.find((segment) => segment.id === deepLinkSegmentId) ?? null)
+    : null;
+
+  /** The explicit ▶ a deep link offers instead of autoplay (#373). */
+  const deepLinkPlayChip =
+    deepLinkPlayMs !== null && !playerBlocked ? (
+      <Chip
+        icon={<PlayArrowIcon />}
+        label={`Play from ${formatTimestamp(deepLinkPlayMs)}`}
+        color="primary"
+        onClick={() => {
+          engine.playFromMs(deepLinkPlayMs);
+          setDeepLinkPlayMs(null);
+        }}
+        onDelete={() => setDeepLinkPlayMs(null)}
+        sx={{ alignSelf: 'flex-start' }}
+      />
+    ) : null;
+
   const segmentList = (
     <SegmentList
       segments={segments}
@@ -1021,14 +1097,16 @@ export function TranscriptPage() {
           ? (activeMatch ?? null)
           : nameHighlightsOn && nameJump
             ? { segmentId: nameJump.segmentId, start: nameJump.start, end: nameJump.end }
-            : null
+            : deepLinkSegment
+              ? { segmentId: deepLinkSegment.id, start: 0, end: deepLinkSegment.text.length }
+              : null
       }
       scrollToSegmentId={
         findOpen
           ? (activeMatch?.segmentId ?? null)
           : nameHighlightsOn
             ? (nameJump?.segmentId ?? null)
-            : null
+            : deepLinkSegmentId
       }
     />
   );
@@ -1272,6 +1350,7 @@ export function TranscriptPage() {
               {findPanel}
               {namePanel}
               {playerNotice}
+              {deepLinkPlayChip}
               {!playerBlocked && (
                 <TranscriptPlayer
                   engine={engine}
@@ -1290,6 +1369,8 @@ export function TranscriptPage() {
                   onToggleSpeaker={toggleSpeaker}
                   variant="panel"
                   editable={canEdit}
+                  speakerEntityIds={canReadGraph ? speakerEntityIds : undefined}
+                  onOpenSpeakerEntity={canReadGraph ? openSpeakerEntity : undefined}
                   onOpenSpeakerActions={(speakerId, anchor) =>
                     setSpeakerMenu({ speakerId, anchor })
                   }
@@ -1326,12 +1407,15 @@ export function TranscriptPage() {
           onToggleSpeaker={toggleSpeaker}
           variant="chips"
           editable={canEdit}
+          speakerEntityIds={canReadGraph ? speakerEntityIds : undefined}
+          onOpenSpeakerEntity={canReadGraph ? openSpeakerEntity : undefined}
           onOpenSpeakerActions={(speakerId, anchor) =>
             setSpeakerMenu({ speakerId, anchor })
           }
         />
       </Box>
       {playerNotice && <Box sx={{ mb: 2 }}>{playerNotice}</Box>}
+      {deepLinkPlayChip && <Box sx={{ mb: 1.5 }}>{deepLinkPlayChip}</Box>}
       {segmentList}
       {findPanel}
       {namePanel}

@@ -131,6 +131,7 @@ import { HomeHero } from '../components/home/HomeHero';
 import { HomeSkeleton } from '../components/home/HomeSkeleton';
 import { InProgressSection } from '../components/home/InProgressSection';
 import { JourneyEmptyState } from '../components/home/JourneyEmptyState';
+import { KnowledgeSection } from '../components/home/KnowledgeSection';
 import { NeedsAttention } from '../components/home/NeedsAttention';
 import { RecentNotes } from '../components/home/RecentNotes';
 import { RecentTranscripts } from '../components/home/RecentTranscripts';
@@ -356,6 +357,10 @@ export default function HomePage() {
                 isLoading={notes.isLoading}
               />
             )}
+            {/* Knowledge (#373, spec §13) — the graph's entry point, since it
+                has no bottom-bar tab. Renders nothing without `graph:read` or
+                an entity to show, and never an error box. */}
+            <KnowledgeSection />
             <SharedWithMe items={sharedWithMe} />
           </>
         )}

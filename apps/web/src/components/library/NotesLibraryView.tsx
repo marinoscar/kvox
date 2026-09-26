@@ -68,6 +68,7 @@ import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { NoteStatusChip } from '../notes/NoteStatusChip';
 import { SearchResultsView } from '../search/SearchResultsView';
+import { EntitySearchHits } from '../graph/EntitySearchHits';
 import { usePermissions } from '../../hooks/usePermissions';
 import { isNoteInFlight, useNotes } from '../../hooks/useNotes';
 import { useSearch } from '../../hooks/useSearch';
@@ -366,6 +367,11 @@ export function NotesLibraryView() {
       )}
 
       {searchMode ? (
+        <>
+        {/* Knowledge-graph entity hits (#373) ABOVE the ranked results. Renders
+            nothing without `graph:read`, with no hits, or on any graph error —
+            library search never depends on the graph. */}
+        <EntitySearchHits query={search} />
         <SearchResultsView
           type="note"
           query={search}
@@ -374,6 +380,7 @@ export function NotesLibraryView() {
           onOpen={(result: SearchResult) => navigate(`/notes/${result.id}`)}
           unappliedStatusFilter={status !== 'all'}
         />
+        </>
       ) : (
         <>
         {error && (
