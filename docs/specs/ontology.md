@@ -2762,6 +2762,70 @@ where: { ownerId } })`, messages by cascade), then enqueues `kg.purge` for the
 conversations through `ask_conversations.owner_id` Cascade instead.
 `GET /api/user-data/summary` reports `askConversations: { count }`.
 
+### 21.7 The toolset, as shipped (#377)
+
+`apps/api/src/ask/tools/` — `AskToolset` (exported by `AskToolsModule`, which
+imports only `GraphModule`, `SearchModule` and `PrismaModule`) holds seven
+tools, each a fixed, parameterized read shape with a Zod `input` and a
+strict-mode JSON Schema `parameters` (`type: 'object'`,
+`additionalProperties: false`, every property in `required`, optional ones
+`[T, 'null']`, no bounds keywords — bounds are in the description and
+enforced by Zod). `definitions()` lists them in this order, which #378's
+prompts and #382's evals name:
+
+| Tool | Parameters (`null` = default) | Reads | Returns |
+|---|---|---|---|
+| `search` | `query` (1–200), `scope` `all`\|`entities`\|`documents`, `limit` 1–10 (5) | `GraphReadService.listEntities({ q })` **and** `SearchService.search({ types: 'transcript,note' })` — both legs on every call (§9.4); `scope` only shortens the other leg to 3 | `{ entities: [{ ref, type, label, aliases }], documents: [{ ref, kind, title, excerpt, at, startMs }] }` |
+| `get_entity` | `entity` | `GraphReadService.getEntity` + the effective schema | `{ ref, type, label, aliases, attributes: { <label>: value }, counts: { relations, commitments, decisions, claims, openCommitments }, firstSeen, lastSeen }` |
+| `neighbors` | `entity`, `hops` 1\|2 (1), `types[]`, `relationTypes[]`, `asOf`, `limit` 1–50 (25) | `GraphNeighborhoodService.neighborhood` | `{ asOf, nodes: [{ ref, kind, type, label, depth }], edges: [{ ref\|null, type, from, to, validFrom, validTo, precision? }], truncated }` |
+| `timeline` | `entity`, `asOf`, `kinds[]`, `limit` 1–25 (15) | `GraphReadService.timeline`, never `includeSensitive` | `[{ ref, event, text, status, superseded, at, precision?, evidence: [{ ref, quote }] ≤ 2 }]` |
+| `evidence` | `subject` (`ent`/`itm`/`rel`), `limit` 1–10 (5) | `GraphEvidenceService.listForSubject` (owner-scoped, newest source first) | `[{ ref, quote, source: { kind: transcript\|note\|import, title, at, startMs }, available }]` |
+| `entity_brief` | `entity`, `since`, `asOf` | `EntityBriefService.getBrief(…, { markViewed: false, enqueueStaleDigest: false })` | `{ window, digest: [{ text, evidence }] \| null, digestStale, digestGeneratedAt, whatChanged, decisions, openCommitments: { theirs, yours }, risksClaims, peopleChanges }` |
+| `list_commitments` | `entity`, `direction` `owned_by`\|`owed_to`\|`any`, `status` `open`\|`done`\|`dropped`\|`superseded`\|`any` (open), `dueBefore`, `limit` 1–25 (15) | one owner-scoped `kg_items` query, `due_at ASC NULLS LAST, occurred_at DESC` | `[{ ref, statement, status, due, owner, counterparty, madeOn, evidence }]` |
+
+A neighbourhood edge carries a `rel` ref only when it is a stored relation
+(citable, with evidence); a derived item-column edge (`virtual`) has
+`ref: null`.
+
+**Handles, not ids.** No tool result contains a uuid. Every id a tool reads is
+registered in the turn's `HandleRegistry` (`handle-registry.ts`, pure) as
+`ent<n>`, `itm<n>`, `rel<n>`, `ev<n>` or `doc<n>` — per-kind counters, the
+same `(kind, id)` (plus `startMs` for a `doc`) always the same handle — and a
+handle resolves only if this turn issued it (`/^(ent|itm|rel|ev|doc)[1-9]\d*$/`,
+strict). The model passes handles back into tool calls and cites them as
+`[^ev7]`; `toJSON()` is what #378 persists to map citations back to ids. All
+five kinds are citable; #378 resolves `itm`/`rel` to their first evidence row.
+Dates are `YYYY-MM-DD`, with `precision` only when it is not `day`; quotes are
+cut at 300 characters, statements at 400.
+
+**Owner scoping and sensitivity are enforced in every tool, not the prompt.**
+Every service call receives the caller; every direct query carries
+`owner_id = ctx.user.id`, so even a handle forged to another owner's id
+returns nothing (`test/ask/ask-tools.db.spec.ts`). A `sensitive` PersonFact
+never appears in any field of any tool; a `personal` (or unclassified) one only
+when `ctx.personalFactsAllowed` — §14's opt-in, resolved through
+`GraphPreferencesService` and **always false** until that preference exists
+(`personalFactsAllowedFor`; `graph.domains.personal` is not consent). The same
+rule filters attributes by their definition's sensitivity in `get_entity`.
+Only readable rows (`readable.ts`) are returned; `timeline` keeps superseded
+items, flagged. No tool depends on a write service, and `entity_brief` neither
+moves the viewer's last-viewed marker nor enqueues a digest — the summary says
+"summary may be out of date" when the stored digest is stale.
+
+**Execution never throws for a model mistake.** `execute(ctx, name,
+argumentsJson)` answers `{ ok: false, error, json }` with a short readable
+message for an unknown tool, malformed or over-long JSON, a Zod failure (paths
+only, never the rejected values), an unissued or wrong-kind handle
+(`"Unknown entity reference ent9. Use search first."`), and a 4xx or graph
+statement-timeout 503 from a read service; anything else is a bug and
+propagates. A successful result is serialised as the tool message (`{ ...data,
+truncated }`, or `{ items, truncated }` for a list) and held to
+`ASK_TOOL_RESULT_MAX_TOKENS = 3000`, counted with the resolved model's
+`countTokens` (a conservative character estimate when none is given): over
+budget, the longest array is halved until it fits and `truncated: true` is set
+— always valid JSON. Each call is logged at debug as `{ tool, ok, resultCount,
+truncated, ms }`, never its arguments or result.
+
 ## 22. Visualization — explorer and overview
 
 Two views, one underlying graph model, deliberately not one: §13's
