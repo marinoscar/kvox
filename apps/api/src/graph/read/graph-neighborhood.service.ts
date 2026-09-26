@@ -86,7 +86,7 @@ interface WalkRow {
   walk_rows: bigint | number;
 }
 
-interface EdgeRow {
+export interface EdgeRow {
   id: string;
   type: string;
   source: string;
@@ -407,32 +407,39 @@ export class GraphNeighborhoodService {
           AND i.kind IN ${literalList(v.kinds)} AND ${this.itemOk('i', opts.asOf)}`);
     }
     const rows = await tx.$queryRaw<EdgeRow[]>`${Prisma.join(parts, ' UNION ALL ')}`;
-
-    // A stored relation with the same (type, from, to) wins over a derived one.
-    const stored = new Set(rows.filter((r) => !r.virtual).map((r) => `${r.type}|${r.source}|${r.target}`));
-    const seen = new Set<string>();
-    const edges: GraphEdge[] = [];
-    for (const r of rows) {
-      if (r.virtual && stored.has(`${r.type}|${r.source}|${r.target}`)) continue;
-      if (seen.has(r.id)) continue;
-      seen.add(r.id);
-      edges.push({
-        id: r.virtual ? virtualEdgeId(r.source, r.type) : r.id,
-        type: r.type,
-        source: r.source,
-        target: r.target,
-        valid: edgeValid(r),
-        confidence: r.confidence === null ? null : Number(r.confidence),
-        virtual: r.virtual,
-      });
-    }
-    return edges.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return mergeEdgeRows(rows);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Edge rows → wire edges: a stored relation with the same `(type, from, to)`
+ * as a derived one wins, every id appears once, sorted by id.
+ */
+export function mergeEdgeRows(rows: readonly EdgeRow[]): GraphEdge[] {
+  const stored = new Set(rows.filter((r) => !r.virtual).map((r) => `${r.type}|${r.source}|${r.target}`));
+  const seen = new Set<string>();
+  const edges: GraphEdge[] = [];
+  for (const r of rows) {
+    if (r.virtual && stored.has(`${r.type}|${r.source}|${r.target}`)) continue;
+    const id = r.virtual ? virtualEdgeId(r.source, r.type) : r.id;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    edges.push({
+      id,
+      type: r.type,
+      source: r.source,
+      target: r.target,
+      valid: edgeValid(r),
+      confidence: r.confidence === null ? null : Number(r.confidence),
+      virtual: r.virtual,
+    });
+  }
+  return edges.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
 
 /** Item title, or the first 80 characters of its statement. */
 export function itemLabel(title: string | null, statement: string): string {
