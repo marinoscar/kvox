@@ -42,6 +42,7 @@ interface Harness {
     transcript: { findMany: jest.Mock; updateMany: jest.Mock };
     noteTemplate: { findMany: jest.Mock };
     storageObject: { findMany: jest.Mock };
+    askConversation: { deleteMany: jest.Mock };
     job: { findMany: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
@@ -69,6 +70,8 @@ function harness(): Harness {
     },
     noteTemplate: { findMany: jest.fn().mockResolvedValue([]) },
     storageObject: { findMany: jest.fn().mockResolvedValue([]) },
+    // #376: the `ask` category — one inline deleteMany, messages cascade.
+    askConversation: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     // The `enqueuePurges` live-job dedup check — "nothing already covers
     // this id" unless a test says otherwise.
     job: { findMany: jest.fn().mockResolvedValue([]) },

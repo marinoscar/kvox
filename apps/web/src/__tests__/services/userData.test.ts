@@ -207,6 +207,7 @@ describe('getUserDataSummary', () => {
       noteTemplates: { count: 0 },
       credentials: { aiKeys: 0, accessTokens: 0 },
       graph: { entities: 3, items: 5 },
+      askConversations: { count: 4 },
       activeDeletion: null,
     };
     server.use(

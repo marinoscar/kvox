@@ -57,6 +57,7 @@ function emptySummary(overrides: Partial<UserDataSummary> = {}): UserDataSummary
     noteTemplates: { count: 0 },
     credentials: { aiKeys: 0, accessTokens: 0 },
     graph: { entities: 0, items: 0 },
+    askConversations: { count: 0 },
     activeDeletion: null,
     ...overrides,
   };

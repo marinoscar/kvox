@@ -74,6 +74,7 @@ describe('UserDataService', () => {
     personalAccessToken: { count: jest.Mock };
     kgEntity: { count: jest.Mock };
     kgItem: { count: jest.Mock };
+    askConversation: { count: jest.Mock };
     job: { findFirst: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
@@ -91,6 +92,7 @@ describe('UserDataService', () => {
       personalAccessToken: { count: jest.fn().mockResolvedValue(0) },
       kgEntity: { count: jest.fn().mockResolvedValue(0) },
       kgItem: { count: jest.fn().mockResolvedValue(0) },
+      askConversation: { count: jest.fn().mockResolvedValue(0) },
       job: { findFirst: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
