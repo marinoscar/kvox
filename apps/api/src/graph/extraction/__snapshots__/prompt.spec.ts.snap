@@ -1,0 +1,75 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`assembleExtractionPrompt (#363) matches the snapshot of a small context 1`] = `
+{
+  "systemPrompt": "You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.
+
+## Rules
+1. Cite only ids you were given: \`s#\` for a transcript line, \`N\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.
+2. Never propose a row you cannot cite.
+3. When a mention is one of the known entities, use its \`k#\` id as \`ref\` (or as an endpoint). Otherwise give it a new ref \`e1\`, \`e2\`, … and use that ref in relations and facts. The meeting itself is \`meeting\`.
+4. Use only the entity types, relation types and attributes listed below — no others, and never a generic RELATED_TO. Leave an attribute null when the source does not state it.
+5. A Commitment needs an owner named or clearly implied by the source; otherwise it is not a Commitment.
+6. A reversed decision is a new Decision; never restate the earlier one as changed.
+7. Resolve relative dates ("next Friday", "in Q2") against the meeting date 2026-03-02. Dates are YYYY-MM-DD. When the source is not precise about a date, write \`precision: "unknown"\` (and null dates) rather than guessing.
+8. Mark a person fact's \`sensitivity\` honestly: \`sensitive\` means health, legal, financial or similarly weighty personal information.
+9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type's disambiguation lines below; put recurring topics in \`meeting.topics\` instead.
+
+## Entity types
+
+### Person (Person)
+A human being: one specific, individual person named or unambiguously identified in the source.
+- Never a role ("the CIO"), never a team, never an organization acting collectively.
+- Positive: "Sarah Chen"; "the Acme CIO whose name was given as Marcus Webb."
+- Negative: "the data team at EY" is an Organization, or a Person if and only if one specific human is meant.
+- Negative: "whoever's on call" names no specific human, so there is nothing to create.
+
+### Organization (Organization)
+A company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision.
+- Positive: "EY" (a company); "the data team at EY" when a commitment is owed to that team specifically rather than to an individual within it.
+- Negative: a team mentioned only in passing, with no commitment or decision naming it as a party, is not an Organization; do not create one speculatively.
+- Never a single human being acting for the organization: that is a Person.
+Attributes:
+- website (url): The organization's website address, only if the source states it explicitly.
+
+### Claim (Claim)
+A dated statement of fact about an entity that is neither a decision nor a commitment, e.g. "the budget was cut 20%" or "the pilot moved to Q2".
+- A choice that was made is a Decision, not a Claim.
+- A task with an owner is a Commitment, not a Claim.
+- A fact about a Person as an individual rather than about their work is a PersonFact.
+
+### Person fact (PersonFact)
+A statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style.
+- A fact about the person's job, employer or role is a Claim (or a relation), not a PersonFact.
+- Health, legal, financial or similarly weighty personal information is sensitive and must be marked so.
+
+## Relation types
+(none — propose no relations)
+
+## Fact kinds
+- claim (Claim): A dated statement of fact about an entity that is neither a decision nor a commitment.
+- person_fact (PersonFact): A statement about a person as an individual (an interest, preference, personal detail or communication style), never about their job. Mark \`sensitivity\` honestly: \`sensitive\` for health, legal, financial or similarly weighty information, \`personal\` otherwise, \`business\` only when it is work-relevant.",
+  "userContent": "# Meeting
+Date: 2026-03-02
+Title: Pilot kickoff call
+Context: Kickoff with Northwind about the pilot.
+
+# Known entities
+k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Northwind Robotics
+
+# Speakers
+A = Sarah Chen (k1)
+B = unidentified
+
+# Note (version 2)
+# Pilot kickoff
+
+Sarah Chen (Northwind Robotics) sponsors the pick-path pilot.
+
+- Decision: use Postgres.
+- Sarah will send the updated proposal by Friday.
+
+# Transcript
+s1 [00:00:00] Sarah Chen: Hi everyone, I'm Sarah Chen, VP of Operations at Northwind Robotics.",
+}
+`;

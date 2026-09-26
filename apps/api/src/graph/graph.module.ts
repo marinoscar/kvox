@@ -13,6 +13,7 @@ import { GraphEntitiesService } from './graph-entities.service';
 import { GraphController } from './graph.controller';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
+import { GraphPreferencesService } from './preferences/graph-preferences.service';
 import { KgPurgeService } from './purge/kg-purge.service';
 import { GraphEvidenceService } from './read/graph-evidence.service';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service';
@@ -50,6 +51,8 @@ import { GraphWriteService } from './write/graph-write.service';
   imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, NotesModule],
   providers: [
     GraphAccessService,
+    // #369 — the `graph` user-settings namespace, resolved with defaults.
+    GraphPreferencesService,
     GraphOntologyService,
     EvidenceValidator,
     GraphWriteService,
@@ -73,6 +76,7 @@ import { GraphWriteService } from './write/graph-write.service';
   exports: [
     GraphAccessService,
     GraphOntologyService,
+    GraphPreferencesService,
     EvidenceValidator,
     GraphWriteService,
     GraphReadService,

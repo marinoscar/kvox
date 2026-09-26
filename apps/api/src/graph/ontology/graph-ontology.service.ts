@@ -12,10 +12,10 @@
 // ALL of them including deprecated ones: a deprecated attribute is still
 // readable on existing rows, and the payload flags it rather than hiding it.
 //
-// THE `enabledDomains` SEAM. Which domains a user has switched on is not
-// persisted yet; until #369 adds the user-settings storage, everybody gets
-// `DEFAULT_ENABLED_DOMAINS` (`core`, `work`). #369 replaces ONLY the protected
-// `enabledDomains()` method — nothing else in this file needs to change.
+// THE `enabledDomains` SEAM. Which domains a user has switched on is the
+// `graph.domains` user-settings preference (#369), read through
+// `GraphPreferencesService` — absent means the defaults (`core`, `work`).
+// `core` is always included.
 //
 // NOT GATED ON `ai.graphEnabled`: reading one's own schema is not an AI call.
 // That flag gates AI-spending actions (#360), and turning AI off must never
@@ -28,7 +28,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   computeEffectiveSchema,
-  DEFAULT_ENABLED_DOMAINS,
   toEffectiveSchemaPayload,
   type AttributeOptions,
   type DomainKey,
@@ -39,6 +38,8 @@ import {
 import type { KgAttributeDef } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { enabledDomainKeys } from '../preferences/graph-preferences.defaults';
+import { GraphPreferencesService } from '../preferences/graph-preferences.service';
 
 /** Maps one `kg_attribute_defs` row to the shared package's plain-data shape. */
 export function toUserAttributeDef(row: KgAttributeDef): UserAttributeDef {
@@ -59,7 +60,10 @@ export function toUserAttributeDef(row: KgAttributeDef): UserAttributeDef {
 
 @Injectable()
 export class GraphOntologyService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly preferences: GraphPreferencesService,
+  ) {}
 
   /** The caller's resolved, frozen effective schema. */
   async effectiveSchemaFor(userId: string): Promise<EffectiveSchema> {
@@ -86,10 +90,9 @@ export class GraphOntologyService {
    * The domains this user has switched on. `core` is forced in by
    * `computeEffectiveSchema` regardless.
    *
-   * ⚠ THE SEAM #369 REPLACES with the persisted `graph.domains` preference.
-   * Until then: the defaults, for everybody.
+   * The persisted `graph.domains` preference (#369), `core` always first.
    */
-  protected async enabledDomains(_userId: string): Promise<DomainKey[]> {
-    return [...DEFAULT_ENABLED_DOMAINS];
+  protected async enabledDomains(userId: string): Promise<DomainKey[]> {
+    return enabledDomainKeys(await this.preferences.get(userId));
   }
 }

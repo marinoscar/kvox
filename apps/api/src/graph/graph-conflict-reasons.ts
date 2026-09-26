@@ -38,6 +38,8 @@ export const GRAPH_CONFLICT_REASONS = {
   REVERT_CONFLICT: 'revert_conflict',
   /** The resolved model cannot do what this task needs (e.g. structured output). */
   MODEL_LACKS_CAPABILITY: 'model_lacks_capability',
+  /** The note is not `ready` (still generating, failed, …) — #363. */
+  NOTE_NOT_READY: 'note_not_ready',
 } as const;
 
 export type GraphConflictReason =

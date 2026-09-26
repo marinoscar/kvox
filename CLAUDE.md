@@ -896,7 +896,7 @@ to all three roles; owner-only, and **404, never 403**, for any graph row the ca
 transcript share never grants graph access. See [`docs/API.md`](docs/API.md#graph) and
 [`docs/specs/ontology.md`](docs/specs/ontology.md).
 - `GET /api/graph/ontology` - The caller's **effective ontology**: `core` + enabled domains
-  (`core`,`work` by default until #369 persists the choice) + mixins + their own
+  (the caller's `graph.domains` preference, #369; `core`,`work` by default) + mixins + their own
   `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
   generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
   is not an AI call
@@ -952,6 +952,19 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
 - `GET /api/graph/evidence?ids=` - Batch-resolve up to 50 citation ids in request order for a row
   of citation chips (issue #370, additive to the original route list); unknown ids are silently
   omitted (`graph:read`)
+- `POST /api/graph/notes/{noteId}/extract` - Extract a **draft proposal** from one of your notes
+  (issue #363): creates the proposal (`status: extracting`) **and** queues `kg.extract` in one
+  transaction; **202** with the proposal and a cost `estimate`. Optional `model` (a permitted
+  override of the `graph.extract` task model) and `userGuidance` (`pinnedEntityIds`,
+  `entityTypes`, `relationTypes`, `instructions`). 400 unpermitted model /
+  `details.unknownTypes` / `details.invalidPinnedIds` / over budget with the numbers; 404 not
+  your note (one message for missing, deleted, not yours); 409 `graph_disabled`,
+  `ai_not_configured`, `ai_key_missing`, `model_lacks_capability`, `extraction_running` (decided
+  by `kg_proposals_note_extracting_uniq_idx` at insert, never a lookup first), `note_not_ready`.
+  A ready note is also extracted automatically once, when the graph switch, the owner's
+  `graph:write` and their `extraction.autoExtract` preference all allow it (`graph:write`)
+- `GET /api/graph/extract/estimate?noteId&model` - What that extraction would cost, counted over
+  the exact prompt (guidance excluded); no key needed — `keyConfigured` reports it (`graph:read`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -1047,7 +1060,10 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `### Onboarding` above and [`docs/specs/onboarding.md`](docs/specs/onboarding.md)). Absent from
   `DEFAULT_USER_SETTINGS` on purpose: absent is how "never onboarded" is spelled. Guarded by
   `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the six-file parity check user
-  settings never had before this namespace
+  settings never had before this namespace. Also `graph` (issue #369): per-user connected-knowledge
+  preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
+  adjudication}`, `domains.work` — absent means every default, resolved by
+  `GraphPreferencesService`; see `docs/specs/ontology.md` §10
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
 - `allowed_emails` - Allowlist for access control. `reminder_count`/`last_reminder_at` (issue
@@ -2102,10 +2118,18 @@ at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. The only `kg.*` job handlers so far are `kg.purge` (#357) and
-`kg.speaker_link` (#356); every other type in `apps/api/src/graph/job-types.ts`
-is still only a constant. There are no extraction/review/commit or
-whole-graph-overview routes yet, and no graph UI.
+above. The only `kg.*` job handlers so far are `kg.purge` (#357),
+`kg.speaker_link` (#356) and `kg.extract` (#363 — one structured-output call per
+note on the owner's own key, producing a **draft proposal**, never graph rows;
+server-only, `maxAttempts: 1`, throttled per user, priority −5, auto-enqueued by
+`NoteGenerationService.commit()` for a ready note); every other type in
+`apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
+`apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
+`NotesModule` for the hook — one-way: it provides the two note services it needs
+itself), with the proposal payload contract later issues import in
+`graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
+#364/#365 plug their stages into. The read layer (#370) is built; there are
+still no review/commit or whole-graph-overview routes, and no graph UI.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph

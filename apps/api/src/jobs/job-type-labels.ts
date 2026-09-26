@@ -151,6 +151,9 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // Connected knowledge (epic #344). `kg.speaker_link` (#356) is the
   // speaker-naming write into the owner's graph.
   'kg.speaker_link': 'Link named speakers to people',
+  // `kg.extract` (#363): one structured-output call per note that proposes
+  // graph rows for review, on the note owner's own AI key.
+  'kg.extract': 'Knowledge graph extraction',
 };
 
 /**

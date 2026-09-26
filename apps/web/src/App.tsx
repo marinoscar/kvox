@@ -77,6 +77,7 @@ const UserNoteTemplatesPage = lazy(() => import('./pages/UserNoteTemplatesPage')
 // spends the USER'S own AI provider account, which is why this is a per-user
 // destination and why there is no admin equivalent and no backfill cron.
 const UserSearchIndexPage = lazy(() => import('./pages/UserSearchIndexPage'));
+const UserKnowledgeGraphPage = lazy(() => import('./pages/UserKnowledgeGraphPage'));
 // Issue #279, epic #271 — the caller's own activation checklist, and the place
 // the shell banner (#277) leads. A registry card in `userSettingsSections.tsx`
 // like every sibling above, and ungated here for the same reason they are.
@@ -450,6 +451,22 @@ function AppRoutes() {
                       this user saved a key — which is checked in the page and
                       is not an authorization. */}
                   <Route path="/settings/search-index" element={<UserSearchIndexPage />} />
+                  {/* Issue #369, epic #346. The ONE gated `/settings/*` route,
+                      and the gate is the exact string the API enforces:
+                      `graph:write` on the attribute-definition write routes
+                      (Settings UI rule 3, docs/specs/ontology.md §13). The
+                      registry card carries the same string. */}
+                  <Route
+                    path="/settings/knowledge-graph"
+                    element={
+                      <RequirePermission
+                        permission="graph:write"
+                        fallback={<Navigate to="/settings" replace />}
+                      >
+                        <UserKnowledgeGraphPage />
+                      </RequirePermission>
+                    }
+                  />
                   <Route path="/settings/tokens" element={<UserTokensPage />} />
                   {/* Issue #80. Ungated like every `/settings/*` sibling, and
                       with the same reason `/settings/ai` carries:

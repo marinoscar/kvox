@@ -138,6 +138,12 @@ export interface AiConfig {
   maxOutputTokens: number;
   /** Whether **the calling user** has saved a key for the active provider. */
   keyConfigured: boolean;
+  /**
+   * Whether connected knowledge may run on this deployment (#360). Optional
+   * here because older fixtures omit it; `undefined` is read as "unknown",
+   * never as "off".
+   */
+  graphEnabled?: boolean;
 }
 
 // =============================================================================

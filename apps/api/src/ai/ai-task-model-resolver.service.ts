@@ -81,6 +81,23 @@ export interface AiModelResolution {
   descriptor: AiConfigModel;
   policy: SystemAiValue;
   source: 'requested' | 'task' | 'default';
+  /**
+   * Whether the caller has saved a key for this provider. Always `true` from
+   * a default `resolve()`, which refuses otherwise; meaningful only when the
+   * caller passed `{ requireKey: false }` (an estimate, which counts tokens
+   * without spending any — #363).
+   */
+  keyConfigured: boolean;
+}
+
+/** Options for {@link AiTaskModelResolver.resolve}. */
+export interface ResolveTaskModelOptions {
+  /**
+   * Default `true`. `false` skips ONLY the `ai_key_missing` refusal, for a
+   * caller that never calls the provider (a token estimate, #363) — every
+   * other check still applies, in the same order.
+   */
+  requireKey?: boolean;
 }
 
 /** The two refusal sentences a `resolveForGeneration` caller supplies. */
@@ -109,6 +126,7 @@ export class AiTaskModelResolver {
     userId: string,
     task: AiTaskKey,
     requested?: string | null,
+    options: ResolveTaskModelOptions = {},
   ): Promise<AiModelResolution> {
     const definition = taskDefinition(task);
     const policy = await this.settings.get();
@@ -130,7 +148,7 @@ export class AiTaskModelResolver {
 
     if (!config.available || !config.provider) throw notConfigured();
 
-    if (!config.keyConfigured) {
+    if (!config.keyConfigured && options.requireKey !== false) {
       throw new ConflictException({
         message: `You have not saved an AI API key. ${definition.label} runs on your own provider account, so it needs your key. Add one in your settings and try again.`,
         details: { reason: AI_CONFLICT_REASONS.AI_KEY_MISSING },
@@ -261,6 +279,7 @@ export class AiTaskModelResolver {
     const descriptor = config.models.find((entry) => entry.id === model)!;
 
     return {
+      keyConfigured: config.keyConfigured,
       providerId: provider.id,
       provider,
       model,
