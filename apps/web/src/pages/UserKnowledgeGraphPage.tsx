@@ -141,7 +141,13 @@ export default function UserKnowledgeGraphPage() {
     if (ok) void refreshOntology();
   }
 
-  const domainKeys: DomainKey[] = ontology?.domains.map((d) => d.key) ?? FALLBACK_DOMAINS;
+  // The ontology's registered domains, plus any of the three known ones it
+  // does not register yet — `personal` ships with #383, but its switch is
+  // shown (disabled) now so the choice is visibly coming.
+  const domainKeys: DomainKey[] = [
+    ...(ontology?.domains.map((d) => d.key) ?? []),
+    ...FALLBACK_DOMAINS,
+  ].filter((key, index, all) => all.indexOf(key) === index);
 
   return (
     <Container maxWidth="md" sx={{ py: { xs: 2, md: 4 } }}>
@@ -343,7 +349,12 @@ export default function UserKnowledgeGraphPage() {
                     edge="end"
                     checked={checked}
                     disabled={disabled}
-                    slotProps={{ input: { 'aria-labelledby': labelId } }}
+                    slotProps={{
+                      input: {
+                        'aria-labelledby': labelId,
+                        'aria-describedby': `${labelId}-caption`,
+                      },
+                    }}
                     onChange={(event) => {
                       if (key !== 'work') return;
                       if (!event.target.checked) setConfirmWorkOff(true);
@@ -352,7 +363,10 @@ export default function UserKnowledgeGraphPage() {
                   />
                 }
               >
-                <ListItemText id={labelId} primary={copy.label} secondary={caption} />
+                <ListItemText
+                  primary={<span id={labelId}>{copy.label}</span>}
+                  secondary={<span id={`${labelId}-caption`}>{caption}</span>}
+                />
               </ListItem>
             );
           })}
