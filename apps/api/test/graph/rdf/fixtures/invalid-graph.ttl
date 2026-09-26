@@ -1,0 +1,46 @@
+# A hand-written graph that VIOLATES the generated SHACL shapes (#385) in
+# exactly four ways, one per node, each otherwise valid:
+#
+#   1. an orphan — a Person citing no source (no prov:wasDerivedFrom);
+#   2. a select value outside its choices — Project status "paused";
+#   3. an undeclared property on a closed shape — kv:Organization.revenue;
+#   4. a relation to the wrong class — WORKS_FOR pointing at a Person.
+#
+# Written against the fixture namespace `https://fixture.app/ns#`.
+
+@prefix kv: <https://fixture.app/ns#> .
+@prefix ent: <https://fixture.app/ns#entity/> .
+@prefix seg: <https://fixture.app/ns#segment/> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# 1. Orphan.
+ent:f0000000-0000-4000-8000-000000000001
+    a kv:Person ;
+    rdfs:label "Nobody cited this" .
+
+# 2. Select value outside sh:in.
+ent:f0000000-0000-4000-8000-000000000002
+    a kv:Project ;
+    rdfs:label "Paused project" ;
+    kv:Project.status "paused" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+# 3. Closed-shape violation.
+ent:f0000000-0000-4000-8000-000000000003
+    a kv:Organization ;
+    rdfs:label "Globex" ;
+    kv:Organization.revenue "12M" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+# 4. Endpoint of the wrong class.
+ent:f0000000-0000-4000-8000-000000000004
+    a kv:Person ;
+    rdfs:label "Joe" ;
+    kv:WORKS_FOR ent:f0000000-0000-4000-8000-000000000005 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+ent:f0000000-0000-4000-8000-000000000005
+    a kv:Person ;
+    rdfs:label "Jane" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
