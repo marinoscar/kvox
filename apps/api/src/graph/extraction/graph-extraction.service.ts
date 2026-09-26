@@ -124,7 +124,8 @@ export class GraphExtractionService {
 
   async request(user: RequestUser, noteId: string, dto: RequestExtractionDto): Promise<RequestExtractionResponse> {
     const note = await this.requireOwnNote(user.id, noteId);
-    if (note.status !== 'ready') {
+    // A ready note always has a version; one without is not extractable yet.
+    if (note.status !== 'ready' || note.currentVersion < 1) {
       throw new ConflictException({
         message: NOTE_NOT_READY_MESSAGE,
         details: { reason: GRAPH_CONFLICT_REASONS.NOTE_NOT_READY },
@@ -226,7 +227,9 @@ export class GraphExtractionService {
     }
 
     const note = await this.prisma.note.findUnique({ where: { id: noteId } });
-    if (!note || note.ownerId !== ownerId || note.deletedAt !== null || note.status !== 'ready') return null;
+    if (!note || note.ownerId !== ownerId || note.deletedAt !== null || note.status !== 'ready' || note.currentVersion < 1) {
+      return null;
+    }
 
     try {
       const proposal = await this.createProposal({ userId: ownerId, note, resolution, guidance: null, reason: 'note_ready' });
