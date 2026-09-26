@@ -147,6 +147,19 @@ const DRILL_DOWN_ROUTES: {
     title: 'Note',
     upPath: () => '/notes',
   },
+  // Knowledge graph (#373). MOST SPECIFIC FIRST. The title stays static, like
+  // `Transcript` — the page's own <h1> names the entity. Up from the index is
+  // Home, because `home` owns `/graph` (config/destinations.ts).
+  {
+    pattern: /^\/graph\/entities\/([^/]+)\/?$/,
+    title: 'Knowledge',
+    upPath: () => '/graph',
+  },
+  {
+    pattern: /^\/graph\/?$/,
+    title: 'Knowledge',
+    upPath: () => '/',
+  },
 ];
 
 interface DrillDown {

@@ -53,6 +53,9 @@ const TranscriptHistoryPage = lazy(() => import('./pages/TranscriptHistoryPage')
 const NewNotePage = lazy(() => import('./pages/NewNotePage'));
 const NotePage = lazy(() => import('./pages/NotePage'));
 const NoteHistoryPage = lazy(() => import('./pages/NoteHistoryPage'));
+// Knowledge graph (#373, epic #347).
+const GraphIndexPage = lazy(() => import('./pages/GraphIndexPage'));
+const GraphEntityPage = lazy(() => import('./pages/GraphEntityPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 // `User`-prefixed to make explicit that it edits the signed-in user's own
@@ -385,6 +388,34 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <NoteHistoryPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Knowledge graph (#373, epic #347; spec §13). OWNED BY
+                      `home` in `config/destinations.ts` — no bottom-bar tab of
+                      its own — and gated on `graph:read`, the exact string
+                      `graph-read.controller.ts` (#370) enforces. Seeded to all
+                      three roles, so the gate is here for the deployment that
+                      revokes it. */}
+                  <Route
+                    path="/graph"
+                    element={
+                      <RequirePermission
+                        permission="graph:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <GraphIndexPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/graph/entities/:id"
+                    element={
+                      <RequirePermission
+                        permission="graph:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <GraphEntityPage />
                       </RequirePermission>
                     }
                   />
