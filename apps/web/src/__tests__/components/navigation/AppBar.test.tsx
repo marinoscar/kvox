@@ -446,6 +446,27 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/transcripts/abc-123');
     });
 
+    it('shows Back + "Knowledge" on an entity page, going up to the graph index (#373)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/graph/entities/abc-123' } });
+
+      expect(screen.getByText('Knowledge')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/graph');
+    });
+
+    it('shows Back + "Knowledge" on the graph index, going up to Home (#373)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/graph' } });
+
+      expect(screen.getByText('Knowledge')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      // `home` owns `/graph`, so structural up is Home.
+      expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
     it('shows Back + "New transcript" on the create route', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);

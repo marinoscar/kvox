@@ -60,6 +60,9 @@ describe('destinations — route ownership', () => {
         '/notes/new',
         '/notes/:id',
         '/notes/:id/history',
+        // #373, epic #347 — the knowledge graph, owned by `home`.
+        '/graph',
+        '/graph/entities/:id',
         '/admin',
         '/admin/users',
         '/admin/settings',
@@ -128,6 +131,16 @@ describe('destinations — route ownership', () => {
         `${destination.path} should activate ${destination.key}`,
       ).toBe(destination.key);
     }
+  });
+});
+
+describe('destinations — the knowledge graph (#373)', () => {
+  it('lets `home` own every /graph route, with no bottom-bar tab of its own', () => {
+    expect(resolveActiveDestination('/graph')).toBe('home');
+    expect(resolveActiveDestination('/graph/entities/abc')).toBe('home');
+    expect(resolveActiveDestination('/graph/explore')).toBe('home');
+    expect(resolveActiveDestination('/graphs')).toBeNull();
+    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).not.toContain('/graph');
   });
 });
 
