@@ -1272,3 +1272,89 @@ export function extractBadRequest(err: unknown): ExtractBadRequest | null {
     budget,
   };
 }
+
+// =============================================================================
+// Whole-graph overview (#371) — used by #375's `/graph/overview`
+// =============================================================================
+//
+// Mirrors `apps/api/src/graph/layout/dto/graph-overview.dto.ts` field for
+// field. The server reads its latest STORED layout snapshot and joins labels
+// live (spec §15, §22.3): a forgotten or merged entity is dropped server-side,
+// so nothing here filters. Cluster ids are stable within ONE snapshot only —
+// never persist one beyond the URL of the current view.
+
+/** #371's cap on `nodes` (the top N by degree). */
+export const OVERVIEW_MAX_NODES = 5000;
+
+export interface GraphOverviewMember {
+  id: string;
+  label: string;
+  type: string;
+  degree: number;
+}
+
+export interface GraphOverviewCluster {
+  /** `-1` is "Unconnected": every isolated entity, pooled. */
+  id: number;
+  /** Live label of `labelEntityId`; else `Cluster <id + 1>`; `Unconnected` for `-1`. */
+  label: string;
+  labelEntityId: string | null;
+  /** Members at the time of the snapshot. */
+  size: number;
+  x: number;
+  y: number;
+  radius: number;
+  typeCounts: Record<string, number>;
+  /** Up to 8 members by degree. */
+  memberSample: GraphOverviewMember[];
+}
+
+export interface GraphOverviewClusterEdge {
+  a: number;
+  b: number;
+  weight: number;
+}
+
+export interface GraphOverviewNode {
+  id: string;
+  label: string;
+  type: string;
+  x: number;
+  y: number;
+  clusterId: number;
+  degree: number;
+}
+
+export interface GraphOverview {
+  /** `none`: no snapshot yet. */
+  status: 'ready' | 'none';
+  /** A `kg.graph_layout` job is pending or running for the caller. */
+  pending: boolean;
+  computedAt: string | null;
+  /** The graph changed after the snapshot read it. Reported, never auto-refreshed. */
+  stale: boolean;
+  /** Past the layout ceiling: no clusters or positions. */
+  tooLarge: boolean;
+  nodeCount: number;
+  edgeCount: number;
+  clusters: GraphOverviewCluster[];
+  clusterEdges: GraphOverviewClusterEdge[];
+  nodes: GraphOverviewNode[];
+  nodesTruncated: boolean;
+}
+
+export interface GraphOverviewRefreshResponse {
+  jobId: string;
+  /** `true` when a layout job was already pending or running; that job is returned. */
+  deduplicated: boolean;
+}
+
+/** `GET /api/graph/overview` (`graph:read`) — never recomputes. */
+export function getGraphOverview(signal?: AbortSignal): Promise<GraphOverview> {
+  return api.get<GraphOverview>('/graph/overview', { signal });
+}
+
+/** `POST /api/graph/overview/refresh` (`graph:write`) — 202, deduplicated. */
+export function refreshGraphOverview(): Promise<GraphOverviewRefreshResponse> {
+  return api.post<GraphOverviewRefreshResponse>('/graph/overview/refresh', {});
+}

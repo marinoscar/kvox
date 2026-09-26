@@ -2836,6 +2836,26 @@ straight to the explorer** (§22.2) as its seed set, so the transition from
 it" is one click, sharing the same graphology graph object (§22.1) rather
 than a second fetch.
 
+**As built (issue #375).** `/graph/overview` (`apps/web/src/pages/GraphOverviewPage.tsx`,
+owned by `home` through the `/graph` prefix, gated on `graph:read`) draws the stored snapshot
+through the explorer's own `GraphCanvas` with `layout="static"` — it never moves a node. The
+pure model is `apps/web/src/components/graph/overview/overviewModel.ts`: a **clusters** layer
+(one node per cluster at its centroid, sized by radius, labelled `Label (size)`, plus the
+`clusterEdges`) and an **everything** layer (every positioned node, ≤ 5,000, coloured by
+cluster, no edges — the positions carry the structure), switched by an explicit toggle
+(`?layer=`), never by zoom. Cluster colours are a deterministic twelve-colour palette built
+from theme tokens; `Unconnected` (`-1`) is neutral grey. Labels are the server's live labels
+(§5.7, §15) — nothing on the client renames a cluster. **Drill-down** is the hand-off this
+section describes: *Explore this cluster* puts up to 50 top-degree members (from `nodes`,
+topped up from `memberSample`) **at their overview positions** into the explorer's in-memory
+`explorerHandoff` and opens `/graph/explore?cluster=<id>`, which draws them at once and then
+expands them — no second fetch before the first frame. A cluster id is stable within one
+snapshot only, so it lives in the view's URL and nowhere else. A stale snapshot is reported,
+never refreshed on read; *Refresh* (`POST /api/graph/overview/refresh`) is offered only to
+`graph:write` holders, and the page polls every 10 s while a layout is pending, for at most
+15 minutes. `tooLarge` and an empty graph render a message and no canvas; a cluster list view
+(`?view=list`) is the accessible alternative and the only view without WebGL.
+
 ### 22.4 What neither view ever does
 
 Consistent with §9.4: neither the explorer nor the overview is ever the

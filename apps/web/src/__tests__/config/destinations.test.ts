@@ -65,6 +65,8 @@ describe('destinations — route ownership', () => {
         '/graph/entities/:id',
         // #374 — the explorer, owned by `home` through the `/graph` prefix.
         '/graph/explore',
+        // #375 — the whole-graph overview, likewise.
+        '/graph/overview',
         '/admin',
         '/admin/users',
         '/admin/settings',
@@ -141,6 +143,7 @@ describe('destinations — the knowledge graph (#373)', () => {
     expect(resolveActiveDestination('/graph')).toBe('home');
     expect(resolveActiveDestination('/graph/entities/abc')).toBe('home');
     expect(resolveActiveDestination('/graph/explore')).toBe('home');
+    expect(resolveActiveDestination('/graph/overview')).toBe('home');
     expect(resolveActiveDestination('/graphs')).toBeNull();
     expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).not.toContain('/graph');
   });

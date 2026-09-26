@@ -11,7 +11,8 @@ import { onboardingResponse } from './onboardingApi';
  *     #369, epic #346): ontology, the user's own attribute definitions and
  *     `GET /api/ai/config`.
  *   - `'pages'` — the `/graph` index and entity page (issue #373, epic #347),
- *     and the explorer's `POST /api/graph/explore/expand` (issue #374).
+ *     the explorer's `POST /api/graph/explore/expand` (issue #374) and the
+ *     whole-graph overview's `GET /api/graph/overview` (issue #375).
  *     Shapes mirror #370's read API and #372's brief (and
  *     `apps/web/src/services/graph.ts`, which mirrors those field for field).
  *
@@ -523,6 +524,116 @@ function cappedSlice() {
   return { seedIds: [JOE_ID], asOf: FIXED_ISO, nodes, edges, truncated: true, cap: 300 };
 }
 
+// =============================================================================
+// Whole-graph overview (#375) — `GET /api/graph/overview`, mirroring #371's
+// `graph-overview.dto.ts`. Positions are computed here by a fixed formula
+// (golden-angle rings around each cluster's centroid), never randomly, so the
+// same snapshot draws the same picture every run.
+// =============================================================================
+
+interface OverviewClusterSeed {
+  id: number;
+  label: string;
+  labelEntityId: string | null;
+  cx: number;
+  cy: number;
+  /** The best-connected members, by name, in degree order. */
+  named: [string, string][];
+  /** Everyone else, generated. */
+  rest: [string, number][];
+}
+
+const OVERVIEW_CLUSTER_SEEDS: OverviewClusterSeed[] = [
+  {
+    id: 0, label: 'Acme Corp', labelEntityId: ACME_ID, cx: -420, cy: 160,
+    named: [['Acme Corp', 'Organization'], ['Joe Rivera', 'Person'], ['Project Atlas', 'Project'], ['Ana Diaz', 'Person'], ['Q3 planning', 'Meeting'], ['Ben Okafor', 'Person']],
+    rest: [['Person', 12], ['Organization', 1], ['Project', 2], ['Meeting', 3]],
+  },
+  {
+    id: 1, label: 'Globex', labelEntityId: id(5), cx: 380, cy: -260,
+    named: [['Globex', 'Organization'], ['Carla Mendes', 'Person'], ['Weekly sync', 'Meeting']],
+    rest: [['Person', 8], ['Organization', 1], ['Meeting', 2]],
+  },
+  {
+    id: 2, label: 'Project Beacon', labelEntityId: id(11), cx: 420, cy: 360,
+    named: [['Project Beacon', 'Project'], ['Dana Li', 'Person']],
+    rest: [['Person', 5], ['Project', 1], ['Meeting', 2]],
+  },
+  {
+    id: 3, label: 'Initech', labelEntityId: id(10), cx: -180, cy: -420,
+    named: [['Initech', 'Organization']],
+    rest: [['Person', 5]],
+  },
+  { id: 4, label: 'Cluster 5', labelEntityId: null, cx: -760, cy: -180, named: [], rest: [['Person', 3], ['Organization', 1]] },
+  { id: -1, label: 'Unconnected', labelEntityId: null, cx: 820, cy: 40, named: [], rest: [['Person', 4], ['Organization', 1]] },
+];
+
+const OVERVIEW_GOLDEN = Math.PI * (3 - Math.sqrt(5));
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function buildOverview() {
+  const nodes: Array<{ id: string; label: string; type: string; x: number; y: number; clusterId: number; degree: number }> = [];
+  const clusters = OVERVIEW_CLUSTER_SEEDS.map((seed, clusterIndex) => {
+    const generated = seed.rest.flatMap(([type, count]) =>
+      Array.from({ length: count }, (_, k) => [`${type} ${clusterIndex + 1}-${k + 1}`, type] as [string, string]),
+    );
+    const roster = [...seed.named, ...generated];
+    const size = roster.length;
+    const typeCounts: Record<string, number> = {};
+    for (const [, type] of roster) typeCounts[type] = (typeCounts[type] ?? 0) + 1;
+    const radius = round2(20 * Math.sqrt(size));
+    const members = roster.map(([label, type], i) => {
+      const n = 60_000 + clusterIndex * 100 + i;
+      const degree = seed.id === -1 ? 0 : Math.max(1, size - i);
+      const spread = seed.id === -1 ? 60 : radius * 3.2;
+      const r = spread * Math.sqrt((i + 0.5) / size);
+      const node = {
+        id: i === 0 && seed.labelEntityId ? seed.labelEntityId : id(n),
+        label,
+        type,
+        x: round2(seed.cx + r * Math.cos(i * OVERVIEW_GOLDEN)),
+        y: round2(seed.cy + r * Math.sin(i * OVERVIEW_GOLDEN)),
+        clusterId: seed.id,
+        degree,
+      };
+      nodes.push(node);
+      return node;
+    });
+    return {
+      id: seed.id,
+      label: seed.label,
+      labelEntityId: seed.labelEntityId,
+      size,
+      x: seed.cx,
+      y: seed.cy,
+      radius,
+      typeCounts,
+      memberSample: members.slice(0, 8).map(({ id: memberId, label, type, degree }) => ({ id: memberId, label, type, degree })),
+    };
+  });
+  return {
+    status: 'ready',
+    pending: false,
+    computedAt: FIXED_ISO,
+    stale: false,
+    tooLarge: false,
+    nodeCount: nodes.length,
+    edgeCount: 142,
+    clusters,
+    clusterEdges: [
+      { a: 0, b: 1, weight: 6 },
+      { a: 0, b: 2, weight: 3 },
+      { a: 0, b: 3, weight: 4 },
+      { a: 1, b: 2, weight: 1 },
+      { a: 3, b: 4, weight: 2 },
+    ],
+    nodes,
+    nodesTruncated: false,
+  };
+}
+
+const OVERVIEW = buildOverview();
+
 /** The permissions a graph baseline runs with — a reader AND a writer. */
 export const GRAPH_PERMS = [
   'user_settings:read',
@@ -542,6 +653,8 @@ export interface GraphApiOptions {
   graphDisabled?: boolean;
   /** `'pages'`: every explorer expand answers with a 300-node slice (the cap). */
   explorerCapped?: boolean;
+  /** `'pages'`: the overview (#375) reports a stale snapshot. */
+  overviewStale?: boolean;
 }
 
 function json(route: Route, data: unknown) {
@@ -564,6 +677,17 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
       if (options.explorerCapped) return json(route, cappedSlice());
       const body = (route.request().postDataJSON() ?? {}) as { nodeIds?: string[]; cap?: number };
       return json(route, explorerSlice(body.nodeIds ?? [JOE_ID], body.cap ?? 100));
+    }
+
+    if (path === '/graph/overview') {
+      return json(route, { ...OVERVIEW, stale: Boolean(options.overviewStale) });
+    }
+    if (path === '/graph/overview/refresh') {
+      return route.fulfill({
+        status: 202,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { jobId: 'job-layout', deduplicated: false } }),
+      });
     }
 
     if (path === '/graph/entities') {
