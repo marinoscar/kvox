@@ -4785,6 +4785,20 @@ build has never heard of the model," which resolves automatically now.
 `GET /ai-settings/models` will work for that provider at all — a provider
 with no live model list still accepts any model id typed by hand.
 
+**Every model in the admin catalogue now also carries `structuredOutput:
+boolean`** (issue #358) — whether that model can return schema-constrained
+structured output (OpenAI strict JSON schema), which connected-knowledge
+extraction, adjudication, the entity digest and the brief all require.
+Unlike `contextWindowTokens`/`maxOutputTokens`, capability flags are
+resolved by the same per-model rank chain (exact catalogue hit → catalogue;
+derived family → the family's flag) but are **never** affected by an
+administrator's typed numbers on an `allowedModels` entry — there is no
+per-model flag override in v1. `providers[].capabilities.defaultModelFeatures`
+is the conservative floor applied when a model id can be placed in neither
+the catalogue nor a known family; it sits beside `defaultModelLimits` and is
+optional ("presence is the declaration") — when absent, an unplaceable id's
+flags all resolve to `false`.
+
 ---
 
 #### PUT /ai-settings
@@ -5073,6 +5087,14 @@ this field exists to prevent. The `contextWindowTokens`/`maxOutputTokens`
 values here are already narrowed by deployment policy (`Math.min` against
 `maxInputTokens`/`maxOutputTokens`) — that narrowing never changes `source`.
 
+**Each model also carries `structuredOutput: boolean` (issue #358)**: "Whether
+this model can return schema-constrained structured output (OpenAI strict
+JSON schema). Connected-knowledge extraction, adjudication, digest and brief
+require it." Resolved by the identical per-model rank chain as `source`
+above, but on its own axis — a flag, not a number, so it is never narrowed
+by `Math.min` and never overridden by an administrator's typed
+`contextWindowTokens`/`maxOutputTokens`.
+
 **Response:**
 ```json
 {
@@ -5081,8 +5103,8 @@ values here are already narrowed by deployment policy (`Math.min` against
     "provider": "openai",
     "providerLabel": "OpenAI",
     "models": [
-      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null },
-      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini" }
+      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null, "structuredOutput": true },
+      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini", "structuredOutput": true }
     ],
     "defaultModel": "gpt-5.4-mini",
     "maxInputTokens": 100000,
