@@ -93,6 +93,16 @@ const REASONING_OPTIONS: ReadonlyArray<{ value: AiTaskReasoningEffort | ''; labe
 ];
 
 /**
+ * `''` (Default) is a real option in both selects, so the closed select must
+ * DISPLAY it — MUI renders an empty value as a blank box unless told
+ * otherwise — and the label must sit above it rather than over it.
+ */
+const DEFAULT_SELECT_SLOT_PROPS = {
+  select: { displayEmpty: true },
+  inputLabel: { shrink: true },
+} as const;
+
+/**
  * True when any task names a model the draft no longer permits — the one
  * state in this section that blocks a save.
  */
@@ -224,6 +234,7 @@ export function AiTaskModels({
                   error={isStale || isServerError}
                   helperText={modelHelper}
                   sx={{ width: { xs: '100%', sm: 240 }, flexShrink: 0 }}
+                  slotProps={DEFAULT_SELECT_SLOT_PROPS}
                 >
                   <MenuItem value="">{`Default (${defaultModel})`}</MenuItem>
                   {modelOptions.map((model) => (
@@ -251,6 +262,7 @@ export function AiTaskModels({
                   // is nothing per-task to choose.
                   disabled={disabled || isDefault}
                   sx={{ width: { xs: '100%', sm: 160 }, flexShrink: 0 }}
+                  slotProps={DEFAULT_SELECT_SLOT_PROPS}
                 >
                   {REASONING_OPTIONS.map((option) => (
                     <MenuItem key={option.value || 'default'} value={option.value}>
