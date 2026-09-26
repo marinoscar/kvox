@@ -184,6 +184,43 @@ export class AiBudgetError extends Error implements DomainErrorMarker {
 }
 
 /**
+ * A structured-output call (`AiProvider.generateStructured`, #358) ended
+ * without a usable JSON value.
+ *
+ *   • `'truncated'` — the model hit `maxOutputTokens` (finish reason
+ *     `length`) mid-object. TERMINAL, because `maxOutputTokens` is policy:
+ *     re-sending the same prompt to the same model under the same ceiling is
+ *     not expected to change the answer. Treating it as success would hand a
+ *     caller a truncated object that might happen to parse — silently dropped
+ *     entities, the unearned-confidence failure `generate` already refuses.
+ *   • `'invalid_json'` — the vendor said `stop` but the content is not JSON.
+ *     Under strict decoding that means something in the path (usually a
+ *     gateway) ignored `response_format`; retrying through the same path
+ *     changes nothing.
+ *
+ * A DOMAIN ERROR, so `isTerminalAiError` reports it terminal. What a caller
+ * DOES with it is the caller's decision — graph extraction records it as a
+ * failed proposal (#363) rather than failing the job outright.
+ *
+ * ⚠ NEVER CONSTRUCTED WITH THE MODEL'S OUTPUT. The content is derived from a
+ * user's private conversation, and this message reaches `Job.lastError`.
+ */
+export class AiStructuredOutputError extends Error implements DomainErrorMarker {
+  readonly isDomainError = true as const;
+
+  constructor(
+    message: string,
+    /** Why no usable value came back. See the class comment. */
+    public readonly reason: 'truncated' | 'invalid_json',
+    public readonly providerId?: string,
+  ) {
+    super(message);
+    this.name = 'AiStructuredOutputError';
+    Object.setPrototypeOf(this, AiStructuredOutputError.prototype);
+  }
+}
+
+/**
  * Is this a failure no amount of retrying will change?
  *
  * TOTAL AND NEVER THROWS, mirroring `isTerminalProviderError` and
@@ -201,7 +238,8 @@ export function isTerminalAiError(err: unknown): boolean {
     err instanceof AiAuthError ||
     err instanceof AiInputError ||
     err instanceof AiRefusedError ||
-    err instanceof AiBudgetError
+    err instanceof AiBudgetError ||
+    err instanceof AiStructuredOutputError
   ) {
     return true;
   }

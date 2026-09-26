@@ -4,6 +4,7 @@ import {
   AiBudgetError,
   AiInputError,
   AiRefusedError,
+  AiStructuredOutputError,
   RateLimitError,
   isTerminalAiError,
 } from './ai-errors';
@@ -116,6 +117,29 @@ describe('AI error taxonomy', () => {
       ]) {
         expect(isTerminalAiError(value)).toBe(false);
       }
+    });
+  });
+
+  describe('AiStructuredOutputError (#358)', () => {
+    it.each(['truncated', 'invalid_json'] as const)(
+      'is TERMINAL for reason %s — re-sending the same prompt under the same ceiling changes nothing',
+      (reason) => {
+        const err = new AiStructuredOutputError('x', reason, 'openai');
+
+        expect(isTerminalAiError(err)).toBe(true);
+        expect(err.isDomainError).toBe(true);
+      },
+    );
+
+    it('survives instanceof and carries its reason and provider', () => {
+      const err: unknown = new AiStructuredOutputError('cut off', 'truncated', 'openai');
+
+      expect(err).toBeInstanceOf(AiStructuredOutputError);
+      expect(err).toBeInstanceOf(Error);
+      expect(err).not.toBeInstanceOf(AiInputError);
+      expect((err as AiStructuredOutputError).name).toBe('AiStructuredOutputError');
+      expect((err as AiStructuredOutputError).reason).toBe('truncated');
+      expect((err as AiStructuredOutputError).providerId).toBe('openai');
     });
   });
 

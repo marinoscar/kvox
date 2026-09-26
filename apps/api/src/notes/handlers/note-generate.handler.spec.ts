@@ -121,6 +121,7 @@ class FakeProvider implements AiProvider<unknown> {
         label: 'GPT-4o',
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_000,
+        structuredOutput: false,
       },
     ],
     streaming: true as const,
