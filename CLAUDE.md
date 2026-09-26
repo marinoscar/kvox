@@ -1754,7 +1754,10 @@ deployment and under whose account — is documented in full in
 [`docs/specs/notes.md`](docs/specs/notes.md). Don't restate any of that here;
 extend it instead. `AiProvider.generateStructured` (issue #358, spec §2.6) is
 the schema-validated structured-output path that connected-knowledge
-extraction and adjudication call instead of `generate`'s free-text stream.
+extraction and adjudication call instead of `generate`'s free-text stream;
+`AiProvider.chat` (issue #359, spec §2.7) is the multi-turn, tool-calling path
+the connected-knowledge Ask agent calls instead, gated on the same-shaped
+`toolCalling` capability flag.
 Five rules below are the ones a contributor can break from
 a neighbouring file, each with its failure mode — the same editorial bar the
 Audio Transcription section above sets.

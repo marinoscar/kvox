@@ -267,6 +267,7 @@ export function resolveAllowedModel(
     contextWindowTokens: context.value,
     maxOutputTokens: output.value,
     structuredOutput: features.structuredOutput,
+    toolCalling: features.toolCalling,
     source,
     // Non-null exactly when the WEAKEST source is `derived`: if either number
     // fell through to the floor the pair is not "the family's numbers", and
@@ -380,13 +381,24 @@ function resolveFeatures(
   knowledge: AiModelKnowledge,
   known: AiModelDescriptor | undefined,
 ): AiModelFeatureFlags {
-  if (known) return { structuredOutput: known.structuredOutput };
+  if (known) {
+    return {
+      structuredOutput: known.structuredOutput,
+      toolCalling: known.toolCalling,
+    };
+  }
 
   const derived = knowledge.derive?.(id) ?? null;
-  if (derived) return { structuredOutput: derived.structuredOutput };
+  if (derived) {
+    return {
+      structuredOutput: derived.structuredOutput,
+      toolCalling: derived.toolCalling,
+    };
+  }
 
   return {
     structuredOutput: knowledge.fallbackFeatures?.structuredOutput ?? false,
+    toolCalling: knowledge.fallbackFeatures?.toolCalling ?? false,
   };
 }
 

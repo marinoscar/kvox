@@ -122,6 +122,7 @@ class FakeProvider implements AiProvider<unknown> {
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_000,
         structuredOutput: false,
+        toolCalling: false,
       },
     ],
     streaming: true as const,

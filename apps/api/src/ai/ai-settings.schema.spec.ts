@@ -134,6 +134,7 @@ describe('aiAllowedModelEntrySchema — the legacy string form', () => {
       maxOutputTokens: 16_384,
       // #358: the floor claims no structured-output support.
       structuredOutput: false,
+      toolCalling: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -163,6 +164,7 @@ describe('the GPT-5.4 family in the real catalogue (#87)', () => {
         contextWindowTokens,
         maxOutputTokens,
         structuredOutput: true,
+        toolCalling: true,
         source: 'catalogue',
         derivedFrom: null,
       });

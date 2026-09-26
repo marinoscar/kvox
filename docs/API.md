@@ -4799,6 +4799,15 @@ the catalogue nor a known family; it sits beside `defaultModelLimits` and is
 optional ("presence is the declaration") — when absent, an unplaceable id's
 flags all resolve to `false`.
 
+**Every model in the admin catalogue also carries `toolCalling: boolean`
+(issue #359)**: "Whether this model supports tool (function) calling. The
+connected-knowledge Ask agent requires it." It sits beside `structuredOutput`
+on the identical axis — resolved by the same per-model rank chain (exact
+catalogue hit → catalogue; derived family → the family's flag; otherwise
+`providers[].capabilities.defaultModelFeatures`, or `false` with none
+declared), never affected by an administrator's typed numbers, and with no
+per-model override in v1.
+
 ---
 
 #### PUT /ai-settings
@@ -5095,6 +5104,13 @@ above, but on its own axis — a flag, not a number, so it is never narrowed
 by `Math.min` and never overridden by an administrator's typed
 `contextWindowTokens`/`maxOutputTokens`.
 
+**Each model also carries `toolCalling: boolean` (issue #359)**: "Whether
+this model supports tool (function) calling. The connected-knowledge Ask
+agent requires it." Resolved through the identical per-model rank chain and
+axis as `structuredOutput` above — its own independent boolean, never
+narrowed by `Math.min` and never overridden by an administrator's typed
+numbers.
+
 **Response:**
 ```json
 {
@@ -5103,8 +5119,8 @@ by `Math.min` and never overridden by an administrator's typed
     "provider": "openai",
     "providerLabel": "OpenAI",
     "models": [
-      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null, "structuredOutput": true },
-      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini", "structuredOutput": true }
+      { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "catalogue", "derivedFrom": null, "structuredOutput": true, "toolCalling": true },
+      { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini", "structuredOutput": true, "toolCalling": true }
     ],
     "defaultModel": "gpt-5.4-mini",
     "maxInputTokens": 100000,
