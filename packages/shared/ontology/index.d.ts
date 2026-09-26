@@ -1,3 +1,10 @@
 export { ATTRIBUTE_KINDS, DEFAULT_ENABLED_DOMAINS, DOMAIN_KEYS, ITEM_KINDS, PSEUDO_TYPES, SENSITIVITIES, USER_ATTRIBUTE_KEY_PREFIX, VALID_PRECISIONS, } from './constants.js';
 export type { AttributeChoice, AttributeKind, AttributeOptions, AttributeSpec, Deprecation, DomainKey, DomainMixin, DomainModule, EntityTypeSpec, KgItemKind, PseudoType, RelationRepresentation, RelationTypeSpec, Sensitivity, UserAttributeDef, ValidPrecision, } from './types.js';
 export { defineDomain, defineEntityType, defineRelationType, OntologyDefinitionError } from './define.js';
+export { CHANGELOG, ONTOLOGY_VERSION } from './version.js';
+export type { OntologyChangelogEntry } from './version.js';
+export { SHIPPED_KEYS } from './shipped-keys.js';
+export { buildOntologyRegistry } from './registry.js';
+export type { OntologyRegistry } from './registry.js';
+import type { OntologyRegistry } from './registry.js';
+export declare const ONTOLOGY: OntologyRegistry;

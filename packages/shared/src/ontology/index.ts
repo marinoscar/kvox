@@ -38,3 +38,23 @@ export type {
 } from './types.js';
 
 export { defineDomain, defineEntityType, defineRelationType, OntologyDefinitionError } from './define.js';
+
+export { CHANGELOG, ONTOLOGY_VERSION } from './version.js';
+export type { OntologyChangelogEntry } from './version.js';
+export { SHIPPED_KEYS } from './shipped-keys.js';
+export { buildOntologyRegistry } from './registry.js';
+export type { OntologyRegistry } from './registry.js';
+
+// -----------------------------------------------------------------------------
+// The domain modules, listed EXPLICITLY — never self-registered by import side
+// effect (registration order under Vite pre-bundling vs Jest `require` is not
+// something to depend on). Adding a domain is one import and one entry here.
+// -----------------------------------------------------------------------------
+
+import { coreDomain } from './domains/core.js';
+import { workDomain } from './domains/work.js';
+import { buildOntologyRegistry } from './registry.js';
+import type { OntologyRegistry } from './registry.js';
+import { ONTOLOGY_VERSION } from './version.js';
+
+export const ONTOLOGY: OntologyRegistry = buildOntologyRegistry([coreDomain, workDomain], ONTOLOGY_VERSION);
