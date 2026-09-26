@@ -121,6 +121,8 @@ import { GraphReviewButton } from '../components/graph/GraphReviewButton';
 import { ExtractDialog } from '../components/graph/guide/ExtractDialog';
 import { GuidanceSummary } from '../components/graph/guide/GuidanceSummary';
 import { userDecisionCount } from '../components/graph/guide/guidance';
+import { GraphSelectionAdd } from '../components/graph/selection/GraphSelectionAdd';
+import { resolveNoteSelection } from '../components/graph/selection/resolvers';
 import {
   ProposalReviewSheet,
   REVIEW_SHEET_WIDTH,
@@ -281,6 +283,8 @@ export function NotePage() {
   /** #368: the extract / re-extract dialog, mounted only while open. */
   const [extractMode, setExtractMode] = useState<'extract' | 're-extract' | null>(null);
   const canWriteGraph = hasPermission('graph:write');
+  /** #368: the row "Add to graph" just created, scrolled to in the sheet. */
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const reviewRequested = searchParams.get('review') === '1';
 
@@ -1234,6 +1238,7 @@ export function NotePage() {
           proposal={graphProposal}
           noteBodyRef={renderedBodyRef}
           originTranscriptId={note.originTranscript?.id ?? null}
+          focusItemId={focusItemId}
           onRequestExtract={canWriteGraph ? (mode) => setExtractMode(mode) : undefined}
           headerSlot={
             <GuidanceSummary
@@ -1242,6 +1247,34 @@ export function NotePage() {
               onEdit={canWriteGraph ? () => setExtractMode('re-extract') : undefined}
             />
           }
+        />
+      )}
+
+      {/* #368: "Add to graph" from a selection in the rendered body — never
+          while editing (the editor has its own selection semantics) or while
+          the body is still being written (it is not a version yet). */}
+      {graphVisible && canWriteGraph && id && (
+        <GraphSelectionAdd
+          containerRef={renderedBodyRef}
+          enabled={!isEditing && !inFlight && note.currentVersion > 0}
+          resolve={(range, container) =>
+            resolveNoteSelection(range, container, {
+              noteId: id,
+              noteVersion: note.currentVersion,
+              markdown: note.body,
+            })
+          }
+          target={{
+            kind: 'note',
+            detail: graphProposal.detail,
+            onExtract: () => setExtractMode(graphProposal.detail ? 're-extract' : 'extract'),
+          }}
+          onReload={() => void refresh()}
+          onAdded={(result) => {
+            setFocusItemId(result.item.id);
+            void graphProposal.refresh();
+            setReviewOpen(true);
+          }}
         />
       )}
 
