@@ -54,7 +54,15 @@ export class GraphInvariantError extends Error {
 
 /** A live item with the same `(owner, kind, subject, statement_hash)` exists. */
 export class GraphDuplicateError extends Error {
-  constructor(readonly statementHash: string) {
+  /**
+   * `existingId` is the live row found by the pre-insert check, so the
+   * proposal commit (#366) can attach its evidence there. It is absent only
+   * when the race the pre-check cannot close tripped the unique index itself.
+   */
+  constructor(
+    readonly statementHash: string,
+    readonly existingId?: string,
+  ) {
     super('This statement is already in your graph.');
     this.name = 'GraphDuplicateError';
   }

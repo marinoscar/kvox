@@ -6,6 +6,8 @@ import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
 import { GraphController } from './graph.controller';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
+import { EvidenceValidator } from './write/evidence-validator.service';
+import { GraphWriteService } from './write/graph-write.service';
 
 // =============================================================================
 // GraphModule (#354, epic #344, docs/specs/ontology.md)
@@ -25,8 +27,10 @@ import { GraphOntologyService } from './ontology/graph-ontology.service';
 
 @Module({
   imports: [PrismaModule, JobsModule, TranscriptsModule],
-  providers: [GraphAccessService, GraphOntologyService],
+  providers: [GraphAccessService, GraphOntologyService, EvidenceValidator, GraphWriteService],
   controllers: [GraphController],
-  exports: [GraphAccessService, GraphOntologyService],
+  // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
+  // kg_relations and kg_items (#355) — every later writer imports it from here.
+  exports: [GraphAccessService, GraphOntologyService, EvidenceValidator, GraphWriteService],
 })
 export class GraphModule {}
