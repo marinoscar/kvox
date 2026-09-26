@@ -9,6 +9,7 @@ import { AskConversationsController } from './ask-conversations.controller';
 import { AskConversationsService } from './ask-conversations.service';
 import { AskMessagesController } from './ask-messages.controller';
 import { AskMessagesService } from './ask-messages.service';
+import { AskRespondHandler } from './handlers/ask-respond.handler';
 import { AskToolsModule } from './tools/ask-tools.module';
 
 // =============================================================================
@@ -36,6 +37,7 @@ import { AskToolsModule } from './tools/ask-tools.module';
     AskAccessService,
     AskConversationsService,
     AskMessagesService,
+    AskRespondHandler,
   ],
   controllers: [
     AskConversationsController,
