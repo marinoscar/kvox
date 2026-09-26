@@ -1429,7 +1429,7 @@ committed/discarded/reverted proposal), `stale_note_version` (extracting
 against a note version that has since changed), `revert_conflict` (§19.4 —
 one or more of the proposal's committed rows has been touched since commit),
 and `model_lacks_capability` (§20.2 — the requested model does not report
-`structuredOutput` for an extraction/adjudication/digest/brief task or
+`structuredOutput` for an extraction/adjudication/digest task or
 `toolCalling` for the agent).
 
 ## 13. Web surfaces
@@ -2176,8 +2176,8 @@ never a sixth breakpoint gate on app chrome.
 ## 20. Task models
 
 Every AI-calling job type this document defines — `kg.extract`, `kg.resolve`'s
-adjudication step, `kg.entity_digest`, the entity brief's composition step
-(§9.1), and `ask.respond` (§21) — needs a model, and none of them should
+adjudication step, `kg.entity_digest`, and `ask.respond` (§21) — needs a
+model, and none of them should
 share `NoteGenerationRequestService.resolveModel()`'s notion of "the" model,
 because a deployment reasonably wants a cheap, fast model doing bulk
 extraction and a stronger one composing a brief a person actually reads, and
@@ -2195,8 +2195,8 @@ already have from each other.
 namespace (CLAUDE.md's Database Tables section), following the identical
 six-place settings-parity discipline every other `ai` field already follows
 (verified above). `TaskKey` is `'graph.extract' | 'graph.adjudicate' |
-'graph.digest' | 'graph.brief' | 'graph.agent'` — one key per AI-calling
-*shape* this design has, not one per job type, because `kg.resolve`'s
+'graph.digest' | 'graph.agent'` — one key per AI-calling *shape* this
+design has, not one per job type, because `kg.resolve`'s
 LLM-adjudication step (§7) and `kg.entity_digest` (§9.2) are different
 shapes of call even though a deployment might reasonably point them at the
 same model. A task with no entry falls back to `ai.defaultModel` (the
@@ -2214,6 +2214,11 @@ starts spending the *owning user's own* AI provider credit on an extraction
 they did not explicitly request per-note. `kg.extract` is never enqueued
 while `ai.graphEnabled` is `false` (409 `graph_disabled`, §12).
 
+There is deliberately no `graph.brief` task. The entity brief never calls a
+model in a request: every AI call in this design runs in a queue job, and the
+brief's prose is `kg.entity_digest`'s own output, shown as-is (§9.1). A
+`graph.brief` task key would name a call that does not exist.
+
 ### 20.2 Capability flags
 
 `generateStructured` (§6) and the tool-calling loop `ask.respond` needs
@@ -2229,7 +2234,7 @@ above) carries two new boolean flags, `structuredOutput` and `toolCalling`,
 alongside its existing context-window/output-ceiling numbers
 (`ai-model-resolution.ts`'s five-rank chain, CLAUDE.md's `ai` namespace
 entry) — a model with `structuredOutput: false` is not offered for
-`graph.extract`/`graph.adjudicate`/`graph.digest`/`graph.brief`, and one with
+`graph.extract`/`graph.adjudicate`/`graph.digest`, and one with
 `toolCalling: false` is not offered for `graph.agent`, at both save time
 (§20.4) and resolution time (§20.3), so an unusable pairing is
 unrepresentable rather than merely discouraged.
@@ -2248,8 +2253,8 @@ user's own allow-list permits (the existing `allowedModels` mechanism,
 unchanged by this epic), that model is used instead of the admin's per-task
 default — **the user's own key pays for it either way**, so an override
 changes which model runs, never who is billed. A `requested` model lacking
-the capability the task needs (`structuredOutput` for the four
-extraction/adjudication/digest/brief tasks, `toolCalling` for `graph.agent`)
+the capability the task needs (`structuredOutput` for the three
+extraction/adjudication/digest tasks, `toolCalling` for `graph.agent`)
 is refused with 409 `model_lacks_capability` (§12) rather than silently
 falling back to the admin default — a silent fallback would mean a user who
 explicitly asked for a specific model never learns their choice was ignored.
@@ -2738,7 +2743,7 @@ serve for their own epics.
 | A `sensitive` `PersonFact` never appears in any export format (JSON-LD, Turtle, or n-quads), under any setting | A test seeding a `sensitive` fixture fact alongside `business`/`personal` ones, running `kg.export` in each format, and asserting the sensitive fact's IRI and statement text appear in none of the three outputs |
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
-| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest/brief, `toolCalling` for agent) | `apps/api/src/ai/ai-task-model-resolver.service.spec.ts` and a `PUT /api/ai-settings` integration test asserting the save is rejected, not merely warned about |
+| Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai/ai-task-model-resolver.service.spec.ts` and a `PUT /api/ai-settings` integration test asserting the save is rejected, not merely warned about |
 | Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `apps/api/src/ask/ask-respond.handler.spec.ts`, asserting a deliberately fabricated citation id is stripped before the message is marked `complete` and counted in its stats |
 | `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 
