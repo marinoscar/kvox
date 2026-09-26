@@ -1035,6 +1035,12 @@ is the contract #378–#382 use unchanged. See [`docs/API.md`](docs/API.md#ask) 
   marker-stripped `lastMessagePreview` per row
 - `GET /api/ask/conversations/{id}?before` - The newest 100 messages oldest-first + `hasEarlier`
 - `POST /api/ask/conversations` - **201**; 404 when `scopeEntityId` is not the caller's readable entity
+- `POST /api/ask/conversations/{id}/messages` - Ask a question (#378): `{ content (1–4000), model? }`.
+  **202** `{ userMessage, assistantMessage (pending) }`, both rows **and** the `ask.respond` job in one
+  transaction. 404 not yours; the resolver's 409s (`graph_disabled`/`ai_not_configured`/
+  `ai_key_missing`/`model_lacks_capability`) and 400 (unpermitted model) passed through unchanged;
+  409 `ask_turn_running` decided by `ask_messages_one_running_turn_uniq_idx` at insert. The first
+  question titles an untitled conversation (80 chars)
 - `PATCH /api/ask/conversations/{id}` - Rename
 - `DELETE /api/ask/conversations/{id}` - **204**, allowed while a turn runs (cascade); audited
   `ask.conversation_deleted` with counts/ids only
@@ -2351,6 +2357,25 @@ person's name un-resurrectable through this cache. Its Danger Zone/"forget" reac
 `kg_graph_layouts` rows as its last step, since even an id-and-coordinate-only cache is still a map
 of the graph being wiped; `scope: 'person'` ("Forget this person") does not touch it — the next
 scheduled or requested layout simply drops the forgotten entity through the live join.
+
+**`ask.respond` (#378, epic #348) is one Ask turn, and server-only permanently** —
+`note.generate`'s reason exactly: every call spends the asker's own long-lived AI key and no
+vendor offers a job-scoped sub-key a `nodeSecretBroker` could mint. `profile: { maxRuntimeMs:
+5 min, maxAttempts: 1 }` (a retry would re-bill and show a different answer — re-asking is the
+retry), priority −10, `aiProviderThrottleKey(userId)` registered before the first call. It lives
+in `apps/api/src/ask/handlers/`, loops over `AiProvider.chat()` with #377's `AskToolset` (≤ 8
+tool steps, ≤ 4 calls a step, a 4-minute soft clock, an input budget; each cap forces a final
+`toolChoice: 'none'` call and ends `complete` with `finish_reason` `step_cap`/`time_cap`/
+`token_cap`) and writes `ask_messages.content` **append-only** — the #379 stream is a view over it
+(Notes rule 1). Three things a neighbouring file can break: text a model emits before a tool
+call is **held and discarded** (`answer-hold.ts`), never written, because a written character
+can never be taken back from a connected reader; invalid citation markers therefore **stay in
+`content`** and are flagged `valid: false` in `citations` (`citations.ts` checks each against
+the turn's own `HandleRegistry`; `itm`/`rel` resolve to their first evidence row); and a 429
+**before** any text was flushed resets the row to `pending` and rethrows (deferred, no attempt
+charged), while one **after** fails `rate_limit` — restarting would rewrite the buffer. Every
+write is `WHERE status = 'streaming'`, so a deleted conversation stops the turn with no orphan
+write. The handler imports no write service; see `docs/specs/ontology.md` §21.3.
 
 ## Specialized Subagents (MANDATORY)
 
