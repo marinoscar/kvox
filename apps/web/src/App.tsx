@@ -61,6 +61,8 @@ const GraphExplorerPage = lazy(() => import('./pages/GraphExplorerPage'));
 // The whole-graph overview (#375) — draws #371's stored snapshot with the
 // explorer's own `GraphCanvas`, so sigma stays behind these lazy imports too.
 const GraphOverviewPage = lazy(() => import('./pages/GraphOverviewPage'));
+// Ask — the read-only graph agent (#380, epic #348). One page for both routes.
+const AskPage = lazy(() => import('./pages/AskPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 // `User`-prefixed to make explicit that it edits the signed-in user's own
@@ -449,6 +451,33 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <GraphOverviewPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* Ask (#380, epic #348; spec §21.5). OWNED BY `home` like the
+                      graph routes above — no bottom-bar tab — and gated on
+                      `graph:read`, the exact string every `/api/ask/*` route
+                      (#376, #378, #379) enforces. `graphEnabled` is checked
+                      inside the page, which shows an info state when it is off. */}
+                  <Route
+                    path="/ask"
+                    element={
+                      <RequirePermission
+                        permission="graph:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AskPage />
+                      </RequirePermission>
+                    }
+                  />
+                  <Route
+                    path="/ask/:conversationId"
+                    element={
+                      <RequirePermission
+                        permission="graph:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <AskPage />
                       </RequirePermission>
                     }
                   />
