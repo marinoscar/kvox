@@ -2242,7 +2242,12 @@ The extraction quality harness (issue #362: the synthetic golden set at
 built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
 So is the Ask agent's read-only toolset (issue #377: `AskToolsModule`/`AskToolset` in
 `apps/api/src/ask/tools/` — seven owner-scoped tools returning `ent`/`itm`/`rel`/`ev`/`doc`
-handles, never uuids; spec §21.7).
+handles, never uuids; spec §21.7). So is its evaluation harness (issue #382:
+`apps/api/scripts/ask-eval/`, ≥ 40 golden questions at
+`apps/api/test/fixtures/kg-golden/ask-questions.json`, `npm run ask:eval --workspace=api`,
+and the deterministic replay test `apps/api/test/ask/ask-eval.replay.db.spec.ts` that runs
+in CI with a scripted fake provider — synthetic fixtures only, ever; a real-model run is
+local and report-only, mirroring `kg:eval`'s own posture; spec §21.8).
 The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`

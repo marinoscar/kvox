@@ -2983,6 +2983,56 @@ budget, the longest array is halved until it fits and `truncated: true` is set
 — always valid JSON. Each call is logged at debug as `{ tool, ok, resultCount,
 truncated, ms }`, never its arguments or result.
 
+### 21.8 Evaluation (#382)
+
+The agent promises two things a unit test cannot prove: that every citation
+it shows points at something a tool really returned, and that its answers are
+right often enough to trust. `apps/api/scripts/ask-eval/` builds that
+evaluation on top of #362's synthetic golden meetings, isolating the agent
+from extraction quality by seeding the meetings' **hand labels** as the
+graph — never a model's own extraction — under one throwaway user
+(`seed-graph.ts`; refuses to run against a database whose name doesn't end
+`_test`/`_eval`, per `--allow-db`).
+
+`apps/api/test/fixtures/kg-golden/ask-questions.json` is a second golden set
+over the same meetings: ≥ 40 questions (`question-schema.ts`), each with
+`expected.{entities, answerAll, answerNone, citeFrom, notFound}` — substring
+groups rather than an LLM judge, deliberately: crude, but deterministic and
+reviewable without a second model's variance. `citeFrom` reuses the
+fixtures' own segment ids (`"m01-s009"`) or `"mNN#note"` verbatim.
+
+The runner (`run.ts`) boots a real `NestFactory.createApplicationContext`
+(`JOBS_WORKER_MODE=off`), stores the key from `ASK_EVAL_OPENAI_API_KEY` on
+the eval user, points this deployment's `ai` policy at the eval model for
+the run's duration only (restored in `teardown()` regardless of outcome —
+leaving it wired in would silently change every other user's Ask
+conversation), and for each question calls the real `AskMessagesService`
+then invokes `AskRespondHandler.process(job)` directly — no queue poll, this
+process is the only claimer. A thin wrapper around the registered provider's
+own `chat()` captures every `messages` array actually sent, for the leak
+check.
+
+`scorer.ts` (pure) computes, per question: `citationValidity` (valid
+citations ÷ all markers — **gate: must be 1.0**), `citeFromHit` (a valid
+`evidence`-kind citation resolves, via the seeder's evidence-source map, to a
+listed segment/note — `itm`/`rel` markers resolve through their evidence row
+exactly as #378's own citation mapper does), `answerMatch`, `entityRecall`,
+and `sensitiveLeak` (an `answerNone` string found in the answer **or** in any
+captured prompt — **gate: must be zero**, turning §15's "sensitive never
+leaves" into a measured property rather than an assertion about the code).
+
+Two run modes, mirroring `kg:eval`'s own posture: `npm run ask:eval
+--workspace=api` needs a real key and is **local and report-only** — CI never
+gates on a real model's answer quality, which would need a paid key in CI and
+flakes on provider variance. `apps/api/test/ask/ask-eval.replay.db.spec.ts`
+is what runs in CI (the `smoke` job's `npm run test:db`): the full gold graph,
+the real handler and toolset, and a **scripted fake provider**
+(`fake-provider.ts`) with a fixed tool-call sequence per question, using
+handles the real tools actually returned — plus one answer that cites an
+unissued `[^ev99]`, so the suite proves the citation-validity gate can
+actually fail before trusting that it passes. This is `kg:eval --predictions
+gold`'s role for extraction, played here for the agent's plumbing instead.
+
 ## 22. Visualization — explorer and overview
 
 Two views, one underlying graph model, deliberately not one: §13's
