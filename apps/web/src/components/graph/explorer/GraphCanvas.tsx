@@ -11,9 +11,10 @@
  *     not the selection or one of its neighbours;
  *   - click / double-click / stage / edge events, and dragging (a dragged node
  *     becomes `fixed`, so the layout leaves it where it was put);
- *   - after each `version` change with `layout === 'forceatlas'`, a 1,500 ms
- *     ForceAtlas2 settle. `layout === 'static'` never moves a node, which is
- *     what the visual baselines and `prefers-reduced-motion` rely on.
+ *   - after each `version` change with `layout === 'forceatlas'`, a short
+ *     (~1.5 s) ForceAtlas2 settle of a fixed iteration count. `layout ===
+ *     'static'` never moves a node, which is what the visual baselines and
+ *     `prefers-reduced-motion` rely on.
  *
  * ⚠ THE FA2 SETTLE RUNS ON THE MAIN THREAD, IN FRAME-SIZED SLICES, NOT IN
  * `graphology-layout-forceatlas2/worker`. That supervisor spawns its worker
@@ -21,7 +22,7 @@
  * (`infra/nginx/csp.conf`): the worker would be refused in exactly the
  * environment that matters, and loosening the CSP for a layout is not a trade
  * worth making. At the explorer's 300-node cap one FA2 iteration is well under
- * a millisecond, so a few per animation frame for 1.5 s never blocks input.
+ * a millisecond, so two per animation frame never block input.
  *
  * jsdom has no WebGL: tests `vi.mock` this module rather than import it.
  */
@@ -41,9 +42,13 @@ import type Graph from 'graphology';
 import forceAtlas2, { inferSettings } from 'graphology-layout-forceatlas2';
 import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 
-/** How long a ForceAtlas2 settle runs after each change. */
-export const FA2_SETTLE_MS = 1_500;
-const FA2_ITERATIONS_PER_FRAME = 4;
+/**
+ * One ForceAtlas2 settle: a FIXED number of iterations, a few per animation
+ * frame — about 1.5 s at 60 fps. Bounded by count rather than by the clock so
+ * the same graph always settles to the same picture, however fast the machine.
+ */
+export const FA2_SETTLE_ITERATIONS = 180;
+const FA2_ITERATIONS_PER_FRAME = 2;
 
 export interface GraphCanvasControls {
   zoomIn: () => void;
@@ -220,11 +225,12 @@ function CanvasBehaviour({
   useEffect(() => {
     if (layout !== 'forceatlas' || graph.order < 2) return undefined;
     const settings = inferSettings(graph);
-    const started = performance.now();
+    let done = 0;
     let frame = 0;
     const step = () => {
       forceAtlas2.assign(graph, { iterations: FA2_ITERATIONS_PER_FRAME, settings });
-      if (performance.now() - started < FA2_SETTLE_MS) frame = requestAnimationFrame(step);
+      done += FA2_ITERATIONS_PER_FRAME;
+      if (done < FA2_SETTLE_ITERATIONS) frame = requestAnimationFrame(step);
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
