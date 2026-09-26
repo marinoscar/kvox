@@ -278,6 +278,18 @@ export const transcriptListItemSchema = z.object({
    */
   ownerName: z.string(),
   createdAt: z.string(),
+  /**
+   * When the recording was made (issue #352). Backfilled from, and for a new
+   * transcript identical to, `createdAt`; editable through `PATCH`. The meeting
+   * date connected knowledge dates everything extracted from this recording
+   * against (docs/specs/ontology.md §5.4) — never the upload instant.
+   */
+  recordedAt: z
+    .string()
+    .describe(
+      'When the recording was made (ISO 8601). Defaults to the upload time; the owner or an ' +
+        'editor can correct it. Used as the meeting date by connected knowledge.',
+    ),
   updatedAt: z.string(),
 });
 
@@ -403,16 +415,28 @@ export class TranscriptAudioDto extends createZodDto(transcriptAudioSchema) {}
 /**
  * `PATCH /api/transcripts/:id`.
  *
- * ⚠ TITLE ONLY, AND IT IS NOT VERSIONED. A title is metadata about the
- * recording, not content of it: renaming a transcript does not change a single
- * word anybody said, so recording it as a `transcript_versions` row would put
- * a no-op in the edit history that a restore could later "undo" into a name
- * nobody chose. Content edits go through #28's op batches, which are versioned
- * precisely because they change what the transcript says.
+ * ⚠ METADATA ONLY — THE TITLE AND/OR THE RECORDING DATE (#352) — AND IT IS NOT
+ * VERSIONED. Both are metadata about the recording, not content of it:
+ * renaming or re-dating a transcript does not change a single word anybody
+ * said, so recording it as a `transcript_versions` row would put a no-op in the
+ * edit history that a restore could later "undo" into a value nobody chose.
+ * Content edits go through #28's op batches, which are versioned precisely
+ * because they change what the transcript says.
+ *
+ * `recordedAt` MUST carry an offset (`Z` or `±hh:mm`): an offset-less datetime
+ * is ambiguous about which instant it names, and guessing the server's zone
+ * would silently re-date a meeting. The 1970 floor and the 24-hour future
+ * ceiling are enforced by the service, against the server's clock at request
+ * time.
  */
-export const updateTranscriptSchema = z.object({
-  title: z.string().trim().min(1).max(MAX_TITLE_LENGTH),
-});
+export const updateTranscriptSchema = z
+  .object({
+    title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).optional(),
+    recordedAt: z.iso.datetime({ offset: true }).optional(),
+  })
+  .refine((v) => v.title !== undefined || v.recordedAt !== undefined, {
+    message: 'Nothing to update: send `title`, `recordedAt`, or both.',
+  });
 
 export type UpdateTranscriptDto = z.infer<typeof updateTranscriptSchema>;
 
