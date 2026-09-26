@@ -22,6 +22,7 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Paper from '@mui/material/Paper';
+import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
@@ -116,6 +117,14 @@ export default function GraphEntityPage() {
           >
             {brief.error}
           </Alert>
+        ) : brief.isLoading ? (
+          <Skeleton
+            variant="rounded"
+            height={220}
+            sx={{ mb: 3 }}
+            role="status"
+            aria-label="Loading the brief"
+          />
         ) : null}
 
         <EntityConnectionsList entityId={detail.id} entityLabel={detail.label} ontology={ontology} />

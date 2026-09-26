@@ -17,6 +17,8 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -48,6 +50,10 @@ function plural(count: number, one: string, many: string): string {
 
 export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, actions }: EntityHeaderProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  // Page-level read (not a sixth breakpoint gate): on a phone the Edit button
+  // folds to an icon so a long name keeps the row without horizontal scroll.
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const canForget = canEdit && entity.type === 'Person';
 
   const aliases = entity.aliases.map((alias) => alias.alias);
@@ -81,11 +87,16 @@ export function EntityHeader({ entity, typeLabel, canEdit, onEdit, onForget, act
         </Box>
         <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
           {actions}
-          {canEdit && (
-            <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>
-              Edit
-            </Button>
-          )}
+          {canEdit &&
+            (isPhone ? (
+              <IconButton aria-label="Edit" onClick={onEdit}>
+                <EditOutlinedIcon />
+              </IconButton>
+            ) : (
+              <Button variant="outlined" startIcon={<EditOutlinedIcon />} onClick={onEdit}>
+                Edit
+              </Button>
+            ))}
           {canForget && (
             <>
               <IconButton
