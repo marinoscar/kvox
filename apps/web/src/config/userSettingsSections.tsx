@@ -31,13 +31,18 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 // carries, on purpose: the two are the same idea on two axes (this deployment
 // vs. this account), and a user who has seen one recognises the other.
 import RocketLaunchOutlinedIcon from '@mui/icons-material/RocketLaunchOutlined';
+// Knowledge graph (#369, epic #346).
+import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import type { SettingsSectionDef } from './adminSections';
 
 /**
  * The user settings sections, in hub order.
  *
- * NO CARD DECLARES A `permission`, and that is the correct model rather than
- * an omission: every authenticated user owns their own settings, and the API
+ * NO CARD DECLARES A `permission` — WITH ONE DELIBERATE EXCEPTION, the
+ * `Knowledge graph` card (#369), gated on `graph:write` because that is the
+ * exact string its attribute-definition write routes enforce (Settings UI rule
+ * 3, docs/specs/ontology.md §13). For every other card this is the correct
+ * model rather than an omission: every authenticated user owns their own settings, and the API
  * grants `user_settings:read` / `user_settings:write` to all three roles
  * (Admin, Contributor, Viewer). Adding a gate here would be inventing an
  * authorization rule the API does not enforce — the opposite of what this
@@ -185,6 +190,35 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
           'Describe the notes you want from a recording, and generate a sample to check the result before you rely on it.',
         Icon: DescriptionIcon,
         path: '/settings/note-templates',
+      },
+    ],
+  },
+  {
+    // Issue #369, epic #346 (docs/specs/ontology.md §13 — "the only registry
+    // entry this feature adds"). A GROUP OF ITS OWN, after `Account`: the
+    // connected-knowledge graph is the user's curated knowledge, not a fact
+    // about the account, and later knowledge surfaces (#383's personal domain,
+    // imports) will join it here. One card under its own heading reads as a
+    // section rather than as orphaned — the same shape `Security` and
+    // `Danger Zone` already have with one card each.
+    //
+    // THE ONE CARD IN THIS REGISTRY WITH A `permission`, and it is the exact
+    // string the API enforces rather than an invented gate (Settings UI rule
+    // 3): `graph-attribute-defs.controller.ts` gates its writes on
+    // `graph:write`, and the page's attribute browser is its core. The
+    // preferences on the same page write through `/api/user-settings`
+    // (`user_settings:write`, all roles) — but a user without `graph:write`
+    // has no graph to have preferences about. `graph:write` is seeded to all
+    // three roles, so in a stock deployment this hides the card from nobody.
+    label: 'Knowledge',
+    cards: [
+      {
+        title: 'Knowledge graph',
+        description:
+          'How notes become connected knowledge: automatic extraction, how sure a match must be, domains, and your own attributes.',
+        Icon: HubOutlinedIcon,
+        path: '/settings/knowledge-graph',
+        permission: 'graph:write',
       },
     ],
   },
