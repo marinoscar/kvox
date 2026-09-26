@@ -45,12 +45,14 @@
 // =============================================================================
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { Job, Prisma } from '@prisma/client';
 
 import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GRAPH_CHANGED_EVENT, type GraphChangedEvent } from '../graph-events';
 import { KG_PURGE_JOB_TYPE, KG_SUBJECT_ENTITY, KG_SUBJECT_USER } from '../job-types';
 import { readKgPurgePayload } from '../purge/kg-purge.payload';
 import { KgPurgeService, type KgPurgeCounts } from '../purge/kg-purge.service';
@@ -88,6 +90,7 @@ export class KgPurgeHandler implements JobHandler, OnModuleInit {
     private readonly registry: JobHandlerRegistry,
     private readonly prisma: PrismaService,
     private readonly purge: KgPurgeService,
+    private readonly events: EventEmitter2,
   ) {}
 
   onModuleInit(): void {
@@ -123,6 +126,7 @@ export class KgPurgeHandler implements JobHandler, OnModuleInit {
       this.logger.warn(
         `Forgot person ${entityId} for user ${userId} (job ${job.id}): ${JSON.stringify(meta)}`,
       );
+      this.emitChanged(userId);
       return;
     }
 
@@ -135,6 +139,20 @@ export class KgPurgeHandler implements JobHandler, OnModuleInit {
     this.logger.warn(
       `Purged the knowledge graph of user ${userId} (job ${job.id}): ${JSON.stringify(counts)}`,
     );
+    this.emitChanged(userId);
+  }
+
+  /**
+   * `graph.changed` (#371), after every purge transaction has committed. The
+   * layout listener only counts and, at most, enqueues; a listener failure
+   * must never fail a purge that already happened, hence the catch.
+   */
+  private emitChanged(userId: string): void {
+    try {
+      this.events.emit(GRAPH_CHANGED_EVENT, { ownerId: userId, reason: 'purge' } satisfies GraphChangedEvent);
+    } catch (err) {
+      this.logger.warn(`Could not emit graph.changed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async audit(

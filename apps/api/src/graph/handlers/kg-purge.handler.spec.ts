@@ -1,3 +1,5 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
+
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { KG_PURGE_JOB_TYPE } from '../job-types';
@@ -34,12 +36,14 @@ function harness() {
     purgePerson: jest.fn().mockResolvedValue({ counts, entityIds: [ENTITY, TOMBSTONE] }),
     purgeAll: jest.fn().mockResolvedValue(counts),
   };
+  const events = { emit: jest.fn() };
   const handler = new KgPurgeHandler(
     registry,
     prisma as unknown as PrismaService,
     purge as unknown as KgPurgeService,
+    events as unknown as EventEmitter2,
   );
-  return { handler, registry, prisma, purge, counts };
+  return { handler, registry, prisma, purge, counts, events };
 }
 
 const job = (payload: unknown) => ({ id: 'job-1', payload }) as never;
@@ -117,6 +121,22 @@ describe('KgPurgeHandler.process', () => {
 
     await expect(handler.process(job({ userId: USER, scope: 'person', entityId: ENTITY }))).resolves.toBeUndefined();
     expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('emits graph.changed (reason purge) after each completed purge, and not when nothing was forgotten', async () => {
+    const { handler, purge, events } = harness();
+
+    await handler.process(job({ userId: USER, scope: 'person', entityId: ENTITY }));
+    await handler.process(job({ userId: USER, scope: 'all' }));
+    expect(events.emit).toHaveBeenCalledTimes(2);
+    expect(events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: USER, reason: 'purge' });
+
+    events.emit.mockClear();
+    purge.purgePerson.mockResolvedValue(null);
+    await handler.process(job({ userId: USER, scope: 'person', entityId: ENTITY }));
+    purge.purgeAll.mockRejectedValue(new Error('boom'));
+    await expect(handler.process(job({ userId: USER, scope: 'all' }))).rejects.toThrow('boom');
+    expect(events.emit).not.toHaveBeenCalled();
   });
 
   it('purges a whole graph and audits graph.purged against the user, with every count', async () => {

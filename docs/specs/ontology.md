@@ -1469,7 +1469,11 @@ epic's foundation phase (§16, P1) actually needs to enable.
 Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
 `ask.respond`, which lives under `apps/api/src/ask/handlers/` (planned) —
 Ask is its own module (§21), reusing the graph's job-queue conventions
-rather than being folded into a handler directory it does not belong in:
+rather than being folded into a handler directory it does not belong in.
+As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
+`kg.extract` lives under `graph/extraction/` (§6) and `kg.graph_layout`
+under `graph/layout/` (§22.3) — each grouped with the feature it belongs to
+rather than in one shared handler directory:
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
@@ -1571,8 +1575,9 @@ issue's original text: evaluating a relation `as_of` reads
 own `AS_OF_STATUSES` engine (`apps/api/src/graph/temporal/`) exactly, rather
 than the plain readable set — an `as_of` question about January 2024 must
 still see the edge a later `as_of`-unaware read would call superseded.
-Extraction, review, commit, the brief, and the whole-graph overview remain
-unbuilt and follow in #356 and later.
+Extraction (§6, issue #363) and the whole-graph overview (§22.3, issue #371,
+below) are also built; review, commit, and the brief remain unbuilt and
+follow in #356 and later.
 
 **Additional routes §19–§22 add, under the same two permissions.**
 `graph:read` also gates the read side of proposal review — `GET
@@ -2642,6 +2647,14 @@ by construction" scope means rarely approaches it during ordinary use.
 
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
+**Built (issue #371, epic #347).** `apps/api/src/graph/layout/` holds the
+whole thing: `computeLayout` (Louvain clustering + ForceAtlas2 positions,
+seeded per owner for determinism), the `kg.graph_layout` handler, the one
+`GraphLayoutEnqueuer` every trigger below goes through, `GraphLayoutListener`
+for the material-change trigger, and `GraphOverviewService` behind
+`GET /api/graph/overview` / `POST /api/graph/overview/refresh`. The design
+below is what shipped.
+
 **Never computed client-side, and never client-side even in principle.** A
 force-directed layout of an entire graph is $O(n^2)$-ish per frame and a
 client cannot be trusted to have a machine capable of running it smoothly
@@ -2656,10 +2669,17 @@ to) and `positions` (precomputed 2D coordinates) — to `kg_graph_layouts`
 snapshot, never recomputes at request time, the identical "precompute once,
 read cheaply forever" economy `kg_entity_digests` (§9.2) already gives the
 entity brief. `POST /api/graph/overview/refresh` (§12, `graph:write`) lets a
-user ask for a fresh snapshot after a large commit changes the shape of
-their graph enough to be worth re-clustering; it is never triggered
+user ask for a fresh snapshot immediately; it is never triggered
 automatically on every commit, because a whole-graph re-layout is not the
-kind of work that should run on every note a user finishes reviewing.
+kind of work that should run on every note a user finishes reviewing. As
+built, two other triggers exist, both through the same `GraphLayoutEnqueuer`
+and both delayed 120 seconds so a burst of commits coalesces into one run: the
+bootstrap first snapshot (`GET /api/graph/overview` finding none for a
+non-empty graph) and a **material change** — a `graph.changed` event whose
+listener re-lays only when the readable entity count has moved by at least
+20% since the latest snapshot (floored at a denominator of 50, so a small
+graph does not re-lay on every new person). A manual refresh that joins an
+automatic job still waiting out its delay pulls it forward to run now.
 
 The overview itself renders clusters as the zoomed-out unit — a cluster's
 size and label (its most central entities) rather than every individual

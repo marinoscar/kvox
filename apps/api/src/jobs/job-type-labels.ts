@@ -154,6 +154,8 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // `kg.extract` (#363): one structured-output call per note that proposes
   // graph rows for review, on the note owner's own AI key.
   'kg.extract': 'Knowledge graph extraction',
+  // #371, epic #347: the whole-graph overview snapshot (clusters + positions).
+  'kg.graph_layout': 'Knowledge graph layout',
 };
 
 /**

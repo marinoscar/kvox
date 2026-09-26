@@ -5345,10 +5345,11 @@ ontology, extraction, review, retrieval, privacy) is
 effective ontology, the manual entity edit, and your own attribute
 definitions (issue #355), plus "forget this person" (issue #357),
 extraction — asking for, and estimating, a draft proposal from a note
-(issue #363) — and the read layer — the entity index, an entity's page, its
+(issue #363) — the read layer — the entity index, an entity's page, its
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
-(issue #370); the review/commit routes and the whole-graph overview arrive
-with later issues and follow the access posture below.
+(issue #370) — and the whole-graph overview, read from a precomputed
+snapshot, plus its manual refresh (issue #371); the review/commit routes
+arrive with a later issue and follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
@@ -6097,6 +6098,90 @@ for the batch.
 
 **Errors:** `400` missing, malformed, or more than 50 ids · `401` · `403`
 without `graph:read`.
+
+#### Whole-graph overview
+
+Your whole graph at once — clusters and 2D positions for a force-directed
+view — read from the latest snapshot the `kg.graph_layout` job computed
+(issue #371). Owner-scoped by construction: both routes act only on your own
+graph, so neither has an id to 404 on.
+
+##### GET /graph/overview
+
+**This request never recomputes the layout.** It reads your latest stored
+snapshot and joins every label **live** against `kg_entities`, so an entity
+merged, forgotten or deleted since the snapshot was computed is silently
+dropped from `nodes` and a cluster's `memberSample`, and a cluster named
+after one falls back to `Cluster <n>` (`Unconnected` for cluster `-1`, which
+pools every isolated entity). That live join is the privacy guarantee: the
+stored snapshot holds ids and coordinates only, never a label, so it can
+never resurrect a forgotten person's name.
+
+- **`status: "none"`** — no snapshot yet. If your graph has readable entities
+  and no layout job is already pending or running for you, one is queued now
+  (`pending: true`, `reason: "backfill"`) — the only case this request
+  queues anything.
+- **`stale: true`** — your graph changed after the snapshot was computed.
+  Reported, never refreshed automatically; call the refresh route below.
+- **`nodes`** carries at most 5000 entities, highest degree first;
+  `nodesTruncated` says whether more were positioned. `clusterEdges` is
+  capped at 500.
+
+**Requires:** `graph:read`. **Always `200`** for your own graph — there is
+no state that answers anything else.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "status": "ready",
+    "pending": false,
+    "computedAt": "2026-09-26T08:00:00.000Z",
+    "stale": false,
+    "tooLarge": false,
+    "nodeCount": 42,
+    "edgeCount": 61,
+    "clusters": [
+      {
+        "id": 0,
+        "label": "Sarah Chen-Li",
+        "labelEntityId": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+        "size": 9,
+        "x": 12.4, "y": -3.1, "radius": 8.2,
+        "typeCounts": { "Person": 3, "Project": 2, "Commitment": 4 },
+        "memberSample": [
+          { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person", "degree": 6 }
+        ]
+      }
+    ],
+    "clusterEdges": [{ "a": 0, "b": 1, "weight": 3 }],
+    "nodes": [
+      { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person", "x": 11.9, "y": -2.7, "clusterId": 0, "degree": 6 }
+    ],
+    "nodesTruncated": false
+  }
+}
+```
+
+**Errors:** `401` · `403` without `graph:read`.
+
+##### POST /graph/overview/refresh
+
+Queues a `kg.graph_layout` job that recomputes your overview snapshot now.
+At most one layout job per user is ever queued: asking again while one is
+pending or running returns that job with `deduplicated: true` — and pulls an
+automatic one still waiting out its coalescing delay forward to run now, so
+pressing Refresh never waits behind a delay meant to coalesce a burst of
+unattended edits. **Never a `409`.**
+
+**Requires:** `graph:write`.
+
+**Response:** `202`
+```json
+{ "data": { "jobId": "3f9a1c2e-…", "deduplicated": false } }
+```
+
+**Errors:** `401` · `403` without `graph:write`.
 
 ### Search
 

@@ -304,6 +304,7 @@ describe('KgPurgeService.purgeAll', () => {
       'entities',
       'evidence',
       'attributeDefs',
+      'graphLayouts',
     ]);
   });
 
@@ -348,7 +349,10 @@ describe('KgPurgeService.purgeAll', () => {
       'tx.kgEntity.deleteMany',
       'tx.kgEvidence.deleteMany',
       'tx.kgAttributeDef.deleteMany',
+      'kgGraphLayout.deleteMany',
     ]);
+    // #371: the owner's layout snapshots go too, owner-scoped.
+    expect(calls.find((c) => c.key === 'kgGraphLayout.deleteMany')?.args).toEqual({ where: { ownerId: USER } });
 
     // Owner-scoped selection everywhere; views by the VIEWER.
     expect(calls.find((c) => c.key === 'kgEntity.findMany')?.args).toMatchObject({ where: { ownerId: USER } });

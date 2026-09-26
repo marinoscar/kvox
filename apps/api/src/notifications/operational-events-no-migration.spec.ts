@@ -143,6 +143,9 @@ const MIGRATIONS_AT_288 = [
   // evidence-less accepted/edited graph row at COMMIT. A graph invariant,
   // and equally not about notifications.
   '20260926030200_kg_evidence_invariant',
+  // #371 (epic #347): the per-owner whole-graph layout snapshot. A graph
+  // cache, and equally not about notifications.
+  '20260926040000_add_kg_graph_layouts',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
