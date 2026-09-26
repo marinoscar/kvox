@@ -26,8 +26,11 @@ import {
   type FetchLikeResponse,
 } from './openai.provider';
 import type {
+  AiChatEvent,
+  AiChatRequest,
   AiGenerateRequest,
   AiStructuredRequest,
+  AiToolDefinition,
 } from './ai-provider.interface';
 
 // =============================================================================
@@ -1159,6 +1162,7 @@ describe('deriveOpenAiModelDescriptor (#97)', () => {
       maxOutputTokens: 128_000,
       // #358: the family's capability travels with its numbers.
       structuredOutput: true,
+      toolCalling: true,
     });
   });
 
@@ -1577,7 +1581,7 @@ describe('OpenAiProvider.generateStructured (#358)', () => {
     });
 
     it('declares a floor that claims NO structured output for an unplaceable id', () => {
-      expect(provider.capabilities.defaultModelFeatures).toEqual({ structuredOutput: false });
+      expect(provider.capabilities.defaultModelFeatures).toEqual({ structuredOutput: false, toolCalling: false });
     });
 
     it.each([
@@ -1592,6 +1596,678 @@ describe('OpenAiProvider.generateStructured (#358)', () => {
     });
 
     it('registers — the boot check is satisfied because generateStructured exists', () => {
+      const registry = new AiProviderRegistry();
+      expect(() => registry.register(new OpenAiProvider(registry))).not.toThrow();
+    });
+  });
+});
+
+describe('OpenAiProvider.chat (#359)', () => {
+  const GET_ENTITY: AiToolDefinition = {
+    name: 'get_entity',
+    description: 'Fetch one entity by id.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        include: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['id', 'include'],
+      additionalProperties: false,
+    },
+  };
+
+  const SEARCH: AiToolDefinition = {
+    name: 'search',
+    description: 'Full-text search over the graph.',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  };
+
+  const CHAT: AiChatRequest = {
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: 'You answer questions about the graph.' },
+      { role: 'user', content: 'Who leads the Acme renewal?' },
+    ],
+    tools: [GET_ENTITY, SEARCH],
+    maxOutputTokens: 1024,
+  };
+
+  /** A plain chat turn: no tools, so no tool vocabulary on the wire. */
+  const PLAIN: AiChatRequest = {
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: 'Hello.' }],
+    maxOutputTokens: 256,
+  };
+
+  interface Captured {
+    url: string;
+    init: { body: string; headers: Record<string, string>; signal?: AbortSignal };
+  }
+
+  function capturing(
+    fixtureName = 'chat-final-answer',
+  ): { provider: OpenAiProvider; calls: Captured[] } {
+    const calls: Captured[] = [];
+    const provider = providerWith(async (url, init) => {
+      calls.push({ url, init: init as Captured['init'] });
+      return streamResponse(oneChunk(fixture(fixtureName)));
+    });
+    return { provider, calls };
+  }
+
+  function bodyOf(call: Captured): Record<string, unknown> {
+    return JSON.parse(call.init.body) as Record<string, unknown>;
+  }
+
+  function fromText(text: string): OpenAiProvider {
+    return providerWith(async () => streamResponse(oneChunk(text)));
+  }
+
+  async function events(
+    provider: OpenAiProvider,
+    request: AiChatRequest = CHAT,
+  ): Promise<AiChatEvent[]> {
+    return (await collect(provider.chat(ctx(), request))) as AiChatEvent[];
+  }
+
+  /** A minimal SSE body from raw frame payloads. */
+  function sse(...frames: string[]): string {
+    return frames.map((frame) => `data: ${frame}\n\n`).join('') + 'data: [DONE]\n\n';
+  }
+
+  describe('wire shape', () => {
+    it('posts a streamed chat request with strict tools, auto tool_choice and parallel_tool_calls: false', async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe('https://api.openai.com/v1/chat/completions');
+
+      const body = bodyOf(calls[0]);
+      expect(body.model).toBe('gpt-4o');
+      expect(body.stream).toBe(true);
+      expect(body.stream_options).toEqual({ include_usage: true });
+      expect(body.max_completion_tokens).toBe(1024);
+      expect(body.tools).toEqual([
+        {
+          type: 'function',
+          function: {
+            name: 'get_entity',
+            description: 'Fetch one entity by id.',
+            parameters: GET_ENTITY.parameters,
+            strict: true,
+          },
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'search',
+            description: 'Full-text search over the graph.',
+            parameters: SEARCH.parameters,
+            strict: true,
+          },
+        },
+      ]);
+      expect(body.tool_choice).toBe('auto');
+      expect(body.parallel_tool_calls).toBe(false);
+      expect(body).not.toHaveProperty('max_tokens');
+      expect(body).not.toHaveProperty('response_format');
+    });
+
+    it('maps every message role, including assistant tool_calls and tool results', async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider, {
+        ...CHAT,
+        messages: [
+          { role: 'system', content: 'sys' },
+          { role: 'user', content: 'Who is ent_9f3c?' },
+          {
+            role: 'assistant',
+            content: null,
+            toolCalls: [
+              { id: 'call_1', name: 'get_entity', argumentsJson: '{"id":"ent_9f3c","include":[]}' },
+            ],
+          },
+          { role: 'tool', toolCallId: 'call_1', content: '{"name":"Ana"}' },
+          { role: 'assistant', content: 'Ana.' },
+          { role: 'user', content: 'Thanks.' },
+        ],
+      });
+
+      expect(bodyOf(calls[0]).messages).toEqual([
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'Who is ent_9f3c?' },
+        {
+          role: 'assistant',
+          content: null,
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'get_entity', arguments: '{"id":"ent_9f3c","include":[]}' },
+            },
+          ],
+        },
+        { role: 'tool', tool_call_id: 'call_1', content: '{"name":"Ana"}' },
+        // No `tool_calls` key at all on an assistant turn without calls.
+        { role: 'assistant', content: 'Ana.' },
+        { role: 'user', content: 'Thanks.' },
+      ]);
+    });
+
+    it.each([
+      ['auto', 'auto'],
+      ['none', 'none'],
+      ['required', 'required'],
+    ] as const)('sends toolChoice %s as the string', async (toolChoice, wire) => {
+      const { provider, calls } = capturing();
+
+      await events(provider, { ...CHAT, toolChoice });
+
+      expect(bodyOf(calls[0]).tool_choice).toBe(wire);
+    });
+
+    it("maps toolChoice { name } to { type: 'function', function: { name } }", async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider, { ...CHAT, toolChoice: { name: 'get_entity' } });
+
+      expect(bodyOf(calls[0]).tool_choice).toEqual({
+        type: 'function',
+        function: { name: 'get_entity' },
+      });
+    });
+
+    it('sends none of tools, tool_choice or parallel_tool_calls without tools', async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider, PLAIN);
+
+      const body = bodyOf(calls[0]);
+      expect(body).not.toHaveProperty('tools');
+      expect(body).not.toHaveProperty('tool_choice');
+      expect(body).not.toHaveProperty('parallel_tool_calls');
+      expect(body.messages).toEqual([{ role: 'user', content: 'Hello.' }]);
+    });
+
+    it.each([
+      ['unset', undefined],
+      ["'none'", 'none'],
+    ] as const)('sends no reasoning_effort key when %s', async (_label, reasoningEffort) => {
+      const { provider, calls } = capturing();
+
+      await events(provider, { ...CHAT, reasoningEffort });
+
+      expect(bodyOf(calls[0])).not.toHaveProperty('reasoning_effort');
+    });
+
+    it('sends a set reasoning_effort flat, without raising max_completion_tokens', async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider, { ...CHAT, reasoningEffort: 'low' });
+
+      const body = bodyOf(calls[0]);
+      expect(body.reasoning_effort).toBe('low');
+      expect(body.max_completion_tokens).toBe(CHAT.maxOutputTokens);
+    });
+
+    it('sends the key as a bearer token and never in the body', async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider);
+
+      expect(calls[0].init.headers.authorization).toBe('Bearer sk-test-DO-NOT-LOG');
+      expect(calls[0].init.body).not.toContain('sk-test');
+    });
+
+    it('arms an AbortSignal only when timeoutMs > 0', async () => {
+      const { provider, calls } = capturing();
+
+      await events(provider, { ...CHAT, timeoutMs: 30_000 });
+      await events(provider, { ...CHAT, timeoutMs: 0 });
+      await events(provider, CHAT);
+
+      expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
+      expect(calls[1].init.signal).toBeUndefined();
+      expect(calls[2].init.signal).toBeUndefined();
+    });
+  });
+
+  describe('pre-flight validation — before any fetch', () => {
+    const cases: Array<[string, AiChatRequest, RegExp]> = [
+      ['empty messages', { ...CHAT, messages: [] }, /at least one message/],
+      [
+        'an orphan toolCallId',
+        {
+          ...CHAT,
+          messages: [
+            { role: 'user', content: 'q' },
+            { role: 'tool', toolCallId: 'call_nobody', content: 'r' },
+          ],
+        },
+        /call_nobody/,
+      ],
+      [
+        'a tool result BEFORE the assistant call it answers',
+        {
+          ...CHAT,
+          messages: [
+            { role: 'user', content: 'q' },
+            { role: 'tool', toolCallId: 'call_1', content: 'r' },
+            {
+              role: 'assistant',
+              content: null,
+              toolCalls: [{ id: 'call_1', name: 'search', argumentsJson: '{}' }],
+            },
+          ],
+        },
+        /call_1/,
+      ],
+      ['duplicate tool names', { ...CHAT, tools: [GET_ENTITY, GET_ENTITY] }, /more than once/],
+      [
+        'an invalid tool name',
+        { ...CHAT, tools: [{ ...GET_ENTITY, name: 'get.entity' }] },
+        /Tool name/,
+      ],
+      [
+        'an over-long tool name',
+        { ...CHAT, tools: [{ ...GET_ENTITY, name: 'x'.repeat(65) }] },
+        /Tool name/,
+      ],
+      [
+        'an empty description',
+        { ...CHAT, tools: [{ ...GET_ENTITY, description: '' }] },
+        /description/,
+      ],
+      [
+        'an over-long description',
+        { ...CHAT, tools: [{ ...GET_ENTITY, description: 'd'.repeat(1025) }] },
+        /description/,
+      ],
+      [
+        'non-strict parameters',
+        {
+          ...CHAT,
+          tools: [
+            {
+              ...GET_ENTITY,
+              parameters: {
+                type: 'object',
+                properties: { id: { type: 'string' } },
+                required: ['id'],
+                // additionalProperties missing: not strict
+              },
+            },
+          ],
+        },
+        /get_entity.*strict/,
+      ],
+      [
+        'more than 32 tools',
+        {
+          ...CHAT,
+          tools: Array.from({ length: 33 }, (_, i) => ({ ...SEARCH, name: `t${i}` })),
+        },
+        /at most 32/,
+      ],
+      ['toolChoice without tools', { ...PLAIN, toolChoice: 'auto' }, /toolChoice/],
+      [
+        'toolChoice naming an undeclared tool',
+        { ...CHAT, toolChoice: { name: 'timeline' } },
+        /timeline/,
+      ],
+    ];
+
+    it.each(cases)('refuses %s', async (_label, request, message) => {
+      const fetchImpl = jest.fn();
+      const provider = providerWith(fetchImpl as unknown as FetchLike);
+
+      const err = await events(provider, request).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(message);
+      // A programming error — never a terminal DOMAIN class.
+      expect(isTerminalAiError(err)).toBe(false);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recorded fixtures', () => {
+    const CALL_ARGS = '{"id":"ent_9f3c","include":["aliases","facts"]}';
+
+    it('chat-tool-call: one tool_call with the arguments concatenated across four frames, then done', async () => {
+      const { provider } = capturing('chat-tool-call');
+
+      const out = await events(provider);
+
+      expect(out).toEqual([
+        { kind: 'tool_call', id: 'call_Qx7aB', name: 'get_entity', argumentsJson: CALL_ARGS },
+        {
+          kind: 'done',
+          finishReason: 'tool_calls',
+          usage: { promptTokens: 412, completionTokens: 27 },
+        },
+      ]);
+      expect(JSON.parse((out[0] as { argumentsJson: string }).argumentsJson)).toEqual({
+        id: 'ent_9f3c',
+        include: ['aliases', 'facts'],
+      });
+    });
+
+    it('chat-tool-call survives the stream arriving ONE BYTE PER CHUNK', async () => {
+      const provider = providerWith(async () =>
+        streamResponse(chopped(fixture('chat-tool-call'), 1)),
+      );
+
+      const out = await events(provider);
+
+      expect(out).toEqual([
+        { kind: 'tool_call', id: 'call_Qx7aB', name: 'get_entity', argumentsJson: CALL_ARGS },
+        {
+          kind: 'done',
+          finishReason: 'tool_calls',
+          usage: { promptTokens: 412, completionTokens: 27 },
+        },
+      ]);
+    });
+
+    it('chat-parallel-tool-calls: interleaved fragments assemble into two calls in index order', async () => {
+      const { provider } = capturing('chat-parallel-tool-calls');
+
+      const out = await events(provider);
+
+      expect(out).toEqual([
+        { kind: 'tool_call', id: 'call_A1', name: 'search', argumentsJson: '{"query":"Acme contract"}' },
+        { kind: 'tool_call', id: 'call_B2', name: 'timeline', argumentsJson: '{"entityId":"ent_42"}' },
+        {
+          kind: 'done',
+          finishReason: 'tool_calls',
+          usage: { promptTokens: 530, completionTokens: 48 },
+        },
+      ]);
+    });
+
+    it('chat-text-then-tool: delta events come before the tool_call', async () => {
+      const { provider } = capturing('chat-text-then-tool');
+
+      const out = await events(provider);
+
+      expect(out.map((event) => event.kind)).toEqual([
+        'delta',
+        'delta',
+        'delta',
+        'tool_call',
+        'done',
+      ]);
+      expect(
+        out
+          .filter((event): event is { kind: 'delta'; text: string } => event.kind === 'delta')
+          .map((event) => event.text)
+          .join(''),
+      ).toBe('Let me look that up.');
+      expect(out[3]).toEqual({
+        kind: 'tool_call',
+        id: 'call_T3',
+        name: 'neighbors',
+        argumentsJson: '{"entityId":"ent_7","depth":1}',
+      });
+      expect(out[4]).toMatchObject({ kind: 'done', finishReason: 'tool_calls' });
+    });
+
+    it('chat-final-answer: deltas, then done { stop } with the vendor usage', async () => {
+      const { provider } = capturing('chat-final-answer');
+
+      const out = await events(provider);
+
+      expect(out).toEqual([
+        { kind: 'delta', text: 'Ana López ' },
+        { kind: 'delta', text: 'leads the Acme ' },
+        { kind: 'delta', text: 'renewal [1].' },
+        { kind: 'done', finishReason: 'stop', usage: { promptTokens: 910, completionTokens: 14 } },
+      ]);
+    });
+
+    it("chat-stop-with-tool-calls: a gateway's stop is reported as 'tool_calls'", async () => {
+      const { provider } = capturing('chat-stop-with-tool-calls');
+
+      const out = await events(provider);
+
+      expect(out).toEqual([
+        { kind: 'tool_call', id: 'call_G5', name: 'evidence', argumentsJson: '{"claimId":"clm_3"}' },
+        { kind: 'done', finishReason: 'tool_calls', usage: { promptTokens: 300, completionTokens: 19 } },
+      ]);
+    });
+
+    it('a mid-stream error frame maps to the same class generate() maps it to', async () => {
+      const { provider } = capturing('mid-stream-error');
+
+      await expect(events(provider)).rejects.toBeInstanceOf(AiInputError);
+    });
+  });
+
+  describe('finish reasons', () => {
+    const TEXT = '{"choices":[{"index":0,"delta":{"content":"Hi."},"finish_reason":null}]}';
+    const CALL =
+      '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"search","arguments":"{}"}}]},"finish_reason":null}]}';
+    const finish = (reason: string) =>
+      `{"choices":[{"index":0,"delta":{},"finish_reason":${JSON.stringify(reason)}}]}`;
+
+    const doneOf = (out: AiChatEvent[]) => out[out.length - 1];
+
+    it.each([
+      ['tool_calls', CALL, 'tool_calls'],
+      ['function_call (legacy)', CALL, 'tool_calls'],
+      ['stop, no calls', TEXT, 'stop'],
+      ['stop, with calls', CALL, 'tool_calls'],
+      ['length', TEXT, 'length'],
+      ['length, with calls', CALL, 'length'],
+    ] as const)('%s', async (label, content, expected) => {
+      const raw = label.split(/[ ,]/)[0];
+      const out = await events(fromText(sse(content, finish(raw))));
+
+      expect(doneOf(out)).toMatchObject({ kind: 'done', finishReason: expected });
+    });
+
+    it('content_filter is an AiRefusedError, identical to generate()', async () => {
+      const err = await events(fromText(sse(TEXT, finish('content_filter')))).catch(
+        (e: unknown) => e,
+      );
+
+      expect(err).toBeInstanceOf(AiRefusedError);
+      expect((err as AiRefusedError).providerId).toBe('openai');
+    });
+
+    it.each([
+      ['no calls', TEXT, 'stop'],
+      ['with calls', CALL, 'tool_calls'],
+    ] as const)(
+      'an unrecognised reason warns (naming only the reason) and is treated as a stop — %s',
+      async (_label, content, expected) => {
+        const provider = fromText(sse(content, finish('vendor_new_reason')));
+        const warn = jest
+          .spyOn(
+            (provider as unknown as { logger: { warn: (m: string) => void } }).logger,
+            'warn',
+          )
+          .mockImplementation(() => undefined);
+
+        const out = await events(provider);
+
+        expect(doneOf(out)).toMatchObject({ kind: 'done', finishReason: expected });
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0]).toContain('vendor_new_reason');
+        expect(warn.mock.calls[0][0]).not.toContain('Hi.');
+        expect(warn.mock.calls[0][0]).not.toContain('search');
+      },
+    );
+
+    it('a stream with no finish reason is a plain, RETRYABLE Error', async () => {
+      const truncated = fixture('chat-tool-call')
+        .split('\n\n')
+        .filter((frame) => !frame.includes('"finish_reason":"tool_calls"') && !frame.includes('[DONE]'))
+        .join('\n\n');
+
+      const err = await events(fromText(truncated)).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(/without a finish reason/);
+      expect(isTerminalAiError(err)).toBe(false);
+    });
+
+    it.each([
+      [
+        'id',
+        '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"type":"function","function":{"name":"search","arguments":"{}"}}]},"finish_reason":null}]}',
+      ],
+      [
+        'name',
+        '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"arguments":"{}"}}]},"finish_reason":null}]}',
+      ],
+    ])('a tool call with no %s is a plain, RETRYABLE "malformed tool call" Error', async (_missing, frame) => {
+      const err = await events(fromText(sse(frame, finish('tool_calls')))).catch(
+        (e: unknown) => e,
+      );
+
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(/malformed tool call/);
+      expect(isTerminalAiError(err)).toBe(false);
+    });
+  });
+
+  describe('usage', () => {
+    it('estimates usage — never zero — when the usage frame is missing', async () => {
+      const withoutUsage = fixture('chat-tool-call')
+        .split('\n\n')
+        .filter((frame) => !frame.includes('"usage"'))
+        .join('\n\n');
+
+      const out = await events(fromText(withoutUsage));
+      const done = out[out.length - 1] as Extract<AiChatEvent, { kind: 'done' }>;
+
+      expect(done.finishReason).toBe('tool_calls');
+      expect(done.usage.promptTokens).toBeGreaterThan(0);
+      expect(done.usage.completionTokens).toBeGreaterThan(0);
+    });
+
+    it('counts tool-call arguments as completion when there is no text at all', async () => {
+      const provider = fromText(
+        sse(
+          '{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"search","arguments":"{\\"query\\":\\"a long enough query string\\"}"}}]},"finish_reason":null}]}',
+          '{"choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}',
+        ),
+      );
+
+      const out = await events(provider);
+      const done = out[out.length - 1] as Extract<AiChatEvent, { kind: 'done' }>;
+
+      expect(out[0]).toMatchObject({
+        kind: 'tool_call',
+        argumentsJson: '{"query":"a long enough query string"}',
+      });
+      expect(done.usage.completionTokens).toBeGreaterThan(1);
+    });
+  });
+
+  describe('HTTP status mapping (shared with generate)', () => {
+    it('maps 429 to RateLimitError carrying the Retry-After delay', async () => {
+      const provider = providerWith(async () =>
+        errorResponse(429, '{"error":{"message":"Rate limit reached"}}', {
+          'retry-after': '30',
+        }),
+      );
+
+      const err = await events(provider).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(RateLimitError);
+      expect((err as RateLimitError).retryAfterMs).toBe(30_000);
+    });
+
+    it('maps 401 to AiAuthError and 400 to AiInputError', async () => {
+      await expect(
+        events(providerWith(async () => errorResponse(401, '{}'))),
+      ).rejects.toBeInstanceOf(AiAuthError);
+      await expect(
+        events(
+          providerWith(async () =>
+            errorResponse(400, '{"error":{"message":"Invalid schema for function get_entity"}}'),
+          ),
+        ),
+      ).rejects.toBeInstanceOf(AiInputError);
+    });
+  });
+
+  describe('logging', () => {
+    it('logs no message, tool argument or tool result on the ordinary path', async () => {
+      const { provider } = capturing('chat-tool-call');
+      const logger = (provider as unknown as {
+        logger: Record<'log' | 'warn' | 'debug' | 'error' | 'verbose', (m: string) => void>;
+      }).logger;
+      const spies = (['log', 'warn', 'debug', 'error', 'verbose'] as const).map((level) =>
+        jest.spyOn(logger, level).mockImplementation(() => undefined),
+      );
+
+      await events(provider, {
+        ...CHAT,
+        messages: [
+          { role: 'user', content: 'SECRET-QUESTION' },
+          {
+            role: 'assistant',
+            content: null,
+            toolCalls: [{ id: 'call_0', name: 'search', argumentsJson: '{"query":"SECRET-ARG"}' }],
+          },
+          { role: 'tool', toolCallId: 'call_0', content: 'SECRET-RESULT' },
+        ],
+      });
+
+      for (const spy of spies) {
+        for (const call of spy.mock.calls) {
+          const line = String(call[0]);
+          expect(line).not.toMatch(/SECRET|ent_9f3c|sk-test/);
+        }
+      }
+    });
+  });
+
+  describe('the toolCalling capability', () => {
+    const provider = providerWith(async () => {
+      throw new Error('no network in this test');
+    });
+
+    it('flags every catalogued model toolCalling: true', () => {
+      expect(provider.capabilities.models.length).toBeGreaterThan(0);
+      for (const model of provider.capabilities.models) {
+        expect([model.id, model.toolCalling]).toEqual([model.id, true]);
+      }
+    });
+
+    it('declares a floor that claims NO tool calling for an unplaceable id', () => {
+      expect(provider.capabilities.defaultModelFeatures?.toolCalling).toBe(false);
+    });
+
+    it('a dated snapshot inherits its family\'s toolCalling', () => {
+      expect(deriveOpenAiModelDescriptor('gpt-5.4-mini-2026-03-17')?.toolCalling).toBe(true);
+    });
+
+    it.each([
+      ['gpt-4o', true, 'catalogue'],
+      ['gpt-5.4-mini-2026-03-17', true, 'derived'],
+      ['some-gateway-model', false, 'default'],
+    ] as const)('resolves %s to toolCalling %s (%s)', (id, flag, source) => {
+      const resolved = resolveAllowedModel({ id }, modelKnowledgeOf(provider));
+
+      expect(resolved?.source).toBe(source);
+      expect(resolved?.toolCalling).toBe(flag);
+    });
+
+    it('registers — the boot check is satisfied because chat exists', () => {
       const registry = new AiProviderRegistry();
       expect(() => registry.register(new OpenAiProvider(registry))).not.toThrow();
     });

@@ -85,6 +85,11 @@ export const aiModelDescriptorSchema = z.object({
     .describe(
       'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication, digest and brief require it.',
     ),
+  toolCalling: z
+    .boolean()
+    .describe(
+      'Whether this model supports tool (function) calling. The connected-knowledge Ask agent requires it.',
+    ),
 });
 
 /** What a provider can do, published so a form need not discover it by trying. */
@@ -106,10 +111,11 @@ export const aiProviderCapabilitiesSchema = z.object({
   defaultModelFeatures: z
     .object({
       structuredOutput: z.boolean(),
+      toolCalling: z.boolean(),
     })
     .optional()
     .describe(
-      'The conservative capability floor applied to a model id this provider cannot place (issue #358) — beside `defaultModelLimits`. OpenAI declares `structuredOutput: false` here: an unknown id could be any gateway model, and claiming support it lacks would fail a paid call. Absent means every flag is false for such an id.',
+      'The conservative capability floor applied to a model id this provider cannot place (issue #358) — beside `defaultModelLimits`. OpenAI declares `structuredOutput: false` and `toolCalling: false` (issue #359) here: an unknown id could be any gateway model, and claiming support it lacks would fail a paid call. Absent means every flag is false for such an id.',
     ),
   modelDiscovery: z
     .boolean()
