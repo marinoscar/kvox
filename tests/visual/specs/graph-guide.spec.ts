@@ -68,14 +68,14 @@ test.describe('Guide the graph', () => {
       await waitForInter(page);
 
       await expect(page.getByRole('heading', { name: /People/ })).toBeVisible();
-      await page.getByRole('button', { name: 'Edit guidance' }).click();
+      await page.getByRole('button', { name: 'Edit guidance', exact: true }).click();
 
-      const dialog = page.getByRole('dialog', { name: 'Extract again' });
+      const dialog = page.getByRole('dialog', { name: 'Extract again', exact: true });
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByRole('combobox', { name: 'Model' })).toHaveText('GPT-4.1');
+      await expect(dialog.getByRole('combobox', { name: 'Model', exact: true })).toHaveText('GPT-4.1');
       await expect(dialog.getByText('About 6,840 input tokens · 1 request')).toBeVisible();
-      await expect(dialog.getByRole('textbox', { name: 'Instructions' })).toHaveValue(/Only the storage migration/);
-      await expect(dialog.getByRole('button', { name: 'Ana Ruiz' })).toBeVisible();
+      await expect(dialog.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue(/Only the storage migration/);
+      await expect(dialog.getByRole('button', { name: 'Ana Ruiz', exact: true })).toBeVisible();
 
       await expect(page).toHaveScreenshot(`graph-guide-extract-${name}.png`);
     });
@@ -95,12 +95,12 @@ test.describe('Guide the graph', () => {
 
     const bar = page.getByTestId('graph-selection-bar');
     await expect(bar).toBeVisible();
-    await bar.getByRole('button', { name: 'Add to graph' }).click();
+    await bar.getByRole('button', { name: 'Add to graph', exact: true }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Add to graph' });
+    const dialog = page.getByRole('dialog', { name: 'Add to graph', exact: true });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('textbox', { name: 'Name' })).toHaveValue('storage migration **behind a flag');
-    await expect(dialog.getByRole('button', { name: 'Add to draft' })).toBeEnabled();
+    await expect(dialog.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('storage migration **behind a flag');
+    await expect(dialog.getByRole('button', { name: 'Add to draft', exact: true })).toBeEnabled();
 
     await expect(page).toHaveScreenshot('graph-guide-add-phone-390.png');
   });
@@ -112,10 +112,10 @@ test.describe('Guide the graph', () => {
     await page.goto(harnessUrl({ route: '/' }));
     await waitForInter(page);
 
-    await expect(page.getByRole('heading', { name: 'Hi, Visual' })).toBeVisible();
-    const section = page.getByRole('region', { name: 'Waiting for review' });
+    await expect(page.getByRole('heading', { name: 'Hi, Visual', exact: true })).toBeVisible();
+    const section = page.getByRole('region', { name: 'Waiting for review', exact: true });
     await expect(section).toBeVisible();
-    await expect(section.getByRole('heading', { name: 'Possible duplicates in your graph' })).toBeVisible();
+    await expect(section.getByRole('heading', { name: 'Possible duplicates in your graph', exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Shared with me', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New transcript', exact: true })).toBeEnabled();
 
