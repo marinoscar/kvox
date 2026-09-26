@@ -1639,10 +1639,13 @@ child-issue breakdown for the pattern).
 
 The ontology is not a fixed set of Prisma enums and a hand-maintained
 extraction prompt kept in step with them by discipline alone — it is a single
-TypeScript + Zod declaration, planned at `packages/shared/ontology/` — a new
-`ontology/` directory inside the existing `@app/shared` package
-(`packages/shared/`), because both `apps/api` and `apps/web` already depend
-on that package for exactly this reason: the API to validate and extract
+TypeScript + Zod declaration (issue #350). Sources live at
+`packages/shared/src/ontology/`, a new directory inside the existing
+`@app/shared` package (`packages/shared/`), compiled with
+`npm run build:ontology --workspace=@app/shared` into committed CommonJS +
+`.d.ts` at `packages/shared/ontology/` and consumed via the `@app/shared/ontology`
+subpath export — because both `apps/api` and `apps/web` already depend on
+that package for exactly this reason: the API to validate and extract
 against, the web app to render a form from, one declaration shared rather
 than two hand-copied ones.
 Zod is not a new dependency reached for here — it is already this codebase's
@@ -1735,10 +1738,16 @@ needs from it.
 
 ### 17.2 Domains as modules
 
-The definition file is not one flat list of types — it is modules that
-self-register, mirroring the exact "one file, `onModuleInit`, no central
-dispatch table" shape CLAUDE.md's Adding a Job Type and Adding a Notification
-recipes already establish for their own registries:
+The definition file is not one flat list of types — it is modules listed
+**explicitly** in `index.ts`, never self-registered by import side effect
+(issue #350): `@app/shared` is a CommonJS package pre-bundled by Vite and
+`require()`d by Jest, and registration order under those two module systems
+is not something to depend on. `index.ts` imports each domain module and
+passes it to `buildOntologyRegistry([coreDomain, workDomain, ...], ...)`
+directly — one import and one array entry is the whole cost of adding a
+domain, with the same "one registry entry" simplicity CLAUDE.md's Adding a
+Job Type and Adding a Notification recipes give their own registries, just
+without the runtime self-registration mechanism those use:
 
 - **`core.ts`** — `Person`, `Organization`, `Meeting`, `Claim`, `PersonFact`,
   plus the evidence/review/temporal machinery (§5.3–§5.5) every other domain
@@ -1746,9 +1755,10 @@ recipes already establish for their own registries:
 - **`work.ts`** — `Project`, `Commitment`, `Decision`, and the relation types
   `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
 - **`personal.ts`** — `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, `Interest`,
-  `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6).
-- **`index.ts`** — the registry: every module calls `register()` from its own
-  `onModuleInit`-equivalent at startup, and a user's **effective schema** is
+  `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6), not yet
+  built.
+- **`index.ts`** — the registry: lists every domain module explicitly and
+  builds it via `buildOntologyRegistry`, and a user's **effective schema** is
   computed as `core ∪ {enabled domains}` — never hand-assembled per caller.
 
 **Why `Person` and `Organization` are `core` rather than `work`, specifically

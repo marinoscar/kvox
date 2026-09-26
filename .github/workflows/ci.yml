@@ -80,6 +80,11 @@ jobs:
       - run: npm run typecheck --workspace=api
       - run: npm run typecheck --workspace=web
       - run: npm run typecheck --workspace=cli
+      - run: npm run typecheck --workspace=@app/shared
+      # @app/shared/ontology is compiled TypeScript whose output is COMMITTED
+      # (packages/shared/ontology/): rebuild it and fail if the committed copy
+      # is stale, i.e. a source edit was committed without its rebuild.
+      - run: npm run build:ontology --workspace=@app/shared && git diff --exit-code -- packages/shared/ontology
 
       - run: npm test --workspace=api
       - run: npm run test:run --workspace=cli
