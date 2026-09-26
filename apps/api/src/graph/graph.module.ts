@@ -114,6 +114,8 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphPreferencesService,
     EvidenceValidator,
     GraphWriteService,
+    // #364 — `MergeService` reuses its guarded kg.embed/kg.entity_digest enqueue.
+    GraphEntitiesService,
     GraphReadService,
     GraphNeighborhoodService,
     GraphEvidenceService,

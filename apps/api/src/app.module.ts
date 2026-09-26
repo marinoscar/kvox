@@ -32,6 +32,7 @@ import { AiModule } from './ai/ai.module';
 import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
+import { GraphResolutionModule } from './graph/resolution/resolution.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
@@ -228,6 +229,12 @@ import configuration from './config/configuration';
     // stage registry. NotesModule imports it too (the note-ready hook); listed
     // here explicitly for the reason SearchIndexingModule is below.
     GraphExtractionModule,
+
+    // Entity resolution (#364): the `resolution` proposal stage, merges and
+    // their reversal, distinct pairs, and the `kg.resolve` / `kg.embed` jobs.
+    // Imports GraphExtractionModule (the stage registry) and SearchModule (the
+    // embedder contract); imported by nothing here, one-way.
+    GraphResolutionModule,
 
     // Semantic search, indexing half (#188, epic #165): the `search.index` job
     // and the enqueue/forget surface its callers use. Listed explicitly even

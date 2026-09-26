@@ -66,7 +66,7 @@ describe('kg:eval CLI (issue #362)', () => {
   it('--run with an unregistered runner exits 2, naming the registered ones', () => {
     const res = cli(['--run', 'nope', '--model', 'any-model']);
     expect(res.status).toBe(2);
-    expect(res.stderr).toContain("no runner 'nope' registered (known: extract)");
+    expect(res.stderr).toContain("no runner 'nope' registered (known: extract, extract+resolve)");
   });
 
   it('--run extract (#363) is registered, and exits 2 without its API key', () => {

@@ -154,6 +154,10 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // `kg.extract` (#363): one structured-output call per note that proposes
   // graph rows for review, on the note owner's own AI key.
   'kg.extract': 'Knowledge graph extraction',
+  // #364: the bulk duplicate re-scan (its only output is a proposal to review)
+  // and profile embeddings for resolution's vector arm, both on the owner's key.
+  'kg.resolve': 'Knowledge graph resolution',
+  'kg.embed': 'Knowledge graph embeddings',
   // #371, epic #347: the whole-graph overview snapshot (clusters + positions).
   'kg.graph_layout': 'Knowledge graph layout',
   // #372 — the rolling per-entity summary the entity brief shows; spends the

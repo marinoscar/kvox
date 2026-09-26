@@ -165,51 +165,66 @@ export interface ExtractRunnerDeps {
   provider?: AiProvider<unknown>;
 }
 
+/**
+ * The shared half of every runner: one `generateStructured` call and the
+ * validator, returning the proposal rows before any pre-check. `null` when the
+ * model's answer fails validation (`invalidOutput`). #364's `extract+resolve`
+ * runner resolves these rows before the pre-check runs.
+ */
+export async function runExtraction(
+  provider: AiProvider<unknown>,
+  fixture: GoldenFixture,
+  opts: KgEvalRunOptions,
+): Promise<{ rows: ProposedRow[]; stats: Record<string, number> } | null> {
+  if (typeof provider.generateStructured !== 'function') {
+    throw new Error(`Provider "${provider.id}" cannot return structured output`);
+  }
+  const ctx = buildExtractionContext(fixtureToInput(fixture));
+  const prompt = assembleExtractionPrompt(ctx);
+  const schema = buildExtractionOutputSchema(ctx);
+  // This build's default provider settings (the OpenAI API root), with the
+  // model the run names permitted — nothing a deployment's settings add.
+  const defaults = (DEFAULT_SYSTEM_SETTINGS.ai.providers as Record<string, Record<string, unknown>>)[provider.id] ?? {};
+  const settings = provider.settingsSchema.parse({ ...defaults, allowedModels: [opts.model], defaultModel: opts.model });
+  const result = await provider.generateStructured(createProviderContext(opts.apiKey, settings), {
+    model: opts.model,
+    systemPrompt: prompt.systemPrompt,
+    userContent: prompt.userContent,
+    schema,
+    schemaName: EXTRACTION_SCHEMA_NAME,
+    maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
+    timeoutMs: EVAL_TIMEOUT_MS,
+  });
+
+  const validated = validateExtraction(result.value, ctx);
+  if (!validated.ok) return null;
+  const final = addDeterministicRows(ctx, validated);
+  return { rows: final.rows, stats: { ...final.stats.dropped, quoteNotLocated: final.stats.quoteNotLocated } };
+}
+
+/** Pre-check the rows with default preferences and turn them into a prediction. */
+export function precheckToPrediction(fixtureId: string, model: string, rows: ProposedRow[], stats: Record<string, number>): KgEvalPrediction {
+  const precheck: PrecheckItem[] = rows.map((row) => ({
+    kind: row.kind,
+    payload: row.payload as unknown as Record<string, unknown>,
+    resolution: row.resolution,
+    flags: row.flags,
+    decision: 'pending',
+  }));
+  applyPrecheck(precheck, GRAPH_PREFERENCE_DEFAULTS);
+  return rowsToPrediction(fixtureId, model, rows, precheck.map((p) => p.decision), stats);
+}
+
 export function createExtractRunner(deps: ExtractRunnerDeps = {}): KgEvalRunner {
   const provider = deps.provider ?? (new OpenAiProvider(new AiProviderRegistry()) as unknown as AiProvider<unknown>);
   return {
     name: 'extract',
     async run(fixture: GoldenFixture, opts: KgEvalRunOptions): Promise<KgEvalPrediction> {
-      if (typeof provider.generateStructured !== 'function') {
-        throw new Error(`Provider "${provider.id}" cannot return structured output`);
-      }
-      const ctx = buildExtractionContext(fixtureToInput(fixture));
-      const prompt = assembleExtractionPrompt(ctx);
-      const schema = buildExtractionOutputSchema(ctx);
-      // This build's default provider settings (the OpenAI API root), with the
-      // model the run names permitted — nothing a deployment's settings add.
-      const defaults = (DEFAULT_SYSTEM_SETTINGS.ai.providers as Record<string, Record<string, unknown>>)[provider.id] ?? {};
-      const settings = provider.settingsSchema.parse({ ...defaults, allowedModels: [opts.model], defaultModel: opts.model });
-      const result = await provider.generateStructured(createProviderContext(opts.apiKey, settings), {
-        model: opts.model,
-        systemPrompt: prompt.systemPrompt,
-        userContent: prompt.userContent,
-        schema,
-        schemaName: EXTRACTION_SCHEMA_NAME,
-        maxOutputTokens: EVAL_MAX_OUTPUT_TOKENS,
-        timeoutMs: EVAL_TIMEOUT_MS,
-      });
-
-      const validated = validateExtraction(result.value, ctx);
-      if (!validated.ok) {
+      const extracted = await runExtraction(provider, fixture, opts);
+      if (!extracted) {
         return { fixtureId: fixture.id, model: opts.model, entities: [], relations: [], items: [], stats: { invalidOutput: 1 } };
       }
-      const final = addDeterministicRows(ctx, validated);
-      const precheck: PrecheckItem[] = final.rows.map((row) => ({
-        kind: row.kind,
-        payload: row.payload as unknown as Record<string, unknown>,
-        resolution: row.resolution,
-        flags: row.flags,
-        decision: 'pending',
-      }));
-      applyPrecheck(precheck, GRAPH_PREFERENCE_DEFAULTS);
-      return rowsToPrediction(
-        fixture.id,
-        opts.model,
-        final.rows,
-        precheck.map((p) => p.decision),
-        { ...final.stats.dropped, quoteNotLocated: final.stats.quoteNotLocated },
-      );
+      return precheckToPrediction(fixture.id, opts.model, extracted.rows, extracted.stats);
     },
   };
 }

@@ -51,6 +51,8 @@ import { SearchService } from './search.service';
   imports: [PrismaModule, AiModule],
   controllers: [SearchController],
   providers: [SearchService, SearchQueryEmbedder],
-  exports: [SearchService],
+  // SearchQueryEmbedder: the graph's embedder (#364) reuses its gate, rather
+  // than growing a second model/dimension contract.
+  exports: [SearchService, SearchQueryEmbedder],
 })
 export class SearchModule {}
