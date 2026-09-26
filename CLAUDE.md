@@ -977,6 +977,14 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
 - `POST /api/graph/distinct-pairs` - Record that two entities are not the same; resolution never
   proposes the pair again. Order-free, idempotent (`created`), normalized `aId < bId`
   (`graph:write`)
+- `GET /api/graph/entities/{id}/brief?since&as_of&markViewed` - "What's the latest on …?" in one
+  call (issue #372, epic #347). **Never a provider call, never a 409** — deterministic, cited
+  `sections` (What changed/Decisions/Open commitments/Risks-claims/People changes) + the latest
+  stored `kg.entity_digest` output + `related` (hybrid search fused with the entity's own graph
+  evidence). A stale digest with nothing already queued is refreshed by **enqueueing**
+  `kg.entity_digest` (`digestPending: true`) after a configuration-only resolver check;
+  `digestUnavailable` names why not otherwise. `kg_entity_views` is upserted when `markViewed` and
+  no `as_of`. 400 bad `since`/`as_of`/`markViewed` (`graph:read`)
 - `GET /api/graph/overview` - The whole-graph overview: clusters and 2D positions from the
   latest `kg_graph_layouts` snapshot, labels joined **live** (issue #371). **Never recomputes.**
   `status: "none"` with no snapshot enqueues the bootstrap layout **only** when the graph is
@@ -1372,11 +1380,15 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   the same reasoning every other `kg_*` table's `owner_id` follows.
 - `kg_entity_digests` - §9.2's precomputed entity brief — "precompute once, read cheaply."
   `entity_id` is the **primary key**, not a separate `id`: exactly one digest per entity, always
-  replaced in place, never versioned.
+  replaced in place, never versioned. Written **only** by the `kg.entity_digest` job (#372,
+  `EntityDigestHandler`); `GET /api/graph/entities/:id/brief` (`EntityBriefService`) reads it and
+  triggers a refresh by enqueueing, never by writing this table itself.
 - `kg_entity_views` - `(user_id, entity_id, last_viewed_at)`, plain `@@unique([userId,
   entityId])` — §9.2's "recently viewed" list. The **one** table in this graph keyed on
   `user_id`, not `owner_id`: which entities a viewer has looked at is a per-viewer fact, not an
-  ownership fact.
+  ownership fact. Upserted by `EntityViewService` (#372) from the brief GET whenever
+  `markViewed` and no `as_of` — after the response is assembled, so a visit's own delta is
+  computed against the previous one, never itself.
 - `kg_graph_layouts` - One row per computed whole-graph layout snapshot (issue #371), read by
   `GET /api/graph/overview` and never by anything else. A **cache of derived data, never a
   source of truth** — `clusters`/`positions` hold ids and numbers only, **no label is ever
@@ -2142,7 +2154,13 @@ neighbourhood, timeline, mentions, citation links, and the explorer's
 `GraphEvidenceService` for the entity brief (#372) and the Ask agent (#377)
 to reuse) is built too; so is the whole-graph overview (issue #371, epic
 #347: the `kg.graph_layout` job, `kg_graph_layouts`, and
-`GET /api/graph/overview` + `POST /api/graph/overview/refresh`); the
+`GET /api/graph/overview` + `POST /api/graph/overview/refresh`), and so is
+the entity brief (issue #372, epic #347: `GET /api/graph/entities/:id/brief`,
+`apps/api/src/graph/brief/` — deterministic cited sections, the
+`kg.entity_digest` job's stored output, and hybrid-search-fused related
+sources, never an AI call inside the request itself; `EntityBriefService
+.getBrief()` is exported for the Ask agent's `entity_brief` tool (#377) to
+call directly with `markViewed: false, enqueueStaleDigest: false`); the
 extraction/review/commit pipeline arrives later.**
 The extraction quality harness (issue #362: the synthetic golden set at
 `apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
@@ -2163,15 +2181,22 @@ entity resolution in `apps/api/src/graph/resolution/`, `GraphResolutionModule`: 
 middle band, the `resolution` proposal stage at order 100, reversible merges and distinct pairs;
 `kg.resolve` only ever writes a `resolution` proposal, never a merge; `kg.embed` is content-hash
 keyed and never embeds a `sensitive` PersonFact), `kg.graph_layout` (#371 —
-see below); every other type in
-`apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
+see below) and `kg.entity_digest` (#372
+— the **only** producer of brief prose: one `generateStructured` call per run,
+citing a numbered fact-handle list rather than uuids, dropping any statement
+citing nothing or an unknown handle; server-only, `maxAttempts: 1`, throttled
+per owner, enqueued by the brief GET when stale and, once a caller enqueues it,
+by #366's commit/revert and #355's manual edit/#364's merge, each guarded on
+`ai.graphEnabled`); every other type in `apps/api/src/graph/job-types.ts` is
+still only a constant. Extraction lives in
 `apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
 `graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
 #364/#365 plug their stages into. Resolution routes (merge, reverse, distinct
-pairs, #364), the read layer (#370) and the whole-graph overview (#371) are
-built; there are still no review/commit routes, and no graph UI.
+pairs, #364), the read layer (#370), the whole-graph overview (#371) and the
+entity brief (#372) are built; there are still no review/commit routes, and no
+graph UI.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph

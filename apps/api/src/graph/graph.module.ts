@@ -4,8 +4,14 @@ import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SearchModule } from '../search/search.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
+import { EntityBriefController } from './brief/entity-brief.controller';
+import { EntityBriefService } from './brief/entity-brief.service';
+import { EntityDigestEnqueuer } from './brief/entity-digest.enqueuer';
+import { EntityDigestHandler } from './brief/entity-digest.handler';
+import { EntityViewService } from './brief/entity-view.service';
 import { GraphAttributeDefsController } from './attribute-defs/graph-attribute-defs.controller';
 import { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs.service';
 import { GraphEntitiesController } from './graph-entities.controller';
@@ -54,8 +60,11 @@ import { GraphWriteService } from './write/graph-write.service';
 // `NotesModule`: NotesModule imports GraphExtractionModule (#363), which
 // imports this module, so importing NotesModule back would be a cycle. The
 // service needs only PrismaService — the same choice GraphExtractionModule makes.
+//
+// `SearchModule` (#372) supplies `SearchService`, the entity brief's text
+// arm (spec §9.4: a brief is never graph-only). One way as well.
 @Module({
-  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule],
+  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, SearchModule],
   providers: [
     GraphAccessService,
     NoteAccessService,
@@ -83,6 +92,11 @@ import { GraphWriteService } from './write/graph-write.service';
     KgGraphLayoutHandler,
     GraphLayoutListener,
     GraphOverviewService,
+    // #372 — the entity brief, and `kg.entity_digest` (the only producer of brief prose).
+    EntityViewService,
+    EntityDigestEnqueuer,
+    EntityDigestHandler,
+    EntityBriefService,
   ],
   controllers: [
     GraphController,
@@ -90,6 +104,7 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphAttributeDefsController,
     GraphReadController,
     GraphOverviewController,
+    EntityBriefController,
   ],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.
@@ -104,6 +119,8 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphReadService,
     GraphNeighborhoodService,
     GraphEvidenceService,
+    EntityBriefService,
+    EntityDigestEnqueuer,
   ],
 })
 export class GraphModule {}

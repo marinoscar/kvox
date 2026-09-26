@@ -5348,7 +5348,8 @@ extraction — asking for, and estimating, a draft proposal from a note
 (issue #363), entity resolution — merging, un-merging and marking two
 entities as distinct (issue #364) — the read layer — the entity index, an entity's page, its
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
-(issue #370) — and the whole-graph overview, read from a precomputed
+(issue #370) — an entity's **brief**, "what's the latest on …?" in one
+call (issue #372) — and the whole-graph overview, read from a precomputed
 snapshot, plus its manual refresh (issue #371); the review/commit routes
 arrive with a later issue and follow the access posture below.
 
@@ -6023,6 +6024,115 @@ Query: `cursor`, `limit` (1–50, default 25).
 
 **Errors:** `400` a cursor from another list · `401` · `403` without
 `graph:read` · `404` no such entity, not yours, or merged.
+
+##### GET /graph/entities/{id}/brief
+
+"What's the latest on …?" in one call (issue #372, epic #347;
+`docs/specs/ontology.md` §9.1, §9.2). **Assembled from stored rows only —
+this request never calls an AI model and never answers 409.** Five
+deterministic, cited sections; the latest AI-written digest as it was last
+stored; and related sources fusing full-text/semantic search with the
+documents your own graph cites for this entity.
+
+- **`sections`** — **What changed** (items about the entity in the window) ·
+  **Decisions** (`superseded` flagged) · **Open commitments** (`theirs`: this
+  entity — or, for an Organization/Project, anyone with an open `WORKS_FOR`
+  to it — owes the commitment; `yours`: it was promised to them) · **Risks /
+  claims** · **People changes** (a `soft`-exclusive relation that started or
+  ended in the window, touching the entity or its 1-hop Persons — a
+  promotion surfaces as one `ended` + one `started`). Every entry cites at
+  least one evidence id you own; `sensitive` person facts never appear.
+- **`digest`** — the latest `kg.entity_digest` job's output, each statement
+  citing the evidence it relies on, or `null` before the first run (or with
+  `as_of`). When it is stale (nothing written since the entity's newest
+  change) and nothing is already queued, **this request enqueues a
+  refresh** (`digestPending: true`) after a configuration-only check —
+  never a provider call — or reports why it cannot in `digestUnavailable`.
+  A refresh less than 15 minutes after a failed one is not retried, so a
+  down provider is not re-billed on every view.
+- **`related`** — up to 8 transcripts/notes: `SearchService`'s hybrid
+  full-text/semantic search over the entity's label, fused
+  (`reciprocalRankFusion`) with the documents your graph cites for this
+  entity, then weighted by recency and confidence. `inGraph` says whether
+  the graph arm found it too — a hit the graph never linked still surfaces
+  (§9.4: graph-only retrieval is forbidden by design).
+
+**Query parameters:**
+
+| Parameter | Notes |
+|---|---|
+| `since` | `YYYY-MM-DD` or an offset datetime. Start of the "what changed" window. Default: when you last opened this brief, else the digest's `coversUntil`, else 30 days before `asOf`. |
+| `as_of` | Evaluate the brief as of this instant instead of now. `digest` is `null`, nothing is enqueued, and your last-viewed time is not moved. |
+| `markViewed` | `true`/`false`, default `true`. Records this visit as "last looked" (ignored with `as_of`). |
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "entity": { "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11", "label": "Acme Corp", "type": "Organization" },
+    "window": {
+      "since": "2026-08-27T00:00:00.000Z",
+      "sinceSource": "last_viewed",
+      "asOf": "2026-09-26T12:00:00.000Z",
+      "lastViewedAt": "2026-08-27T00:00:00.000Z"
+    },
+    "digest": {
+      "statements": [
+        { "text": "Sarah Chen-Li was promoted to CTO.", "evidenceIds": ["e1a2b3c4-…"] }
+      ],
+      "coversUntil": "2026-09-01T00:00:00.000Z",
+      "generatedAt": "2026-09-01T00:05:00.000Z",
+      "model": "gpt-5.4-mini"
+    },
+    "digestStale": true,
+    "digestPending": true,
+    "digestUnavailable": null,
+    "sections": {
+      "whatChanged": [
+        {
+          "itemId": "9a2e…", "kind": "commitment", "title": null,
+          "statement": "Ship the Q3 pricing memo", "occurredAt": "2026-09-01T00:00:00.000Z",
+          "precision": "day", "status": "open", "dueAt": "2026-09-15T00:00:00.000Z",
+          "ownerPerson": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
+          "counterparty": null, "superseded": false, "evidenceIds": ["e1a2b3c4-…"]
+        }
+      ],
+      "decisions": [],
+      "openCommitments": { "theirs": [], "yours": [] },
+      "risksClaims": [],
+      "peopleChanges": [
+        {
+          "relationId": "3c1f…", "type": "HAS_ROLE", "change": "started",
+          "at": "2026-09-01T00:00:00.000Z", "precision": "day",
+          "person": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
+          "other": { "id": "…", "label": "Acme Corp", "type": "Organization" },
+          "title": "CTO", "evidenceIds": ["e1a2b3c4-…"]
+        }
+      ]
+    },
+    "related": [
+      {
+        "kind": "transcript", "id": "…", "title": "Q3 Pricing Review",
+        "snippetHtml": "...quarterly <mark>pricing</mark> review is scheduled for...",
+        "startMs": 184200, "score": 0.94, "inGraph": true,
+        "occurredAt": "2026-09-01T00:00:00.000Z"
+      }
+    ]
+  },
+  "meta": { "timestamp": "2026-09-26T12:00:00.000Z" }
+}
+```
+
+`sinceSource` names which of the four window rules produced `since`:
+`query`, `last_viewed`, `digest`, or `default`. `digestUnavailable` is one of
+`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
+`model_lacks_capability` — the resolver's own reasons, read without a
+network call — or `null` when a refresh was queued, is already pending, was
+deferred by the 15-minute backoff, or the digest is not stale.
+
+**Errors:** `400` an invalid `since`, `as_of`, or `markViewed` · `401` ·
+`403` without `graph:read` · `404` `Entity not found` — no such entity, not
+yours, not part of your reviewed graph, or merged.
 
 ##### GET /graph/entities/{id}/neighborhood
 

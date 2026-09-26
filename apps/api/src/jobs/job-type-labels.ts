@@ -160,6 +160,9 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'kg.embed': 'Knowledge graph embeddings',
   // #371, epic #347: the whole-graph overview snapshot (clusters + positions).
   'kg.graph_layout': 'Knowledge graph layout',
+  // #372 — the rolling per-entity summary the entity brief shows; spends the
+  // owner's own AI key, like `note.generate`.
+  'kg.entity_digest': 'Knowledge graph entity digest',
 };
 
 /**
