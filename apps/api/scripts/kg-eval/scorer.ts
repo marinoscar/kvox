@@ -213,8 +213,14 @@ export function scoreFixture(fixture: GoldenFixture, prediction: KgEvalPredictio
   for (const p of prediction.relations) {
     const pf = canonPred(p.from);
     const pt = canonPred(p.to);
+    // #383: a symmetric relation (SPOUSE_OF, FRIEND_OF) matches either way round.
+    const symmetric = ONTOLOGY.relationType(p.type)?.symmetric === true;
     const gi = goldRels.findIndex(
-      (g, i) => !usedGoldRel.has(i) && g.type === p.type && canonGold(g.from) === pf && canonGold(g.to) === pt,
+      (g, i) =>
+        !usedGoldRel.has(i) &&
+        g.type === p.type &&
+        ((canonGold(g.from) === pf && canonGold(g.to) === pt) ||
+          (symmetric && canonGold(g.from) === pt && canonGold(g.to) === pf)),
     );
     const row = `relation:${p.type}`;
     if (gi === -1) {

@@ -95,7 +95,9 @@ function relationTypesSection(ctx: ExtractionContext): string[] {
   if (ctx.offered.relationTypes.length === 0) lines.push('(none — propose no relations)');
   for (const r of ctx.offered.relationTypes) {
     const temporal = r.type.temporal ? ', temporal' : '';
-    lines.push(`- ${r.type.key}: ${r.from.join('|')} → ${r.to.join('|')}${temporal} — ${r.type.description}`);
+    // #383: a symmetric type is one fact either way round; propose it once.
+    const symmetric = r.type.symmetric === true ? ', symmetric (direction does not matter; propose it once)' : '';
+    lines.push(`- ${r.type.key}: ${r.from.join('|')} → ${r.to.join('|')}${temporal}${symmetric} — ${r.type.description}`);
     for (const a of offeredAttributes(r.type.props)) lines.push(`  ${attributeLine(a)}`);
   }
   return lines;
