@@ -34,6 +34,7 @@ import type { EntityBriefResponse } from '../../src/graph/brief/dto/entity-brief
 import { entityBriefResponseSchema } from '../../src/graph/brief/dto/entity-brief.dto';
 import { KG_ENTITY_DIGEST_JOB_TYPE } from '../../src/graph/job-types';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
+import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { JobHandlerRegistry } from '../../src/jobs/job-handler.registry';
 import { JobsService } from '../../src/jobs/jobs.service';
@@ -75,7 +76,7 @@ describeWithDb('EntityBriefService (real Postgres)', () => {
     briefs = new EntityBriefService(
       p,
       access,
-      new GraphOntologyService(p),
+      new GraphOntologyService(p, new GraphPreferencesService(p)),
       new EntityViewService(p),
       search,
       resolver as never,
