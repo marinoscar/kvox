@@ -5,6 +5,7 @@ import {
   AiBudgetError,
   AiInputError,
   AiRefusedError,
+  AiStructuredOutputError,
   parseRetryAfterMs,
   RateLimitError,
 } from '../ai-errors';
@@ -18,6 +19,7 @@ import {
   aiProvidersSchema,
   type AiProvidersValue,
 } from '../ai-settings.schema';
+import { assertStrictJsonSchema } from '../structured/strict-json-schema';
 import { EMBEDDING_DIMENSIONS } from './ai-provider.interface';
 import type {
   AiConnectionTest,
@@ -34,6 +36,8 @@ import type {
   AiProviderCapabilities,
   AiProviderContext,
   AiProviderFieldDescriptor,
+  AiStructuredRequest,
+  AiStructuredResult,
   AiUsage,
 } from './ai-provider.interface';
 
@@ -402,6 +406,12 @@ const CHARS_PER_TOKEN = 4;
 /** How long `testConnection` waits before calling the endpoint unreachable. */
 const PROBE_TIMEOUT_MS = 15_000;
 
+/** `json_schema.name`'s documented pattern (#358). Checked before any request. */
+const SCHEMA_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/** Most characters of a model's refusal text quoted into an `AiRefusedError`. */
+const REFUSAL_QUOTE_LIMIT = 300;
+
 /** Bound on any error-body excerpt that reaches a log line or `Job.lastError`. */
 const BODY_SNIPPET_LIMIT = 500;
 
@@ -459,7 +469,12 @@ interface OpenAiEmbeddingResponse {
 /** One frame of OpenAI's `stream: true` response, as far as this file reads it. */
 interface OpenAiStreamChunk {
   choices?: Array<{
-    delta?: { content?: unknown };
+    /**
+     * `refusal` (#358): under Structured Outputs a model that declines streams
+     * its explanation here INSTEAD of `content`, so a refusal is not an empty
+     * answer that fails `JSON.parse` — it is its own signal.
+     */
+    delta?: { content?: unknown; refusal?: unknown };
     finish_reason?: unknown;
   }>;
   usage?: {
@@ -1208,6 +1223,168 @@ export class OpenAiProvider
           ),
           completionTokens: this.countTokens(completionText, request.model),
         },
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Structured output (#358)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `POST {baseUrl}/chat/completions` with
+   * `response_format: { type: 'json_schema', json_schema: { strict: true } }`,
+   * streamed, accumulated, and parsed into ONE JSON value.
+   *
+   * STREAMED EVEN THOUGH NOTHING IS YIELDED, because the whole error, timeout
+   * and mid-stream-error machinery is stream-based and lives in
+   * `streamChatCompletion` — one parser for every call shape.
+   *
+   * THE END-OF-STREAM DECISIONS, IN ORDER, and why that order:
+   *
+   *   1. No finish reason → a plain (retryable) `Error`: the socket died, the
+   *      same rule `generate` follows.
+   *   2. Refusal text, or `content_filter` → `AiRefusedError`. Checked before
+   *      `length` because a model that refused and then ran out of room still
+   *      refused — "truncated" would send somebody to raise a ceiling.
+   *   3. `length` → `AiStructuredOutputError('truncated')`, EVEN IF THE PARTIAL
+   *      TEXT PARSES. A cut-off object that happens to be valid JSON silently
+   *      drops whatever came after the cut.
+   *   4. Unparseable content → `AiStructuredOutputError('invalid_json')` —
+   *      under strict decoding, a gateway that ignored `response_format`.
+   *   5. Otherwise the parsed value, `finishReason: 'stop'`.
+   *
+   * ⚠ NOTHING HERE LOGS THE PROMPT, THE SCHEMA OR THE OUTPUT. The one `warn`
+   * (for `invalid_json`) names the model and the content's LENGTH only — the
+   * content is derived from a user's private conversation.
+   */
+  async generateStructured<T = unknown>(
+    ctx: AiProviderContext<OpenAiSettings>,
+    request: AiStructuredRequest,
+  ): Promise<AiStructuredResult<T>> {
+    // Pre-flight: both are programming errors in the CALLER's code, refused
+    // before any byte is sent (and before the user's account is metered).
+    assertStrictJsonSchema(request.schema);
+
+    if (!SCHEMA_NAME_PATTERN.test(request.schemaName)) {
+      throw new Error(
+        `Structured-output schemaName ${JSON.stringify(request.schemaName)} must match ${SCHEMA_NAME_PATTERN.source}; the vendor refuses any other name.`,
+      );
+    }
+
+    const body = {
+      model: request.model,
+      stream: true,
+      stream_options: { include_usage: true },
+      max_completion_tokens: request.maxOutputTokens,
+      // Spread — absent, never `'none'`. See `reasoningEffortBody`.
+      ...this.reasoningEffortBody(request.reasoningEffort),
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: request.schemaName,
+          strict: true,
+          schema: request.schema,
+        },
+      },
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userContent },
+      ],
+    };
+
+    let finishReason: AiFinishReason | null = null;
+    let usage: AiUsage | null = null;
+    let content = '';
+    let refusal = '';
+
+    for await (const chunk of this.streamChatCompletion(
+      ctx,
+      body,
+      `generate structured output with model "${request.model}"`,
+      request.timeoutMs,
+    )) {
+      const choice = chunk.choices?.[0];
+
+      const text = choice?.delta?.content;
+      if (typeof text === 'string') content += text;
+
+      const refused = choice?.delta?.refusal;
+      if (typeof refused === 'string') refusal += refused;
+
+      const mapped = mapFinishReason(choice?.finish_reason);
+      if (mapped !== null) {
+        finishReason = mapped;
+      } else if (
+        choice?.finish_reason !== undefined &&
+        choice.finish_reason !== null
+      ) {
+        this.logger.warn(
+          `OpenAI returned an unrecognised finish_reason "${String(choice.finish_reason)}"; treating it as a normal stop.`,
+        );
+        finishReason = 'stop';
+      }
+
+      if (chunk.usage) {
+        const promptTokens = asFiniteNumber(chunk.usage.prompt_tokens);
+        const completionTokens = asFiniteNumber(chunk.usage.completion_tokens);
+        if (promptTokens !== null && completionTokens !== null) {
+          usage = { promptTokens, completionTokens };
+        }
+      }
+    }
+
+    if (finishReason === null) {
+      throw new Error(
+        'The provider closed the structured-output stream without a finish reason; the response was truncated.',
+      );
+    }
+
+    if (refusal.trim().length > 0 || finishReason === 'content_filter') {
+      const quoted = refusal.trim();
+      throw new AiRefusedError(
+        'The provider declined to produce this structured answer. Rewording the instructions or the source, or choosing a different model, is the only thing that changes the answer.',
+        quoted.length > 0
+          ? quoted.slice(0, REFUSAL_QUOTE_LIMIT)
+          : 'finish_reason: content_filter',
+        this.id,
+      );
+    }
+
+    if (finishReason === 'length') {
+      throw new AiStructuredOutputError(
+        `The structured answer from model "${request.model}" was cut off at the ${request.maxOutputTokens}-token output ceiling before the JSON object was complete.`,
+        'truncated',
+        this.id,
+      );
+    }
+
+    let value: unknown;
+    try {
+      value = JSON.parse(content);
+    } catch {
+      this.logger.warn(
+        `Structured output from model "${request.model}" was not valid JSON (${content.length} characters).`,
+      );
+      throw new AiStructuredOutputError(
+        `The provider finished normally but the structured answer from model "${request.model}" is not valid JSON. Something between this application and the model (usually a gateway) ignored the requested response format.`,
+        'invalid_json',
+        this.id,
+      );
+    }
+
+    return {
+      value,
+      usage:
+        usage ?? {
+          // Never zero — see `generate`. The schema travels with the prompt,
+          // so it is counted as prompt.
+          promptTokens: this.countTokens(
+            `${request.systemPrompt}\n${request.userContent}\n${JSON.stringify(request.schema)}`,
+            request.model,
+          ),
+          completionTokens: this.countTokens(content, request.model),
+        },
+      finishReason: 'stop',
     };
   }
 
