@@ -1159,6 +1159,7 @@ describe('deriveOpenAiModelDescriptor (#97)', () => {
       maxOutputTokens: 128_000,
       // #358: the family's capability travels with its numbers.
       structuredOutput: true,
+      toolCalling: true,
     });
   });
 
@@ -1577,7 +1578,7 @@ describe('OpenAiProvider.generateStructured (#358)', () => {
     });
 
     it('declares a floor that claims NO structured output for an unplaceable id', () => {
-      expect(provider.capabilities.defaultModelFeatures).toEqual({ structuredOutput: false });
+      expect(provider.capabilities.defaultModelFeatures).toEqual({ structuredOutput: false, toolCalling: false });
     });
 
     it.each([

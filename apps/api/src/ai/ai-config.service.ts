@@ -235,6 +235,8 @@ export class AiConfigService {
         // #358: which rank of the catalogue/derivation/floor answered, never
         // an administrator override — see `resolveFeatures`.
         structuredOutput: model.structuredOutput,
+        // #359: same ranks, same "never an administrator override".
+        toolCalling: model.toolCalling,
         // ⚠ THE SOURCE DESCRIBES THE MODEL'S OWN NUMBERS, NOT THE NARROWED ONES
         // ABOVE (#97). Deployment policy always narrows, and it narrows a
         // verified window and an inferred one identically — so re-labelling a

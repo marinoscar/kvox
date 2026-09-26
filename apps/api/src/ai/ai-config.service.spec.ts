@@ -74,13 +74,14 @@ function stubOpenAi(): AiProvider<never> {
           contextWindowTokens: 128_000,
           maxOutputTokens: 16_384,
           structuredOutput: true,
+          toolCalling: true,
         },
       ],
       streaming: true,
       modelDiscovery: false,
       // #358: a floor that claims nothing, so an unplaceable id reports false.
       defaultModelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_384 },
-      defaultModelFeatures: { structuredOutput: false },
+      defaultModelFeatures: { structuredOutput: false, toolCalling: false },
     },
   } as unknown as AiProvider<never>;
 }

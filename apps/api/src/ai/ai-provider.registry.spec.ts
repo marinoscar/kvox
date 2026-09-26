@@ -30,6 +30,7 @@ function stubProvider(overrides: Partial<AiProvider<unknown>> = {}): AiProvider<
           contextWindowTokens: 8000,
           maxOutputTokens: 2000,
           structuredOutput: false,
+          toolCalling: false,
         },
       ],
       streaming: true,
@@ -110,6 +111,7 @@ describe('AiProviderRegistry', () => {
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
                 structuredOutput: false,
+                toolCalling: false,
               },
             ],
             streaming: true,
@@ -133,6 +135,7 @@ describe('AiProviderRegistry', () => {
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
                 structuredOutput: false,
+                toolCalling: false,
               },
             ],
             streaming: true,
@@ -152,6 +155,7 @@ describe('AiProviderRegistry', () => {
         contextWindowTokens: 8000,
         maxOutputTokens: 2000,
         structuredOutput,
+        toolCalling: false,
       },
     ];
 
@@ -177,7 +181,7 @@ describe('AiProviderRegistry', () => {
               models: flagged(false),
               streaming: true,
               modelDiscovery: false,
-              defaultModelFeatures: { structuredOutput: true },
+              defaultModelFeatures: { structuredOutput: true, toolCalling: false },
             },
           }),
         ),
@@ -192,7 +196,7 @@ describe('AiProviderRegistry', () => {
               models: flagged(true),
               streaming: true,
               modelDiscovery: false,
-              defaultModelFeatures: { structuredOutput: true },
+              defaultModelFeatures: { structuredOutput: true, toolCalling: false },
             },
             generateStructured: jest.fn(),
           }),
@@ -208,7 +212,7 @@ describe('AiProviderRegistry', () => {
               models: flagged(false),
               streaming: true,
               modelDiscovery: false,
-              defaultModelFeatures: { structuredOutput: false },
+              defaultModelFeatures: { structuredOutput: false, toolCalling: false },
             },
           }),
         ),
@@ -222,7 +226,7 @@ describe('AiProviderRegistry', () => {
             models: flagged(true),
             streaming: true,
             modelDiscovery: false,
-            defaultModelFeatures: { structuredOutput: false },
+            defaultModelFeatures: { structuredOutput: false, toolCalling: false },
           },
           generateStructured: jest.fn(),
         }),
@@ -233,6 +237,7 @@ describe('AiProviderRegistry', () => {
       expect(described.capabilities.models[0].structuredOutput).toBe(true);
       expect(described.capabilities.defaultModelFeatures).toEqual({
         structuredOutput: false,
+        toolCalling: false,
       });
     });
   });
@@ -369,6 +374,7 @@ describe('AiProviderRegistry', () => {
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
                 structuredOutput: false,
+                toolCalling: false,
               },
             ],
             streaming: true,
@@ -411,6 +417,7 @@ describe('AiProviderRegistry', () => {
         contextWindowTokens: 1,
         maxOutputTokens: 1,
         structuredOutput: false,
+        toolCalling: false,
       });
       described.fieldDescriptors.length = 0;
 

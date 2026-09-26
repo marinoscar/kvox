@@ -81,6 +81,13 @@ export interface AiModelDescriptor {
    * {@link AiModelFeatureFlags}.
    */
   structuredOutput: boolean;
+  /**
+   * Whether this model supports tool (function) calling through
+   * {@link AiProvider.chat} (#359). REQUIRED, for the reason
+   * `structuredOutput` is: the connected-knowledge Ask agent must not be
+   * pointed at a model that cannot call its tools.
+   */
+  toolCalling: boolean;
 }
 
 /**
@@ -484,8 +491,7 @@ export interface AiStructuredResult<T = unknown> {
 }
 
 /**
- * Capability flags a model descriptor carries (#358). Extended by #359 with
- * `toolCalling`.
+ * Capability flags a model descriptor carries (#358, #359).
  */
 export interface AiModelFeatureFlags {
   /**
@@ -493,6 +499,11 @@ export interface AiModelFeatureFlags {
    * {@link AiProvider.generateStructured}.
    */
   structuredOutput: boolean;
+  /**
+   * Whether this model supports tool (function) calling through
+   * {@link AiProvider.chat} (#359).
+   */
+  toolCalling: boolean;
 }
 
 // =============================================================================

@@ -37,6 +37,7 @@ const CATALOGUE: AiModelDescriptor[] = [
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-5.4',
@@ -44,6 +45,7 @@ const CATALOGUE: AiModelDescriptor[] = [
     contextWindowTokens: 1_050_000,
     maxOutputTokens: 128_000,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-5.4-mini',
@@ -51,6 +53,7 @@ const CATALOGUE: AiModelDescriptor[] = [
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
     structuredOutput: true,
+    toolCalling: true,
   },
 ];
 
@@ -102,6 +105,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 128_000,
       maxOutputTokens: 16_384,
       structuredOutput: true,
+      toolCalling: true,
       source: 'catalogue',
       derivedFrom: null,
     });
@@ -123,6 +127,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 999_000,
       maxOutputTokens: 32_000,
       structuredOutput: true,
+      toolCalling: true,
       source: 'explicit',
       derivedFrom: null,
     });
@@ -146,6 +151,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 500_000,
       maxOutputTokens: 64_000,
       structuredOutput: false,
+      toolCalling: false,
       source: 'explicit',
       derivedFrom: null,
     });
@@ -164,6 +170,7 @@ describe('resolveAllowedModel', () => {
         contextWindowTokens: 400_000,
         maxOutputTokens: 128_000,
         structuredOutput: true,
+        toolCalling: true,
         source: 'derived',
         derivedFrom: 'gpt-5.4-mini',
       },
@@ -177,6 +184,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 128_000,
       maxOutputTokens: 16_384,
       structuredOutput: false,
+      toolCalling: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -197,6 +205,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 400_000,
       maxOutputTokens: 64_000,
       structuredOutput: true,
+      toolCalling: true,
       source: 'derived',
       derivedFrom: 'gpt-5.4-mini',
     });
@@ -215,6 +224,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 400_000,
       maxOutputTokens: 16_384,
       structuredOutput: false,
+      toolCalling: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -277,6 +287,7 @@ describe('resolveAllowedModel', () => {
         contextWindowTokens: 300_000, // the entry's own, overriding the catalogue's 128_000
         maxOutputTokens: 16_384, // the catalogue's, since the entry named none
         structuredOutput: true,
+        toolCalling: true,
         source: 'catalogue', // the weaker of `explicit` and `catalogue`
         derivedFrom: null,
       },
@@ -295,6 +306,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 128_000,
       maxOutputTokens: 64_000,
       structuredOutput: false,
+      toolCalling: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -324,6 +336,7 @@ describe('resolveAllowedModel', () => {
           contextWindowTokens: 400_000,
           maxOutputTokens: 128_000,
           structuredOutput: true,
+          toolCalling: true,
         }),
       })?.label,
     ).toBe('gpt-5.4-mini-2026-03-17');
@@ -346,6 +359,7 @@ describe('resolveAllowedModel', () => {
       contextWindowTokens: 1_024,
       maxOutputTokens: 64,
       structuredOutput: false,
+      toolCalling: false,
       source: 'explicit',
       derivedFrom: null,
     });
@@ -456,6 +470,7 @@ describe('resolveAllowedModel — the structuredOutput flag, per rank (#358)', (
       contextWindowTokens: 16_000,
       maxOutputTokens: 4_000,
       structuredOutput: false,
+      toolCalling: false,
     },
   ];
 
@@ -463,7 +478,7 @@ describe('resolveAllowedModel — the structuredOutput flag, per rank (#358)', (
     catalogue: MIXED,
     derive,
     fallback: FULL.fallback,
-    fallbackFeatures: { structuredOutput },
+    fallbackFeatures: { structuredOutput, toolCalling: false },
   });
 
   it('takes an exact catalogue hit\'s own flag, true or false', () => {
@@ -527,12 +542,13 @@ describe('resolveAllowedModel — the structuredOutput flag, per rank (#358)', (
         models: CATALOGUE,
         streaming: true as const,
         modelDiscovery: false,
-        defaultModelFeatures: { structuredOutput: false },
+        defaultModelFeatures: { structuredOutput: false, toolCalling: false },
       },
     } as unknown as AiProvider<unknown>;
 
     expect(modelKnowledgeOf(provider).fallbackFeatures).toEqual({
       structuredOutput: false,
+      toolCalling: false,
     });
     expect(
       modelKnowledgeOf({

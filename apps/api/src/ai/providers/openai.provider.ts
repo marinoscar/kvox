@@ -170,6 +170,12 @@ export const OPENAI_PROVIDER_ID = 'openai';
  * say `false` here — a false positive fails a paid extraction — and a dated
  * snapshot inherits whatever its family says, through
  * {@link deriveOpenAiModelDescriptor}.
+ *
+ * ⚠ `toolCalling: true` ON EVERY ENTRY (#359): each of these seven models
+ * supports Chat Completions function tools with `strict: true` and
+ * `parallel_tool_calls: false` per OpenAI's function-calling documentation as
+ * of 2026-09. Re-verify with the numbers; a snapshot inherits its family's
+ * flag the same way.
  */
 const MODELS: AiModelDescriptor[] = [
   {
@@ -178,6 +184,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4o-mini',
@@ -185,6 +192,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4.1',
@@ -192,6 +200,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4.1-mini',
@@ -199,6 +208,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
     structuredOutput: true,
+    toolCalling: true,
   },
   // ---------------------------------------------------------------------------
   // The GPT-5.4 family — the REASONING models (#87)
@@ -227,6 +237,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 1_050_000,
     maxOutputTokens: 128_000,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-5.4-mini',
@@ -234,6 +245,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
     structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-5.4-nano',
@@ -241,6 +253,7 @@ const MODELS: AiModelDescriptor[] = [
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
     structuredOutput: true,
+    toolCalling: true,
   },
 ];
 
@@ -281,6 +294,7 @@ export const OPENAI_DEFAULT_MODEL_LIMITS = {
  */
 export const OPENAI_DEFAULT_MODEL_FEATURES = {
   structuredOutput: false,
+  toolCalling: false,
 } as const;
 
 /**
@@ -357,6 +371,7 @@ export function deriveOpenAiModelDescriptor(
     // The family's capability, like its numbers (#358): a dated snapshot of a
     // strict-schema model is a strict-schema model.
     structuredOutput: best.structuredOutput,
+    toolCalling: best.toolCalling,
   };
 }
 
