@@ -6,8 +6,12 @@ import {
   AiBudgetError,
   AiInputError,
   AiRefusedError,
+  AiStructuredOutputError,
+  isTerminalAiError,
   RateLimitError,
 } from '../ai-errors';
+import { modelKnowledgeOf, resolveAllowedModel } from '../ai-model-resolution';
+import { StrictSchemaError } from '../structured/strict-json-schema';
 import { AiProviderRegistry } from '../ai-provider.registry';
 import {
   createProviderContext,
@@ -21,7 +25,10 @@ import {
   type FetchLike,
   type FetchLikeResponse,
 } from './openai.provider';
-import type { AiGenerateRequest } from './ai-provider.interface';
+import type {
+  AiGenerateRequest,
+  AiStructuredRequest,
+} from './ai-provider.interface';
 
 // =============================================================================
 // OpenAiProvider (issue #47, epic #45)
@@ -1150,6 +1157,8 @@ describe('deriveOpenAiModelDescriptor (#97)', () => {
       label: 'gpt-5.4-mini-2026-03-17',
       contextWindowTokens: 400_000,
       maxOutputTokens: 128_000,
+      // #358: the family's capability travels with its numbers.
+      structuredOutput: true,
     });
   });
 
@@ -1204,5 +1213,387 @@ describe('deriveOpenAiModelDescriptor (#97)', () => {
         OPENAI_DEFAULT_MODEL_LIMITS.maxOutputTokens,
       );
     }
+  });
+});
+
+// =============================================================================
+// generateStructured (#358)
+// =============================================================================
+
+describe('OpenAiProvider.generateStructured (#358)', () => {
+  const SCHEMA = {
+    type: 'object',
+    properties: {
+      entities: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            type: { type: 'string', enum: ['person', 'organization'] },
+          },
+          required: ['name', 'type'],
+          additionalProperties: false,
+        },
+      },
+      count: { type: 'integer' },
+    },
+    required: ['entities', 'count'],
+    additionalProperties: false,
+  };
+
+  const STRUCTURED: AiStructuredRequest = {
+    model: 'gpt-4o',
+    systemPrompt: 'You extract entities.',
+    userContent: 'A transcript.',
+    schema: SCHEMA,
+    schemaName: 'kg_extraction',
+    maxOutputTokens: 2048,
+  };
+
+  /** The exact object `structured-completion.txt` spells across five frames. */
+  const EXPECTED = {
+    entities: [
+      { name: 'Ana "Ani" López', type: 'person' },
+      { name: 'Acme', type: 'organization' },
+    ],
+    count: 2,
+  };
+
+  interface Captured {
+    url: string;
+    init: { body: string; headers: Record<string, string>; signal?: AbortSignal };
+  }
+
+  function capturing(
+    fixtureName = 'structured-completion',
+  ): { provider: OpenAiProvider; calls: Captured[] } {
+    const calls: Captured[] = [];
+    const provider = providerWith(async (url, init) => {
+      calls.push({ url, init: init as Captured['init'] });
+      return streamResponse(oneChunk(fixture(fixtureName)));
+    });
+    return { provider, calls };
+  }
+
+  function bodyOf(call: Captured): Record<string, unknown> {
+    return JSON.parse(call.init.body) as Record<string, unknown>;
+  }
+
+  describe('wire shape', () => {
+    it('posts a streamed json_schema strict request carrying the schema verbatim', async () => {
+      const { provider, calls } = capturing();
+
+      await provider.generateStructured(ctx(), STRUCTURED);
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].url).toBe('https://api.openai.com/v1/chat/completions');
+
+      const body = bodyOf(calls[0]);
+      expect(body.model).toBe('gpt-4o');
+      expect(body.stream).toBe(true);
+      expect(body.stream_options).toEqual({ include_usage: true });
+      expect(body.max_completion_tokens).toBe(2048);
+      expect(body.response_format).toEqual({
+        type: 'json_schema',
+        json_schema: { name: 'kg_extraction', strict: true, schema: SCHEMA },
+      });
+      expect(body.messages).toEqual([
+        { role: 'system', content: 'You extract entities.' },
+        { role: 'user', content: 'A transcript.' },
+      ]);
+      // The same guards `generate` carries.
+      expect(body).not.toHaveProperty('max_tokens');
+      expect(body).not.toHaveProperty('temperature');
+    });
+
+    it.each([
+      ['unset', undefined],
+      ["'none'", 'none'],
+    ] as const)('sends no reasoning_effort key when %s', async (_label, reasoningEffort) => {
+      const { provider, calls } = capturing();
+
+      await provider.generateStructured(ctx(), { ...STRUCTURED, reasoningEffort });
+
+      expect(bodyOf(calls[0])).not.toHaveProperty('reasoning_effort');
+    });
+
+    it('sends a set reasoning_effort flat, without raising max_completion_tokens', async () => {
+      const { provider, calls } = capturing();
+
+      await provider.generateStructured(ctx(), { ...STRUCTURED, reasoningEffort: 'high' });
+
+      const body = bodyOf(calls[0]);
+      expect(body.reasoning_effort).toBe('high');
+      expect(body).not.toHaveProperty('reasoning');
+      expect(body.max_completion_tokens).toBe(STRUCTURED.maxOutputTokens);
+    });
+
+    it('sends the key as a bearer token and never in the body', async () => {
+      const { provider, calls } = capturing();
+
+      await provider.generateStructured(ctx(), STRUCTURED);
+
+      expect(calls[0].init.headers.authorization).toBe('Bearer sk-test-DO-NOT-LOG');
+      expect(calls[0].init.body).not.toContain('sk-test');
+    });
+
+    it('arms an AbortSignal only when timeoutMs > 0', async () => {
+      const { provider, calls } = capturing();
+
+      await provider.generateStructured(ctx(), { ...STRUCTURED, timeoutMs: 30_000 });
+      await provider.generateStructured(ctx(), { ...STRUCTURED, timeoutMs: 0 });
+      await provider.generateStructured(ctx(), STRUCTURED);
+
+      expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
+      expect(calls[1].init.signal).toBeUndefined();
+      expect(calls[2].init.signal).toBeUndefined();
+    });
+  });
+
+  describe('pre-flight', () => {
+    it('refuses a schema outside the strict subset BEFORE any fetch', async () => {
+      const fetchImpl = jest.fn();
+      const provider = providerWith(fetchImpl as unknown as FetchLike);
+
+      const badSchema = {
+        ...SCHEMA,
+        properties: { ...SCHEMA.properties, when: { type: 'string', format: 'date-time' } },
+        required: [...SCHEMA.required, 'when'],
+      };
+
+      const err = await provider
+        .generateStructured(ctx(), { ...STRUCTURED, schema: badSchema })
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(StrictSchemaError);
+      expect((err as StrictSchemaError).path).toBe('$.properties.when');
+      // A programming error — never a terminal DOMAIN class.
+      expect(isTerminalAiError(err)).toBe(false);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it.each(['', 'has spaces', 'a'.repeat(65), 'dots.not.allowed'])(
+      'refuses schemaName %p before any fetch',
+      async (schemaName) => {
+        const fetchImpl = jest.fn();
+        const provider = providerWith(fetchImpl as unknown as FetchLike);
+
+        await expect(
+          provider.generateStructured(ctx(), { ...STRUCTURED, schemaName }),
+        ).rejects.toThrow(/schemaName/);
+        expect(fetchImpl).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  describe('recorded fixtures', () => {
+    it('structured-completion: returns the exact parsed object and the vendor usage', async () => {
+      const { provider } = capturing('structured-completion');
+
+      const result = await provider.generateStructured(ctx(), STRUCTURED);
+
+      expect(result).toEqual({
+        value: EXPECTED,
+        usage: { promptTokens: 812, completionTokens: 41 },
+        finishReason: 'stop',
+      });
+    });
+
+    it('survives the stream arriving ONE BYTE PER CHUNK (mid-escape, mid-UTF-8, mid-separator)', async () => {
+      const provider = providerWith(async () =>
+        streamResponse(chopped(fixture('structured-completion'), 1)),
+      );
+
+      const result = await provider.generateStructured(ctx(), STRUCTURED);
+
+      expect(result.value).toEqual(EXPECTED);
+      expect(result.usage).toEqual({ promptTokens: 812, completionTokens: 41 });
+    });
+
+    it('structured-refusal: a delta.refusal is an AiRefusedError quoting the refusal', async () => {
+      const { provider } = capturing('structured-refusal');
+
+      const err = await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(AiRefusedError);
+      expect((err as AiRefusedError).providerMessage).toBe(
+        "I'm sorry, I can't help with that.",
+      );
+      expect((err as AiRefusedError).providerId).toBe('openai');
+    });
+
+    it('bounds the quoted refusal to 300 characters', async () => {
+      const long = 'x'.repeat(1000);
+      const provider = providerWith(async () =>
+        streamResponse(
+          oneChunk(
+            `data: {"choices":[{"index":0,"delta":{"refusal":"${long}"},"finish_reason":null}]}\n\n` +
+              'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
+              'data: [DONE]\n\n',
+          ),
+        ),
+      );
+
+      const err = (await provider
+        .generateStructured(ctx(), STRUCTURED)
+        .catch((e: unknown) => e)) as AiRefusedError;
+
+      expect(err).toBeInstanceOf(AiRefusedError);
+      expect(err.providerMessage).toHaveLength(300);
+    });
+
+    it('content_filter is an AiRefusedError too', async () => {
+      const { provider } = capturing('content-filter');
+
+      await expect(provider.generateStructured(ctx(), STRUCTURED)).rejects.toBeInstanceOf(
+        AiRefusedError,
+      );
+    });
+
+    it("structured-length: finish_reason length is AiStructuredOutputError('truncated')", async () => {
+      const { provider } = capturing('structured-length');
+
+      const err = await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(AiStructuredOutputError);
+      expect((err as AiStructuredOutputError).reason).toBe('truncated');
+      expect(isTerminalAiError(err)).toBe(true);
+    });
+
+    it("a length cut-off is 'truncated' EVEN WHEN the partial text happens to parse", async () => {
+      const provider = providerWith(async () =>
+        streamResponse(
+          oneChunk(
+            'data: {"choices":[{"index":0,"delta":{"content":"{\\"entities\\":[],\\"count\\":0}"},"finish_reason":null}]}\n\n' +
+              'data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}]}\n\n' +
+              'data: [DONE]\n\n',
+          ),
+        ),
+      );
+
+      await expect(provider.generateStructured(ctx(), STRUCTURED)).rejects.toMatchObject({
+        name: 'AiStructuredOutputError',
+        reason: 'truncated',
+      });
+    });
+
+    it("structured-invalid-json: stop with prose is AiStructuredOutputError('invalid_json'), logged without content", async () => {
+      const { provider } = capturing('structured-invalid-json');
+      const warn = jest
+        .spyOn((provider as unknown as { logger: { warn: (m: string) => void } }).logger, 'warn')
+        .mockImplementation(() => undefined);
+
+      const err = await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(AiStructuredOutputError);
+      expect((err as AiStructuredOutputError).reason).toBe('invalid_json');
+      // The message never carries the model's output.
+      expect((err as Error).message).not.toContain('Ana and Ben');
+
+      // One warn, naming the model and the LENGTH only — never the content.
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = warn.mock.calls[0][0];
+      expect(line).toContain('gpt-4o');
+      expect(line).toContain('43 characters');
+      expect(line).not.toContain('Ana');
+    });
+
+    it('a mid-stream error frame maps to the same class generate() maps it to', async () => {
+      const { provider } = capturing('mid-stream-error');
+
+      await expect(provider.generateStructured(ctx(), STRUCTURED)).rejects.toBeInstanceOf(
+        AiInputError,
+      );
+    });
+  });
+
+  describe('stream endings and usage', () => {
+    it('estimates usage — never zero — when the usage frame is missing', async () => {
+      const withoutUsage = fixture('structured-completion')
+        .split('\n\n')
+        .filter((frame) => !frame.includes('"usage"'))
+        .join('\n\n');
+      const provider = providerWith(async () => streamResponse(oneChunk(withoutUsage)));
+
+      const result = await provider.generateStructured(ctx(), STRUCTURED);
+
+      expect(result.value).toEqual(EXPECTED);
+      expect(result.usage.promptTokens).toBeGreaterThan(0);
+      expect(result.usage.completionTokens).toBeGreaterThan(0);
+    });
+
+    it('a stream with no finish reason is a plain, RETRYABLE Error', async () => {
+      const truncated = fixture('structured-completion')
+        .split('\n\n')
+        .filter((frame) => !frame.includes('"finish_reason":"stop"') && !frame.includes('[DONE]'))
+        .join('\n\n');
+      const provider = providerWith(async () => streamResponse(oneChunk(truncated)));
+
+      const err = await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toMatch(/without a finish reason/);
+      expect(isTerminalAiError(err)).toBe(false);
+    });
+  });
+
+  describe('HTTP status mapping (shared with generate)', () => {
+    it('maps 429 to RateLimitError carrying the Retry-After delay', async () => {
+      const provider = providerWith(async () =>
+        errorResponse(429, '{"error":{"message":"Rate limit reached"}}', {
+          'retry-after': '30',
+        }),
+      );
+
+      const err = await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(RateLimitError);
+      expect((err as RateLimitError).retryAfterMs).toBe(30_000);
+    });
+
+    it('maps 401 to AiAuthError and 400 to AiInputError', async () => {
+      await expect(
+        providerWith(async () => errorResponse(401, '{}')).generateStructured(ctx(), STRUCTURED),
+      ).rejects.toBeInstanceOf(AiAuthError);
+      await expect(
+        providerWith(async () =>
+          errorResponse(400, '{"error":{"message":"Invalid schema for response_format"}}'),
+        ).generateStructured(ctx(), STRUCTURED),
+      ).rejects.toBeInstanceOf(AiInputError);
+    });
+  });
+
+  describe('the structuredOutput capability', () => {
+    const provider = providerWith(async () => {
+      throw new Error('no network in this test');
+    });
+
+    it('flags every catalogued model structuredOutput: true', () => {
+      expect(provider.capabilities.models.length).toBeGreaterThan(0);
+      for (const model of provider.capabilities.models) {
+        expect([model.id, model.structuredOutput]).toEqual([model.id, true]);
+      }
+    });
+
+    it('declares a floor that claims NO structured output for an unplaceable id', () => {
+      expect(provider.capabilities.defaultModelFeatures).toEqual({ structuredOutput: false });
+    });
+
+    it.each([
+      ['gpt-4o', true, 'catalogue'],
+      ['gpt-5.4-mini-2026-03-17', true, 'derived'],
+      ['some-gateway-model', false, 'default'],
+    ] as const)('resolves %s to structuredOutput %s (%s)', (id, flag, source) => {
+      const resolved = resolveAllowedModel({ id }, modelKnowledgeOf(provider));
+
+      expect(resolved?.source).toBe(source);
+      expect(resolved?.structuredOutput).toBe(flag);
+    });
+
+    it('registers — the boot check is satisfied because generateStructured exists', () => {
+      const registry = new AiProviderRegistry();
+      expect(() => registry.register(new OpenAiProvider(registry))).not.toThrow();
+    });
   });
 });

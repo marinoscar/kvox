@@ -73,10 +73,14 @@ function stubOpenAi(): AiProvider<never> {
           label: 'GPT-4o',
           contextWindowTokens: 128_000,
           maxOutputTokens: 16_384,
+          structuredOutput: true,
         },
       ],
       streaming: true,
       modelDiscovery: false,
+      // #358: a floor that claims nothing, so an unplaceable id reports false.
+      defaultModelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_384 },
+      defaultModelFeatures: { structuredOutput: false },
     },
   } as unknown as AiProvider<never>;
 }
@@ -289,5 +293,45 @@ describe('AiConfigService — switch is on, provider registered, but nothing is 
     expect(result.providerLabel).toBe('OpenAI');
     expect(result.models).toEqual([]);
     expect(result.defaultModel).toBeNull();
+  });
+});
+
+describe('AiConfigService — the structuredOutput flag (#358)', () => {
+  it('publishes each model\'s structuredOutput from its resolution rank', async () => {
+    const service = new AiConfigService(
+      settingsStub(
+        policy({
+          provider: 'openai',
+          enabled: true,
+          providers: {
+            openai: {
+              baseUrl: 'https://api.openai.com/v1',
+              allowedModels: [
+                // Catalogue hit: the catalogue's flag.
+                { id: 'gpt-4o' },
+                // Unplaceable id: the provider floor's flag — and typed numbers
+                // never promote it, because there is no admin override of a
+                // flag in v1.
+                {
+                  id: 'some-gateway-model',
+                  contextWindowTokens: 64_000,
+                  maxOutputTokens: 4_000,
+                },
+              ],
+              defaultModel: 'gpt-4o',
+            },
+          },
+        }),
+      ),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+
+    const result = await service.getConfig('user-1');
+
+    expect(result.models.map((m) => [m.id, m.structuredOutput])).toEqual([
+      ['gpt-4o', true],
+      ['some-gateway-model', false],
+    ]);
   });
 });

@@ -1752,7 +1752,10 @@ refuses rather than truncates, the streaming contract, the access model, the
 export registry, and the full privacy statement of what leaves this
 deployment and under whose account — is documented in full in
 [`docs/specs/notes.md`](docs/specs/notes.md). Don't restate any of that here;
-extend it instead. Five rules below are the ones a contributor can break from
+extend it instead. `AiProvider.generateStructured` (issue #358, spec §2.6) is
+the schema-validated structured-output path that connected-knowledge
+extraction and adjudication call instead of `generate`'s free-text stream.
+Five rules below are the ones a contributor can break from
 a neighbouring file, each with its failure mode — the same editorial bar the
 Audio Transcription section above sets.
 
