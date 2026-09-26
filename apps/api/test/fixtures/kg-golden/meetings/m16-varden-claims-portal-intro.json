@@ -1,0 +1,707 @@
+{
+  "id": "m16",
+  "title": "Varden Insurance claims portal introduction",
+  "tags": [
+    "client",
+    "relative-date",
+    "negative-role",
+    "sensitive"
+  ],
+  "recordedAt": "2026-04-23T13:00:00Z",
+  "contextText": "First meeting with Varden Insurance about their claims portal.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m16-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m16-spk-b",
+      "label": "B",
+      "displayName": "Rosa Delgado"
+    },
+    {
+      "id": "m16-spk-c",
+      "label": "C",
+      "displayName": "Ben Adeyemi"
+    },
+    {
+      "id": "m16-spk-d",
+      "label": "D",
+      "displayName": "Hana Sato"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m16-s001",
+      "speakerId": "m16-spk-a",
+      "startMs": 0,
+      "endMs": 6300,
+      "rev": 1,
+      "text": "Thanks for having us. We'd love to hear what's going on with the claims portal."
+    },
+    {
+      "id": "m16-s002",
+      "speakerId": "m16-spk-b",
+      "startMs": 6550,
+      "endMs": 14750,
+      "rev": 1,
+      "text": "I'm Rosa Delgado, claims director at Varden Insurance. The portal is where policyholders file and track claims, and it's painful."
+    },
+    {
+      "id": "m16-s003",
+      "speakerId": "m16-spk-c",
+      "startMs": 15000,
+      "endMs": 23200,
+      "rev": 1,
+      "text": "Ben Adeyemi, I'm on the IT side at Varden. I look after the portal and the policy systems behind it."
+    },
+    {
+      "id": "m16-s004",
+      "speakerId": "m16-spk-d",
+      "startMs": 23450,
+      "endMs": 28610,
+      "rev": 1,
+      "text": "Hana Sato, account director at Larkspur. I'll look after the commercial side."
+    },
+    {
+      "id": "m16-s005",
+      "speakerId": "m16-spk-a",
+      "startMs": 28860,
+      "endMs": 32120,
+      "rev": 1,
+      "text": "How much traffic does the portal handle?"
+    },
+    {
+      "id": "m16-s006",
+      "speakerId": "m16-spk-b",
+      "startMs": 32370,
+      "endMs": 39810,
+      "rev": 1,
+      "text": "About 9,000 claims a month. And our call centre gets swamped with people asking where their claim is."
+    },
+    {
+      "id": "m16-s007",
+      "speakerId": "m16-spk-c",
+      "startMs": 40060,
+      "endMs": 44460,
+      "rev": 1,
+      "text": "The portal is fifteen years old. Every change takes months."
+    },
+    {
+      "id": "m16-s008",
+      "speakerId": "m16-spk-a",
+      "startMs": 44710,
+      "endMs": 47590,
+      "rev": 1,
+      "text": "So you're thinking about a rebuild?"
+    },
+    {
+      "id": "m16-s009",
+      "speakerId": "m16-spk-b",
+      "startMs": 47840,
+      "endMs": 56800,
+      "rev": 1,
+      "text": "A claims portal rebuild, yes. But I don't want to jump straight into a build. I want to understand the options first."
+    },
+    {
+      "id": "m16-s010",
+      "speakerId": "m16-spk-d",
+      "startMs": 57050,
+      "endMs": 60310,
+      "rev": 1,
+      "text": "A short discovery would make sense then."
+    },
+    {
+      "id": "m16-s011",
+      "speakerId": "m16-spk-b",
+      "startMs": 60560,
+      "endMs": 66100,
+      "rev": 1,
+      "text": "Agreed. We've decided to run a six-week discovery before committing to any build."
+    },
+    {
+      "id": "m16-s012",
+      "speakerId": "m16-spk-a",
+      "startMs": 66350,
+      "endMs": 70750,
+      "rev": 1,
+      "text": "That's sensible. What do you need from us to start?"
+    },
+    {
+      "id": "m16-s013",
+      "speakerId": "m16-spk-c",
+      "startMs": 71000,
+      "endMs": 77300,
+      "rev": 1,
+      "text": "You'll need to understand the architecture. I'll send you the architecture diagrams by next Tuesday."
+    },
+    {
+      "id": "m16-s014",
+      "speakerId": "m16-spk-a",
+      "startMs": 77550,
+      "endMs": 80810,
+      "rev": 1,
+      "text": "Perfect. Any constraints we should know about?"
+    },
+    {
+      "id": "m16-s015",
+      "speakerId": "m16-spk-c",
+      "startMs": 81060,
+      "endMs": 87360,
+      "rev": 1,
+      "text": "The policy systems are off limits for now. Anything touching them needs the CIO's approval."
+    },
+    {
+      "id": "m16-s016",
+      "speakerId": "m16-spk-b",
+      "startMs": 87610,
+      "endMs": 91250,
+      "rev": 1,
+      "text": "And the CIO is not a fast approver."
+    },
+    {
+      "id": "m16-s017",
+      "speakerId": "m16-spk-a",
+      "startMs": 91500,
+      "endMs": 95900,
+      "rev": 1,
+      "text": "Understood, we'll design discovery to stay in the portal layer."
+    },
+    {
+      "id": "m16-s018",
+      "speakerId": "m16-spk-d",
+      "startMs": 96150,
+      "endMs": 100930,
+      "rev": 1,
+      "text": "On the commercial side, I'll send a discovery proposal by Monday."
+    },
+    {
+      "id": "m16-s019",
+      "speakerId": "m16-spk-b",
+      "startMs": 101180,
+      "endMs": 109760,
+      "rev": 1,
+      "text": "Good. One more thing, I'm having surgery in June and will be out for two weeks. Ben will cover for me."
+    },
+    {
+      "id": "m16-s020",
+      "speakerId": "m16-spk-a",
+      "startMs": 110010,
+      "endMs": 114790,
+      "rev": 1,
+      "text": "Thanks for telling us, Rosa. We'll plan the milestones around that."
+    },
+    {
+      "id": "m16-s021",
+      "speakerId": "m16-spk-c",
+      "startMs": 115040,
+      "endMs": 120200,
+      "rev": 1,
+      "text": "I'm usually easier to reach on chat than email, by the way."
+    },
+    {
+      "id": "m16-s022",
+      "speakerId": "m16-spk-a",
+      "startMs": 120450,
+      "endMs": 122570,
+      "rev": 1,
+      "text": "Noted. Hana, anything else?"
+    },
+    {
+      "id": "m16-s023",
+      "speakerId": "m16-spk-d",
+      "startMs": 122820,
+      "endMs": 126840,
+      "rev": 1,
+      "text": "Only that we'd like a named sponsor for discovery."
+    },
+    {
+      "id": "m16-s024",
+      "speakerId": "m16-spk-b",
+      "startMs": 127090,
+      "endMs": 128450,
+      "rev": 1,
+      "text": "That's me."
+    },
+    {
+      "id": "m16-s025",
+      "speakerId": "m16-spk-a",
+      "startMs": 128700,
+      "endMs": 130440,
+      "rev": 1,
+      "text": "Great, thanks both."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Varden Insurance claims portal introduction\n\n**Date:** April 23\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)\n\n## Summary\n\nFirst meeting with Varden Insurance about their claims portal, where policyholders file and track claims. Rosa Delgado, claims director, is the sponsor. Ben Adeyemi on the Varden IT side looks after the portal and the policy systems behind it.\n\n## Context\n\n- The portal handles about 9,000 claims a month.\n- The call centre is swamped with policyholders asking where their claim is.\n- The portal is fifteen years old; every change takes months.\n- Rosa wants a claims portal rebuild but wants to understand the options before committing to a build.\n\n## Decisions\n\n- Varden will run a **six-week discovery** before committing to any build. Rosa is the named sponsor.\n- Discovery stays in the portal layer. The policy systems are off limits; anything touching them needs approval from Varden's CIO, who is not a fast approver.\n\n## Action items\n\n- **Ben Adeyemi** — send the architecture diagrams by next Tuesday.\n- **Hana Sato** — send a discovery proposal by Monday.\n\n## Notes\n\n- Rosa will be out for two weeks in June; Ben covers for her. Milestones should be planned around that.\n- Ben is easier to reach on chat than by email.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15"
+      ]
+    },
+    {
+      "id": "g-person-hana-sato",
+      "type": "Person",
+      "label": "Hana Sato",
+      "aliases": [
+        "Hana"
+      ],
+      "props": {
+        "title": "Account Director"
+      },
+      "attendedFixtureIds": [
+        "m03"
+      ]
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Varden Insurance claims portal introduction",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Varden Insurance claims portal introduction"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Sato",
+        "aliases": [],
+        "existingId": "g-person-hana-sato",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s004",
+            "quote": "Hana Sato, account director at Larkspur."
+          }
+        ]
+      },
+      {
+        "key": "rosa",
+        "type": "Person",
+        "label": "Rosa Delgado",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s002",
+            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+          }
+        ]
+      },
+      {
+        "key": "ben",
+        "type": "Person",
+        "label": "Ben Adeyemi",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s003",
+            "quote": "Ben Adeyemi, I'm on the IT side at Varden."
+          }
+        ]
+      },
+      {
+        "key": "varden",
+        "type": "Organization",
+        "label": "Varden Insurance",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s002",
+            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+          }
+        ]
+      },
+      {
+        "key": "portal",
+        "type": "Project",
+        "label": "Claims portal rebuild",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s009",
+            "quote": "A claims portal rebuild, yes."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "hana",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "rosa",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ben",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "rosa",
+        "to": "varden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s002",
+            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "rosa",
+        "to": "varden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Claims Director"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s002",
+            "quote": "I'm Rosa Delgado, claims director at Varden Insurance."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "ben",
+        "to": "varden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s003",
+            "quote": "Ben Adeyemi, I'm on the IT side at Varden."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "hana",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s004",
+            "quote": "Hana Sato, account director at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "hana",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Account Director"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s004",
+            "quote": "Hana Sato, account director at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "portal",
+        "to": "varden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "First meeting with Varden Insurance about their claims portal"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "portal",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s009",
+            "quote": "A claims portal rebuild, yes."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "varden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Portal handles 9,000 claims a month",
+        "statement": "The Varden claims portal handles about 9,000 claims a month.",
+        "status": null,
+        "occurredAt": "2026-04-23",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s006",
+            "quote": "About 9,000 claims a month."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "portal",
+        "owner": null,
+        "counterparty": null,
+        "title": "Run a six-week discovery first",
+        "statement": "Varden will run a six-week discovery before committing to any build.",
+        "status": null,
+        "occurredAt": "2026-04-23",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s011",
+            "quote": "We've decided to run a six-week discovery before committing to any build."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "ben",
+        "counterparty": "g-org-larkspur-labs",
+        "title": "Send architecture diagrams",
+        "statement": "Ben will send the architecture diagrams by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-04-23",
+        "dueAt": "2026-04-28",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s013",
+            "quote": "I'll send you the architecture diagrams by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "hana",
+        "counterparty": "varden",
+        "title": "Send discovery proposal",
+        "statement": "Hana will send a discovery proposal by Monday.",
+        "status": "open",
+        "occurredAt": "2026-04-23",
+        "dueAt": "2026-04-27",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s018",
+            "quote": "I'll send a discovery proposal by Monday."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "rosa",
+        "owner": null,
+        "counterparty": null,
+        "title": "Surgery in June",
+        "statement": "Rosa is having surgery in June and will be out for two weeks.",
+        "status": null,
+        "occurredAt": "2026-04-23",
+        "dueAt": null,
+        "sensitivity": "sensitive",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s019",
+            "quote": "I'm having surgery in June and will be out for two weeks."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "ben",
+        "owner": null,
+        "counterparty": null,
+        "title": "Easier to reach on chat",
+        "statement": "Ben is easier to reach on chat than by email.",
+        "status": null,
+        "occurredAt": "2026-04-23",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m16-s021",
+            "quote": "I'm usually easier to reach on chat than email"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "Anything touching them needs the CIO's approval.",
+        "why": "A role (\"the CIO\"), not a named person: no Person is created."
+      }
+    ]
+  }
+}

@@ -1,0 +1,730 @@
+{
+  "id": "m14",
+  "title": "Gullwing chargeback discovery readout",
+  "tags": [
+    "client"
+  ],
+  "recordedAt": "2026-04-09T16:00:00Z",
+  "contextText": "Readout of the four-week discovery phase.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m14-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m14-spk-b",
+      "label": "B",
+      "displayName": "Felix Amundsen"
+    },
+    {
+      "id": "m14-spk-c",
+      "label": "C",
+      "displayName": "Wen Zhao"
+    },
+    {
+      "id": "m14-spk-d",
+      "label": "D",
+      "displayName": "Kwame Mensah"
+    },
+    {
+      "id": "m14-spk-e",
+      "label": "E",
+      "displayName": "Priya Raman"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m14-s001",
+      "speakerId": "m14-spk-a",
+      "startMs": 0,
+      "endMs": 4780,
+      "rev": 1,
+      "text": "Thanks everyone. This is the readout from the four-week chargeback discovery."
+    },
+    {
+      "id": "m14-s002",
+      "speakerId": "m14-spk-d",
+      "startMs": 5030,
+      "endMs": 11330,
+      "rev": 1,
+      "text": "I'll start with the headline. Manual review takes about 18 minutes per dispute on average."
+    },
+    {
+      "id": "m14-s003",
+      "speakerId": "m14-spk-b",
+      "startMs": 11580,
+      "endMs": 14080,
+      "rev": 1,
+      "text": "Eighteen? I'd have guessed ten."
+    },
+    {
+      "id": "m14-s004",
+      "speakerId": "m14-spk-c",
+      "startMs": 14330,
+      "endMs": 17970,
+      "rev": 1,
+      "text": "It's the evidence reading. Merchants send forty-page PDFs."
+    },
+    {
+      "id": "m14-s005",
+      "speakerId": "m14-spk-d",
+      "startMs": 18220,
+      "endMs": 26420,
+      "rev": 1,
+      "text": "And 60 percent of the volume sits in just three reason codes: goods not received, duplicate processing, and cancelled recurring."
+    },
+    {
+      "id": "m14-s006",
+      "speakerId": "m14-spk-b",
+      "startMs": 26670,
+      "endMs": 31830,
+      "rev": 1,
+      "text": "So if we automate those three, we cover most of the pain."
+    },
+    {
+      "id": "m14-s007",
+      "speakerId": "m14-spk-e",
+      "startMs": 32080,
+      "endMs": 38380,
+      "rev": 1,
+      "text": "That's our recommendation. Start with the top three reason codes and prove it before widening."
+    },
+    {
+      "id": "m14-s008",
+      "speakerId": "m14-spk-b",
+      "startMs": 38630,
+      "endMs": 40750,
+      "rev": 1,
+      "text": "Wen, do you agree?"
+    },
+    {
+      "id": "m14-s009",
+      "speakerId": "m14-spk-c",
+      "startMs": 41000,
+      "endMs": 47680,
+      "rev": 1,
+      "text": "Yes. Those three are also the most rule-like. The judgement calls are in the long tail."
+    },
+    {
+      "id": "m14-s010",
+      "speakerId": "m14-spk-b",
+      "startMs": 47930,
+      "endMs": 53470,
+      "rev": 1,
+      "text": "Then that's the decision. We automate the top three dispute reason codes first."
+    },
+    {
+      "id": "m14-s011",
+      "speakerId": "m14-spk-a",
+      "startMs": 53720,
+      "endMs": 57360,
+      "rev": 1,
+      "text": "Great. For the build we'll need labelled data."
+    },
+    {
+      "id": "m14-s012",
+      "speakerId": "m14-spk-d",
+      "startMs": 57610,
+      "endMs": 63530,
+      "rev": 1,
+      "text": "I'll build a labelled sample of 2,000 disputes by the end of the month."
+    },
+    {
+      "id": "m14-s013",
+      "speakerId": "m14-spk-c",
+      "startMs": 63780,
+      "endMs": 67420,
+      "rev": 1,
+      "text": "I can have my team validate the labels."
+    },
+    {
+      "id": "m14-s014",
+      "speakerId": "m14-spk-a",
+      "startMs": 67670,
+      "endMs": 71690,
+      "rev": 1,
+      "text": "Wen, how does validation fit with your team's workload?"
+    },
+    {
+      "id": "m14-s015",
+      "speakerId": "m14-spk-c",
+      "startMs": 71940,
+      "endMs": 76340,
+      "rev": 1,
+      "text": "It's tight. I report to Felix and we're already stretched."
+    },
+    {
+      "id": "m14-s016",
+      "speakerId": "m14-spk-b",
+      "startMs": 76590,
+      "endMs": 81370,
+      "rev": 1,
+      "text": "I'll free up two analysts for two weeks. Wen, pick who."
+    },
+    {
+      "id": "m14-s017",
+      "speakerId": "m14-spk-c",
+      "startMs": 81620,
+      "endMs": 82980,
+      "rev": 1,
+      "text": "Thank you."
+    },
+    {
+      "id": "m14-s018",
+      "speakerId": "m14-spk-a",
+      "startMs": 83230,
+      "endMs": 86490,
+      "rev": 1,
+      "text": "Felix, how do you want progress reported?"
+    },
+    {
+      "id": "m14-s019",
+      "speakerId": "m14-spk-b",
+      "startMs": 86740,
+      "endMs": 91140,
+      "rev": 1,
+      "text": "A spreadsheet with numbers. Not slides. I don't read slides."
+    },
+    {
+      "id": "m14-s020",
+      "speakerId": "m14-spk-a",
+      "startMs": 91390,
+      "endMs": 94270,
+      "rev": 1,
+      "text": "Understood. Weekly numbers in a spreadsheet."
+    },
+    {
+      "id": "m14-s021",
+      "speakerId": "m14-spk-e",
+      "startMs": 94520,
+      "endMs": 102340,
+      "rev": 1,
+      "text": "From our side, Kwame leads the model work and JJ will help on the API once we get there."
+    },
+    {
+      "id": "m14-s022",
+      "speakerId": "m14-spk-b",
+      "startMs": 102590,
+      "endMs": 105090,
+      "rev": 1,
+      "text": "What's the next decision point?"
+    },
+    {
+      "id": "m14-s023",
+      "speakerId": "m14-spk-a",
+      "startMs": 105340,
+      "endMs": 112780,
+      "rev": 1,
+      "text": "When the labelled sample is done, we'll show a first model's accuracy and you decide on the build."
+    },
+    {
+      "id": "m14-s024",
+      "speakerId": "m14-spk-b",
+      "startMs": 113030,
+      "endMs": 115530,
+      "rev": 1,
+      "text": "Good. Clear gate, clear numbers."
+    },
+    {
+      "id": "m14-s025",
+      "speakerId": "m14-spk-a",
+      "startMs": 115780,
+      "endMs": 117140,
+      "rev": 1,
+      "text": "Thanks all."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Gullwing chargeback discovery readout\n\n**Date:** April 9\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)\n\n## Summary\n\nReadout of the four-week discovery phase for Gullwing's chargeback automation.\n\n## Findings\n\n- Manual review takes about 18 minutes per dispute on average. Most of that time is spent reading merchant evidence, which often arrives as forty-page PDFs.\n- 60 percent of volume sits in three reason codes: goods not received, duplicate processing, and cancelled recurring.\n- Those three codes are also the most rule-like; the judgement calls are in the long tail.\n\n## Decisions\n\n- **Automate the top three dispute reason codes first**, and prove the approach before widening.\n- The next gate: once the labelled sample is complete, Larkspur presents a first model's accuracy and Felix decides on the build.\n\n## Action items\n\n- **Kwame Mensah** — build a labelled sample of 2,000 disputes by the end of the month.\n- **Wen Zhao** — have her team validate the labels; choose two analysts.\n- **Felix Amundsen** — free up two analysts for two weeks for label validation.\n- **Alex Rivera** — report weekly progress numbers in a spreadsheet.\n\n## Notes\n\n- Wen reports to Felix; the risk team is already stretched.\n- Felix wants numbers in a spreadsheet, not slides.\n- Kwame leads the model work; JJ will help on the API later.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-gullwing-payments",
+      "type": "Organization",
+      "label": "Gullwing Payments",
+      "aliases": [
+        "Gullwing"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13"
+      ]
+    },
+    {
+      "id": "g-person-felix-amundsen",
+      "type": "Person",
+      "label": "Felix Amundsen",
+      "aliases": [
+        "Felix"
+      ],
+      "props": {
+        "title": "CFO"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08",
+        "m13"
+      ]
+    },
+    {
+      "id": "g-person-kwame-mensah",
+      "type": "Person",
+      "label": "Kwame Mensah",
+      "aliases": [
+        "Kwame"
+      ],
+      "props": {
+        "title": "Data Engineer"
+      },
+      "attendedFixtureIds": [
+        "m11"
+      ]
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m03",
+        "m05"
+      ]
+    },
+    {
+      "id": "g-person-wen-zhao",
+      "type": "Person",
+      "label": "Wen Zhao",
+      "aliases": [
+        "Wen"
+      ],
+      "props": {
+        "title": "Risk Analyst"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-chargeback-automation",
+      "type": "Project",
+      "label": "Chargeback automation",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Gullwing chargeback discovery readout",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing chargeback discovery readout"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "kwame",
+        "type": "Person",
+        "label": "Kwame Mensah",
+        "aliases": [],
+        "existingId": "g-person-kwame-mensah",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kwame Mensah (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "felix",
+        "type": "Person",
+        "label": "Felix Amundsen",
+        "aliases": [],
+        "existingId": "g-person-felix-amundsen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix Amundsen (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "key": "wen",
+        "type": "Person",
+        "label": "Wen Zhao",
+        "aliases": [],
+        "existingId": "g-person-wen-zhao",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "key": "gullwing",
+        "type": "Organization",
+        "label": "Gullwing Payments",
+        "aliases": [],
+        "existingId": "g-org-gullwing-payments",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing's chargeback automation"
+          }
+        ]
+      },
+      {
+        "key": "chargeback",
+        "type": "Project",
+        "label": "Chargeback automation",
+        "aliases": [],
+        "existingId": "g-project-chargeback-automation",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing's chargeback automation"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kwame",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "felix",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "wen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "wen",
+        "to": "felix",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s015",
+            "quote": "I report to Felix"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "chargeback",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s001",
+            "quote": "This is the readout from the four-week chargeback discovery."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "gullwing",
+        "owner": null,
+        "counterparty": null,
+        "title": "Manual review takes 18 minutes",
+        "statement": "Manual review takes about 18 minutes per dispute on average.",
+        "status": null,
+        "occurredAt": "2026-04-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s002",
+            "quote": "Manual review takes about 18 minutes per dispute on average."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "gullwing",
+        "owner": null,
+        "counterparty": null,
+        "title": "60 percent of volume in three reason codes",
+        "statement": "60 percent of dispute volume sits in three reason codes.",
+        "status": null,
+        "occurredAt": "2026-04-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s005",
+            "quote": "60 percent of the volume sits in just three reason codes"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "chargeback",
+        "owner": null,
+        "counterparty": null,
+        "title": "Automate the top three reason codes first",
+        "statement": "Gullwing will automate the top three dispute reason codes first.",
+        "status": null,
+        "occurredAt": "2026-04-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s010",
+            "quote": "We automate the top three dispute reason codes first."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "kwame",
+        "counterparty": null,
+        "title": "Build labelled sample of 2,000 disputes",
+        "statement": "Kwame will build a labelled sample of 2,000 disputes by the end of the month.",
+        "status": "open",
+        "occurredAt": "2026-04-09",
+        "dueAt": "2026-04-30",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s012",
+            "quote": "I'll build a labelled sample of 2,000 disputes by the end of the month."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "felix",
+        "counterparty": "wen",
+        "title": "Free up two analysts",
+        "statement": "Felix will free up two analysts for two weeks for label validation.",
+        "status": "open",
+        "occurredAt": "2026-04-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s016",
+            "quote": "I'll free up two analysts for two weeks."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "alex",
+        "counterparty": "felix",
+        "title": "Weekly numbers in a spreadsheet",
+        "statement": "Alex will report weekly progress numbers in a spreadsheet.",
+        "status": "open",
+        "occurredAt": "2026-04-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s020",
+            "quote": "Weekly numbers in a spreadsheet."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "felix",
+        "owner": null,
+        "counterparty": null,
+        "title": "Reads spreadsheets, not slides",
+        "statement": "Felix wants numbers in a spreadsheet and doesn't read slides.",
+        "status": null,
+        "occurredAt": "2026-04-09",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m14-s019",
+            "quote": "A spreadsheet with numbers. Not slides. I don't read slides."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

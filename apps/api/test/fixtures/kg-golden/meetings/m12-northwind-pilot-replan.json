@@ -1,0 +1,690 @@
+{
+  "id": "m12",
+  "title": "Northwind pilot re-plan",
+  "tags": [
+    "client",
+    "supersedes",
+    "resolution-trap",
+    "abbreviation",
+    "relative-date"
+  ],
+  "recordedAt": "2026-03-26T15:00:00Z",
+  "contextText": "Re-planning the pilot timeline after the sensor delays.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m12-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m12-spk-b",
+      "label": "B",
+      "displayName": "Sarah Chen"
+    },
+    {
+      "id": "m12-spk-c",
+      "label": "C",
+      "displayName": "Tomás Aguilar"
+    },
+    {
+      "id": "m12-spk-d",
+      "label": "D",
+      "displayName": "Owen Barker"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m12-s001",
+      "speakerId": "m12-spk-a",
+      "startMs": 0,
+      "endMs": 7060,
+      "rev": 1,
+      "text": "Thanks for making time. I think we all know why we're here, the aisle sensors are late."
+    },
+    {
+      "id": "m12-s002",
+      "speakerId": "m12-spk-c",
+      "startMs": 7310,
+      "endMs": 15510,
+      "rev": 1,
+      "text": "Yes. The supplier slipped the delivery by five weeks. We can't run the pilot without location data from the sensors."
+    },
+    {
+      "id": "m12-s003",
+      "speakerId": "m12-spk-b",
+      "startMs": 15760,
+      "endMs": 22820,
+      "rev": 1,
+      "text": "So let's be honest about the timeline. The pilot moved to Q2. I've already told NWR's board."
+    },
+    {
+      "id": "m12-s004",
+      "speakerId": "m12-spk-d",
+      "startMs": 23070,
+      "endMs": 25570,
+      "rev": 1,
+      "text": "How did they take it?"
+    },
+    {
+      "id": "m12-s005",
+      "speakerId": "m12-spk-b",
+      "startMs": 25820,
+      "endMs": 30980,
+      "rev": 1,
+      "text": "Fine. NWR's board cares that it works, not that it's in Q1."
+    },
+    {
+      "id": "m12-s006",
+      "speakerId": "m12-spk-a",
+      "startMs": 31230,
+      "endMs": 36770,
+      "rev": 1,
+      "text": "Then let's pick a real date. What's the earliest go-live in Building 3?"
+    },
+    {
+      "id": "m12-s007",
+      "speakerId": "m12-spk-c",
+      "startMs": 37020,
+      "endMs": 43700,
+      "rev": 1,
+      "text": "If the sensors land mid April, installation takes about a week, then a week of calibration."
+    },
+    {
+      "id": "m12-s008",
+      "speakerId": "m12-spk-d",
+      "startMs": 43950,
+      "endMs": 47590,
+      "rev": 1,
+      "text": "That puts us at the start of May."
+    },
+    {
+      "id": "m12-s009",
+      "speakerId": "m12-spk-b",
+      "startMs": 47840,
+      "endMs": 53760,
+      "rev": 1,
+      "text": "Then we go live in Building 3 on May 4. Let's commit to that."
+    },
+    {
+      "id": "m12-s010",
+      "speakerId": "m12-spk-a",
+      "startMs": 54010,
+      "endMs": 56130,
+      "rev": 1,
+      "text": "May 4 go-live, agreed."
+    },
+    {
+      "id": "m12-s011",
+      "speakerId": "m12-spk-d",
+      "startMs": 56380,
+      "endMs": 58880,
+      "rev": 1,
+      "text": "Agreed from the platform side."
+    },
+    {
+      "id": "m12-s012",
+      "speakerId": "m12-spk-a",
+      "startMs": 59130,
+      "endMs": 63150,
+      "rev": 1,
+      "text": "Tomás, the install plan is the next dependency, right?"
+    },
+    {
+      "id": "m12-s013",
+      "speakerId": "m12-spk-c",
+      "startMs": 63400,
+      "endMs": 68180,
+      "rev": 1,
+      "text": "Yes. I'll finalize the aisle sensor install plan by next Tuesday."
+    },
+    {
+      "id": "m12-s014",
+      "speakerId": "m12-spk-d",
+      "startMs": 68430,
+      "endMs": 73210,
+      "rev": 1,
+      "text": "Send it to me as well, it affects the network work."
+    },
+    {
+      "id": "m12-s015",
+      "speakerId": "m12-spk-c",
+      "startMs": 73460,
+      "endMs": 74820,
+      "rev": 1,
+      "text": "Will do."
+    },
+    {
+      "id": "m12-s016",
+      "speakerId": "m12-spk-a",
+      "startMs": 75070,
+      "endMs": 79090,
+      "rev": 1,
+      "text": "Anything we should do differently with the extra time?"
+    },
+    {
+      "id": "m12-s017",
+      "speakerId": "m12-spk-d",
+      "startMs": 79340,
+      "endMs": 85640,
+      "rev": 1,
+      "text": "Use it for load testing. I'd like to see the service under peak-season order volumes."
+    },
+    {
+      "id": "m12-s018",
+      "speakerId": "m12-spk-a",
+      "startMs": 85890,
+      "endMs": 90670,
+      "rev": 1,
+      "text": "Good idea. JJ can build a replay of last November's orders."
+    },
+    {
+      "id": "m12-s019",
+      "speakerId": "m12-spk-b",
+      "startMs": 90920,
+      "endMs": 94180,
+      "rev": 1,
+      "text": "Do that. November is our worst month."
+    },
+    {
+      "id": "m12-s020",
+      "speakerId": "m12-spk-a",
+      "startMs": 94430,
+      "endMs": 99590,
+      "rev": 1,
+      "text": "Sarah, how are you doing? You mentioned a big race coming up."
+    },
+    {
+      "id": "m12-s021",
+      "speakerId": "m12-spk-b",
+      "startMs": 99840,
+      "endMs": 107280,
+      "rev": 1,
+      "text": "The Berlin marathon in September. I'm running it for the first time, so my mornings are mostly training."
+    },
+    {
+      "id": "m12-s022",
+      "speakerId": "m12-spk-a",
+      "startMs": 107530,
+      "endMs": 111930,
+      "rev": 1,
+      "text": "Good luck. We'll keep the Friday updates coming as usual."
+    },
+    {
+      "id": "m12-s023",
+      "speakerId": "m12-spk-b",
+      "startMs": 112180,
+      "endMs": 116960,
+      "rev": 1,
+      "text": "Please do. And copy Owen now that platform sits with him."
+    },
+    {
+      "id": "m12-s024",
+      "speakerId": "m12-spk-a",
+      "startMs": 117210,
+      "endMs": 118570,
+      "rev": 1,
+      "text": "Will do."
+    },
+    {
+      "id": "m12-s025",
+      "speakerId": "m12-spk-c",
+      "startMs": 118820,
+      "endMs": 123980,
+      "rev": 1,
+      "text": "One last thing, the supplier has promised weekly status. I'll forward those."
+    },
+    {
+      "id": "m12-s026",
+      "speakerId": "m12-spk-a",
+      "startMs": 124230,
+      "endMs": 129010,
+      "rev": 1,
+      "text": "Perfect. So: Q2, May 4 go-live, install plan by next Tuesday."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Northwind pilot re-plan\n\n**Date:** March 26\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)\n\n## Summary\n\nThe aisle sensor supplier slipped delivery by five weeks, and the pick-path pilot cannot run without sensor location data. The group re-planned the timeline.\n\n## Timeline\n\n- The pilot moved to Q2. Sarah has already told NWR's board, who care that it works rather than that it lands in Q1.\n- Sensors are expected mid April; installation takes about a week, followed by a week of calibration.\n\n## Decisions\n\n- **Go live in Building 3 on May 4.**\n- Use the extra time for load testing at peak-season order volumes, using a replay of last November's orders — Northwind's worst month.\n\n## Action items\n\n- **Tomás Aguilar** — finalize the aisle sensor install plan by next Tuesday and share it with Owen, since it affects the network work.\n- **Tomás Aguilar** — forward the supplier's weekly status updates.\n- **JJ** — build a replay of last November's orders for load testing.\n- **Alex Rivera** — continue the Friday updates and copy Owen.\n\n## Notes\n\n- Sarah is running the Berlin marathon in September for the first time; her mornings are mostly training.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08"
+      ]
+    },
+    {
+      "id": "g-person-owen-barker",
+      "type": "Person",
+      "label": "Owen Barker",
+      "aliases": [
+        "Owen"
+      ],
+      "props": {
+        "title": "Head of Platform"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06",
+        "m09"
+      ]
+    },
+    {
+      "id": "g-person-tomas-aguilar",
+      "type": "Person",
+      "label": "Tomás Aguilar",
+      "aliases": [
+        "Tomas Aguilar",
+        "Tomás"
+      ],
+      "props": {
+        "title": "Engineer"
+      },
+      "attendedFixtureIds": [
+        "m06",
+        "m09"
+      ]
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northwind pilot re-plan",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind pilot re-plan"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarah",
+        "type": "Person",
+        "label": "Sarah Chen",
+        "aliases": [],
+        "existingId": "g-person-sarah-chen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Chen (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomás Aguilar",
+        "aliases": [],
+        "existingId": "g-person-tomas-aguilar",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "owen",
+        "type": "Person",
+        "label": "Owen Barker",
+        "aliases": [],
+        "existingId": "g-person-owen-barker",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [
+          "NWR"
+        ],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s003",
+            "quote": "I've already told NWR's board."
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the pick-path pilot cannot run without sensor location data"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarah",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "tomas",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "owen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the pick-path pilot cannot run without sensor location data"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Pilot moved to Q2",
+        "statement": "The pilot moved to Q2.",
+        "status": null,
+        "occurredAt": "2026-03-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": "m01#claim-1",
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s003",
+            "quote": "The pilot moved to Q2."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Sensor delivery slipped five weeks",
+        "statement": "The aisle sensor supplier slipped the delivery by five weeks.",
+        "status": null,
+        "occurredAt": "2026-03-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s002",
+            "quote": "The supplier slipped the delivery by five weeks."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Go live in Building 3 on May 4",
+        "statement": "The pilot goes live in Building 3 on May 4.",
+        "status": null,
+        "occurredAt": "2026-03-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s009",
+            "quote": "Then we go live in Building 3 on May 4."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Load test with a November replay",
+        "statement": "The extra time will be used for load testing with a replay of last November's orders.",
+        "status": null,
+        "occurredAt": "2026-03-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s018",
+            "quote": "JJ can build a replay of last November's orders."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m12-s019",
+            "quote": "Do that. November is our worst month."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "tomas",
+        "counterparty": "owen",
+        "title": "Finalize the sensor install plan",
+        "statement": "Tomás will finalize the aisle sensor install plan by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-03-26",
+        "dueAt": "2026-03-31",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s013",
+            "quote": "I'll finalize the aisle sensor install plan by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "g-person-jonah-jimenez",
+        "counterparty": null,
+        "title": "Build November order replay",
+        "statement": "JJ will build a replay of last November's orders for load testing.",
+        "status": "open",
+        "occurredAt": "2026-03-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s018",
+            "quote": "JJ can build a replay of last November's orders."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "sarah",
+        "owner": null,
+        "counterparty": null,
+        "title": "Running the Berlin marathon",
+        "statement": "Sarah is running the Berlin marathon in September for the first time.",
+        "status": null,
+        "occurredAt": "2026-03-26",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m12-s021",
+            "quote": "The Berlin marathon in September. I'm running it for the first time"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}
