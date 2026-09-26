@@ -148,6 +148,12 @@ describe('scopeIncludes — mirrored from apps/api/src/user-data/job-types.ts, a
     }
   });
 
+  it('the knowledge graph is covered by "content" and "everything" only — never by a narrow scope (#357)', () => {
+    for (const scope of ALL_SCOPES) {
+      expect(scopeIncludes(scope, 'graph')).toBe(scope === 'content' || scope === 'everything');
+    }
+  });
+
   it('each narrow scope covers exactly one category — no narrow scope silently fans out', () => {
     const narrow: Record<Extract<UserDataScope, 'transcripts' | 'notes' | 'files'>, UserDataCategory> = {
       transcripts: 'transcripts',
@@ -200,6 +206,7 @@ describe('getUserDataSummary', () => {
       files: { count: 0, bytes: '0' },
       noteTemplates: { count: 0 },
       credentials: { aiKeys: 0, accessTokens: 0 },
+      graph: { entities: 3, items: 5 },
       activeDeletion: null,
     };
     server.use(

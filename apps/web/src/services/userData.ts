@@ -138,7 +138,7 @@ export const USER_DATA_CONFIRMATION: Record<UserDataScope, string> = {
 // =============================================================================
 
 /**
- * The six categories a scope may or may not cover.
+ * The seven categories a scope may or may not cover.
  *
  * Named exactly as `apps/api/src/user-data/job-types.ts` names them, and in the
  * same order, so the two functions can be read side by side.
@@ -149,7 +149,8 @@ export type UserDataCategory =
   | 'noteTemplates'
   | 'files'
   | 'credentials'
-  | 'onboarding';
+  | 'onboarding'
+  | 'graph';
 
 /** Every category, for callers that need to ask about all of them. */
 export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
@@ -159,6 +160,7 @@ export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
   'files',
   'credentials',
   'onboarding',
+  'graph',
 ];
 
 /**
@@ -220,6 +222,12 @@ export function scopeIncludes(scope: UserDataScope, category: UserDataCategory):
     // the itemised inventory, since "1 onboarding" is not a sentence.
     case 'onboarding':
       return scope === 'everything';
+    // ⚠ THE KNOWLEDGE GRAPH IS `content`/`everything` ONLY (#357). It is
+    // content the user MADE, by reviewing and committing proposals, so it sits
+    // on the note-templates line; no narrow scope takes it, and there is
+    // deliberately no `graph` scope. A category, not a scope.
+    case 'graph':
+      return scope === 'content' || scope === 'everything';
   }
 }
 
