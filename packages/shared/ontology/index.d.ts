@@ -2,6 +2,8 @@ export { ATTRIBUTE_KINDS, DEFAULT_ENABLED_DOMAINS, DOMAIN_KEYS, ITEM_KINDS, PSEU
 export type { AttributeChoice, AttributeKind, AttributeOptions, AttributeSpec, Deprecation, DomainKey, DomainMixin, DomainModule, EntityTypeSpec, KgItemKind, PseudoType, RelationRepresentation, RelationTypeSpec, Sensitivity, UserAttributeDef, ValidPrecision, } from './types.js';
 export { defineDomain, defineEntityType, defineRelationType, OntologyDefinitionError } from './define.js';
 export { CHANGELOG, ONTOLOGY_VERSION } from './version.js';
+export { KV_PREFIX, RDF_PREFIXES, expandCurie, kvNamespace } from './rdf-namespaces.js';
+export type { RdfPrefix } from './rdf-namespaces.js';
 export type { OntologyChangelogEntry } from './version.js';
 export { SHIPPED_KEYS } from './shipped-keys.js';
 export { buildOntologyRegistry } from './registry.js';
