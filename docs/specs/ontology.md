@@ -2785,6 +2785,45 @@ independently-written SSE frame format for the same "stream durable text as
 it is written" problem is a second place the two could quietly disagree
 about what "resume from here" means.
 
+**As shipped (#379).** `apps/api/src/ask/stream/` — `ask-stream.ts` (pure
+frames and `StepCursor`), `AskMessageStreamService` (the poll loop) and
+`AskMessageStreamController`. It is §21.4's `delta | done | error` contract
+**plus one additive `step` event** for tool progress. The text arithmetic is
+imported, not copied: `NoteStreamCursor`, `toDeltaFrame`, `parseLastEventId`
+and `resolveStreamOffset` (the header-over-query rule, moved into
+`note-stream.ts` so both streams share it).
+
+| event | `data` | `id:` |
+|---|---|---|
+| `delta` | `{ delta, offset }` | `offset` |
+| `step` | `{ index, name, summary, resultCount, error, offset }` | the current offset — never advances it |
+| `done` | `{ status: 'succeeded', offset, citations, finishReason, promptTokens, completionTokens }` | `offset` |
+| `error` | `{ status: 'failed', offset, errorClass, reason }` | `offset` |
+
+- `id:` is the UTF-16 offset into `ask_messages.content` the frame ends at —
+  the note stream's rule verbatim. A `step` carries the current offset and
+  **never advances it**: advancing it would break "id = content offset" and
+  make a resume ambiguous. Instead every recorded step is re-sent, in `index`
+  order, before new text on every (re)connect, and the client de-duplicates
+  by `index`. A step index that disappears from `tool_calls` (#378 resets a
+  turn rate-limited before any text to `pending`, `tool_calls: []`) is
+  forgotten, so the rerun's steps are announced.
+- `errorClass` is #376's `ASK_ERROR_CLASSES` plus the **wire-only** `gone`
+  (the row vanished — its conversation was deleted; `reason: 'message_gone'`).
+  `timeout` doubles as the connection-cap class, told apart by
+  `reason: 'stream_duration_cap'`; a stored failure's `reason` is `null`
+  (`ask_messages` has no detail column).
+- The loop polls the row every 250 ms, reading only `status`, `content`,
+  `tool_calls`, `citations`, the token counts, `error_class` and
+  `finish_reason`; `pending` emits nothing but heartbeats (every 25 s). A
+  terminal poll flushes its remaining steps and text **before** `done`/`error`.
+  The cap is `ask.respond`'s five-minute `maxRuntimeMs` plus the notes
+  stream's one-minute margin; the job may still finish, and the client
+  refetches. Tuning is the `ASK_STREAM_TUNING` DI token, `{}` in `AskModule`.
+- Access is `graph:read` + `AskAccessService.requireMessage` **before** the
+  stream opens; a foreign, missing or `role: 'user'` message is the same JSON
+  404. The stream writes nothing (CLAUDE.md, Notes rule 1).
+
 ### 21.5 Web surfaces
 
 An **`/ask`** page (conversation list, a streaming answer view, citation

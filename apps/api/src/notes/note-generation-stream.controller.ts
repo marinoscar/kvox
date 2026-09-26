@@ -63,7 +63,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { NoteGenerationAccessService } from './access/note-generation-access.service';
 import { NoteGenerationStreamService } from './generation/note-generation-stream.service';
-import { parseLastEventId, type NoteStreamMessage } from './generation/note-stream';
+import { resolveStreamOffset, type NoteStreamMessage } from './generation/note-stream';
 
 /** The prose both operations share, so the two descriptions cannot drift. */
 const FRAME_DOCS =
@@ -143,7 +143,7 @@ export class NoteGenerationStreamController {
   ): Promise<Observable<NoteStreamMessage>> {
     const target = await this.access.requireForNote(userId, noteId);
 
-    return this.streams.stream(target.generationId, resolveOffset(header, query));
+    return this.streams.stream(target.generationId, resolveStreamOffset(header, query));
   }
 
   @Sse('note-generations/:id/stream')
@@ -194,32 +194,6 @@ export class NoteGenerationStreamController {
   ): Promise<Observable<NoteStreamMessage>> {
     const target = await this.access.require(userId, generationId);
 
-    return this.streams.stream(target.generationId, resolveOffset(header, query));
+    return this.streams.stream(target.generationId, resolveStreamOffset(header, query));
   }
-}
-
-/**
- * Where to resume from: the header if it is usable, otherwise the query.
- *
- * ⚠ BOTH CARRY A FRAME ID — WHICH, PER ISSUE #52, IS A BUFFER OFFSET. Not
- * `note_generations.last_event_id`, whose value is a flush counter and would
- * resume a client near the START of the buffer if passed here. Nothing is lost
- * if one is (the replay is simply longer than it needed to be), but the two
- * numbers must not be confused: `note-stream.ts`'s header records why the offset
- * is what travels.
- *
- * The HEADER WINS because a reconnecting client's header is set by the transport
- * and reflects what actually arrived, while a query parameter is whatever the
- * page had in hand when it opened the connection — and is therefore the older of
- * the two whenever both exist. `parseLastEventId` is total, so an unusable
- * header is `0`, which falls through to the query rather than silently
- * restarting a resumable client from the beginning.
- */
-function resolveOffset(
-  header: string | undefined,
-  query: string | undefined,
-): number {
-  const fromHeader = parseLastEventId(header);
-
-  return fromHeader > 0 ? fromHeader : parseLastEventId(query);
 }

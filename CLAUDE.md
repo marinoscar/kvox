@@ -1044,6 +1044,13 @@ is the contract #378–#382 use unchanged. See [`docs/API.md`](docs/API.md#ask) 
 - `PATCH /api/ask/conversations/{id}` - Rename
 - `DELETE /api/ask/conversations/{id}` - **204**, allowed while a turn runs (cascade); audited
   `ask.conversation_deleted` with counts/ids only
+- `GET /api/ask/messages/{id}/stream` - SSE view over one **assistant** message (#379): the note
+  stream's `delta | done | error` contract (`id:` = content offset, `Last-Event-ID`/`?lastEventId=`
+  resume via the shared `resolveStreamOffset`) plus an additive `step` frame per tool call — id =
+  current offset, never advancing it, re-sent on every reconnect and de-duplicated by `index`.
+  `error.errorClass` adds the wire-only `gone` (conversation deleted); `timeout` +
+  `reason: "stream_duration_cap"` is the reader giving up. Foreign/missing/user-role id → the same
+  404 before any bytes. Polls the row; writes nothing
 
 ### Health
 - `GET /api/health/live` - Liveness check

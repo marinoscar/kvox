@@ -154,6 +154,37 @@ export function parseLastEventId(raw: string | string[] | undefined): number {
 }
 
 /**
+ * Where to resume from: the header if it is usable, otherwise the query.
+ *
+ * Shared by every offset-resumable SSE route — `GET /api/notes/:id/stream`,
+ * `GET /api/note-generations/:id/stream` and `GET /api/ask/messages/:id/stream`
+ * (#379) — so the precedence rule cannot drift between them. Moved here from
+ * `note-generation-stream.controller.ts` unchanged.
+ *
+ * ⚠ BOTH CARRY A FRAME ID — WHICH, PER ISSUE #52, IS A BUFFER OFFSET. Not
+ * `note_generations.last_event_id`, whose value is a flush counter and would
+ * resume a client near the START of the buffer if passed here. Nothing is lost
+ * if one is (the replay is simply longer than it needed to be), but the two
+ * numbers must not be confused: this file's header records why the offset is
+ * what travels.
+ *
+ * The HEADER WINS because a reconnecting client's header is set by the transport
+ * and reflects what actually arrived, while a query parameter is whatever the
+ * page had in hand when it opened the connection — and is therefore the older of
+ * the two whenever both exist. {@link parseLastEventId} is total, so an unusable
+ * header is `0`, which falls through to the query rather than silently
+ * restarting a resumable client from the beginning.
+ */
+export function resolveStreamOffset(
+  header: string | string[] | undefined,
+  query: string | string[] | undefined,
+): number {
+  const fromHeader = parseLastEventId(header);
+
+  return fromHeader > 0 ? fromHeader : parseLastEventId(query);
+}
+
+/**
  * How much of `note_generations.content` one connection has already sent.
  *
  * The entire delta computation, and the reason it is a class rather than four

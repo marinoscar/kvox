@@ -66,6 +66,16 @@ const parseCitation = (e: unknown): AskCitation | null => {
   return r.success ? r.data : null;
 };
 
+/** `tool_calls` as the wire's `AskToolCall[]` — malformed elements dropped (the SSE stream, #379). */
+export function parseAskToolCalls(value: unknown): AskToolCall[] {
+  return parseArray(value, parseToolCall);
+}
+
+/** `citations` as the wire's `AskCitation[]` — malformed elements dropped (the SSE stream, #379). */
+export function parseAskCitations(value: unknown): AskCitation[] {
+  return parseArray(value, parseCitation);
+}
+
 /** The columns the mapper reads — a Prisma row, or a raw-SQL row aliased to the same names. */
 export type AskMessageRow = Pick<
   AskMessage,

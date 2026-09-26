@@ -10,6 +10,8 @@ import { AskConversationsService } from './ask-conversations.service';
 import { AskMessagesController } from './ask-messages.controller';
 import { AskMessagesService } from './ask-messages.service';
 import { AskRespondHandler } from './handlers/ask-respond.handler';
+import { AskMessageStreamController } from './stream/ask-message-stream.controller';
+import { ASK_STREAM_TUNING, AskMessageStreamService } from './stream/ask-message-stream.service';
 import { AskToolsModule } from './tools/ask-tools.module';
 
 // =============================================================================
@@ -23,6 +25,8 @@ import { AskToolsModule } from './tools/ask-tools.module';
 // `AskToolsModule` (#377) supplies the read-only `AskToolset` #378's job runs.
 // #378: `JobsModule` (enqueue + the handler registry) and `AiModule` (the
 // task-model resolver and the asker's own key) for posting and answering.
+// #379's `AskMessageStreamController`/`AskMessageStreamService` are a read-only
+// view over `ask_messages`; `ASK_STREAM_TUNING` is `{}` so the defaults ship.
 // =============================================================================
 
 @Module({
@@ -38,10 +42,13 @@ import { AskToolsModule } from './tools/ask-tools.module';
     AskConversationsService,
     AskMessagesService,
     AskRespondHandler,
+    AskMessageStreamService,
+    { provide: ASK_STREAM_TUNING, useValue: {} },
   ],
   controllers: [
     AskConversationsController,
     AskMessagesController,
+    AskMessageStreamController,
   ],
   exports: [AskAccessService, AskConversationsService],
 })

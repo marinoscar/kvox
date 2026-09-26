@@ -6819,6 +6819,72 @@ and ids only, never content. There is no path back.
 delete all of your conversations ([User Data](#user-data)); deleting your
 account removes them by cascade.
 
+#### GET /ask/messages/{id}/stream
+
+Watch one **assistant** turn being written — Server-Sent Events, issue
+#379. A **view** over the durable `ask_messages` row `ask.respond` writes:
+the answer, its tool steps and its citations are committed whether or not
+anybody connects, and closing the stream cancels nothing. The stream polls
+the row about every 250 ms, so it works whichever API replica runs the job.
+
+**Requires:** `graph:read`, and the message must be in one of your own
+conversations.
+
+**Client.** Send the ordinary `Authorization: Bearer …` header — the native
+`EventSource` cannot, so use a fetch-based SSE client (`apps/web/src/services/
+sse.ts`); a `?token=` query parameter is not accepted.
+
+**Resume.** Every text frame's `id:` is the UTF-16 offset into `content` it
+ends at. Reconnect with `Last-Event-ID: <last id seen>`, or `?lastEventId=`
+when a header cannot be set; the header wins when it is a usable value
+greater than 0. Anything that is not a non-negative integer means 0 — the
+whole answer is replayed, never skipped. A turn that has already settled
+replays whatever your offset was missing and ends immediately.
+
+**Frames** — the note stream's `delta | done | error` contract verbatim,
+plus one additive `step` event a client may ignore without losing text:
+
+| `event:` | `data` | `id:` |
+|---|---|---|
+| `delta` | `{ "delta": "…", "offset": n }` | `offset` |
+| `step` | `{ "index": n, "name": "search", "summary": "Searched for Acme", "resultCount": 3, "error": null, "offset": n }` | the current offset — **never advances it** |
+| `done` | `{ "status": "succeeded", "offset": n, "citations": AskCitation[], "finishReason": "stop" \| "step_cap" \| "token_cap" \| "time_cap", "promptTokens": n \| null, "completionTokens": n \| null }` | `offset` |
+| `error` | `{ "status": "failed", "offset": n, "errorClass": "auth" \| "refusal" \| "rate_limit" \| "budget" \| "timeout" \| "other" \| "gone", "reason": string \| null }` | `offset` |
+
+Plus a `: connected` comment on open and `: heartbeat` comments about every
+25 seconds.
+
+- **Steps.** On every (re)connect all recorded tool steps are sent once, in
+  `index` order, before new text; afterwards each newly recorded step is sent
+  once. De-duplicate by `index`.
+- **`pending`** sends nothing but comments until the turn starts.
+- **`error`.** A failed turn sends its remaining text and then `error` with
+  the stored `errorClass` (`reason: null`). `gone` (`reason: "message_gone"`)
+  means the message no longer exists — its conversation was deleted.
+  `timeout` with `reason: "stream_duration_cap"` means **this connection**
+  gave up after about six minutes (the job's five-minute limit plus a
+  minute); the turn may still finish — refetch the conversation.
+
+```text
+: connected
+
+event: step
+id: 0
+data: {"index":0,"name":"search","summary":"Searched for Acme","resultCount":3,"error":null,"offset":0}
+
+event: delta
+id: 24
+data: {"delta":"Acme renewed in March.","offset":24}
+
+event: done
+id: 24
+data: {"status":"succeeded","offset":24,"citations":[],"finishReason":"stop","promptTokens":812,"completionTokens":40}
+```
+
+**Errors** (JSON, before any stream bytes): `400` malformed id · `401` ·
+`403` without `graph:read` · `404` — missing, not yours, **or a user
+message** (only assistant turns stream); the same body in every case.
+
 ---
 
 ### Search
