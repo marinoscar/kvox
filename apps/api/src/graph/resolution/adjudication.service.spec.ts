@@ -115,6 +115,50 @@ describe('AdjudicationService.adjudicate', () => {
   });
 });
 
+describe('AdjudicationService.adjudicateItems (#365)', () => {
+  function itemPair(n: number) {
+    return {
+      pairId: `p${n}`,
+      kind: 'commitment',
+      subjectType: 'Project',
+      proposed: { title: 'Ship', statement: 'Sarah ships the migration by May.', occurredAt: null, dueAt: '2026-05-01', ownerLabel: 'Sarah', quotes: [] },
+      existing: { title: 'Ship', statement: 'Sarah ships the migration.', occurredAt: null, dueAt: '2026-04-01', status: 'open', ownerLabel: 'Sarah' },
+    };
+  }
+
+  it('batches ≤ 20 item pairs per call on graph.adjudicate and the per-user throttle key', async () => {
+    const { service, generateStructured, resolver, throttle } = build({
+      answer: (req) => ({
+        verdicts: [...req.userContent.matchAll(/## Pair (p\d+)/g)].map((m) => ({
+          pairId: m[1],
+          verdict: 'same',
+          changes: { status: null, dueAt: '2026-05-01' },
+          rationale: 'new date',
+        })),
+      }),
+    });
+    const out = await service.adjudicateItems(USER, Array.from({ length: 21 }, (_, i) => itemPair(i + 1)), { jobType: 'kg.extract' });
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+    expect(resolver.resolve).toHaveBeenCalledWith(USER, 'graph.adjudicate');
+    expect(throttle.registerProviderKey).toHaveBeenCalledWith('kg.extract', `ai-provider:${USER}`);
+    expect(out.get('p21')).toEqual({
+      verdict: 'same',
+      changes: { status: null, dueAt: '2026-05-01' },
+      rationale: 'new date',
+      model: 'gpt-adjudicate',
+    });
+    const req = generateStructured.mock.calls[0][1] as unknown as { schemaName: string };
+    expect(req.schemaName).toBe('kg_item_adjudication');
+  });
+
+  it('leaves an unanswered pair out, and rethrows a RateLimitError', async () => {
+    const { service } = build({ answer: () => ({ verdicts: [] }) });
+    expect((await service.adjudicateItems(USER, [itemPair(1)], { jobType: 'kg.extract' })).size).toBe(0);
+    const limited = build({ throwOn: 1 });
+    await expect(limited.service.adjudicateItems(USER, [itemPair(1)], { jobType: 'kg.extract' })).rejects.toBeInstanceOf(RateLimitError);
+  });
+});
+
 describe('the adjudication prompt', () => {
   it('uses the exported headings and bounds quotes to 200 characters', () => {
     const content = buildAdjudicationUserContent([pair(1)]);
