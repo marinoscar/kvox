@@ -92,6 +92,12 @@ export interface EffectiveRelationTypePayload {
   exclusiveScope: 'from' | 'from_to';
   representation: RelationRepresentation;
   extractable: boolean;
+  /**
+   * Present (and `true`) only on a symmetric relation — `(a, b)` and `(b, a)`
+   * are one fact. Absent means directed. Omitted rather than `false` so the
+   * payload of every directed relation is unchanged by the flag's existence.
+   */
+  symmetric?: true;
   alignment: string | null;
   deprecated: boolean;
   props: EffectiveAttributePayload[];
@@ -315,6 +321,7 @@ export function computeEffectiveSchemaFor(registry: OntologyRegistry, input: Com
       exclusiveScope: r.exclusiveScope ?? 'from',
       representation: JSON.parse(JSON.stringify(r.representation)) as RelationRepresentation,
       extractable: r.extractable,
+      ...(r.symmetric === true ? { symmetric: true as const } : {}),
       alignment: r.alignment ?? null,
       deprecated: r.deprecated !== undefined,
       props: builtinAttributes(r.props, 'builtin', r.domain, 'business', 0),
