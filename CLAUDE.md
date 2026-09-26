@@ -922,6 +922,36 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   aliases, relations, items, mentions, evidence and draft proposal references; your transcripts
   and notes are untouched. 400 wrong confirmation or non-Person; 404 no access or merged; 403
   your own entity without `graph:write` (`graph:write`)
+- `GET /api/graph/entities` - The entity index: list/search your people, organizations, projects
+  and meetings (issue #370, epic #347). `type` filters (400 on an unknown key); `q` is a trigram
+  fuzzy match on label/alias (top `limit`, `nextCursor` always null); `sort=updated`|`viewed`;
+  `transcriptId` narrows to the Persons `IDENTIFIED_AS` a speaker in that transcript, each with
+  `speakerIds` — 404 without view access to it. Keyset-paginated otherwise (`graph:read`)
+- `GET /api/graph/entities/{id}` - One entity: attributes, aliases, `firstSeenAt`/`lastSeenAt`,
+  and the page counts (`sensitive` person facts not counted) (`graph:read`)
+- `GET /api/graph/entities/{id}/neighborhood?hops&types&relationTypes&as_of&limit` - The entity's
+  bounded 1–2-hop neighbourhood as a `GraphSlice` {seedIds, asOf, nodes, edges, truncated, cap}
+  (issue #370). An item is always a walk leaf; edges touching one are derived from its own
+  columns (`virtual: true`) and a stored relation with the same `(type,from,to)` wins. `limit`
+  ≤ 300; `sensitive` person facts never appear. 503 `graph_query_timeout` past a 3 s statement
+  timeout (`graph:read`)
+- `GET /api/graph/entities/{id}/timeline?as_of&kinds&includeSensitive&cursor&limit` - Everything
+  dated about this entity, newest first (issue #370); a **superseded** item stays, flagged.
+  `includeSensitive=true` reveals `sensitive` person facts. Keyset-paginated; 503
+  `graph_query_timeout` (`graph:read`)
+- `GET /api/graph/entities/{id}/mentions` - The notes/transcripts linked to this entity, newest
+  first (issue #370, additive to the original route list). A deleted document or a revoked
+  transcript share stays with `available: false` (`graph:read`)
+- `POST /api/graph/explore/expand` - One hop out from up to 50 nodes as one `GraphSlice`, seeds
+  at depth 0 (issue #370). A read, despite the verb — the node list does not fit a query string.
+  `cap` ≤ 300; **all-or-nothing 404** if any `nodeIds` entry is not one of your readable
+  entities/items; 503 `graph_query_timeout` (`graph:read`)
+- `GET /api/graph/evidence/{id}` - Resolve one citation to an openable link — a transcript
+  segment (playable at the quoted moment) or a note version (issue #370). `available: false`
+  (quote still returned) when the source is gone or no longer viewable (`graph:read`)
+- `GET /api/graph/evidence?ids=` - Batch-resolve up to 50 citation ids in request order for a row
+  of citation chips (issue #370, additive to the original route list); unknown ids are silently
+  omitted (`graph:read`)
 - `POST /api/graph/notes/{noteId}/extract` - Extract a **draft proposal** from one of your notes
   (issue #363): creates the proposal (`status: extracting`) **and** queues `kg.extract` in one
   transaction; **202** with the proposal and a cost `estimate`. Optional `model` (a permitted
@@ -947,6 +977,16 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
 - `POST /api/graph/distinct-pairs` - Record that two entities are not the same; resolution never
   proposes the pair again. Order-free, idempotent (`created`), normalized `aId < bId`
   (`graph:write`)
+- `GET /api/graph/overview` - The whole-graph overview: clusters and 2D positions from the
+  latest `kg_graph_layouts` snapshot, labels joined **live** (issue #371). **Never recomputes.**
+  `status: "none"` with no snapshot enqueues the bootstrap layout **only** when the graph is
+  non-empty and none is already pending; `stale: true` reports (never auto-fixes) a graph that
+  changed since the snapshot; `nodes` capped at 5000 by degree, `nodesTruncated` says whether
+  more exist. Always 200 (`graph:read`)
+- `POST /api/graph/overview/refresh` - Queue a `kg.graph_layout` re-layout now (issue #371).
+  **202** `{jobId, deduplicated}`; at most one layout job per owner — a request while one is
+  pending/running returns it with `deduplicated: true` and pulls a delayed automatic run forward
+  to start immediately. Never 409 (`graph:write`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -1337,6 +1377,17 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   entityId])` — §9.2's "recently viewed" list. The **one** table in this graph keyed on
   `user_id`, not `owner_id`: which entities a viewer has looked at is a per-viewer fact, not an
   ownership fact.
+- `kg_graph_layouts` - One row per computed whole-graph layout snapshot (issue #371), read by
+  `GET /api/graph/overview` and never by anything else. A **cache of derived data, never a
+  source of truth** — `clusters`/`positions` hold ids and numbers only, **no label is ever
+  stored**, so a renamed, merged or forgotten entity never shows a stale name through this
+  table; the overview joins labels live instead. `owner_id` **Cascade**, the same reasoning
+  every other `kg_*` table's `owner_id` follows. Only the newest **two** rows per owner are
+  kept — the handler prunes the rest in the same transaction that inserts the new one — so this
+  is a handful of rows per owner, not a growing history. `source_updated_at` is
+  `max(updated_at)` over the owner's `kg_entities`/`kg_relations` at the moment the snapshot was
+  computed, stamped **before** the read starts; `GET /api/graph/overview` compares it against a
+  fresh count to report `stale: true` without ever recomputing itself.
 
 ## Navigation Destination Model
 
@@ -2084,7 +2135,15 @@ graph, and an explorer/whole-graph visualization (§19–§22).
 are built, and so is the graph write layer (issue #355: `GraphWriteService`, the evidence
 invariant trigger, the manual entity edit and attribute definitions); "forget this person"
 (issue #357: `POST /api/graph/entities/:id/forget`, the `kg.purge` job type, and the Danger
-Zone's `graph` category) is also built; the remaining services arrive with #356 and later.**
+Zone's `graph` category) is also built; the read layer (issue #370, epic #347:
+`apps/api/src/graph/read/` — the entity index, an entity's page, its
+neighbourhood, timeline, mentions, citation links, and the explorer's
+`expand`, exported as `GraphReadService`, `GraphNeighborhoodService` and
+`GraphEvidenceService` for the entity brief (#372) and the Ask agent (#377)
+to reuse) is built too; so is the whole-graph overview (issue #371, epic
+#347: the `kg.graph_layout` job, `kg_graph_layouts`, and
+`GET /api/graph/overview` + `POST /api/graph/overview/refresh`); the
+extraction/review/commit pipeline arrives later.**
 The extraction quality harness (issue #362: the synthetic golden set at
 `apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
 built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
@@ -2094,8 +2153,8 @@ at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. The only `kg.*` job handlers so far are `kg.purge` (#357),
-`kg.speaker_link` (#356) and `kg.extract` (#363 — one structured-output call per
+above. The `kg.*` job handlers so far are `kg.purge` (#357),
+`kg.speaker_link` (#356), `kg.extract` (#363 — one structured-output call per
 note on the owner's own key, producing a **draft proposal**, never graph rows;
 server-only, `maxAttempts: 1`, throttled per user, priority −5, auto-enqueued by
 `NoteGenerationService.commit()` for a ready note), `kg.resolve` and `kg.embed` (#364 —
@@ -2103,15 +2162,16 @@ entity resolution in `apps/api/src/graph/resolution/`, `GraphResolutionModule`: 
 `pg_trgm` ∪ pgvector candidates, the transparent `score.ts` table, `graph.adjudicate` for the
 middle band, the `resolution` proposal stage at order 100, reversible merges and distinct pairs;
 `kg.resolve` only ever writes a `resolution` proposal, never a merge; `kg.embed` is content-hash
-keyed and never embeds a `sensitive` PersonFact); every other type in
+keyed and never embeds a `sensitive` PersonFact), `kg.graph_layout` (#371 —
+see below); every other type in
 `apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
 `apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
 `graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
-#364/#365 plug their stages into. There are no `/api/graph/*` routes beyond the
-ontology, the entity edit, attribute definitions, forget, extraction
-(request + estimate) and resolution (merge, reverse, distinct pairs), and no graph UI.
+#364/#365 plug their stages into. Resolution routes (merge, reverse, distinct
+pairs, #364), the read layer (#370) and the whole-graph overview (#371) are
+built; there are still no review/commit routes, and no graph UI.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
@@ -2151,6 +2211,33 @@ speaker's **effective** name (the live row with the `speaker_identities` overlay
 `materialize()` shows it — never `speaker_identities` alone) into the **owner's** `Person` +
 `IDENTIFIED_AS` rows — never an editor's, and only while the owner holds `graph:write`; see
 `docs/specs/ontology.md` §8.
+
+**`kg.graph_layout` (#371) is server-only, and not for a credential reason** — it makes no AI
+call and needs no vendor key; it opts out under CLAUDE.md rule 2's "reads several tables
+mid-computation" exception, because its input is the owner's entire graph read across
+`kg_entities`, `kg_relations` and `kg_items` at run time, with no node-side artifact for a
+worker to fetch or produce. `profile: { maxRuntimeMs: 15 min, maxAttempts: 2 }` — one automatic
+retry is honest here, unlike `note.generate`'s `maxAttempts: 1`, because a retry has no side
+effect anybody pays for: it recomputes a derived cache, never calls a vendor. `GraphLayoutEnqueuer`
+is the one place it is ever enqueued, with ordinary dedup (never `skipDedup`) so at most one
+layout job is ever pending or running per owner. Three triggers: a manual
+`POST /api/graph/overview/refresh` (immediate); the bootstrap first snapshot (`GET
+/api/graph/overview` finding none for a non-empty graph); and a **material change** — the
+`graph.changed` event (`apps/api/src/graph/graph-events.ts`, emitted after a graph write commits,
+never inside the transaction) is read by `GraphLayoutListener`, which runs one cheap readable-entity
+count and enqueues only when it has moved by at least 20% from the latest snapshot's `nodeCount`
+(floored at a denominator of 50, so a small graph does not re-lay on every new person) — never on
+every commit, which spec §22.3 forbids. Both the bootstrap and the material-change trigger schedule
+the job **120 seconds out** (`GRAPH_LAYOUT_COALESCE_MS`) so a burst of commits coalesces into one
+run; a manual refresh that joins one still waiting out that delay pulls it forward to now, since
+pressing Refresh means "no delay" is the caller's explicit ask. The stored snapshot holds ids and
+coordinates only — never a label — and retains only the newest two rows per owner; `GET
+/api/graph/overview` joins labels live and never recomputes, which is what makes a forgotten
+person's name un-resurrectable through this cache. Its Danger Zone/"forget" reach is narrow: `kg.purge`'s
+`scope: 'all'` plan (the Danger Zone's `content`/`everything` categories) deletes the owner's
+`kg_graph_layouts` rows as its last step, since even an id-and-coordinate-only cache is still a map
+of the graph being wiped; `scope: 'person'` ("Forget this person") does not touch it — the next
+scheduled or requested layout simply drops the forgotten entity through the live join.
 
 ## Specialized Subagents (MANDATORY)
 

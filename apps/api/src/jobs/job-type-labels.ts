@@ -158,6 +158,8 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // and profile embeddings for resolution's vector arm, both on the owner's key.
   'kg.resolve': 'Knowledge graph resolution',
   'kg.embed': 'Knowledge graph embeddings',
+  // #371, epic #347: the whole-graph overview snapshot (clusters + positions).
+  'kg.graph_layout': 'Knowledge graph layout',
 };
 
 /**

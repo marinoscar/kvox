@@ -29,6 +29,7 @@
 // =============================================================================
 
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import type { KgEntity, KgEntityAlias, Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../ai/ai-settings.service';
@@ -38,6 +39,7 @@ import { JobsService } from '../jobs/jobs.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GraphAccessService } from './access/graph-access.service';
 import type { GraphEntityResponse, PatchEntityDto } from './dto/graph-entity.dto';
+import { GRAPH_CHANGED_EVENT, type GraphChangedEvent } from './graph-events';
 import {
   FORGET_CONFIRMATION_MESSAGE,
   FORGET_NOT_PERSON_MESSAGE,
@@ -97,6 +99,7 @@ export class GraphEntitiesService {
     private readonly jobs: JobsService,
     private readonly registry: JobHandlerRegistry,
     private readonly aiSettings: AiSettingsService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async patch(id: string, dto: PatchEntityDto, user: RequestUser): Promise<GraphEntityResponse> {
@@ -126,6 +129,9 @@ export class GraphEntitiesService {
         aliasesRemoved: result.aliasesRemoved,
       });
       await this.enqueueFollowUps(user.id, id);
+      // After the transaction committed (#371): the layout listener decides
+      // whether the change is material; it only ever enqueues.
+      this.events.emit(GRAPH_CHANGED_EVENT, { ownerId: user.id, reason: 'manual_edit' } satisfies GraphChangedEvent);
     }
 
     return toGraphEntityResponse(result.entity, aliases);

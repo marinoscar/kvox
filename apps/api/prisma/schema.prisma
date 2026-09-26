@@ -128,6 +128,7 @@ model User {
   kgAttributeDefs KgAttributeDef[]
   kgEntityDigests KgEntityDigest[]
   kgEntityViews   KgEntityView[]
+  kgGraphLayouts  KgGraphLayout[]
 
   @@map("users")
 }
@@ -4898,4 +4899,33 @@ model KgEntityView {
 
   @@unique([userId, entityId])
   @@map("kg_entity_views")
+}
+
+/// Latest whole-graph layout per owner (spec §22, issue #371). A cache of derived data — never
+/// a source of truth; labels are NOT stored (read live, so a renamed or forgotten entity never
+/// shows a stale label). `clusters`/`positions` are versioned JSON blobs (`{ version: 1, ... }`)
+/// rather than typed columns, produced by the pure `computeLayout()` function and consumed only
+/// by `GraphOverviewService`, which joins live entity rows back in at read time.
+model KgGraphLayout {
+  id     String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+
+  computedAt DateTime @map("computed_at") @db.Timestamptz(6)
+
+  nodeCount Int @map("node_count")
+  edgeCount Int @map("edge_count")
+
+  clusters  Json @db.JsonB
+  positions Json @db.JsonB
+
+  ontologyVersion String @map("ontology_version")
+
+  // max(updated_at) over the owner's kg_entities/kg_relations read by this run — the staleness
+  // check `GET /api/graph/overview` compares against a fresh count, never recomputing itself.
+  sourceUpdatedAt DateTime? @map("source_updated_at") @db.Timestamptz(6)
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, computedAt(sort: Desc)])
+  @@map("kg_graph_layouts")
 }
