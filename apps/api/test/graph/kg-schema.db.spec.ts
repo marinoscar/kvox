@@ -101,8 +101,13 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
   }
 
   async function createEntity(ownerId: string, overrides: Partial<{ type: string; label: string }> = {}) {
+    // `unreviewed`, not the column default `accepted`: an accepted row with
+    // no evidence is refused at COMMIT by #355's no-orphans trigger, and
+    // nothing in this file is about review state (the one test that needs
+    // accepted rows, the live-statement index, adds evidence with them).
     return prisma.kgEntity.create({
       data: {
+        reviewStatus: 'unreviewed',
         ownerId,
         type: overrides.type ?? 'person',
         label: overrides.label ?? 'Sarah Chen',
@@ -121,7 +126,6 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     });
     await prisma.kgProposal.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.kgMention.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
-    await prisma.kgEvidence.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.kgMerge.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.$executeRaw`DELETE FROM "kg_distinct_pairs" WHERE "owner_id" IN (SELECT "id" FROM "users" WHERE "email" LIKE ${EMAIL_PREFIX + '%'})`;
     await prisma.kgAttributeDef.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
@@ -129,6 +133,10 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
     await prisma.kgItem.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.kgEntityAlias.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.kgEntity.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
+    // Evidence AFTER its subjects: deleting the last citation of a still-accepted
+    // row is refused at COMMIT by #355's no-orphans trigger, while deleting the
+    // subject first leaves nothing for the trigger to protect.
+    await prisma.kgEvidence.deleteMany({ where: { owner: { email: { startsWith: EMAIL_PREFIX } } } });
     await prisma.user.deleteMany({ where: { email: { startsWith: EMAIL_PREFIX } } });
   });
 
@@ -303,6 +311,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgRelation.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             type: 'IDENTIFIED_AS',
             fromId: from.id,
@@ -340,6 +349,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgRelation.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             type: 'WORKS_AT',
             fromSpeakerId: speaker.id,
@@ -375,6 +385,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
 
       const relation = await prisma.kgRelation.create({
         data: {
+          reviewStatus: 'unreviewed',
           ownerId: owner.id,
           type: 'IDENTIFIED_AS',
           fromSpeakerId: speaker.id,
@@ -388,6 +399,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgRelation.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             type: 'IDENTIFIED_AS',
             fromSpeakerId: speaker.id,
@@ -456,6 +468,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgItem.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             kind: 'person_fact',
             subjectId: subject.id,
@@ -475,6 +488,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgItem.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             kind: 'claim',
             subjectId: subject.id,
@@ -494,6 +508,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgItem.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             kind: 'claim',
             statement: 'Revenue grew 20%',
@@ -511,6 +526,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       await expect(
         prisma.kgItem.create({
           data: {
+            reviewStatus: 'unreviewed',
             ownerId: owner.id,
             kind: 'commitment',
             statement: 'Send the deck',
@@ -788,51 +804,37 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const owner = await createUser('item-live-statement-uniq');
       const subject = await createEntity(owner.id);
       const hash = randomUUID();
+      // Accepted items need a citation in the same transaction (#355's
+      // deferred no-orphans trigger), so each insert carries one.
+      const createAcceptedClaim = (id: string) =>
+        prisma.$transaction([
+          prisma.kgItem.create({
+            data: {
+              id,
+              ownerId: owner.id,
+              kind: 'claim',
+              subjectId: subject.id,
+              statement: 'Revenue grew 20%',
+              status: 'active',
+              statementHash: hash,
+              ontologyVersion: 'test-v1',
+            },
+          }),
+          prisma.kgEvidence.create({
+            data: { ownerId: owner.id, subjectKind: 'item', subjectId: id, quote: 'Revenue grew 20%' },
+          }),
+        ]);
 
-      const first = await prisma.kgItem.create({
-        data: {
-          ownerId: owner.id,
-          kind: 'claim',
-          subjectId: subject.id,
-          statement: 'Revenue grew 20%',
-          status: 'active',
-          statementHash: hash,
-          ontologyVersion: 'test-v1',
-        },
-      });
+      const [first] = await createAcceptedClaim(randomUUID());
 
       // A verbatim restatement while the first is still accepted is refused
       // by the index — the "known, skipped" §8 dedup guard.
-      await expect(
-        prisma.kgItem.create({
-          data: {
-            ownerId: owner.id,
-            kind: 'claim',
-            subjectId: subject.id,
-            statement: 'Revenue grew 20%',
-            status: 'active',
-            statementHash: hash,
-            ontologyVersion: 'test-v1',
-          },
-        }),
-      ).rejects.toMatchObject({ code: 'P2002' });
+      await expect(createAcceptedClaim(randomUUID())).rejects.toMatchObject({ code: 'P2002' });
 
       // Once the first is rejected, a fresh row with the identical hash is
       // no longer blocked.
       await prisma.kgItem.update({ where: { id: first.id }, data: { reviewStatus: 'rejected' } });
-      await expect(
-        prisma.kgItem.create({
-          data: {
-            ownerId: owner.id,
-            kind: 'claim',
-            subjectId: subject.id,
-            statement: 'Revenue grew 20%',
-            status: 'active',
-            statementHash: hash,
-            ontologyVersion: 'test-v1',
-          },
-        }),
-      ).resolves.toMatchObject({ statementHash: hash });
+      await expect(createAcceptedClaim(randomUUID()).then(([item]) => item)).resolves.toMatchObject({ statementHash: hash });
     });
   });
 
@@ -866,7 +868,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const from = await createEntity(owner.id);
       const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
       const relation = await prisma.kgRelation.create({
-        data: { ownerId: owner.id, type: 'WORKS_AT', fromId: from.id, toId: to.id, ontologyVersion: 'test-v1' },
+        data: { reviewStatus: 'unreviewed', ownerId: owner.id, type: 'WORKS_AT', fromId: from.id, toId: to.id, ontologyVersion: 'test-v1' },
       });
       await prisma.$executeRaw`
         UPDATE "kg_relations" SET "valid" = tstzrange('2019-01-01', '2026-03-01', '[)'), "valid_precision" = 'day'
@@ -896,7 +898,7 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const from = await createEntity(owner.id);
       const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
       const relation = await prisma.kgRelation.create({
-        data: { ownerId: owner.id, type: 'WORKS_AT', fromId: from.id, toId: to.id, ontologyVersion: 'test-v1' },
+        data: { reviewStatus: 'unreviewed', ownerId: owner.id, type: 'WORKS_AT', fromId: from.id, toId: to.id, ontologyVersion: 'test-v1' },
       });
 
       await prisma.$executeRaw`
@@ -941,10 +943,11 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       });
       const to = await createEntity(owner.id, { label: 'Acme Corp', type: 'organization' });
       const relation = await prisma.kgRelation.create({
-        data: { ownerId: owner.id, type: 'WORKS_AT', fromId: entity.id, toId: to.id, ontologyVersion: 'test-v1' },
+        data: { reviewStatus: 'unreviewed', ownerId: owner.id, type: 'WORKS_AT', fromId: entity.id, toId: to.id, ontologyVersion: 'test-v1' },
       });
       const item = await prisma.kgItem.create({
         data: {
+          reviewStatus: 'unreviewed',
           ownerId: owner.id,
           kind: 'commitment',
           statement: 'Send the deck',
