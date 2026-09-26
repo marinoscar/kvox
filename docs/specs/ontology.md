@@ -1264,7 +1264,12 @@ nothing, or an unknown handle, is dropped before it is stored
 and the previous digest is kept rather than replaced with an empty one.
 `sensitive` PersonFacts never enter the fact list, ever; `personal` ones
 only with the §14 personal-facts-in-prompts opt-in, which no preference
-defines yet, so it is always `false` today. `profile: { maxRuntimeMs: 5m,
+defines yet, so it is always `false` today. The same rule holds for a
+relation whose *type* declares `personal` sensitivity (#383 — every
+`personal`-domain relation, e.g. the soft-exclusive `SPOUSE_OF`): it is never
+asked for as digest input, and the brief's staleness check reads the same
+relation set, so a change the digest may not summarise can never keep it
+permanently stale. `profile: { maxRuntimeMs: 5m,
 maxAttempts: 1 }` — one attempt, for `note.generate`'s exact reason: a retry
 would bill the owner's own key a second time for a different, non-
 deterministic answer. Server-only, permanently, for the identical reason —
@@ -1544,7 +1549,7 @@ graph?: {
                  autoLinkThreshold: number;  /* 0.80–0.99 */      // default 0.90
                  newThreshold: number;       /* 0.30–0.94, ≥ 0.05 below auto-link */ // default 0.55
                  adjudication: 'llm' | 'off' };                   // default llm
-  domains?: { work: boolean; personal: false };                   // core is never stored (always on)
+  domains?: { work: boolean; personal: boolean };                 // core is never stored (always on); personal default false
 }
 ```
 
@@ -1552,8 +1557,9 @@ graph?: {
 sub-object or a field to its default; `graph: null` resets everything). A write
 whose resolved values change emits `graph.preferences_changed`
 (`{ userId, changed, previous, next }`); a listener may only enqueue (#364's
-`kg.resolve` on a threshold change). `personal` is `z.literal(false)` until
-#383 ships that domain.
+`kg.resolve` on a threshold change). `personal` is a boolean, default
+`false` (#383, §17.2): turning it on is what makes the `personal` domain part
+of the caller's effective schema.
 
 **`pg_trgm` is a new migration requirement for this codebase — pgvector
 already is not** (`SearchEmbedding` already depends on it, verified above),
@@ -1969,6 +1975,11 @@ applies to it automatically from the moment the domain is turned on.
 *Acceptance:* a user who enables `personal` sees its types offered by
 extraction on their next note; a user who never enables it sees no change
 anywhere, including in the effective-schema payload §17.4 publishes.
+**Built (#383):** see §17.2 for what shipped, including the three relations
+added beyond this list and the `symmetric` relation flag; the payload a user
+who never enables `personal` receives is pinned against a committed copy of
+the 1.0.0 payload (`apps/api/test/ontology/personal-domain.spec.ts`) — only
+`version` and the disabled `personal` entry in `domains` differ.
 
 **P7 — Interoperability.** The RDF/OWL and SHACL generators (§18.1, §18.2),
 `kg.export` and its three artefacts, `kg.import` and its validate-then-propose
@@ -2048,6 +2059,10 @@ defineRelationType({
                                  // has to know about separately
   props: { /* none for WORKS_FOR */ },
   alignment: 'schema:worksFor', // §18
+  // symmetric?: boolean        // #383, default false — (a, b) and (b, a)
+  //                            // are one fact (SPOUSE_OF); see §17.2
+  // sensitivityDefault?: ...   // #383, default 'business' — the instances'
+  //                            // sensitivity (every personal relation)
 });
 ```
 
@@ -2105,9 +2120,18 @@ without the runtime self-registration mechanism those use:
   depends on. **Always on**, for every user, unconditionally.
 - **`work.ts`** — `Project`, `Commitment`, `Decision`, and the relation types
   `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
-- **`personal.ts`** — `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, `Interest`,
-  `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6), not yet
-  built.
+- **`personal.ts`** (label *Personal life*) — `Interest`, `Trip`,
+  `Milestone`, and `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, plus
+  `INTERESTED_IN` (Person → Interest), `TRAVELED_ON` (Person → Trip) and
+  `HAS_MILESTONE` (Person → Milestone). **Off by default** (§16, P6; built in
+  #383, ontology 1.1.0). The last three relations are additions to this
+  section's original list: without them an `Interest`, `Trip` or `Milestone`
+  could never be connected to a `Person` and would always be an orphan node.
+  Every type **and relation** declares `sensitivityDefault: 'personal'`.
+  `core`'s endpoint lists (`MENTIONS`, `ABOUT`, `SUPPORTED_BY`, `Claim`'s
+  subject types) name the three personal types; the effective schema prunes
+  them away while the domain is off, which is what keeps the disabled payload
+  byte-identical to 1.0.0's.
 - **`index.ts`** — the registry: lists every domain module explicitly and
   builds it via `buildOntologyRegistry`, and a user's **effective schema** is
   computed as `core ∪ {enabled domains}` — never hand-assembled per caller.
@@ -2140,6 +2164,35 @@ guarantees one Joe across every domain a user ever turns on.
   so §15's privacy handling — never pre-checked, opt-in for prompt
   enrichment — applies automatically the moment the domain is turned on,
   with no second setting a user has to separately remember to configure.
+  As built (#383): the pre-check leaves every entity/relation row of a
+  non-`business` type pending (`reviewOnlyTypes`, derived from the caller's
+  effective schema — a `known` restatement of an edge already accepted still
+  follows the `known` rule, exactly as a known `personal` PersonFact does);
+  the Ask tools (§21.7) and the entity digest (§9.2) treat such entities and
+  relations like `personal` PersonFacts — returned or sent only with the §14
+  opt-in, read from the whole registry so rows written while the domain was
+  on stay personal after it is turned off. **Enabling the domain is not that
+  opt-in**: it decides which types extraction offers, never what a model may
+  be shown. Disabling it stops extraction proposing personal types; rows
+  already accepted stay the user's data (the Danger Zone and "forget this
+  person" remain the deletion paths).
+
+**Symmetric relations (#383).** A relation type may declare
+`symmetric: true` — `(a, b)` and `(b, a)` are the **same fact** (`SPOUSE_OF`,
+`FRIEND_OF`; never `PARENT_OF`). Only one row is ever stored (§5.2 rejects
+storing both directions: two rows that can disagree). *Validation*
+(`defineRelationType`): `from` and `to` must be the same single type, the
+representation an `edge`, and no `allowedPairs`. *Dedup*: the temporal planner
+(#353) reads an existing `(b, a)` as `(a, b)` under a symmetric rule, and the
+`work-item-dedup`/`temporal-closing` stages (#365) load a symmetric type's live
+edges from both ends — so a restated marriage is "known, skipped" (#366)
+either way round, and a new marriage closes the earlier one however it was
+stored. The extraction prompt (#363) marks a symmetric type "direction does
+not matter; propose it once", and `kg:eval`'s scorer matches it either way
+round. The payload carries `symmetric: true` only on a symmetric relation
+(absent means directed), and `sensitivityDefault` only when a relation
+declares one (absent means `business`), so neither flag changes a
+`core`/`work` relation's entry.
 
 ### 17.3 User-defined attributes
 
@@ -3095,7 +3148,11 @@ never appears in any field of any tool; a `personal` (or unclassified) one only
 when `ctx.personalFactsAllowed` — §14's opt-in, resolved through
 `GraphPreferencesService` and **always false** until that preference exists
 (`personalFactsAllowedFor`; `graph.domains.personal` is not consent). The same
-rule filters attributes by their definition's sensitivity in `get_entity`.
+rule filters attributes by their definition's sensitivity in `get_entity`,
+and (#383) entities and relations of a `personal`-sensitivity type — every
+`personal`-domain type (`PERSONAL_SENSITIVITY_TYPES` in `sensitivity.ts`): no
+tool returns an `Interest`, `Trip`, `Milestone` or a `SPOUSE_OF`/`PARENT_OF`/…
+edge without the opt-in, and `get_entity` refuses one by handle.
 Only readable rows (`readable.ts`) are returned; `timeline` keeps superseded
 items, flagged. No tool depends on a write service, and `entity_brief` neither
 moves the viewer's last-viewed marker nor enqueues a digest — the summary says
