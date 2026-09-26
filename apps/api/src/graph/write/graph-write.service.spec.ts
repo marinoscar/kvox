@@ -23,6 +23,7 @@ const ORG = '33333333-3333-4333-8333-333333333333';
 const MEETING = '44444444-4444-4444-8444-444444444444';
 const SPEAKER = '55555555-5555-4555-8555-555555555555';
 const OLDER = '66666666-6666-4666-8666-666666666666';
+const TRANSCRIPT = '77777777-7777-4777-8777-777777777777';
 
 const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
 const evidence = [{ noteId: OWNER, noteVersion: 1, charStart: 0, charEnd: 1, quote: 'x' } as EvidenceInput];
@@ -86,7 +87,9 @@ function fakeTx(): FakeTx {
       findUnique: track('kgItem.findUnique'),
       update: track('kgItem.update'),
     },
-    transcriptSpeaker: { findFirst: track('transcriptSpeaker.findFirst', (() => ({ id: SPEAKER })) as never) },
+    transcriptSpeaker: {
+      findFirst: track('transcriptSpeaker.findFirst', (() => ({ id: SPEAKER, transcriptId: TRANSCRIPT })) as never),
+    },
     kgProposalItem: { findFirst: track('kgProposalItem.findFirst') },
     $executeRaw: track('$executeRaw', (() => 1) as never),
   };
@@ -293,6 +296,37 @@ describe('GraphWriteService', () => {
       await expect(service.createRelation(asTx, { ...input, fromId: PERSON }, schema)).rejects.toBeInstanceOf(
         GraphValidationError,
       );
+    });
+
+    it("stamps a speaker link's transcriptId/speakerId system props from the speaker row (#356)", async () => {
+      const { service, tx, asTx } = setup();
+      const input = {
+        ownerId: OWNER,
+        type: 'IDENTIFIED_AS',
+        fromSpeakerId: SPEAKER,
+        toId: PERSON,
+        props: { transcriptId: TRANSCRIPT, speakerId: SPEAKER },
+        reviewStatus: 'accepted' as const,
+        evidence,
+      };
+      await service.createRelation(asTx, input, schema);
+      expect(tx.kgRelation.create.mock.calls[0][0].data.props).toEqual({ transcriptId: TRANSCRIPT, speakerId: SPEAKER });
+
+      // Stamped even when the caller sent none.
+      await service.createRelation(asTx, { ...input, props: undefined }, schema);
+      expect(tx.kgRelation.create.mock.calls[1][0].data.props).toEqual({ transcriptId: TRANSCRIPT, speakerId: SPEAKER });
+
+      // A claimed value that disagrees with the speaker row is refused.
+      await expect(
+        service.createRelation(asTx, { ...input, props: { speakerId: PERSON } }, schema),
+      ).rejects.toBeInstanceOf(GraphValidationError);
+      await expect(
+        service.createRelation(asTx, { ...input, props: { transcriptId: PERSON } }, schema),
+      ).rejects.toBeInstanceOf(GraphValidationError);
+      // Any other key stays closed.
+      await expect(
+        service.createRelation(asTx, { ...input, props: { nickname: 'x' } }, schema),
+      ).rejects.toBeInstanceOf(GraphValidationError);
     });
 
     it('refuses a temporal relation without a precision, naming validPrecision', async () => {

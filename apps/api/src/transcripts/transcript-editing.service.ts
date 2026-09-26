@@ -81,6 +81,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
@@ -124,6 +125,10 @@ import {
   type RequestOp,
   type StateDiff,
 } from './editing';
+import {
+  TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+  TranscriptSpeakersIdentifiedEvent,
+} from './events/transcript-speakers-identified.event';
 import { TranscriptAccessService } from './transcript-access.service';
 import { TranscriptMaterializeService } from './transcript-materialize.service';
 import { TranscriptPipelineService } from './transcript-pipeline.service';
@@ -210,6 +215,9 @@ export class TranscriptEditingService {
     private readonly access: TranscriptAccessService,
     private readonly materialize: TranscriptMaterializeService,
     private readonly pipeline: TranscriptPipelineService,
+    // #356: the naming → graph hand-off. Global (`EventEmitterModule.forRoot()`
+    // in `app.module.ts`), so no module import is needed for it.
+    private readonly events: EventEmitter2,
   ) {}
 
   // ===========================================================================
@@ -1024,6 +1032,27 @@ export class TranscriptEditingService {
       await this.audit(user.id, 'transcript.speaker_identified', transcriptId, {
         speakers: saved.identified,
       });
+
+      // #356: hand the naming to the graph. Emitted AFTER the commit, the
+      // search enqueue and the audit, and outside the transaction; the
+      // listener only enqueues `kg.speaker_link`, which re-reads the current
+      // identities itself. Contained: naming must never fail because the
+      // graph could not be told about it.
+      try {
+        this.events.emit(
+          TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+          new TranscriptSpeakersIdentifiedEvent(
+            transcriptId,
+            user.id,
+            saved.identified.map((s) => s.speakerId),
+          ),
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Transcript ${transcriptId}: could not emit ${TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
       this.logger.log(
         `Transcript ${transcriptId}: ${saved.identified.length} speaker(s) identified by ` +
