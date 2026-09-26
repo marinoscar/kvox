@@ -26,23 +26,23 @@ model User {
   updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   // Relations
-  identities                 UserIdentity[]
-  userRoles                  UserRole[]
-  userSettings               UserSettings?
-  auditEvents                AuditEvent[]            @relation("ActorEvents")
-  settingsUpdates            SystemSettings[]        @relation("SettingsUpdater")
-  refreshTokens              RefreshToken[]          @relation("UserRefreshTokens")
-  allowlistEntriesAdded      AllowedEmail[]          @relation("AllowlistAddedBy")
-  allowlistEntry             AllowedEmail?           @relation("AllowlistClaimedBy")
-  deviceCodes                DeviceCode[]            @relation("UserDeviceCodes")
-  storageObjects             StorageObject[]         @relation("UserStorageObjects")
-  personalAccessTokens       PersonalAccessToken[]   @relation("UserPersonalAccessTokens")
-  credentialUpdates          Credential[]            @relation("CredentialUpdatedBy")
-  notificationDeliveries     NotificationDelivery[]  @relation("UserNotificationDeliveries")
-  notifications              Notification[]          @relation("UserNotifications")
-  pushSubscriptions          PushSubscription[]      @relation("UserPushSubscriptions")
-  workerNodes                WorkerNode[]            @relation("UserWorkerNodes")
-  nodeCredentials            NodeCredential[]        @relation("UserNodeCredentials")
+  identities                       UserIdentity[]
+  userRoles                        UserRole[]
+  userSettings                     UserSettings?
+  auditEvents                      AuditEvent[]               @relation("ActorEvents")
+  settingsUpdates                  SystemSettings[]           @relation("SettingsUpdater")
+  refreshTokens                    RefreshToken[]             @relation("UserRefreshTokens")
+  allowlistEntriesAdded            AllowedEmail[]             @relation("AllowlistAddedBy")
+  allowlistEntry                   AllowedEmail?              @relation("AllowlistClaimedBy")
+  deviceCodes                      DeviceCode[]               @relation("UserDeviceCodes")
+  storageObjects                   StorageObject[]            @relation("UserStorageObjects")
+  personalAccessTokens             PersonalAccessToken[]      @relation("UserPersonalAccessTokens")
+  credentialUpdates                Credential[]               @relation("CredentialUpdatedBy")
+  notificationDeliveries           NotificationDelivery[]     @relation("UserNotificationDeliveries")
+  notifications                    Notification[]             @relation("UserNotifications")
+  pushSubscriptions                PushSubscription[]         @relation("UserPushSubscriptions")
+  workerNodes                      WorkerNode[]               @relation("UserWorkerNodes")
+  nodeCredentials                  NodeCredential[]           @relation("UserNodeCredentials")
   // Two relations to ONE table, deliberately (#281, epic #254): a
   // `database_backup_runs` row records both "who asked for this backup" and,
   // once Phase 7 restores from it, "who restored it". They are different acts
@@ -50,9 +50,9 @@ model User {
   // columns and therefore different relation names. See the block comment
   // above `DatabaseBackupRun` for why the restore audit lives on the backup's
   // own row rather than in a second table.
-  databaseBackupRuns         DatabaseBackupRun[]     @relation("UserDatabaseBackupRuns")
-  databaseRestores           DatabaseBackupRun[]     @relation("UserDatabaseRestores")
-  broadcastsCreated          NotificationBroadcast[] @relation("BroadcastAuthor")
+  databaseBackupRuns               DatabaseBackupRun[]        @relation("UserDatabaseBackupRuns")
+  databaseRestores                 DatabaseBackupRun[]        @relation("UserDatabaseRestores")
+  broadcastsCreated                NotificationBroadcast[]    @relation("BroadcastAuthor")
   // Transcripts (issue #24, epic #19). Six relations to the transcript
   // tables, split by role for the same reason `databaseBackupRuns` /
   // `databaseRestores` are two relations to one table above: "owns this
@@ -61,28 +61,28 @@ model User {
   // different acts, not one. See the block comment above the `Transcript`
   // model for the full reasoning behind every one of these relations'
   // `onDelete` behaviour.
-  transcripts                Transcript[]            @relation("TranscriptOwner")
-  transcriptVersionsAuthored TranscriptVersion[]     @relation("TranscriptVersionAuthor")
-  transcriptSegmentEdits     TranscriptSegment[]     @relation("TranscriptSegmentEditor")
-  transcriptSharesReceived   TranscriptShare[]       @relation("TranscriptShareUser")
-  transcriptSharesGranted    TranscriptShare[]       @relation("TranscriptShareGrantedBy")
-  transcriptExportsRequested TranscriptExport[]      @relation("TranscriptExportRequestedBy")
+  transcripts                      Transcript[]               @relation("TranscriptOwner")
+  transcriptVersionsAuthored       TranscriptVersion[]        @relation("TranscriptVersionAuthor")
+  transcriptSegmentEdits           TranscriptSegment[]        @relation("TranscriptSegmentEditor")
+  transcriptSharesReceived         TranscriptShare[]          @relation("TranscriptShareUser")
+  transcriptSharesGranted          TranscriptShare[]          @relation("TranscriptShareGrantedBy")
+  transcriptExportsRequested       TranscriptExport[]         @relation("TranscriptExportRequestedBy")
   // AI name checks (issue #328, epic #326). Two relations, split by role for
   // the same reason the six transcript relations above are: "asked for this
   // run" and "accepted/rejected this suggestion" are different acts. See the
   // block comment above the `TranscriptNameCheck` model for the full
   // reasoning behind each `onDelete`.
-  transcriptNameChecksRequested     TranscriptNameCheck[]       @relation("TranscriptNameCheckRequestedBy")
-  transcriptNameSuggestionsDecided  TranscriptNameSuggestion[]  @relation("TranscriptNameSuggestionDecidedBy")
+  transcriptNameChecksRequested    TranscriptNameCheck[]      @relation("TranscriptNameCheckRequestedBy")
+  transcriptNameSuggestionsDecided TranscriptNameSuggestion[] @relation("TranscriptNameSuggestionDecidedBy")
   // Notes (issue #48, epic #45). Four relations to the note tables, split by
   // role for the identical reason the six transcript relations above are:
   // "owns this note", "owns this custom template", "wrote this version" and
   // "asked for this export" are four different acts. See the block comment
   // above the `Note` model for the full reasoning behind each `onDelete`.
-  notes                 Note[]           @relation("NoteOwner")
-  noteTemplatesOwned     NoteTemplate[]   @relation("NoteTemplateOwner")
-  noteVersionsAuthored   NoteVersion[]    @relation("NoteVersionAuthor")
-  noteExportsRequested   NoteExport[]     @relation("NoteExportRequestedBy")
+  notes                            Note[]                     @relation("NoteOwner")
+  noteTemplatesOwned               NoteTemplate[]             @relation("NoteTemplateOwner")
+  noteVersionsAuthored             NoteVersion[]              @relation("NoteVersionAuthor")
+  noteExportsRequested             NoteExport[]               @relation("NoteExportRequestedBy")
   // Per-user AI credentials (issue #47, epic #45). ONE relation, and it
   // CASCADES — unlike `credentialUpdates` above, which is `SetNull` because a
   // `credentials` row belongs to the deployment rather than to the person who
@@ -91,7 +91,7 @@ model User {
   // the account must take the encrypted key with it. See the block comment
   // above `UserAiCredential` for why that FK could not be added to
   // `credentials` instead.
-  aiCredentials          UserAiCredential[] @relation("UserAiCredentials")
+  aiCredentials                    UserAiCredential[]         @relation("UserAiCredentials")
 
   // Semantic search index state (issue #181, epic #165). ONE relation, and
   // it CASCADES — an index-state row for a document owned by nobody means
@@ -104,6 +104,24 @@ model User {
   // See the block comment above `UserHiddenNoteTemplate` for why this is a
   // join table rather than a `user_settings` namespace.
   hiddenNoteTemplates UserHiddenNoteTemplate[]
+
+  // Connected Knowledge (epic #344, issue #351). Twelve relations — one per
+  // `kg_*` table's `owner_id`, all CASCADE (see the block comment above the
+  // "Connected Knowledge" section header for why every one of these rows IS
+  // the private content, never a record OF something), plus the one
+  // `user_id`-keyed exception, `kgEntityViews`.
+  kgEntitiesOwned      KgEntity[]       @relation("KgEntityOwner")
+  kgEntityAliasesOwned KgEntityAlias[]  @relation("KgEntityAliasOwner")
+  kgRelationsOwned     KgRelation[]     @relation("KgRelationOwner")
+  kgItemsOwned         KgItem[]         @relation("KgItemOwner")
+  kgEvidenceOwned      KgEvidence[]     @relation("KgEvidenceOwner")
+  kgMentionsOwned      KgMention[]      @relation("KgMentionOwner")
+  kgProposalsOwned     KgProposal[]     @relation("KgProposalOwner")
+  kgMergesOwned        KgMerge[]        @relation("KgMergeOwner")
+  kgDistinctPairsOwned KgDistinctPair[] @relation("KgDistinctPairOwner")
+  kgAttributeDefsOwned KgAttributeDef[] @relation("KgAttributeDefOwner")
+  kgEntityDigestsOwned KgEntityDigest[] @relation("KgEntityDigestOwner")
+  kgEntityViews        KgEntityView[]   @relation("KgEntityViewUser")
 
   @@map("users")
 }
@@ -424,8 +442,12 @@ model StorageObject {
   // Restrict-FK reasoning as the five transcript ones above: only
   // `note.purge`/`notes.housekeeping` deleting the referencing row first may
   // ever remove one of these objects.
-  notesAsSourceObject       Note[]               @relation("NoteSourceObject")
-  noteExportFiles           NoteExport[]         @relation("NoteExportObject")
+  notesAsSourceObject        Note[]               @relation("NoteSourceObject")
+  noteExportFiles            NoteExport[]         @relation("NoteExportObject")
+
+  // Import-anchored evidence citations (epic #344, issue #351). `SetNull` —
+  // see the block comment above `KgEvidence`.
+  kgEvidenceImports KgEvidence[] @relation("KgEvidenceImportObject")
 
   @@index([uploadedById])
   @@index([status])
@@ -1381,6 +1403,14 @@ model Job {
   // history is purged) is independent of `job.history.purge`'s schedule for
   // this row.
   transcriptNameCheck TranscriptNameCheck?
+
+  // The `kg_proposals` row this job generated, when `type` is `'kg.extract'`
+  // (epic #344, issue #351). Same one-to-one shape as `transcriptNameCheck`/
+  // `noteGeneration`/`transcriptExport`/`backupRun` above, for the identical
+  // reason: `KgProposal.jobId` is `@unique`/nullable/`SetNull` because a
+  // proposal's own lifetime (read by the review UI) is independent of
+  // `job.history.purge`'s schedule for this row.
+  kgProposal KgProposal?
 
   // See the block comment above ("Prisma-expressible indexes...") for why
   // these eight are declared here and three more exist only in
@@ -2410,19 +2440,28 @@ model Transcript {
   playbackObject  StorageObject? @relation("TranscriptPlaybackObject", fields: [playbackObjectId], references: [id], onDelete: Restrict)
   rawResultObject StorageObject? @relation("TranscriptRawResultObject", fields: [rawResultObjectId], references: [id], onDelete: Restrict)
 
-  speakers TranscriptSpeaker[]
-  segments TranscriptSegment[]
-  versions TranscriptVersion[]
-  shares   TranscriptShare[]
-  exports  TranscriptExport[]
+  speakers      TranscriptSpeaker[]
+  segments      TranscriptSegment[]
+  versions      TranscriptVersion[]
+  shares        TranscriptShare[]
+  exports       TranscriptExport[]
   // Every note that named this transcript as its source (issue #48, epic
   // #45) — Restrict on `notes.source_transcript_id`, so a transcript with a
   // dependent note cannot be deleted until `notes.service.ts`'s own delete
   // guard clears it. See the block comment above the `Note` model.
-  notesAsSource Note[] @relation("NoteSourceTranscript")
+  notesAsSource Note[]                @relation("NoteSourceTranscript")
   // AI name-check runs against this transcript (issue #328, epic #326). See
   // the block comment above the `TranscriptNameCheck` model.
   nameChecks    TranscriptNameCheck[]
+
+  // Connected Knowledge (epic #344, issue #351). Two relations: evidence
+  // citations anchored here (`SetNull` — a citation outlives the transcript
+  // it was quoted from, see the block comment above `KgEvidence`) and
+  // mentions of a graph entity found here (`Cascade` — a mention has no
+  // meaning once its source transcript is gone, see the block comment above
+  // `KgMention`).
+  kgEvidence KgEvidence[] @relation("KgEvidenceTranscript")
+  kgMentions KgMention[]  @relation("KgMentionTranscript")
 
   // "This owner's transcripts, newest first" — the transcript list view.
   @@index([ownerId, updatedAt(sort: Desc)])
@@ -2450,6 +2489,11 @@ model TranscriptSpeaker {
 
   transcript Transcript          @relation(fields: [transcriptId], references: [id], onDelete: Cascade)
   segments   TranscriptSegment[]
+
+  // `IDENTIFIED_AS` edges sourced from this speaker (epic #344, issue #351).
+  // `Cascade` — see the block comment above `KgRelation` for why this speaker
+  // link is a real FK rather than a polymorphic reference.
+  kgRelationsFrom KgRelation[] @relation("KgRelationFromSpeaker")
 
   @@map("transcript_speakers")
 }
@@ -2535,6 +2579,10 @@ model TranscriptSegment {
   // AI name-check suggestions proposed against this segment (issue #328,
   // epic #326). See the block comment above the `TranscriptNameCheck` model.
   nameSuggestions TranscriptNameSuggestion[]
+
+  // Evidence citations anchored to this segment (epic #344, issue #351).
+  // `SetNull` — see the block comment above `KgEvidence`.
+  kgEvidence KgEvidence[] @relation("KgEvidenceSegment")
 
   // The compound order both a segment list and a time-window query
   // (`GET /:id/words?fromMs&toMs`) need (spec §3.3).
@@ -2835,11 +2883,11 @@ model TranscriptNameSuggestion {
   // Cascade, matching `TranscriptSegment`'s own relation to `Transcript`: a
   // suggestion against a segment that no longer exists (a later
   // `segment.split`/`segment.join`/delete) has nothing left to apply to.
-  segmentId String @map("segment_id") @db.Uuid
+  segmentId  String @map("segment_id") @db.Uuid
   // The `TranscriptSegment.rev` these offsets were computed against — see
   // the block comment above for why a mismatch at apply time means `stale`,
   // never a silently wrong offset.
-  segmentRev Int   @map("segment_rev")
+  segmentRev Int    @map("segment_rev")
 
   // UTF-16 offsets into `TranscriptSegment.text` at `segmentRev` — matching
   // JavaScript string indexing end to end, so the editor, the API and this
@@ -2855,7 +2903,7 @@ model TranscriptNameSuggestion {
   // `'phonetic' | 'discovery'` today — plain string, not an enum, matching
   // `Transcript.provider`'s own open-registry reasoning: which detection
   // strategies exist is code, not schema.
-  source      String
+  source     String
 
   status      TranscriptNameSuggestionStatus @default(pending)
   decidedAt   DateTime?                      @map("decided_at") @db.Timestamptz
@@ -3211,6 +3259,15 @@ model Note {
   versions     NoteVersion[]
   exports      NoteExport[]
 
+  // Connected Knowledge (epic #344, issue #351). Three relations: evidence
+  // citations anchored here (`SetNull`), mentions of a graph entity found
+  // here (`Cascade`), and extraction proposals generated from this note
+  // (`SetNull`, keyed on `noteVersion` not `noteId` for the CHECK reasoning
+  // — see the block comment above `KgProposal`).
+  kgEvidence  KgEvidence[] @relation("KgEvidenceNote")
+  kgMentions  KgMention[]  @relation("KgMentionNote")
+  kgProposals KgProposal[] @relation("KgProposalNoteSource")
+
   // "This owner's notes, newest first" — the notes library list view.
   @@index([ownerId, updatedAt(sort: Desc)])
   // "Every note in state X" — `notes.housekeeping`'s scans (#53) and any
@@ -3264,8 +3321,8 @@ model NoteTemplate {
   id      String  @id @default(uuid()) @db.Uuid
   ownerId String? @map("owner_id") @db.Uuid
 
-  name        String
-  description String
+  name         String
+  description  String
   // The prompt body the system role carries verbatim (spec §3.1), read
   // together with the structured fields below by `assemblePrompt` (#49).
   // @db.Text: free-text prompt instructions can run well past what a
@@ -3299,7 +3356,7 @@ model NoteTemplate {
   // archiving never breaks a note or generation that used this template).
   // Never meaningfully set on a built-in row today, but not schema-
   // prevented from being so in the future.
-  isArchived Boolean @default(false) @map("is_archived")
+  isArchived   Boolean @default(false) @map("is_archived")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -3396,9 +3453,9 @@ model NoteGeneration {
   noteId String?            @map("note_id") @db.Uuid
   kind   NoteGenerationKind
 
-  status       NoteGenerationStatus      @default(pending)
-  errorClass   NoteGenerationErrorClass? @map("error_class")
-  errorDetail  String?                   @map("error_detail")
+  status      NoteGenerationStatus      @default(pending)
+  errorClass  NoteGenerationErrorClass? @map("error_class")
+  errorDetail String?                   @map("error_detail")
 
   // Denormalized inputs — see the block comment above the enums. templateId
   // is nullable/SetNull for the same reason `notes.templateId` is (a
@@ -3467,7 +3524,7 @@ model NoteGeneration {
   // 250ms interval while streaming (spec §5.1); a second auto-maintained
   // timestamp on the same hot write path would cost index/row-version
   // churn spec §4.4 does not ask for and nothing downstream reads.
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   note     Note?         @relation("NoteGenerations", fields: [noteId], references: [id], onDelete: Cascade)
   template NoteTemplate? @relation("NoteGenerationTemplateSelection", fields: [templateId], references: [id], onDelete: SetNull)
@@ -3566,9 +3623,9 @@ model NoteExport {
   // reason `TranscriptExport.format` is: adding an exporter must cost zero
   // migrations to this table.
   format      String
-  options     Json              @db.JsonB
-  optionsHash String            @map("options_hash")
-  status      NoteExportStatus  @default(pending)
+  options     Json             @db.JsonB
+  optionsHash String           @map("options_hash")
+  status      NoteExportStatus @default(pending)
 
   // Restrict, matching every `storage_objects` FK on `transcripts`: only
   // `notes.housekeeping`'s expiry sweep (spec §8.4) may remove the rendered
@@ -3579,7 +3636,7 @@ model NoteExport {
   // render for the SAME job is unrepresentable, and this row's own 7-day
   // retention is independent of `job.history.purge`'s schedule for the
   // underlying `jobs` row.
-  jobId String? @unique @map("job_id") @db.Uuid
+  jobId    String? @unique @map("job_id") @db.Uuid
 
   // Who asked for this export. NOT NULL and Cascade, matching
   // `TranscriptExport.requestedById`: an export is a disposable,
@@ -3905,4 +3962,816 @@ model SearchIndexState {
   // state X".
   @@index([ownerId, status])
   @@map("search_index_state")
+}
+
+// =============================================================================
+// Connected Knowledge (epic #344) — docs/specs/ontology.md §5, §7, §8, §10, §17.3
+// =============================================================================
+//
+// Storage only (issue #351): a durable entity-and-relationship graph over
+// transcripts and notes — people, organizations, projects, meetings,
+// decisions, commitments and dated claims. No service, endpoint or trigger
+// lands here; the write path (including the evidence-invariant trigger) is
+// #355, speaker linking is #356, purge is #357, extraction is #363-#366.
+//
+// -----------------------------------------------------------------------------
+// Conventions, restated once instead of on every model below
+// -----------------------------------------------------------------------------
+// Every `kg_*` model: `id String @id @default(uuid()) @db.Uuid`, snake_case
+// via `@map`/`@@map`, `@db.Timestamptz` timestamps, and `owner_id -> users.id`
+// `onDelete: Cascade` — the same "this row IS the private content, not a
+// record OF something" reasoning `Transcript.ownerId`/`Note.ownerId` already
+// establish (see the block comment above `Transcript`), restated here because
+// there is deliberately no permission string, no role, and no read-any that
+// could ever reach another owner's graph row (§12). The one exception is
+// `kg_entity_views`, keyed on `user_id` because it is a per-viewer read
+// marker, not an owned graph row. `type`/`kind` columns that name an ontology
+// key (entity type, relation type) are plain `text`, never a Prisma enum
+// (§17.4, matching `Job.type`/`Transcript.provider`'s precedent) — the
+// ontology itself is code-owned and versioned separately (`ontology_version`
+// on every row that can be re-extracted), so a new ontology type costs this
+// schema zero migrations. Enums are reserved for CLOSED, application-owned
+// state machines (review status, proposal status, …), the same asymmetry
+// `SearchIndexState.status` vs. `SearchChunk.documentType` already states.
+//
+// -----------------------------------------------------------------------------
+// `valid tstzrange` (§5.4) is `Unsupported("tstzrange")?` — Prisma cannot
+// read or write it through the query API at all
+// -----------------------------------------------------------------------------
+// `kg_relations.valid` and `kg_items.valid` hold the bitemporal validity
+// window a range-typed column and GiST index make correct by construction
+// (closing, overlap and `@>`/`&&` queries) rather than as two nullable
+// timestamps a service must keep consistent by hand. Because Prisma has no
+// scalar type for a Postgres range, `Unsupported` is the only representation
+// available, and — like `SearchEmbedding.embedding` — that makes the
+// generated client's own `create`/`update` UNABLE to write this column at
+// all. Writers set it with `$executeRaw` inside the SAME transaction as the
+// `create`; readers select `lower(valid)`, `upper(valid)`,
+// `lower_inc(valid)`/`upper_inc(valid)` via `$queryRaw`. #353 provides
+// `toPgRange`/`fromPgRange` for both directions. `valid_precision` is a
+// SIBLING column, not encoded into the range itself, because "we only know
+// this happened sometime in 2024" and "this happened at this exact instant"
+// need the same range shape with a different confidence label attached.
+//
+// -----------------------------------------------------------------------------
+// Hand-written SQL — eleven objects, intentional drift, occurrence 6
+// -----------------------------------------------------------------------------
+// `pg_trgm` (fuzzy alias/label matching, §7), two GiST indexes on `valid`
+// (§5.4), two HNSW indexes on `embedding` (§7, §9, matching
+// `search_embeddings_embedding_hnsw_idx`'s reasoning exactly), five partial
+// unique indexes and twelve CHECK constraints exist ONLY in this migration's
+// `migration.sql` — see that file's header for the full list and reasoning
+// behind each. This is the SIXTH occurrence of hand-written,
+// Prisma-inexpressible schema in this codebase (after `jobs`,
+// `database_backup_runs`, `transcript_speakers`, the generated `tsvector`
+// columns, and `search_embeddings`'s HNSW index). When a later
+// `prisma migrate dev` proposes dropping any hand-written index or
+// constraint named there, delete that proposal — it is not real drift to
+// reconcile.
+// =============================================================================
+
+enum KgReviewStatus {
+  unreviewed
+  accepted
+  edited
+  rejected
+  merged
+  superseded
+
+  @@map("kg_review_status")
+}
+
+enum KgValidPrecision {
+  day
+  month
+  year
+  unknown
+
+  @@map("kg_valid_precision")
+}
+
+enum KgItemKind {
+  commitment
+  decision
+  claim
+  person_fact
+
+  @@map("kg_item_kind")
+}
+
+enum KgSensitivity {
+  business
+  personal
+  sensitive
+
+  @@map("kg_sensitivity")
+}
+
+enum KgAliasSource {
+  user
+  extraction
+  speaker_naming
+  import
+
+  @@map("kg_alias_source")
+}
+
+enum KgEvidenceSubjectKind {
+  entity
+  relation
+  item
+  proposal_item
+  import
+
+  @@map("kg_evidence_subject_kind")
+}
+
+enum KgMentionStatus {
+  suggested
+  linked
+  new
+  ignored
+
+  @@map("kg_mention_status")
+}
+
+// The whole proposal-model status/kind sets, up front (issue #351 exists
+// specifically so #363/#364/#366/#387 never need `ALTER TYPE ... ADD VALUE`
+// or a proposal-table migration of their own). `extracting` and `reverted`
+// belong to #363/#366; `resolution` belongs to #364; `import` belongs to
+// #387. See the block comment above `KgProposal` for the lifecycle these
+// values form.
+enum KgProposalKind {
+  extraction
+  import
+  resolution
+
+  @@map("kg_proposal_kind")
+}
+
+enum KgProposalStatus {
+  draft
+  extracting
+  committed
+  discarded
+  failed
+  reverted
+
+  @@map("kg_proposal_status")
+}
+
+enum KgProposalItemKind {
+  entity
+  relation
+  item
+  closing
+
+  @@map("kg_proposal_item_kind")
+}
+
+enum KgProposalItemDecision {
+  pending
+  accept
+  edit
+  reject
+  merge_into
+
+  @@map("kg_proposal_item_decision")
+}
+
+enum KgProposalItemOrigin {
+  ai
+  user
+
+  @@map("kg_proposal_item_origin")
+}
+
+enum KgAttributeKind {
+  text
+  number
+  date
+  boolean
+  select
+  multi_select
+  url
+  entity_ref
+
+  @@map("kg_attribute_kind")
+}
+
+// One row per graph node — a person, organization, project or meeting (§10).
+// `embedding`/`embeddingModel` mirror `SearchEmbedding.embedding` exactly
+// (`Unsupported("vector(1536)")`, the same `AiProvider.EMBEDDING_DIMENSIONS`
+// contract — see that model's block comment for why the width is a contract,
+// not a default); `embeddingHash` (#364) is the content hash `kg.embed` keys
+// on to skip re-embedding an entity whose label/props have not changed,
+// mirroring `SearchChunk.contentHash`'s reasoning. `mergedIntoId` is a SELF
+// FK, `SetNull`: merging entity A into B (#366) sets A's `mergedIntoId` to B
+// rather than deleting A, so evidence, mentions and history already pointing
+// at A keep resolving; `SetNull` means un-merging (a later delete of B) never
+// cascades away the merged row, it simply forgets which entity it was folded
+// into. `occurredAt` is set ONLY on a `Meeting` entity (the ontology's own
+// `type` value) — every other entity type leaves it null; there is no CHECK
+// enforcing that pairing because the ontology's type catalogue, not this
+// table, owns which types carry which optional facts (#350).
+model KgEntity {
+  id String @id @default(uuid()) @db.Uuid
+
+  ownerId String @map("owner_id") @db.Uuid
+  type    String
+  label   String
+  props   Json   @default("{}") @db.JsonB
+
+  embedding      Unsupported("vector(1536)")? @map("embedding")
+  embeddingModel String?                      @map("embedding_model")
+  embeddingHash  String?                      @map("embedding_hash")
+
+  reviewStatus KgReviewStatus @default(accepted) @map("review_status")
+  mergedIntoId String?        @map("merged_into_id") @db.Uuid
+  // Set on a `Meeting` entity only — see the block comment above.
+  occurredAt   DateTime?      @map("occurred_at") @db.Timestamptz
+
+  ontologyVersion String   @map("ontology_version")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner      User       @relation("KgEntityOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  // ⚠ Self FK, SetNull — see the block comment above.
+  mergedInto KgEntity?  @relation("KgEntityMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom KgEntity[] @relation("KgEntityMerge")
+
+  aliases KgEntityAlias[]
+
+  relationsFrom KgRelation[] @relation("KgRelationFrom")
+  relationsTo   KgRelation[] @relation("KgRelationTo")
+
+  itemsAsSubject      KgItem[] @relation("KgItemSubject")
+  itemsAsMeeting      KgItem[] @relation("KgItemMeeting")
+  itemsAsOwnerPerson  KgItem[] @relation("KgItemOwnerPerson")
+  itemsAsCounterparty KgItem[] @relation("KgItemCounterparty")
+
+  mentions KgMention[]
+
+  proposalItemsMergedInto KgProposalItem[] @relation("KgProposalItemMergeInto")
+
+  mergesAsSurvivor KgMerge[] @relation("KgMergeSurvivor")
+  mergesAsMerged   KgMerge[] @relation("KgMergeMerged")
+
+  distinctPairsAsA KgDistinctPair[] @relation("KgDistinctPairA")
+  distinctPairsAsB KgDistinctPair[] @relation("KgDistinctPairB")
+
+  digest KgEntityDigest?
+  views  KgEntityView[]
+
+  // "This owner's entities of this type, by review state" — the entity
+  // list/filter view.
+  @@index([ownerId, type, reviewStatus])
+  // "This owner's entities, most recently touched" — the entity library.
+  @@index([ownerId, updatedAt(sort: Desc)])
+  // "Everything merged into this entity" — resolving a merged-away id.
+  @@index([mergedIntoId])
+  @@map("kg_entities")
+}
+
+// One row per alternate name an entity is known by (§7 candidate
+// generation). `normalized` is produced by #355's pure `normalizeAlias()`
+// (NFKC, lowercase, trimmed, whitespace collapsed) — a plain `text` column
+// rather than `citext`, which is not installed and is not needed: exact
+// matching is `normalized = $1`, fuzzy matching is `normalized %
+// $1` against `kg_entity_aliases_normalized_trgm_idx` (hand-written, see the
+// section header). `@@unique([entityId, normalized])` is the natural key a
+// re-alias upserts against; `source` records how the alias was learned so a
+// reviewer can tell "the AI proposed this" from "the user typed this."
+model KgEntityAlias {
+  id       String @id @default(uuid()) @db.Uuid
+  entityId String @map("entity_id") @db.Uuid
+  ownerId  String @map("owner_id") @db.Uuid
+
+  alias      String
+  normalized String
+  source     KgAliasSource
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  entity KgEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  owner  User     @relation("KgEntityAliasOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // One normalized alias per entity — the natural key a re-alias upserts
+  // against.
+  @@unique([entityId, normalized])
+  // Fuzzy-candidate scan scoped to one owner, and the exact-match lookup.
+  @@index([ownerId, normalized])
+  @@index([entityId])
+  @@map("kg_entity_aliases")
+}
+
+// One row per directed edge between two entities, or between a diarized
+// speaker and an entity for `IDENTIFIED_AS` (§5.1, §5.2). Exactly one of
+// `fromId`/`fromSpeakerId` is set — enforced by the hand-written
+// `kg_relations_one_source_chk` (see the section header) — because a
+// speaker-identification edge's source is a `transcript_speakers` row, not
+// yet a graph entity: `fromSpeakerId` is a CONTRACT ADDITION with a real FK
+// (`onDelete: Cascade` — deleting a merged-away speaker cleans up the edge)
+// rather than a polymorphic `fromKind`/`fromId` pair with no FK, precisely
+// so that integrity. `kg_relations_speaker_type_chk` further restricts
+// `fromSpeakerId` to `type = 'IDENTIFIED_AS'` rows only. `valid`/
+// `validPrecision` are the bitemporal pair — see the section header for why
+// `valid` is `Unsupported`. `supersededById` is a SELF FK, `SetNull`: a
+// later, corrected relation supersedes an earlier one (§5.5) without
+// deleting the history a reviewer or an export might still want to see.
+// There are deliberately NO stored relations for `ABOUT`/`ASSIGNED_TO`/
+// `OWED_TO`/`CREATED_IN`/`DECIDED_IN` — `KgItem`'s own `subjectId`/
+// `ownerPersonId`/`counterpartyId`/`meetingId` columns already carry those
+// facts, and storing both would be two rows that can disagree (§5.2).
+model KgRelation {
+  id      String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  type    String
+
+  // Exactly one of these two is set — see the block comment above.
+  fromId        String? @map("from_id") @db.Uuid
+  fromSpeakerId String? @map("from_speaker_id") @db.Uuid
+  toId          String  @map("to_id") @db.Uuid
+
+  props Json @default("{}") @db.JsonB
+
+  // Bitemporal validity window (§5.4) — see the section header for why this
+  // is `Unsupported("tstzrange")` and how it is written/read.
+  valid          Unsupported("tstzrange")?
+  validPrecision KgValidPrecision?         @map("valid_precision")
+
+  reviewStatus   KgReviewStatus @default(accepted) @map("review_status")
+  confidence     Float?
+  // ⚠ Self FK, SetNull — see the block comment above.
+  supersededById String?        @map("superseded_by_id") @db.Uuid
+
+  ontologyVersion String   @map("ontology_version")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner        User               @relation("KgRelationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  from         KgEntity?          @relation("KgRelationFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  fromSpeaker  TranscriptSpeaker? @relation("KgRelationFromSpeaker", fields: [fromSpeakerId], references: [id], onDelete: Cascade)
+  to           KgEntity           @relation("KgRelationTo", fields: [toId], references: [id], onDelete: Cascade)
+  supersededBy KgRelation?        @relation("KgRelationSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded   KgRelation[]       @relation("KgRelationSupersede")
+
+  // "Every outgoing edge of this type from this entity" / the reverse for
+  // incoming edges.
+  @@index([ownerId, fromId, type])
+  @@index([ownerId, toId, type])
+  @@index([fromSpeakerId])
+  @@index([supersededById])
+  @@index([ownerId, type, reviewStatus])
+  @@map("kg_relations")
+}
+
+// One row per commitment, decision, claim or person-fact (§10). One table
+// for all four kinds — not four tables per §10's own rejected alternative —
+// so dedup and "what changed" stay one pass instead of four. `subjectId`,
+// `ownerPersonId`, `counterpartyId` and `meetingId` all point at
+// `KgEntity`, never at each other: `meetingId` (CASCADE→`SetNull`, a
+// CONTRACT ADDITION backing `CREATED_IN`/`DECIDED_IN`, #350) is `SetNull`
+// because losing the meeting an item was created in loses only provenance,
+// not the item's validity; `subjectId`/`ownerPersonId`/`counterpartyId` are
+// `Cascade` because an item with no subject left to be about means nothing
+// (`kg_items_subject_required_chk`, hand-written, requires `subjectId` for
+// `claim`/`person_fact`). `sensitivity` is set if and only if `kind =
+// 'person_fact'` (`kg_items_sensitivity_chk`) — the one item kind capable of
+// holding data this deployment must never let leave it (§5.6). `valid`/
+// `validPrecision` mirror `KgRelation`'s bitemporal pair exactly.
+// `statementHash` (sha256 of the statement, #355) backs
+// `kg_items_live_statement_uniq_idx` (hand-written) — the "known, skipped"
+// guard from §8: a verbatim restatement attaches evidence to the existing
+// row instead of inserting a duplicate, scoped to `accepted`/`edited` rows
+// only, so a `rejected` item's hash never blocks a fresh proposal.
+// `supersededById` is a SELF FK, `SetNull`, identical reasoning to
+// `KgRelation.supersededById`.
+model KgItem {
+  id      String     @id @default(uuid()) @db.Uuid
+  ownerId String     @map("owner_id") @db.Uuid
+  kind    KgItemKind
+
+  subjectId      String? @map("subject_id") @db.Uuid
+  meetingId      String? @map("meeting_id") @db.Uuid
+  ownerPersonId  String? @map("owner_person_id") @db.Uuid
+  counterpartyId String? @map("counterparty_id") @db.Uuid
+
+  title     String?
+  statement String
+  // `open|done|dropped|superseded` for `commitment`, `active|superseded` for
+  // the others (§10) — plain text, service-enforced, the same posture
+  // `Transcript`/`Note` already take toward multi-value invariants Postgres
+  // has no portable CHECK for.
+  status    String
+  props     Json    @default("{}") @db.JsonB
+
+  occurredAt DateTime? @map("occurred_at") @db.Timestamptz
+  dueAt      DateTime? @map("due_at") @db.Timestamptz
+
+  // ⚠ Self FK, SetNull — see the block comment above.
+  supersededById String?        @map("superseded_by_id") @db.Uuid
+  sensitivity    KgSensitivity? @map("sensitivity")
+  statementHash  String         @map("statement_hash")
+
+  valid          Unsupported("tstzrange")?
+  validPrecision KgValidPrecision?         @map("valid_precision")
+
+  embedding      Unsupported("vector(1536)")? @map("embedding")
+  embeddingModel String?                      @map("embedding_model")
+  embeddingHash  String?                      @map("embedding_hash")
+
+  reviewStatus KgReviewStatus @default(accepted) @map("review_status")
+  confidence   Float?
+
+  ontologyVersion String   @map("ontology_version")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner        User      @relation("KgItemOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  subject      KgEntity? @relation("KgItemSubject", fields: [subjectId], references: [id], onDelete: Cascade)
+  meeting      KgEntity? @relation("KgItemMeeting", fields: [meetingId], references: [id], onDelete: SetNull)
+  ownerPerson  KgEntity? @relation("KgItemOwnerPerson", fields: [ownerPersonId], references: [id], onDelete: Cascade)
+  counterparty KgEntity? @relation("KgItemCounterparty", fields: [counterpartyId], references: [id], onDelete: Cascade)
+  supersededBy KgItem?   @relation("KgItemSupersede", fields: [supersededById], references: [id], onDelete: SetNull)
+  superseded   KgItem[]  @relation("KgItemSupersede")
+
+  // "This owner's items about this subject, most recent first" — an entity
+  // page's item list.
+  @@index([ownerId, subjectId, occurredAt(sort: Desc)])
+  // "This owner's items of this kind and status" — dashboards (open
+  // commitments, active decisions).
+  @@index([ownerId, kind, status])
+  // The dedup lookup `kg_items_live_statement_uniq_idx` backs at the SQL
+  // level; this b-tree serves the equivalent ordinary read.
+  @@index([ownerId, statementHash])
+  @@index([ownerPersonId])
+  @@index([counterpartyId])
+  @@index([meetingId])
+  @@index([supersededById])
+  @@map("kg_items")
+}
+
+// One row per citation tying a graph fact back to where it came from (§5.3).
+// `subjectKind`/`subjectId` is POLYMORPHIC with NO FK — the same
+// `jobs.subjectType`/`subjectId` and `search_chunks.documentId` precedent —
+// because evidence can anchor an entity, a relation, an item, a proposal
+// item under review, or an import row, and the closed enum only names WHICH
+// kind, never a foreign key Prisma could express across five different
+// tables at once.
+//
+// ⚠ THERE IS DELIBERATELY NO CHECK REQUIRING AN ANCHOR. `transcriptId`/
+// `segmentId`/`noteId` are all `SetNull` by design (§10): a CHECK requiring
+// at least one anchor would make deleting a transcript or note FAIL the
+// moment its own evidence rows lose their pointer, which is exactly backward
+// — the citation should survive, just without a live link to jump to.
+// `quote` (`NOT NULL`) is what keeps a citation readable once its anchor is
+// gone: "said in a meeting that no longer exists" still reads as a sentence.
+//
+// `charStart`/`charEnd` are offsets into the cited NOTE VERSION BODY when
+// `noteId` is set, or into the cited SEGMENT'S TEXT when `segmentId` is set
+// — never both at once, and NULL means the whole segment/note is cited.
+// #363 relies on this exact meaning when relocating a citation against
+// edited text.
+model KgEvidence {
+  id          String                @id @default(uuid()) @db.Uuid
+  ownerId     String                @map("owner_id") @db.Uuid
+  subjectKind KgEvidenceSubjectKind @map("subject_kind")
+  subjectId   String                @map("subject_id") @db.Uuid
+
+  // Transcript anchor — SetNull, see the block comment above.
+  transcriptId String? @map("transcript_id") @db.Uuid
+  segmentId    String? @map("segment_id") @db.Uuid
+  segmentRev   Int?    @map("segment_rev")
+  startMs      Int?    @map("start_ms")
+  endMs        Int?    @map("end_ms")
+
+  // Note anchor — SetNull, see the block comment above.
+  noteId      String? @map("note_id") @db.Uuid
+  noteVersion Int?    @map("note_version")
+
+  // Offsets into the note-version body (when noteId is set) or the cited
+  // segment's text (when segmentId is set) — see the block comment above.
+  // NULL means the whole segment/note.
+  charStart Int? @map("char_start")
+  charEnd   Int? @map("char_end")
+
+  // The text at anchoring time (§5.3) — NOT NULL, the readability backstop
+  // the block comment above describes.
+  quote String
+
+  // Import anchor — an external source this evidence was ingested from
+  // (#387), independent of the transcript/note anchors above.
+  importObjectId String? @map("import_object_id") @db.Uuid
+  sourceIri      String? @map("source_iri")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  owner        User               @relation("KgEvidenceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  transcript   Transcript?        @relation("KgEvidenceTranscript", fields: [transcriptId], references: [id], onDelete: SetNull)
+  segment      TranscriptSegment? @relation("KgEvidenceSegment", fields: [segmentId], references: [id], onDelete: SetNull)
+  note         Note?              @relation("KgEvidenceNote", fields: [noteId], references: [id], onDelete: SetNull)
+  importObject StorageObject?     @relation("KgEvidenceImportObject", fields: [importObjectId], references: [id], onDelete: SetNull)
+
+  // "Every citation for this fact" — the reverse lookup every entity/item/
+  // relation detail page runs.
+  @@index([subjectKind, subjectId])
+  @@index([ownerId, transcriptId])
+  @@index([segmentId])
+  @@index([ownerId, noteId])
+  @@map("kg_evidence")
+}
+
+// One row per place an entity is mentioned in a note or transcript — the
+// review surface for "where does this graph node come from" independent of
+// `KgEvidence` (which anchors a fact, not a bare mention). `span` is `{
+// charStart, charEnd }` for a note or `{ segmentId }` for a transcript —
+// opaque JSONB, not two nullable column pairs, because its shape already
+// depends on which of `noteId`/`transcriptId` is set. Exactly one of
+// `noteId`/`transcriptId` is required — `kg_mentions_one_source_chk`
+// (hand-written, see the section header) — and BOTH cascade, unlike
+// `KgEvidence`'s SetNull anchors: a mention has no meaning once its source
+// document is gone, where an evidence citation deliberately outlives its
+// anchor.
+model KgMention {
+  id       String @id @default(uuid()) @db.Uuid
+  ownerId  String @map("owner_id") @db.Uuid
+  entityId String @map("entity_id") @db.Uuid
+
+  // Exactly one of these two — see the block comment above.
+  noteId       String? @map("note_id") @db.Uuid
+  transcriptId String? @map("transcript_id") @db.Uuid
+
+  span   Json?           @db.JsonB
+  status KgMentionStatus @default(linked)
+  score  Float?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  owner      User        @relation("KgMentionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  entity     KgEntity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  note       Note?       @relation("KgMentionNote", fields: [noteId], references: [id], onDelete: Cascade)
+  transcript Transcript? @relation("KgMentionTranscript", fields: [transcriptId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, entityId])
+  @@index([noteId])
+  @@index([transcriptId])
+  @@map("kg_mentions")
+}
+
+// One row per extraction/import/resolution run, reviewed and committed as a
+// batch (§8). The WHOLE proposal model lands in this one migration (issue
+// #351) so #363/#364/#366/#387 never need `ALTER TYPE ... ADD VALUE` or a
+// table migration of their own — see the enum block comments above for which
+// later issue owns which value.
+//
+// Lifecycle (service-enforced, #363/#366): `extracting -> draft | failed`,
+// `draft -> committed | discarded`, `failed -> discarded`,
+// `committed -> reverted`.
+//
+// `noteId`/`noteVersion` are set if and only if `kind = 'extraction'` —
+// `kg_proposals_note_source_chk` (hand-written) requires `noteVersion` for
+// `extraction` and requires BOTH null for `import`/`resolution`. The CHECK
+// keys on `noteVersion`, never on `noteId`, because `noteId` is `SetNull`:
+// hard-deleting a note nulls `noteId` on its extraction proposals as a pure
+// side effect of that FK, and a CHECK keyed on `noteId` would then start
+// failing rows the delete never touched on purpose. `noteVersion` is never
+// nulled by any FK, so it is the column that actually distinguishes
+// `extraction` from the other two kinds for the CHECK's whole lifetime.
+//
+// `commitLog` (#366) is the INTERNAL undo record the commit writes and the
+// revert reads — never serialized to clients; `stats` is the display copy a
+// client actually sees.
+model KgProposal {
+  id      String           @id @default(uuid()) @db.Uuid
+  ownerId String           @map("owner_id") @db.Uuid
+  kind    KgProposalKind
+  status  KgProposalStatus @default(draft)
+
+  // Set iff kind = 'extraction' — see the block comment above.
+  noteId      String? @map("note_id") @db.Uuid
+  noteVersion Int?    @map("note_version")
+
+  model        String?
+  provider     String?
+  systemPrompt String? @map("system_prompt")
+  userContent  String? @map("user_content")
+  userGuidance Json?   @map("user_guidance") @db.JsonB
+
+  stats Json @default("{}") @db.JsonB
+
+  committedAt DateTime? @map("committed_at") @db.Timestamptz
+  revertedAt  DateTime? @map("reverted_at") @db.Timestamptz
+
+  // The job that ran this proposal's generation, when kind = 'extraction'.
+  // `@unique`/nullable/`SetNull`, mirroring `TranscriptExport.jobId` exactly
+  // — this row's own lifetime (read by the review UI) is independent of
+  // `job.history.purge`'s retention schedule for the underlying job.
+  jobId String? @unique @map("job_id") @db.Uuid
+
+  // The internal undo record — see the block comment above.
+  commitLog Json? @map("commit_log") @db.JsonB
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner User  @relation("KgProposalOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  note  Note? @relation("KgProposalNoteSource", fields: [noteId], references: [id], onDelete: SetNull)
+  job   Job?  @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  items KgProposalItem[]
+
+  // "This owner's proposals, newest first, filtered by status" — the review
+  // inbox.
+  @@index([ownerId, status, createdAt(sort: Desc)])
+  // "This note's proposal history" — a note detail page's provenance panel.
+  @@index([noteId, createdAt(sort: Desc)])
+  @@map("kg_proposals")
+}
+
+// One row per candidate entity/relation/item (or a `closing` marker for an
+// already-open commitment) inside a proposal, reviewed and decided
+// individually (§8). `payload` is the AI's (or importer's) proposed shape;
+// `resolution` (`{ ref, score, candidates[] }`) is the entity-resolution
+// verdict for an entity-kind item; `editedPayload` is what a reviewer typed
+// over `payload` without discarding the original.
+//
+// `mergeIntoId` (#366) is set IFF `decision = 'merge_into'`
+// (`kg_proposal_items_merge_into_chk`, hand-written) and is `SetNull`:
+// forgetting or purging the target entity clears the override rather than
+// blocking the delete, and the row falls back to `pending` semantics at
+// commit time — #366's commit refuses a `merge_into` row with no target
+// rather than guessing. `distinctFrom` (#366) records the reviewer's "not
+// the same as" candidates as distinct pairs at commit, materialized into
+// `kg_distinct_pairs` by the commit path, not read live from this array
+// afterward.
+model KgProposalItem {
+  id         String             @id @default(uuid()) @db.Uuid
+  proposalId String             @map("proposal_id") @db.Uuid
+  kind       KgProposalItemKind
+
+  payload       Json  @db.JsonB
+  resolution    Json? @db.JsonB
+  editedPayload Json? @map("edited_payload") @db.JsonB
+
+  decision KgProposalItemDecision @default(pending)
+  flags    String[]               @default([])
+  origin   KgProposalItemOrigin   @default(ai)
+
+  // Set iff decision = 'merge_into' — see the block comment above.
+  mergeIntoId  String?  @map("merge_into_id") @db.Uuid
+  distinctFrom String[] @default([]) @map("distinct_from") @db.Uuid
+
+  // Polymorphic — the committed entity/relation/item id this proposal item
+  // became, once decided. No FK, matching `KgEvidence.subjectId`'s
+  // reasoning: it can point at any one of three tables depending on `kind`.
+  committedRefId String? @map("committed_ref_id") @db.Uuid
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  proposal  KgProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  // ⚠ SetNull — see the block comment above.
+  mergeInto KgEntity?  @relation("KgProposalItemMergeInto", fields: [mergeIntoId], references: [id], onDelete: SetNull)
+
+  // The review-panel ordering: this proposal's items, grouped by kind, in
+  // their assigned order.
+  @@index([proposalId, kind, sortOrder])
+  @@map("kg_proposal_items")
+}
+
+// One row per completed entity merge (#366), the undo record for
+// `KgEntity.mergedIntoId`. `reversal` is the pre-merge snapshot a revert
+// restores from; `reversedAt` is set once that revert has run. Both
+// `survivorId`/`mergedId` `Cascade`: a merge record with either entity gone
+// has nothing left to reverse.
+model KgMerge {
+  id      String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+
+  survivorId String @map("survivor_id") @db.Uuid
+  mergedId   String @map("merged_id") @db.Uuid
+
+  reversal   Json      @db.JsonB
+  reversedAt DateTime? @map("reversed_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  owner    User     @relation("KgMergeOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  survivor KgEntity @relation("KgMergeSurvivor", fields: [survivorId], references: [id], onDelete: Cascade)
+  merged   KgEntity @relation("KgMergeMerged", fields: [mergedId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([survivorId])
+  @@index([mergedId])
+  @@map("kg_merges")
+}
+
+// One row per reviewer-recorded "these two are NOT the same entity" pair
+// (#366), keyed on the pair itself rather than a surrogate id —
+// `@@id([ownerId, aId, bId])` IS the natural key a resolution pass checks
+// against before proposing a merge candidate again. `kg_distinct_pairs
+// _order_chk` (hand-written, `a_id < b_id`) makes the pair's storage order
+// canonical so `(x, y)` and `(y, x)` are never both insertable as different
+// rows.
+model KgDistinctPair {
+  ownerId String @map("owner_id") @db.Uuid
+  aId     String @map("a_id") @db.Uuid
+  bId     String @map("b_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  owner User     @relation("KgDistinctPairOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  a     KgEntity @relation("KgDistinctPairA", fields: [aId], references: [id], onDelete: Cascade)
+  b     KgEntity @relation("KgDistinctPairB", fields: [bId], references: [id], onDelete: Cascade)
+
+  @@id([ownerId, aId, bId])
+  @@map("kg_distinct_pairs")
+}
+
+// One row per user-defined structured attribute an entity type can carry
+// (§17.3) — the schema behind a person or organization's custom fields,
+// beyond what the ontology's own built-in properties cover. `extractable`/
+// `extractionHint` let a definition opt into AI extraction (#363);
+// `sensitivity` lets a custom field itself be marked sensitive, the same
+// enum `KgItem.sensitivity` uses. `deprecatedAt` retires a definition
+// without deleting it, so existing entities keep whatever value they were
+// given under it.
+model KgAttributeDef {
+  id      String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+
+  entityType String          @map("entity_type")
+  key        String
+  label      String
+  kind       KgAttributeKind
+  options    Json?           @db.JsonB
+
+  extractable    Boolean @default(false)
+  extractionHint String? @map("extraction_hint")
+
+  sensitivity  KgSensitivity?
+  sortOrder    Int            @default(0) @map("sort_order")
+  deprecatedAt DateTime?      @map("deprecated_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner User @relation("KgAttributeDefOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // One definition per key per entity type per owner — the natural key a
+  // definition edit upserts against.
+  @@unique([ownerId, entityType, key])
+  // The attribute-panel read: this owner's definitions for this entity
+  // type, in display order.
+  @@index([ownerId, entityType, sortOrder])
+  @@map("kg_attribute_defs")
+}
+
+// One row per entity's AI-generated summary (§9.2) — a compaction of that
+// entity's evidence/items/relations, never a second source of truth for any
+// of them. `entityId` is the PRIMARY KEY (one digest per entity, replaced in
+// place on regeneration, not versioned like a note); `coversUntil` records
+// how current the summary is, the same "how stale is this" question
+// `SearchIndexState.indexedAt` answers for a document's search index.
+model KgEntityDigest {
+  entityId String @id @map("entity_id") @db.Uuid
+  ownerId  String @map("owner_id") @db.Uuid
+
+  summary     String
+  citations   Json     @db.JsonB
+  coversUntil DateTime @map("covers_until") @db.Timestamptz
+  model       String
+
+  generatedAt DateTime @map("generated_at") @db.Timestamptz
+
+  entity KgEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  owner  User     @relation("KgEntityDigestOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // "Every digest this owner holds" — an admin/owner-adjacent health check,
+  // matching `SearchIndexState`'s own `[ownerId, status]` precedent.
+  @@index([ownerId])
+  @@map("kg_entity_digests")
+}
+
+// One row per (viewer, entity) "I looked at this" marker — a plain
+// `@@unique`, not the partial-unique pattern used elsewhere in this
+// migration, because nothing about it is conditional (§10). Keyed on
+// `userId`, not `ownerId`: this is the ONE exception the section header
+// promises — a view is a fact about the VIEWER, not about who owns the
+// entity, so a shared or admin-visible entity (were one ever to exist)
+// could still be tracked per viewer without a second table shape.
+model KgEntityView {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  entityId     String   @map("entity_id") @db.Uuid
+  lastViewedAt DateTime @map("last_viewed_at") @db.Timestamptz
+
+  user   User     @relation("KgEntityViewUser", fields: [userId], references: [id], onDelete: Cascade)
+  entity KgEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityId])
+  @@map("kg_entity_views")
 }
