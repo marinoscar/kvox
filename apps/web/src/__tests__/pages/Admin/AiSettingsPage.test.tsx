@@ -104,6 +104,9 @@ const baseView: AiSettingsAdminView = {
     // so the page would render against a shape the real API never sends.
     reasoningEffort: 'none',
     maxDocumentBytes: 26_214_400,
+    // #360/#361. Every task on Default and the graph off — the shipping state.
+    taskModels: {},
+    graphEnabled: false,
   },
   providers: [
     {
@@ -119,12 +122,16 @@ const baseView: AiSettingsAdminView = {
             label: 'GPT-4o',
             contextWindowTokens: 128_000,
             maxOutputTokens: 16_384,
+            structuredOutput: true,
+            toolCalling: true,
           },
           {
             id: 'gpt-4o-mini',
             label: 'GPT-4o mini',
             contextWindowTokens: 128_000,
             maxOutputTokens: 16_384,
+            structuredOutput: true,
+            toolCalling: true,
           },
         ],
         streaming: true,
@@ -134,6 +141,9 @@ const baseView: AiSettingsAdminView = {
     },
   ],
   unknownModels: [],
+  tasks: [],
+  modelCapabilities: [],
+  taskModelStatus: [],
   version: 7,
   updatedAt: '2026-01-05T08:00:00.000Z',
   updatedBy: { id: 'admin-user-id', email: 'admin@example.com' },
