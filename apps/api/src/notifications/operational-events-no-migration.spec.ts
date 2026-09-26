@@ -133,6 +133,9 @@ const MIGRATIONS_AT_288 = [
   // and their supporting tables). A graph data model, and equally not about
   // notifications.
   '20260926012548_add_knowledge_graph',
+  // #398 (epic #344): closes a NULL hole in kg_relations_valid_precision_chk.
+  // A graph constraint fix, and equally not about notifications.
+  '20260926030000_fix_kg_relations_valid_precision_chk',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

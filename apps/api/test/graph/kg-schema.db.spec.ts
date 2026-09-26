@@ -406,6 +406,45 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
   });
 
   // ===========================================================================
+  // kg_relations_valid_precision_chk (#398)
+  // ===========================================================================
+  //
+  // Written with `IS NOT DISTINCT FROM 'unknown'` since #398: the original
+  // `= 'unknown'` made the CHECK evaluate NULL for a set `valid` with a NULL
+  // precision, and a CHECK treats NULL as satisfied.
+
+  describe('kg_relations_valid_precision_chk', () => {
+    async function insertRelation(valid: 'range' | 'none', precision: string | null) {
+      const owner = await createUser(`valid-precision-${valid}-${precision ?? 'null'}`);
+      const from = await createEntity(owner.id);
+      const to = await createEntity(owner.id, { label: 'Acme' });
+      const range = valid === 'range' ? '[2019-01-01,2026-03-01)' : null;
+      return prisma.$executeRaw`
+        INSERT INTO "kg_relations"
+          ("id", "owner_id", "type", "from_id", "to_id", "valid", "valid_precision", "ontology_version", "updated_at")
+        VALUES
+          (${randomUUID()}::uuid, ${owner.id}::uuid, 'WORKS_AT', ${from.id}::uuid, ${to.id}::uuid,
+           ${range}::tstzrange, ${precision}::kg_valid_precision, 'test-v1', now())
+      `;
+    }
+
+    it('rejects a set valid with a NULL valid_precision', async () => {
+      await expect(insertRelation('range', null)).rejects.toThrow(/kg_relations_valid_precision_chk/);
+    });
+
+    it('rejects a precision other than unknown with no range', async () => {
+      await expect(insertRelation('none', 'day')).rejects.toThrow(/kg_relations_valid_precision_chk/);
+    });
+
+    it('allows a range with a precision, an unknown time with no range, and neither', async () => {
+      await expect(insertRelation('range', 'month')).resolves.toBe(1);
+      await expect(insertRelation('range', 'unknown')).resolves.toBe(1);
+      await expect(insertRelation('none', 'unknown')).resolves.toBe(1);
+      await expect(insertRelation('none', null)).resolves.toBe(1);
+    });
+  });
+
+  // ===========================================================================
   // kg_items_sensitivity_chk / kg_items_subject_required_chk
   // ===========================================================================
 
