@@ -933,6 +933,25 @@ describe('User Settings Integration', () => {
       });
     });
 
+    it('persists domains.personal: true and false through PATCH and reads each back (#383)', async () => {
+      const user = await createMockTestUser(context);
+      setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+      await patchSettings(user.accessToken, {
+        graph: { domains: { personal: true } },
+      }).expect(200);
+      expect((await getSettings(user.accessToken)).body.data.graph).toEqual({
+        domains: { work: true, personal: true },
+      });
+
+      await patchSettings(user.accessToken, {
+        graph: { domains: { personal: false } },
+      }).expect(200);
+      expect((await getSettings(user.accessToken)).body.data.graph).toEqual({
+        domains: { work: true, personal: false },
+      });
+    });
+
     it('`resolution: null` resets it, leaving no graph key at all', async () => {
       const user = await createMockTestUser(context);
       setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);

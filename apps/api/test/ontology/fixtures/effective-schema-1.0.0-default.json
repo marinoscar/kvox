@@ -1,0 +1,831 @@
+{
+  "version": "1.0.0",
+  "domains": [
+    {
+      "key": "core",
+      "label": "Core",
+      "enabled": true,
+      "alwaysOn": true
+    },
+    {
+      "key": "work",
+      "label": "Work",
+      "enabled": true,
+      "alwaysOn": false
+    }
+  ],
+  "entityTypes": [
+    {
+      "key": "Person",
+      "domain": "core",
+      "label": "Person",
+      "pluralLabel": "People",
+      "description": "A human being: one specific, individual person named or unambiguously identified in the source.",
+      "disambiguation": [
+        "Never a role (\"the CIO\"), never a team, never an organization acting collectively.",
+        "Positive: \"Sarah Chen\"; \"the Acme CIO whose name was given as Marcus Webb.\"",
+        "Negative: \"the data team at EY\" is an Organization, or a Person if and only if one specific human is meant.",
+        "Negative: \"whoever's on call\" names no specific human, so there is nothing to create."
+      ],
+      "storage": "entity",
+      "itemKind": null,
+      "statuses": null,
+      "subjectTypes": null,
+      "subjectRequired": false,
+      "sensitivityDefault": "business",
+      "alignment": "schema:Person",
+      "extractable": true,
+      "deprecated": false,
+      "attributes": [
+        {
+          "key": "title",
+          "label": "Job title",
+          "kind": "text",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": true,
+          "description": "The person's job title, only if the source states it.",
+          "sensitivity": "business",
+          "source": "mixin",
+          "domain": "work",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 0
+        }
+      ]
+    },
+    {
+      "key": "Organization",
+      "domain": "core",
+      "label": "Organization",
+      "pluralLabel": "Organizations",
+      "description": "A company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision.",
+      "disambiguation": [
+        "Positive: \"EY\" (a company); \"the data team at EY\" when a commitment is owed to that team specifically rather than to an individual within it.",
+        "Negative: a team mentioned only in passing, with no commitment or decision naming it as a party, is not an Organization; do not create one speculatively.",
+        "Never a single human being acting for the organization: that is a Person."
+      ],
+      "storage": "entity",
+      "itemKind": null,
+      "statuses": null,
+      "subjectTypes": null,
+      "subjectRequired": false,
+      "sensitivityDefault": "business",
+      "alignment": "schema:Organization",
+      "extractable": true,
+      "deprecated": false,
+      "attributes": [
+        {
+          "key": "website",
+          "label": "Website",
+          "kind": "url",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": true,
+          "description": "The organization's website address, only if the source states it explicitly.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "core",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 0
+        }
+      ]
+    },
+    {
+      "key": "Meeting",
+      "domain": "core",
+      "label": "Meeting",
+      "pluralLabel": "Meetings",
+      "description": "The event anchor: a dated meeting or conversation, its attendees, and the transcript and/or note it was drawn from.",
+      "disambiguation": [
+        "One Meeting per transcript, or per note with no source audio; created by the system, never proposed by extraction.",
+        "A recurring conversation subject is not a Meeting; it is a topic of the meetings it came up in."
+      ],
+      "storage": "entity",
+      "itemKind": null,
+      "statuses": null,
+      "subjectTypes": null,
+      "subjectRequired": false,
+      "sensitivityDefault": "business",
+      "alignment": "schema:Event",
+      "extractable": false,
+      "deprecated": false,
+      "attributes": [
+        {
+          "key": "transcriptId",
+          "label": "Transcript",
+          "kind": "text",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": false,
+          "description": "The id of the transcript this meeting was drawn from, set by the system.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "core",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 0
+        },
+        {
+          "key": "noteId",
+          "label": "Note",
+          "kind": "text",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": false,
+          "description": "The id of the note this meeting was drawn from, set by the system.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "core",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 1
+        },
+        {
+          "key": "dateSource",
+          "label": "Date source",
+          "kind": "select",
+          "required": false,
+          "list": false,
+          "options": {
+            "choices": [
+              {
+                "value": "stated",
+                "label": "Stated"
+              },
+              {
+                "value": "note_created_at",
+                "label": "Note creation date"
+              }
+            ]
+          },
+          "extractable": false,
+          "description": "Where the meeting's date came from: stated in the source, or the note's creation date.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "core",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 2
+        },
+        {
+          "key": "topics",
+          "label": "Topics",
+          "kind": "text",
+          "required": false,
+          "list": true,
+          "options": null,
+          "extractable": false,
+          "description": "Free-text subjects discussed in the meeting that are not Projects of their own.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "core",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 3
+        }
+      ]
+    },
+    {
+      "key": "Claim",
+      "domain": "core",
+      "label": "Claim",
+      "pluralLabel": "Claims",
+      "description": "A dated statement of fact about an entity that is neither a decision nor a commitment, e.g. \"the budget was cut 20%\" or \"the pilot moved to Q2\".",
+      "disambiguation": [
+        "A choice that was made is a Decision, not a Claim.",
+        "A task with an owner is a Commitment, not a Claim.",
+        "A fact about a Person as an individual rather than about their work is a PersonFact."
+      ],
+      "storage": "item",
+      "itemKind": "claim",
+      "statuses": [
+        "active",
+        "superseded"
+      ],
+      "subjectTypes": [
+        "Person",
+        "Organization",
+        "Meeting",
+        "Project"
+      ],
+      "subjectRequired": true,
+      "sensitivityDefault": "business",
+      "alignment": null,
+      "extractable": true,
+      "deprecated": false,
+      "attributes": []
+    },
+    {
+      "key": "PersonFact",
+      "domain": "core",
+      "label": "Person fact",
+      "pluralLabel": "Person facts",
+      "description": "A statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style.",
+      "disambiguation": [
+        "A fact about the person's job, employer or role is a Claim (or a relation), not a PersonFact.",
+        "Health, legal, financial or similarly weighty personal information is sensitive and must be marked so."
+      ],
+      "storage": "item",
+      "itemKind": "person_fact",
+      "statuses": [
+        "active",
+        "superseded"
+      ],
+      "subjectTypes": [
+        "Person"
+      ],
+      "subjectRequired": true,
+      "sensitivityDefault": "personal",
+      "alignment": null,
+      "extractable": true,
+      "deprecated": false,
+      "attributes": []
+    },
+    {
+      "key": "Project",
+      "domain": "work",
+      "label": "Project",
+      "pluralLabel": "Projects",
+      "description": "A named effort with a start and an expected (even if fuzzy) end that meetings, decisions and commitments attach to, e.g. \"Q2 pilot\" or \"the vendor migration\".",
+      "disambiguation": [
+        "A recurring meeting topic with no start or end and nothing attaching to it as a unit of work is a topic, not a Project.",
+        "Do not create a Project for every recurring conversation subject; create one only when it anchors work."
+      ],
+      "storage": "entity",
+      "itemKind": null,
+      "statuses": null,
+      "subjectTypes": null,
+      "subjectRequired": false,
+      "sensitivityDefault": "business",
+      "alignment": "schema:Project",
+      "extractable": true,
+      "deprecated": false,
+      "attributes": [
+        {
+          "key": "status",
+          "label": "Status",
+          "kind": "select",
+          "required": false,
+          "list": false,
+          "options": {
+            "choices": [
+              {
+                "value": "planned",
+                "label": "Planned"
+              },
+              {
+                "value": "active",
+                "label": "Active"
+              },
+              {
+                "value": "done",
+                "label": "Done"
+              },
+              {
+                "value": "cancelled",
+                "label": "Cancelled"
+              }
+            ]
+          },
+          "extractable": true,
+          "description": "Where the project stands, only if the source says so.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "work",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 0
+        },
+        {
+          "key": "startDate",
+          "label": "Start date",
+          "kind": "date",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": true,
+          "description": "The date the project started or is planned to start, if stated.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "work",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 1
+        },
+        {
+          "key": "endDate",
+          "label": "End date",
+          "kind": "date",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": true,
+          "description": "The date the project ended or is expected to end, if stated.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "work",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 2
+        }
+      ]
+    },
+    {
+      "key": "Commitment",
+      "domain": "work",
+      "label": "Commitment",
+      "pluralLabel": "Commitments",
+      "description": "A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. \"Sarah will send the updated proposal by Friday\".",
+      "disambiguation": [
+        "No owner named or clearly implied means it is not a Commitment: \"we should probably look into that\" is a Claim at most, or nothing.",
+        "Never force-fit a sentence into a Commitment because it sounds task-shaped."
+      ],
+      "storage": "item",
+      "itemKind": "commitment",
+      "statuses": [
+        "open",
+        "done",
+        "dropped",
+        "superseded"
+      ],
+      "subjectTypes": [
+        "Person",
+        "Organization",
+        "Project"
+      ],
+      "subjectRequired": false,
+      "sensitivityDefault": "business",
+      "alignment": null,
+      "extractable": true,
+      "deprecated": false,
+      "attributes": []
+    },
+    {
+      "key": "Decision",
+      "domain": "work",
+      "label": "Decision",
+      "pluralLabel": "Decisions",
+      "description": "A choice that was made: what was chosen and, when the source states it, the option that was rejected.",
+      "disambiguation": [
+        "A later reversal is a new Decision that supersedes the old one; never edit the earlier Decision.",
+        "A statement of fact that involves no choice is a Claim, not a Decision."
+      ],
+      "storage": "item",
+      "itemKind": "decision",
+      "statuses": [
+        "active",
+        "superseded"
+      ],
+      "subjectTypes": [
+        "Person",
+        "Organization",
+        "Project"
+      ],
+      "subjectRequired": false,
+      "sensitivityDefault": "business",
+      "alignment": null,
+      "extractable": true,
+      "deprecated": false,
+      "attributes": [
+        {
+          "key": "rejectedOption",
+          "label": "Rejected option",
+          "kind": "text",
+          "required": false,
+          "list": false,
+          "options": null,
+          "extractable": true,
+          "description": "The option that was considered and rejected, only if the source states it.",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "work",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 0
+        }
+      ]
+    }
+  ],
+  "relationTypes": [
+    {
+      "key": "ABOUT",
+      "domain": "core",
+      "label": "About",
+      "description": "The entity an item (a claim, decision, commitment or person fact) is about: its subject.",
+      "from": [
+        "Claim",
+        "Decision",
+        "Commitment",
+        "PersonFact"
+      ],
+      "to": [
+        "Person",
+        "Organization",
+        "Meeting",
+        "Project"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "item_column",
+        "column": "subject_id"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "IDENTIFIED_AS",
+      "domain": "core",
+      "label": "Identified as",
+      "description": "Links a diarized transcript speaker to the Person that speaker was identified as.",
+      "from": [
+        "Speaker"
+      ],
+      "to": [
+        "Person"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "speaker_link"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "SUPERSEDES",
+      "domain": "core",
+      "label": "Supersedes",
+      "description": "A newer decision, claim or commitment that replaces an older one of the same type.",
+      "from": [
+        "Decision",
+        "Claim",
+        "Commitment"
+      ],
+      "to": [
+        "Decision",
+        "Claim",
+        "Commitment"
+      ],
+      "allowedPairs": [
+        [
+          "Decision",
+          "Decision"
+        ],
+        [
+          "Claim",
+          "Claim"
+        ],
+        [
+          "Commitment",
+          "Commitment"
+        ]
+      ],
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "supersedes"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "MENTIONS",
+      "domain": "core",
+      "label": "Mentions",
+      "description": "A note or transcript that mentions an entity somewhere in its text.",
+      "from": [
+        "Note",
+        "Transcript"
+      ],
+      "to": [
+        "Person",
+        "Organization",
+        "Meeting",
+        "Project"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "mention"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "SUPPORTED_BY",
+      "domain": "core",
+      "label": "Supported by",
+      "description": "The transcript segment or note span that is evidence for a graph row.",
+      "from": [
+        "Person",
+        "Organization",
+        "Meeting",
+        "Claim",
+        "PersonFact",
+        "Project",
+        "Commitment",
+        "Decision"
+      ],
+      "to": [
+        "Transcript",
+        "Note"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "evidence"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "WORKS_FOR",
+      "domain": "work",
+      "label": "Works for",
+      "description": "A person is employed by, or works on behalf of, an organization.",
+      "from": [
+        "Person"
+      ],
+      "to": [
+        "Organization"
+      ],
+      "allowedPairs": null,
+      "temporal": true,
+      "exclusive": "soft",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "edge"
+      },
+      "extractable": true,
+      "alignment": "schema:worksFor",
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "HAS_ROLE",
+      "domain": "work",
+      "label": "Has role",
+      "description": "A person holds a titled role at an organization for a period of time.",
+      "from": [
+        "Person"
+      ],
+      "to": [
+        "Organization"
+      ],
+      "allowedPairs": null,
+      "temporal": true,
+      "exclusive": "soft",
+      "exclusiveScope": "from_to",
+      "representation": {
+        "kind": "edge"
+      },
+      "extractable": true,
+      "alignment": "schema:hasOccupation",
+      "deprecated": false,
+      "props": [
+        {
+          "key": "title",
+          "label": "Title",
+          "kind": "text",
+          "required": true,
+          "list": false,
+          "options": null,
+          "extractable": true,
+          "description": "The job title the person holds in this role, e.g. \"Staff Engineer\".",
+          "sensitivity": "business",
+          "source": "builtin",
+          "domain": "work",
+          "attributeDefId": null,
+          "deprecated": false,
+          "sortOrder": 0
+        }
+      ]
+    },
+    {
+      "key": "REPORTS_TO",
+      "domain": "work",
+      "label": "Reports to",
+      "description": "A person reports to another person, their manager, for a period of time.",
+      "from": [
+        "Person"
+      ],
+      "to": [
+        "Person"
+      ],
+      "allowedPairs": null,
+      "temporal": true,
+      "exclusive": "soft",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "edge"
+      },
+      "extractable": true,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "ATTENDED",
+      "domain": "work",
+      "label": "Attended",
+      "description": "A person took part in a meeting.",
+      "from": [
+        "Person"
+      ],
+      "to": [
+        "Meeting"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "edge"
+      },
+      "extractable": true,
+      "alignment": "schema:attendee",
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "DISCUSSED",
+      "domain": "work",
+      "label": "Discussed",
+      "description": "A meeting discussed a project as a substantive topic.",
+      "from": [
+        "Meeting"
+      ],
+      "to": [
+        "Project"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "edge"
+      },
+      "extractable": true,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "PART_OF",
+      "domain": "work",
+      "label": "Part of",
+      "description": "A project belongs to an organization, or a meeting belongs to a project.",
+      "from": [
+        "Project",
+        "Meeting"
+      ],
+      "to": [
+        "Organization",
+        "Project"
+      ],
+      "allowedPairs": [
+        [
+          "Project",
+          "Organization"
+        ],
+        [
+          "Meeting",
+          "Project"
+        ]
+      ],
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "edge"
+      },
+      "extractable": true,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "ASSIGNED_TO",
+      "domain": "work",
+      "label": "Assigned to",
+      "description": "The person who owns a commitment and is expected to carry it out.",
+      "from": [
+        "Commitment"
+      ],
+      "to": [
+        "Person"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "item_column",
+        "column": "owner_person_id"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "OWED_TO",
+      "domain": "work",
+      "label": "Owed to",
+      "description": "The person or organization a commitment is owed to, when one is stated.",
+      "from": [
+        "Commitment"
+      ],
+      "to": [
+        "Person",
+        "Organization"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "item_column",
+        "column": "counterparty_id"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "CREATED_IN",
+      "domain": "work",
+      "label": "Created in",
+      "description": "The meeting in which a commitment was made.",
+      "from": [
+        "Commitment"
+      ],
+      "to": [
+        "Meeting"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "item_column",
+        "column": "meeting_id"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    },
+    {
+      "key": "DECIDED_IN",
+      "domain": "work",
+      "label": "Decided in",
+      "description": "The meeting in which a decision was made.",
+      "from": [
+        "Decision"
+      ],
+      "to": [
+        "Meeting"
+      ],
+      "allowedPairs": null,
+      "temporal": false,
+      "exclusive": "none",
+      "exclusiveScope": "from",
+      "representation": {
+        "kind": "item_column",
+        "column": "meeting_id"
+      },
+      "extractable": false,
+      "alignment": null,
+      "deprecated": false,
+      "props": []
+    }
+  ]
+}

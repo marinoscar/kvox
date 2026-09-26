@@ -1,0 +1,472 @@
+{
+  "id": "m32",
+  "title": "Brambleway studio weekly sync",
+  "tags": [
+    "personal",
+    "internal",
+    "negative-work-trip"
+  ],
+  "recordedAt": "2026-05-04T09:00:00Z",
+  "contextText": "Weekly studio sync; plan summer cover.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m32-spk-a",
+      "label": "A",
+      "displayName": "Nina Castellanos"
+    },
+    {
+      "id": "m32-spk-b",
+      "label": "B",
+      "displayName": "Oliver Brandt"
+    },
+    {
+      "id": "m32-spk-c",
+      "label": "C",
+      "displayName": "Sam Kowalski"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m32-s001",
+      "speakerId": "m32-spk-a",
+      "startMs": 0,
+      "endMs": 7615,
+      "rev": 1,
+      "text": "Morning both. Short one today, then I want five minutes on summer leave so we can plan cover."
+    },
+    {
+      "id": "m32-s002",
+      "speakerId": "m32-spk-b",
+      "startMs": 7915,
+      "endMs": 15530,
+      "rev": 1,
+      "text": "Sounds good. Harbourline first? Their onboarding flows went into usability testing on Friday."
+    },
+    {
+      "id": "m32-s003",
+      "speakerId": "m32-spk-a",
+      "startMs": 15830,
+      "endMs": 20255,
+      "rev": 1,
+      "text": "Yes, how did the first sessions go?"
+    },
+    {
+      "id": "m32-s004",
+      "speakerId": "m32-spk-b",
+      "startMs": 20555,
+      "endMs": 27510,
+      "rev": 1,
+      "text": "Mostly fine. People got lost on the account-linking step, which we half expected."
+    },
+    {
+      "id": "m32-s005",
+      "speakerId": "m32-spk-c",
+      "startMs": 27810,
+      "endMs": 35315,
+      "rev": 1,
+      "text": "I saw the recordings. Three out of five participants skipped the linking screen completely."
+    },
+    {
+      "id": "m32-s006",
+      "speakerId": "m32-spk-a",
+      "startMs": 35615,
+      "endMs": 41360,
+      "rev": 1,
+      "text": "Okay, so that screen needs a rethink before the next round."
+    },
+    {
+      "id": "m32-s007",
+      "speakerId": "m32-spk-c",
+      "startMs": 41660,
+      "endMs": 49165,
+      "rev": 1,
+      "text": "Agreed. I'll send the Harbourline workshop agenda by Friday so we can walk them through it."
+    },
+    {
+      "id": "m32-s008",
+      "speakerId": "m32-spk-a",
+      "startMs": 49465,
+      "endMs": 54385,
+      "rev": 1,
+      "text": "Great. And the workshop itself is in person?"
+    },
+    {
+      "id": "m32-s009",
+      "speakerId": "m32-spk-c",
+      "startMs": 54685,
+      "endMs": 62300,
+      "rev": 1,
+      "text": "It is. I'm flying to Rotterdam on Tuesday for the Harbourline workshop, back Wednesday night."
+    },
+    {
+      "id": "m32-s010",
+      "speakerId": "m32-spk-a",
+      "startMs": 62600,
+      "endMs": 68840,
+      "rev": 1,
+      "text": "Take the prototype on the tablet, their wifi was terrible last time."
+    },
+    {
+      "id": "m32-s011",
+      "speakerId": "m32-spk-c",
+      "startMs": 69140,
+      "endMs": 73290,
+      "rev": 1,
+      "text": "Will do. I'll load it offline."
+    },
+    {
+      "id": "m32-s012",
+      "speakerId": "m32-spk-a",
+      "startMs": 73590,
+      "endMs": 78675,
+      "rev": 1,
+      "text": "Right, leave. Oliver, you had something booked?"
+    },
+    {
+      "id": "m32-s013",
+      "speakerId": "m32-spk-b",
+      "startMs": 78975,
+      "endMs": 85545,
+      "rev": 1,
+      "text": "Yes. Maya and I are finally taking the Lisbon trip we postponed last year."
+    },
+    {
+      "id": "m32-s014",
+      "speakerId": "m32-spk-a",
+      "startMs": 85845,
+      "endMs": 89115,
+      "rev": 1,
+      "text": "Oh nice, when?"
+    },
+    {
+      "id": "m32-s015",
+      "speakerId": "m32-spk-b",
+      "startMs": 89415,
+      "endMs": 97360,
+      "rev": 1,
+      "text": "We fly out June 12 and come back June 20. It's the first holiday just the two of us since the kids."
+    },
+    {
+      "id": "m32-s016",
+      "speakerId": "m32-spk-c",
+      "startMs": 97660,
+      "endMs": 103185,
+      "rev": 1,
+      "text": "Maya's your wife, right? I met her at the studio party."
+    },
+    {
+      "id": "m32-s017",
+      "speakerId": "m32-spk-b",
+      "startMs": 103485,
+      "endMs": 110935,
+      "rev": 1,
+      "text": "That's her. My wife has wanted to see Lisbon for about ten years, so no excuses this time."
+    },
+    {
+      "id": "m32-s018",
+      "speakerId": "m32-spk-a",
+      "startMs": 111235,
+      "endMs": 118080,
+      "rev": 1,
+      "text": "Good for you both. So Oliver is out June 12 to June 20. Sam, anything from you?"
+    },
+    {
+      "id": "m32-s019",
+      "speakerId": "m32-spk-c",
+      "startMs": 118380,
+      "endMs": 123355,
+      "rev": 1,
+      "text": "Nothing big, just the Rotterdam day for work."
+    },
+    {
+      "id": "m32-s020",
+      "speakerId": "m32-spk-a",
+      "startMs": 123655,
+      "endMs": 130280,
+      "rev": 1,
+      "text": "Okay. Oliver, can you hand the Harbourline test notes to Sam before you go?"
+    },
+    {
+      "id": "m32-s021",
+      "speakerId": "m32-spk-b",
+      "startMs": 130580,
+      "endMs": 135775,
+      "rev": 1,
+      "text": "Sure, I'll do a written handover the week before."
+    },
+    {
+      "id": "m32-s022",
+      "speakerId": "m32-spk-a",
+      "startMs": 136075,
+      "endMs": 140775,
+      "rev": 1,
+      "text": "Perfect. That's everything, thanks both."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Brambleway studio weekly sync\n\n**Date:** May 4\n**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski\n\n## Summary\n\nShort internal sync at Brambleway Studio covering the first round of Harbourline usability testing, next week's client workshop, and summer leave so cover can be planned.\n\n## Harbourline\n\n- The onboarding flows went into usability testing on Friday. Participants struggled with the account-linking step: three out of five skipped the linking screen completely.\n- The account-linking screen needs a rethink before the next round of testing.\n- Sam is flying to Rotterdam on Tuesday for the Harbourline workshop, back Wednesday night. This is a client work trip; he will take the prototype on a tablet with an offline build.\n\n## Action items\n\n- **Sam Kowalski** — send the Harbourline workshop agenda by Friday.\n- **Oliver Brandt** — write a handover of the Harbourline test notes for Sam the week before his leave.\n\n## Leave and cover\n\n- Oliver and his wife Maya are taking the Lisbon trip they postponed last year, flying out June 12 and returning June 20. It is their first holiday on their own since the kids were born.\n- Oliver is therefore out from June 12 to June 20, and Sam covers Harbourline while he is away.\n- No other leave was raised; Sam's only time away is the Rotterdam day for work.\n\n## Next steps\n\nNina will confirm the cover plan in the studio calendar, and the team reviews the reworked linking screen at the next sync before it goes back to Harbourline for a second round of testing.\n"
+  },
+  "knownEntities": [],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Brambleway studio weekly sync",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brambleway studio weekly sync"
+          }
+        ]
+      },
+      {
+        "key": "nina",
+        "type": "Person",
+        "label": "Nina Castellanos",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "oliver",
+        "type": "Person",
+        "label": "Oliver Brandt",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "sam",
+        "type": "Person",
+        "label": "Sam Kowalski",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "maya",
+        "type": "Person",
+        "label": "Maya Brandt",
+        "aliases": [
+          "Maya"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m32-s016",
+            "quote": "Maya's your wife, right?"
+          },
+          {
+            "source": "note",
+            "quote": "Oliver and his wife Maya"
+          }
+        ]
+      },
+      {
+        "key": "brambleway",
+        "type": "Organization",
+        "label": "Brambleway Studio",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Short internal sync at Brambleway Studio"
+          }
+        ]
+      },
+      {
+        "key": "harbourline",
+        "type": "Organization",
+        "label": "Harbourline",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the first round of Harbourline usability testing"
+          }
+        ]
+      },
+      {
+        "key": "lisbon",
+        "type": "Trip",
+        "label": "Lisbon trip",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "destination": "Lisbon",
+          "startDate": "2026-06-12",
+          "endDate": "2026-06-20"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m32-s015",
+            "quote": "We fly out June 12 and come back June 20."
+          },
+          {
+            "source": "note",
+            "quote": "taking the Lisbon trip they postponed last year, flying out June 12 and returning June 20"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "nina",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "oliver",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sam",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "SPOUSE_OF",
+        "from": "oliver",
+        "to": "maya",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m32-s017",
+            "quote": "That's her. My wife has wanted to see Lisbon"
+          },
+          {
+            "source": "note",
+            "quote": "Oliver and his wife Maya"
+          }
+        ]
+      },
+      {
+        "type": "TRAVELED_ON",
+        "from": "oliver",
+        "to": "lisbon",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m32-s013",
+            "quote": "Maya and I are finally taking the Lisbon trip we postponed last year."
+          }
+        ]
+      },
+      {
+        "type": "TRAVELED_ON",
+        "from": "maya",
+        "to": "lisbon",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m32-s013",
+            "quote": "Maya and I are finally taking the Lisbon trip we postponed last year."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "commitment",
+        "subject": "harbourline",
+        "owner": "sam",
+        "counterparty": null,
+        "title": "Send the Harbourline workshop agenda",
+        "statement": "Sam will send the Harbourline workshop agenda by Friday.",
+        "status": "open",
+        "occurredAt": "2026-05-04",
+        "dueAt": "2026-05-08",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m32-s007",
+            "quote": "I'll send the Harbourline workshop agenda by Friday"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "I'm flying to Rotterdam on Tuesday for the Harbourline workshop, back Wednesday night.",
+        "why": "A business trip to a client workshop is work, not a personal Trip (§17.2 Trip disambiguation)."
+      }
+    ]
+  }
+}
