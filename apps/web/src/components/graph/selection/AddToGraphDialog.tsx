@@ -160,7 +160,10 @@ export function AddToGraphDialog({
   const [sensitivity, setSensitivity] = useState<string>('business');
 
   // Relationship
-  const relationTypes = useMemo(() => (ontology?.relationTypes ?? []).filter((type) => !type.deprecated), [ontology]);
+  const relationTypes = useMemo(
+    () => (ontology?.relationTypes ?? []).filter((type) => !type.deprecated && type.extractable),
+    [ontology],
+  );
   const [relationType, setRelationType] = useState('');
   const [from, setFrom] = useState<EndpointOption | null>(null);
   const [to, setTo] = useState<EndpointOption | null>(null);
