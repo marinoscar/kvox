@@ -1,0 +1,14 @@
+export declare const project: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const commitment: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const decision: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const worksFor: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const hasRole: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const reportsTo: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const attended: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const discussed: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const partOf: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const assignedTo: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const owedTo: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const createdIn: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const decidedIn: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const workDomain: Readonly<import("../types.js").DomainModule>;

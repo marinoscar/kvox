@@ -1,0 +1,11 @@
+export declare const person: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const organization: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const meeting: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const claim: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const personFact: Readonly<import("../types.js").EntityTypeSpec>;
+export declare const about: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const identifiedAs: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const supersedes: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const mentions: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const supportedBy: Readonly<import("../types.js").RelationTypeSpec>;
+export declare const coreDomain: Readonly<import("../types.js").DomainModule>;
