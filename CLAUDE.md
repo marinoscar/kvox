@@ -2098,11 +2098,14 @@ silently resume minutes later, and there is no credential narrow enough for a
 The handler is re-entrant — every step selects what is still there and deletes it — which is
 what makes a person-initiated retry (asking again) safe without an automatic one.
 
-**Speaker naming writes the graph only through `kg.speaker_link`** (#356): `TranscriptEditingService
-.identify()` emits `transcript.speakers_identified`, a listener only enqueues the job
-(`skipDedup: true`), and the server-only handler reconciles that transcript's current
-`speaker_identities` into the **owner's** `Person` + `IDENTIFIED_AS` rows — never an editor's, and
-only while the owner holds `graph:write`; see `docs/specs/ontology.md` §8.
+**Speaker naming writes the graph only through `kg.speaker_link`** (#356): every
+`TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and (#405) a
+versioned rename/clear/create/merge or a restore — emits `transcript.speakers_identified`, a
+listener only enqueues the job (`skipDedup: true`), and the server-only handler reconciles each
+speaker's **effective** name (the live row with the `speaker_identities` overlay, exactly as
+`materialize()` shows it — never `speaker_identities` alone) into the **owner's** `Person` +
+`IDENTIFIED_AS` rows — never an editor's, and only while the owner holds `graph:write`; see
+`docs/specs/ontology.md` §8.
 
 ## Specialized Subagents (MANDATORY)
 
