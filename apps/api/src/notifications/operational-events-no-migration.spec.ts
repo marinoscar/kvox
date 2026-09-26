@@ -139,6 +139,10 @@ const MIGRATIONS_AT_288 = [
   // #352: `transcripts.recorded_at`, when the recording was made — the meeting
   // date connected knowledge reads. Transcript metadata, not notifications.
   '20260926030100_add_transcript_recorded_at',
+  // #355 (epic #344): the deferred constraint trigger that refuses an
+  // evidence-less accepted/edited graph row at COMMIT. A graph invariant,
+  // and equally not about notifications.
+  '20260926030200_kg_evidence_invariant',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

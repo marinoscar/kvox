@@ -5313,8 +5313,9 @@ data: {"status":"succeeded","offset":812,"currentVersion":1}
 Your own connected knowledge — the entity-and-relationship graph built from
 your transcripts and notes (issue #354, epic #344). Full design (the
 ontology, extraction, review, retrieval, privacy) is
-[`docs/specs/ontology.md`](specs/ontology.md). Today this group carries one
-route, the effective ontology; entity, relation, fact and search routes
+[`docs/specs/ontology.md`](specs/ontology.md). Today this group carries the
+effective ontology, the manual entity edit, and your own attribute
+definitions (issue #355); entity reads, relation, fact and search routes
 arrive with later issues and follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
@@ -5344,8 +5345,19 @@ you can already see the row and a 404 would only mislead you.
 **Conflicts.** A 409 from a graph route names its cause in
 `details.reason` (`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
 `extraction_running`, `proposal_not_draft`, `stale_note_version`,
-`revert_conflict`, `model_lacks_capability`); none is raised by the route
+`revert_conflict`, `model_lacks_capability`); none is raised by the routes
 below.
+
+**Every write goes through one service, and every fact keeps a citation.**
+Nothing writes an entity, relation or fact except `GraphWriteService`, and an
+accepted or edited one always carries at least one piece of evidence back to
+a transcript segment, a note span or an import (§3.3). The service refuses an
+evidence-less write with a 400 before anything is stored, and a deferred
+database trigger refuses one at commit as a backstop — reaching that
+backstop is a bug in a writer, answered as a 500. Evidence may cite only a
+note you own (at a version that exists) or a transcript you can view (owned
+or shared with you); an invalid citation is a 400 naming the index of every
+bad row in `details.invalidEvidence`, never a 404.
 
 #### GET /graph/ontology
 
@@ -5440,6 +5452,160 @@ is abridged; the published OpenAPI schema (`GraphOntologyDto`) is the full
 contract.
 
 **Errors:** `401` unauthenticated · `403` without `graph:read`.
+
+#### PATCH /graph/entities/{id}
+
+Edit one of your entities by hand — one of the two ways anything changes in
+your graph outside a reviewed proposal (§8). Every field is optional, but the
+body must change something.
+
+**Requires:** `graph:write`.
+
+**Request:**
+```json
+{
+  "label": "Sarah Chen-Li",
+  "props": { "title": "CTO", "u_k3v9x0a1bq": null },
+  "addAliases": ["Sally"],
+  "removeAliasIds": ["7c9e6679-7425-40de-944b-e07fc1f90ae7"]
+}
+```
+
+| Field | Rules |
+|---|---|
+| `label` | 1–200 characters. The **previous label is kept as an alias** (`source: "user"`), so matching still finds the entity by its old name. |
+| `props` | A merge: `key → value` sets an attribute, `key → null` clears it, keys you do not send are unchanged. The **merged** result must validate against your effective ontology; an undeclared key is a 400. |
+| `addAliases` | Up to 20, 1–200 characters each. One that normalizes to an alias the entity already has is ignored, not an error. |
+| `removeAliasIds` | Up to 50. The alias that is the current label cannot be removed. |
+| `type` | **Refused.** Change a type through a proposal. |
+
+An `accepted` entity becomes `edited` once anything changes (an `edited` one
+stays `edited`). Its evidence is untouched — an edit is curation of a fact
+that already has citations. The edit is audited as `graph.entity_edited`
+with the changed attribute keys and alias counts, never the values.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+    "type": "Person",
+    "label": "Sarah Chen-Li",
+    "props": { "title": "CTO" },
+    "reviewStatus": "edited",
+    "mergedIntoId": null,
+    "occurredAt": null,
+    "ontologyVersion": "1.0.0",
+    "aliases": [
+      { "id": "…", "alias": "Sarah Chen", "normalized": "sarah chen", "source": "extraction", "createdAt": "2026-09-20T10:00:00.000Z" },
+      { "id": "…", "alias": "Sarah Chen-Li", "normalized": "sarah chen-li", "source": "user", "createdAt": "2026-09-26T12:00:00.000Z" }
+    ],
+    "createdAt": "2026-09-20T10:00:00.000Z",
+    "updatedAt": "2026-09-26T12:00:00.000Z"
+  },
+  "meta": { "timestamp": "2026-09-26T12:00:00.000Z" }
+}
+```
+
+An alias's `normalized` form (NFKC, lowercase, whitespace collapsed, leading
+and trailing punctuation stripped) is what every exact-match lookup reads.
+
+**Errors:** `400` invalid props (`details.issues`, one per path), `type`
+sent, an empty body, or an alias that is empty once normalized · `401` ·
+`403` your own entity without `graph:write` · `404` `Entity not found` — no
+such entity, another user's, or merged.
+
+#### Attribute definitions
+
+Your own attributes on the ontology's types — "Nickname" on `Person`, "Tier"
+on `Organization` (§17.3). A definition appears in
+[`GET /graph/ontology`](#get-graphontology) with `source: "user"`, and values
+are stored in an entity's `props` under its key. Owner-only: another user's
+definition is a `404` (`Attribute definition not found`). Each change is
+audited (`graph.attribute_def_created`, `graph.attribute_def_updated`,
+`graph.attribute_def_deprecated`) with `{ entityType, key, kind }` only.
+
+Every route returns (or lists) this shape:
+```json
+{
+  "id": "5f0e2b1c-9d4a-4c3e-8b7f-1a2b3c4d5e6f",
+  "entityType": "Person",
+  "key": "u_k3v9x0a1bq",
+  "label": "Tier",
+  "kind": "select",
+  "options": { "choices": [{ "value": "gold", "label": "Gold" }] },
+  "extractable": true,
+  "extractionHint": "The customer tier, if the source names one.",
+  "sensitivity": null,
+  "sortOrder": 0,
+  "deprecatedAt": null,
+  "createdAt": "2026-09-26T12:00:00.000Z",
+  "updatedAt": "2026-09-26T12:00:00.000Z"
+}
+```
+
+##### GET /graph/attribute-defs
+
+Your definitions, ordered by entity type, sort order, then creation time.
+Query: `entityType` (only that type), `includeDeprecated` (`true`/`false`,
+default `false`). **Requires:** `graph:read`. **Response:** `200`
+`{ "data": { "items": [ … ] } }`.
+
+##### POST /graph/attribute-defs
+
+**Requires:** `graph:write`.
+
+```json
+{
+  "entityType": "Person",
+  "label": "Tier",
+  "kind": "select",
+  "options": { "choices": [{ "value": "gold", "label": "Gold" }] },
+  "extractable": true,
+  "extractionHint": "The customer tier, if the source names one.",
+  "sensitivity": null,
+  "sortOrder": 0
+}
+```
+
+- `kind`: `text`, `number`, `date`, `boolean`, `select`, `multi_select`,
+  `url` or `entity_ref`.
+- `select`/`multi_select` need `options.choices` (1–100, unique values;
+  value 1–60, label 1–80 characters). `entity_ref` needs
+  `options.targetTypes`, each an entity type in your graph. No other kind
+  takes `options`.
+- `extractable: true` needs an `extractionHint` (1–500 characters) — it is
+  what the model is asked.
+- At most **50 live definitions** per entity type.
+
+The **key is generated by the server** — `u_` plus ten lowercase
+alphanumerics — and is permanent; the label stays renameable.
+
+**Response:** `201` the definition. **Errors:** `400` unknown entity type,
+options invalid for the kind, a missing hint, or the limit · `401` · `403`
+without `graph:write`.
+
+##### PATCH /graph/attribute-defs/{id}
+
+**Requires:** `graph:write`. Body: any of `label`, `options`, `extractable`,
+`extractionHint`, `sensitivity`, `sortOrder`, `deprecated`.
+
+- `kind`, `entityType` and `key` are **immutable** (400 if sent).
+- Choices can be added or relabelled but **never removed** — stored values
+  would lose their label. The 400 names them in `details.removedChoices`.
+- `deprecated: true` retires the definition; `false` restores it.
+
+**Response:** `200` the definition. **Errors:** `400` · `401` · `403`
+without `graph:write` · `404`.
+
+##### DELETE /graph/attribute-defs/{id}
+
+**Deprecates — never deletes** (§17.3): stored values keep their key and stay
+readable, and the attribute leaves forms and extraction. Idempotent: a
+second call returns the same definition with the same `deprecatedAt`.
+
+**Requires:** `graph:write`. **Response:** `200` the definition with
+`deprecatedAt` set. **Errors:** `401` · `403` without `graph:write` · `404`.
 
 ### Search
 
