@@ -5,6 +5,7 @@ import {
   navigationSchema,
   notificationsSchema,
   onboardingSchema,
+  graphPreferencesSchema,
 } from '../../common/schemas/user-settings-namespaces.schema';
 import { profileImageSourceSchema } from '../../common/schemas/settings.schema';
 
@@ -30,6 +31,8 @@ export const userSettingsResponseSchema = z.object({
   // opposite of nothing, so the service omits the key rather than emitting it
   // empty — see `mergeOnboarding`.
   onboarding: onboardingSchema.optional(),
+  // Absent = every graph default (#369); the client resolves them itself.
+  graph: graphPreferencesSchema.optional(),
   updatedAt: z.iso.datetime(),
   version: z.number(),
 });

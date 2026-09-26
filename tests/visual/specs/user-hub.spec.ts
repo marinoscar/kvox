@@ -4,10 +4,10 @@ import { harnessUrl, waitForInter } from '../support/harness';
 /**
  * The per-user settings hub — `/settings`, `UserSettingsHubPage` over the same
  * `SettingsHub` component as the admin console, parameterised with
- * `USER_SETTINGS_SECTIONS` (`config/userSettingsSections.tsx`): `Account`
- * (Profile, Appearance) and `Security` (Access Tokens). No card in this
- * registry declares a `permission` — every authenticated user owns their own
- * settings — so nothing here depends on the harness's `perms` param.
+ * `USER_SETTINGS_SECTIONS` (`config/userSettingsSections.tsx`): `Account`,
+ * `Knowledge` (#369) and `Security`, among others. One card declares a
+ * `permission` — `Knowledge graph`, gated on `graph:write` — which the
+ * harness's default permission set carries, so it is in this baseline.
  *
  * `/settings` is not an admin route, so the rail stays in library mode
  * (Console pinned at the foot) rather than swapping to Console mode — this
@@ -29,6 +29,9 @@ test('User settings hub @ /settings', async ({ page }) => {
   // fails Playwright's strict mode.
   await expect(main.getByText('Access Tokens', { exact: true })).toBeVisible();
   await expect(main.getByText('Profile', { exact: true })).toBeVisible();
+  // Issue #369: the `Knowledge` group's one card, gated on `graph:write` —
+  // which the harness's default permission set carries.
+  await expect(main.getByText('Knowledge graph', { exact: true })).toBeVisible();
 
   await expect(page).toHaveScreenshot('user-hub-1440x900.png', {
     fullPage: true,

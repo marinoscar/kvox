@@ -427,6 +427,14 @@ export interface UserSettings {
    * real answer, not a loading state.
    */
   onboarding?: OnboardingSettings;
+  /**
+   * Connected-knowledge preferences (#369, epic #346).
+   *
+   * OPTIONAL, AND ABSENT MEANS EVERY DEFAULT — resolve through
+   * `resolveGraphPreferences` (`hooks/useGraphPreferences.ts`), never by
+   * backfilling a literal. A present sub-object carries all of its fields.
+   */
+  graph?: GraphPreferencesSettings;
   updatedAt: string;
   version: number;
 }
@@ -507,6 +515,44 @@ export interface UserSettingsUpdate {
    * the dialog closes — and never has to restate the rest.
    */
   onboarding?: OnboardingSettingsPatch | null;
+  /**
+   * Graph preferences (#369). Deep-merged per sub-object server-side: send
+   * only the field that changed; `null` on a sub-object resets it to its
+   * defaults, `null` on the whole namespace resets everything.
+   */
+  graph?: GraphPreferencesPatch | null;
+}
+
+// =============================================================================
+// Connected-knowledge preferences — the `graph` user-settings namespace (#369)
+// =============================================================================
+
+export type GraphResolutionMode = 'precheck_confident' | 'review_all';
+export type GraphAdjudication = 'llm' | 'off';
+
+/** The stored (sparse) `graph` namespace, mirroring the API's `graphPreferencesSchema`. */
+export interface GraphPreferencesSettings {
+  extraction?: { autoExtract: boolean };
+  resolution?: {
+    mode: GraphResolutionMode;
+    autoLinkThreshold: number;
+    newThreshold: number;
+    adjudication: GraphAdjudication;
+  };
+  /** `core` is always on and never stored. `personal` is `false` until #383. */
+  domains?: { work: boolean; personal: false };
+}
+
+/** PATCH form: every field optional; `null` resets to the default. */
+export interface GraphPreferencesPatch {
+  extraction?: { autoExtract?: boolean | null } | null;
+  resolution?: {
+    mode?: GraphResolutionMode | null;
+    autoLinkThreshold?: number | null;
+    newThreshold?: number | null;
+    adjudication?: GraphAdjudication | null;
+  } | null;
+  domains?: { work?: boolean | null; personal?: false | null } | null;
 }
 
 /**

@@ -894,6 +894,98 @@ describe('User Settings Integration', () => {
     });
   });
 
+  // ===========================================================================
+  // graph namespace (issue #369, epic #346)
+  // ===========================================================================
+  //
+  // Driven through the real wire DTOs and the real merge, asserting on the
+  // value a subsequent GET returns — the silent failure the parity spec exists
+  // for (a 200 with nothing persisted) is only visible that way.
+  describe('graph namespace', () => {
+    const getSettings = (token: string) =>
+      request(context.app.getHttpServer())
+        .get('/api/user-settings')
+        .set(authHeader(token))
+        .expect(200);
+
+    const patchSettings = (token: string, body: object) =>
+      request(context.app.getHttpServer())
+        .patch('/api/user-settings')
+        .set(authHeader(token))
+        .send(body);
+
+    it('persists a single threshold and reads it back with the rest defaulted', async () => {
+      const user = await createMockTestUser(context);
+      setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+      await patchSettings(user.accessToken, {
+        graph: { resolution: { autoLinkThreshold: 0.93 } },
+      }).expect(200);
+
+      const response = await getSettings(user.accessToken);
+      expect(response.body.data.graph).toEqual({
+        resolution: {
+          mode: 'precheck_confident',
+          autoLinkThreshold: 0.93,
+          newThreshold: 0.55,
+          adjudication: 'llm',
+        },
+      });
+    });
+
+    it('`resolution: null` resets it, leaving no graph key at all', async () => {
+      const user = await createMockTestUser(context);
+      setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+      await patchSettings(user.accessToken, {
+        graph: { resolution: { autoLinkThreshold: 0.93 } },
+      }).expect(200);
+      await patchSettings(user.accessToken, {
+        graph: { resolution: null },
+      }).expect(200);
+
+      const response = await getSettings(user.accessToken);
+      expect('graph' in response.body.data).toBe(false);
+    });
+
+    it('a never-written user reads no graph key (absent = defaults)', async () => {
+      const user = await createMockTestUser(context);
+      setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+      const response = await getSettings(user.accessToken);
+      expect('graph' in response.body.data).toBe(false);
+    });
+
+    describe('rejections return 400, not 500', () => {
+      it.each<[string, unknown]>([
+        ['personal: true (until #383)', { domains: { personal: true } }],
+        [
+          'thresholds closer than 0.05 in one patch',
+          { resolution: { autoLinkThreshold: 0.85, newThreshold: 0.84 } },
+        ],
+        ['an auto-link threshold below 0.80', { resolution: { autoLinkThreshold: 0.79 } }],
+        ['an unknown key', { extraction: { autoExtract: true, extra: 1 } }],
+      ])('rejects a graph patch with %s', async (_label, graph) => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        await patchSettings(user.accessToken, { graph }).expect(400);
+      });
+
+      it('rejects a patch whose thresholds only collide with the stored value', async () => {
+        const user = await createMockTestUser(context);
+        setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+        await patchSettings(user.accessToken, {
+          graph: { resolution: { newThreshold: 0.8 } },
+        }).expect(200);
+        await patchSettings(user.accessToken, {
+          graph: { resolution: { autoLinkThreshold: 0.82 } },
+        }).expect(400);
+      });
+    });
+  });
+
   // User isolation tests require complex multi-user mock setup
   describe.skip('User isolation', () => {
     it('should not allow user to access other user settings', async () => {

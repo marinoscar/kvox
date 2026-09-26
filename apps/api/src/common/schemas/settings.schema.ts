@@ -18,6 +18,8 @@ import {
   notificationEventKeySchema,
   onboardingSchema,
   onboardingPatchSchema,
+  graphPreferencesSchema,
+  graphPreferencesPatchSchema,
   NOTIFICATION_MAX_EVENTS_PER_CHANNEL,
 } from './user-settings-namespaces.schema';
 
@@ -83,6 +85,9 @@ export const userSettingsSchema = z.object({
   // A default here would tell every account it had already been through an
   // experience it has never seen. See user-settings-namespaces.schema.ts.
   onboarding: onboardingSchema.optional(),
+  // `graph` (#369, epic #346): connected-knowledge preferences. Absent means
+  // every default in `GRAPH_PREFERENCE_DEFAULTS` — see graph-preferences.service.ts.
+  graph: graphPreferencesSchema.optional(),
 });
 
 export type UserSettingsDto = z.infer<typeof userSettingsSchema>;
@@ -103,6 +108,9 @@ export const userSettingsPatchSchema = z.object({
   // again"); `{ onboarding: { dismissedAt: null } }` un-dismisses just the
   // checklist, leaving the welcome and the admin banner alone.
   onboarding: onboardingPatchSchema.nullable().optional(),
+  // `{ graph: null }` resets every graph preference; `{ graph: { resolution:
+  // null } }` resets just that sub-object. See graphPreferencesPatchSchema.
+  graph: graphPreferencesPatchSchema.nullable().optional(),
 });
 
 // =============================================================================

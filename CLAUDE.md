@@ -896,7 +896,7 @@ to all three roles; owner-only, and **404, never 403**, for any graph row the ca
 transcript share never grants graph access. See [`docs/API.md`](docs/API.md#graph) and
 [`docs/specs/ontology.md`](docs/specs/ontology.md).
 - `GET /api/graph/ontology` - The caller's **effective ontology**: `core` + enabled domains
-  (`core`,`work` by default until #369 persists the choice) + mixins + their own
+  (the caller's `graph.domains` preference, #369; `core`,`work` by default) + mixins + their own
   `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
   generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
   is not an AI call
@@ -1017,7 +1017,10 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `### Onboarding` above and [`docs/specs/onboarding.md`](docs/specs/onboarding.md)). Absent from
   `DEFAULT_USER_SETTINGS` on purpose: absent is how "never onboarded" is spelled. Guarded by
   `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the six-file parity check user
-  settings never had before this namespace
+  settings never had before this namespace. Also `graph` (issue #369): per-user connected-knowledge
+  preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
+  adjudication}`, `domains.work` — absent means every default, resolved by
+  `GraphPreferencesService`; see `docs/specs/ontology.md` §10
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
 - `allowed_emails` - Allowlist for access control. `reminder_count`/`last_reminder_at` (issue

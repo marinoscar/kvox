@@ -9,6 +9,8 @@ import {
   notificationsPatchSchema,
   onboardingSchema,
   onboardingPatchSchema,
+  graphPreferencesSchema,
+  graphPreferencesPatchSchema,
 } from '../../common/schemas/user-settings-namespaces.schema';
 import {
   userProfileSettingsSchema,
@@ -28,6 +30,7 @@ export const updateUserSettingsSchema = z.object({
   navigation: navigationSchema.optional(),
   notifications: notificationsSchema.optional(),
   onboarding: onboardingSchema.optional(),
+  graph: graphPreferencesSchema.optional(),
 });
 
 export class UpdateUserSettingsDto extends createZodDto(
@@ -59,6 +62,10 @@ export const patchUserSettingsSchema = z.object({
   //      the other three fields alone. Field-wise like `navigation`, because
   //      the four are independent decisions rather than one view state.
   onboarding: onboardingPatchSchema.nullable().optional(),
+  // `graph` (#369) deletes at three levels: `graph: null` (every default),
+  // `graph: { resolution: null }` (one sub-object), and
+  // `graph: { resolution: { mode: null } }` (one field back to its default).
+  graph: graphPreferencesPatchSchema.nullable().optional(),
 });
 
 export class PatchUserSettingsDto extends createZodDto(

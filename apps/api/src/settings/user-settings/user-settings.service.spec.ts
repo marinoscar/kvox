@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, BadRequestException } from '@nestjs/common';
 import { UserSettingsService } from './user-settings.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
+import { GRAPH_PREFERENCES_CHANGED_EVENT } from '../../graph/preferences/graph-preferences.events';
 import {
   createMockPrismaService,
   MockPrismaService,
@@ -14,6 +16,7 @@ import {
 describe('UserSettingsService', () => {
   let service: UserSettingsService;
   let mockPrisma: MockPrismaService;
+  let mockEvents: { emit: jest.Mock };
 
   const mockUserId = 'user-123';
 
@@ -27,11 +30,13 @@ describe('UserSettingsService', () => {
 
   beforeEach(async () => {
     mockPrisma = createMockPrismaService();
+    mockEvents = { emit: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserSettingsService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: EventEmitter2, useValue: mockEvents },
       ],
     }).compile();
 
@@ -1484,6 +1489,238 @@ describe('UserSettingsService', () => {
         welcomeSeenAt: SEEN,
         skipped: ['configure_oauth'],
       });
+    });
+  });
+
+  // ===========================================================================
+  // graph namespace (issue #369, epic #346)
+  // ===========================================================================
+  //
+  // Driven through the whole of `patchSettings`/`replaceSettings`, asserting
+  // against what reached Prisma — the post-merge `userSettingsSchema.parse`
+  // would silently strip a namespace the canonical schema forgot.
+  describe('graph preferences namespace (issue #369)', () => {
+    const BASE = { theme: 'system', profile: { imageSource: 'provider' } };
+    const DEFAULT_RESOLUTION = {
+      mode: 'precheck_confident',
+      autoLinkThreshold: 0.9,
+      newThreshold: 0.55,
+      adjudication: 'llm',
+    };
+
+    function stored(value: Record<string, unknown>) {
+      mockPrisma.userSettings.findUnique.mockResolvedValue({
+        ...mockUserSettings,
+        value: { ...BASE, ...value } as any,
+      } as any);
+    }
+
+    function captureStoredValue() {
+      const captured: { value?: any } = {};
+      (mockPrisma.userSettings.update as any).mockImplementation(
+        async ({ data }: any) => {
+          captured.value = data.value;
+          return { ...mockUserSettings, value: data.value, version: 2 };
+        },
+      );
+      return captured;
+    }
+
+    it('persists a single threshold, filling the rest of the sub-object from defaults', async () => {
+      stored({});
+      const captured = captureStoredValue();
+
+      const result = await service.patchSettings(mockUserId, {
+        graph: { resolution: { autoLinkThreshold: 0.93 } },
+      } as any);
+
+      expect(captured.value.graph).toEqual({
+        resolution: { ...DEFAULT_RESOLUTION, autoLinkThreshold: 0.93 },
+      });
+      expect(result.graph).toEqual(captured.value.graph);
+    });
+
+    it('deep-merges per sub-object, leaving the others untouched', async () => {
+      stored({
+        graph: {
+          extraction: { autoExtract: false },
+          resolution: { ...DEFAULT_RESOLUTION, autoLinkThreshold: 0.95 },
+        },
+      });
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: { resolution: { mode: 'review_all' }, domains: { work: false } },
+      } as any);
+
+      expect(captured.value.graph).toEqual({
+        extraction: { autoExtract: false },
+        resolution: {
+          ...DEFAULT_RESOLUTION,
+          autoLinkThreshold: 0.95,
+          mode: 'review_all',
+        },
+        domains: { work: false, personal: false },
+      });
+    });
+
+    it('a null field restores that field\'s default', async () => {
+      stored({
+        graph: {
+          resolution: { ...DEFAULT_RESOLUTION, mode: 'review_all', adjudication: 'off' },
+        },
+      });
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: { resolution: { adjudication: null } },
+      } as any);
+
+      expect(captured.value.graph.resolution).toEqual({
+        ...DEFAULT_RESOLUTION,
+        mode: 'review_all',
+      });
+    });
+
+    it('`resolution: null` resets the sub-object; an emptied namespace is removed', async () => {
+      stored({
+        graph: { resolution: { ...DEFAULT_RESOLUTION, autoLinkThreshold: 0.93 } },
+      });
+      const captured = captureStoredValue();
+
+      const result = await service.patchSettings(mockUserId, {
+        graph: { resolution: null },
+      } as any);
+
+      expect('graph' in captured.value).toBe(false);
+      expect('graph' in result).toBe(false);
+    });
+
+    it('`graph: null` deletes the whole namespace', async () => {
+      stored({
+        graph: {
+          extraction: { autoExtract: false },
+          domains: { work: false, personal: false },
+        },
+      });
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, { graph: null } as any);
+
+      expect('graph' in captured.value).toBe(false);
+    });
+
+    it('an unrelated PATCH leaves the stored graph namespace alone and emits nothing', async () => {
+      const graph = { extraction: { autoExtract: false } };
+      stored({ graph });
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, { theme: 'dark' } as any);
+
+      expect(captured.value.graph).toEqual(graph);
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('refuses with 400 a merge whose thresholds end up too close together', async () => {
+      stored({
+        graph: { resolution: { ...DEFAULT_RESOLUTION, newThreshold: 0.8 } },
+      });
+      captureStoredValue();
+
+      await expect(
+        service.patchSettings(mockUserId, {
+          graph: { resolution: { autoLinkThreshold: 0.82 } },
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockPrisma.userSettings.update).not.toHaveBeenCalled();
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('accepts the exact 0.05 boundary despite floating-point subtraction', async () => {
+      stored({});
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: { resolution: { autoLinkThreshold: 0.9, newThreshold: 0.85 } },
+      } as any);
+
+      expect(captured.value.graph.resolution.newThreshold).toBe(0.85);
+    });
+
+    it('emits graph.preferences_changed naming the changed sub-objects, with resolved values', async () => {
+      stored({});
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: {
+          resolution: { autoLinkThreshold: 0.93 },
+          domains: { work: false },
+        },
+      } as any);
+
+      expect(mockEvents.emit).toHaveBeenCalledTimes(1);
+      const [name, payload] = mockEvents.emit.mock.calls[0];
+      expect(name).toBe(GRAPH_PREFERENCES_CHANGED_EVENT);
+      expect(payload).toEqual({
+        userId: mockUserId,
+        changed: ['resolution', 'domains'],
+        previous: {
+          extraction: { autoExtract: true },
+          resolution: DEFAULT_RESOLUTION,
+          domains: { core: true, work: true, personal: false },
+        },
+        next: {
+          extraction: { autoExtract: true },
+          resolution: { ...DEFAULT_RESOLUTION, autoLinkThreshold: 0.93 },
+          domains: { core: true, work: false, personal: false },
+        },
+      });
+    });
+
+    it('does not emit when the effective values are unchanged (explicit default over absent)', async () => {
+      stored({});
+      captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: { extraction: { autoExtract: true } },
+      } as any);
+
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('a throwing listener does not fail the write', async () => {
+      stored({});
+      captureStoredValue();
+      mockEvents.emit.mockImplementation(() => {
+        throw new Error('listener boom');
+      });
+
+      await expect(
+        service.patchSettings(mockUserId, {
+          graph: { extraction: { autoExtract: false } },
+        } as any),
+      ).resolves.toMatchObject({ graph: { extraction: { autoExtract: false } } });
+    });
+
+    it('PUT stores the namespace and emits for the sub-objects it changed', async () => {
+      stored({ graph: { extraction: { autoExtract: false } } });
+      (mockPrisma.userSettings.upsert as any).mockImplementation(async ({ update }: any) => ({
+        ...mockUserSettings,
+        value: update.value,
+        version: 2,
+      }));
+
+      const result = await service.replaceSettings(mockUserId, {
+        theme: 'system',
+        profile: { imageSource: 'provider' },
+        graph: { domains: { work: false, personal: false } },
+      } as any);
+
+      expect(result.graph).toEqual({ domains: { work: false, personal: false } });
+      expect(mockEvents.emit).toHaveBeenCalledWith(
+        GRAPH_PREFERENCES_CHANGED_EVENT,
+        expect.objectContaining({ changed: ['extraction', 'domains'] }),
+      );
     });
   });
 });

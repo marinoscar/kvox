@@ -933,7 +933,8 @@ Resolution runs in two places: **inline**, inside `kg.extract` itself, so
 the review panel can already show proposed matches rather than a wall of
 "new" rows the user has to link by hand; and **on demand**, as a standalone
 `kg.resolve` job, for a bulk re-scan, a re-check after a merge reversal, or a
-re-check after a threshold change in the `graph` settings namespace (§10).
+re-check after a threshold change in the per-user `graph` user-settings
+namespace (§10).
 
 **Candidate generation** unions three signals, deliberately over-generating
 candidates for the scoring step below to narrow rather than trying to be
@@ -959,8 +960,11 @@ attendee/speaker match** (strong — the two "Sarah"s were in the same room),
 **shared-neighbour overlap** (medium — both connect to the same `Project`),
 **recency** (weak — a tie-breaker only, never a deciding signal on its own).
 
-**Thresholds**, stored in the `graph` system-settings namespace (§10,
-default values given here): **auto-link ≥ 0.90**, **new < 0.55**, and
+**Thresholds**, stored per user in the `graph` **user-settings** namespace
+(`graph.resolution.*` — §10, §13; issue #369 corrected an earlier draft that
+put them in a system-settings namespace: they are a preference over one's own
+graph, and the one deployment-wide switch is `ai.graphEnabled`, §20), default
+values given here: **auto-link ≥ 0.90**, **new < 0.55**, and
 everything between routed to **LLM adjudication** — a small, bounded request
 carrying a dossier per candidate (its 1–2-hop neighbourhood plus its
 supporting quotes, matching the "small, bounded, verification-shaped, never
@@ -1371,6 +1375,33 @@ plain b-tree a bare pair of timestamp columns would have used);
 `(owner_id, subject_id, occurred_at desc)` on `kg_items` (§9.1's brief
 query); a partial unique on `kg_entity_views(user_id, entity_id)`.
 
+**Per-user preferences are not a table.** Automatic extraction, the
+resolution thresholds, mode and adjudication switch, and the enabled domains
+live in the `graph` namespace of the existing `user_settings` JSONB row
+(issue #369 — `apps/api/src/common/schemas/user-settings-namespaces.schema.ts`,
+all six user-settings parity places), read through `GraphPreferencesService`
+(`apps/api/src/graph/preferences/`), which fills every absent field from
+`GRAPH_PREFERENCE_DEFAULTS` at read time and never writes a default into the
+row:
+
+```ts
+graph?: {
+  extraction?: { autoExtract: boolean };                          // default true
+  resolution?: { mode: 'precheck_confident' | 'review_all';       // default precheck_confident
+                 autoLinkThreshold: number;  /* 0.80–0.99 */      // default 0.90
+                 newThreshold: number;       /* 0.30–0.94, ≥ 0.05 below auto-link */ // default 0.55
+                 adjudication: 'llm' | 'off' };                   // default llm
+  domains?: { work: boolean; personal: false };                   // core is never stored (always on)
+}
+```
+
+`PATCH /api/user-settings` merges it per sub-object (`null` resets a
+sub-object or a field to its default; `graph: null` resets everything). A write
+whose resolved values change emits `graph.preferences_changed`
+(`{ userId, changed, previous, next }`); a listener may only enqueue (#364's
+`kg.resolve` on a threshold change). `personal` is `z.literal(false)` until
+#383 ships that domain.
+
 **`pg_trgm` is a new migration requirement for this codebase — pgvector
 already is not** (`SearchEmbedding` already depends on it, verified above),
 worth stating plainly because it is the one new PostgreSQL extension this
@@ -1553,8 +1584,10 @@ proposal panel on a note (§8, §19); an entity chip added to a transcript's
 speaker list (linking a named speaker to their `Person` page); and from
 search results that resolve to a graph entity.
 
-**A user-settings card, `Knowledge graph`** (thresholds, resolution mode,
-domain toggles, a user-defined-attribute browser, gated `graph:write`) is
+**A user-settings card, `Knowledge graph`** (automatic extraction,
+thresholds, resolution mode, domain toggles, a user-defined-attribute browser,
+gated `graph:write`; built by issue #369 at `/settings/knowledge-graph`, in its
+own `Knowledge` group, over the `graph` user-settings namespace §10 describes) is
 the **only** registry entry this document adds, in
 `apps/web/src/config/userSettingsSections.tsx`'s `USER_SETTINGS_SECTIONS`
 (Settings UI Pattern rule 1) — no admin card, because resolution thresholds

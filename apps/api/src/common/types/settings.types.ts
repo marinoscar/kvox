@@ -3,6 +3,7 @@ import type {
   NavigationValue,
   NotificationsValue,
   OnboardingValue,
+  GraphPreferencesValue,
 } from '../schemas/user-settings-namespaces.schema';
 import {
   DEFAULT_MAINTENANCE_MESSAGE,
@@ -79,6 +80,13 @@ export interface UserSettingsValue {
    * Derived from the zod schema so the two cannot drift.
    */
   onboarding?: OnboardingValue;
+  /**
+   * Connected-knowledge preferences (#369, epic #346): automatic extraction,
+   * resolution thresholds/mode/adjudication, and enabled domains. Absent means
+   * every default — deliberately NOT in `DEFAULT_USER_SETTINGS`. Resolved by
+   * `GraphPreferencesService` (graph/preferences/).
+   */
+  graph?: GraphPreferencesValue;
 }
 
 /**
@@ -151,7 +159,7 @@ export interface SystemSettingsValue {
 /**
  * Default user settings
  */
-// NOTE: `dataTables`, `navigation`, `notifications` and `onboarding` are
+// NOTE: `dataTables`, `navigation`, `notifications`, `onboarding` and `graph` are
 // intentionally NOT listed here.
 // Seeding them would turn "absent" into "explicitly empty", which is exactly
 // the failure mode the namespaces are designed to avoid (a frozen column set

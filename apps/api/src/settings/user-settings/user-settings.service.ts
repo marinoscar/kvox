@@ -5,6 +5,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserSettingsDto } from '../dto/update-user-settings.dto';
 import { PatchUserSettingsDto } from '../dto/update-user-settings.dto';
@@ -25,7 +26,20 @@ import {
   NotificationsValue,
   OnboardingPatchValue,
   OnboardingValue,
+  GraphPreferencesPatchValue,
+  GraphPreferencesValue,
+  GRAPH_THRESHOLD_ORDER_MESSAGE,
+  graphThresholdsAreOrdered,
 } from '../../common/schemas/user-settings-namespaces.schema';
+import {
+  changedGraphSections,
+  GRAPH_PREFERENCE_DEFAULTS,
+  resolveGraphPreferences,
+} from '../../graph/preferences/graph-preferences.defaults';
+import {
+  GRAPH_PREFERENCES_CHANGED_EVENT,
+  type GraphPreferencesChangedEvent,
+} from '../../graph/preferences/graph-preferences.events';
 import type { NotificationChannel } from '../../notifications/notification-events';
 import {
   isAvatarObjectFor,
@@ -37,7 +51,12 @@ import {
 export class UserSettingsService {
   private readonly logger = new Logger(UserSettingsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // #369: announces `graph.preferences_changed`. Global via
+    // `EventEmitterModule.forRoot()` in AppModule.
+    private readonly events: EventEmitter2,
+  ) {}
 
   /**
    * Build the API response projection for a stored settings value.
@@ -70,6 +89,8 @@ export class UserSettingsService {
       ...(value.onboarding !== undefined
         ? { onboarding: value.onboarding }
         : {}),
+      // Absent `graph` means every default (#369); the client resolves them.
+      ...(value.graph !== undefined ? { graph: value.graph } : {}),
       updatedAt,
       version,
     };
@@ -154,6 +175,12 @@ export class UserSettingsService {
     if (validated.profile.displayName !== undefined) {
       await this.syncDisplayName(userId, validated.profile.displayName);
     }
+
+    this.emitGraphPreferencesChanged(
+      userId,
+      (stored?.value as unknown as UserSettingsValue | undefined)?.graph,
+      validated.graph,
+    );
 
     this.logger.log(`Settings replaced for user: ${userId}`);
 
@@ -243,6 +270,11 @@ export class UserSettingsService {
       merged.onboarding = mergedOnboarding;
     }
 
+    const mergedGraph = this.mergeGraph(current.graph, dto.graph);
+    if (mergedGraph !== undefined) {
+      merged.graph = mergedGraph;
+    }
+
     // Enforce the caps AFTER the merge — see assertDataTableLimit.
     this.assertDataTableLimit(merged.dataTables);
     this.assertNotificationLimit(merged.notifications);
@@ -266,6 +298,8 @@ export class UserSettingsService {
     if (dto.profile?.displayName !== undefined) {
       await this.syncDisplayName(userId, dto.profile.displayName);
     }
+
+    this.emitGraphPreferencesChanged(userId, current.graph, validated.graph);
 
     this.logger.log(`Settings patched for user: ${userId}`);
 
@@ -348,6 +382,137 @@ export class UserSettingsService {
     }
 
     return Object.keys(merged).length > 0 ? merged : undefined;
+  }
+
+  /**
+   * Merge the `graph` namespace (#369, epic #346) per sub-object.
+   *
+   *   `patch === undefined`          -> keep what is stored
+   *   `patch === null`               -> delete the namespace (every default)
+   *   `patch.<sub> === null`         -> delete that sub-object (its defaults)
+   *   `patch.<sub>.<field> === null` -> that field back to its default
+   *
+   * A sub-object is stored WHOLE (every field present — see the namespace
+   * header), so a patch that creates one fills the fields it does not name
+   * from `GRAPH_PREFERENCE_DEFAULTS`. That is what makes the threshold-order
+   * rule checkable against the merged value, which is done here with an
+   * explicit 400: a patch naming only `autoLinkThreshold: 0.8` is valid on its
+   * own and invalid against a stored `newThreshold: 0.8`, and the ZodError
+   * `userSettingsSchema.parse` would otherwise throw escapes as a 500.
+   */
+  private mergeGraph(
+    current: GraphPreferencesValue | undefined,
+    patch: GraphPreferencesPatchValue | null | undefined,
+  ): GraphPreferencesValue | undefined {
+    if (patch === undefined) {
+      return current;
+    }
+
+    if (patch === null) {
+      return undefined;
+    }
+
+    const merged: GraphPreferencesValue = { ...(current ?? {}) };
+    const defaults = GRAPH_PREFERENCE_DEFAULTS;
+
+    if (patch.extraction === null) {
+      delete merged.extraction;
+    } else if (patch.extraction !== undefined) {
+      const base = merged.extraction ?? { ...defaults.extraction };
+      merged.extraction = {
+        autoExtract: pick(
+          patch.extraction.autoExtract,
+          base.autoExtract,
+          defaults.extraction.autoExtract,
+        ),
+      };
+    }
+
+    if (patch.resolution === null) {
+      delete merged.resolution;
+    } else if (patch.resolution !== undefined) {
+      const base = merged.resolution ?? { ...defaults.resolution };
+      const next = {
+        mode: pick(patch.resolution.mode, base.mode, defaults.resolution.mode),
+        autoLinkThreshold: pick(
+          patch.resolution.autoLinkThreshold,
+          base.autoLinkThreshold,
+          defaults.resolution.autoLinkThreshold,
+        ),
+        newThreshold: pick(
+          patch.resolution.newThreshold,
+          base.newThreshold,
+          defaults.resolution.newThreshold,
+        ),
+        adjudication: pick(
+          patch.resolution.adjudication,
+          base.adjudication,
+          defaults.resolution.adjudication,
+        ),
+      };
+      if (!graphThresholdsAreOrdered(next.newThreshold, next.autoLinkThreshold)) {
+        throw new BadRequestException(
+          `graph.resolution: ${GRAPH_THRESHOLD_ORDER_MESSAGE} (would store newThreshold ${next.newThreshold}, autoLinkThreshold ${next.autoLinkThreshold}).`,
+        );
+      }
+      merged.resolution = next;
+    }
+
+    if (patch.domains === null) {
+      delete merged.domains;
+    } else if (patch.domains !== undefined) {
+      const base = merged.domains ?? {
+        work: defaults.domains.work,
+        personal: false as const,
+      };
+      merged.domains = {
+        work: pick(patch.domains.work, base.work, defaults.domains.work),
+        // `personal` is `z.literal(false)` until #383; the patch schema has
+        // already refused `true`.
+        personal: false,
+      };
+    }
+
+    return Object.keys(merged).length > 0 ? merged : undefined;
+  }
+
+  /**
+   * Emit `graph.preferences_changed` when the EFFECTIVE graph preferences
+   * changed. Compared after resolution against the defaults, so writing a
+   * default explicitly over an absent value — or a PUT restating the same
+   * preferences — is not a change and emits nothing.
+   *
+   * Wrapped in try/catch because `EventEmitter2` dispatches synchronously: a
+   * throwing listener must never turn a committed settings write into an
+   * error response (the same guard `JobTerminalService.emitSettled` uses).
+   */
+  private emitGraphPreferencesChanged(
+    userId: string,
+    previousValue: GraphPreferencesValue | undefined,
+    nextValue: GraphPreferencesValue | undefined,
+  ): void {
+    const previous = resolveGraphPreferences(previousValue);
+    const next = resolveGraphPreferences(nextValue);
+    const changed = changedGraphSections(previous, next);
+    if (changed.length === 0) {
+      return;
+    }
+
+    const event: GraphPreferencesChangedEvent = {
+      userId,
+      changed,
+      previous,
+      next,
+    };
+    try {
+      this.events.emit(GRAPH_PREFERENCES_CHANGED_EVENT, event);
+    } catch (error) {
+      this.logger.error(
+        `A ${GRAPH_PREFERENCES_CHANGED_EVENT} listener threw for user ${userId}; ` +
+          `the settings write is unaffected: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**
@@ -674,4 +839,14 @@ export class UserSettingsService {
   async updateTheme(userId: string, theme: 'light' | 'dark' | 'system') {
     return this.patchSettings(userId, { theme });
   }
+}
+
+/**
+ * A patch field's value: `undefined` keeps `current`, `null` restores
+ * `fallback` (the default), anything else replaces.
+ */
+function pick<T>(patch: T | null | undefined, current: T, fallback: T): T {
+  if (patch === undefined) return current;
+  if (patch === null) return fallback;
+  return patch;
 }

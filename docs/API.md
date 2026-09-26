@@ -986,6 +986,34 @@ If-Match: 1
 - 400 Bad Request - Same `profile.imageSource`/`profile.imageObjectId` validation as `PUT /user-settings` above.
 - 409 Conflict - `If-Match` version mismatch.
 
+**The `graph` namespace (issue #369, epic #346):** per-user connected-knowledge
+preferences — docs/specs/ontology.md §7, §10, §13. **Absent means every
+default** (it is never seeded into a new row); a present sub-object always
+carries all of its fields.
+
+| Field | Values | Default |
+|---|---|---|
+| `graph.extraction.autoExtract` | boolean — queue an extraction proposal when a note is ready | `true` |
+| `graph.resolution.mode` | `precheck_confident` \| `review_all` | `precheck_confident` |
+| `graph.resolution.autoLinkThreshold` | 0.80–0.99 | `0.90` |
+| `graph.resolution.newThreshold` | 0.30–0.94, and at least 0.05 below `autoLinkThreshold` | `0.55` |
+| `graph.resolution.adjudication` | `llm` \| `off` — ask the AI (on the caller's own key) about uncertain matches | `llm` |
+| `graph.domains.work` | boolean — `core` is always on and never stored | `true` |
+| `graph.domains.personal` | `false` only, until #383 ships that domain | `false` |
+
+PATCH merges it **per sub-object**: send only what changed
+(`{ "graph": { "resolution": { "autoLinkThreshold": 0.93 } } }` — the other
+resolution fields are filled from the stored value or the defaults). `null`
+on a field restores its default, `null` on a sub-object
+(`{ "graph": { "resolution": null } }`) resets that sub-object, and
+`{ "graph": null }` resets everything. **400** for an out-of-range value,
+an unknown key, `personal: true`, or a threshold pair out of order — including
+one only the merge with the stored value reveals. A write whose resolved
+preferences actually change emits the in-process `graph.preferences_changed`
+event (no audit event, consistent with every other user-settings namespace).
+The `Knowledge graph` settings card (`/settings/knowledge-graph`, gated
+`graph:write`) is the UI over this namespace and #355's attribute definitions.
+
 ---
 
 #### GET /user-settings/profile-image
@@ -5364,8 +5392,8 @@ bad row in `details.invalidEvidence`, never a 404.
 
 Your **effective ontology**: the schema your graph is made of, and the one
 response every graph form is generated from. It is the `core` domain, plus
-every domain you have enabled (`work` by default — choosing your own domains
-arrives with a later issue), plus the attributes those domains mix into each
+every domain you have enabled (your `graph.domains` user-settings
+preference, issue #369 — `work` by default), plus the attributes those domains mix into each
 other's types (`work` adds a `title` to `Person`), plus your own attribute
 definitions — **deprecated ones included**, flagged `deprecated: true`, so
 values already stored under them stay readable. Relation endpoints and item
