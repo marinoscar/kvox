@@ -25,6 +25,8 @@ import { GraphOverviewController } from './layout/graph-overview.controller';
 import { GraphOverviewService } from './layout/graph-overview.service';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { GraphPreferencesService } from './preferences/graph-preferences.service';
+import { GraphRdfController } from './rdf/graph-rdf.controller';
+import { GraphRdfService } from './rdf/graph-rdf.service';
 import { KgPurgeService } from './purge/kg-purge.service';
 import { GraphEvidenceService } from './read/graph-evidence.service';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service';
@@ -97,6 +99,8 @@ import { GraphWriteService } from './write/graph-write.service';
     EntityDigestEnqueuer,
     EntityDigestHandler,
     EntityBriefService,
+    // #385 — the generated OWL/RDFS and SHACL artefacts (ETag + LRU).
+    GraphRdfService,
   ],
   controllers: [
     GraphController,
@@ -105,6 +109,7 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphReadController,
     GraphOverviewController,
     EntityBriefController,
+    GraphRdfController,
   ],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.
