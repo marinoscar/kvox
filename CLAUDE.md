@@ -1175,6 +1175,90 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   `note_templates.is_archived` (that column is shared by every viewer; hiding is per-user and
   must never affect anyone else's picker, built-in included). Hiding is a listing preference
   only — it never gates create/regenerate/preview reading the template by id.
+- `kg_entities` - The Connected Knowledge graph foundation's node table — Person, Organization,
+  Project, Meeting (issue #351, epic #344), `type` a plain ontology key (#350), never a Prisma
+  enum, so a new type costs zero migrations. `embedding vector(1536)` reuses `SearchEmbedding`'s
+  exact model/dimension contract rather than a second convention; `merged_into_id` self-relation
+  (SetNull) is set once §7's entity resolution merges this row into another. `owner_id` **Cascade**
+  — the same reasoning `notes.owner_id`/`transcripts.owner_id` establish, and there is deliberately
+  no `graph:read_any`. `pg_trgm` (new to this codebase — see `docs/specs/ontology.md` §10) backs
+  `kg_entities_label_trgm_idx`, and `kg_entities_embedding_hnsw_idx` mirrors
+  `search_embeddings_embedding_hnsw_idx`'s own hand-written discipline; both live only in
+  `migration.sql`, never in `schema.prisma`, the same intentional drift `jobs`/`transcript_speakers`
+  already establish.
+- `kg_entity_aliases` - A separate table, not an array column, so an alias carries its own
+  indexed exact/fuzzy lookup (`normalized`, produced by #355's `normalizeAlias()` — this
+  **replaces** `citext`, not installed and not needed) plus its own provenance (`source`).
+  `entity_id`/`owner_id` both Cascade. `kg_entity_aliases_normalized_trgm_idx` is hand-written
+  (`gin_trgm_ops`), alongside the label index above.
+- `kg_relations` - Every graph edge (§5.2's sixteen types, plain text `type`, never enum). A
+  relation's `from` side is **exactly one of** a resolved entity (`from_id`) or a diarized
+  speaker awaiting identification (`from_speaker_id`, a real FK into `transcript_speakers`,
+  Cascade) — enforced by `kg_relations_one_source_chk`, with `from_speaker_id` restricted to
+  `IDENTIFIED_AS` by `kg_relations_speaker_type_chk` and to one edge per speaker by the
+  hand-written partial unique `kg_relations_speaker_link_uniq_idx`. `valid tstzrange` (§5.4) is
+  `Unsupported` — Prisma cannot read or write it at all, so every write goes through
+  `$executeRaw` inside the same transaction as the `create`, and every read through `$queryRaw`
+  (`lower`/`upper`/`lower_inc`/`upper_inc`); `kg_relations_valid_gist_idx` is what makes the
+  containment/overlap queries this shape exists for actually fast. No inverse row is ever stored
+  (§5.2).
+- `kg_items` - `Commitment`/`Decision`/`Claim`/`PersonFact` in **one** table, distinguished by
+  `kind` (the one real Prisma enum among this graph's `type`/`kind` columns — see `kg_entities`
+  above for why the others stay plain text). `meeting_id` (SetNull, backs `CREATED_IN`/
+  `DECIDED_IN`), `owner_person_id`/`counterparty_id`/`subject_id` (Cascade) all point sideways
+  into `kg_entities`. `sensitivity` is non-NULL **iff** `kind = 'person_fact'`
+  (`kg_items_sensitivity_chk`); a `claim`/`person_fact` always carries a `subject_id`
+  (`kg_items_subject_required_chk`). `kg_items_live_statement_uniq_idx` (hand-written partial
+  unique, scoped to `accepted`/`edited` rows with a subject) is the §8 "known, skipped" dedup
+  guard — a verbatim restatement attaches evidence instead of inserting a duplicate.
+  `valid`/`embedding` mirror `kg_relations`/`kg_entities` exactly, including the `Unsupported`
+  raw-SQL contract and the hand-written GiST/HNSW indexes.
+- `kg_evidence` - The §5.3 citation contract. `subject_kind`/`subject_id` are **polymorphic, no
+  FK** — the identical `jobs.subject_type`/`subject_id` pattern. Every real anchor FK
+  (`transcript_id`/`segment_id`/`note_id`/`import_object_id`) is **SetNull, not Restrict** — a
+  deliberate divergence from most of this schema's sideways pointers: an evidence row is a
+  citation that must survive losing what it pointed to, and `quote` (NOT NULL) is precisely what
+  keeps it readable once every anchor has gone to NULL. There is deliberately **no CHECK**
+  requiring any anchor to be present. `char_start`/`char_end` are offsets into the cited **note
+  version body** when `note_id` is set, or into the cited **segment's text** when `segment_id` is
+  set — NULL means the whole segment; #363 relies on this exact convention.
+- `kg_mentions` - The coarse `MENTIONS` shortcut (§5.2), distinct from `kg_evidence`'s precise
+  per-claim citation — `entity_id`/`note_id`/`transcript_id` all **Cascade** (the opposite of
+  `kg_evidence` above: a mention has no meaning once either side is gone). Exactly one source
+  document per row (`kg_mentions_one_source_chk`).
+- `kg_proposals` - One row per extraction/import/resolution run, with the **complete** proposal
+  status/kind sets landed by this migration (issue #351) so #363/#364/#366/#387 never need
+  `ALTER TYPE … ADD VALUE`. Only `kind = 'extraction'` has a note;
+  `kg_proposals_note_source_chk` keys on `note_version`, **never** `note_id` — `note_id` is
+  `SetNull` and can only go NULL after the note is hard-deleted, while `note_version` never
+  changes, so the CHECK stays satisfied across that delete. Two hand-written partial uniques cap
+  concurrency: at most one `draft` and at most one `extracting` proposal per note, plus at most
+  one `extracting` **import** proposal per owner (scoped by `owner_id`, since an import has no
+  note). `commit_log` is #366's internal undo record, never serialized to clients. `job_id`
+  mirrors `TranscriptExport.jobId` (`@unique`, nullable, SetNull).
+- `kg_proposal_items` - One row per proposed entity/relation/item/`closing` edit.
+  `merge_into_id` (SetNull into `kg_entities`) is set **iff** `decision = 'merge_into'`
+  (`kg_proposal_items_merge_into_chk`) — losing the target clears the override rather than
+  blocking the delete. `payload` is always a JSON object (`kg_proposal_items_kind_payload_chk`).
+  `committed_ref_id` is polymorphic, no FK — the `kg_entities`/`kg_relations`/`kg_items` row this
+  item became once committed.
+- `kg_merges` - One row per merge (§7), with the full reversal payload. `survivor_id`/`merged_id`
+  both Cascade into `kg_entities` — a merge record has no meaning once either entity it names is
+  gone.
+- `kg_distinct_pairs` - Confirmed-not-the-same pairs (§7), `@@id([ownerId, aId, bId])`.
+  `kg_distinct_pairs_order_chk` (`a_id < b_id`, hand-written — Prisma cannot express a
+  cross-column CHECK) canonicalizes an unordered pair so `(a, b)` and `(b, a)` can never both
+  exist as two different rows for the same fact.
+- `kg_attribute_defs` - One row per user-defined attribute (§17.3): entity type, key, label,
+  kind, extractability, sensitivity. `@@unique([ownerId, entityType, key])`; `owner_id` Cascade,
+  the same reasoning every other `kg_*` table's `owner_id` follows.
+- `kg_entity_digests` - §9.2's precomputed entity brief — "precompute once, read cheaply."
+  `entity_id` is the **primary key**, not a separate `id`: exactly one digest per entity, always
+  replaced in place, never versioned.
+- `kg_entity_views` - `(user_id, entity_id, last_viewed_at)`, plain `@@unique([userId,
+  entityId])` — §9.2's "recently viewed" list. The **one** table in this graph keyed on
+  `user_id`, not `owner_id`: which entities a viewer has looked at is a per-viewer fact, not an
+  ownership fact.
 
 ## Navigation Destination Model
 
@@ -1908,14 +1992,15 @@ gate, retrieval, privacy) is [`docs/specs/ontology.md`](docs/specs/ontology.md).
 The same document also specifies a review UI for overriding extraction,
 per-task-and-per-user AI model selection, a read-only "Ask" agent over the
 graph, and an explorer/whole-graph visualization (§19–§22).
-**The ontology definition package is built (issue #350); nothing else
-described there is.** Its sources live at `packages/shared/src/ontology/`,
-compiled with `npm run build:ontology --workspace=@app/shared` into
-committed output at `packages/shared/ontology/` and consumed as
-`@app/shared/ontology`. Edit sources, rebuild, and commit the compiled
-output in the same commit as the source change — CI rebuilds and fails on
-any diff. There are still no `kg_*` tables, no `graph.*` jobs, no
-`/api/graph/*` routes, and no graph UI. Five rules a neighbouring file can
+**The ontology definition package (issue #350) and the `kg_*` tables (issue
+#351) are built; services arrive with #354–#357.** The ontology's sources live
+at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
+--workspace=@app/shared` into committed output at `packages/shared/ontology/`
+and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
+compiled output in the same commit as the source change — CI rebuilds and
+fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
+above. There are still no `graph.*` jobs, no `/api/graph/*` routes, and no
+graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the

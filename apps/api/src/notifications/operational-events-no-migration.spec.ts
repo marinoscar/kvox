@@ -128,6 +128,11 @@ const MIGRATIONS_AT_288 = [
   // restore brings the format back with the body. Note rendering, and equally
   // not about notifications.
   '20260923170000_add_note_version_body_format',
+  // #351 (epic #344): every kg_* table for the Connected Knowledge graph
+  // foundation (entities, relations, items, evidence, mentions, proposals,
+  // and their supporting tables). A graph data model, and equally not about
+  // notifications.
+  '20260926012548_add_knowledge_graph',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
