@@ -59,6 +59,7 @@ import {
   workerIds,
 } from './brief-queries';
 import { fuseRelatedSources, relatedKey, type GraphArmHit, type RelatedDoc, type TextArmHit } from './brief-related';
+import { relationAllowedInPrompt } from './brief-facts';
 import { buildBriefSections, exclusiveRelationTypes } from './brief-sections';
 import {
   BRIEF_ENTRY_EVIDENCE_IDS,
@@ -68,6 +69,7 @@ import {
 } from './dto/entity-brief.dto';
 import { readDigestStatements } from './citation-validation';
 import { EntityDigestEnqueuer } from './entity-digest.enqueuer';
+import { DIGEST_INCLUDE_PERSONAL_FACTS } from './entity-digest.handler';
 import { EntityViewService } from './entity-view.service';
 
 /** Without `since`, a view or a digest: this many days before `asOf`. */
@@ -135,6 +137,13 @@ export class EntityBriefService {
     ]);
     const exclusiveTypes = exclusiveRelationTypes(schema.relationTypes);
     const exclusiveList = [...exclusiveTypes];
+    // Staleness asks what the DIGEST would have to account for, so it reads the
+    // digest's own relation set (#383: never a personal-sensitivity type).
+    const digestExclusiveList = [
+      ...exclusiveRelationTypes(
+        schema.relationTypes.filter((r) => relationAllowedInPrompt(r, DIGEST_INCLUDE_PERSONAL_FACTS)),
+      ),
+    ];
 
     // -- The window ----------------------------------------------------------
     let since: Date;
@@ -164,7 +173,7 @@ export class EntityBriefService {
         const [items, relations, staleness] = await Promise.all([
           briefItems(tx, ownerId, entityId, workers, asOf),
           peopleChangeRelations(tx, ownerId, [entityId, ...persons], exclusiveList, since, asOf),
-          asOfSet ? Promise.resolve(null) : newestChange(tx, ownerId, entityId, exclusiveList, now),
+          asOfSet ? Promise.resolve(null) : newestChange(tx, ownerId, entityId, digestExclusiveList, now),
         ]);
         const evidence = await evidenceIdsFor(
           tx,
