@@ -8,7 +8,8 @@
 // fails when the committed output is stale.
 // =============================================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ONTOLOGY = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
+exports.ONTOLOGY = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
+exports.computeEffectiveSchema = computeEffectiveSchema;
 var constants_js_1 = require("./constants.js");
 Object.defineProperty(exports, "ATTRIBUTE_KINDS", { enumerable: true, get: function () { return constants_js_1.ATTRIBUTE_KINDS; } });
 Object.defineProperty(exports, "DEFAULT_ENABLED_DOMAINS", { enumerable: true, get: function () { return constants_js_1.DEFAULT_ENABLED_DOMAINS; } });
@@ -30,6 +31,8 @@ var shipped_keys_js_1 = require("./shipped-keys.js");
 Object.defineProperty(exports, "SHIPPED_KEYS", { enumerable: true, get: function () { return shipped_keys_js_1.SHIPPED_KEYS; } });
 var registry_js_1 = require("./registry.js");
 Object.defineProperty(exports, "buildOntologyRegistry", { enumerable: true, get: function () { return registry_js_1.buildOntologyRegistry; } });
+var effective_schema_js_1 = require("./effective-schema.js");
+Object.defineProperty(exports, "toEffectiveSchemaPayload", { enumerable: true, get: function () { return effective_schema_js_1.toEffectiveSchemaPayload; } });
 // -----------------------------------------------------------------------------
 // The domain modules, listed EXPLICITLY — never self-registered by import side
 // effect (registration order under Vite pre-bundling vs Jest `require` is not
@@ -39,4 +42,13 @@ const core_js_1 = require("./domains/core.js");
 const work_js_1 = require("./domains/work.js");
 const registry_js_2 = require("./registry.js");
 const version_js_2 = require("./version.js");
+const effective_schema_js_2 = require("./effective-schema.js");
 exports.ONTOLOGY = (0, registry_js_2.buildOntologyRegistry)([core_js_1.coreDomain, work_js_1.workDomain], version_js_2.ONTOLOGY_VERSION);
+/**
+ * One user's effective schema: `core` plus their enabled domains, mixins and
+ * their own attribute defs. `registry` defaults to `ONTOLOGY`. (Defined here
+ * rather than in effective-schema.ts so that file never imports this one.)
+ */
+function computeEffectiveSchema(input) {
+    return (0, effective_schema_js_2.computeEffectiveSchemaFor)(input.registry ?? exports.ONTOLOGY, input);
+}

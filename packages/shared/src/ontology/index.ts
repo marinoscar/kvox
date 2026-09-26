@@ -44,6 +44,19 @@ export type { OntologyChangelogEntry } from './version.js';
 export { SHIPPED_KEYS } from './shipped-keys.js';
 export { buildOntologyRegistry } from './registry.js';
 export type { OntologyRegistry } from './registry.js';
+export { toEffectiveSchemaPayload } from './effective-schema.js';
+export type {
+  ComputeEffectiveSchemaInput,
+  EffectiveAttribute,
+  EffectiveAttributePayload,
+  EffectiveDomainPayload,
+  EffectiveEntityType,
+  EffectiveEntityTypePayload,
+  EffectiveRelationType,
+  EffectiveRelationTypePayload,
+  EffectiveSchema,
+  EffectiveSchemaPayload,
+} from './effective-schema.js';
 
 // -----------------------------------------------------------------------------
 // The domain modules, listed EXPLICITLY — never self-registered by import side
@@ -56,5 +69,16 @@ import { workDomain } from './domains/work.js';
 import { buildOntologyRegistry } from './registry.js';
 import type { OntologyRegistry } from './registry.js';
 import { ONTOLOGY_VERSION } from './version.js';
+import { computeEffectiveSchemaFor } from './effective-schema.js';
+import type { ComputeEffectiveSchemaInput, EffectiveSchema } from './effective-schema.js';
 
 export const ONTOLOGY: OntologyRegistry = buildOntologyRegistry([coreDomain, workDomain], ONTOLOGY_VERSION);
+
+/**
+ * One user's effective schema: `core` plus their enabled domains, mixins and
+ * their own attribute defs. `registry` defaults to `ONTOLOGY`. (Defined here
+ * rather than in effective-schema.ts so that file never imports this one.)
+ */
+export function computeEffectiveSchema(input: ComputeEffectiveSchemaInput): EffectiveSchema {
+  return computeEffectiveSchemaFor(input.registry ?? ONTOLOGY, input);
+}
