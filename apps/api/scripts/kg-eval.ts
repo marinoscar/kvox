@@ -128,6 +128,15 @@ async function run(argv: string[], io: Io): Promise<number> {
     return EXIT.usage;
   }
 
+  // The output guard runs before anything is loaded: a run over real data may
+  // never write inside the repository, not even into the git-ignored scratch dir.
+  let runOutDir: string | null = null;
+  if (runnerName !== undefined) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const outArg = str('out') ?? (realDir ? join(realDir, 'runs', stamp) : join(syntheticRunsDir(), 'runs', stamp));
+    runOutDir = assertOutsideRepo(outArg, { allowSyntheticRunsDir: realDir === null });
+  }
+
   const all = loadGoldenSet(realDir ?? GOLDEN_MEETINGS_DIR);
   const only = str('only')
     ?.split(',')
@@ -147,9 +156,7 @@ async function run(argv: string[], io: Io): Promise<number> {
     const apiKey = io.env[KG_EVAL_API_KEY_ENV];
     if (!apiKey) throw new UsageError(`--run reads its API key from ${KG_EVAL_API_KEY_ENV}; it is not set`);
 
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const outArg = str('out') ?? (realDir ? join(realDir, 'runs', stamp) : join(syntheticRunsDir(), 'runs', stamp));
-    const outDir = assertOutsideRepo(outArg, { allowSyntheticRunsDir: realDir === null });
+    const outDir = runOutDir as string;
     mkdirSync(outDir, { recursive: true });
 
     const runner = await factory();
