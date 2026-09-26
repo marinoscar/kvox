@@ -155,6 +155,12 @@ const DRILL_DOWN_ROUTES: {
     title: 'Knowledge',
     upPath: () => '/graph',
   },
+  // The explorer (#374). Up is the index it is reached from.
+  {
+    pattern: /^\/graph\/explore\/?$/,
+    title: 'Explore',
+    upPath: () => '/graph',
+  },
   {
     pattern: /^\/graph\/?$/,
     title: 'Knowledge',
