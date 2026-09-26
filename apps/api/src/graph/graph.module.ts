@@ -4,6 +4,8 @@ import { JobsModule } from '../jobs/jobs.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
+import { GraphController } from './graph.controller';
+import { GraphOntologyService } from './ontology/graph-ontology.service';
 
 // =============================================================================
 // GraphModule (#354, epic #344, docs/specs/ontology.md)
@@ -23,8 +25,8 @@ import { GraphAccessService } from './access/graph-access.service';
 
 @Module({
   imports: [PrismaModule, JobsModule, TranscriptsModule],
-  providers: [GraphAccessService],
-  controllers: [],
-  exports: [GraphAccessService],
+  providers: [GraphAccessService, GraphOntologyService],
+  controllers: [GraphController],
+  exports: [GraphAccessService, GraphOntologyService],
 })
 export class GraphModule {}
