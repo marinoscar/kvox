@@ -5350,8 +5350,9 @@ entities as distinct (issue #364) — the read layer — the entity index, an en
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
 (issue #370) — an entity's **brief**, "what's the latest on …?" in one
 call (issue #372) — the whole-graph overview, read from a precomputed
-snapshot, plus its manual refresh (issue #371) — and reviewing, committing and
-reverting proposals (issue #366); all follow the access posture below.
+snapshot, plus its manual refresh (issue #371) — reviewing, committing and
+reverting proposals (issue #366) — and the ontology itself as OWL/RDFS and
+SHACL Turtle (issue #385); all follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
@@ -5487,6 +5488,61 @@ another enabled domain; `domain` names it) or `user` (one of your own
 definitions; `domain` is `null` and `attributeDefId` is its id). The example
 is abridged; the published OpenAPI schema (`GraphOntologyDto`) is the full
 contract.
+
+**Errors:** `401` unauthenticated · `403` without `graph:read`.
+
+#### GET /graph/ontology.ttl and GET /graph/ontology.shacl.ttl
+
+The ontology as standard RDF, in Turtle (issue #385,
+[`docs/specs/ontology.md`](specs/ontology.md) §18.1–§18.2): the vocabulary
+(`ontology.ttl`, OWL/RDFS) and the constraints graph data satisfies
+(`ontology.shacl.ttl`, SHACL). Both are **generated** from the ontology
+definition file on request — never hand-maintained — over **every** domain,
+not just the ones you enabled, so they describe every row that can exist; plus
+your own attribute definitions as `kv:attr/<definition id>` (deprecated ones
+flagged `owl:deprecated`). **Vocabulary only, never row data.** A `sensitive`
+attribute definition appears in neither (it is never exported).
+
+- `ontology.ttl` — `owl:versionInfo` is the ontology version; types are
+  `owl:Class`es, attributes and relations `owl:DatatypeProperty`/
+  `owl:ObjectProperty`s, aligned to Schema.org/PROV-O with
+  `rdfs:subClassOf`/`rdfs:subPropertyOf`. `IDENTIFIED_AS`, `MENTIONS` and
+  `SUPPORTED_BY` are not properties.
+- `ontology.shacl.ttl` — one **closed** `sh:NodeShape` per type (an undeclared
+  property is a violation), `required` → `sh:minCount 1`, selects → `sh:in`,
+  relation endpoints → `sh:class`, URLs → `sh:pattern`, at least one
+  `prov:wasDerivedFrom` on every node, and `kv:AssertionShape` for reified
+  temporal edges.
+
+**Requires:** `graph:read`.
+
+**Response:** `200`, `Content-Type: text/turtle; charset=utf-8`, the Turtle
+document itself — **not** the `{ data }` envelope:
+
+```turtle
+@prefix kv: <https://<app slug>.app/ns#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+
+kv:
+    a owl:Ontology ;
+    rdfs:label "<app name> ontology" ;
+    owl:versionInfo "1.0.1" .
+
+kv:Person
+    a owl:Class ;
+    rdfs:comment "A human being: …" ;
+    rdfs:label "Person" ;
+    rdfs:subClassOf schema:Person .
+```
+
+**Caching.** Both carry a weak `ETag` —
+`W/"sha256(<ontology version>:<fingerprint of your attribute definitions>)"` —
+so it changes exactly when the ontology version changes or you add, rename or
+deprecate an attribute definition. A request whose `If-None-Match` matches is
+answered **`304` with no body**. `Cache-Control: private, max-age=0,
+must-revalidate`.
 
 **Errors:** `401` unauthenticated · `403` without `graph:read`.
 

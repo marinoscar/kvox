@@ -54,6 +54,13 @@ export interface AttributeSpec {
   /** Default: the owning type's `sensitivityDefault`. */
   sensitivity?: Sensitivity;
   options?: AttributeOptions;
+  /**
+   * A standard-vocabulary property this attribute is (§18.1), as a CURIE with
+   * a prefix from `RDF_PREFIXES` — e.g. `schema:jobTitle`. When set, the RDF
+   * generators use it as the attribute's IRI instead of `kv:<Type>.<key>`.
+   * Metadata only: it never changes what is stored or validated.
+   */
+  alignment?: string;
   deprecated?: Deprecation;
 }
 

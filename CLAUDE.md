@@ -900,6 +900,15 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
   generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
   is not an AI call
+- `GET /api/graph/ontology.ttl` - The ontology as OWL/RDFS Turtle (issue #385), generated from the
+  definition file over **every** domain plus the caller's own non-`sensitive` attribute defs
+  (`kv:attr/<id>`); raw `text/turtle`, never the `{ data }` envelope. Weak ETag over
+  `ONTOLOGY_VERSION` + an attribute-def fingerprint, 304 on `If-None-Match`, 500-entry LRU.
+  Written by the hand-written `graph/rdf/turtle-writer.ts` — no RDF library in the request path
+  (spec §18.4) (`graph:read`)
+- `GET /api/graph/ontology.shacl.ttl` - The same, as SHACL shapes: closed `sh:NodeShape` per type,
+  `prov:wasDerivedFrom sh:minCount 1` on every node, `kv:AssertionShape` for temporal edges; every
+  IRI from `graph/rdf/iris.ts`, which #386's export must use too (`graph:read`)
 - `PATCH /api/graph/entities/{id}` - Manual entity edit (#355, §8's second named exception):
   `label` (the old label is **kept as an alias**), `props` merge (`null` clears a key; the merged
   result must validate), `addAliases`/`removeAliasIds`. `type` is a 400 — a type changes only

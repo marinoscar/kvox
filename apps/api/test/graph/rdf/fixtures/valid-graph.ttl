@@ -1,0 +1,141 @@
+# A hand-written graph that CONFORMS to the generated SHACL shapes (#385).
+#
+# Written against the fixture namespace `https://fixture.app/ns#` (the
+# generators take the namespace as a parameter; the tests pass the same one).
+# It exercises every node shape the ontology ships: entity types, item types,
+# an aligned mixin attribute, a URL, a select, a list, dates, item-column
+# relations, a relation narrowed by allowedPairs, a caller-defined attribute,
+# and reified temporal edges (kv:Assertion) including HAS_ROLE's required title.
+#
+# Every node cites at least one source (prov:wasDerivedFrom) — the no-orphans rule.
+
+@prefix kv: <https://fixture.app/ns#> .
+@prefix ent: <https://fixture.app/ns#entity/> .
+@prefix itm: <https://fixture.app/ns#item/> .
+@prefix rel: <https://fixture.app/ns#relation/> .
+@prefix seg: <https://fixture.app/ns#segment/> .
+@prefix attr: <https://fixture.app/ns#attr/> .
+@prefix ev: <https://fixture.app/ns#evidence/> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# --- Entities ----------------------------------------------------------------
+
+ent:a0000000-0000-4000-8000-000000000001
+    a kv:Person, schema:Person ;
+    rdfs:label "Sarah Chen" ;
+    schema:jobTitle "Staff Engineer" ;
+    kv:WORKS_FOR ent:a0000000-0000-4000-8000-000000000002 ;
+    schema:worksFor ent:a0000000-0000-4000-8000-000000000002 ;
+    kv:HAS_ROLE ent:a0000000-0000-4000-8000-000000000002 ;
+    kv:REPORTS_TO ent:a0000000-0000-4000-8000-000000000005 ;
+    kv:ATTENDED ent:a0000000-0000-4000-8000-000000000003 ;
+    kv:reviewStatus "accepted" ;
+    kv:confidence "0.92"^^xsd:decimal ;
+    kv:ontologyVersion "1.0.1" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+ent:a0000000-0000-4000-8000-000000000005
+    a kv:Person ;
+    rdfs:label "Marcus Webb" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+ent:a0000000-0000-4000-8000-000000000002
+    a kv:Organization ;
+    rdfs:label "Acme" ;
+    schema:url "https://acme.example"^^xsd:anyURI ;
+    attr:11111111-1111-4111-8111-111111111111 "gold" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000002 .
+
+ent:a0000000-0000-4000-8000-000000000003
+    a kv:Meeting ;
+    rdfs:label "Pilot sync" ;
+    kv:Meeting.dateSource "stated" ;
+    kv:Meeting.topics "budget", "hiring" ;
+    kv:DISCUSSED ent:a0000000-0000-4000-8000-000000000004 ;
+    kv:PART_OF ent:a0000000-0000-4000-8000-000000000004 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+ent:a0000000-0000-4000-8000-000000000004
+    a kv:Project ;
+    rdfs:label "Q2 pilot" ;
+    kv:Project.status "active" ;
+    kv:Project.startDate "2026-04-01"^^xsd:date ;
+    kv:PART_OF ent:a0000000-0000-4000-8000-000000000002 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000002 .
+
+# --- Items -------------------------------------------------------------------
+
+itm:c0000000-0000-4000-8000-000000000001
+    a kv:Commitment ;
+    rdfs:label "Send the updated proposal by Friday" ;
+    kv:status "open" ;
+    kv:ASSIGNED_TO ent:a0000000-0000-4000-8000-000000000001 ;
+    kv:OWED_TO ent:a0000000-0000-4000-8000-000000000002 ;
+    kv:CREATED_IN ent:a0000000-0000-4000-8000-000000000003 ;
+    kv:ABOUT ent:a0000000-0000-4000-8000-000000000004 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+itm:c0000000-0000-4000-8000-000000000002
+    a kv:Decision ;
+    rdfs:label "Run the pilot in-house" ;
+    kv:status "active" ;
+    kv:Decision.rejectedOption "Outsource it" ;
+    kv:DECIDED_IN ent:a0000000-0000-4000-8000-000000000003 ;
+    kv:SUPERSEDES itm:c0000000-0000-4000-8000-000000000005 ;
+    prov:wasRevisionOf itm:c0000000-0000-4000-8000-000000000005 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000002 .
+
+itm:c0000000-0000-4000-8000-000000000005
+    a kv:Decision ;
+    rdfs:label "Outsource the pilot" ;
+    kv:status "superseded" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+itm:c0000000-0000-4000-8000-000000000003
+    a kv:Claim ;
+    rdfs:label "The pilot budget was cut 20%" ;
+    kv:status "active" ;
+    kv:ABOUT ent:a0000000-0000-4000-8000-000000000004 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000002 .
+
+itm:c0000000-0000-4000-8000-000000000004
+    a kv:PersonFact ;
+    rdfs:label "Prefers written updates" ;
+    kv:status "active" ;
+    kv:ABOUT ent:a0000000-0000-4000-8000-000000000001 ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+# --- Reified temporal edges --------------------------------------------------
+
+rel:d0000000-0000-4000-8000-000000000001
+    a kv:Assertion ;
+    rdf:subject ent:a0000000-0000-4000-8000-000000000001 ;
+    rdf:predicate kv:WORKS_FOR ;
+    rdf:object ent:a0000000-0000-4000-8000-000000000002 ;
+    prov:startedAtTime "2019-01-01T00:00:00Z"^^xsd:dateTime ;
+    kv:validPrecision "year" ;
+    kv:reviewStatus "accepted" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
+
+rel:d0000000-0000-4000-8000-000000000002
+    a kv:Assertion ;
+    rdf:subject ent:a0000000-0000-4000-8000-000000000001 ;
+    rdf:predicate kv:HAS_ROLE ;
+    rdf:object ent:a0000000-0000-4000-8000-000000000002 ;
+    kv:HAS_ROLE.title "Staff Engineer" ;
+    prov:startedAtTime "2024-03-01T00:00:00Z"^^xsd:dateTime ;
+    prov:endedAtTime "2026-06-30T00:00:00Z"^^xsd:dateTime ;
+    kv:validPrecision "month" ;
+    prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000002 .
+
+# --- Evidence (no shape targets these; they are what the shapes point at) ----
+
+ev:e0000000-0000-4000-8000-000000000001
+    a oa:Annotation ;
+    oa:hasBody ent:a0000000-0000-4000-8000-000000000001 ;
+    oa:hasTarget seg:b0000000-0000-4000-8000-000000000001 .

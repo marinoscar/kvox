@@ -16,5 +16,12 @@ exports.CHANGELOG = Object.freeze([
         date: '2026-09-26',
         changes: Object.freeze(['initial core + work']),
     }),
+    Object.freeze({
+        version: '1.0.1',
+        date: '2026-09-26',
+        changes: Object.freeze([
+            'attribute alignment metadata: Person.title -> schema:jobTitle, Organization.website -> schema:url (#385)',
+        ]),
+    }),
 ]);
-exports.ONTOLOGY_VERSION = '1.0.0';
+exports.ONTOLOGY_VERSION = '1.0.1';

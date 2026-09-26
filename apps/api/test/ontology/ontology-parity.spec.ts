@@ -8,6 +8,8 @@ import {
   CHANGELOG,
   computeEffectiveSchema,
   DEFAULT_ENABLED_DOMAINS,
+  RDF_PREFIXES,
+  expandCurie,
 } from '@app/shared/ontology';
 import type { EntityTypeSpec, RelationTypeSpec } from '@app/shared/ontology';
 
@@ -23,8 +25,8 @@ import type { EntityTypeSpec, RelationTypeSpec } from '@app/shared/ontology';
 // broken a rule should be able to find the fix from the assertion message
 // alone, without re-deriving which rule failed.
 //
-// The ten rules are numbered exactly as `docs/specs/ontology.md` / issue #350
-// numbers them; one `it` per rule.
+// The first ten rules are numbered exactly as `docs/specs/ontology.md` / issue #350
+// numbers them; rule 11 (alignment prefixes) is issue #385's. One `it` per rule.
 // =============================================================================
 
 const MIN_DESCRIPTION_LENGTH = 20;
@@ -325,6 +327,34 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
           }
         }
       }
+    }
+
+    expect(failures).toEqual([]);
+  });
+
+  it('rule 11: every alignment (type, relation and attribute) is a CURIE whose prefix is a known RDF_PREFIXES entry', () => {
+    const failures: string[] = [];
+    const known = Object.keys(RDF_PREFIXES).join(', ');
+    const check = (where: string, alignment: string | undefined) => {
+      if (alignment === undefined) return;
+      if (expandCurie(alignment) === undefined) {
+        failures.push(`rule 11: ${where} alignment '${alignment}' is not a CURIE with a known prefix (${known}) — see packages/shared/src/ontology/rdf-namespaces.ts`);
+      }
+    };
+    const checkAttrs = (owner: string, attrs: Record<string, { alignment?: string }>) => {
+      for (const [key, spec] of Object.entries(attrs)) check(`attribute '${owner}.${key}'`, spec.alignment);
+    };
+
+    for (const t of entityTypes) {
+      check(`entity type '${t.key}'`, t.alignment);
+      checkAttrs(t.key, t.attributes);
+    }
+    for (const r of relationTypes) {
+      check(`relation type '${r.key}'`, r.alignment);
+      checkAttrs(r.key, r.props);
+    }
+    for (const d of ONTOLOGY.domains()) {
+      for (const mixin of d.mixins) checkAttrs(mixin.entityType, mixin.attributes);
     }
 
     expect(failures).toEqual([]);

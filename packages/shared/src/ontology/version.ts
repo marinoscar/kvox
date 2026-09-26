@@ -21,6 +21,13 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
     date: '2026-09-26',
     changes: Object.freeze(['initial core + work']) as string[],
   }),
+  Object.freeze({
+    version: '1.0.1',
+    date: '2026-09-26',
+    changes: Object.freeze([
+      'attribute alignment metadata: Person.title -> schema:jobTitle, Organization.website -> schema:url (#385)',
+    ]) as string[],
+  }),
 ]);
 
-export const ONTOLOGY_VERSION: string = '1.0.0';
+export const ONTOLOGY_VERSION: string = '1.0.1';

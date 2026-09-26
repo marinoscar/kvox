@@ -1,0 +1,300 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`generateOwl parses with n3 and matches the snapshot 1`] = `
+"@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix kv: <https://fixture.app/ns#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+kv:
+    a owl:Ontology ;
+    rdfs:label "<APP_NAME> ontology" ;
+    owl:versionInfo "1.0.1" .
+
+kv:ABOUT
+    a owl:ObjectProperty ;
+    rdfs:comment "The entity an item (a claim, decision, commitment or person fact) is about: its subject." ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact )
+    ] ;
+    rdfs:label "About" ;
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Meeting kv:Organization kv:Person kv:Project )
+    ] .
+
+kv:ASSIGNED_TO
+    a owl:ObjectProperty ;
+    rdfs:comment "The person who owns a commitment and is expected to carry it out." ;
+    rdfs:domain kv:Commitment ;
+    rdfs:label "Assigned to" ;
+    rdfs:range kv:Person .
+
+kv:ATTENDED
+    a owl:ObjectProperty ;
+    rdfs:comment "A person took part in a meeting." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Attended" ;
+    rdfs:range kv:Meeting ;
+    rdfs:subPropertyOf schema:attendee .
+
+kv:Assertion
+    a owl:Class ;
+    rdfs:comment "A temporal relation, reified: rdf:subject/rdf:predicate/rdf:object name the edge and prov:startedAtTime/prov:endedAtTime its validity range." ;
+    rdfs:label "Assertion" ;
+    rdfs:subClassOf rdf:Statement .
+
+kv:CREATED_IN
+    a owl:ObjectProperty ;
+    rdfs:comment "The meeting in which a commitment was made." ;
+    rdfs:domain kv:Commitment ;
+    rdfs:label "Created in" ;
+    rdfs:range kv:Meeting .
+
+kv:Claim
+    a owl:Class ;
+    rdfs:comment "A dated statement of fact about an entity that is neither a decision nor a commitment, e.g. \\"the budget was cut 20%\\" or \\"the pilot moved to Q2\\"." ;
+    rdfs:label "Claim" .
+
+kv:Commitment
+    a owl:Class ;
+    rdfs:comment "A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. \\"Sarah will send the updated proposal by Friday\\"." ;
+    rdfs:label "Commitment" .
+
+kv:DECIDED_IN
+    a owl:ObjectProperty ;
+    rdfs:comment "The meeting in which a decision was made." ;
+    rdfs:domain kv:Decision ;
+    rdfs:label "Decided in" ;
+    rdfs:range kv:Meeting .
+
+kv:DISCUSSED
+    a owl:ObjectProperty ;
+    rdfs:comment "A meeting discussed a project as a substantive topic." ;
+    rdfs:domain kv:Meeting ;
+    rdfs:label "Discussed" ;
+    rdfs:range kv:Project .
+
+kv:Decision
+    a owl:Class ;
+    rdfs:comment "A choice that was made: what was chosen and, when the source states it, the option that was rejected." ;
+    rdfs:label "Decision" .
+
+kv:Decision.rejectedOption
+    a owl:DatatypeProperty ;
+    rdfs:comment "The option that was considered and rejected, only if the source states it." ;
+    rdfs:domain kv:Decision ;
+    rdfs:label "Rejected option" ;
+    rdfs:range xsd:string .
+
+kv:HAS_ROLE
+    a owl:ObjectProperty ;
+    rdfs:comment "A person holds a titled role at an organization for a period of time." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Has role" ;
+    rdfs:range kv:Organization ;
+    rdfs:subPropertyOf schema:hasOccupation .
+
+kv:HAS_ROLE.title
+    a owl:DatatypeProperty ;
+    rdfs:comment "The job title the person holds in this role, e.g. \\"Staff Engineer\\"." ;
+    rdfs:domain kv:Assertion ;
+    rdfs:label "Title" ;
+    rdfs:range xsd:string .
+
+kv:Meeting
+    a owl:Class ;
+    rdfs:comment "The event anchor: a dated meeting or conversation, its attendees, and the transcript and/or note it was drawn from." ;
+    rdfs:label "Meeting" ;
+    rdfs:subClassOf schema:Event .
+
+kv:Meeting.dateSource
+    a owl:DatatypeProperty ;
+    rdfs:comment "Where the meeting's date came from: stated in the source, or the note's creation date." ;
+    rdfs:domain kv:Meeting ;
+    rdfs:label "Date source" ;
+    rdfs:range xsd:string .
+
+kv:Meeting.noteId
+    a owl:DatatypeProperty ;
+    rdfs:comment "The id of the note this meeting was drawn from, set by the system." ;
+    rdfs:domain kv:Meeting ;
+    rdfs:label "Note" ;
+    rdfs:range xsd:string .
+
+kv:Meeting.topics
+    a owl:DatatypeProperty ;
+    rdfs:comment "Free-text subjects discussed in the meeting that are not Projects of their own." ;
+    rdfs:domain kv:Meeting ;
+    rdfs:label "Topics" ;
+    rdfs:range xsd:string .
+
+kv:Meeting.transcriptId
+    a owl:DatatypeProperty ;
+    rdfs:comment "The id of the transcript this meeting was drawn from, set by the system." ;
+    rdfs:domain kv:Meeting ;
+    rdfs:label "Transcript" ;
+    rdfs:range xsd:string .
+
+kv:OWED_TO
+    a owl:ObjectProperty ;
+    rdfs:comment "The person or organization a commitment is owed to, when one is stated." ;
+    rdfs:domain kv:Commitment ;
+    rdfs:label "Owed to" ;
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Organization kv:Person )
+    ] .
+
+kv:Organization
+    a owl:Class ;
+    rdfs:comment "A company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision." ;
+    rdfs:label "Organization" ;
+    rdfs:subClassOf schema:Organization .
+
+kv:PART_OF
+    a owl:ObjectProperty ;
+    rdfs:comment "A project belongs to an organization, or a meeting belongs to a project." ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf ( kv:Meeting kv:Project )
+    ] ;
+    rdfs:label "Part of" ;
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Organization kv:Project )
+    ] .
+
+kv:Person
+    a owl:Class ;
+    rdfs:comment "A human being: one specific, individual person named or unambiguously identified in the source." ;
+    rdfs:label "Person" ;
+    rdfs:subClassOf schema:Person .
+
+kv:PersonFact
+    a owl:Class ;
+    rdfs:comment "A statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style." ;
+    rdfs:label "Person fact" .
+
+kv:Project
+    a owl:Class ;
+    rdfs:comment "A named effort with a start and an expected (even if fuzzy) end that meetings, decisions and commitments attach to, e.g. \\"Q2 pilot\\" or \\"the vendor migration\\"." ;
+    rdfs:label "Project" ;
+    rdfs:subClassOf schema:Project .
+
+kv:Project.endDate
+    a owl:DatatypeProperty ;
+    rdfs:comment "The date the project ended or is expected to end, if stated." ;
+    rdfs:domain kv:Project ;
+    rdfs:label "End date" ;
+    rdfs:range xsd:date .
+
+kv:Project.startDate
+    a owl:DatatypeProperty ;
+    rdfs:comment "The date the project started or is planned to start, if stated." ;
+    rdfs:domain kv:Project ;
+    rdfs:label "Start date" ;
+    rdfs:range xsd:date .
+
+kv:Project.status
+    a owl:DatatypeProperty ;
+    rdfs:comment "Where the project stands, only if the source says so." ;
+    rdfs:domain kv:Project ;
+    rdfs:label "Status" ;
+    rdfs:range xsd:string .
+
+kv:REPORTS_TO
+    a owl:ObjectProperty ;
+    rdfs:comment "A person reports to another person, their manager, for a period of time." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Reports to" ;
+    rdfs:range kv:Person .
+
+kv:SUPERSEDES
+    a owl:ObjectProperty ;
+    rdfs:comment "A newer decision, claim or commitment that replaces an older one of the same type." ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision )
+    ] ;
+    rdfs:label "Supersedes" ;
+    rdfs:range [
+        a owl:Class ;
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision )
+    ] ;
+    rdfs:subPropertyOf prov:wasRevisionOf .
+
+kv:WORKS_FOR
+    a owl:ObjectProperty ;
+    rdfs:comment "A person is employed by, or works on behalf of, an organization." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Works for" ;
+    rdfs:range kv:Organization ;
+    rdfs:subPropertyOf schema:worksFor .
+
+<https://fixture.app/ns#attr/11111111-1111-4111-8111-111111111111>
+    a owl:DatatypeProperty ;
+    rdfs:domain kv:Organization ;
+    rdfs:label "Tier" ;
+    rdfs:range xsd:string .
+
+<https://fixture.app/ns#attr/22222222-2222-4222-8222-222222222222>
+    a owl:DatatypeProperty ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Old nickname" ;
+    rdfs:range xsd:string ;
+    owl:deprecated true .
+
+kv:confidence
+    a owl:AnnotationProperty ;
+    rdfs:comment "The extraction confidence recorded for a graph row, between 0 and 1." ;
+    rdfs:label "Confidence" .
+
+kv:ontologyVersion
+    a owl:AnnotationProperty ;
+    rdfs:comment "The ontology version a graph row was written against." ;
+    rdfs:label "Ontology version" .
+
+kv:reviewStatus
+    a owl:AnnotationProperty ;
+    rdfs:comment "Where a graph row stands in the review lifecycle (accepted or edited, for anything exported)." ;
+    rdfs:label "Review status" .
+
+kv:status
+    a owl:DatatypeProperty ;
+    rdfs:comment "An item's lifecycle status: one of the statuses its type declares." ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact )
+    ] ;
+    rdfs:label "Status" ;
+    rdfs:range xsd:string .
+
+kv:validPrecision
+    a owl:AnnotationProperty ;
+    rdfs:comment "How exact the source was about a validity range: day, month, year or unknown." ;
+    rdfs:label "Valid precision" .
+
+schema:jobTitle
+    a owl:DatatypeProperty ;
+    rdfs:comment "The person's job title, only if the source states it." ;
+    rdfs:label "Job title" ;
+    schema:domainIncludes kv:Person ;
+    schema:rangeIncludes xsd:string .
+
+schema:url
+    a owl:DatatypeProperty ;
+    rdfs:comment "The organization's website address, only if the source states it explicitly." ;
+    rdfs:label "Website" ;
+    schema:domainIncludes kv:Organization ;
+    schema:rangeIncludes xsd:anyURI .
+"
+`;

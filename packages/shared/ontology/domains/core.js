@@ -62,6 +62,7 @@ exports.Organization = (0, define_js_1.defineEntityType)({
             label: 'Website',
             description: "The organization's website address, only if the source states it explicitly.",
             extractable: true,
+            alignment: 'schema:url',
         },
     },
     sensitivityDefault: 'business',

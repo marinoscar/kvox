@@ -1,0 +1,337 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`generateShacl parses with n3 and matches the snapshot 1`] = `
+"@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix kv: <https://fixture.app/ns#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+kv:AssertionShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion ) ;
+    sh:or ( [ sh:not [ sh:hasValue kv:HAS_ROLE ; sh:path rdf:predicate ] ] [ sh:minCount 1 ; sh:path kv:HAS_ROLE.title ] ) ;
+    sh:property [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:path prov:endedAtTime
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:path prov:startedAtTime
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "day" "month" "year" "unknown" ) ;
+        sh:maxCount 1 ;
+        sh:path kv:validPrecision
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Title" ;
+        sh:path kv:HAS_ROLE.title
+    ], [
+        sh:in ( kv:HAS_ROLE kv:REPORTS_TO kv:WORKS_FOR ) ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:path rdf:predicate
+    ], [
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path rdf:object
+    ], [
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path rdf:subject
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Assertion .
+
+kv:ClaimShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom prov:wasRevisionOf ) ;
+    sh:property [
+        sh:class kv:Claim ;
+        sh:name "Supersedes" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:SUPERSEDES
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "active" "superseded" ) ;
+        sh:maxCount 1 ;
+        sh:name "Status" ;
+        sh:path kv:status
+    ], [
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "About" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Meeting ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] ) ;
+        sh:path kv:ABOUT
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Claim .
+
+kv:CommitmentShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom prov:wasRevisionOf ) ;
+    sh:property [
+        sh:class kv:Commitment ;
+        sh:name "Supersedes" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:SUPERSEDES
+    ], [
+        sh:class kv:Meeting ;
+        sh:maxCount 1 ;
+        sh:name "Created in" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:CREATED_IN
+    ], [
+        sh:class kv:Person ;
+        sh:maxCount 1 ;
+        sh:name "Assigned to" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:ASSIGNED_TO
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "open" "done" "dropped" "superseded" ) ;
+        sh:maxCount 1 ;
+        sh:name "Status" ;
+        sh:path kv:status
+    ], [
+        sh:maxCount 1 ;
+        sh:name "About" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] ) ;
+        sh:path kv:ABOUT
+    ], [
+        sh:maxCount 1 ;
+        sh:name "Owed to" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] ) ;
+        sh:path kv:OWED_TO
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Commitment .
+
+kv:DecisionShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom prov:wasRevisionOf ) ;
+    sh:property [
+        sh:class kv:Decision ;
+        sh:name "Supersedes" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:SUPERSEDES
+    ], [
+        sh:class kv:Meeting ;
+        sh:maxCount 1 ;
+        sh:name "Decided in" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:DECIDED_IN
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "active" "superseded" ) ;
+        sh:maxCount 1 ;
+        sh:name "Status" ;
+        sh:path kv:status
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Rejected option" ;
+        sh:path kv:Decision.rejectedOption
+    ], [
+        sh:maxCount 1 ;
+        sh:name "About" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] ) ;
+        sh:path kv:ABOUT
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Decision .
+
+kv:MeetingShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:class kv:Project ;
+        sh:name "Discussed" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:DISCUSSED
+    ], [
+        sh:class kv:Project ;
+        sh:name "Part of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PART_OF
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "stated" "note_created_at" ) ;
+        sh:maxCount 1 ;
+        sh:name "Date source" ;
+        sh:path kv:Meeting.dateSource
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Note" ;
+        sh:path kv:Meeting.noteId
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Transcript" ;
+        sh:path kv:Meeting.transcriptId
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Topics" ;
+        sh:path kv:Meeting.topics
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Meeting .
+
+kv:OrganizationShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:datatype xsd:anyURI ;
+        sh:maxCount 1 ;
+        sh:name "Website" ;
+        sh:path schema:url ;
+        sh:pattern "^https?://"
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "gold" "silver" ) ;
+        sh:maxCount 1 ;
+        sh:name "Tier" ;
+        sh:path <https://fixture.app/ns#attr/11111111-1111-4111-8111-111111111111>
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Organization .
+
+kv:PersonFactShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:class kv:Person ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "About" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:ABOUT
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "active" "superseded" ) ;
+        sh:maxCount 1 ;
+        sh:name "Status" ;
+        sh:path kv:status
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:PersonFact .
+
+kv:PersonShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom schema:attendee schema:hasOccupation schema:worksFor ) ;
+    sh:property [
+        sh:class kv:Meeting ;
+        sh:name "Attended" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:ATTENDED
+    ], [
+        sh:class kv:Organization ;
+        sh:name "Has role" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:HAS_ROLE
+    ], [
+        sh:class kv:Organization ;
+        sh:name "Works for" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:WORKS_FOR
+    ], [
+        sh:class kv:Person ;
+        sh:name "Reports to" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:REPORTS_TO
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Job title" ;
+        sh:path schema:jobTitle
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Person .
+
+kv:ProjectShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:class kv:Organization ;
+        sh:name "Part of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PART_OF
+    ], [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "End date" ;
+        sh:path kv:Project.endDate
+    ], [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "Start date" ;
+        sh:path kv:Project.startDate
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "planned" "active" "done" "cancelled" ) ;
+        sh:maxCount 1 ;
+        sh:name "Status" ;
+        sh:path kv:Project.status
+    ], [
+        sh:maxCount 1 ;
+        sh:name "Sponsor" ;
+        sh:nodeKind sh:IRI ;
+        sh:or ( [ sh:class kv:Organization ] [ sh:class kv:Person ] ) ;
+        sh:path <https://fixture.app/ns#attr/55555555-5555-4555-8555-555555555555>
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Project .
+"
+`;

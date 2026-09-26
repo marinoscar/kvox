@@ -66,6 +66,7 @@ export const Organization = defineEntityType({
       label: 'Website',
       description: "The organization's website address, only if the source states it explicitly.",
       extractable: true,
+      alignment: 'schema:url',
     },
   },
   sensitivityDefault: 'business',
