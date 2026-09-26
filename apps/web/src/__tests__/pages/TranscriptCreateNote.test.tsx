@@ -156,6 +156,8 @@ function aiConfig(overrides: Record<string, unknown> = {}) {
         maxOutputTokens: 16_000,
         source: 'catalogue',
         derivedFrom: null,
+        structuredOutput: true,
+        toolCalling: true,
       },
     ],
     defaultModel: 'gpt-4o-mini',

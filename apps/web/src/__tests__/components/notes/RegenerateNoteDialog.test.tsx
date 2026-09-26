@@ -77,6 +77,8 @@ const MODELS: AiConfigModel[] = [
     maxOutputTokens: 16_000,
     source: 'catalogue',
     derivedFrom: null,
+    structuredOutput: true,
+    toolCalling: true,
   },
   {
     id: 'gpt-4o',
@@ -85,6 +87,8 @@ const MODELS: AiConfigModel[] = [
     maxOutputTokens: 16_000,
     source: 'catalogue',
     derivedFrom: null,
+    structuredOutput: true,
+    toolCalling: true,
   },
 ];
 
