@@ -15,6 +15,7 @@ import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { KgPurgeService } from './purge/kg-purge.service';
 import { GraphEvidenceService } from './read/graph-evidence.service';
+import { GraphNeighborhoodService } from './read/graph-neighborhood.service';
 import { GraphReadController } from './read/graph-read.controller';
 import { GraphReadService } from './read/graph-read.service';
 import { EvidenceValidator } from './write/evidence-validator.service';
@@ -56,6 +57,7 @@ import { GraphWriteService } from './write/graph-write.service';
     KgPurgeHandler,
     // #370 — the read layer (exported for the brief #372 and the Ask agent #377).
     GraphReadService,
+    GraphNeighborhoodService,
     GraphEvidenceService,
   ],
   controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController, GraphReadController],
@@ -67,6 +69,7 @@ import { GraphWriteService } from './write/graph-write.service';
     EvidenceValidator,
     GraphWriteService,
     GraphReadService,
+    GraphNeighborhoodService,
     GraphEvidenceService,
   ],
 })

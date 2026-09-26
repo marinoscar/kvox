@@ -1,5 +1,5 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { ApiBody, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ZodValidationPipe } from 'nestjs-zod';
 
 import { Auth } from '../../auth/decorators/auth.decorator';
@@ -9,6 +9,15 @@ import { ApiDataResponse } from '../../common/decorators/api-data-response.decor
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import {
   EvidenceBatchResponseDto,
+  ExpandRequestDto,
+  GRAPH_EXPAND_MAX_SEEDS,
+  GRAPH_NODE_CAP,
+  GraphSliceDto,
+  expandRequestSchema,
+  neighborhoodQuerySchema,
+  type ExpandRequest,
+  type GraphSlice,
+  type NeighborhoodQuery,
   EvidenceLinkDto,
   GRAPH_EVIDENCE_BATCH_MAX,
   GraphEntityDetailDto,
@@ -27,6 +36,7 @@ import {
   type MentionsResponse,
 } from './dto/graph-read.dto';
 import { GraphEvidenceService } from './graph-evidence.service';
+import { GraphNeighborhoodService } from './graph-neighborhood.service';
 import { GraphReadService } from './graph-read.service';
 
 // =============================================================================
@@ -51,6 +61,7 @@ export class GraphReadController {
   constructor(
     private readonly reads: GraphReadService,
     private readonly evidence: GraphEvidenceService,
+    private readonly neighborhoods: GraphNeighborhoodService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -128,6 +139,74 @@ export class GraphReadController {
     @CurrentUser() user: RequestUser,
   ): Promise<MentionsResponse> {
     return this.reads.mentions(user, id, query);
+  }
+
+  @Get('entities/:id/neighborhood')
+  @Auth({ permissions: [PERMISSIONS.GRAPH_READ] })
+  @ApiOperation({
+    summary: "An entity's neighbourhood",
+    description:
+      'The entity and what is connected to it, one or two hops out, as a graph slice: nodes ' +
+      '(entities, and the commitments, decisions, claims and person facts about them) and ' +
+      'every edge between them.\n\n' +
+      '- A walk never continues **through** an item: an item is always a leaf.\n' +
+      '- Edges touching an item are derived from the item itself (`virtual: true`); a stored ' +
+      'relation always has an id of its own.\n' +
+      '- **`as_of`** evaluates every relation and item at that instant — "who did Joe report to ' +
+      'in January 2024" — with ranges half-open `[from, to)`.\n' +
+      '- **`types`** keeps only those entity types / item kinds (the seed is always kept); ' +
+      '**`relationTypes`** walks only along those edge types. Unknown keys are a **400**.\n' +
+      `- At most \`limit\` nodes (≤ ${GRAPH_NODE_CAP}); \`truncated\` says more were reachable. ` +
+      'The closest and best-connected nodes are kept.\n\n' +
+      '`sensitive` person facts are never part of a slice. A query that runs longer than 3 s is ' +
+      'a **503** with `details.reason: "graph_query_timeout"`.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiQuery({ name: 'hops', required: false, type: Number, description: '1 or 2 (default 1)' })
+  @ApiQuery({ name: 'types', required: false, type: String, description: 'Comma-separated entity types / item kinds' })
+  @ApiQuery({ name: 'relationTypes', required: false, type: String, description: 'Comma-separated relation types' })
+  @ApiQuery({ name: 'as_of', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: `1-${GRAPH_NODE_CAP} (default 150)` })
+  @ApiDataResponse(GraphSliceDto, { description: 'The neighbourhood' })
+  @ApiResponse({ status: 400, description: 'Invalid parameter or unknown type key' })
+  @ApiResponse({ status: 404, description: NOT_FOUND_ENTITY })
+  @ApiResponse({ status: 503, description: 'The walk exceeded its 3 s budget (`graph_query_timeout`)' })
+  async neighborhood(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(neighborhoodQuerySchema)) query: NeighborhoodQuery,
+    @CurrentUser() user: RequestUser,
+  ): Promise<GraphSlice> {
+    return this.neighborhoods.neighborhood(user, id, query);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Explorer
+  // ---------------------------------------------------------------------------
+
+  @Post('explore/expand')
+  @Auth({ permissions: [PERMISSIONS.GRAPH_READ] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Expand explorer nodes',
+    description:
+      'One hop out from each of up to ' +
+      `${GRAPH_EXPAND_MAX_SEEDS} nodes, as one graph slice (the seeds come back at depth 0). ` +
+      'A read, even though it is a `POST`: the node list does not fit a query string.\n\n' +
+      '`types` and `relationTypes` narrow what the expansion may **add**. At most `cap` nodes ' +
+      `(≤ ${GRAPH_NODE_CAP}); \`truncated\` says more were reachable.\n\n` +
+      'Every `nodeIds` entry must be one of your readable entities or items: if **any** is not, ' +
+      'the whole request is a **404** that does not say which.',
+  })
+  @ApiBody({ type: ExpandRequestDto })
+  @ApiDataResponse(GraphSliceDto, { description: 'The expanded slice' })
+  @ApiResponse({ status: 400, description: 'Invalid body or unknown type key' })
+  @ApiResponse({ status: 404, description: 'At least one node is not one of your readable nodes' })
+  @ApiResponse({ status: 503, description: 'The walk exceeded its 3 s budget (`graph_query_timeout`)' })
+  async expand(
+    @Body(new ZodValidationPipe(expandRequestSchema)) body: ExpandRequest,
+    @CurrentUser() user: RequestUser,
+  ): Promise<GraphSlice> {
+    return this.neighborhoods.expand(user, body);
   }
 
   // ---------------------------------------------------------------------------
