@@ -8,6 +8,7 @@ import {
 } from '../../notes/generation/note-generation-stream.service';
 import { NoteStreamCursor, toDeltaFrame } from '../../notes/generation/note-stream';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ASK_RESPOND_MAX_RUNTIME_MS } from '../ask-limits';
 import { parseAskCitations, parseAskToolCalls } from '../ask-message.mapper';
 import {
   ASK_STREAM_CAP_REASON,
@@ -44,13 +45,11 @@ import {
 // =============================================================================
 
 /**
- * `ask.respond`'s `profile.maxRuntimeMs` (#378, spec §21.3: five minutes).
- *
- * Stated here rather than imported because #378 lands in parallel; the stream
- * only needs the NUMBER, and the spec fixes it. If the job's profile ever
- * changes, change this with it — the cap must outlast the job.
+ * `ask.respond`'s `profile.maxRuntimeMs` (#378, spec §21.3: five minutes),
+ * imported from the job's own limit so the stream cap can never fall below
+ * the job it is watching.
  */
-export const ASK_RESPOND_STREAM_RUNTIME_MS = 5 * 60_000;
+export const ASK_RESPOND_STREAM_RUNTIME_MS = ASK_RESPOND_MAX_RUNTIME_MS;
 
 /** The hard ceiling on one connection: the job's runtime plus the notes margin. */
 export const DEFAULT_ASK_STREAM_DURATION_CAP_MS =
