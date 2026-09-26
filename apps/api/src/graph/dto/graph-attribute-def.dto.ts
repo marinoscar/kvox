@@ -106,7 +106,6 @@ export const attributeDefListQuerySchema = z.object({
 });
 
 export type AttributeDefListQuery = z.infer<typeof attributeDefListQuerySchema>;
-export class AttributeDefListQueryDto extends createZodDto(attributeDefListQuerySchema) {}
 
 export const graphAttributeDefSchema = z
   .object({
