@@ -151,7 +151,9 @@ export function buildClusterGraph(o: GraphOverview, theme: OverviewPalette): Ove
     const a = clusterNodeKey(edge.a);
     const b = clusterNodeKey(edge.b);
     if (a === b || !graph.hasNode(a) || !graph.hasNode(b) || graph.hasEdge(a, b)) continue;
-    graph.addEdge(a, b, {
+    // An explicit key: graphology's generated ones come from a process-wide
+    // counter, so two builds of one snapshot would differ.
+    graph.addEdgeWithKey(`${a}~${b}`, a, b, {
       type: 'line',
       size: round2(1 + Math.log(Math.max(1, edge.weight))),
       color: edgeColor,

@@ -66,7 +66,8 @@ export function ClusterListView({
             variant="outlined"
             expanded={selectedId === row.id}
             onChange={(_, expanded) => onSelect(expanded ? row.id : null)}
-            slotProps={{ transition: { unmountOnExit: true } }}
+            // h2: the page's only heading above the list is its h1.
+            slotProps={{ transition: { unmountOnExit: true }, heading: { component: 'h2' } }}
           >
             <AccordionSummary expandIcon={<ExpandMoreIcon />} id={summaryId} aria-controls={`${summaryId}-panel`}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
