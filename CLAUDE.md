@@ -1175,6 +1175,57 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   `note_templates.is_archived` (that column is shared by every viewer; hiding is per-user and
   must never affect anyone else's picker, built-in included). Hiding is a listing preference
   only — it never gates create/regenerate/preview reading the template by id.
+- `kg_entities` - One graph node per person/organization/project/meeting (epic #344, issue
+  #351). `mergedIntoId` is a self-FK, `SetNull` — merging folds one entity into another without
+  deleting the row, so evidence and mentions already pointing at it keep resolving.
+- `kg_entity_aliases` - Alternate names an entity is known by, backing fuzzy candidate
+  generation via `pg_trgm` (a new, trusted extension this migration enables). `@@unique
+  ([entityId, normalized])` is the natural re-alias upsert key; the trigram GIN index on
+  `normalized` is hand-written, Prisma-inexpressible drift — never "fix" it with `@@unique`.
+- `kg_relations` - Directed edges between two entities, or between a diarized speaker and an
+  entity for `IDENTIFIED_AS` via `fromSpeakerId` (a real FK into `transcript_speakers`, Cascade)
+  — exactly one of `fromId`/`fromSpeakerId` is set, enforced by the hand-written
+  `kg_relations_one_source_chk`. `valid` is a `tstzrange` written only through `$executeRaw`
+  (Prisma has no scalar for a Postgres range) in the same transaction as the row's `create`.
+- `kg_items` - One row per commitment/decision/claim/person-fact (one table for all four kinds,
+  not four tables). `valid` is the same `$executeRaw`-only `tstzrange` as `kg_relations.valid`.
+- `kg_evidence` - Citations tying a graph fact back to its source. `subjectKind`/`subjectId` is
+  polymorphic with **no FK** — it can anchor an entity, relation, item, proposal item or import
+  row, and a closed enum only names which kind. `transcriptId`/`segmentId`/`noteId` are all
+  `SetNull`, deliberately: there is **no CHECK requiring an anchor**, because requiring one
+  would make deleting a transcript or note fail the moment its own evidence loses that pointer.
+- `kg_mentions` - Where an entity is mentioned in a note or transcript, independent of
+  `kg_evidence` (which anchors a fact, not a bare mention). Exactly one of `noteId`/
+  `transcriptId` is required (hand-written `kg_mentions_one_source_chk`) and **both cascade** —
+  unlike `kg_evidence`'s `SetNull` anchors, a mention has no meaning once its source is gone.
+- `kg_proposals` - One row per extraction/import/resolution run, reviewed and committed as a
+  batch. The whole proposal lifecycle (including kinds/statuses #363–#387 will use) lands in
+  this one migration so later issues never need `ALTER TYPE ... ADD VALUE`.
+- `kg_proposal_items` - One candidate entity/relation/item inside a proposal, decided
+  individually. `mergeIntoId` is `SetNull`, set iff `decision = 'merge_into'` (hand-written
+  `kg_proposal_items_merge_into_chk`); `committedRefId` is polymorphic with no FK, matching
+  `kg_evidence.subjectId`'s reasoning.
+- `kg_merges` - The undo record for an entity merge. `reversal` is the pre-merge snapshot a
+  revert restores from.
+- `kg_distinct_pairs` - Reviewer-recorded "these two are not the same entity" pairs, keyed on
+  the pair itself (`@@id([ownerId, aId, bId])`). The hand-written `kg_distinct_pairs_order_chk`
+  (`a_id < b_id`) makes storage order canonical so `(x, y)` and `(y, x)` are never two rows.
+- `kg_attribute_defs` - User-defined structured attributes an entity type can carry, beyond the
+  ontology's built-in properties. `deprecatedAt` retires a definition without deleting it.
+- `kg_entity_digests` - One AI-generated summary per entity, `entityId` as the primary key
+  (replaced in place on regeneration, never versioned) — a compaction of evidence/items/
+  relations, never a second source of truth for any of them.
+- `kg_entity_views` - The one exception to "every `kg_*` row is owner-scoped": keyed on
+  `userId`, not `ownerId`, because a view is a fact about the viewer, not who owns the entity.
+
+  Eleven objects across these tables — the `pg_trgm` extension statement, two trigram GIN
+  indexes, two GiST indexes on `valid`, two HNSW indexes on `embedding`, five partial unique
+  indexes and twelve CHECK constraints — exist **only** in
+  `20260926010000_add_knowledge_graph/migration.sql`, the sixth occurrence of this codebase's
+  hand-written-SQL pattern (after `jobs`, `database_backup_runs`, `transcript_speakers`, the
+  generated `tsvector` columns, and `search_embeddings`). When a later `prisma migrate dev`
+  proposes `DROP INDEX`/`DROP CONSTRAINT` for any of them, delete that proposal from the
+  generated migration — it is not real drift to reconcile.
 
 ## Navigation Destination Model
 
@@ -1902,8 +1953,10 @@ gate, retrieval, privacy) is [`docs/specs/ontology.md`](docs/specs/ontology.md).
 The same document also specifies a review UI for overriding extraction,
 per-task-and-per-user AI model selection, a read-only "Ask" agent over the
 graph, and an explorer/whole-graph visualization (§19–§22).
-**Nothing described there is built** — no `kg_*` tables, no `graph.*` jobs,
-no `/api/graph/*` routes, no graph UI. Five rules a neighbouring file can
+**The `kg_*` tables exist** (migration `20260926010000_add_knowledge_graph`,
+issue #351) but nothing that writes or reads them does — no service arrives
+until #354–#357, and until then there are no `graph.*` jobs, no
+`/api/graph/*` routes, no graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
