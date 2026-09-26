@@ -201,6 +201,21 @@ export const mockPermissions = {
     name: 'note_templates:write',
     description: 'Create, edit and delete your own note templates',
   },
+  // Knowledge graph (#354, epic #344). Seeded to ALL THREE ROLES in
+  // `prisma/seed-data.ts`, mirrored that way below — the same posture as
+  // `notes:*`. A fixture that withheld these from Viewer would make an
+  // integration test asserting a viewer CAN read `GET /api/graph/ontology`
+  // fail for a reason the real seed does not have.
+  graphRead: {
+    id: randomUUID(),
+    name: 'graph:read',
+    description: 'View your own knowledge graph',
+  },
+  graphWrite: {
+    id: randomUUID(),
+    name: 'graph:write',
+    description: 'Curate your own knowledge graph',
+  },
 };
 
 export const mockRoles = {
@@ -533,6 +548,8 @@ export const rolePermissionsMap = {
     mockPermissions.notesWrite,
     mockPermissions.noteTemplatesRead,
     mockPermissions.noteTemplatesWrite,
+    mockPermissions.graphRead,
+    mockPermissions.graphWrite,
   ],
   contributor: [
     mockPermissions.userSettingsRead,
@@ -545,6 +562,8 @@ export const rolePermissionsMap = {
     mockPermissions.notesWrite,
     mockPermissions.noteTemplatesRead,
     mockPermissions.noteTemplatesWrite,
+    mockPermissions.graphRead,
+    mockPermissions.graphWrite,
   ],
   // Viewer gets storage:read and NOT storage:write, exactly as seeded — which
   // is what makes a 403 on a storage:write route testable.
@@ -561,6 +580,8 @@ export const rolePermissionsMap = {
     mockPermissions.notesWrite,
     mockPermissions.noteTemplatesRead,
     mockPermissions.noteTemplatesWrite,
+    mockPermissions.graphRead,
+    mockPermissions.graphWrite,
   ],
 };
 

@@ -4115,7 +4115,9 @@ model SearchIndexState {
 //     'IDENTIFIED_AS'`) — `from_speaker_id` exists for exactly one
 //     relation type, and no other.
 //   - `kg_relations_valid_precision_chk` (`(valid IS NULL) =
-//     (valid_precision IS NULL) OR valid_precision = 'unknown'`) — a
+//     (valid_precision IS NULL) OR valid_precision IS NOT DISTINCT FROM
+//     'unknown'` — `IS NOT DISTINCT FROM`, not `=`, since #398: with `=` a
+//     NULL precision made the CHECK evaluate NULL, which passes) — a
 //     temporal relation always states a precision, but `unknown` is
 //     representable even should `valid` itself later become NULL (e.g. a
 //     future correction that clears a range while a precision is still on

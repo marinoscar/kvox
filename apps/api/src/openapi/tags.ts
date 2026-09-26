@@ -238,6 +238,19 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
+    // #354, epic #344. #376 later appends an `Ask` tag to this group.
+    name: 'Knowledge',
+    tags: [
+      {
+        name: 'Graph',
+        description:
+          'Your own connected knowledge: the effective ontology, entities, relations, facts ' +
+          'with evidence, extraction proposals and their review. Owner-only; no access is ' +
+          'always 404, never 403.',
+      },
+    ],
+  },
+  {
     name: 'Search',
     tags: [
       {

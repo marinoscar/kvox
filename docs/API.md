@@ -5238,6 +5238,139 @@ data: {"status":"succeeded","offset":812,"currentVersion":1}
 
 ---
 
+### Graph
+
+Your own connected knowledge — the entity-and-relationship graph built from
+your transcripts and notes (issue #354, epic #344). Full design (the
+ontology, extraction, review, retrieval, privacy) is
+[`docs/specs/ontology.md`](specs/ontology.md). Today this group carries one
+route, the effective ontology; entity, relation, fact and search routes
+arrive with later issues and follow the access posture below.
+
+**Permissions.** `graph:read` gates every read; `graph:write` gates every
+curation (committing proposals, editing, merging and forgetting entities,
+managing attribute definitions). Both are seeded to **all three roles**,
+Viewer included, the same posture as `notes:*`, and reach existing
+deployments through the idempotent seed rather than a migration. There is
+deliberately **no `graph:read_any`**, not even for an administrator: a graph
+is derived from somebody's private conversations and notes.
+
+**Access: owner-only, and no access is always 404, never 403.** Every graph
+row is authorised by one service, `GraphAccessService`, before anything
+touches it. A missing row, another user's row, and — for entities,
+relations and facts — a row that was never accepted into your graph
+(`unreviewed` or `rejected`) all answer the **same 404 with the same
+message** per kind (`Entity not found`, `Relation not found`,
+`Item not found`, `Proposal not found`, `Attribute definition not found`,
+`Evidence not found`, `Merge not found`), so the response cannot be used to
+learn whether a given id exists. A merged entity is also a 404 unless the
+route is one that redirects to the entity it was merged into. **No sharing
+path exists**: a transcript shared with you never grants access to its
+owner's graph. The one 403 is a permission 403 — a route you lack
+`graph:read`/`graph:write` for, or editing your **own** row without
+`graph:write` (`This action requires the graph:write permission.`), where
+you can already see the row and a 404 would only mislead you.
+
+**Conflicts.** A 409 from a graph route names its cause in
+`details.reason` (`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
+`extraction_running`, `proposal_not_draft`, `stale_note_version`,
+`revert_conflict`, `model_lacks_capability`); none is raised by the route
+below.
+
+#### GET /graph/ontology
+
+Your **effective ontology**: the schema your graph is made of, and the one
+response every graph form is generated from. It is the `core` domain, plus
+every domain you have enabled (`work` by default — choosing your own domains
+arrives with a later issue), plus the attributes those domains mix into each
+other's types (`work` adds a `title` to `Person`), plus your own attribute
+definitions — **deprecated ones included**, flagged `deprecated: true`, so
+values already stored under them stay readable. Relation endpoints and item
+subjects are pruned to the types present.
+
+**Requires:** `graph:read`. **Not** gated on the deployment's AI switch:
+reading your own schema is not an AI call, and turning AI off must never make
+an already-curated graph unreadable.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "version": "1.0.0",
+    "domains": [
+      { "key": "core", "label": "Core", "enabled": true, "alwaysOn": true },
+      { "key": "work", "label": "Work", "enabled": true, "alwaysOn": false }
+    ],
+    "entityTypes": [
+      {
+        "key": "Person",
+        "domain": "core",
+        "label": "Person",
+        "pluralLabel": "People",
+        "description": "…",
+        "disambiguation": ["…"],
+        "storage": "entity",
+        "itemKind": null,
+        "statuses": null,
+        "subjectTypes": null,
+        "subjectRequired": false,
+        "sensitivityDefault": "business",
+        "alignment": "schema:Person",
+        "extractable": true,
+        "deprecated": false,
+        "attributes": [
+          {
+            "key": "title",
+            "label": "Job title",
+            "kind": "text",
+            "required": false,
+            "list": false,
+            "options": null,
+            "extractable": true,
+            "description": "The person's job title, only if the source states it.",
+            "sensitivity": "business",
+            "source": "mixin",
+            "domain": "work",
+            "attributeDefId": null,
+            "deprecated": false,
+            "sortOrder": 0
+          }
+        ]
+      }
+    ],
+    "relationTypes": [
+      {
+        "key": "WORKS_FOR",
+        "domain": "work",
+        "label": "Works for",
+        "description": "…",
+        "from": ["Person"],
+        "to": ["Organization"],
+        "allowedPairs": null,
+        "temporal": true,
+        "exclusive": "soft",
+        "exclusiveScope": "from",
+        "representation": { "kind": "edge" },
+        "extractable": true,
+        "alignment": "schema:worksFor",
+        "deprecated": false,
+        "props": []
+      }
+    ]
+  },
+  "meta": { "timestamp": "2026-09-26T12:00:00.000Z" }
+}
+```
+
+`version` is the ontology version the schema was computed from. An
+attribute's `source` is `builtin` (declared on the type), `mixin` (added by
+another enabled domain; `domain` names it) or `user` (one of your own
+definitions; `domain` is `null` and `attributeDefId` is its id). The example
+is abridged; the published OpenAPI schema (`GraphOntologyDto`) is the full
+contract.
+
+**Errors:** `401` unauthenticated · `403` without `graph:read`.
+
 ### Search
 
 Ranked full-text search over the **content** of your transcripts and notes —

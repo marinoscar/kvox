@@ -30,6 +30,7 @@ import { TranscriptionModule } from './transcription/transcription.module';
 import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
 import { NotesModule } from './notes/notes.module';
+import { GraphModule } from './graph/graph.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
@@ -214,6 +215,13 @@ import configuration from './config/configuration';
     // note is generated from the transcript AS THE USER CORRECTED IT, never
     // from the AI's original result.
     NotesModule,
+
+    // Connected knowledge (#354, epic #344): the graph scaffold — the
+    // `graph:*` access service, the effective-ontology service and
+    // `GET /api/graph/ontology`. After NotesModule and TranscriptsModule
+    // (imported for #355's evidence validation); imported by nothing, so the
+    // dependency edge runs one way.
+    GraphModule,
 
     // Semantic search, indexing half (#188, epic #165): the `search.index` job
     // and the enqueue/forget surface its callers use. Listed explicitly even
