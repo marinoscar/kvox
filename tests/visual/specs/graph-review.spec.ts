@@ -77,7 +77,7 @@ test.describe('Graph proposal review sheet', () => {
     await waitForInter(page);
 
     await expect(page.getByRole('heading', { name: /People/ })).toBeVisible();
-    await page.getByRole('button', { name: 'More actions for Ana Ruiz' }).click();
+    await page.getByRole('button', { name: 'More actions for Ana Ruiz', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Edit…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Edit Ana Ruiz' });
     await expect(dialog).toBeVisible();
