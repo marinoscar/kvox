@@ -7,7 +7,7 @@ import 'vitest-axe/extend-expect';
 import { server } from '../../mocks/server';
 import { render } from '../../utils/test-utils';
 import { graphReader, noGraphUser } from '../../utils/graphTestUsers';
-import { graphEntitySummaries } from '../../mocks/graphData';
+import { graphEntitySummaries, mockGraphAiConfig } from '../../mocks/graphData';
 import { KnowledgeSection } from '../../../components/home/KnowledgeSection';
 
 /** Home's "Knowledge" entry point (#373). */
@@ -89,6 +89,23 @@ describe('KnowledgeSection', () => {
     } finally {
       consoleError.mockRestore();
     }
+  });
+
+  it('offers Ask (#380) only while connected knowledge is on', async () => {
+    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
+    render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
+    const section = await screen.findByRole('region', { name: 'Knowledge' });
+    expect(await within(section).findByRole('link', { name: 'Ask' })).toHaveAttribute('href', '/ask');
+  });
+
+  it('hides Ask while connected knowledge is off', async () => {
+    server.use(
+      http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
+    );
+    render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
+    const section = await screen.findByRole('region', { name: 'Knowledge' });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(within(section).queryByRole('link', { name: 'Ask' })).not.toBeInTheDocument();
   });
 
   it('asks nothing and renders nothing without graph:read', async () => {

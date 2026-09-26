@@ -2739,6 +2739,59 @@ owned by the `home` destination exactly as §13 states for the rest of this
 epic's routes; there is no new bottom-bar tab for Ask any more than there is
 one for the graph itself.
 
+**The `/ask` page is built** (issue #380), against the contracts of #376
+(conversation CRUD, the `AskMessage` wire schema), #378 (`POST …/messages`
+and its 409 reasons) and #379 (the stream) with MSW, ahead of those routes
+landing. What it does, and the decisions a neighbouring change could undo:
+
+- **One route, `/ask/:conversationId?`**, `graph:read`-gated, owned by
+  `home` (the prefix `/ask`), titled "Ask" in the AppBar (a conversation's
+  up arrow goes to `/ask`, `/ask`'s to Home). One optional-segment route
+  rather than two so that `/ask` → `/ask/:id` after the first question keeps
+  the page mounted. The page is behind `GET /api/ai/config`'s `graphEnabled`:
+  an explicit `false` shows "Ask is turned off for this deployment" and no
+  composer (`undefined`, from an older server, is not read as off). Home's
+  Knowledge section carries an "Ask" button while `graphEnabled === true`.
+- **Layout.** ≥ 600 px: the conversation list in a 280 px pane that scrolls
+  on its own; < 600 px: the thread full width and the list in a left
+  temporary drawer. That is a page-level `down('sm')` read — where the page
+  puts its own list — not a sixth coupled breakpoint gate (CLAUDE.md,
+  Settings UI Pattern rule 5). The page's height mirrors `Layout`'s padding so
+  the composer sits above the phone's bottom bar.
+- **Sending** from `/ask` creates the conversation, posts the question and
+  replaces the URL, handing #378's two new rows over in router state so both
+  render at once; a refused first post (a 409) reuses the conversation it
+  created rather than making a second. Every 409 reason and #360's 400
+  `model_not_permitted` has its own sentence above the composer, and the
+  typed text is kept.
+- **The stream** (`services/askStream.ts`) mirrors the note stream's client
+  and reuses its offset-addressed `applyDelta`, so a replay never duplicates
+  text; a page opened mid-answer seeds the buffer from the row and resumes
+  from its length (`?lastEventId=`); `step` frames are de-duplicated by
+  `index`. The reader's own duration cap (`timeout` /
+  `stream_duration_cap`) re-reads the row and re-attaches rather than
+  failing the turn.
+- **Citations.** `remarkAskCitations` rewrites markdown TEXT nodes only (a
+  marker inside code is left alone): a valid `evidence` citation becomes
+  #373's `EvidenceChip`, numbered by first appearance of its evidence row; an
+  `entity` a chip to its page; a `document` a chip to the transcript at
+  `startMs` or to the note. An invalid or unknown marker — which stays in the
+  append-only `content` — is removed from the rendered answer and counted
+  ("1 source couldn't be verified and was removed"). A complete answer with
+  no valid citation, unless it says it found nothing, carries "No sources were
+  cited — treat this answer with care."; a non-`stop` `finishReason` carries
+  "Stopped early — this answer may be incomplete" with its reason. The nodes
+  are the app's own, built from the validated `citations`; `MarkdownView`
+  still has no raw-HTML path.
+- **The model picker** offers the tool-capable allow-list, defaults to the
+  caller's resolved `graph.agent` model, sends `model` only when the user
+  changed it, and remembers the choice per conversation in `sessionStorage`
+  — the only thing Ask stores in the browser.
+- **Reuse by the entity panel (#381).** `AskThread` and `AskComposer` take
+  everything through props and callbacks (no router coupling), and
+  `useAskConversations({ scopeEntityId })` / `useAskConversation` /
+  `useAskStream` are the whole data layer.
+
 ### 21.6 Deletion
 
 Ask's conversations are the caller's own generated content over their own

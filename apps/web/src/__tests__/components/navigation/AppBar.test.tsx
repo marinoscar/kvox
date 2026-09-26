@@ -477,6 +477,27 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/');
     });
 
+    it('shows Back + "Ask" on a conversation, going up to the conversation list (#380)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/ask/abc-123' } });
+
+      expect(screen.getByText('Ask')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/ask');
+    });
+
+    it('shows Back + "Ask" on /ask, going up to Home (#380)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/ask' } });
+
+      expect(screen.getByText('Ask')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      // `home` owns `/ask`, so structural up is Home.
+      expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
     it('shows Back + "New transcript" on the create route', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);
