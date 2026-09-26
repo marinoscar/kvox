@@ -301,7 +301,8 @@
         "title": "Delivery Lead"
       },
       "attendedFixtureIds": [
-        "m01"
+        "m01",
+        "m22"
       ]
     },
     {
@@ -327,7 +328,9 @@
       "props": {
         "title": "CIO"
       },
-      "attendedFixtureIds": []
+      "attendedFixtureIds": [
+        "m22"
+      ]
     },
     {
       "id": "g-person-ravi-menon",
@@ -339,7 +342,9 @@
       "props": {
         "title": "Integration Lead"
       },
-      "attendedFixtureIds": []
+      "attendedFixtureIds": [
+        "m22"
+      ]
     },
     {
       "id": "g-person-sarah-chen",

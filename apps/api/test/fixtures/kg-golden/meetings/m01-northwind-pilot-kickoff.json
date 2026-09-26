@@ -286,7 +286,9 @@
       "props": {
         "title": "Delivery Lead"
       },
-      "attendedFixtureIds": []
+      "attendedFixtureIds": [
+        "m22"
+      ]
     },
     {
       "id": "g-person-priya-raman",

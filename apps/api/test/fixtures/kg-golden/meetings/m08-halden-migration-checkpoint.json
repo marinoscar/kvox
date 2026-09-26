@@ -258,7 +258,8 @@
         "m04",
         "m05",
         "m06",
-        "m07"
+        "m07",
+        "m22"
       ]
     },
     {
@@ -289,7 +290,8 @@
         "title": "CIO"
       },
       "attendedFixtureIds": [
-        "m02"
+        "m02",
+        "m22"
       ]
     },
     {
@@ -303,7 +305,8 @@
         "title": "Integration Lead"
       },
       "attendedFixtureIds": [
-        "m02"
+        "m02",
+        "m22"
       ]
     },
     {

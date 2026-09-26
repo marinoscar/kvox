@@ -1,0 +1,705 @@
+{
+  "id": "m26",
+  "title": "Larkspur engineering all-hands prep",
+  "tags": [
+    "internal",
+    "promotion",
+    "negative-topic",
+    "negative-vague-task",
+    "nickname"
+  ],
+  "recordedAt": "2026-06-25T09:30:00Z",
+  "contextText": null,
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m26-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m26-spk-b",
+      "label": "B",
+      "displayName": "Priya Raman"
+    },
+    {
+      "id": "m26-spk-c",
+      "label": "C",
+      "displayName": "Jonah Jiménez"
+    },
+    {
+      "id": "m26-spk-d",
+      "label": "D",
+      "displayName": "Kwame Mensah"
+    },
+    {
+      "id": "m26-spk-e",
+      "label": "E",
+      "displayName": "Nadia Brooks"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m26-s001",
+      "speakerId": "m26-spk-b",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "Okay, prep for next week's engineering all-hands. I want the agenda locked today."
+    },
+    {
+      "id": "m26-s002",
+      "speakerId": "m26-spk-a",
+      "startMs": 5790,
+      "endMs": 12470,
+      "rev": 1,
+      "text": "First item should be the good news. JJ's promotion to Staff Engineer takes effect July 1."
+    },
+    {
+      "id": "m26-s003",
+      "speakerId": "m26-spk-d",
+      "startMs": 12720,
+      "endMs": 14080,
+      "rev": 1,
+      "text": "Congratulations, JJ."
+    },
+    {
+      "id": "m26-s004",
+      "speakerId": "m26-spk-c",
+      "startMs": 14330,
+      "endMs": 17590,
+      "rev": 1,
+      "text": "Thanks. Mostly it means more architecture reviews."
+    },
+    {
+      "id": "m26-s005",
+      "speakerId": "m26-spk-b",
+      "startMs": 17840,
+      "endMs": 22620,
+      "rev": 1,
+      "text": "Second item, branching. We're doing three different things across client repos."
+    },
+    {
+      "id": "m26-s006",
+      "speakerId": "m26-spk-c",
+      "startMs": 22870,
+      "endMs": 27270,
+      "rev": 1,
+      "text": "I'd push for trunk-based development everywhere. Short-lived branches, feature flags."
+    },
+    {
+      "id": "m26-s007",
+      "speakerId": "m26-spk-d",
+      "startMs": 27520,
+      "endMs": 32300,
+      "rev": 1,
+      "text": "Our Gullwing repo is already trunk-based and it's the calmest one."
+    },
+    {
+      "id": "m26-s008",
+      "speakerId": "m26-spk-b",
+      "startMs": 32550,
+      "endMs": 36950,
+      "rev": 1,
+      "text": "Then we adopt trunk-based development across client repos. Any objections?"
+    },
+    {
+      "id": "m26-s009",
+      "speakerId": "m26-spk-e",
+      "startMs": 37200,
+      "endMs": 38940,
+      "rev": 1,
+      "text": "None from design."
+    },
+    {
+      "id": "m26-s010",
+      "speakerId": "m26-spk-b",
+      "startMs": 39190,
+      "endMs": 42450,
+      "rev": 1,
+      "text": "Decided. I'll present it at the all-hands."
+    },
+    {
+      "id": "m26-s011",
+      "speakerId": "m26-spk-a",
+      "startMs": 42700,
+      "endMs": 46720,
+      "rev": 1,
+      "text": "Third item, on-call. The guide is out of date."
+    },
+    {
+      "id": "m26-s012",
+      "speakerId": "m26-spk-b",
+      "startMs": 46970,
+      "endMs": 50990,
+      "rev": 1,
+      "text": "I'll publish the new on-call guide by July 3."
+    },
+    {
+      "id": "m26-s013",
+      "speakerId": "m26-spk-d",
+      "startMs": 51240,
+      "endMs": 53740,
+      "rev": 1,
+      "text": "Include the Northwind rotation, please."
+    },
+    {
+      "id": "m26-s014",
+      "speakerId": "m26-spk-b",
+      "startMs": 53990,
+      "endMs": 55350,
+      "rev": 1,
+      "text": "Will do."
+    },
+    {
+      "id": "m26-s015",
+      "speakerId": "m26-spk-c",
+      "startMs": 55600,
+      "endMs": 61140,
+      "rev": 1,
+      "text": "Should we put AI code review on the agenda? It's come up again."
+    },
+    {
+      "id": "m26-s016",
+      "speakerId": "m26-spk-b",
+      "startMs": 61390,
+      "endMs": 67690,
+      "rev": 1,
+      "text": "It keeps coming up. We should probably look into that, but not at this all-hands."
+    },
+    {
+      "id": "m26-s017",
+      "speakerId": "m26-spk-a",
+      "startMs": 67940,
+      "endMs": 71580,
+      "rev": 1,
+      "text": "Agreed, it's a topic, not a project yet."
+    },
+    {
+      "id": "m26-s018",
+      "speakerId": "m26-spk-e",
+      "startMs": 71830,
+      "endMs": 73190,
+      "rev": 1,
+      "text": "Hiring update?"
+    },
+    {
+      "id": "m26-s019",
+      "speakerId": "m26-spk-b",
+      "startMs": 73440,
+      "endMs": 78600,
+      "rev": 1,
+      "text": "We have three open engineering reqs now that the freeze is over."
+    },
+    {
+      "id": "m26-s020",
+      "speakerId": "m26-spk-a",
+      "startMs": 78850,
+      "endMs": 82490,
+      "rev": 1,
+      "text": "Add it to the agenda, people will ask."
+    },
+    {
+      "id": "m26-s021",
+      "speakerId": "m26-spk-d",
+      "startMs": 82740,
+      "endMs": 90940,
+      "rev": 1,
+      "text": "One personal request, if we're pairing next week, I'm much better in the afternoons. Mornings I'm on the Gullwing stand-ups."
+    },
+    {
+      "id": "m26-s022",
+      "speakerId": "m26-spk-b",
+      "startMs": 91190,
+      "endMs": 93690,
+      "rev": 1,
+      "text": "Fine, afternoon pairing for Kwame."
+    },
+    {
+      "id": "m26-s023",
+      "speakerId": "m26-spk-c",
+      "startMs": 93940,
+      "endMs": 98340,
+      "rev": 1,
+      "text": "Priya, while you're out in July, I'll cover team questions."
+    },
+    {
+      "id": "m26-s024",
+      "speakerId": "m26-spk-b",
+      "startMs": 98590,
+      "endMs": 103370,
+      "rev": 1,
+      "text": "Thank you, JJ. I'll send the handover note before I go."
+    },
+    {
+      "id": "m26-s025",
+      "speakerId": "m26-spk-a",
+      "startMs": 103620,
+      "endMs": 106120,
+      "rev": 1,
+      "text": "Anything else for the agenda?"
+    },
+    {
+      "id": "m26-s026",
+      "speakerId": "m26-spk-e",
+      "startMs": 106370,
+      "endMs": 110010,
+      "rev": 1,
+      "text": "A short design demo of the Corvid intake."
+    },
+    {
+      "id": "m26-s027",
+      "speakerId": "m26-spk-b",
+      "startMs": 110260,
+      "endMs": 114280,
+      "rev": 1,
+      "text": "Good, five minutes at the end. That's the agenda."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Larkspur engineering all-hands prep\n\n**Date:** June 25\n**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks\n\n## Summary\n\nPriya locked the agenda for next week's Larkspur Labs engineering all-hands.\n\n## Agenda\n\n1. **Promotion:** JJ's promotion to Staff Engineer takes effect July 1.\n2. **Branching:** adopt trunk-based development across client repos.\n3. **On-call:** the guide is out of date; a new one is coming, including the Northwind rotation.\n4. **Hiring:** three open engineering reqs now that the freeze is over.\n5. **Design demo:** five minutes on the Corvid intake.\n\n## Decisions\n\n- **Adopt trunk-based development across client repos**, with short-lived branches and feature flags. The Gullwing repo is already trunk-based and is the calmest.\n- AI code review stays off the agenda: it keeps coming up, but it is a topic, not a project.\n\n## Action items\n\n- **Priya Raman** — publish the new on-call guide by July 3, including the Northwind rotation; present the branching decision; send a handover note before her leave.\n- **JJ** — cover team questions while Priya is out in July.\n\n## Notes\n\n- Kwame is better at pairing in the afternoons; mornings he is on the Gullwing stand-ups.\n- The agenda is final; Priya will circulate it to the whole engineering group before Monday so people can add questions.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22",
+        "m23",
+        "m24",
+        "m25"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08",
+        "m13",
+        "m15",
+        "m18"
+      ]
+    },
+    {
+      "id": "g-person-kwame-mensah",
+      "type": "Person",
+      "label": "Kwame Mensah",
+      "aliases": [
+        "Kwame"
+      ],
+      "props": {
+        "title": "Data Engineer"
+      },
+      "attendedFixtureIds": [
+        "m11",
+        "m14",
+        "m19",
+        "m23"
+      ]
+    },
+    {
+      "id": "g-person-nadia-brooks",
+      "type": "Person",
+      "label": "Nadia Brooks",
+      "aliases": [
+        "Nadia"
+      ],
+      "props": {
+        "title": "Product Designer"
+      },
+      "attendedFixtureIds": [
+        "m03",
+        "m04",
+        "m10",
+        "m17",
+        "m25"
+      ]
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m03",
+        "m05",
+        "m14",
+        "m18",
+        "m21"
+      ]
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Larkspur engineering all-hands prep",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Larkspur engineering all-hands prep"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya locked the agenda"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s002",
+            "quote": "JJ's promotion to Staff Engineer takes effect July 1."
+          }
+        ]
+      },
+      {
+        "key": "kwame",
+        "type": "Person",
+        "label": "Kwame Mensah",
+        "aliases": [],
+        "existingId": "g-person-kwame-mensah",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kwame Mensah"
+          }
+        ]
+      },
+      {
+        "key": "nadia",
+        "type": "Person",
+        "label": "Nadia Brooks",
+        "aliases": [],
+        "existingId": "g-person-nadia-brooks",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "key": "larkspur",
+        "type": "Organization",
+        "label": "Larkspur Labs",
+        "aliases": [],
+        "existingId": "g-org-larkspur-labs",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "next week's Larkspur Labs engineering all-hands"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kwame",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "nadia",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, JJ, Kwame Mensah, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "jj",
+        "to": "larkspur",
+        "validFrom": "2026-07-01",
+        "validTo": null,
+        "precision": "day",
+        "props": {
+          "title": "Staff Engineer"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s002",
+            "quote": "JJ's promotion to Staff Engineer takes effect July 1."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "larkspur",
+        "owner": null,
+        "counterparty": null,
+        "title": "Adopt trunk-based development",
+        "statement": "Larkspur adopts trunk-based development across client repos.",
+        "status": null,
+        "occurredAt": "2026-06-25",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s008",
+            "quote": "Then we adopt trunk-based development across client repos."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m26-s010",
+            "quote": "Decided."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "larkspur",
+        "owner": null,
+        "counterparty": null,
+        "title": "Three open engineering reqs",
+        "statement": "Larkspur has three open engineering reqs now that the freeze is over.",
+        "status": null,
+        "occurredAt": "2026-06-25",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s019",
+            "quote": "We have three open engineering reqs now that the freeze is over."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "larkspur",
+        "owner": "priya",
+        "counterparty": null,
+        "title": "Publish the new on-call guide",
+        "statement": "Priya will publish the new on-call guide by July 3.",
+        "status": "open",
+        "occurredAt": "2026-06-25",
+        "dueAt": "2026-07-03",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s012",
+            "quote": "I'll publish the new on-call guide by July 3."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "larkspur",
+        "owner": "jj",
+        "counterparty": "priya",
+        "title": "Cover team questions in July",
+        "statement": "JJ will cover team questions while Priya is out in July.",
+        "status": "open",
+        "occurredAt": "2026-06-25",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s023",
+            "quote": "I'll cover team questions."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "kwame",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers afternoon pairing",
+        "statement": "Kwame is better at pairing in the afternoons because mornings are Gullwing stand-ups.",
+        "status": null,
+        "occurredAt": "2026-06-25",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m26-s021",
+            "quote": "I'm much better in the afternoons."
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "Should we put AI code review on the agenda? It's come up again.",
+        "why": "A recurring topic, not a Project: nothing starts, ends or attaches to it."
+      },
+      {
+        "quote": "We should probably look into that, but not at this all-hands.",
+        "why": "No owner named or implied: not a Commitment."
+      }
+    ]
+  }
+}
