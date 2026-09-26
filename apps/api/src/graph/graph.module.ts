@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
+import { NotesModule } from '../notes/notes.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
@@ -13,6 +14,9 @@ import { GraphController } from './graph.controller';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { KgPurgeService } from './purge/kg-purge.service';
+import { GraphEvidenceService } from './read/graph-evidence.service';
+import { GraphReadController } from './read/graph-read.controller';
+import { GraphReadService } from './read/graph-read.service';
 import { EvidenceValidator } from './write/evidence-validator.service';
 import { GraphWriteService } from './write/graph-write.service';
 
@@ -34,8 +38,12 @@ import { GraphWriteService } from './write/graph-write.service';
 
 // `AiModule` (#355) supplies `AiSettingsService`, read for `ai.graphEnabled`
 // before a guarded `kg.entity_digest` enqueue after a manual entity edit.
+//
+// `NotesModule` (#370) supplies `NoteAccessService`, which decides whether a
+// citation's note is still readable by the caller. One way, like the others:
+// nothing in NotesModule imports this module.
 @Module({
-  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule],
+  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, NotesModule],
   providers: [
     GraphAccessService,
     GraphOntologyService,
@@ -46,10 +54,20 @@ import { GraphWriteService } from './write/graph-write.service';
     // #357 — `kg.purge`: forget-a-person and the Danger Zone's `graph` category.
     KgPurgeService,
     KgPurgeHandler,
+    // #370 — the read layer (exported for the brief #372 and the Ask agent #377).
+    GraphReadService,
+    GraphEvidenceService,
   ],
-  controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController],
+  controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController, GraphReadController],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.
-  exports: [GraphAccessService, GraphOntologyService, EvidenceValidator, GraphWriteService],
+  exports: [
+    GraphAccessService,
+    GraphOntologyService,
+    EvidenceValidator,
+    GraphWriteService,
+    GraphReadService,
+    GraphEvidenceService,
+  ],
 })
 export class GraphModule {}

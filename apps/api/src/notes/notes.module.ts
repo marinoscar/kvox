@@ -206,6 +206,11 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
   // either inside the user-data module would be a second implementation of
   // "how a note's bytes are removed" and of "when a template may go", each free
   // to drift from the one the per-item delete endpoints use.
-  exports: [NotesService, NoteTemplatesService],
+  //
+  // ⚠ A THIRD, ADDED BY #370 FOR THE SAME REASON: the graph read layer resolves
+  // a citation into a note-version link only while the caller may still view
+  // that note, and asks THIS module's `NoteAccessService` rather than
+  // re-deriving "who may read a note" inside the graph module.
+  exports: [NotesService, NoteTemplatesService, NoteAccessService],
 })
 export class NotesModule {}
