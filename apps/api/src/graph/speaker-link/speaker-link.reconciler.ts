@@ -36,6 +36,7 @@ import { Prisma } from '@prisma/client';
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { parseSpeakerIdentities } from '../../transcripts/editing/speaker-identity';
 import type { EvidenceInput } from '../dto/graph-evidence.dto';
+import { KG_SUBJECT_TRANSCRIPT } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
 import { normalizeAlias } from '../write/normalize';
 import { GraphWriteService } from '../write/graph-write.service';
@@ -80,7 +81,7 @@ interface ExistingEdge {
   personNames: string[];
 }
 
-interface PersonCandidate {
+export interface PersonCandidate {
   id: string;
   label: string;
   aliases: { alias: string; normalized: string }[];
@@ -95,6 +96,29 @@ export function safeNormalize(name: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The Person a name resolves to among `candidates` (all matching, live, the
+ * owner's). One: it. Several: the one with the most `IDENTIFIED_AS` edges, then
+ * the most recently updated, then the lowest id — deterministic, so two runs
+ * over the same graph pick the same Person. `null` when there is none.
+ */
+export function pickPerson(
+  candidates: readonly PersonCandidate[],
+): { person: PersonCandidate; ambiguous: boolean; candidateIds: string[] } | null {
+  if (candidates.length === 0) return null;
+  const sorted = [...candidates].sort(
+    (a, b) =>
+      b.identifiedCount - a.identifiedCount ||
+      b.updatedAt.getTime() - a.updatedAt.getTime() ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  return {
+    person: sorted[0],
+    ambiguous: sorted.length > 1,
+    candidateIds: sorted.map((c) => c.id),
+  };
 }
 
 function emptySummary(skipped: SpeakerLinkSkip | null, ownerId: string | null): SpeakerLinkSummary {
@@ -161,25 +185,42 @@ export class SpeakerLinkReconciler {
     const schemaFor = async () => (schema ??= await this.ontology.effectiveSchemaFor(ownerId));
 
     // 5. Every named speaker.
+    const orphaned: string[] = []; // Persons whose edge was removed — cleanup candidates
     for (const [speakerId, name] of named) {
       const edge = edgeBySpeaker.get(speakerId);
 
-      // 5.1 Already linked to a live Person carrying this name.
+      // 5.1 Already linked to a live Person carrying this name: nothing to do.
       if (edge && edge.personLive && edge.personNames.some((n) => safeNormalize(n) === name.normalized)) continue;
-      if (edge) continue; // re-pointing lands with the cleanup rules
 
       const evidence = await this.evidenceFor(tx, transcriptId, speakerId);
       if (evidence.length === 0) {
+        // No citable segment, so nothing may enter the graph (§3.3). A stale
+        // edge still goes: it names somebody this speaker no longer is.
         this.logger.debug(`kg.speaker_link ${transcriptId}: speaker ${speakerId} has no citable segment`);
+        if (edge) {
+          await this.unlink(tx, ownerId, transcriptId, edge, orphaned);
+          summary.unlinked += 1;
+        }
         continue;
       }
 
-      // 5.2 Find the Person, or 5.3 create one.
+      // 5.2 Find the Person.
       const candidates = await this.findPersons(tx, ownerId, name.displayName, name.normalized);
+      const pick = pickPerson(candidates);
       let personId: string;
-      if (candidates.length > 0) {
-        personId = candidates[0].id;
+      let createdPerson = false;
+
+      if (pick) {
+        personId = pick.person.id;
+        // 5.4 Matched through an alias spelled differently: record this spelling
+        // too. (`addAliases` skips a normalized form the entity already carries.)
+        const spelledAlike =
+          pick.person.label === name.displayName || pick.person.aliases.some((a) => a.alias === name.displayName);
+        if (!spelledAlike) {
+          await this.write.addAliases(tx, ownerId, personId, [{ alias: name.displayName, source: 'speaker_naming' }]);
+        }
       } else {
+        // 5.3 Create it. The label is stored as its own `speaker_naming` alias (#355).
         const person = await this.write.createEntity(
           tx,
           {
@@ -193,11 +234,17 @@ export class SpeakerLinkReconciler {
           await schemaFor(),
         );
         personId = person.id;
+        createdPerson = true;
         summary.created += 1;
         summary.createdPersonIds.push(person.id);
       }
 
-      // 5.5 The edge.
+      // 5.5 The edge: the stale one first (its old Person is a cleanup
+      // candidate, step 6), then the new one. At most one edge per speaker is
+      // `kg_relations_speaker_link_uniq_idx`'s guarantee.
+      if (edge) await this.deleteEdge(tx, edge.id);
+      if (edge && edge.personId !== personId) orphaned.push(edge.personId);
+
       await this.write.createRelation(
         tx,
         {
@@ -213,9 +260,141 @@ export class SpeakerLinkReconciler {
         await schemaFor(),
       );
       summary.linked += 1;
+
+      // 7. Audit — ids only, never the name.
+      await this.audit(tx, ownerId, SPEAKER_LINKED_ACTION, transcriptId, {
+        transcriptId,
+        speakerId,
+        personId,
+        createdPerson,
+        ...(pick?.ambiguous ? { ambiguous: true, candidateIds: pick.candidateIds } : {}),
+      });
+    }
+
+    // 6. Edges whose speaker no longer has a name.
+    for (const edge of edges) {
+      if (named.has(edge.speakerId)) continue;
+      await this.unlink(tx, ownerId, transcriptId, edge, orphaned);
+      summary.unlinked += 1;
+    }
+
+    // 6. Cleanup: a Person that existed only because of speaker naming here.
+    for (const personId of new Set(orphaned)) {
+      if (await this.isSpeakerNamingOnly(tx, ownerId, personId, transcriptId)) {
+        await this.deletePerson(tx, personId);
+      }
     }
 
     return summary;
+  }
+
+  // ===========================================================================
+  // Writes that GraphWriteService has no path for (deletions)
+  // ===========================================================================
+
+  /** Delete an edge and its evidence, audit it, and queue its Person for cleanup. */
+  private async unlink(
+    tx: Tx,
+    ownerId: string,
+    transcriptId: string,
+    edge: ExistingEdge,
+    orphaned: string[],
+  ): Promise<void> {
+    await this.deleteEdge(tx, edge.id);
+    orphaned.push(edge.personId);
+    await this.audit(tx, ownerId, SPEAKER_UNLINKED_ACTION, transcriptId, {
+      transcriptId,
+      speakerId: edge.speakerId,
+      removedPersonId: edge.personId,
+    });
+  }
+
+  /**
+   * Evidence TOGETHER WITH its subject, on one transaction: the deferred
+   * no-orphans trigger re-reads the relation at COMMIT, finds no row, passes.
+   */
+  private async deleteEdge(tx: Tx, relationId: string): Promise<void> {
+    await tx.kgEvidence.deleteMany({ where: { subjectKind: 'relation', subjectId: relationId } });
+    await tx.kgRelation.delete({ where: { id: relationId } });
+  }
+
+  /** A speaker-naming-only Person, with its aliases and evidence. */
+  private async deletePerson(tx: Tx, personId: string): Promise<void> {
+    await tx.kgEvidence.deleteMany({ where: { subjectKind: 'entity', subjectId: personId } });
+    await tx.kgEntityAlias.deleteMany({ where: { entityId: personId } });
+    await tx.kgEntity.delete({ where: { id: personId } });
+  }
+
+  /**
+   * Whether a Person exists ONLY because this transcript's speaker naming made
+   * it — and so may go with its last edge. All of:
+   *   - every alias is `speaker_naming`;
+   *   - no remaining relation (either end), item, mention, merge or digest;
+   *   - every evidence row cites a segment of THIS transcript.
+   * Anything else means it has become knowledge in its own right: kept.
+   */
+  private async isSpeakerNamingOnly(tx: Tx, ownerId: string, personId: string, transcriptId: string): Promise<boolean> {
+    const person = await tx.kgEntity.findFirst({ where: { id: personId, ownerId, type: PERSON }, select: { id: true } });
+    if (!person) return false;
+
+    const [
+      otherAliases,
+      relations,
+      items,
+      mentions,
+      merges,
+      mergedFrom,
+      digests,
+      foreignEvidence,
+    ] = await Promise.all([
+      tx.kgEntityAlias.count({ where: { entityId: personId, source: { not: 'speaker_naming' } } }),
+      tx.kgRelation.count({ where: { OR: [{ fromId: personId }, { toId: personId }] } }),
+      tx.kgItem.count({
+        where: {
+          OR: [{ subjectId: personId }, { meetingId: personId }, { ownerPersonId: personId }, { counterpartyId: personId }],
+        },
+      }),
+      tx.kgMention.count({ where: { entityId: personId } }),
+      tx.kgMerge.count({ where: { OR: [{ survivorId: personId }, { mergedId: personId }] } }),
+      tx.kgEntity.count({ where: { mergedIntoId: personId } }),
+      tx.kgEntityDigest.count({ where: { entityId: personId } }),
+      tx.kgEvidence.count({
+        where: {
+          subjectKind: 'entity',
+          subjectId: personId,
+          OR: [{ transcriptId: null }, { transcriptId: { not: transcriptId } }, { segmentId: null }],
+        },
+      }),
+    ]);
+
+    return (
+      otherAliases === 0 &&
+      relations === 0 &&
+      items === 0 &&
+      mentions === 0 &&
+      merges === 0 &&
+      mergedFrom === 0 &&
+      digests === 0 &&
+      foreignEvidence === 0
+    );
+  }
+
+  private async audit(
+    tx: Tx,
+    ownerId: string,
+    action: string,
+    transcriptId: string,
+    meta: Record<string, unknown>,
+  ): Promise<void> {
+    await tx.auditEvent.create({
+      data: {
+        actorUserId: ownerId,
+        action,
+        targetType: KG_SUBJECT_TRANSCRIPT,
+        targetId: transcriptId,
+        meta: meta as Prisma.InputJsonValue,
+      },
+    });
   }
 
   // ===========================================================================
