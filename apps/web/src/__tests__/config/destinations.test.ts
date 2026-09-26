@@ -63,6 +63,8 @@ describe('destinations — route ownership', () => {
         // #373, epic #347 — the knowledge graph, owned by `home`.
         '/graph',
         '/graph/entities/:id',
+        // #374 — the explorer, owned by `home` through the `/graph` prefix.
+        '/graph/explore',
         '/admin',
         '/admin/users',
         '/admin/settings',

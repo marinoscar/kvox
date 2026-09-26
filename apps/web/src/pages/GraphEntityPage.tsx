@@ -6,7 +6,8 @@
  *   1. `EntityHeader` — type, the page's <h1>, aliases, dates, counts, Edit and
  *      (Person + `graph:write`) "Forget this person…".
  *   2. `EntityBriefCard` — the stored digest + the five cited sections (#372).
- *   3. Connections — a text list today; #374 mounts its canvas above it.
+ *   3. Connections — #374's `NeighborhoodWidget` canvas, then the text list
+ *      (the accessible form of the same slice, and all there is without WebGL).
  *   4. Timeline — with the opt-in sensitive-facts switch.
  *   5. Mentions.
  *
@@ -35,6 +36,7 @@ import { EntityMentionsList } from '../components/graph/EntityMentionsList';
 import { EntityPageSkeleton } from '../components/graph/EntityPageSkeleton';
 import { EntityTimeline } from '../components/graph/EntityTimeline';
 import { ForgetPersonDialog } from '../components/graph/ForgetPersonDialog';
+import { NeighborhoodWidget } from '../components/graph/NeighborhoodWidget';
 import { GRAPH_NOT_FOUND_MESSAGE } from '../hooks/graphHookUtils';
 import { useGraphBrief } from '../hooks/useGraphBrief';
 import { useGraphEntity } from '../hooks/useGraphEntity';
@@ -127,6 +129,7 @@ export default function GraphEntityPage() {
           />
         ) : null}
 
+        <NeighborhoodWidget entityId={detail.id} entityLabel={detail.label} />
         <EntityConnectionsList entityId={detail.id} entityLabel={detail.label} ontology={ontology} />
         <EntityTimeline entityId={detail.id} ontology={ontology} />
         <EntityMentionsList entityId={detail.id} />

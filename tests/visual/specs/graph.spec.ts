@@ -13,6 +13,10 @@ import { GRAPH_PERMS, JOE_ID, installGraphApi } from '../support/graphApi';
  * than a popover — the one layout this feature adds that no other baseline
  * covers.
  *
+ * The entity page carries #374's Neighbourhood widget, so its routes add
+ * `?layout=static`: the widget's canvas then shows the model's deterministic
+ * placement and never runs a layout (see `graph-explorer.spec.ts`).
+ *
  * ⚠ These baselines are valid only when generated inside the pinned Playwright
  * image (`.github/workflows/visual-baselines.yml`).
  */
@@ -62,7 +66,7 @@ test.describe('Entity page', () => {
     test(`entity page @ ${name}`, async ({ page }) => {
       await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
-      await page.goto(harnessUrl({ route: `/graph/entities/${JOE_ID}`, perms: GRAPH_PERMS }));
+      await page.goto(harnessUrl({ route: `/graph/entities/${JOE_ID}?layout=static`, perms: GRAPH_PERMS }));
       await waitForInter(page);
 
       await expect(page.getByRole('heading', { level: 1, name: 'Joe Rivera' })).toBeVisible();
@@ -81,7 +85,7 @@ test.describe('Entity page', () => {
   test('evidence sheet open @ phone-390', async ({ page }) => {
     await installGraphApi(page, { surface: 'pages' });
     await page.setViewportSize(PHONE);
-    await page.goto(harnessUrl({ route: `/graph/entities/${JOE_ID}`, perms: GRAPH_PERMS }));
+    await page.goto(harnessUrl({ route: `/graph/entities/${JOE_ID}?layout=static`, perms: GRAPH_PERMS }));
     await waitForInter(page);
 
     const chip = page.getByRole('button', { name: 'Source 1: Q3 planning call' }).first();
