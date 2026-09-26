@@ -557,3 +557,85 @@ describe('resolveAllowedModel — the structuredOutput flag, per rank (#358)', (
     ).toBeUndefined();
   });
 });
+
+describe('resolveAllowedModel — the toolCalling flag, per rank (#359)', () => {
+  // Same ranks as structuredOutput, and — like it — no administrator override.
+  // The two flags are INDEPENDENT: each rank carries both, and one never
+  // implies the other.
+
+  /** A catalogue with one model that does structured output but not tools. */
+  const MIXED: AiModelDescriptor[] = [
+    ...CATALOGUE,
+    {
+      id: 'schema-only',
+      label: 'Schema only',
+      contextWindowTokens: 16_000,
+      maxOutputTokens: 4_000,
+      structuredOutput: true,
+      toolCalling: false,
+    },
+  ];
+
+  const WITH_FEATURE_FLOOR = (toolCalling: boolean): AiModelKnowledge => ({
+    catalogue: MIXED,
+    derive,
+    fallback: FULL.fallback,
+    fallbackFeatures: { structuredOutput: false, toolCalling },
+  });
+
+  it('takes an exact catalogue hit\'s own flag, true or false', () => {
+    expect(resolveAllowedModel(entry(), WITH_FEATURE_FLOOR(false))?.toolCalling).toBe(true);
+
+    const schemaOnly = resolveAllowedModel(
+      entry({ id: 'schema-only' }),
+      WITH_FEATURE_FLOOR(true),
+    );
+    expect(schemaOnly?.toolCalling).toBe(false);
+    expect(schemaOnly?.structuredOutput).toBe(true);
+  });
+
+  it('takes the derived FAMILY\'s flag for a dated snapshot', () => {
+    const resolved = resolveAllowedModel(
+      entry({ id: 'gpt-5.4-mini-2026-03-17' }),
+      WITH_FEATURE_FLOOR(false),
+    );
+
+    expect(resolved?.source).toBe('derived');
+    expect(resolved?.toolCalling).toBe(true);
+  });
+
+  it('takes the provider\'s feature floor for an id nothing places', () => {
+    expect(
+      resolveAllowedModel(entry({ id: 'llama-4-titan' }), WITH_FEATURE_FLOOR(false))
+        ?.toolCalling,
+    ).toBe(false);
+
+    const floored = resolveAllowedModel(entry({ id: 'llama-4-titan' }), WITH_FEATURE_FLOOR(true));
+    expect(floored?.toolCalling).toBe(true);
+    // Independent: the floor's structuredOutput stayed false.
+    expect(floored?.structuredOutput).toBe(false);
+  });
+
+  it('is false when the provider declares no feature floor at all', () => {
+    const resolved = resolveAllowedModel(entry({ id: 'llama-4-titan' }), FULL);
+
+    expect(resolved?.source).toBe('default');
+    expect(resolved?.toolCalling).toBe(false);
+  });
+
+  it('is NOT affected by an entry\'s explicit numbers — no admin override of a flag', () => {
+    expect(
+      resolveAllowedModel(
+        entry({ contextWindowTokens: 999_000, maxOutputTokens: 32_000 }),
+        WITH_FEATURE_FLOOR(false),
+      )?.toolCalling,
+    ).toBe(true);
+
+    const typed = resolveAllowedModel(
+      entry({ id: 'llama-4-titan', contextWindowTokens: 64_000, maxOutputTokens: 4_000 }),
+      WITH_FEATURE_FLOOR(false),
+    );
+    expect(typed?.source).toBe('explicit');
+    expect(typed?.toolCalling).toBe(false);
+  });
+});

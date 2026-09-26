@@ -242,6 +242,111 @@ describe('AiProviderRegistry', () => {
     });
   });
 
+  describe('toolCalling boot check (#359)', () => {
+    const flagged = (toolCalling: boolean) => [
+      {
+        id: 'stub-1',
+        label: 'Stub 1',
+        contextWindowTokens: 8000,
+        maxOutputTokens: 2000,
+        structuredOutput: false,
+        toolCalling,
+      },
+    ];
+
+    it('REFUSES a provider flagging a model toolCalling with no chat()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+            },
+          }),
+        ),
+      ).toThrow(/"stub" declares toolCalling .* implements no chat\(\)/);
+    });
+
+    it('REFUSES a provider whose defaultModelFeatures floor claims it with no chat()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: true },
+            },
+          }),
+        ),
+      ).toThrow(/implements no chat\(\)/);
+    });
+
+    it('is independent of generateStructured — implementing that does not satisfy it', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+            },
+            generateStructured: jest.fn(),
+          }),
+        ),
+      ).toThrow(/implements no chat\(\)/);
+    });
+
+    it('accepts the flag when chat() is implemented', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: true },
+            },
+            chat: jest.fn(),
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('accepts a provider that claims nothing and implements nothing — presence is the declaration', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false, toolCalling: false },
+            },
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('publishes each model\'s flag through describeAll()', () => {
+      registry.register(
+        stubProvider({
+          capabilities: {
+            models: flagged(true),
+            streaming: true,
+            modelDiscovery: false,
+          },
+          chat: jest.fn(),
+        }),
+      );
+
+      const [described] = registry.describeAll();
+
+      expect(described.capabilities.models[0].toolCalling).toBe(true);
+    });
+  });
+
   it('accepts a provider that declares modelDiscovery: false with no listModels', () => {
     // The default `stubProvider()` shape — registers fine, matching every test
     // above it in this file.

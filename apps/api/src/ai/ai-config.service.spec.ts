@@ -336,3 +336,41 @@ describe('AiConfigService — the structuredOutput flag (#358)', () => {
     ]);
   });
 });
+
+describe('AiConfigService — the toolCalling flag (#359)', () => {
+  it('publishes each model\'s toolCalling from its resolution rank', async () => {
+    const service = new AiConfigService(
+      settingsStub(
+        policy({
+          provider: 'openai',
+          enabled: true,
+          providers: {
+            openai: {
+              baseUrl: 'https://api.openai.com/v1',
+              allowedModels: [
+                // Catalogue hit: the catalogue's flag.
+                { id: 'gpt-4o' },
+                // Unplaceable id: the floor's flag, whatever numbers are typed.
+                {
+                  id: 'some-gateway-model',
+                  contextWindowTokens: 64_000,
+                  maxOutputTokens: 4_000,
+                },
+              ],
+              defaultModel: 'gpt-4o',
+            },
+          },
+        }),
+      ),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+
+    const result = await service.getConfig('user-1');
+
+    expect(result.models.map((m) => [m.id, m.toolCalling])).toEqual([
+      ['gpt-4o', true],
+      ['some-gateway-model', false],
+    ]);
+  });
+});
