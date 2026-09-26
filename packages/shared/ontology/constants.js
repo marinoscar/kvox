@@ -27,8 +27,8 @@ exports.VALID_PRECISIONS = ['day', 'month', 'year', 'unknown'];
 /** The four item types stored in `kg_items` rather than `kg_entities`. */
 exports.ITEM_KINDS = ['commitment', 'decision', 'claim', 'person_fact'];
 /**
- * Every domain key (§17.2). `personal` is declared so settings and payloads can
- * name it, but no module ships for it yet.
+ * Every domain key (§17.2). `personal` ships off by default (#383): a user
+ * enables it through the `graph.domains.personal` preference.
  */
 exports.DOMAIN_KEYS = ['core', 'work', 'personal'];
 /** Domains a user has enabled when they have never touched the setting. */

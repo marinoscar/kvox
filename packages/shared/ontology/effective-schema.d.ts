@@ -61,6 +61,12 @@ export interface EffectiveRelationTypePayload {
      * payload of every directed relation is unchanged by the flag's existence.
      */
     symmetric?: true;
+    /**
+     * Present only when the relation type declares one (every `personal`-domain
+     * relation: `personal`). Absent means `business`. Omitted rather than
+     * defaulted so the entries of `core`/`work` relations are unchanged.
+     */
+    sensitivityDefault?: Sensitivity;
     alignment: string | null;
     deprecated: boolean;
     props: EffectiveAttributePayload[];

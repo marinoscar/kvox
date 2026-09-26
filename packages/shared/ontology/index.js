@@ -52,10 +52,11 @@ Object.defineProperty(exports, "extractableRelationTypes", { enumerable: true, g
 // -----------------------------------------------------------------------------
 const core_js_1 = require("./domains/core.js");
 const work_js_1 = require("./domains/work.js");
+const personal_js_1 = require("./domains/personal.js");
 const registry_js_2 = require("./registry.js");
 const version_js_2 = require("./version.js");
 const effective_schema_js_2 = require("./effective-schema.js");
-exports.ONTOLOGY = (0, registry_js_2.buildOntologyRegistry)([core_js_1.coreDomain, work_js_1.workDomain], version_js_2.ONTOLOGY_VERSION);
+exports.ONTOLOGY = (0, registry_js_2.buildOntologyRegistry)([core_js_1.coreDomain, work_js_1.workDomain, personal_js_1.personalDomain], version_js_2.ONTOLOGY_VERSION);
 /**
  * One user's effective schema: `core` plus their enabled domains, mixins and
  * their own attribute defs. `registry` defaults to `ONTOLOGY`. (Defined here

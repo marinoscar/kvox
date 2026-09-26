@@ -132,6 +132,12 @@ export interface RelationTypeSpec {
    * `to` to be the same single type.
    */
   symmetric?: boolean;
+  /**
+   * Default `business`. The sensitivity an instance of this relation carries,
+   * and the default for its props. Every `personal`-domain relation is
+   * `personal`, so §15 applies to it (never pre-checked in review).
+   */
+  sensitivityDefault?: Sensitivity;
   alignment?: string;
   deprecated?: Deprecation;
 }
