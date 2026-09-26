@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 
+import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
+import { GraphEntitiesController } from './graph-entities.controller';
+import { GraphEntitiesService } from './graph-entities.service';
 import { GraphController } from './graph.controller';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { EvidenceValidator } from './write/evidence-validator.service';
@@ -25,10 +28,18 @@ import { GraphWriteService } from './write/graph-write.service';
 // module — so no `forwardRef` is needed.
 // =============================================================================
 
+// `AiModule` (#355) supplies `AiSettingsService`, read for `ai.graphEnabled`
+// before a guarded `kg.entity_digest` enqueue after a manual entity edit.
 @Module({
-  imports: [PrismaModule, JobsModule, TranscriptsModule],
-  providers: [GraphAccessService, GraphOntologyService, EvidenceValidator, GraphWriteService],
-  controllers: [GraphController],
+  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule],
+  providers: [
+    GraphAccessService,
+    GraphOntologyService,
+    EvidenceValidator,
+    GraphWriteService,
+    GraphEntitiesService,
+  ],
+  controllers: [GraphController, GraphEntitiesController],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.
   exports: [GraphAccessService, GraphOntologyService, EvidenceValidator, GraphWriteService],
