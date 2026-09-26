@@ -922,6 +922,19 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   aliases, relations, items, mentions, evidence and draft proposal references; your transcripts
   and notes are untouched. 400 wrong confirmation or non-Person; 404 no access or merged; 403
   your own entity without `graph:write` (`graph:write`)
+- `POST /api/graph/notes/{noteId}/extract` - Extract a **draft proposal** from one of your notes
+  (issue #363): creates the proposal (`status: extracting`) **and** queues `kg.extract` in one
+  transaction; **202** with the proposal and a cost `estimate`. Optional `model` (a permitted
+  override of the `graph.extract` task model) and `userGuidance` (`pinnedEntityIds`,
+  `entityTypes`, `relationTypes`, `instructions`). 400 unpermitted model /
+  `details.unknownTypes` / `details.invalidPinnedIds` / over budget with the numbers; 404 not
+  your note (one message for missing, deleted, not yours); 409 `graph_disabled`,
+  `ai_not_configured`, `ai_key_missing`, `model_lacks_capability`, `extraction_running` (decided
+  by `kg_proposals_note_extracting_uniq_idx` at insert, never a lookup first), `note_not_ready`.
+  A ready note is also extracted automatically once, when the graph switch, the owner's
+  `graph:write` and their `extraction.autoExtract` preference all allow it (`graph:write`)
+- `GET /api/graph/extract/estimate?noteId&model` - What that extraction would cost, counted over
+  the exact prompt (guidance excluded); no key needed — `keyConfigured` reports it (`graph:read`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -2069,10 +2082,19 @@ at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. The only `kg.*` job handlers so far are `kg.purge` (#357) and
-`kg.speaker_link` (#356); every other type in `apps/api/src/graph/job-types.ts`
-is still only a constant. There are no `/api/graph/*` routes beyond the
-ontology, the entity edit, attribute definitions and forget, and no graph UI.
+above. The only `kg.*` job handlers so far are `kg.purge` (#357),
+`kg.speaker_link` (#356) and `kg.extract` (#363 — one structured-output call per
+note on the owner's own key, producing a **draft proposal**, never graph rows;
+server-only, `maxAttempts: 1`, throttled per user, priority −5, auto-enqueued by
+`NoteGenerationService.commit()` for a ready note); every other type in
+`apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
+`apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
+`NotesModule` for the hook — one-way: it provides the two note services it needs
+itself), with the proposal payload contract later issues import in
+`graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
+#364/#365 plug their stages into. There are no `/api/graph/*` routes beyond the
+ontology, the entity edit, attribute definitions, forget and extraction
+(request + estimate), and no graph UI.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
