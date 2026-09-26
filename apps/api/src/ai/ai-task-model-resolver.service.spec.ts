@@ -161,6 +161,21 @@ describe('AiTaskModelResolver.resolve', () => {
     expect(body(error).details).toEqual({ reason: 'ai_key_missing' });
   });
 
+  it('{ requireKey: false } skips only the key check and reports keyConfigured (#363)', async () => {
+    const { resolver } = setup({ config: config({ keyConfigured: false }) });
+    const r = await resolver.resolve('u1', 'graph.extract', null, { requireKey: false });
+    expect(r.keyConfigured).toBe(false);
+
+    const disabled = setup({ policy: policy({ graphEnabled: false }), config: config({ keyConfigured: false }) });
+    const error = await rejection(disabled.resolver.resolve('u1', 'graph.extract', null, { requireKey: false }));
+    expect(body(error).details).toEqual({ reason: 'graph_disabled' });
+  });
+
+  it('a default resolution reports keyConfigured: true', async () => {
+    const { resolver } = setup();
+    expect((await resolver.resolve('u1', 'graph.extract')).keyConfigured).toBe(true);
+  });
+
   it('task model set → that model with its reasoningEffort', async () => {
     const { resolver } = setup({
       policy: policy({
