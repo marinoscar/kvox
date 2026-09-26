@@ -144,6 +144,23 @@ export interface AiConfig {
    * never as "off".
    */
   graphEnabled?: boolean;
+  /**
+   * What each connected-knowledge task would run on for THIS caller (#360).
+   * Optional for the same reason as `graphEnabled`: older fixtures omit it.
+   * #368's extract dialog defaults its model picker to `graph.extract`'s.
+   */
+  taskModels?: Partial<Record<AiTaskKey, AiConfigTaskModel>>;
+}
+
+/** One entry of `GET /api/ai/config`'s `taskModels` (#360's `aiConfigTaskModelSchema`). */
+export interface AiConfigTaskModel {
+  /** The administrator's task model, else the default; null when nothing is permitted. */
+  model: string | null;
+  source: 'task' | 'default' | 'none';
+  reasoningEffort: string;
+  requires: AiModelCapability[];
+  usable: boolean;
+  reason: 'graph_disabled' | 'model_lacks_capability' | 'no_model' | null;
 }
 
 // =============================================================================
