@@ -183,6 +183,24 @@ export const PERMISSIONS = {
   // docs/specs/notes.md §7.2).
   NOTE_TEMPLATES_READ: 'note_templates:read',
   NOTE_TEMPLATES_WRITE: 'note_templates:write',
+
+  // Knowledge graph (#354, epic #344, docs/specs/ontology.md §12).
+  //
+  // Seeded to ALL THREE roles, the same posture as `notes:*`/`transcripts:*`:
+  // curating one's own connected knowledge is a core product action, and this
+  // app's default role is Viewer. `graph:read` gates every read of one's own
+  // entities, relations, facts, proposals and the effective ontology;
+  // `graph:write` gates committing proposals, editing, merging and forgetting
+  // entities, and managing attribute definitions.
+  //
+  // THERE IS DELIBERATELY NO `GRAPH_READ_ANY` — not even for an admin. A graph
+  // is derived from somebody's private conversations and notes, exactly like a
+  // transcript or a note, and no permission string for reading another user's
+  // graph exists anywhere in this design, for any role, ever.
+  // `GraphAccessService.require` answers a caller with no access a plain 404,
+  // never a 403, for the identical reason `NoteAccessService` does.
+  GRAPH_READ: 'graph:read',
+  GRAPH_WRITE: 'graph:write',
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

@@ -889,6 +889,18 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   ever transcribes anything personally. `system_settings:read` — reused rather than a new
   `onboarding:read`, per epic #118 decision 8's precedent (the About card)
 
+### Knowledge graph
+Your own connected knowledge (issue #354, epic #344). `graph:read`/`graph:write`, both seeded
+to all three roles; owner-only, and **404, never 403**, for any graph row the caller cannot see
+— every row is authorised through `GraphAccessService` (`apps/api/src/graph/access/`), and a
+transcript share never grants graph access. See [`docs/API.md`](docs/API.md#graph) and
+[`docs/specs/ontology.md`](docs/specs/ontology.md).
+- `GET /api/graph/ontology` - The caller's **effective ontology**: `core` + enabled domains
+  (`core`,`work` by default until #369 persists the choice) + mixins + their own
+  `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
+  generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
+  is not an AI call
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -961,6 +973,14 @@ account (issue #275, epic #271, issues #272–#281). See [`docs/specs/onboarding
   404-never-403 posture, because a built-in template's existence is public by design (it is
   in every account's own catalogue) while another user's template's existence is private.
   Both permissions are seeded to all three roles.
+- `graph:read/write` - Connected knowledge (issue #354, epic #344): read your own graph
+  (entities, relations, facts, proposals, the effective ontology) vs. curate it (commit
+  proposals, edit/merge/forget entities, manage attribute definitions). **Seeded to all three
+  roles**, mirroring `notes:*`, and delivered through the idempotent seed, never a migration.
+  **There is deliberately no `graph:read_any`**, for the notes/transcripts reason: a graph is
+  derived from somebody's private conversations. `GraphAccessService.require` answers no
+  access with a byte-identical **404** per kind; `edit` on the caller's own row without
+  `graph:write` is the one **403**.
 
 ## Database Tables
 
@@ -1992,15 +2012,18 @@ gate, retrieval, privacy) is [`docs/specs/ontology.md`](docs/specs/ontology.md).
 The same document also specifies a review UI for overriding extraction,
 per-task-and-per-user AI model selection, a read-only "Ask" agent over the
 graph, and an explorer/whole-graph visualization (§19–§22).
-**The ontology definition package (issue #350) and the `kg_*` tables (issue
-#351) are built; services arrive with #354–#357.** The ontology's sources live
+**The ontology definition package (issue #350), the `kg_*` tables (issue
+#351) and the graph module scaffold (issue #354: `GraphModule`,
+`GraphAccessService`, the `graph:*` permissions and `GET /api/graph/ontology`)
+are built; the remaining services arrive with #355–#357.** The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. There are still no `graph.*` jobs, no `/api/graph/*` routes, and no
-graph UI. Five rules a neighbouring file can
+above. There are still no `kg.*` job handlers (only the type constants in
+`apps/api/src/graph/job-types.ts`), no `/api/graph/*` route beyond
+`GET /api/graph/ontology`, and no graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the

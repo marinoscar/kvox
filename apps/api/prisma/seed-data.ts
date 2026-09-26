@@ -151,6 +151,23 @@ export const PERMISSIONS = [
     name: 'note_templates:write',
     description: 'Create, edit, delete and duplicate your own note templates',
   },
+
+  // Knowledge graph (#354, epic #344, docs/specs/ontology.md §12). Granted to
+  // ALL THREE roles below, mirroring `notes:*` exactly. There is deliberately
+  // no `graph:read_any` — a graph is derived from somebody's private
+  // conversations and notes, and no permission string exists for reading
+  // someone else's (an admin included). Delivered to existing deployments
+  // through this idempotent seed, never through a migration.
+  {
+    name: 'graph:read',
+    description:
+      'View your own knowledge graph: entities, relations, facts, proposals and the effective ontology',
+  },
+  {
+    name: 'graph:write',
+    description:
+      'Curate your own knowledge graph: commit proposals, edit, merge and forget entities, manage attribute definitions',
+  },
 ] as const;
 
 // Role to permissions mapping
@@ -204,6 +221,10 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'notes:write',
     'note_templates:read',
     'note_templates:write',
+    // #354, epic #344 — ALL THREE ROLES, identical posture to notes:* just
+    // above. No graph:read_any exists anywhere in this codebase, for any role.
+    'graph:read',
+    'graph:write',
   ],
   contributor: [
     'user_settings:read',
@@ -216,6 +237,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'notes:write',
     'note_templates:read',
     'note_templates:write',
+    'graph:read',
+    'graph:write',
   ],
   viewer: [
     'user_settings:read',
@@ -238,6 +261,10 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     'notes:write',
     'note_templates:read',
     'note_templates:write',
+    // #354, epic #344. Same posture as notes:* immediately above: a fresh
+    // account (this role) curates its own knowledge graph from day one.
+    'graph:read',
+    'graph:write',
   ],
 };
 

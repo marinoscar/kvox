@@ -143,6 +143,43 @@ describe('seed data', () => {
     });
   });
 
+  describe('graph permissions (#354, epic #344)', () => {
+    it('seeds graph:read and graph:write exactly once each', () => {
+      const names = PERMISSIONS.map((permission) => permission.name);
+
+      expect(names.filter((name) => name === 'graph:read')).toHaveLength(1);
+      expect(names.filter((name) => name === 'graph:write')).toHaveLength(1);
+    });
+
+    it('declares both in roles.constants.ts, the list the guards read', () => {
+      expect(PERMISSION_CONSTANTS.GRAPH_READ).toBe('graph:read');
+      expect(PERMISSION_CONSTANTS.GRAPH_WRITE).toBe('graph:write');
+    });
+
+    it('grants both to ALL THREE roles, the same posture as notes:*', () => {
+      for (const role of ['admin', 'contributor', 'viewer']) {
+        for (const permission of ['graph:read', 'graph:write']) {
+          expect(ROLE_PERMISSIONS[role]).toContain(permission);
+        }
+      }
+    });
+
+    // The absence is the point (docs/specs/ontology.md §12): no permission to
+    // read another user's graph exists anywhere, for any role. Checked in all
+    // three lists independently, like notes:read_any above.
+    it('does NOT seed graph:read_any anywhere — the absence is deliberate', () => {
+      expect(PERMISSIONS.map((permission) => permission.name)).not.toContain(
+        'graph:read_any',
+      );
+      expect(Object.values(PERMISSION_CONSTANTS)).not.toContain('graph:read_any');
+      expect(
+        Object.values(ROLE_PERMISSIONS).some((grants) =>
+          grants.includes('graph:read_any'),
+        ),
+      ).toBe(false);
+    });
+  });
+
   describe('role-permission mappings', () => {
     it('names only roles that are seeded', () => {
       const roles = new Set<string>(ROLES.map((role) => role.name));
