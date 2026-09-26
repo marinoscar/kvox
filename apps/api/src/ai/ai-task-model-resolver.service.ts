@@ -13,7 +13,12 @@ import type {
   SystemAiValue,
 } from './ai-settings.schema';
 import { AiSettingsService } from './ai-settings.service';
-import { chooseTaskModel, taskDefinition } from './ai-task-models';
+import {
+  AI_MODEL_LACKS_CAPABILITY,
+  AI_MODEL_NOT_PERMITTED,
+  chooseTaskModel,
+  taskDefinition,
+} from './ai-task-models';
 import type { AiConfigModel, AiConfigResponse } from './dto/ai-config.dto';
 import type { AiProvider } from './providers/ai-provider.interface';
 
@@ -54,18 +59,15 @@ export const AI_CONFLICT_REASONS = {
   GRAPH_DISABLED: 'graph_disabled',
   AI_NOT_CONFIGURED: 'ai_not_configured',
   AI_KEY_MISSING: 'ai_key_missing',
-  MODEL_LACKS_CAPABILITY: 'model_lacks_capability',
+  MODEL_LACKS_CAPABILITY: AI_MODEL_LACKS_CAPABILITY,
 } as const;
 
 export type AiConflictReason =
   (typeof AI_CONFLICT_REASONS)[keyof typeof AI_CONFLICT_REASONS];
 
-/**
- * The 400 `details.reason` for a model outside the permitted list — shared by
- * the run-time resolver and save-time validation in `AiSettingsService`, so a
- * client maps one value.
- */
-export const AI_MODEL_NOT_PERMITTED = 'model_not_permitted' as const;
+// Defined in the pure `ai-task-models.ts` so `AiSettingsService` can use it
+// without importing this file (which injects `AiSettingsService` — a cycle).
+export { AI_MODEL_NOT_PERMITTED };
 
 /** Everything a run needs to call a model, resolved and checked. */
 export interface AiModelResolution {

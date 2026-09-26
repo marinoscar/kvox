@@ -24,6 +24,20 @@ import type {
 // the chooser the already-resolved model list.
 // =============================================================================
 
+/**
+ * The 400 `details.reason` for a model outside the permitted list — shared by
+ * the run-time resolver (`AiTaskModelResolver`) and save-time validation
+ * (`AiSettingsService.update`), so a client maps one value.
+ */
+export const AI_MODEL_NOT_PERMITTED = 'model_not_permitted' as const;
+
+/**
+ * The 400 `details.reason` save-time validation answers for a task model that
+ * lacks a capability the task requires. The same string is the run-time 409
+ * reason (`AI_CONFLICT_REASONS.MODEL_LACKS_CAPABILITY`).
+ */
+export const AI_MODEL_LACKS_CAPABILITY = 'model_lacks_capability' as const;
+
 /** A model capability a task may require. Flags on `AiConfigModel`. */
 export type AiModelCapability = 'structuredOutput' | 'toolCalling';
 
