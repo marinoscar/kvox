@@ -47,6 +47,7 @@ function emptySummary(overrides: Partial<UserDataSummary> = {}): UserDataSummary
     files: { count: 0, bytes: '0' },
     noteTemplates: { count: 0 },
     credentials: { aiKeys: 0, accessTokens: 0 },
+    graph: { entities: 0, items: 0 },
     activeDeletion: null,
     ...overrides,
   };
@@ -149,6 +150,60 @@ describe('UserDangerZonePage', () => {
       ]) {
         expect(screen.getByRole('button', { name })).toBeDisabled();
       }
+    });
+  });
+
+  // ==========================================================================
+  // The knowledge graph line (issue #357) — a category of `content` and
+  // `everything`, never a narrow row of its own
+  // ==========================================================================
+
+  describe('the knowledge graph line', () => {
+    it('shows entity and fact counts in the compound section, pluralised', async () => {
+      mockGetSummary.mockResolvedValue({
+        ...MIXED_SUMMARY,
+        graph: { entities: 3, items: 5 },
+      });
+
+      await renderPage();
+
+      expect(screen.getByText('Knowledge graph: 3 entities, 5 facts')).toBeInTheDocument();
+    });
+
+    it('uses the singular for a count of one', async () => {
+      mockGetSummary.mockResolvedValue({
+        ...MIXED_SUMMARY,
+        graph: { entities: 1, items: 1 },
+      });
+
+      await renderPage();
+
+      expect(screen.getByText('Knowledge graph: 1 entity, 1 fact')).toBeInTheDocument();
+    });
+
+    it('says nothing is stored rather than printing two zeroes', async () => {
+      await renderPage();
+
+      expect(screen.getByText('Knowledge graph: nothing stored')).toBeInTheDocument();
+    });
+
+    it('names the graph in the all-content description', async () => {
+      await renderPage();
+
+      expect(screen.getByText(/and your knowledge graph/i)).toBeInTheDocument();
+    });
+
+    // No narrow `graph` scope exists (USER_DATA_SCOPES is unchanged), so the
+    // graph must never gain a layer-1 row with a delete button of its own.
+    it('adds no delete button of its own', async () => {
+      mockGetSummary.mockResolvedValue({
+        ...MIXED_SUMMARY,
+        graph: { entities: 3, items: 5 },
+      });
+
+      await renderPage();
+
+      expect(screen.queryByRole('button', { name: /graph/i })).not.toBeInTheDocument();
     });
   });
 

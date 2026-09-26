@@ -26,6 +26,7 @@ const CATEGORIES = [
   'files',
   'credentials',
   'onboarding',
+  'graph',
 ] as const;
 
 describe('user.data.purge job type strings', () => {
@@ -53,6 +54,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       files: false,
       credentials: false,
       onboarding: false,
+      graph: false,
     },
     notes: {
       transcripts: false,
@@ -61,6 +63,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       files: false,
       credentials: false,
       onboarding: false,
+      graph: false,
     },
     files: {
       transcripts: false,
@@ -69,6 +72,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       files: true,
       credentials: false,
       onboarding: false,
+      graph: false,
     },
     content: {
       transcripts: true,
@@ -77,6 +81,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       files: true,
       credentials: false,
       onboarding: false,
+      graph: true,
     },
     everything: {
       transcripts: true,
@@ -85,6 +90,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       files: true,
       credentials: true,
       onboarding: true,
+      graph: true,
     },
   };
 
@@ -117,6 +123,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
     expect(scopeIncludes('content', 'noteTemplates')).toBe(true);
     expect(scopeIncludes('content', 'files')).toBe(true);
     expect(scopeIncludes('content', 'credentials')).toBe(false);
+    expect(scopeIncludes('content', 'graph')).toBe(true);
   });
 
   it('composes `everything` as `content` plus credentials AND onboarding, the only two lines the composites differ on', () => {
@@ -195,6 +202,19 @@ describe('scopeIncludes — the full scope x category matrix', () => {
   // payload records one. Adding `'onboarding'` there would create a
   // "delete my onboarding state" request that destroys nothing and that the
   // replay button on `/settings/getting-started` already provides.
+  // #357: the knowledge graph follows `content` ("everything you made"), the
+  // note-templates line — and like `onboarding` it is a category, never a
+  // requestable scope.
+  it('reaches the knowledge graph EXACTLY from `content` and `everything` — never from a narrow scope', () => {
+    const reaching = USER_DATA_SCOPES.filter((scope) => scopeIncludes(scope, 'graph'));
+
+    expect(reaching).toEqual(['content', 'everything']);
+  });
+
+  it('does NOT add `graph` to the requestable scopes', () => {
+    expect(USER_DATA_SCOPES).not.toContain('graph');
+  });
+
   it('does NOT add `onboarding` to the requestable scopes — those five strings are permanent', () => {
     expect(USER_DATA_SCOPES).toEqual(['transcripts', 'notes', 'files', 'content', 'everything']);
     expect(USER_DATA_SCOPES).not.toContain('onboarding');

@@ -5315,8 +5315,9 @@ your transcripts and notes (issue #354, epic #344). Full design (the
 ontology, extraction, review, retrieval, privacy) is
 [`docs/specs/ontology.md`](specs/ontology.md). Today this group carries the
 effective ontology, the manual entity edit, and your own attribute
-definitions (issue #355); entity reads, relation, fact and search routes
-arrive with later issues and follow the access posture below.
+definitions (issue #355), plus "forget this person" (issue #357); entity
+reads, relation, fact and search routes arrive with later issues and follow
+the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
@@ -5514,6 +5515,58 @@ and trailing punctuation stripped) is what every exact-match lookup reads.
 sent, an empty body, or an alias that is empty once normalized · `401` ·
 `403` your own entity without `graph:write` · `404` `Entity not found` — no
 such entity, another user's, or merged.
+
+#### POST /graph/entities/{id}/forget
+
+"Forget this person" (issue #357, epic #344; `docs/specs/ontology.md` §15).
+Queues a `kg.purge` job that removes this **Person** — and every entity
+previously merged into it — plus everything your graph derived about them:
+their aliases, every relation naming them on either end (including the link
+from a diarized transcript speaker), every fact where they are the subject,
+owner or counterparty, their mentions, their citations, and any draft
+proposal item that would re-create them. **Your recordings and notes are
+untouched** — they are your own content, and the person's name stays in
+them exactly as recorded.
+
+Only a **Person** may be forgotten; delete any other entity type by editing
+or reverting the proposal that created it.
+
+**Requires:** `graph:write`.
+
+**Request:**
+```json
+{ "confirmation": "FORGET" }
+```
+
+The body must be exactly this — a stray click, or a replayed request with an
+empty body, can never delete anything.
+
+**Response:** `202`
+```json
+{
+  "data": {
+    "jobId": "b2e6e2b0-…",
+    "entityId": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+    "status": "pending"
+  },
+  "meta": { "timestamp": "2026-09-26T12:00:00.000Z" }
+}
+```
+
+`status` is `pending` while the job waits for a worker, `running` once
+claimed. The person stays visible until it completes — normally within
+seconds. **Asking again while a deletion is pending or running for this
+entity returns that same `jobId`** — the queue's ordinary active dedup, keyed
+on this entity — rather than queuing a second one. The request is audited as
+`graph.person_forget_requested`; the job's own completion is audited
+separately as `graph.person_forgotten`, carrying row counts only (never a
+label, alias or quote — those are exactly the facts about the person you
+just asked this deployment to forget).
+
+**Errors:** `400` confirmation missing or not exactly `FORGET`, or the
+entity is not a Person · `401` · `403` your own entity without
+`graph:write` · `404` `Entity not found` — no such entity, another user's,
+or merged.
 
 #### Attribute definitions
 
@@ -5751,13 +5804,13 @@ the one definition; the table below is a rendering of it, not a second copy.
 Every narrow scope maps to exactly one category — only the two composites fan
 out:
 
-| Scope | Transcripts | Notes | Note Templates | Files | Credentials |
-|---|:---:|:---:|:---:|:---:|:---:|
-| `transcripts` | ✓ | | | | |
-| `notes` | | ✓ | | | |
-| `files` | | | | ✓ | |
-| `content` | ✓ | ✓ | ✓ | ✓ | |
-| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Scope | Transcripts | Notes | Note Templates | Files | Graph | Credentials |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| `transcripts` | ✓ | | | | | |
+| `notes` | | ✓ | | | | |
+| `files` | | | | ✓ | | |
+| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 `content` is everything the user **made**; `everything` is `content` plus
 their **credentials** (AI provider keys and personal access tokens) — the
@@ -5766,6 +5819,15 @@ only line the two composites differ on. ⚠ Note templates ride with
 remove them. A template is reusable configuration with its own settings
 page, not note content, and a user who clicked "Delete notes" was told they
 were deleting notes, not silently emptying a different settings page.
+
+⚠ The knowledge graph (issue #357, epic #344) rides with `content`/
+`everything` too, for the same "everything you made" reasoning, and for the
+same reason no narrow scope reaches it — deleting `transcripts` must not
+silently empty a graph the caller curated by hand. It is not deleted inline:
+these two scopes enqueue a `kg.purge { scope: "all" }` job and let that
+handler own the plan, the same fan-out-to-an-existing-handler pattern
+`transcript.purge`/`note.purge` already use, rather than a second
+implementation of graph deletion living here.
 
 **No scope deletes the account.** The `users` row, `user_roles`,
 `refresh_tokens` and the caller's session are untouched by every scope,
@@ -5802,11 +5864,18 @@ shrink only when the caller acts, never on their own.
     "notes": { "count": 40, "bytes": "184220" },
     "files": { "count": 3, "bytes": "552012" },
     "noteTemplates": { "count": 2 },
+    "graph": { "entities": 7, "items": 12 },
     "credentials": { "aiKeys": 1, "accessTokens": 2 },
     "activeDeletion": null
   }
 }
 ```
+
+`graph` counts the caller's own `kg_entities` (excluding merge tombstones —
+an entity `merged_into_id` points at someone else is not something the
+caller still holds) and `kg_items` (commitments, decisions, claims, person
+facts); a graph row has no byte size of its own the way a transcript or file
+does, so there is no `bytes` field here.
 
 `activeDeletion` is non-null while a `user.data.purge` job is `pending` or
 `running` for this caller — `{ id, scope, status, requestedAt }`. A client

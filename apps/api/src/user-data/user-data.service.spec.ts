@@ -10,6 +10,7 @@ import {
   USER_DATA_SUBJECT_TYPE,
   type UserDataScope,
 } from './job-types';
+import { userDataSummarySchema } from './dto/user-data.dto';
 import { readPurgePayload, UserDataService } from './user-data.service';
 
 // =============================================================================
@@ -71,6 +72,8 @@ describe('UserDataService', () => {
     noteTemplate: { count: jest.Mock };
     userAiCredential: { count: jest.Mock };
     personalAccessToken: { count: jest.Mock };
+    kgEntity: { count: jest.Mock };
+    kgItem: { count: jest.Mock };
     job: { findFirst: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
@@ -86,6 +89,8 @@ describe('UserDataService', () => {
       noteTemplate: { count: jest.fn().mockResolvedValue(0) },
       userAiCredential: { count: jest.fn().mockResolvedValue(0) },
       personalAccessToken: { count: jest.fn().mockResolvedValue(0) },
+      kgEntity: { count: jest.fn().mockResolvedValue(0) },
+      kgItem: { count: jest.fn().mockResolvedValue(0) },
       job: { findFirst: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
@@ -155,6 +160,25 @@ describe('UserDataService', () => {
         _count: { _all: true },
         _sum: { size: true },
       });
+    });
+
+    it('reports the knowledge graph as entity and item counts, excluding merge tombstones (#357)', async () => {
+      prisma.kgEntity.count.mockResolvedValue(7);
+      prisma.kgItem.count.mockResolvedValue(12);
+
+      const result = await service.summary(USER_ID);
+
+      expect(result.graph).toEqual({ entities: 7, items: 12 });
+      expect(prisma.kgEntity.count).toHaveBeenCalledWith({
+        where: { ownerId: USER_ID, reviewStatus: { not: 'merged' } },
+      });
+      expect(prisma.kgItem.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
+    });
+
+    it('conforms to the published summary schema, graph field included', async () => {
+      const result = await service.summary(USER_ID);
+
+      expect(userDataSummarySchema.safeParse(result).success).toBe(true);
     });
 
     it('reports activeDeletion as null when nothing is running', async () => {

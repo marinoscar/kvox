@@ -1,3 +1,4 @@
+import { KG_PURGE_JOB_TYPE, KG_SUBJECT_USER } from '../../graph/job-types';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../notes/job-types';
 import {
@@ -52,6 +53,7 @@ interface Harness {
   aiCredentials: { removeAll: jest.Mock };
   searchIndex: { forget: jest.Mock; forgetOwnerDocuments: jest.Mock };
   userSettings: { patchSettings: jest.Mock };
+  jobs: { enqueue: jest.Mock };
   registry: JobHandlerRegistry;
 }
 
@@ -90,6 +92,8 @@ function harness(): Harness {
   // edit. The mock is the service, so the assertions below are about the
   // REQUEST this handler makes — which namespace, and only which namespace.
   const userSettings = { patchSettings: jest.fn().mockResolvedValue({}) };
+  // #357: the `graph` category is handed to `kg.purge`, never deleted inline.
+  const jobs = { enqueue: jest.fn().mockResolvedValue({ id: 'kg-job-1', status: 'pending' }) };
   const registry = new JobHandlerRegistry();
 
   const handler = new UserDataPurgeHandler(
@@ -103,6 +107,7 @@ function harness(): Harness {
     aiCredentials as never,
     searchIndex as never,
     userSettings as never,
+    jobs as never,
   );
 
   return {
@@ -116,6 +121,7 @@ function harness(): Harness {
     aiCredentials,
     searchIndex,
     userSettings,
+    jobs,
     registry,
   };
 }
@@ -716,5 +722,92 @@ describe('UserDataPurgeHandler — the batch loop is bounded', () => {
     );
 
     expect(prisma.note.findMany).toHaveBeenCalledTimes(USER_DATA_PURGE_MAX_BATCHES);
+  });
+});
+
+// -----------------------------------------------------------------------------
+// The knowledge graph (#357) — `content`/`everything` hand it to `kg.purge`
+// -----------------------------------------------------------------------------
+
+describe('UserDataPurgeHandler — the knowledge graph category', () => {
+  it.each(['content', 'everything'] as const)(
+    'scope "%s" enqueues ONE kg.purge { scope: all } for the user, with ordinary dedup',
+    async (scope) => {
+      const { handler, jobs } = harness();
+
+      await handler.process(job(scope));
+
+      expect(jobs.enqueue).toHaveBeenCalledTimes(1);
+      expect(jobs.enqueue).toHaveBeenCalledWith({
+        type: KG_PURGE_JOB_TYPE,
+        reason: 'rerun',
+        subjectType: KG_SUBJECT_USER,
+        subjectId: USER_ID,
+        payload: { userId: USER_ID, scope: 'all' },
+      });
+      // Ordinary dedup: a re-run while an earlier graph purge is live gets it back.
+      expect(jobs.enqueue.mock.calls[0][0]).not.toHaveProperty('skipDedup');
+    },
+  );
+
+  it.each(['transcripts', 'notes', 'files'] as const)(
+    'narrow scope "%s" never touches the graph',
+    async (scope) => {
+      const { handler, jobs } = harness();
+
+      await handler.process(job(scope));
+
+      expect(jobs.enqueue).not.toHaveBeenCalled();
+    },
+  );
+
+  it('enqueues the graph purge FIRST — before credentials, notes and transcripts', async () => {
+    const { handler, prisma, aiCredentials, jobs } = harness();
+
+    const order: string[] = [];
+    jobs.enqueue.mockImplementation(async () => {
+      order.push('graph');
+      return { id: 'kg-job-1', status: 'pending' };
+    });
+    aiCredentials.removeAll.mockImplementation(async () => {
+      order.push('credentials');
+      return 0;
+    });
+    prisma.note.findMany.mockImplementation(async () => {
+      order.push('notes');
+      return [];
+    });
+    prisma.transcript.findMany.mockImplementation(async () => {
+      order.push('transcripts');
+      return [];
+    });
+
+    await handler.process(job('everything'));
+
+    expect(order).toEqual(['graph', 'credentials', 'notes', 'transcripts']);
+  });
+
+  it('audits the queued graph purge with its job id', async () => {
+    const { handler, prisma } = harness();
+
+    await handler.process(job('content'));
+
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+      data: {
+        actorUserId: USER_ID,
+        action: 'user_data:graph_purge_queued',
+        targetType: 'user',
+        targetId: USER_ID,
+        meta: { jobId: 'kg-job-1' },
+      },
+    });
+  });
+
+  it('enqueues nothing for an unreadable payload', async () => {
+    const { handler, jobs } = harness();
+
+    await handler.process({ id: JOB_ID, payload: { scope: 'content' } } as never);
+
+    expect(jobs.enqueue).not.toHaveBeenCalled();
   });
 });

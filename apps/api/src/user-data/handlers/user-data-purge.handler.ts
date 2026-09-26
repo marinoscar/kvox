@@ -194,9 +194,11 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import type { Job, Prisma } from '@prisma/client';
 
 import { UserAiCredentialsService } from '../../ai/user-ai-credentials.service';
+import { KG_PURGE_JOB_TYPE, KG_SUBJECT_USER } from '../../graph/job-types';
 import type { JobExecutionProfile } from '../../jobs/job-execution-profile';
 import type { JobHandler } from '../../jobs/job-handler.interface';
 import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
+import { JobsService } from '../../jobs/jobs.service';
 import { NOTE_PURGE_JOB_TYPE, NOTE_SUBJECT_TYPE } from '../../notes/job-types';
 import { NoteTemplatesService } from '../../notes/note-templates.service';
 import { NotesService } from '../../notes/notes.service';
@@ -276,6 +278,7 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
     private readonly aiCredentials: UserAiCredentialsService,
     private readonly searchIndex: SearchIndexService,
     private readonly userSettings: UserSettingsService,
+    private readonly jobs: JobsService,
   ) {}
 
   onModuleInit(): void {
@@ -303,6 +306,14 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
     this.logger.warn(
       `Starting bulk deletion of scope "${scope}" for user ${userId} (job ${job.id})`,
     );
+
+    // #357: the knowledge graph goes FIRST (after #376's `ask` step, when
+    // present), so graph rows citing about-to-be-deleted notes and transcripts
+    // go away with them. Correctness does not depend on the order — every
+    // evidence anchor FK is SetNull.
+    if (scopeIncludes(scope, 'graph')) {
+      await this.enqueueGraphPurge(userId);
+    }
 
     if (scopeIncludes(scope, 'credentials')) {
       await this.destroyCredentials(userId);
@@ -343,6 +354,35 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
   // ===========================================================================
   // The semantic index (#188, epic #165)
   // ===========================================================================
+
+  /**
+   * Hand the user's whole knowledge graph to `kg.purge { scope: 'all' }`
+   * (#357, epic #344).
+   *
+   * ⚠ IT ENQUEUES AND DELETES NOTHING ITSELF — the fan-out-to-existing-handlers
+   * rule this handler already follows for `transcript.purge`/`note.purge`.
+   * `kg.purge` owns the plan (a dozen tables, evidence with no FK to its
+   * subject, entity ids inside draft proposal JSON); a second copy of it here
+   * is how the two would come to disagree about what "the graph" is.
+   *
+   * Subject `user`/userId with ORDINARY dedup: a re-run of this deletion while
+   * an earlier graph purge is still pending or running gets that job back
+   * rather than a second one. The type string comes from the constants-only
+   * `graph/job-types.ts`, so this module never imports `GraphModule`.
+   */
+  private async enqueueGraphPurge(userId: string): Promise<void> {
+    const job = await this.jobs.enqueue({
+      type: KG_PURGE_JOB_TYPE,
+      reason: 'rerun',
+      subjectType: KG_SUBJECT_USER,
+      subjectId: userId,
+      payload: { userId, scope: 'all' },
+    });
+
+    await this.audit(userId, 'user_data:graph_purge_queued', { jobId: job.id });
+
+    this.logger.warn(`User ${userId}: knowledge graph queued for deletion (kg.purge job ${job.id})`);
+  }
 
   /**
    * Drop every `search_chunks` / `search_index_state` row for one category of

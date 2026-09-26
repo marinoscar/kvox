@@ -10,7 +10,9 @@ import { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs
 import { GraphEntitiesController } from './graph-entities.controller';
 import { GraphEntitiesService } from './graph-entities.service';
 import { GraphController } from './graph.controller';
+import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
+import { KgPurgeService } from './purge/kg-purge.service';
 import { EvidenceValidator } from './write/evidence-validator.service';
 import { GraphWriteService } from './write/graph-write.service';
 
@@ -41,6 +43,9 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphWriteService,
     GraphEntitiesService,
     GraphAttributeDefsService,
+    // #357 — `kg.purge`: forget-a-person and the Danger Zone's `graph` category.
+    KgPurgeService,
+    KgPurgeHandler,
   ],
   controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
