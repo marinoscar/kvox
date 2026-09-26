@@ -43,7 +43,10 @@ export interface EvidenceChipProps {
 
 /** The source's human title, whatever its kind. */
 export function evidenceTitle(link: EvidenceLink | null | undefined): string | null {
-  if (!link) return null;
+  // `undefined` is still loading; `null` is settled and gone (an id the API
+  // silently omitted — #370 never 404s a batch).
+  if (link === undefined) return null;
+  if (link === null) return 'Source no longer available';
   if (!link.source.available) return 'Source no longer available';
   switch (link.source.kind) {
     case 'segment':
