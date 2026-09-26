@@ -922,6 +922,36 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   aliases, relations, items, mentions, evidence and draft proposal references; your transcripts
   and notes are untouched. 400 wrong confirmation or non-Person; 404 no access or merged; 403
   your own entity without `graph:write` (`graph:write`)
+- `GET /api/graph/entities` - The entity index: list/search your people, organizations, projects
+  and meetings (issue #370, epic #347). `type` filters (400 on an unknown key); `q` is a trigram
+  fuzzy match on label/alias (top `limit`, `nextCursor` always null); `sort=updated`|`viewed`;
+  `transcriptId` narrows to the Persons `IDENTIFIED_AS` a speaker in that transcript, each with
+  `speakerIds` — 404 without view access to it. Keyset-paginated otherwise (`graph:read`)
+- `GET /api/graph/entities/{id}` - One entity: attributes, aliases, `firstSeenAt`/`lastSeenAt`,
+  and the page counts (`sensitive` person facts not counted) (`graph:read`)
+- `GET /api/graph/entities/{id}/neighborhood?hops&types&relationTypes&as_of&limit` - The entity's
+  bounded 1–2-hop neighbourhood as a `GraphSlice` {seedIds, asOf, nodes, edges, truncated, cap}
+  (issue #370). An item is always a walk leaf; edges touching one are derived from its own
+  columns (`virtual: true`) and a stored relation with the same `(type,from,to)` wins. `limit`
+  ≤ 300; `sensitive` person facts never appear. 503 `graph_query_timeout` past a 3 s statement
+  timeout (`graph:read`)
+- `GET /api/graph/entities/{id}/timeline?as_of&kinds&includeSensitive&cursor&limit` - Everything
+  dated about this entity, newest first (issue #370); a **superseded** item stays, flagged.
+  `includeSensitive=true` reveals `sensitive` person facts. Keyset-paginated; 503
+  `graph_query_timeout` (`graph:read`)
+- `GET /api/graph/entities/{id}/mentions` - The notes/transcripts linked to this entity, newest
+  first (issue #370, additive to the original route list). A deleted document or a revoked
+  transcript share stays with `available: false` (`graph:read`)
+- `POST /api/graph/explore/expand` - One hop out from up to 50 nodes as one `GraphSlice`, seeds
+  at depth 0 (issue #370). A read, despite the verb — the node list does not fit a query string.
+  `cap` ≤ 300; **all-or-nothing 404** if any `nodeIds` entry is not one of your readable
+  entities/items; 503 `graph_query_timeout` (`graph:read`)
+- `GET /api/graph/evidence/{id}` - Resolve one citation to an openable link — a transcript
+  segment (playable at the quoted moment) or a note version (issue #370). `available: false`
+  (quote still returned) when the source is gone or no longer viewable (`graph:read`)
+- `GET /api/graph/evidence?ids=` - Batch-resolve up to 50 citation ids in request order for a row
+  of citation chips (issue #370, additive to the original route list); unknown ids are silently
+  omitted (`graph:read`)
 - `POST /api/graph/notes/{noteId}/extract` - Extract a **draft proposal** from one of your notes
   (issue #363): creates the proposal (`status: extracting`) **and** queues `kg.extract` in one
   transaction; **202** with the proposal and a cost `estimate`. Optional `model` (a permitted
@@ -2072,7 +2102,13 @@ graph, and an explorer/whole-graph visualization (§19–§22).
 are built, and so is the graph write layer (issue #355: `GraphWriteService`, the evidence
 invariant trigger, the manual entity edit and attribute definitions); "forget this person"
 (issue #357: `POST /api/graph/entities/:id/forget`, the `kg.purge` job type, and the Danger
-Zone's `graph` category) is also built; the remaining services arrive with #356 and later.**
+Zone's `graph` category) is also built; the read layer (issue #370, epic #347:
+`apps/api/src/graph/read/` — the entity index, an entity's page, its
+neighbourhood, timeline, mentions, citation links, and the explorer's
+`expand`, exported as `GraphReadService`, `GraphNeighborhoodService` and
+`GraphEvidenceService` for the entity brief (#372) and the Ask agent (#377)
+to reuse) is built too; the extraction/review/commit pipeline and the
+whole-graph overview arrive later.**
 The extraction quality harness (issue #362: the synthetic golden set at
 `apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
 built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
@@ -2092,9 +2128,8 @@ server-only, `maxAttempts: 1`, throttled per user, priority −5, auto-enqueued 
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
 `graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
-#364/#365 plug their stages into. There are no `/api/graph/*` routes beyond the
-ontology, the entity edit, attribute definitions, forget and extraction
-(request + estimate), and no graph UI.
+#364/#365 plug their stages into. The read layer (#370) is built; there are
+still no review/commit or whole-graph-overview routes, and no graph UI.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph

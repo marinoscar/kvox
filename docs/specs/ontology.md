@@ -1545,6 +1545,35 @@ recording itself, a different object entirely. The stated consequence:
 revoking a transcript share revokes nothing on the graph side, because
 nothing was ever shared there to revoke.
 
+**The read layer is built (issue #370, epic #347).** `GET
+/api/graph/entities` (list/search, with `sort`/`type`/`q`/`transcriptId`),
+`GET /api/graph/entities/:id`, `GET /api/graph/entities/:id/neighborhood`,
+`GET /api/graph/entities/:id/timeline`, and `POST /api/graph/explore/expand`
+are the five routes this section's bullet list already named above as
+`graph:read`; `apps/api/src/graph/read/` (`GraphReadController`,
+`GraphReadService`, `GraphNeighborhoodService`, `GraphEvidenceService`) is the
+implementation, exported from `GraphModule` for the entity brief (§9.1, #372)
+and the Ask agent's tools (§9.3, #377) to call directly rather than
+re-querying `kg_entities`/`kg_relations`/`kg_items` themselves. Two routes are
+**additive** to the list this issue started from, both `graph:read`, and
+folded into the same controller: `GET /api/graph/entities/:id/mentions` (the
+notes and transcripts linked to an entity — this section already listed
+"mentions" under `graph:read` above, this is its route) and `GET
+/api/graph/evidence?ids=` (batch citation resolution, alongside the
+single-id `GET /api/graph/evidence/:id` also shipped here, for rendering a
+row of citation chips in one round trip). `READABLE_ENTITY_STATUSES`,
+`READABLE_RELATION_STATUSES`, `READABLE_ITEM_STATUSES` and
+`TIMELINE_ITEM_STATUSES` (`apps/api/src/graph/read/readable.ts`) are the one
+definition of "readable" every one of these routes, and every later read
+surface, imports rather than re-deriving. One deliberate deviation from this
+issue's original text: evaluating a relation `as_of` reads
+`AS_OF_RELATION_STATUSES` (readable **plus** `superseded`), matching §5.4's
+own `AS_OF_STATUSES` engine (`apps/api/src/graph/temporal/`) exactly, rather
+than the plain readable set — an `as_of` question about January 2024 must
+still see the edge a later `as_of`-unaware read would call superseded.
+Extraction, review, commit, the brief, and the whole-graph overview remain
+unbuilt and follow in #356 and later.
+
 **Additional routes §19–§22 add, under the same two permissions.**
 `graph:read` also gates the read side of proposal review — `GET
 /api/graph/proposals`, `GET /api/graph/proposals/:id`, `GET
