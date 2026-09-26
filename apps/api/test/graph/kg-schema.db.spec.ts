@@ -426,6 +426,8 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
   // precision, and a CHECK treats NULL as satisfied.
 
   describe('kg_relations_valid_precision_chk', () => {
+    // Inserted `unreviewed`: an accepted row needs evidence at COMMIT (the
+    // no-orphans trigger, #355), and this CHECK is independent of review state.
     async function insertRelation(valid: 'range' | 'none', precision: string | null) {
       const owner = await createUser(`valid-precision-${valid}-${precision ?? 'null'}`);
       const from = await createEntity(owner.id);
@@ -433,10 +435,10 @@ describeWithDb('Knowledge graph schema (real Postgres)', () => {
       const range = valid === 'range' ? '[2019-01-01,2026-03-01)' : null;
       return prisma.$executeRaw`
         INSERT INTO "kg_relations"
-          ("id", "owner_id", "type", "from_id", "to_id", "valid", "valid_precision", "ontology_version", "updated_at")
+          ("id", "owner_id", "type", "from_id", "to_id", "valid", "valid_precision", "review_status", "ontology_version", "updated_at")
         VALUES
           (${randomUUID()}::uuid, ${owner.id}::uuid, 'WORKS_AT', ${from.id}::uuid, ${to.id}::uuid,
-           ${range}::tstzrange, ${precision}::kg_valid_precision, 'test-v1', now())
+           ${range}::tstzrange, ${precision}::kg_valid_precision, 'unreviewed', 'test-v1', now())
       `;
     }
 
