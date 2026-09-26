@@ -92,6 +92,12 @@ vi.mock('../pages/UserNotificationsPage', () => ({
   default: () => <h1>User Notifications Page</h1>,
 }));
 
+// Issue #369. The one GATED `/settings/*` route; its own suite
+// (`UserKnowledgeGraphPage.test.tsx`) covers the page itself.
+vi.mock('../pages/UserKnowledgeGraphPage', () => ({
+  default: () => <h1>User Knowledge Graph Page</h1>,
+}));
+
 /**
  * The four transcript routes from issue #30, epic #19, and the four note
  * routes from #57, epic #45. Same rationale as every stand-in above, with one
@@ -350,6 +356,45 @@ describe('App', () => {
    * carries no gate.
    */
   describe('User settings routes', () => {
+    describe('/settings/knowledge-graph (issue #369, gated on graph:write)', () => {
+      it('renders the page for a holder of graph:write', async () => {
+        signInAs(['user_settings:read', 'user_settings:write', 'graph:read', 'graph:write']);
+
+        render(
+          <MemoryRouter initialEntries={['/settings/knowledge-graph']}>
+            <App />
+          </MemoryRouter>,
+        );
+
+        await waitFor(
+          () =>
+            expect(
+              screen.getByRole('heading', { name: 'User Knowledge Graph Page' }),
+            ).toBeInTheDocument(),
+          { timeout: 5000 },
+        );
+      });
+
+      it('redirects a user without graph:write to the settings hub', async () => {
+        signInAs(['user_settings:read', 'user_settings:write', 'graph:read']);
+
+        render(
+          <MemoryRouter initialEntries={['/settings/knowledge-graph']}>
+            <App />
+          </MemoryRouter>,
+        );
+
+        await waitFor(
+          () =>
+            expect(screen.getByRole('heading', { name: 'User Settings Hub' })).toBeInTheDocument(),
+          { timeout: 5000 },
+        );
+        expect(
+          screen.queryByRole('heading', { name: 'User Knowledge Graph Page' }),
+        ).not.toBeInTheDocument();
+      });
+    });
+
     it.each([
       ['/settings', 'User Settings Hub'],
       ['/settings/profile', 'User Profile Page'],
