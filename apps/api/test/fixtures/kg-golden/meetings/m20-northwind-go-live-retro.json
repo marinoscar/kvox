@@ -1,0 +1,681 @@
+{
+  "id": "m20",
+  "title": "Northwind pilot go-live retrospective",
+  "tags": [
+    "client",
+    "negative-on-call"
+  ],
+  "recordedAt": "2026-05-21T15:00:00Z",
+  "contextText": "Retro two weeks after the Building 3 go-live.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m20-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m20-spk-b",
+      "label": "B",
+      "displayName": "Sarah Chen"
+    },
+    {
+      "id": "m20-spk-c",
+      "label": "C",
+      "displayName": "Tomás Aguilar"
+    },
+    {
+      "id": "m20-spk-d",
+      "label": "D",
+      "displayName": "Owen Barker"
+    },
+    {
+      "id": "m20-spk-e",
+      "label": "E",
+      "displayName": "Chloé Dubois"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m20-s001",
+      "speakerId": "m20-spk-a",
+      "startMs": 0,
+      "endMs": 4400,
+      "rev": 1,
+      "text": "Two weeks since go-live, so let's look back. Sarah, headline?"
+    },
+    {
+      "id": "m20-s002",
+      "speakerId": "m20-spk-b",
+      "startMs": 4650,
+      "endMs": 14750,
+      "rev": 1,
+      "text": "The headline is that pick rates in Building 3 are up 12 percent in the first two weeks. That's above what we promised the board."
+    },
+    {
+      "id": "m20-s003",
+      "speakerId": "m20-spk-c",
+      "startMs": 15000,
+      "endMs": 19400,
+      "rev": 1,
+      "text": "And walking distance per order is down about a fifth."
+    },
+    {
+      "id": "m20-s004",
+      "speakerId": "m20-spk-e",
+      "startMs": 19650,
+      "endMs": 29370,
+      "rev": 1,
+      "text": "I'm Chloé Dubois, floor supervisor in Building 3. The pickers like it, mostly. The zone layout took a few days to get used to."
+    },
+    {
+      "id": "m20-s005",
+      "speakerId": "m20-spk-a",
+      "startMs": 29620,
+      "endMs": 31740,
+      "rev": 1,
+      "text": "What didn't go well?"
+    },
+    {
+      "id": "m20-s006",
+      "speakerId": "m20-spk-d",
+      "startMs": 31990,
+      "endMs": 39810,
+      "rev": 1,
+      "text": "The first night, a service restarted and nobody noticed for forty minutes. Whoever was on call missed the alert."
+    },
+    {
+      "id": "m20-s007",
+      "speakerId": "m20-spk-c",
+      "startMs": 40060,
+      "endMs": 42940,
+      "rev": 1,
+      "text": "We've fixed the alert routing since."
+    },
+    {
+      "id": "m20-s008",
+      "speakerId": "m20-spk-a",
+      "startMs": 43190,
+      "endMs": 46070,
+      "rev": 1,
+      "text": "Good. What's next for the pilot?"
+    },
+    {
+      "id": "m20-s009",
+      "speakerId": "m20-spk-b",
+      "startMs": 46320,
+      "endMs": 51480,
+      "rev": 1,
+      "text": "I want to extend it to Building 5 in Q3. Same approach."
+    },
+    {
+      "id": "m20-s010",
+      "speakerId": "m20-spk-d",
+      "startMs": 51730,
+      "endMs": 54230,
+      "rev": 1,
+      "text": "The platform can handle it."
+    },
+    {
+      "id": "m20-s011",
+      "speakerId": "m20-spk-b",
+      "startMs": 54480,
+      "endMs": 59640,
+      "rev": 1,
+      "text": "Then that's decided. We extend the pilot to Building 5 in Q3."
+    },
+    {
+      "id": "m20-s012",
+      "speakerId": "m20-spk-a",
+      "startMs": 59890,
+      "endMs": 64290,
+      "rev": 1,
+      "text": "Before Building 5, I'd like proper feedback from the pickers."
+    },
+    {
+      "id": "m20-s013",
+      "speakerId": "m20-spk-e",
+      "startMs": 64540,
+      "endMs": 68560,
+      "rev": 1,
+      "text": "I'll collect a picker feedback survey by June 5."
+    },
+    {
+      "id": "m20-s014",
+      "speakerId": "m20-spk-a",
+      "startMs": 68810,
+      "endMs": 70550,
+      "rev": 1,
+      "text": "Thank you, Chloé."
+    },
+    {
+      "id": "m20-s015",
+      "speakerId": "m20-spk-b",
+      "startMs": 70800,
+      "endMs": 74820,
+      "rev": 1,
+      "text": "Owen, I'll need a budget number for Building 5."
+    },
+    {
+      "id": "m20-s016",
+      "speakerId": "m20-spk-d",
+      "startMs": 75070,
+      "endMs": 80230,
+      "rev": 1,
+      "text": "I'll put together the budget request for Building 5 by June 12."
+    },
+    {
+      "id": "m20-s017",
+      "speakerId": "m20-spk-a",
+      "startMs": 80480,
+      "endMs": 84500,
+      "rev": 1,
+      "text": "Chloé, how do the pickers prefer to get information?"
+    },
+    {
+      "id": "m20-s018",
+      "speakerId": "m20-spk-e",
+      "startMs": 84750,
+      "endMs": 93330,
+      "rev": 1,
+      "text": "For the floor team, French-language documents work much better. Most of the night shift are French speakers, and so am I."
+    },
+    {
+      "id": "m20-s019",
+      "speakerId": "m20-spk-a",
+      "startMs": 93580,
+      "endMs": 96460,
+      "rev": 1,
+      "text": "Useful. We'll translate the quick guide."
+    },
+    {
+      "id": "m20-s020",
+      "speakerId": "m20-spk-b",
+      "startMs": 96710,
+      "endMs": 99970,
+      "rev": 1,
+      "text": "Tomás, are you comfortable with the timeline?"
+    },
+    {
+      "id": "m20-s021",
+      "speakerId": "m20-spk-c",
+      "startMs": 100220,
+      "endMs": 103860,
+      "rev": 1,
+      "text": "Yes. We learned a lot from Building 3."
+    },
+    {
+      "id": "m20-s022",
+      "speakerId": "m20-spk-a",
+      "startMs": 104110,
+      "endMs": 110030,
+      "rev": 1,
+      "text": "Great. So: Building 5 in Q3, survey by June 5, budget by June 12."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Northwind pilot go-live retrospective\n\n**Date:** May 21\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics), Chloé Dubois (Northwind Robotics)\n\n## Summary\n\nRetrospective two weeks after the pick-path pilot went live in Building 3 at Northwind Robotics.\n\n## Results\n\n- Pick rates in Building 3 are up 12 percent in the first two weeks, above what was promised to the board.\n- Walking distance per order is down about a fifth.\n- Chloé Dubois, floor supervisor in Building 3, reports that pickers mostly like it; the zone layout took a few days to get used to.\n\n## What didn't go well\n\n- On the first night a service restarted and nobody noticed for forty minutes because the on-call alert was missed. Alert routing has since been fixed.\n\n## Decisions\n\n- **Extend the pilot to Building 5 in Q3**, using the same approach.\n- Translate the quick guide into French for the floor team.\n\n## Action items\n\n- **Chloé Dubois** — collect a picker feedback survey by June 5.\n- **Owen Barker** — put together the budget request for Building 5 by June 12.\n\n## Notes\n\n- French-language documents work much better for the floor team; most of the night shift, and Chloé herself, are French speakers.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-owen-barker",
+      "type": "Person",
+      "label": "Owen Barker",
+      "aliases": [
+        "Owen"
+      ],
+      "props": {
+        "title": "Head of Platform"
+      },
+      "attendedFixtureIds": [
+        "m12",
+        "m18"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06",
+        "m09",
+        "m12"
+      ]
+    },
+    {
+      "id": "g-person-tomas-aguilar",
+      "type": "Person",
+      "label": "Tomás Aguilar",
+      "aliases": [
+        "Tomas Aguilar",
+        "Tomás"
+      ],
+      "props": {
+        "title": "Engineer"
+      },
+      "attendedFixtureIds": [
+        "m06",
+        "m09",
+        "m12"
+      ]
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northwind pilot go-live retrospective",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind pilot go-live retrospective"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarah",
+        "type": "Person",
+        "label": "Sarah Chen",
+        "aliases": [],
+        "existingId": "g-person-sarah-chen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Chen (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomás Aguilar",
+        "aliases": [],
+        "existingId": "g-person-tomas-aguilar",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "owen",
+        "type": "Person",
+        "label": "Owen Barker",
+        "aliases": [],
+        "existingId": "g-person-owen-barker",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "chloe",
+        "type": "Person",
+        "label": "Chloé Dubois",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s004",
+            "quote": "I'm Chloé Dubois, floor supervisor in Building 3."
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Building 3 at Northwind Robotics"
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the pick-path pilot went live in Building 3"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarah",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "tomas",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "owen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "chloe",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "chloe",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "chloe",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Floor Supervisor"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s004",
+            "quote": "I'm Chloé Dubois, floor supervisor in Building 3."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the pick-path pilot went live in Building 3"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Pick rates up 12 percent",
+        "statement": "Pick rates in Building 3 are up 12 percent in the first two weeks.",
+        "status": null,
+        "occurredAt": "2026-05-21",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s002",
+            "quote": "pick rates in Building 3 are up 12 percent in the first two weeks"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Extend pilot to Building 5 in Q3",
+        "statement": "The pilot extends to Building 5 in Q3.",
+        "status": null,
+        "occurredAt": "2026-05-21",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s011",
+            "quote": "Then that's decided. We extend the pilot to Building 5 in Q3."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "chloe",
+        "counterparty": null,
+        "title": "Collect picker feedback survey",
+        "statement": "Chloé will collect a picker feedback survey by June 5.",
+        "status": "open",
+        "occurredAt": "2026-05-21",
+        "dueAt": "2026-06-05",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s013",
+            "quote": "I'll collect a picker feedback survey by June 5."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "owen",
+        "counterparty": "sarah",
+        "title": "Budget request for Building 5",
+        "statement": "Owen will put together the budget request for Building 5 by June 12.",
+        "status": "open",
+        "occurredAt": "2026-05-21",
+        "dueAt": "2026-06-12",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s016",
+            "quote": "I'll put together the budget request for Building 5 by June 12."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "chloe",
+        "owner": null,
+        "counterparty": null,
+        "title": "French speaker",
+        "statement": "Chloé is a French speaker and French-language documents work better for her floor team.",
+        "status": null,
+        "occurredAt": "2026-05-21",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m20-s018",
+            "quote": "French-language documents work much better."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m20-s018",
+            "quote": "and so am I"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "Whoever was on call missed the alert.",
+        "why": "No specific human is named: nothing to create."
+      }
+    ]
+  }
+}

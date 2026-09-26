@@ -87,6 +87,11 @@ jobs:
       - run: npm run build:ontology --workspace=@app/shared && git diff --exit-code -- packages/shared/ontology
 
       - run: npm test --workspace=api
+      # Knowledge-graph golden set self-test (issue #362): scores predictions
+      # synthesised from the labels, so anything but 1.000 is a scorer or
+      # fixture bug. Report-only — CI never passes --enforce (spec §6: the
+      # targets gate relaxing resolution thresholds, not shipping).
+      - run: npm run kg:eval --workspace=api -- --predictions gold
       - run: npm run test:run --workspace=cli
 
       # The CLI is the one workspace whose BUILD is the deliverable — the `bin`

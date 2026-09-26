@@ -1,0 +1,678 @@
+{
+  "id": "m04",
+  "title": "Corvid Health intake discovery workshop",
+  "tags": [
+    "client",
+    "relative-date",
+    "negative-passing-team",
+    "sensitive"
+  ],
+  "recordedAt": "2026-01-29T13:00:00Z",
+  "contextText": "Discovery workshop for redesigning patient intake at Corvid Health walk-in clinics.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m04-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m04-spk-b",
+      "label": "B",
+      "displayName": "Elif Kaya"
+    },
+    {
+      "id": "m04-spk-c",
+      "label": "C",
+      "displayName": "Samir Haddad"
+    },
+    {
+      "id": "m04-spk-d",
+      "label": "D",
+      "displayName": "Nadia Brooks"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m04-s001",
+      "speakerId": "m04-spk-a",
+      "startMs": 0,
+      "endMs": 8580,
+      "rev": 1,
+      "text": "Welcome everyone, and thanks for hosting us. The goal today is to understand how intake works now and where it breaks."
+    },
+    {
+      "id": "m04-s002",
+      "speakerId": "m04-spk-b",
+      "startMs": 8830,
+      "endMs": 16650,
+      "rev": 1,
+      "text": "Happy to. I'm Elif Kaya, product owner for patient-facing systems at Corvid Health. This intake redesign is my project."
+    },
+    {
+      "id": "m04-s003",
+      "speakerId": "m04-spk-c",
+      "startMs": 16900,
+      "endMs": 25480,
+      "rev": 1,
+      "text": "I'm Samir Haddad, clinical lead for the walk-in clinics. I'm here to make sure whatever we build works for the clinicians."
+    },
+    {
+      "id": "m04-s004",
+      "speakerId": "m04-spk-d",
+      "startMs": 25730,
+      "endMs": 31270,
+      "rev": 1,
+      "text": "Nadia Brooks, I'm the designer from Larkspur. I'll be sketching as we go."
+    },
+    {
+      "id": "m04-s005",
+      "speakerId": "m04-spk-a",
+      "startMs": 31520,
+      "endMs": 34780,
+      "rev": 1,
+      "text": "Let's start with the biggest pain. Elif?"
+    },
+    {
+      "id": "m04-s006",
+      "speakerId": "m04-spk-b",
+      "startMs": 35030,
+      "endMs": 43610,
+      "rev": 1,
+      "text": "Incomplete forms. About 40 percent of the intake forms we receive are incomplete in some way, usually allergies or current medication."
+    },
+    {
+      "id": "m04-s007",
+      "speakerId": "m04-spk-c",
+      "startMs": 43860,
+      "endMs": 49780,
+      "rev": 1,
+      "text": "And that lands on my nurses, who have to chase it at the bedside."
+    },
+    {
+      "id": "m04-s008",
+      "speakerId": "m04-spk-a",
+      "startMs": 50030,
+      "endMs": 54050,
+      "rev": 1,
+      "text": "Is that across all sites or mostly the clinics?"
+    },
+    {
+      "id": "m04-s009",
+      "speakerId": "m04-spk-b",
+      "startMs": 54300,
+      "endMs": 60980,
+      "rev": 1,
+      "text": "It's worst in the walk-in clinics. The hospital wards have admissions staff who fill things in."
+    },
+    {
+      "id": "m04-s010",
+      "speakerId": "m04-spk-a",
+      "startMs": 61230,
+      "endMs": 64110,
+      "rev": 1,
+      "text": "So where should the redesign start?"
+    },
+    {
+      "id": "m04-s011",
+      "speakerId": "m04-spk-c",
+      "startMs": 64360,
+      "endMs": 68380,
+      "rev": 1,
+      "text": "The walk-in clinics, definitely. That's where the pain is."
+    },
+    {
+      "id": "m04-s012",
+      "speakerId": "m04-spk-b",
+      "startMs": 68630,
+      "endMs": 75690,
+      "rev": 1,
+      "text": "I agree. Let's start with the walk-in clinics and leave the hospital wards for a later phase."
+    },
+    {
+      "id": "m04-s013",
+      "speakerId": "m04-spk-a",
+      "startMs": 75940,
+      "endMs": 79580,
+      "rev": 1,
+      "text": "Good, that's a clear decision. Walk-in clinics first."
+    },
+    {
+      "id": "m04-s014",
+      "speakerId": "m04-spk-d",
+      "startMs": 79830,
+      "endMs": 85750,
+      "rev": 1,
+      "text": "Could I see some real intake forms? Even anonymized ones would help a lot."
+    },
+    {
+      "id": "m04-s015",
+      "speakerId": "m04-spk-b",
+      "startMs": 86000,
+      "endMs": 90780,
+      "rev": 1,
+      "text": "Yes. I'll send you anonymized intake form samples by next Tuesday."
+    },
+    {
+      "id": "m04-s016",
+      "speakerId": "m04-spk-d",
+      "startMs": 91030,
+      "endMs": 93150,
+      "rev": 1,
+      "text": "Thank you, that's perfect."
+    },
+    {
+      "id": "m04-s017",
+      "speakerId": "m04-spk-a",
+      "startMs": 93400,
+      "endMs": 97040,
+      "rev": 1,
+      "text": "Are there reporting needs we should know about?"
+    },
+    {
+      "id": "m04-s018",
+      "speakerId": "m04-spk-b",
+      "startMs": 97290,
+      "endMs": 105110,
+      "rev": 1,
+      "text": "The data team at Corvid pulls monthly completion numbers, but that's a side thing, not part of this project."
+    },
+    {
+      "id": "m04-s019",
+      "speakerId": "m04-spk-a",
+      "startMs": 105360,
+      "endMs": 108620,
+      "rev": 1,
+      "text": "Okay, we'll keep it out of scope."
+    },
+    {
+      "id": "m04-s020",
+      "speakerId": "m04-spk-c",
+      "startMs": 108870,
+      "endMs": 119730,
+      "rev": 1,
+      "text": "One personal note so nobody's surprised, I'm recovering from knee surgery, so I'm on reduced hours for the next month. If I'm slow to reply, that's why."
+    },
+    {
+      "id": "m04-s021",
+      "speakerId": "m04-spk-a",
+      "startMs": 119980,
+      "endMs": 125140,
+      "rev": 1,
+      "text": "Thanks for telling us, Samir. We'll keep things asynchronous where we can."
+    },
+    {
+      "id": "m04-s022",
+      "speakerId": "m04-spk-d",
+      "startMs": 125390,
+      "endMs": 129790,
+      "rev": 1,
+      "text": "What devices do patients use at the front desk today?"
+    },
+    {
+      "id": "m04-s023",
+      "speakerId": "m04-spk-b",
+      "startMs": 130040,
+      "endMs": 135960,
+      "rev": 1,
+      "text": "Paper and a clipboard, mostly. A couple of clinics have tablets that nobody uses."
+    },
+    {
+      "id": "m04-s024",
+      "speakerId": "m04-spk-d",
+      "startMs": 136210,
+      "endMs": 140610,
+      "rev": 1,
+      "text": "That's useful. Tablets that nobody uses tell us a lot."
+    },
+    {
+      "id": "m04-s025",
+      "speakerId": "m04-spk-a",
+      "startMs": 140860,
+      "endMs": 147920,
+      "rev": 1,
+      "text": "Let's wrap there. Walk-in clinics first, samples by next Tuesday, and we'll come back with first sketches."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Corvid Health intake discovery workshop\n\n**Date:** January 29\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nDiscovery workshop for the patient intake redesign at Corvid Health. Elif Kaya, product owner for patient-facing systems, owns the project; Samir Haddad, clinical lead for the walk-in clinics, represents the clinicians. Nadia sketched throughout.\n\n## Current state\n\n- About 40 percent of intake forms arrive incomplete, most often missing allergies or current medication.\n- Incomplete forms fall on nurses, who chase the information at the bedside.\n- The problem is worst in the walk-in clinics; hospital wards have admissions staff who complete the forms.\n- Most clinics use paper and a clipboard. A couple of clinics have tablets that nobody uses.\n\n## Decisions\n\n- The redesign will **start with the walk-in clinics**; hospital wards are left for a later phase.\n- Monthly completion reporting is out of scope for this project.\n\n## Action items\n\n- **Elif Kaya** — send anonymized intake form samples to Nadia by next Tuesday.\n- **Larkspur** — come back with first sketches after reviewing the samples.\n\n## Notes\n\n- The data team at Corvid pulls monthly completion numbers; this is not part of the project.\n- Samir is on reduced hours for the next month; the team will keep communication asynchronous where possible.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-corvid-health",
+      "type": "Organization",
+      "label": "Corvid Health",
+      "aliases": [
+        "Corvid"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-elif-kaya",
+      "type": "Person",
+      "label": "Elif Kaya",
+      "aliases": [
+        "Elif"
+      ],
+      "props": {
+        "title": "Product Owner"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-nadia-brooks",
+      "type": "Person",
+      "label": "Nadia Brooks",
+      "aliases": [
+        "Nadia"
+      ],
+      "props": {
+        "title": "Product Designer"
+      },
+      "attendedFixtureIds": [
+        "m03"
+      ]
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Corvid Health intake discovery workshop",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Corvid Health intake discovery workshop"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "nadia",
+        "type": "Person",
+        "label": "Nadia Brooks",
+        "aliases": [],
+        "existingId": "g-person-nadia-brooks",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s004",
+            "quote": "Nadia Brooks, I'm the designer from Larkspur."
+          }
+        ]
+      },
+      {
+        "key": "elif",
+        "type": "Person",
+        "label": "Elif Kaya",
+        "aliases": [],
+        "existingId": "g-person-elif-kaya",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s002",
+            "quote": "I'm Elif Kaya, product owner for patient-facing systems at Corvid Health."
+          }
+        ]
+      },
+      {
+        "key": "samir",
+        "type": "Person",
+        "label": "Samir Haddad",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s003",
+            "quote": "I'm Samir Haddad, clinical lead for the walk-in clinics."
+          }
+        ]
+      },
+      {
+        "key": "corvid",
+        "type": "Organization",
+        "label": "Corvid Health",
+        "aliases": [],
+        "existingId": "g-org-corvid-health",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s002",
+            "quote": "product owner for patient-facing systems at Corvid Health"
+          }
+        ]
+      },
+      {
+        "key": "intake",
+        "type": "Project",
+        "label": "Patient intake redesign",
+        "aliases": [
+          "intake redesign"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s002",
+            "quote": "This intake redesign is my project."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "nadia",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "elif",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "samir",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "elif",
+        "to": "corvid",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s002",
+            "quote": "I'm Elif Kaya, product owner for patient-facing systems at Corvid Health."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "elif",
+        "to": "corvid",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Product Owner"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s002",
+            "quote": "I'm Elif Kaya, product owner for patient-facing systems at Corvid Health."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "samir",
+        "to": "corvid",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "nadia",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s004",
+            "quote": "Nadia Brooks, I'm the designer from Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "samir",
+        "to": "corvid",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Clinical Lead"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s003",
+            "quote": "I'm Samir Haddad, clinical lead for the walk-in clinics."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "intake",
+        "to": "corvid",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Discovery workshop for the patient intake redesign at Corvid Health."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "intake",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Discovery workshop for the patient intake redesign at Corvid Health."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "corvid",
+        "owner": null,
+        "counterparty": null,
+        "title": "40 percent of intake forms incomplete",
+        "statement": "About 40 percent of intake forms received are incomplete, usually missing allergies or current medication.",
+        "status": null,
+        "occurredAt": "2026-01-29",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s006",
+            "quote": "About 40 percent of the intake forms we receive are incomplete in some way"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "intake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Start with walk-in clinics",
+        "statement": "The redesign will start with the walk-in clinics and leave the hospital wards for a later phase.",
+        "status": null,
+        "occurredAt": "2026-01-29",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s012",
+            "quote": "Let's start with the walk-in clinics and leave the hospital wards for a later phase."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "intake",
+        "owner": "elif",
+        "counterparty": "nadia",
+        "title": "Send anonymized intake form samples",
+        "statement": "Elif will send anonymized intake form samples to Nadia by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-01-29",
+        "dueAt": "2026-02-03",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s015",
+            "quote": "I'll send you anonymized intake form samples by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "samir",
+        "owner": null,
+        "counterparty": null,
+        "title": "Recovering from knee surgery",
+        "statement": "Samir is recovering from knee surgery and is on reduced hours for the next month.",
+        "status": null,
+        "occurredAt": "2026-01-29",
+        "dueAt": null,
+        "sensitivity": "sensitive",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s020",
+            "quote": "I'm recovering from knee surgery, so I'm on reduced hours for the next month."
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "The data team at Corvid pulls monthly completion numbers",
+        "why": "A team mentioned in passing, party to no commitment or decision: no Organization is created."
+      }
+    ]
+  }
+}

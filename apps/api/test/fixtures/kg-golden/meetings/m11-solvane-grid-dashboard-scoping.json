@@ -1,0 +1,675 @@
+{
+  "id": "m11",
+  "title": "Solvane Energy grid dashboard scoping",
+  "tags": [
+    "client",
+    "year-precision",
+    "negative-vague-task"
+  ],
+  "recordedAt": "2026-03-19T10:00:00Z",
+  "contextText": "Scoping call for an operations dashboard across Solvane solar sites.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m11-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m11-spk-b",
+      "label": "B",
+      "displayName": "Grace Holloway"
+    },
+    {
+      "id": "m11-spk-c",
+      "label": "C",
+      "displayName": "Iris Novak"
+    },
+    {
+      "id": "m11-spk-d",
+      "label": "D",
+      "displayName": "Kwame Mensah"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m11-s001",
+      "speakerId": "m11-spk-a",
+      "startMs": 0,
+      "endMs": 7060,
+      "rev": 1,
+      "text": "Thanks for having us. We'd like to leave today with a clear scope for the grid dashboard."
+    },
+    {
+      "id": "m11-s002",
+      "speakerId": "m11-spk-b",
+      "startMs": 7310,
+      "endMs": 17410,
+      "rev": 1,
+      "text": "Good. I'm Grace Holloway, COO at Solvane Energy. The dashboard is my initiative, I want one screen that tells me how every site is doing."
+    },
+    {
+      "id": "m11-s003",
+      "speakerId": "m11-spk-c",
+      "startMs": 17660,
+      "endMs": 25860,
+      "rev": 1,
+      "text": "I'm Iris Novak, I run data at Solvane. I joined Solvane in 2026, so I'm still learning where everything lives."
+    },
+    {
+      "id": "m11-s004",
+      "speakerId": "m11-spk-d",
+      "startMs": 26110,
+      "endMs": 30890,
+      "rev": 1,
+      "text": "Kwame Mensah, data engineer at Larkspur. I'll be building the pipelines."
+    },
+    {
+      "id": "m11-s005",
+      "speakerId": "m11-spk-a",
+      "startMs": 31140,
+      "endMs": 34400,
+      "rev": 1,
+      "text": "How many sites are we talking about?"
+    },
+    {
+      "id": "m11-s006",
+      "speakerId": "m11-spk-b",
+      "startMs": 34650,
+      "endMs": 38290,
+      "rev": 1,
+      "text": "Fourteen solar sites today, two more under construction."
+    },
+    {
+      "id": "m11-s007",
+      "speakerId": "m11-spk-d",
+      "startMs": 38540,
+      "endMs": 42560,
+      "rev": 1,
+      "text": "Where does the site data live? Straight from SCADA?"
+    },
+    {
+      "id": "m11-s008",
+      "speakerId": "m11-spk-c",
+      "startMs": 42810,
+      "endMs": 48730,
+      "rev": 1,
+      "text": "SCADA feeds our historian, and the historian feeds the data warehouse every fifteen minutes."
+    },
+    {
+      "id": "m11-s009",
+      "speakerId": "m11-spk-d",
+      "startMs": 48980,
+      "endMs": 56420,
+      "rev": 1,
+      "text": "I'd strongly prefer to read from the warehouse. Reading SCADA directly means dealing with fourteen different vendor quirks."
+    },
+    {
+      "id": "m11-s010",
+      "speakerId": "m11-spk-b",
+      "startMs": 56670,
+      "endMs": 59930,
+      "rev": 1,
+      "text": "Is fifteen minutes fresh enough for me?"
+    },
+    {
+      "id": "m11-s011",
+      "speakerId": "m11-spk-c",
+      "startMs": 60180,
+      "endMs": 64580,
+      "rev": 1,
+      "text": "For an operations overview, yes. Nobody's dispatching from this screen."
+    },
+    {
+      "id": "m11-s012",
+      "speakerId": "m11-spk-b",
+      "startMs": 64830,
+      "endMs": 71510,
+      "rev": 1,
+      "text": "Then that's our answer. The dashboard reads from the existing data warehouse, not directly from SCADA."
+    },
+    {
+      "id": "m11-s013",
+      "speakerId": "m11-spk-a",
+      "startMs": 71760,
+      "endMs": 76920,
+      "rev": 1,
+      "text": "Decided. Iris, can we see a sample of what's in the warehouse?"
+    },
+    {
+      "id": "m11-s014",
+      "speakerId": "m11-spk-c",
+      "startMs": 77170,
+      "endMs": 82710,
+      "rev": 1,
+      "text": "I'll share a SCADA export sample and the warehouse schema by March 27."
+    },
+    {
+      "id": "m11-s015",
+      "speakerId": "m11-spk-d",
+      "startMs": 82960,
+      "endMs": 86220,
+      "rev": 1,
+      "text": "That's all I need to start modelling."
+    },
+    {
+      "id": "m11-s016",
+      "speakerId": "m11-spk-a",
+      "startMs": 86470,
+      "endMs": 90110,
+      "rev": 1,
+      "text": "What does success look like for you, Grace?"
+    },
+    {
+      "id": "m11-s017",
+      "speakerId": "m11-spk-b",
+      "startMs": 90360,
+      "endMs": 94760,
+      "rev": 1,
+      "text": "I stop getting six spreadsheets every Monday morning. That's it."
+    },
+    {
+      "id": "m11-s018",
+      "speakerId": "m11-spk-c",
+      "startMs": 95010,
+      "endMs": 102070,
+      "rev": 1,
+      "text": "We should probably look into weather feeds at some point too, cloud cover explains half our dips."
+    },
+    {
+      "id": "m11-s019",
+      "speakerId": "m11-spk-a",
+      "startMs": 102320,
+      "endMs": 108240,
+      "rev": 1,
+      "text": "Let's park that for phase two. It's a good idea but it widens scope."
+    },
+    {
+      "id": "m11-s020",
+      "speakerId": "m11-spk-b",
+      "startMs": 108490,
+      "endMs": 110230,
+      "rev": 1,
+      "text": "Agreed, park it."
+    },
+    {
+      "id": "m11-s021",
+      "speakerId": "m11-spk-a",
+      "startMs": 110480,
+      "endMs": 113360,
+      "rev": 1,
+      "text": "Grace, any constraints on meeting times?"
+    },
+    {
+      "id": "m11-s022",
+      "speakerId": "m11-spk-b",
+      "startMs": 113610,
+      "endMs": 119530,
+      "rev": 1,
+      "text": "Not Thursday evenings, I play cello in a community orchestra and rehearsal is sacred."
+    },
+    {
+      "id": "m11-s023",
+      "speakerId": "m11-spk-a",
+      "startMs": 119780,
+      "endMs": 121900,
+      "rev": 1,
+      "text": "Understood, no Thursday evenings."
+    },
+    {
+      "id": "m11-s024",
+      "speakerId": "m11-spk-d",
+      "startMs": 122150,
+      "endMs": 125030,
+      "rev": 1,
+      "text": "Who signs off the data model?"
+    },
+    {
+      "id": "m11-s025",
+      "speakerId": "m11-spk-b",
+      "startMs": 125280,
+      "endMs": 128920,
+      "rev": 1,
+      "text": "Iris does. I trust her judgement on data."
+    },
+    {
+      "id": "m11-s026",
+      "speakerId": "m11-spk-a",
+      "startMs": 129170,
+      "endMs": 133950,
+      "rev": 1,
+      "text": "Great. So: warehouse only, sample by March 27, and weather parked."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Solvane Energy grid dashboard scoping\n\n**Date:** March 19\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)\n\n## Summary\n\nScoping session for the grid dashboard, an operations overview across Solvane Energy's solar sites. Grace Holloway, COO, sponsors the initiative; she wants one screen showing how every site is doing. Iris Novak runs data at Solvane and joined the company in 2026. Kwame will build the pipelines.\n\n## Context\n\n- Solvane operates fourteen solar sites today, with two more under construction.\n- SCADA feeds a historian, which loads the data warehouse every fifteen minutes.\n- Grace's measure of success: no more six spreadsheets every Monday morning.\n\n## Decisions\n\n- The dashboard **reads from the existing data warehouse, not directly from SCADA**. Reading SCADA directly would mean handling fourteen different vendor quirks, and fifteen-minute freshness is sufficient for an operations overview.\n- Iris signs off the data model.\n\n## Action items\n\n- **Iris Novak** — share a SCADA export sample and the warehouse schema by March 27.\n- **Kwame Mensah** — start modelling once the sample arrives.\n\n## Parked\n\n- Weather feeds. Iris noted cloud cover explains many output dips and suggested we should probably look into weather feeds at some point; parked for phase two to avoid widening scope.\n\n## Notes\n\n- Avoid Thursday evenings for meetings with Grace.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-kwame-mensah",
+      "type": "Person",
+      "label": "Kwame Mensah",
+      "aliases": [
+        "Kwame"
+      ],
+      "props": {
+        "title": "Data Engineer"
+      },
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Solvane Energy grid dashboard scoping",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Solvane Energy grid dashboard scoping"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "kwame",
+        "type": "Person",
+        "label": "Kwame Mensah",
+        "aliases": [],
+        "existingId": "g-person-kwame-mensah",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s004",
+            "quote": "Kwame Mensah, data engineer at Larkspur."
+          }
+        ]
+      },
+      {
+        "key": "grace",
+        "type": "Person",
+        "label": "Grace Holloway",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s002",
+            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+          }
+        ]
+      },
+      {
+        "key": "iris",
+        "type": "Person",
+        "label": "Iris Novak",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s003",
+            "quote": "I'm Iris Novak, I run data at Solvane."
+          }
+        ]
+      },
+      {
+        "key": "solvane",
+        "type": "Organization",
+        "label": "Solvane Energy",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s002",
+            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+          }
+        ]
+      },
+      {
+        "key": "dashboard",
+        "type": "Project",
+        "label": "Grid dashboard",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s001",
+            "quote": "a clear scope for the grid dashboard"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kwame",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "grace",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "iris",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "grace",
+        "to": "solvane",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s002",
+            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "grace",
+        "to": "solvane",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "COO"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s002",
+            "quote": "I'm Grace Holloway, COO at Solvane Energy."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "iris",
+        "to": "solvane",
+        "validFrom": "2026-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s003",
+            "quote": "I joined Solvane in 2026"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "kwame",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s004",
+            "quote": "Kwame Mensah, data engineer at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "dashboard",
+        "to": "solvane",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the grid dashboard, an operations overview across Solvane Energy's solar sites"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "dashboard",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s001",
+            "quote": "a clear scope for the grid dashboard"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "solvane",
+        "owner": null,
+        "counterparty": null,
+        "title": "Fourteen solar sites",
+        "statement": "Solvane operates fourteen solar sites today, with two more under construction.",
+        "status": null,
+        "occurredAt": "2026-03-19",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s006",
+            "quote": "Fourteen solar sites today, two more under construction."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Read from the data warehouse, not SCADA",
+        "statement": "The dashboard reads from the existing data warehouse, not directly from SCADA.",
+        "status": null,
+        "occurredAt": "2026-03-19",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s012",
+            "quote": "The dashboard reads from the existing data warehouse, not directly from SCADA."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Park weather feeds for phase two",
+        "statement": "Weather feeds are parked for phase two.",
+        "status": null,
+        "occurredAt": "2026-03-19",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s019",
+            "quote": "Let's park that for phase two."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m11-s020",
+            "quote": "Agreed, park it."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "dashboard",
+        "owner": "iris",
+        "counterparty": "kwame",
+        "title": "Share SCADA sample and schema",
+        "statement": "Iris will share a SCADA export sample and the warehouse schema by March 27.",
+        "status": "open",
+        "occurredAt": "2026-03-19",
+        "dueAt": "2026-03-27",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s014",
+            "quote": "I'll share a SCADA export sample and the warehouse schema by March 27."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "grace",
+        "owner": null,
+        "counterparty": null,
+        "title": "Plays cello in a community orchestra",
+        "statement": "Grace plays cello in a community orchestra with rehearsals on Thursday evenings.",
+        "status": null,
+        "occurredAt": "2026-03-19",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s022",
+            "quote": "I play cello in a community orchestra"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "We should probably look into weather feeds at some point too",
+        "why": "No owner named or implied: not a Commitment."
+      }
+    ]
+  }
+}

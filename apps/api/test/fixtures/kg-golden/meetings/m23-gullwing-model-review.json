@@ -1,0 +1,712 @@
+{
+  "id": "m23",
+  "title": "Gullwing pilot model review",
+  "tags": [
+    "client",
+    "relative-date"
+  ],
+  "recordedAt": "2026-06-04T16:00:00Z",
+  "contextText": "First model results on the labelled dispute sample.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m23-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m23-spk-b",
+      "label": "B",
+      "displayName": "Wen Zhao"
+    },
+    {
+      "id": "m23-spk-c",
+      "label": "C",
+      "displayName": "Felix Amundsen"
+    },
+    {
+      "id": "m23-spk-d",
+      "label": "D",
+      "displayName": "Kwame Mensah"
+    },
+    {
+      "id": "m23-spk-e",
+      "label": "E",
+      "displayName": "Yusuf Demir"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m23-s001",
+      "speakerId": "m23-spk-a",
+      "startMs": 0,
+      "endMs": 5920,
+      "rev": 1,
+      "text": "Thanks all. This is the gate review, first model results on the labelled sample."
+    },
+    {
+      "id": "m23-s002",
+      "speakerId": "m23-spk-d",
+      "startMs": 6170,
+      "endMs": 14370,
+      "rev": 1,
+      "text": "On the held-out set, the model's precision is 0.91 on the three target reason codes. Recall is lower, around 0.78."
+    },
+    {
+      "id": "m23-s003",
+      "speakerId": "m23-spk-c",
+      "startMs": 14620,
+      "endMs": 19400,
+      "rev": 1,
+      "text": "Explain that to me like I'm the CFO. Which I am."
+    },
+    {
+      "id": "m23-s004",
+      "speakerId": "m23-spk-d",
+      "startMs": 19650,
+      "endMs": 33170,
+      "rev": 1,
+      "text": "When the model says a dispute is a clear case, it's right nine times out of ten. It misses about a fifth of the clear cases, which then go to a human as today."
+    },
+    {
+      "id": "m23-s005",
+      "speakerId": "m23-spk-b",
+      "startMs": 33420,
+      "endMs": 37060,
+      "rev": 1,
+      "text": "So nothing gets worse, some things get faster."
+    },
+    {
+      "id": "m23-s006",
+      "speakerId": "m23-spk-c",
+      "startMs": 37310,
+      "endMs": 43610,
+      "rev": 1,
+      "text": "I'm fine with that, but I don't want the model rejecting anything on its own."
+    },
+    {
+      "id": "m23-s007",
+      "speakerId": "m23-spk-b",
+      "startMs": 43860,
+      "endMs": 47500,
+      "rev": 1,
+      "text": "Agreed. My analysts should make every final call."
+    },
+    {
+      "id": "m23-s008",
+      "speakerId": "m23-spk-a",
+      "startMs": 47750,
+      "endMs": 53670,
+      "rev": 1,
+      "text": "So the model flags disputes for review but never auto-rejects. Is that the decision?"
+    },
+    {
+      "id": "m23-s009",
+      "speakerId": "m23-spk-c",
+      "startMs": 53920,
+      "endMs": 56800,
+      "rev": 1,
+      "text": "That's the decision. Flag, never auto-reject."
+    },
+    {
+      "id": "m23-s010",
+      "speakerId": "m23-spk-e",
+      "startMs": 57050,
+      "endMs": 66010,
+      "rev": 1,
+      "text": "I'm Yusuf Demir, I lead the disputes platform engineering at Gullwing. For that we'll need a queue the analysts can work from."
+    },
+    {
+      "id": "m23-s011",
+      "speakerId": "m23-spk-a",
+      "startMs": 66260,
+      "endMs": 69140,
+      "rev": 1,
+      "text": "What would you need to build?"
+    },
+    {
+      "id": "m23-s012",
+      "speakerId": "m23-spk-e",
+      "startMs": 69390,
+      "endMs": 76450,
+      "rev": 1,
+      "text": "An API that exposes the flagged disputes queue. I'll expose the disputes queue API by June 18."
+    },
+    {
+      "id": "m23-s013",
+      "speakerId": "m23-spk-d",
+      "startMs": 76700,
+      "endMs": 80340,
+      "rev": 1,
+      "text": "I'll give you the model output schema today."
+    },
+    {
+      "id": "m23-s014",
+      "speakerId": "m23-spk-b",
+      "startMs": 80590,
+      "endMs": 86130,
+      "rev": 1,
+      "text": "I'll also need reviewer guidelines, so analysts know how to treat a flag."
+    },
+    {
+      "id": "m23-s015",
+      "speakerId": "m23-spk-a",
+      "startMs": 86380,
+      "endMs": 88120,
+      "rev": 1,
+      "text": "Who writes those?"
+    },
+    {
+      "id": "m23-s016",
+      "speakerId": "m23-spk-b",
+      "startMs": 88370,
+      "endMs": 92770,
+      "rev": 1,
+      "text": "I will. I'll write the reviewer guidelines by next Tuesday."
+    },
+    {
+      "id": "m23-s017",
+      "speakerId": "m23-spk-c",
+      "startMs": 93020,
+      "endMs": 97800,
+      "rev": 1,
+      "text": "Then I'm approving the build phase. Send the paperwork to me."
+    },
+    {
+      "id": "m23-s018",
+      "speakerId": "m23-spk-a",
+      "startMs": 98050,
+      "endMs": 101310,
+      "rev": 1,
+      "text": "Great news. Hana will send it over."
+    },
+    {
+      "id": "m23-s019",
+      "speakerId": "m23-spk-b",
+      "startMs": 101560,
+      "endMs": 108620,
+      "rev": 1,
+      "text": "Unrelated, but I'm learning Portuguese for a trip, so if I say obrigada by accident, that's why."
+    },
+    {
+      "id": "m23-s020",
+      "speakerId": "m23-spk-a",
+      "startMs": 108870,
+      "endMs": 110230,
+      "rev": 1,
+      "text": "Ha, noted."
+    },
+    {
+      "id": "m23-s021",
+      "speakerId": "m23-spk-d",
+      "startMs": 110480,
+      "endMs": 116780,
+      "rev": 1,
+      "text": "One risk, the model was trained on last year's data. Seasonal fraud patterns may shift."
+    },
+    {
+      "id": "m23-s022",
+      "speakerId": "m23-spk-c",
+      "startMs": 117030,
+      "endMs": 119910,
+      "rev": 1,
+      "text": "Then we review the numbers monthly."
+    },
+    {
+      "id": "m23-s023",
+      "speakerId": "m23-spk-a",
+      "startMs": 120160,
+      "endMs": 123040,
+      "rev": 1,
+      "text": "Monthly numbers review, noted. Thanks everyone."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Gullwing pilot model review\n\n**Date:** June 4\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)\n\n## Summary\n\nGate review of the first chargeback automation model on the labelled dispute sample. Felix approved the build phase.\n\n## Results\n\n- On the held-out set, the model's precision is 0.91 on the three target reason codes; recall is around 0.78.\n- In plain terms: when the model calls a dispute a clear case it is right nine times out of ten, and the clear cases it misses go to a human as they do today.\n- The model was trained on last year's data, so seasonal fraud patterns may shift.\n\n## Decisions\n\n- **The model flags disputes for review and never auto-rejects.** Analysts make every final call.\n- **Felix approved the build phase.**\n- Numbers will be reviewed monthly because of the seasonality risk.\n\n## Action items\n\n- **Yusuf Demir** — expose the flagged disputes queue API by June 18. Yusuf leads disputes platform engineering at Gullwing.\n- **Kwame Mensah** — give Yusuf the model output schema today.\n- **Wen Zhao** — write reviewer guidelines for analysts by next Tuesday.\n- **Hana Sato** — send the build-phase paperwork to Felix.\n\n## Notes\n\n- Wen is learning Portuguese for a trip.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-gullwing-payments",
+      "type": "Organization",
+      "label": "Gullwing Payments",
+      "aliases": [
+        "Gullwing"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-felix-amundsen",
+      "type": "Person",
+      "label": "Felix Amundsen",
+      "aliases": [
+        "Felix"
+      ],
+      "props": {
+        "title": "CFO"
+      },
+      "attendedFixtureIds": [
+        "m14"
+      ]
+    },
+    {
+      "id": "g-person-hana-sato",
+      "type": "Person",
+      "label": "Hana Sato",
+      "aliases": [
+        "Hana"
+      ],
+      "props": {
+        "title": "Account Director"
+      },
+      "attendedFixtureIds": [
+        "m03",
+        "m16",
+        "m21"
+      ]
+    },
+    {
+      "id": "g-person-kwame-mensah",
+      "type": "Person",
+      "label": "Kwame Mensah",
+      "aliases": [
+        "Kwame"
+      ],
+      "props": {
+        "title": "Data Engineer"
+      },
+      "attendedFixtureIds": [
+        "m11",
+        "m14",
+        "m19"
+      ]
+    },
+    {
+      "id": "g-person-wen-zhao",
+      "type": "Person",
+      "label": "Wen Zhao",
+      "aliases": [
+        "Wen"
+      ],
+      "props": {
+        "title": "Risk Analyst"
+      },
+      "attendedFixtureIds": [
+        "m14"
+      ]
+    },
+    {
+      "id": "g-project-chargeback-automation",
+      "type": "Project",
+      "label": "Chargeback automation",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Gullwing pilot model review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing pilot model review"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "kwame",
+        "type": "Person",
+        "label": "Kwame Mensah",
+        "aliases": [],
+        "existingId": "g-person-kwame-mensah",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kwame Mensah (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "felix",
+        "type": "Person",
+        "label": "Felix Amundsen",
+        "aliases": [],
+        "existingId": "g-person-felix-amundsen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix Amundsen (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "key": "wen",
+        "type": "Person",
+        "label": "Wen Zhao",
+        "aliases": [],
+        "existingId": "g-person-wen-zhao",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "key": "yusuf",
+        "type": "Person",
+        "label": "Yusuf Demir",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s010",
+            "quote": "I'm Yusuf Demir, I lead the disputes platform engineering at Gullwing."
+          }
+        ]
+      },
+      {
+        "key": "gullwing",
+        "type": "Organization",
+        "label": "Gullwing Payments",
+        "aliases": [],
+        "existingId": "g-org-gullwing-payments",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s010",
+            "quote": "I lead the disputes platform engineering at Gullwing."
+          }
+        ]
+      },
+      {
+        "key": "chargeback",
+        "type": "Project",
+        "label": "Chargeback automation",
+        "aliases": [],
+        "existingId": "g-project-chargeback-automation",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the first chargeback automation model"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kwame",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "felix",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "wen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "yusuf",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments), Yusuf Demir (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "yusuf",
+        "to": "gullwing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s010",
+            "quote": "I'm Yusuf Demir, I lead the disputes platform engineering at Gullwing."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "chargeback",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the first chargeback automation model"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "chargeback",
+        "owner": null,
+        "counterparty": null,
+        "title": "Model precision 0.91",
+        "statement": "The model's precision is 0.91 on the three target reason codes, with recall around 0.78.",
+        "status": null,
+        "occurredAt": "2026-06-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s002",
+            "quote": "the model's precision is 0.91 on the three target reason codes. Recall is lower, around 0.78."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "chargeback",
+        "owner": null,
+        "counterparty": null,
+        "title": "Flag, never auto-reject",
+        "statement": "The model flags disputes for review and never auto-rejects.",
+        "status": null,
+        "occurredAt": "2026-06-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s009",
+            "quote": "That's the decision. Flag, never auto-reject."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "chargeback",
+        "owner": null,
+        "counterparty": null,
+        "title": "Build phase approved",
+        "statement": "Felix approved the build phase.",
+        "status": null,
+        "occurredAt": "2026-06-04",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s017",
+            "quote": "Then I'm approving the build phase."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "yusuf",
+        "counterparty": null,
+        "title": "Expose disputes queue API",
+        "statement": "Yusuf will expose the disputes queue API by June 18.",
+        "status": "open",
+        "occurredAt": "2026-06-04",
+        "dueAt": "2026-06-18",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s012",
+            "quote": "I'll expose the disputes queue API by June 18."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "wen",
+        "counterparty": null,
+        "title": "Write reviewer guidelines",
+        "statement": "Wen will write the reviewer guidelines by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-06-04",
+        "dueAt": "2026-06-09",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s016",
+            "quote": "I'll write the reviewer guidelines by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "kwame",
+        "counterparty": "yusuf",
+        "title": "Share model output schema",
+        "statement": "Kwame will give Yusuf the model output schema today.",
+        "status": "open",
+        "occurredAt": "2026-06-04",
+        "dueAt": "2026-06-04",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s013",
+            "quote": "I'll give you the model output schema today."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "wen",
+        "owner": null,
+        "counterparty": null,
+        "title": "Learning Portuguese",
+        "statement": "Wen is learning Portuguese for a trip.",
+        "status": null,
+        "occurredAt": "2026-06-04",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m23-s019",
+            "quote": "I'm learning Portuguese for a trip"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

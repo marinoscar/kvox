@@ -96,3 +96,7 @@ nul
 .claude/settings.local.json
 apps/web/test-results.json
 __pycache__/
+
+# kg:eval scratch output (issue #362): prediction files from runs over the
+# synthetic golden set. Real meeting data is refused inside the repo entirely.
+apps/api/.kg-eval/

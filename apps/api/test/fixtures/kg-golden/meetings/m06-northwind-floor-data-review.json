@@ -1,0 +1,659 @@
+{
+  "id": "m06",
+  "title": "Northwind pilot weekly: floor data review",
+  "tags": [
+    "client",
+    "resolution-trap",
+    "misspelling"
+  ],
+  "recordedAt": "2026-02-12T15:00:00Z",
+  "contextText": "Weekly pilot check-in. Sara Chen joining for the first half.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m06-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m06-spk-b",
+      "label": "B",
+      "displayName": "Sara Chen"
+    },
+    {
+      "id": "m06-spk-c",
+      "label": "C",
+      "displayName": "Tomás Aguilar"
+    },
+    {
+      "id": "m06-spk-d",
+      "label": "D",
+      "displayName": "Jonah Jiménez"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m06-s001",
+      "speakerId": "m06-spk-a",
+      "startMs": 0,
+      "endMs": 7440,
+      "rev": 1,
+      "text": "Hi all, weekly check-in. Today I mainly want to go through what the floor data is telling us."
+    },
+    {
+      "id": "m06-s002",
+      "speakerId": "m06-spk-b",
+      "startMs": 7690,
+      "endMs": 13990,
+      "rev": 1,
+      "text": "I can only stay for the first half, so let's do the headline numbers first."
+    },
+    {
+      "id": "m06-s003",
+      "speakerId": "m06-spk-d",
+      "startMs": 14240,
+      "endMs": 24720,
+      "rev": 1,
+      "text": "Sure. We've processed the January pick logs for Building 3. The short version is that pick rates dropped about 8 percent in January compared to December."
+    },
+    {
+      "id": "m06-s004",
+      "speakerId": "m06-spk-b",
+      "startMs": 24970,
+      "endMs": 30890,
+      "rev": 1,
+      "text": "That matches what my supervisors are telling me. January always has a new-hire wave."
+    },
+    {
+      "id": "m06-s005",
+      "speakerId": "m06-spk-c",
+      "startMs": 31140,
+      "endMs": 38960,
+      "rev": 1,
+      "text": "It's also the month we re-slotted the fast movers, so some of the drop is people learning new locations."
+    },
+    {
+      "id": "m06-s006",
+      "speakerId": "m06-spk-a",
+      "startMs": 39210,
+      "endMs": 42850,
+      "rev": 1,
+      "text": "Does that change anything for the pilot baseline?"
+    },
+    {
+      "id": "m06-s007",
+      "speakerId": "m06-spk-d",
+      "startMs": 43100,
+      "endMs": 50160,
+      "rev": 1,
+      "text": "It means January is a noisy baseline. I'd rather compare against a blend of November and December."
+    },
+    {
+      "id": "m06-s008",
+      "speakerId": "m06-spk-b",
+      "startMs": 50410,
+      "endMs": 55950,
+      "rev": 1,
+      "text": "Fine by me, as long as we're explicit about it in the report."
+    },
+    {
+      "id": "m06-s009",
+      "speakerId": "m06-spk-a",
+      "startMs": 56200,
+      "endMs": 60220,
+      "rev": 1,
+      "text": "Next, the picking strategy. Tomás, you had a proposal."
+    },
+    {
+      "id": "m06-s010",
+      "speakerId": "m06-spk-c",
+      "startMs": 60470,
+      "endMs": 70570,
+      "rev": 1,
+      "text": "Yes. I'd like the pilot aisles to use zone-based picking instead of the current batch picking. The path optimisation works much better within a zone."
+    },
+    {
+      "id": "m06-s011",
+      "speakerId": "m06-spk-d",
+      "startMs": 70820,
+      "endMs": 77120,
+      "rev": 1,
+      "text": "From the model side that's true. Paths inside a zone are shorter and more predictable."
+    },
+    {
+      "id": "m06-s012",
+      "speakerId": "m06-spk-b",
+      "startMs": 77370,
+      "endMs": 80250,
+      "rev": 1,
+      "text": "What does it cost the floor?"
+    },
+    {
+      "id": "m06-s013",
+      "speakerId": "m06-spk-c",
+      "startMs": 80500,
+      "endMs": 86800,
+      "rev": 1,
+      "text": "Some retraining, maybe two shifts. The supervisors already know the zone layout from peak season."
+    },
+    {
+      "id": "m06-s014",
+      "speakerId": "m06-spk-b",
+      "startMs": 87050,
+      "endMs": 91450,
+      "rev": 1,
+      "text": "Then let's do it. Zone-based picking in the pilot aisles."
+    },
+    {
+      "id": "m06-s015",
+      "speakerId": "m06-spk-a",
+      "startMs": 91700,
+      "endMs": 95720,
+      "rev": 1,
+      "text": "Great, that's decided. I'll note it in Friday's update."
+    },
+    {
+      "id": "m06-s016",
+      "speakerId": "m06-spk-b",
+      "startMs": 95970,
+      "endMs": 100750,
+      "rev": 1,
+      "text": "I need to drop now. Send me anything urgent in writing."
+    },
+    {
+      "id": "m06-s017",
+      "speakerId": "m06-spk-a",
+      "startMs": 101000,
+      "endMs": 103120,
+      "rev": 1,
+      "text": "Will do, thanks Sarah."
+    },
+    {
+      "id": "m06-s018",
+      "speakerId": "m06-spk-c",
+      "startMs": 103370,
+      "endMs": 110050,
+      "rev": 1,
+      "text": "Before we wrap, the slotting simulation. I'd like to rerun it with the January data included."
+    },
+    {
+      "id": "m06-s019",
+      "speakerId": "m06-spk-d",
+      "startMs": 110300,
+      "endMs": 113560,
+      "rev": 1,
+      "text": "That makes sense, especially with the re-slotting."
+    },
+    {
+      "id": "m06-s020",
+      "speakerId": "m06-spk-c",
+      "startMs": 113810,
+      "endMs": 118970,
+      "rev": 1,
+      "text": "I'll rerun the slotting simulation with January data by Friday the 20th."
+    },
+    {
+      "id": "m06-s021",
+      "speakerId": "m06-spk-a",
+      "startMs": 119220,
+      "endMs": 124000,
+      "rev": 1,
+      "text": "Perfect. JJ, can you pair with him on the input format?"
+    },
+    {
+      "id": "m06-s022",
+      "speakerId": "m06-spk-d",
+      "startMs": 124250,
+      "endMs": 127890,
+      "rev": 1,
+      "text": "Yes, I'll send him the schema this afternoon."
+    },
+    {
+      "id": "m06-s023",
+      "speakerId": "m06-spk-c",
+      "startMs": 128140,
+      "endMs": 137480,
+      "rev": 1,
+      "text": "One scheduling thing, I leave at three most days for school pickup, I've got two kids, so afternoon calls need to be early."
+    },
+    {
+      "id": "m06-s024",
+      "speakerId": "m06-spk-a",
+      "startMs": 137730,
+      "endMs": 141370,
+      "rev": 1,
+      "text": "No problem, we'll keep afternoon sessions before three."
+    },
+    {
+      "id": "m06-s025",
+      "speakerId": "m06-spk-d",
+      "startMs": 141620,
+      "endMs": 144120,
+      "rev": 1,
+      "text": "That works for me too."
+    },
+    {
+      "id": "m06-s026",
+      "speakerId": "m06-spk-a",
+      "startMs": 144370,
+      "endMs": 146110,
+      "rev": 1,
+      "text": "Great, thanks both."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Northwind pilot weekly: floor data review\n\n**Date:** February 12\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)\n\n## Summary\n\nWeekly check-in on the Northwind pick-path pilot, focused on the January floor data for Building 3 and the picking strategy for the pilot aisles.\n\n## Findings\n\n- Pick rates in Building 3 dropped about 8 percent in January compared with December.\n- Sara Chen said this matches what her supervisors report: January always brings a new-hire wave.\n- January was also the month the fast movers were re-slotted, so part of the drop is pickers learning new locations.\n- JJ considers January a noisy baseline and proposed comparing against a blend of November and December. Sara agreed as long as the report says so explicitly.\n\n## Decisions\n\n- The pilot aisles will use **zone-based picking** instead of the current batch picking. Path optimisation works much better within a zone, and the retraining cost is about two shifts because supervisors already know the zone layout from peak season.\n- The pilot baseline will be a blend of November and December rather than January.\n\n## Action items\n\n- **Tomás Aguilar** — rerun the slotting simulation with January data included, by Friday the 20th.\n- **JJ** — send Tomás the input schema this afternoon.\n- **Alex Rivera** — note the zone-picking decision in Friday's written update.\n\n## Notes\n\n- Tomás leaves at three most days for school pickup, so afternoon sessions should be scheduled before three.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01"
+      ]
+    },
+    {
+      "id": "g-person-sarah-okonkwo",
+      "type": "Person",
+      "label": "Sarah Okonkwo",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "Procurement Lead"
+      },
+      "attendedFixtureIds": [
+        "m02"
+      ]
+    },
+    {
+      "id": "g-person-tomas-aguilar",
+      "type": "Person",
+      "label": "Tomás Aguilar",
+      "aliases": [
+        "Tomas Aguilar",
+        "Tomás"
+      ],
+      "props": {
+        "title": "Engineer"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northwind pilot weekly: floor data review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind pilot weekly: floor data review"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "JJ (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarah",
+        "type": "Person",
+        "label": "Sarah Chen",
+        "aliases": [
+          "Sara Chen"
+        ],
+        "existingId": "g-person-sarah-chen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sara Chen (Northwind Robotics, first half)"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomás Aguilar",
+        "aliases": [],
+        "existingId": "g-person-tomas-aguilar",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Weekly check-in on the Northwind pick-path pilot"
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Weekly check-in on the Northwind pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarah",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "tomas",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sara Chen (Northwind Robotics, first half), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Weekly check-in on the Northwind pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "nwr",
+        "owner": null,
+        "counterparty": null,
+        "title": "January pick rates dropped 8 percent",
+        "statement": "Pick rates in Building 3 dropped about 8 percent in January compared with December.",
+        "status": null,
+        "occurredAt": "2026-02-12",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m06-s003",
+            "quote": "pick rates dropped about 8 percent in January compared to December"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Use zone-based picking in pilot aisles",
+        "statement": "The pilot aisles will use zone-based picking instead of batch picking.",
+        "status": null,
+        "occurredAt": "2026-02-12",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m06-s014",
+            "quote": "Then let's do it. Zone-based picking in the pilot aisles."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Baseline on November and December",
+        "statement": "The pilot baseline will be a blend of November and December rather than January.",
+        "status": null,
+        "occurredAt": "2026-02-12",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m06-s007",
+            "quote": "I'd rather compare against a blend of November and December."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m06-s008",
+            "quote": "Fine by me, as long as we're explicit about it in the report."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "tomas",
+        "counterparty": null,
+        "title": "Rerun slotting simulation with January data",
+        "statement": "Tomás will rerun the slotting simulation with January data by Friday the 20th.",
+        "status": "open",
+        "occurredAt": "2026-02-12",
+        "dueAt": "2026-02-20",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m06-s020",
+            "quote": "I'll rerun the slotting simulation with January data by Friday the 20th."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "jj",
+        "counterparty": "tomas",
+        "title": "Send simulation input schema",
+        "statement": "JJ will send Tomás the input schema this afternoon.",
+        "status": "open",
+        "occurredAt": "2026-02-12",
+        "dueAt": "2026-02-12",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m06-s022",
+            "quote": "I'll send him the schema this afternoon."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "tomas",
+        "owner": null,
+        "counterparty": null,
+        "title": "Leaves at three for school pickup",
+        "statement": "Tomás has two kids and leaves at three most days for school pickup.",
+        "status": null,
+        "occurredAt": "2026-02-12",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m06-s023",
+            "quote": "I leave at three most days for school pickup, I've got two kids"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

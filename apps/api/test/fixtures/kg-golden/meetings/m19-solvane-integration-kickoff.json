@@ -1,0 +1,734 @@
+{
+  "id": "m19",
+  "title": "Solvane integration kickoff with Ravi",
+  "tags": [
+    "client",
+    "relative-date",
+    "resolution-trap"
+  ],
+  "recordedAt": "2026-05-14T10:00:00Z",
+  "contextText": "Ravi's first project meeting at Solvane; integrating the SCADA historian.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m19-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m19-spk-b",
+      "label": "B",
+      "displayName": "Ravi Menon"
+    },
+    {
+      "id": "m19-spk-c",
+      "label": "C",
+      "displayName": "Grace Holloway"
+    },
+    {
+      "id": "m19-spk-d",
+      "label": "D",
+      "displayName": "Iris Novak"
+    },
+    {
+      "id": "m19-spk-e",
+      "label": "E",
+      "displayName": "Kwame Mensah"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m19-s001",
+      "speakerId": "m19-spk-a",
+      "startMs": 0,
+      "endMs": 4020,
+      "rev": 1,
+      "text": "Welcome, and Ravi, welcome back in a new role."
+    },
+    {
+      "id": "m19-s002",
+      "speakerId": "m19-spk-b",
+      "startMs": 4270,
+      "endMs": 12090,
+      "rev": 1,
+      "text": "Thanks. Two weeks in at Solvane and I already know more about solar inverters than I ever wanted to."
+    },
+    {
+      "id": "m19-s003",
+      "speakerId": "m19-spk-c",
+      "startMs": 12340,
+      "endMs": 19400,
+      "rev": 1,
+      "text": "Ravi reports to me, and I've asked him to own the integration side of the grid dashboard."
+    },
+    {
+      "id": "m19-s004",
+      "speakerId": "m19-spk-d",
+      "startMs": 19650,
+      "endMs": 22910,
+      "rev": 1,
+      "text": "Which is a relief for me, honestly."
+    },
+    {
+      "id": "m19-s005",
+      "speakerId": "m19-spk-a",
+      "startMs": 23160,
+      "endMs": 26800,
+      "rev": 1,
+      "text": "Great. Kwame, where are we on the pipelines?"
+    },
+    {
+      "id": "m19-s006",
+      "speakerId": "m19-spk-e",
+      "startMs": 27050,
+      "endMs": 34490,
+      "rev": 1,
+      "text": "The warehouse model is done. What I need now is access to the historian API for the backfill."
+    },
+    {
+      "id": "m19-s007",
+      "speakerId": "m19-spk-b",
+      "startMs": 34740,
+      "endMs": 39900,
+      "rev": 1,
+      "text": "I'll provide the API credentials for the SCADA historian by next Tuesday."
+    },
+    {
+      "id": "m19-s008",
+      "speakerId": "m19-spk-e",
+      "startMs": 40150,
+      "endMs": 41130,
+      "rev": 1,
+      "text": "Perfect."
+    },
+    {
+      "id": "m19-s009",
+      "speakerId": "m19-spk-a",
+      "startMs": 41380,
+      "endMs": 46160,
+      "rev": 1,
+      "text": "On load patterns, do we stream or batch for phase one?"
+    },
+    {
+      "id": "m19-s010",
+      "speakerId": "m19-spk-e",
+      "startMs": 46410,
+      "endMs": 51570,
+      "rev": 1,
+      "text": "Batch is much simpler, and fifteen-minute freshness is already the warehouse cadence."
+    },
+    {
+      "id": "m19-s011",
+      "speakerId": "m19-spk-c",
+      "startMs": 51820,
+      "endMs": 56980,
+      "rev": 1,
+      "text": "Then nightly batch loads for phase one. We don't need streaming yet."
+    },
+    {
+      "id": "m19-s012",
+      "speakerId": "m19-spk-a",
+      "startMs": 57230,
+      "endMs": 60490,
+      "rev": 1,
+      "text": "Decided, nightly batch loads for phase one."
+    },
+    {
+      "id": "m19-s013",
+      "speakerId": "m19-spk-d",
+      "startMs": 60740,
+      "endMs": 65140,
+      "rev": 1,
+      "text": "For the pilot, we'll cover four of the fourteen sites."
+    },
+    {
+      "id": "m19-s014",
+      "speakerId": "m19-spk-c",
+      "startMs": 65390,
+      "endMs": 69030,
+      "rev": 1,
+      "text": "The four biggest. That's where the money is."
+    },
+    {
+      "id": "m19-s015",
+      "speakerId": "m19-spk-a",
+      "startMs": 69280,
+      "endMs": 70640,
+      "rev": 1,
+      "text": "Which four?"
+    },
+    {
+      "id": "m19-s016",
+      "speakerId": "m19-spk-d",
+      "startMs": 70890,
+      "endMs": 74530,
+      "rev": 1,
+      "text": "I'll send the site list after this call."
+    },
+    {
+      "id": "m19-s017",
+      "speakerId": "m19-spk-b",
+      "startMs": 74780,
+      "endMs": 80700,
+      "rev": 1,
+      "text": "Also, the historian has a rate limit, so we should schedule the backfill overnight."
+    },
+    {
+      "id": "m19-s018",
+      "speakerId": "m19-spk-e",
+      "startMs": 80950,
+      "endMs": 83830,
+      "rev": 1,
+      "text": "Noted, I'll run it after midnight."
+    },
+    {
+      "id": "m19-s019",
+      "speakerId": "m19-spk-a",
+      "startMs": 84080,
+      "endMs": 86580,
+      "rev": 1,
+      "text": "Ravi, how's the move going?"
+    },
+    {
+      "id": "m19-s020",
+      "speakerId": "m19-spk-b",
+      "startMs": 86830,
+      "endMs": 94270,
+      "rev": 1,
+      "text": "We've settled in Lisbon. I cycle to the office now, which I never did in the old job."
+    },
+    {
+      "id": "m19-s021",
+      "speakerId": "m19-spk-a",
+      "startMs": 94520,
+      "endMs": 97780,
+      "rev": 1,
+      "text": "That sounds good. Grace, anything from you?"
+    },
+    {
+      "id": "m19-s022",
+      "speakerId": "m19-spk-c",
+      "startMs": 98030,
+      "endMs": 103950,
+      "rev": 1,
+      "text": "Just that I want a demo before the summer. Early July at the latest."
+    },
+    {
+      "id": "m19-s023",
+      "speakerId": "m19-spk-a",
+      "startMs": 104200,
+      "endMs": 106700,
+      "rev": 1,
+      "text": "That works with this plan."
+    },
+    {
+      "id": "m19-s024",
+      "speakerId": "m19-spk-e",
+      "startMs": 106950,
+      "endMs": 109450,
+      "rev": 1,
+      "text": "Yes, early July is realistic."
+    },
+    {
+      "id": "m19-s025",
+      "speakerId": "m19-spk-a",
+      "startMs": 109700,
+      "endMs": 115240,
+      "rev": 1,
+      "text": "Great. So: credentials by next Tuesday, nightly batch, four sites, demo early July."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Solvane integration kickoff with Ravi\n\n**Date:** May 14\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)\n\n## Summary\n\nKickoff of the integration workstream for the Solvane Energy grid dashboard. Ravi Menon has joined Solvane as integration lead and reports to Grace Holloway, who asked him to own integration for the dashboard.\n\n## Status\n\n- Kwame has finished the warehouse model and now needs access to the historian API for the backfill.\n- The historian enforces a rate limit, so the backfill will run overnight.\n\n## Decisions\n\n- **Nightly batch loads for phase one.** Streaming is not needed yet; fifteen-minute freshness is already the warehouse cadence.\n- The pilot covers **four of the fourteen sites** — the four biggest.\n- Grace wants a demo before the summer, early July at the latest.\n\n## Action items\n\n- **Ravi Menon** — provide API credentials for the SCADA historian by next Tuesday.\n- **Iris Novak** — send the list of the four pilot sites after the call.\n- **Kwame Mensah** — run the historian backfill after midnight.\n\n## Notes\n\n- Ravi has settled in Lisbon and now cycles to the office.\n- Iris is relieved to hand the integration side to Ravi.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-solvane-energy",
+      "type": "Organization",
+      "label": "Solvane Energy",
+      "aliases": [
+        "Solvane"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-grace-holloway",
+      "type": "Person",
+      "label": "Grace Holloway",
+      "aliases": [
+        "Grace"
+      ],
+      "props": {
+        "title": "COO"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-iris-novak",
+      "type": "Person",
+      "label": "Iris Novak",
+      "aliases": [
+        "Iris"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-kwame-mensah",
+      "type": "Person",
+      "label": "Kwame Mensah",
+      "aliases": [
+        "Kwame"
+      ],
+      "props": {
+        "title": "Data Engineer"
+      },
+      "attendedFixtureIds": [
+        "m11",
+        "m14"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08",
+        "m13",
+        "m15",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-project-grid-dashboard",
+      "type": "Project",
+      "label": "Grid dashboard",
+      "aliases": [
+        "the dashboard"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Solvane integration kickoff with Ravi",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Solvane integration kickoff with Ravi"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "kwame",
+        "type": "Person",
+        "label": "Kwame Mensah",
+        "aliases": [],
+        "existingId": "g-person-kwame-mensah",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kwame Mensah (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Menon has joined Solvane as integration lead"
+          }
+        ]
+      },
+      {
+        "key": "grace",
+        "type": "Person",
+        "label": "Grace Holloway",
+        "aliases": [],
+        "existingId": "g-person-grace-holloway",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Grace Holloway (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "key": "iris",
+        "type": "Person",
+        "label": "Iris Novak",
+        "aliases": [],
+        "existingId": "g-person-iris-novak",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "key": "solvane",
+        "type": "Organization",
+        "label": "Solvane Energy",
+        "aliases": [],
+        "existingId": "g-org-solvane-energy",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s002",
+            "quote": "Two weeks in at Solvane"
+          }
+        ]
+      },
+      {
+        "key": "dashboard",
+        "type": "Project",
+        "label": "Grid dashboard",
+        "aliases": [],
+        "existingId": "g-project-grid-dashboard",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s003",
+            "quote": "the integration side of the grid dashboard"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kwame",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "grace",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "iris",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Ravi Menon (Solvane Energy), Grace Holloway (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "ravi",
+        "to": "solvane",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Menon has joined Solvane as integration lead"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "ravi",
+        "to": "grace",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s003",
+            "quote": "Ravi reports to me"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "dashboard",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s003",
+            "quote": "the integration side of the grid dashboard"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Nightly batch loads for phase one",
+        "statement": "Phase one uses nightly batch loads rather than streaming.",
+        "status": null,
+        "occurredAt": "2026-05-14",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s012",
+            "quote": "Decided, nightly batch loads for phase one."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Pilot covers the four biggest sites",
+        "statement": "The pilot covers four of the fourteen sites, the four biggest.",
+        "status": null,
+        "occurredAt": "2026-05-14",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s013",
+            "quote": "For the pilot, we'll cover four of the fourteen sites."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m19-s014",
+            "quote": "The four biggest. That's where the money is."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "dashboard",
+        "owner": "ravi",
+        "counterparty": "kwame",
+        "title": "Provide historian API credentials",
+        "statement": "Ravi will provide the API credentials for the SCADA historian by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-05-14",
+        "dueAt": "2026-05-19",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s007",
+            "quote": "I'll provide the API credentials for the SCADA historian by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "dashboard",
+        "owner": "iris",
+        "counterparty": null,
+        "title": "Send the pilot site list",
+        "statement": "Iris will send the list of the four pilot sites after the call.",
+        "status": "open",
+        "occurredAt": "2026-05-14",
+        "dueAt": "2026-05-14",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s016",
+            "quote": "I'll send the site list after this call."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Warehouse model done",
+        "statement": "Kwame has finished the warehouse model for the dashboard.",
+        "status": null,
+        "occurredAt": "2026-05-14",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s006",
+            "quote": "The warehouse model is done."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "ravi",
+        "owner": null,
+        "counterparty": null,
+        "title": "Settled in Lisbon, cycles to work",
+        "statement": "Ravi has settled in Lisbon and cycles to the office.",
+        "status": null,
+        "occurredAt": "2026-05-14",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m19-s020",
+            "quote": "We've settled in Lisbon. I cycle to the office now"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

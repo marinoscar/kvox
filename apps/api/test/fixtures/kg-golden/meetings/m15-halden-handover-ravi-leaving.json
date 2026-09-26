@@ -1,0 +1,724 @@
+{
+  "id": "m15",
+  "title": "Halden handover: Ravi leaving",
+  "tags": [
+    "client",
+    "company-change"
+  ],
+  "recordedAt": "2026-04-16T14:00:00Z",
+  "contextText": "Ravi is leaving Halden; handover of his integration work.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m15-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m15-spk-b",
+      "label": "B",
+      "displayName": "Ravi Menon"
+    },
+    {
+      "id": "m15-spk-c",
+      "label": "C",
+      "displayName": "Marcus Webb"
+    },
+    {
+      "id": "m15-spk-d",
+      "label": "D",
+      "displayName": "Jonah Jiménez"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m15-s001",
+      "speakerId": "m15-spk-a",
+      "startMs": 0,
+      "endMs": 5160,
+      "rev": 1,
+      "text": "Thanks for joining. Ravi, do you want to share the news yourself?"
+    },
+    {
+      "id": "m15-s002",
+      "speakerId": "m15-spk-b",
+      "startMs": 5410,
+      "endMs": 10570,
+      "rev": 1,
+      "text": "Sure. I'm leaving Halden. My last day is the end of April."
+    },
+    {
+      "id": "m15-s003",
+      "speakerId": "m15-spk-c",
+      "startMs": 10820,
+      "endMs": 15220,
+      "rev": 1,
+      "text": "We're sorry to lose him, but it's a great move."
+    },
+    {
+      "id": "m15-s004",
+      "speakerId": "m15-spk-b",
+      "startMs": 15470,
+      "endMs": 19870,
+      "rev": 1,
+      "text": "I'm joining Solvane Energy as integration lead from May 1."
+    },
+    {
+      "id": "m15-s005",
+      "speakerId": "m15-spk-a",
+      "startMs": 20120,
+      "endMs": 24520,
+      "rev": 1,
+      "text": "Congratulations. We know Solvane well, we're building their grid dashboard."
+    },
+    {
+      "id": "m15-s006",
+      "speakerId": "m15-spk-b",
+      "startMs": 24770,
+      "endMs": 28030,
+      "rev": 1,
+      "text": "So we'll probably see each other again."
+    },
+    {
+      "id": "m15-s007",
+      "speakerId": "m15-spk-a",
+      "startMs": 28280,
+      "endMs": 33820,
+      "rev": 1,
+      "text": "Let's make sure the handover is clean. What's still open on your side?"
+    },
+    {
+      "id": "m15-s008",
+      "speakerId": "m15-spk-b",
+      "startMs": 34070,
+      "endMs": 39990,
+      "rev": 1,
+      "text": "Two things. The rollback runbook, which I'm late on, and the southern depot mappings."
+    },
+    {
+      "id": "m15-s009",
+      "speakerId": "m15-spk-c",
+      "startMs": 40240,
+      "endMs": 46540,
+      "rev": 1,
+      "text": "The runbook matters most. We cut over the north without it, which I didn't love."
+    },
+    {
+      "id": "m15-s010",
+      "speakerId": "m15-spk-b",
+      "startMs": 46790,
+      "endMs": 51950,
+      "rev": 1,
+      "text": "I'll still finish the rollback runbook before I go, by April 30."
+    },
+    {
+      "id": "m15-s011",
+      "speakerId": "m15-spk-a",
+      "startMs": 52200,
+      "endMs": 54320,
+      "rev": 1,
+      "text": "And the depot mappings?"
+    },
+    {
+      "id": "m15-s012",
+      "speakerId": "m15-spk-d",
+      "startMs": 54570,
+      "endMs": 61250,
+      "rev": 1,
+      "text": "I'll take over the depot integrations after Ravi leaves. I know most of that code anyway."
+    },
+    {
+      "id": "m15-s013",
+      "speakerId": "m15-spk-c",
+      "startMs": 61500,
+      "endMs": 65900,
+      "rev": 1,
+      "text": "Then that's decided, JJ owns the depot integrations from May."
+    },
+    {
+      "id": "m15-s014",
+      "speakerId": "m15-spk-a",
+      "startMs": 66150,
+      "endMs": 69410,
+      "rev": 1,
+      "text": "Marcus, who replaces Ravi on your side?"
+    },
+    {
+      "id": "m15-s015",
+      "speakerId": "m15-spk-c",
+      "startMs": 69660,
+      "endMs": 75580,
+      "rev": 1,
+      "text": "I'll name a replacement integration lead by April 24. I have two internal candidates."
+    },
+    {
+      "id": "m15-s016",
+      "speakerId": "m15-spk-a",
+      "startMs": 75830,
+      "endMs": 79090,
+      "rev": 1,
+      "text": "Any impact on the southern depots timeline?"
+    },
+    {
+      "id": "m15-s017",
+      "speakerId": "m15-spk-b",
+      "startMs": 79340,
+      "endMs": 86780,
+      "rev": 1,
+      "text": "Realistically, the southern depots cutover slips to June. I don't want my replacement starting with a live cutover."
+    },
+    {
+      "id": "m15-s018",
+      "speakerId": "m15-spk-c",
+      "startMs": 87030,
+      "endMs": 89530,
+      "rev": 1,
+      "text": "I agree, June is safer."
+    },
+    {
+      "id": "m15-s019",
+      "speakerId": "m15-spk-a",
+      "startMs": 89780,
+      "endMs": 92280,
+      "rev": 1,
+      "text": "Understood. We'll re-plan around June."
+    },
+    {
+      "id": "m15-s020",
+      "speakerId": "m15-spk-d",
+      "startMs": 92530,
+      "endMs": 98070,
+      "rev": 1,
+      "text": "Ravi, can we do a recorded walkthrough of the mappings before you go?"
+    },
+    {
+      "id": "m15-s021",
+      "speakerId": "m15-spk-b",
+      "startMs": 98320,
+      "endMs": 100820,
+      "rev": 1,
+      "text": "Yes, let's do Tuesday afternoon."
+    },
+    {
+      "id": "m15-s022",
+      "speakerId": "m15-spk-a",
+      "startMs": 101070,
+      "endMs": 104330,
+      "rev": 1,
+      "text": "Ravi, anything personal we can help with?"
+    },
+    {
+      "id": "m15-s023",
+      "speakerId": "m15-spk-b",
+      "startMs": 104580,
+      "endMs": 111260,
+      "rev": 1,
+      "text": "We're moving to Lisbon with the kids, so the next month is chaos, but good chaos."
+    },
+    {
+      "id": "m15-s024",
+      "speakerId": "m15-spk-a",
+      "startMs": 111510,
+      "endMs": 115530,
+      "rev": 1,
+      "text": "That's exciting. Thanks Ravi, for everything on this project."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Halden handover: Ravi leaving\n\n**Date:** April 16\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)\n\n## Summary\n\nRavi Menon is leaving Halden Freight; his last day is the end of April. He joins Solvane Energy as integration lead from May 1. This session covered the handover of his open work on the route optimizer migration.\n\n## Open items from Ravi\n\n- The rollback runbook, which is overdue. Marcus considers it the most important item; the north cut over without it.\n- The southern depot mappings.\n\n## Decisions\n\n- **JJ takes over the depot integrations** after Ravi leaves.\n- The southern depots cutover slips to June so that Ravi's replacement does not start with a live cutover. The plan will be reworked around June.\n\n## Action items\n\n- **Ravi Menon** — finish the rollback runbook before he goes, by April 30.\n- **Ravi Menon and JJ** — record a walkthrough of the depot mappings on Tuesday afternoon.\n- **Marcus Webb** — name a replacement integration lead by April 24; he has two internal candidates.\n\n## Notes\n\n- Larkspur already works with Solvane on the grid dashboard, so we will likely work with Ravi again.\n- Ravi and his family are moving to Lisbon.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-solvane-energy",
+      "type": "Organization",
+      "label": "Solvane Energy",
+      "aliases": [
+        "Solvane"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08",
+        "m13"
+      ]
+    },
+    {
+      "id": "g-person-marcus-webb",
+      "type": "Person",
+      "label": "Marcus Webb",
+      "aliases": [
+        "Marcus"
+      ],
+      "props": {
+        "title": "CIO"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m13",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08",
+        "m13",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-project-grid-dashboard",
+      "type": "Project",
+      "label": "Grid dashboard",
+      "aliases": [
+        "the dashboard"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-route-optimizer-migration",
+      "type": "Project",
+      "label": "Route optimizer migration",
+      "aliases": [
+        "the migration"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Halden handover: Ravi leaving",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Halden handover: Ravi leaving"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s013",
+            "quote": "JJ owns the depot integrations from May."
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Menon is leaving Halden Freight"
+          }
+        ]
+      },
+      {
+        "key": "marcus",
+        "type": "Person",
+        "label": "Marcus Webb",
+        "aliases": [],
+        "existingId": "g-person-marcus-webb",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "key": "halden",
+        "type": "Organization",
+        "label": "Halden Freight",
+        "aliases": [],
+        "existingId": "g-org-halden-freight",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s002",
+            "quote": "I'm leaving Halden."
+          }
+        ]
+      },
+      {
+        "key": "solvane",
+        "type": "Organization",
+        "label": "Solvane Energy",
+        "aliases": [],
+        "existingId": "g-org-solvane-energy",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s004",
+            "quote": "I'm joining Solvane Energy as integration lead from May 1."
+          }
+        ]
+      },
+      {
+        "key": "migration",
+        "type": "Project",
+        "label": "Route optimizer migration",
+        "aliases": [],
+        "existingId": "g-project-route-optimizer-migration",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "his open work on the route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "marcus",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Ravi Menon (Halden Freight), Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "ravi",
+        "to": "halden",
+        "validFrom": null,
+        "validTo": "2026-05-01",
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s002",
+            "quote": "My last day is the end of April."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "ravi",
+        "to": "solvane",
+        "validFrom": "2026-05-01",
+        "validTo": null,
+        "precision": "day",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s004",
+            "quote": "I'm joining Solvane Energy as integration lead from May 1."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "ravi",
+        "to": "solvane",
+        "validFrom": "2026-05-01",
+        "validTo": null,
+        "precision": "day",
+        "props": {
+          "title": "Integration Lead"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s004",
+            "quote": "I'm joining Solvane Energy as integration lead from May 1."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "migration",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "his open work on the route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "ravi",
+        "counterparty": "marcus",
+        "title": "Finish the rollback runbook",
+        "statement": "Ravi will still finish the rollback runbook before he goes, by April 30.",
+        "status": "open",
+        "occurredAt": "2026-04-16",
+        "dueAt": "2026-04-30",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s010",
+            "quote": "I'll still finish the rollback runbook before I go, by April 30."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "halden",
+        "owner": "marcus",
+        "counterparty": null,
+        "title": "Name a replacement integration lead",
+        "statement": "Marcus will name a replacement integration lead by April 24.",
+        "status": "open",
+        "occurredAt": "2026-04-16",
+        "dueAt": "2026-04-24",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s015",
+            "quote": "I'll name a replacement integration lead by April 24."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "ravi",
+        "counterparty": "jj",
+        "title": "Record depot mappings walkthrough",
+        "statement": "Ravi will record a walkthrough of the depot mappings with JJ on Tuesday afternoon.",
+        "status": "open",
+        "occurredAt": "2026-04-16",
+        "dueAt": "2026-04-21",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s021",
+            "quote": "Yes, let's do Tuesday afternoon."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "JJ takes over depot integrations",
+        "statement": "JJ takes over the depot integrations after Ravi leaves.",
+        "status": null,
+        "occurredAt": "2026-04-16",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s013",
+            "quote": "JJ owns the depot integrations from May."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Southern depots cutover slips to June",
+        "statement": "The southern depots cutover slips to June.",
+        "status": null,
+        "occurredAt": "2026-04-16",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s017",
+            "quote": "the southern depots cutover slips to June"
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "ravi",
+        "owner": null,
+        "counterparty": null,
+        "title": "Moving to Lisbon with family",
+        "statement": "Ravi is moving to Lisbon with his kids.",
+        "status": null,
+        "occurredAt": "2026-04-16",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m15-s023",
+            "quote": "We're moving to Lisbon with the kids"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

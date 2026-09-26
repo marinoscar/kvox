@@ -1,0 +1,703 @@
+{
+  "id": "m30",
+  "title": "Varden claims portal build kickoff",
+  "tags": [
+    "client",
+    "supersedes",
+    "relative-date",
+    "sensitive"
+  ],
+  "recordedAt": "2026-08-06T13:00:00Z",
+  "contextText": "Build phase kickoff after discovery. Rosa back from leave.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m30-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m30-spk-b",
+      "label": "B",
+      "displayName": "Rosa Delgado"
+    },
+    {
+      "id": "m30-spk-c",
+      "label": "C",
+      "displayName": "Ben Adeyemi"
+    },
+    {
+      "id": "m30-spk-d",
+      "label": "D",
+      "displayName": "Mateo Rossi"
+    },
+    {
+      "id": "m30-spk-e",
+      "label": "E",
+      "displayName": "Hana Sato"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m30-s001",
+      "speakerId": "m30-spk-a",
+      "startMs": 0,
+      "endMs": 4020,
+      "rev": 1,
+      "text": "Welcome back, Rosa, and welcome to the build kickoff."
+    },
+    {
+      "id": "m30-s002",
+      "speakerId": "m30-spk-b",
+      "startMs": 4270,
+      "endMs": 13230,
+      "rev": 1,
+      "text": "Thanks. I'm back, but on mornings only for now while I recover from the surgery. Ben stays my backup in the afternoons."
+    },
+    {
+      "id": "m30-s003",
+      "speakerId": "m30-spk-e",
+      "startMs": 13480,
+      "endMs": 17120,
+      "rev": 1,
+      "text": "Glad you're back. Let's make the mornings count."
+    },
+    {
+      "id": "m30-s004",
+      "speakerId": "m30-spk-a",
+      "startMs": 17370,
+      "endMs": 22530,
+      "rev": 1,
+      "text": "Mateo, there's one thing from the spike we need to discuss first."
+    },
+    {
+      "id": "m30-s005",
+      "speakerId": "m30-spk-d",
+      "startMs": 22780,
+      "endMs": 34400,
+      "rev": 1,
+      "text": "Yes. In June we decided to rebuild the portal on top of the existing policy API. The spike showed the claims endpoints in that API can't support real-time status."
+    },
+    {
+      "id": "m30-s006",
+      "speakerId": "m30-spk-c",
+      "startMs": 34650,
+      "endMs": 40570,
+      "rev": 1,
+      "text": "They batch overnight. There's no way to get a claim's status during the day."
+    },
+    {
+      "id": "m30-s007",
+      "speakerId": "m30-spk-b",
+      "startMs": 40820,
+      "endMs": 47120,
+      "rev": 1,
+      "text": "Which is the whole point of the project. Status is thirty percent of our calls."
+    },
+    {
+      "id": "m30-s008",
+      "speakerId": "m30-spk-d",
+      "startMs": 47370,
+      "endMs": 56710,
+      "rev": 1,
+      "text": "So my recommendation is to replace the policy API's claims endpoints with a new claims service, and keep the rest of the API."
+    },
+    {
+      "id": "m30-s009",
+      "speakerId": "m30-spk-b",
+      "startMs": 56960,
+      "endMs": 60220,
+      "rev": 1,
+      "text": "That reverses what we decided in June."
+    },
+    {
+      "id": "m30-s010",
+      "speakerId": "m30-spk-a",
+      "startMs": 60470,
+      "endMs": 64870,
+      "rev": 1,
+      "text": "It does, but for a reason we didn't know then."
+    },
+    {
+      "id": "m30-s011",
+      "speakerId": "m30-spk-b",
+      "startMs": 65120,
+      "endMs": 71040,
+      "rev": 1,
+      "text": "Then we reverse it. We replace the claims endpoints with a new claims service."
+    },
+    {
+      "id": "m30-s012",
+      "speakerId": "m30-spk-c",
+      "startMs": 71290,
+      "endMs": 76450,
+      "rev": 1,
+      "text": "I can live with that. The rest of the policy API stays."
+    },
+    {
+      "id": "m30-s013",
+      "speakerId": "m30-spk-a",
+      "startMs": 76700,
+      "endMs": 81100,
+      "rev": 1,
+      "text": "Decided. Mateo, what do you need to write it up?"
+    },
+    {
+      "id": "m30-s014",
+      "speakerId": "m30-spk-d",
+      "startMs": 81350,
+      "endMs": 85370,
+      "rev": 1,
+      "text": "I'll write the architecture decision record by next Tuesday."
+    },
+    {
+      "id": "m30-s015",
+      "speakerId": "m30-spk-b",
+      "startMs": 85620,
+      "endMs": 90780,
+      "rev": 1,
+      "text": "I want two claims handlers involved from the start as product champions."
+    },
+    {
+      "id": "m30-s016",
+      "speakerId": "m30-spk-a",
+      "startMs": 91030,
+      "endMs": 92770,
+      "rev": 1,
+      "text": "Who picks them?"
+    },
+    {
+      "id": "m30-s017",
+      "speakerId": "m30-spk-b",
+      "startMs": 93020,
+      "endMs": 97800,
+      "rev": 1,
+      "text": "I'll nominate two claims handlers as product champions by August 14."
+    },
+    {
+      "id": "m30-s018",
+      "speakerId": "m30-spk-e",
+      "startMs": 98050,
+      "endMs": 104350,
+      "rev": 1,
+      "text": "On budget, the build phase is approved at 1.4 million, with a ten percent contingency."
+    },
+    {
+      "id": "m30-s019",
+      "speakerId": "m30-spk-c",
+      "startMs": 104600,
+      "endMs": 108240,
+      "rev": 1,
+      "text": "Good. My team will need a staging environment."
+    },
+    {
+      "id": "m30-s020",
+      "speakerId": "m30-spk-d",
+      "startMs": 108490,
+      "endMs": 111370,
+      "rev": 1,
+      "text": "I'll include staging in the ADR."
+    },
+    {
+      "id": "m30-s021",
+      "speakerId": "m30-spk-a",
+      "startMs": 111620,
+      "endMs": 117160,
+      "rev": 1,
+      "text": "Great. So: new claims service, ADR by next Tuesday, champions by August 14."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Varden claims portal build kickoff\n\n**Date:** August 6\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)\n\n## Summary\n\nKickoff of the build phase for the Varden Insurance claims portal rebuild. Rosa is back from leave, working mornings only for now; Ben covers afternoons.\n\n## Spike finding\n\n- In June the team decided to rebuild the portal on top of the existing policy API.\n- The integration spike showed the API's claims endpoints only batch overnight and cannot support real-time claim status during the day.\n- Real-time status is the heart of the project: status checks are thirty percent of claims calls.\n\n## Decisions\n\n- **Reverse the June decision: replace the policy API's claims endpoints with a new claims service**, keeping the rest of the policy API. The reversal is based on the spike, which was not available in June.\n- Two claims handlers will be involved from the start as product champions.\n\n## Budget\n\nThe build phase is approved at 1.4 million with a ten percent contingency.\n\n## Action items\n\n- **Mateo Rossi** — write the architecture decision record by next Tuesday, including a staging environment for Ben's team.\n- **Rosa Delgado** — nominate two claims handlers as product champions by August 14.\n\n## Notes\n\n- Rosa is on mornings only for now; schedule key decisions before noon.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-varden-insurance",
+      "type": "Organization",
+      "label": "Varden Insurance",
+      "aliases": [
+        "Varden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22",
+        "m23",
+        "m24",
+        "m25",
+        "m26",
+        "m27",
+        "m28",
+        "m29"
+      ]
+    },
+    {
+      "id": "g-person-ben-adeyemi",
+      "type": "Person",
+      "label": "Ben Adeyemi",
+      "aliases": [
+        "Ben"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m24"
+      ]
+    },
+    {
+      "id": "g-person-hana-sato",
+      "type": "Person",
+      "label": "Hana Sato",
+      "aliases": [
+        "Hana"
+      ],
+      "props": {
+        "title": "Account Director"
+      },
+      "attendedFixtureIds": [
+        "m03",
+        "m16",
+        "m21"
+      ]
+    },
+    {
+      "id": "g-person-mateo-rossi",
+      "type": "Person",
+      "label": "Mateo Rossi",
+      "aliases": [
+        "Mateo"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m24"
+      ]
+    },
+    {
+      "id": "g-person-rosa-delgado",
+      "type": "Person",
+      "label": "Rosa Delgado",
+      "aliases": [
+        "Rosa"
+      ],
+      "props": {
+        "title": "Claims Director"
+      },
+      "attendedFixtureIds": [
+        "m24"
+      ]
+    },
+    {
+      "id": "g-project-claims-portal-rebuild",
+      "type": "Project",
+      "label": "Claims portal rebuild",
+      "aliases": [
+        "the portal"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Varden claims portal build kickoff",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Varden claims portal build kickoff"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Sato",
+        "aliases": [],
+        "existingId": "g-person-hana-sato",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana Sato (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "mateo",
+        "type": "Person",
+        "label": "Mateo Rossi",
+        "aliases": [],
+        "existingId": "g-person-mateo-rossi",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Mateo Rossi (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "rosa",
+        "type": "Person",
+        "label": "Rosa Delgado",
+        "aliases": [],
+        "existingId": "g-person-rosa-delgado",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rosa Delgado (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "key": "ben",
+        "type": "Person",
+        "label": "Ben Adeyemi",
+        "aliases": [],
+        "existingId": "g-person-ben-adeyemi",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "key": "varden",
+        "type": "Organization",
+        "label": "Varden Insurance",
+        "aliases": [],
+        "existingId": "g-org-varden-insurance",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Varden Insurance claims portal rebuild"
+          }
+        ]
+      },
+      {
+        "key": "portal",
+        "type": "Project",
+        "label": "Claims portal rebuild",
+        "aliases": [],
+        "existingId": "g-project-claims-portal-rebuild",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Varden Insurance claims portal rebuild"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "hana",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "mateo",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "rosa",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ben",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Mateo Rossi (Larkspur Labs), Rosa Delgado (Varden Insurance), Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "portal",
+        "to": "varden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Varden Insurance claims portal rebuild"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "portal",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kickoff of the build phase for the Varden Insurance claims portal rebuild."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "portal",
+        "owner": null,
+        "counterparty": null,
+        "title": "Replace claims endpoints with a new claims service",
+        "statement": "The policy API claims endpoints are replaced with a new claims service, keeping the rest of the API.",
+        "status": null,
+        "occurredAt": "2026-08-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": "m24#decision-1",
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s011",
+            "quote": "We replace the claims endpoints with a new claims service."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "portal",
+        "owner": null,
+        "counterparty": null,
+        "title": "Two claims handlers as product champions",
+        "statement": "Two claims handlers will be involved from the start as product champions.",
+        "status": null,
+        "occurredAt": "2026-08-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s015",
+            "quote": "I want two claims handlers involved from the start as product champions."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "portal",
+        "owner": null,
+        "counterparty": null,
+        "title": "Build phase approved at 1.4 million",
+        "statement": "The build phase is approved at 1.4 million with a ten percent contingency.",
+        "status": null,
+        "occurredAt": "2026-08-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s018",
+            "quote": "the build phase is approved at 1.4 million, with a ten percent contingency"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "portal",
+        "owner": null,
+        "counterparty": null,
+        "title": "Claims endpoints only batch overnight",
+        "statement": "The policy API's claims endpoints only batch overnight and cannot support real-time status.",
+        "status": null,
+        "occurredAt": "2026-08-06",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s005",
+            "quote": "The spike showed the claims endpoints in that API can't support real-time status."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m30-s006",
+            "quote": "They batch overnight."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "mateo",
+        "counterparty": null,
+        "title": "Write the architecture decision record",
+        "statement": "Mateo will write the architecture decision record by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-08-06",
+        "dueAt": "2026-08-11",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s014",
+            "quote": "I'll write the architecture decision record by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "rosa",
+        "counterparty": null,
+        "title": "Nominate two product champions",
+        "statement": "Rosa will nominate two claims handlers as product champions by August 14.",
+        "status": "open",
+        "occurredAt": "2026-08-06",
+        "dueAt": "2026-08-14",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s017",
+            "quote": "I'll nominate two claims handlers as product champions by August 14."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "rosa",
+        "owner": null,
+        "counterparty": null,
+        "title": "Recovering from surgery, mornings only",
+        "statement": "Rosa is working mornings only while she recovers from surgery.",
+        "status": null,
+        "occurredAt": "2026-08-06",
+        "dueAt": null,
+        "sensitivity": "sensitive",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m30-s002",
+            "quote": "I'm back, but on mornings only for now while I recover from the surgery."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

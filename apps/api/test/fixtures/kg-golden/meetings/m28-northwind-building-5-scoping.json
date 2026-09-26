@@ -1,0 +1,723 @@
+{
+  "id": "m28",
+  "title": "Northwind Building 5 expansion scoping",
+  "tags": [
+    "client",
+    "resolution-trap",
+    "abbreviation"
+  ],
+  "recordedAt": "2026-07-16T15:00:00Z",
+  "contextText": "Scoping the extension of the pick-path approach to Building 5.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m28-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m28-spk-b",
+      "label": "B",
+      "displayName": "Sarah Chen"
+    },
+    {
+      "id": "m28-spk-c",
+      "label": "C",
+      "displayName": "Owen Barker"
+    },
+    {
+      "id": "m28-spk-d",
+      "label": "D",
+      "displayName": "Tomás Aguilar"
+    },
+    {
+      "id": "m28-spk-e",
+      "label": "E",
+      "displayName": "Chloé Dubois"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m28-s001",
+      "speakerId": "m28-spk-a",
+      "startMs": 0,
+      "endMs": 4400,
+      "rev": 1,
+      "text": "Thanks all. This is scoping for the Building 5 expansion."
+    },
+    {
+      "id": "m28-s002",
+      "speakerId": "m28-spk-b",
+      "startMs": 4650,
+      "endMs": 11330,
+      "rev": 1,
+      "text": "For context, NWR's board approved the budget in principle. I need to confirm the final number."
+    },
+    {
+      "id": "m28-s003",
+      "speakerId": "m28-spk-c",
+      "startMs": 11580,
+      "endMs": 15600,
+      "rev": 1,
+      "text": "The platform side is ready, the cluster has room."
+    },
+    {
+      "id": "m28-s004",
+      "speakerId": "m28-spk-a",
+      "startMs": 15850,
+      "endMs": 18350,
+      "rev": 1,
+      "text": "What's different about Building 5?"
+    },
+    {
+      "id": "m28-s005",
+      "speakerId": "m28-spk-d",
+      "startMs": 18600,
+      "endMs": 25280,
+      "rev": 1,
+      "text": "It's bigger, and the shelving is older. The location data will be messier than Building 3."
+    },
+    {
+      "id": "m28-s006",
+      "speakerId": "m28-spk-e",
+      "startMs": 25530,
+      "endMs": 31450,
+      "rev": 1,
+      "text": "And the pickers there have never used zones. Building 3 pickers had peak-season experience."
+    },
+    {
+      "id": "m28-s007",
+      "speakerId": "m28-spk-b",
+      "startMs": 31700,
+      "endMs": 34960,
+      "rev": 1,
+      "text": "Do we keep the same layout approach?"
+    },
+    {
+      "id": "m28-s008",
+      "speakerId": "m28-spk-d",
+      "startMs": 35210,
+      "endMs": 42650,
+      "rev": 1,
+      "text": "I'd keep the same zone picking layout. Changing two things at once makes it impossible to learn anything."
+    },
+    {
+      "id": "m28-s009",
+      "speakerId": "m28-spk-b",
+      "startMs": 42900,
+      "endMs": 48060,
+      "rev": 1,
+      "text": "Agreed. Building 5 uses the same zone picking layout as Building 3."
+    },
+    {
+      "id": "m28-s010",
+      "speakerId": "m28-spk-a",
+      "startMs": 48310,
+      "endMs": 51570,
+      "rev": 1,
+      "text": "Decided. What do you need first, Tomás?"
+    },
+    {
+      "id": "m28-s011",
+      "speakerId": "m28-spk-d",
+      "startMs": 51820,
+      "endMs": 57740,
+      "rev": 1,
+      "text": "A sensor survey. I'll finish the sensor survey of Building 5 by August 7."
+    },
+    {
+      "id": "m28-s012",
+      "speakerId": "m28-spk-b",
+      "startMs": 57990,
+      "endMs": 62010,
+      "rev": 1,
+      "text": "I'll confirm the budget by the end of July."
+    },
+    {
+      "id": "m28-s013",
+      "speakerId": "m28-spk-a",
+      "startMs": 62260,
+      "endMs": 64760,
+      "rev": 1,
+      "text": "Chloé, what about the pickers?"
+    },
+    {
+      "id": "m28-s014",
+      "speakerId": "m28-spk-e",
+      "startMs": 65010,
+      "endMs": 71690,
+      "rev": 1,
+      "text": "I'll run the same training we did in Building 3, in French and English this time."
+    },
+    {
+      "id": "m28-s015",
+      "speakerId": "m28-spk-c",
+      "startMs": 71940,
+      "endMs": 76340,
+      "rev": 1,
+      "text": "When does Building 5 actually open for the new shifts?"
+    },
+    {
+      "id": "m28-s016",
+      "speakerId": "m28-spk-b",
+      "startMs": 76590,
+      "endMs": 83650,
+      "rev": 1,
+      "text": "Building 5 opens for the new flow in Q4, but I don't have a firmer date yet."
+    },
+    {
+      "id": "m28-s017",
+      "speakerId": "m28-spk-a",
+      "startMs": 83900,
+      "endMs": 86400,
+      "rev": 1,
+      "text": "We'll plan to Q4 then."
+    },
+    {
+      "id": "m28-s018",
+      "speakerId": "m28-spk-c",
+      "startMs": 86650,
+      "endMs": 89910,
+      "rev": 1,
+      "text": "Chloé, do you report to Sarah now?"
+    },
+    {
+      "id": "m28-s019",
+      "speakerId": "m28-spk-e",
+      "startMs": 90160,
+      "endMs": 94940,
+      "rev": 1,
+      "text": "Yes, since the spring. Floor supervisors all report to Sarah directly."
+    },
+    {
+      "id": "m28-s020",
+      "speakerId": "m28-spk-a",
+      "startMs": 95190,
+      "endMs": 98450,
+      "rev": 1,
+      "text": "Tomás, how are weekends? You mentioned coaching."
+    },
+    {
+      "id": "m28-s021",
+      "speakerId": "m28-spk-d",
+      "startMs": 98700,
+      "endMs": 104240,
+      "rev": 1,
+      "text": "I coach my daughter's football team on Saturdays, so no weekend cutovers please."
+    },
+    {
+      "id": "m28-s022",
+      "speakerId": "m28-spk-b",
+      "startMs": 104490,
+      "endMs": 106990,
+      "rev": 1,
+      "text": "Nobody wants weekend cutovers anyway."
+    },
+    {
+      "id": "m28-s023",
+      "speakerId": "m28-spk-a",
+      "startMs": 107240,
+      "endMs": 114300,
+      "rev": 1,
+      "text": "Great. So: same layout, sensor survey by August 7, budget by end of July, opening in Q4."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Northwind Building 5 expansion scoping\n\n**Date:** July 16\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)\n\n## Summary\n\nScoping for the Building 5 expansion, which extends the pick-path approach from Building 3. NWR's board has approved the budget in principle; Sarah needs to confirm the final number.\n\n## Differences from Building 3\n\n- Building 5 is bigger and has older shelving, so location data will be messier.\n- Building 5 pickers have never used zones; Building 3 pickers had peak-season experience.\n- The platform cluster has room for Building 5.\n\n## Decisions\n\n- **Building 5 uses the same zone picking layout as Building 3**, so the team changes only one thing at a time.\n- No weekend cutovers.\n\n## Timeline\n\nBuilding 5 opens for the new flow in Q4; there is no firmer date yet.\n\n## Action items\n\n- **Tomás Aguilar** — finish the sensor survey of Building 5 by August 7.\n- **Sarah Chen** — confirm the budget by the end of July.\n- **Chloé Dubois** — run the Building 3 picker training in Building 5, in French and English.\n\n## Notes\n\n- Floor supervisors, including Chloé, have reported directly to Sarah since the spring.\n- Tomás coaches his daughter's football team on Saturdays.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22",
+        "m23",
+        "m24",
+        "m25",
+        "m26",
+        "m27"
+      ]
+    },
+    {
+      "id": "g-person-chloe-dubois",
+      "type": "Person",
+      "label": "Chloé Dubois",
+      "aliases": [
+        "Chloe Dubois",
+        "Chloé"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-owen-barker",
+      "type": "Person",
+      "label": "Owen Barker",
+      "aliases": [
+        "Owen"
+      ],
+      "props": {
+        "title": "Head of Platform"
+      },
+      "attendedFixtureIds": [
+        "m12",
+        "m18",
+        "m20"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06",
+        "m09",
+        "m12",
+        "m20"
+      ]
+    },
+    {
+      "id": "g-person-tomas-aguilar",
+      "type": "Person",
+      "label": "Tomás Aguilar",
+      "aliases": [
+        "Tomas Aguilar",
+        "Tomás"
+      ],
+      "props": {
+        "title": "Engineer"
+      },
+      "attendedFixtureIds": [
+        "m06",
+        "m09",
+        "m12",
+        "m20"
+      ]
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northwind Building 5 expansion scoping",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind Building 5 expansion scoping"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarah",
+        "type": "Person",
+        "label": "Sarah Chen",
+        "aliases": [],
+        "existingId": "g-person-sarah-chen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Chen (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "owen",
+        "type": "Person",
+        "label": "Owen Barker",
+        "aliases": [],
+        "existingId": "g-person-owen-barker",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomás Aguilar",
+        "aliases": [],
+        "existingId": "g-person-tomas-aguilar",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "chloe",
+        "type": "Person",
+        "label": "Chloé Dubois",
+        "aliases": [],
+        "existingId": "g-person-chloe-dubois",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [
+          "NWR"
+        ],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s002",
+            "quote": "NWR's board approved the budget in principle."
+          }
+        ]
+      },
+      {
+        "key": "b5",
+        "type": "Project",
+        "label": "Building 5 expansion",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s001",
+            "quote": "This is scoping for the Building 5 expansion."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarah",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "owen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "tomas",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "chloe",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Owen Barker (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Chloé Dubois (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "b5",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "NWR's board has approved the budget in principle"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "b5",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s001",
+            "quote": "This is scoping for the Building 5 expansion."
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "chloe",
+        "to": "sarah",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s019",
+            "quote": "Floor supervisors all report to Sarah directly."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "b5",
+        "owner": null,
+        "counterparty": null,
+        "title": "Same zone picking layout as Building 3",
+        "statement": "Building 5 uses the same zone picking layout as Building 3.",
+        "status": null,
+        "occurredAt": "2026-07-16",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s009",
+            "quote": "Building 5 uses the same zone picking layout as Building 3."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "b5",
+        "owner": null,
+        "counterparty": null,
+        "title": "Building 5 opens in Q4",
+        "statement": "Building 5 opens for the new flow in Q4.",
+        "status": null,
+        "occurredAt": "2026-07-16",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s016",
+            "quote": "Building 5 opens for the new flow in Q4"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "b5",
+        "owner": "tomas",
+        "counterparty": null,
+        "title": "Sensor survey of Building 5",
+        "statement": "Tomás will finish the sensor survey of Building 5 by August 7.",
+        "status": "open",
+        "occurredAt": "2026-07-16",
+        "dueAt": "2026-08-07",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s011",
+            "quote": "I'll finish the sensor survey of Building 5 by August 7."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "b5",
+        "owner": "sarah",
+        "counterparty": null,
+        "title": "Confirm the Building 5 budget",
+        "statement": "Sarah will confirm the budget by the end of July.",
+        "status": "open",
+        "occurredAt": "2026-07-16",
+        "dueAt": "2026-07-31",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s012",
+            "quote": "I'll confirm the budget by the end of July."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "b5",
+        "owner": "chloe",
+        "counterparty": null,
+        "title": "Run picker training in Building 5",
+        "statement": "Chloé will run the same picker training in Building 5, in French and English.",
+        "status": "open",
+        "occurredAt": "2026-07-16",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s014",
+            "quote": "I'll run the same training we did in Building 3, in French and English this time."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "tomas",
+        "owner": null,
+        "counterparty": null,
+        "title": "Coaches his daughter's football team",
+        "statement": "Tomás coaches his daughter's football team on Saturdays.",
+        "status": null,
+        "occurredAt": "2026-07-16",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m28-s021",
+            "quote": "I coach my daughter's football team on Saturdays"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

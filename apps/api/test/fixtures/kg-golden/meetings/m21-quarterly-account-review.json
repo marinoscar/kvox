@@ -1,0 +1,457 @@
+{
+  "id": "m21",
+  "title": "Quarterly account review",
+  "tags": [
+    "internal",
+    "note-only",
+    "sensitive",
+    "promotion"
+  ],
+  "recordedAt": "2026-05-28T09:00:00Z",
+  "contextText": "Quarterly review of all accounts with Hana and Priya. Not recorded.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Quarterly account review\n\n**Date:** May 28\n**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)\n\n## Summary\n\nQuarterly review of every Larkspur Labs client account, covering revenue, staffing and risk. Alex reports to Hana for account matters, so Hana chaired.\n\n## Accounts\n\n- **Northwind Robotics** — the strongest account this quarter. Northwind account revenue is up 30 percent over plan, driven by the pilot extension to Building 5.\n- **Halden Freight** — the migration continues without Ravi; JJ now owns the depot integrations. The southern depots cutover is planned for June.\n- **Corvid Health** — designs are signed off and the build is starting at the first walk-in clinic.\n- **Solvane Energy** — integration kickoff went well; demo targeted for early July.\n- **Gullwing Payments** — the discovery gate is close; Felix wants numbers before the build decision.\n- **Varden Insurance** — discovery is under way; Rosa will be out for two weeks in June.\n\n## Decisions\n\n- Larkspur **will not bid on Varden's phase two infrastructure work**; the team lacks the mainframe skills and Hana does not want to subcontract it.\n- The hiring freeze is over; Priya can open two engineering reqs.\n\n## Staffing\n\n- Hana becomes a partner at Larkspur Labs from July. The announcement goes out internally next week.\n- Priya will be on medical leave for two weeks in July. JJ covers engineering management while she is out.\n\n## Action items\n\n- **Hana Sato** — draft the Q3 staffing plan by June 10, including cover for Priya's leave.\n- **Priya Raman** — open two engineering reqs this week.\n- **Alex Rivera** — prepare a one-page account health summary for the partner meeting.\n\n## Risks\n\n- Northwind now represents a large share of revenue; Hana wants a second anchor client before the end of the year.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-varden-insurance",
+      "type": "Organization",
+      "label": "Varden Insurance",
+      "aliases": [
+        "Varden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-hana-sato",
+      "type": "Person",
+      "label": "Hana Sato",
+      "aliases": [
+        "Hana"
+      ],
+      "props": {
+        "title": "Account Director"
+      },
+      "attendedFixtureIds": [
+        "m03",
+        "m16"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08",
+        "m13",
+        "m15",
+        "m18"
+      ]
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m03",
+        "m05",
+        "m14",
+        "m18"
+      ]
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Quarterly account review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quarterly account review"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Sato",
+        "aliases": [],
+        "existingId": "g-person-hana-sato",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana Sato (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "larkspur",
+        "type": "Organization",
+        "label": "Larkspur Labs",
+        "aliases": [],
+        "existingId": "g-org-larkspur-labs",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Quarterly review of every Larkspur Labs client account"
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Northwind Robotics** — the strongest account this quarter."
+          }
+        ]
+      },
+      {
+        "key": "varden",
+        "type": "Organization",
+        "label": "Varden Insurance",
+        "aliases": [],
+        "existingId": "g-org-varden-insurance",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Larkspur **will not bid on Varden's phase two infrastructure work**"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "hana",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Hana Sato (Larkspur Labs), Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "alex",
+        "to": "hana",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex reports to Hana for account matters"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "hana",
+        "to": "larkspur",
+        "validFrom": "2026-07-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {
+          "title": "Partner"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana becomes a partner at Larkspur Labs from July."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "nwr",
+        "owner": null,
+        "counterparty": null,
+        "title": "Northwind revenue 30 percent over plan",
+        "statement": "Northwind account revenue is up 30 percent over plan.",
+        "status": null,
+        "occurredAt": "2026-05-28",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind account revenue is up 30 percent over plan"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "varden",
+        "owner": null,
+        "counterparty": null,
+        "title": "No bid on Varden's phase two infrastructure",
+        "statement": "Larkspur will not bid on Varden's phase two infrastructure work.",
+        "status": null,
+        "occurredAt": "2026-05-28",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Larkspur **will not bid on Varden's phase two infrastructure work**"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "larkspur",
+        "owner": null,
+        "counterparty": null,
+        "title": "Hiring freeze over, open two reqs",
+        "statement": "The hiring freeze is over and Priya can open two engineering reqs.",
+        "status": null,
+        "occurredAt": "2026-05-28",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The hiring freeze is over; Priya can open two engineering reqs."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "larkspur",
+        "owner": "hana",
+        "counterparty": null,
+        "title": "Draft Q3 staffing plan",
+        "statement": "Hana will draft the Q3 staffing plan by June 10, including cover for Priya's leave.",
+        "status": "open",
+        "occurredAt": "2026-05-28",
+        "dueAt": "2026-06-10",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "draft the Q3 staffing plan by June 10, including cover for Priya's leave."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "larkspur",
+        "owner": "priya",
+        "counterparty": null,
+        "title": "Open two engineering reqs",
+        "statement": "Priya will open two engineering reqs this week.",
+        "status": "open",
+        "occurredAt": "2026-05-28",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "open two engineering reqs this week."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "larkspur",
+        "owner": "alex",
+        "counterparty": "hana",
+        "title": "Account health summary",
+        "statement": "Alex will prepare a one-page account health summary for the partner meeting.",
+        "status": "open",
+        "occurredAt": "2026-05-28",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "prepare a one-page account health summary for the partner meeting."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "priya",
+        "owner": null,
+        "counterparty": null,
+        "title": "Medical leave in July",
+        "statement": "Priya will be on medical leave for two weeks in July.",
+        "status": null,
+        "occurredAt": "2026-05-28",
+        "dueAt": null,
+        "sensitivity": "sensitive",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya will be on medical leave for two weeks in July."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

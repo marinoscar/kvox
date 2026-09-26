@@ -2057,6 +2057,9 @@ are built, and so is the graph write layer (issue #355: `GraphWriteService`, the
 invariant trigger, the manual entity edit and attribute definitions); "forget this person"
 (issue #357: `POST /api/graph/entities/:id/forget`, the `kg.purge` job type, and the Danger
 Zone's `graph` category) is also built; the remaining services arrive with #356 and later.**
+The extraction quality harness (issue #362: the synthetic golden set at
+`apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
+built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
 The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`

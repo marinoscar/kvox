@@ -1,0 +1,657 @@
+{
+  "id": "m27",
+  "title": "Solvane grid dashboard phase one demo",
+  "tags": [
+    "client",
+    "relative-date",
+    "negative-vague-task"
+  ],
+  "recordedAt": "2026-07-09T10:00:00Z",
+  "contextText": "Phase one demo to Grace and the Solvane operations leads.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m27-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m27-spk-b",
+      "label": "B",
+      "displayName": "Grace Holloway"
+    },
+    {
+      "id": "m27-spk-c",
+      "label": "C",
+      "displayName": "Ravi Menon"
+    },
+    {
+      "id": "m27-spk-d",
+      "label": "D",
+      "displayName": "Iris Novak"
+    },
+    {
+      "id": "m27-spk-e",
+      "label": "E",
+      "displayName": "Kwame Mensah"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m27-s001",
+      "speakerId": "m27-spk-a",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "Thanks everyone. Kwame will drive, this is phase one of the grid dashboard."
+    },
+    {
+      "id": "m27-s002",
+      "speakerId": "m27-spk-e",
+      "startMs": 5790,
+      "endMs": 14370,
+      "rev": 1,
+      "text": "So this is the overview. All four pilot sites, output against forecast, and alarms. Data is at most fifteen minutes old."
+    },
+    {
+      "id": "m27-s003",
+      "speakerId": "m27-spk-b",
+      "startMs": 14620,
+      "endMs": 18260,
+      "rev": 1,
+      "text": "This is exactly what I wanted. One screen."
+    },
+    {
+      "id": "m27-s004",
+      "speakerId": "m27-spk-d",
+      "startMs": 18510,
+      "endMs": 24430,
+      "rev": 1,
+      "text": "The drill-down per site works too. Click a site and you get inverter-level output."
+    },
+    {
+      "id": "m27-s005",
+      "speakerId": "m27-spk-c",
+      "startMs": 24680,
+      "endMs": 30220,
+      "rev": 1,
+      "text": "The nightly batch has run clean every night since we switched it on."
+    },
+    {
+      "id": "m27-s006",
+      "speakerId": "m27-spk-b",
+      "startMs": 30470,
+      "endMs": 33350,
+      "rev": 1,
+      "text": "What's the one thing that's wrong?"
+    },
+    {
+      "id": "m27-s007",
+      "speakerId": "m27-spk-e",
+      "startMs": 33600,
+      "endMs": 40660,
+      "rev": 1,
+      "text": "The solar output chart has a timezone offset. It's an hour off for the two southern sites."
+    },
+    {
+      "id": "m27-s008",
+      "speakerId": "m27-spk-b",
+      "startMs": 40910,
+      "endMs": 44170,
+      "rev": 1,
+      "text": "Please fix that before I show anyone."
+    },
+    {
+      "id": "m27-s009",
+      "speakerId": "m27-spk-e",
+      "startMs": 44420,
+      "endMs": 49200,
+      "rev": 1,
+      "text": "I'll fix the timezone offset on the output chart by Friday."
+    },
+    {
+      "id": "m27-s010",
+      "speakerId": "m27-spk-a",
+      "startMs": 49450,
+      "endMs": 51950,
+      "rev": 1,
+      "text": "Grace, what about phase two?"
+    },
+    {
+      "id": "m27-s011",
+      "speakerId": "m27-spk-b",
+      "startMs": 52200,
+      "endMs": 58500,
+      "rev": 1,
+      "text": "Weather. Iris was right in March, cloud cover explains most of the dips we chase."
+    },
+    {
+      "id": "m27-s012",
+      "speakerId": "m27-spk-d",
+      "startMs": 58750,
+      "endMs": 63910,
+      "rev": 1,
+      "text": "I'd add a weather overlay to the output chart in phase two."
+    },
+    {
+      "id": "m27-s013",
+      "speakerId": "m27-spk-b",
+      "startMs": 64160,
+      "endMs": 68180,
+      "rev": 1,
+      "text": "Then that's decided. Phase two adds the weather overlay."
+    },
+    {
+      "id": "m27-s014",
+      "speakerId": "m27-spk-a",
+      "startMs": 68430,
+      "endMs": 71310,
+      "rev": 1,
+      "text": "Decided. Anything else for phase two?"
+    },
+    {
+      "id": "m27-s015",
+      "speakerId": "m27-spk-c",
+      "startMs": 71560,
+      "endMs": 76720,
+      "rev": 1,
+      "text": "Alarm routing. We should probably look into paging integration at some point."
+    },
+    {
+      "id": "m27-s016",
+      "speakerId": "m27-spk-b",
+      "startMs": 76970,
+      "endMs": 79090,
+      "rev": 1,
+      "text": "Not now. Weather first."
+    },
+    {
+      "id": "m27-s017",
+      "speakerId": "m27-spk-a",
+      "startMs": 79340,
+      "endMs": 83360,
+      "rev": 1,
+      "text": "Iris, how do we learn what the operators think?"
+    },
+    {
+      "id": "m27-s018",
+      "speakerId": "m27-spk-d",
+      "startMs": 83610,
+      "endMs": 88010,
+      "rev": 1,
+      "text": "I'll collect operator feedback on phase one in three weeks."
+    },
+    {
+      "id": "m27-s019",
+      "speakerId": "m27-spk-a",
+      "startMs": 88260,
+      "endMs": 89240,
+      "rev": 1,
+      "text": "Perfect."
+    },
+    {
+      "id": "m27-s020",
+      "speakerId": "m27-spk-b",
+      "startMs": 89490,
+      "endMs": 91990,
+      "rev": 1,
+      "text": "Iris, how's the MBA going?"
+    },
+    {
+      "id": "m27-s021",
+      "speakerId": "m27-spk-d",
+      "startMs": 92240,
+      "endMs": 97020,
+      "rev": 1,
+      "text": "Exhausting. Part-time MBA plus this is a lot, but I'm halfway."
+    },
+    {
+      "id": "m27-s022",
+      "speakerId": "m27-spk-b",
+      "startMs": 97270,
+      "endMs": 99390,
+      "rev": 1,
+      "text": "We're proud of her."
+    },
+    {
+      "id": "m27-s023",
+      "speakerId": "m27-spk-a",
+      "startMs": 99640,
+      "endMs": 106320,
+      "rev": 1,
+      "text": "Thanks all. So: timezone fix by Friday, weather overlay in phase two, feedback in three weeks."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Solvane grid dashboard phase one demo\n\n**Date:** July 9\n**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)\n\n## Summary\n\nKwame demonstrated phase one of the Solvane Energy grid dashboard. Grace confirmed it delivers what she asked for: one screen for every pilot site.\n\n## What was shown\n\n- An overview of all four pilot sites showing output against forecast and alarms, with data at most fifteen minutes old.\n- A per-site drill-down to inverter-level output.\n- The nightly batch has run cleanly every night since it was switched on.\n\n## Issues\n\n- The solar output chart has a timezone offset, an hour off for the two southern sites. Grace wants it fixed before she shows the dashboard to anyone.\n\n## Decisions\n\n- **Phase two adds a weather overlay** to the output chart. Grace noted Iris was right in March: cloud cover explains most of the dips the team chases.\n- Alarm paging integration is not in phase two; weather comes first.\n\n## Action items\n\n- **Kwame Mensah** — fix the timezone offset on the output chart by Friday.\n- **Iris Novak** — collect operator feedback on phase one in three weeks.\n\n## Notes\n\n- Iris is halfway through a part-time MBA.\n- Ravi raised paging integration as something to look into at some point; nobody took it on.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-solvane-energy",
+      "type": "Organization",
+      "label": "Solvane Energy",
+      "aliases": [
+        "Solvane"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22",
+        "m23",
+        "m24",
+        "m25",
+        "m26"
+      ]
+    },
+    {
+      "id": "g-person-grace-holloway",
+      "type": "Person",
+      "label": "Grace Holloway",
+      "aliases": [
+        "Grace"
+      ],
+      "props": {
+        "title": "COO"
+      },
+      "attendedFixtureIds": [
+        "m19"
+      ]
+    },
+    {
+      "id": "g-person-iris-novak",
+      "type": "Person",
+      "label": "Iris Novak",
+      "aliases": [
+        "Iris"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m19"
+      ]
+    },
+    {
+      "id": "g-person-kwame-mensah",
+      "type": "Person",
+      "label": "Kwame Mensah",
+      "aliases": [
+        "Kwame"
+      ],
+      "props": {
+        "title": "Data Engineer"
+      },
+      "attendedFixtureIds": [
+        "m11",
+        "m14",
+        "m19",
+        "m23",
+        "m26"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08",
+        "m13",
+        "m15",
+        "m19",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-project-grid-dashboard",
+      "type": "Project",
+      "label": "Grid dashboard",
+      "aliases": [
+        "the dashboard"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Solvane grid dashboard phase one demo",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Solvane grid dashboard phase one demo"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "kwame",
+        "type": "Person",
+        "label": "Kwame Mensah",
+        "aliases": [],
+        "existingId": "g-person-kwame-mensah",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kwame Mensah (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "grace",
+        "type": "Person",
+        "label": "Grace Holloway",
+        "aliases": [],
+        "existingId": "g-person-grace-holloway",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Grace Holloway (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Menon (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "key": "iris",
+        "type": "Person",
+        "label": "Iris Novak",
+        "aliases": [],
+        "existingId": "g-person-iris-novak",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "key": "dashboard",
+        "type": "Project",
+        "label": "Grid dashboard",
+        "aliases": [],
+        "existingId": "g-project-grid-dashboard",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s001",
+            "quote": "this is phase one of the grid dashboard"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "kwame",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "grace",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "iris",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Kwame Mensah (Larkspur Labs), Grace Holloway (Solvane Energy), Ravi Menon (Solvane Energy), Iris Novak (Solvane Energy)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "dashboard",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s001",
+            "quote": "this is phase one of the grid dashboard"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Phase one covers four sites at fifteen-minute freshness",
+        "statement": "Phase one shows all four pilot sites with data at most fifteen minutes old.",
+        "status": null,
+        "occurredAt": "2026-07-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s002",
+            "quote": "All four pilot sites, output against forecast, and alarms. Data is at most fifteen minutes old."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "dashboard",
+        "owner": null,
+        "counterparty": null,
+        "title": "Phase two adds a weather overlay",
+        "statement": "Phase two adds the weather overlay to the output chart.",
+        "status": null,
+        "occurredAt": "2026-07-09",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s013",
+            "quote": "Then that's decided. Phase two adds the weather overlay."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "dashboard",
+        "owner": "kwame",
+        "counterparty": "grace",
+        "title": "Fix output chart timezone offset",
+        "statement": "Kwame will fix the timezone offset on the output chart by Friday.",
+        "status": "open",
+        "occurredAt": "2026-07-09",
+        "dueAt": "2026-07-10",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s009",
+            "quote": "I'll fix the timezone offset on the output chart by Friday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "dashboard",
+        "owner": "iris",
+        "counterparty": null,
+        "title": "Collect operator feedback",
+        "statement": "Iris will collect operator feedback on phase one in three weeks.",
+        "status": "open",
+        "occurredAt": "2026-07-09",
+        "dueAt": "2026-07-30",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s018",
+            "quote": "I'll collect operator feedback on phase one in three weeks."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "iris",
+        "owner": null,
+        "counterparty": null,
+        "title": "Doing a part-time MBA",
+        "statement": "Iris is halfway through a part-time MBA.",
+        "status": null,
+        "occurredAt": "2026-07-09",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m27-s021",
+            "quote": "Part-time MBA plus this is a lot, but I'm halfway."
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "We should probably look into paging integration at some point.",
+        "why": "No owner named or implied: not a Commitment."
+      }
+    ]
+  }
+}

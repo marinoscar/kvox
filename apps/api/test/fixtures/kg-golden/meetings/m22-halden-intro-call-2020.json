@@ -1,0 +1,564 @@
+{
+  "id": "m22",
+  "title": "Halden Freight introductory call",
+  "tags": [
+    "client",
+    "out-of-order",
+    "year-precision"
+  ],
+  "recordedAt": "2020-06-10T14:00:00Z",
+  "contextText": "Old recording from our first call with Halden, uploaded now for the archive.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m22-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m22-spk-b",
+      "label": "B",
+      "displayName": "Marcus Webb"
+    },
+    {
+      "id": "m22-spk-c",
+      "label": "C",
+      "displayName": "Ravi Menon"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m22-s001",
+      "speakerId": "m22-spk-a",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "Thanks for taking the call. We understand you're looking at route planning tools."
+    },
+    {
+      "id": "m22-s002",
+      "speakerId": "m22-spk-b",
+      "startMs": 5790,
+      "endMs": 13610,
+      "rev": 1,
+      "text": "We are. I'm Marcus Webb, Head of IT at Halden Freight. I've been Head of IT here since 2018."
+    },
+    {
+      "id": "m22-s003",
+      "speakerId": "m22-spk-c",
+      "startMs": 13860,
+      "endMs": 19400,
+      "rev": 1,
+      "text": "And I'm Ravi Menon, I joined Halden last year as an integration developer."
+    },
+    {
+      "id": "m22-s004",
+      "speakerId": "m22-spk-a",
+      "startMs": 19650,
+      "endMs": 23670,
+      "rev": 1,
+      "text": "Nice to meet you both. What's driving the search?"
+    },
+    {
+      "id": "m22-s005",
+      "speakerId": "m22-spk-b",
+      "startMs": 23920,
+      "endMs": 32120,
+      "rev": 1,
+      "text": "Growth. Halden runs 22 depots now, up from 15 three years ago, and our planners still build routes in spreadsheets."
+    },
+    {
+      "id": "m22-s006",
+      "speakerId": "m22-spk-c",
+      "startMs": 32370,
+      "endMs": 36390,
+      "rev": 1,
+      "text": "The spreadsheets break every time we add a depot."
+    },
+    {
+      "id": "m22-s007",
+      "speakerId": "m22-spk-a",
+      "startMs": 36640,
+      "endMs": 41040,
+      "rev": 1,
+      "text": "Are you looking for a product or a custom build?"
+    },
+    {
+      "id": "m22-s008",
+      "speakerId": "m22-spk-b",
+      "startMs": 41290,
+      "endMs": 47590,
+      "rev": 1,
+      "text": "A product, ideally. But it has to integrate with our dispatch system, which is old."
+    },
+    {
+      "id": "m22-s009",
+      "speakerId": "m22-spk-c",
+      "startMs": 47840,
+      "endMs": 53000,
+      "rev": 1,
+      "text": "The dispatch system is the hard part. It only exports flat files."
+    },
+    {
+      "id": "m22-s010",
+      "speakerId": "m22-spk-a",
+      "startMs": 53250,
+      "endMs": 57270,
+      "rev": 1,
+      "text": "We've dealt with flat-file integrations before, it's very doable."
+    },
+    {
+      "id": "m22-s011",
+      "speakerId": "m22-spk-b",
+      "startMs": 57520,
+      "endMs": 63820,
+      "rev": 1,
+      "text": "Good. We're going to shortlist two vendors and run a proof of concept with each."
+    },
+    {
+      "id": "m22-s012",
+      "speakerId": "m22-spk-a",
+      "startMs": 64070,
+      "endMs": 67330,
+      "rev": 1,
+      "text": "That's a sensible approach. What's the timeline?"
+    },
+    {
+      "id": "m22-s013",
+      "speakerId": "m22-spk-b",
+      "startMs": 67580,
+      "endMs": 73500,
+      "rev": 1,
+      "text": "Decision by the end of the summer. I'll send the RFP by June 19."
+    },
+    {
+      "id": "m22-s014",
+      "speakerId": "m22-spk-a",
+      "startMs": 73750,
+      "endMs": 77390,
+      "rev": 1,
+      "text": "We'll respond within two weeks of receiving it."
+    },
+    {
+      "id": "m22-s015",
+      "speakerId": "m22-spk-c",
+      "startMs": 77640,
+      "endMs": 84700,
+      "rev": 1,
+      "text": "Can you include a sample of the dispatch export format in the RFP? It'll save everyone time."
+    },
+    {
+      "id": "m22-s016",
+      "speakerId": "m22-spk-b",
+      "startMs": 84950,
+      "endMs": 87070,
+      "rev": 1,
+      "text": "Yes, Ravi, attach one."
+    },
+    {
+      "id": "m22-s017",
+      "speakerId": "m22-spk-c",
+      "startMs": 87320,
+      "endMs": 91720,
+      "rev": 1,
+      "text": "I'll attach a sample dispatch export to the RFP pack."
+    },
+    {
+      "id": "m22-s018",
+      "speakerId": "m22-spk-a",
+      "startMs": 91970,
+      "endMs": 95610,
+      "rev": 1,
+      "text": "Anything about how your team likes to work?"
+    },
+    {
+      "id": "m22-s019",
+      "speakerId": "m22-spk-b",
+      "startMs": 95860,
+      "endMs": 104060,
+      "rev": 1,
+      "text": "I'm hard to reach in August. I sail most of the month, it's the one thing I don't give up."
+    },
+    {
+      "id": "m22-s020",
+      "speakerId": "m22-spk-a",
+      "startMs": 104310,
+      "endMs": 109090,
+      "rev": 1,
+      "text": "Understood. We'll aim to wrap the proof of concept before then."
+    },
+    {
+      "id": "m22-s021",
+      "speakerId": "m22-spk-c",
+      "startMs": 109340,
+      "endMs": 112980,
+      "rev": 1,
+      "text": "I'll be the technical contact over the summer."
+    },
+    {
+      "id": "m22-s022",
+      "speakerId": "m22-spk-a",
+      "startMs": 113230,
+      "endMs": 116490,
+      "rev": 1,
+      "text": "Thanks, Ravi. Looking forward to the RFP."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Halden Freight introductory call\n\n**Date:** June 10\n**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)\n\n## Summary\n\nFirst call with Halden Freight about route planning tools. Marcus Webb has been Head of IT at Halden since 2018. Ravi Menon joined Halden last year as an integration developer and will be the technical contact over the summer.\n\n## Context\n\n- Halden runs 22 depots, up from 15 three years ago.\n- Planners still build routes in spreadsheets, which break every time a depot is added.\n- Halden prefers a product over a custom build, but it must integrate with their old dispatch system, which only exports flat files.\n\n## Decisions\n\n- Halden will **shortlist two vendors** and run a proof of concept with each.\n- Decision expected by the end of the summer.\n\n## Action items\n\n- **Marcus Webb** — send the RFP by June 19.\n- **Ravi Menon** — attach a sample dispatch export to the RFP pack.\n- **Larkspur** — respond within two weeks of receiving the RFP.\n\n## Notes\n\n- Marcus is hard to reach in August; he sails most of the month. Aim to wrap the proof of concept before then.\n- Flat-file integrations are routine for Larkspur and should not be a blocker.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-marcus-webb",
+      "type": "Person",
+      "label": "Marcus Webb",
+      "aliases": [
+        "Marcus"
+      ],
+      "props": {
+        "title": "CIO"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Halden Freight introductory call",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Halden Freight introductory call"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "marcus",
+        "type": "Person",
+        "label": "Marcus Webb",
+        "aliases": [],
+        "existingId": "g-person-marcus-webb",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s002",
+            "quote": "I'm Marcus Webb, Head of IT at Halden Freight."
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s003",
+            "quote": "And I'm Ravi Menon, I joined Halden last year as an integration developer."
+          }
+        ]
+      },
+      {
+        "key": "halden",
+        "type": "Organization",
+        "label": "Halden Freight",
+        "aliases": [],
+        "existingId": "g-org-halden-freight",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s002",
+            "quote": "I'm Marcus Webb, Head of IT at Halden Freight."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "marcus",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "marcus",
+        "to": "halden",
+        "validFrom": "2018-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {
+          "title": "Head of IT"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s002",
+            "quote": "I've been Head of IT here since 2018."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "marcus",
+        "to": "halden",
+        "validFrom": "2018-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s002",
+            "quote": "I've been Head of IT here since 2018."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "ravi",
+        "to": "halden",
+        "validFrom": "2019-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s003",
+            "quote": "I joined Halden last year as an integration developer."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "ravi",
+        "to": "halden",
+        "validFrom": "2019-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {
+          "title": "Integration Developer"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s003",
+            "quote": "I joined Halden last year as an integration developer."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "halden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Halden runs 22 depots",
+        "statement": "Halden runs 22 depots, up from 15 three years ago.",
+        "status": null,
+        "occurredAt": "2020-06-10",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s005",
+            "quote": "Halden runs 22 depots now, up from 15 three years ago"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "halden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Shortlist two vendors",
+        "statement": "Halden will shortlist two vendors and run a proof of concept with each.",
+        "status": null,
+        "occurredAt": "2020-06-10",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s011",
+            "quote": "We're going to shortlist two vendors and run a proof of concept with each."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "halden",
+        "owner": "marcus",
+        "counterparty": "g-org-larkspur-labs",
+        "title": "Send the RFP",
+        "statement": "Marcus will send the RFP by June 19.",
+        "status": "open",
+        "occurredAt": "2020-06-10",
+        "dueAt": "2020-06-19",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s013",
+            "quote": "I'll send the RFP by June 19."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "halden",
+        "owner": "ravi",
+        "counterparty": null,
+        "title": "Attach a sample dispatch export",
+        "statement": "Ravi will attach a sample dispatch export to the RFP pack.",
+        "status": "open",
+        "occurredAt": "2020-06-10",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s017",
+            "quote": "I'll attach a sample dispatch export to the RFP pack."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "marcus",
+        "owner": null,
+        "counterparty": null,
+        "title": "Sails most of August",
+        "statement": "Marcus sails most of August and is hard to reach then.",
+        "status": null,
+        "occurredAt": "2020-06-10",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m22-s019",
+            "quote": "I sail most of the month, it's the one thing I don't give up."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

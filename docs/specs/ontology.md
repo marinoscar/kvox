@@ -917,6 +917,16 @@ panel (§8) exists specifically to catch what extraction gets wrong, so it
 ships regardless of where the numbers land, and the numbers are what
 determine how much the panel can safely pre-check versus leave for a human.
 
+**Measuring extraction (issue #362).** The golden set lives at
+`apps/api/test/fixtures/kg-golden/` (format, the synthetic-only rule and the
+coverage list are in its `README.md`), and the harness is `npm run kg:eval
+--workspace=api`: `--predictions gold` is the self-test that must print 1.000
+everywhere, `--predictions <dir>` scores a runner's output, `--run <runner>`
+runs a registered `KgEvalRunner` (none until `kg.extract` registers `extract`),
+`--enforce` fails on a missed target for local use (CI reports only), and
+`--real-dir`/`--export-note` are the local, opt-in real-data mode, which
+refuses any path inside the git work tree.
+
 ## 7. Entity resolution (`kg.resolve`)
 
 Resolution runs in two places: **inline**, inside `kg.extract` itself, so
