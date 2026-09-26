@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import { mockGraphOntology } from './graphData';
 
 // Use wildcard pattern to match relative URLs
 const API_BASE = '*/api';
@@ -391,5 +392,15 @@ export const handlers = [
           : 'Device access denied.',
       },
     });
+  }),
+
+  // Connected knowledge (#369): the caller's effective ontology (default
+  // domains) and no attribute definitions of their own. Tests override.
+  http.get(`${API_BASE}/graph/ontology`, () => {
+    return HttpResponse.json({ data: mockGraphOntology() });
+  }),
+
+  http.get(`${API_BASE}/graph/attribute-defs`, () => {
+    return HttpResponse.json({ data: { items: [] } });
   }),
 ];

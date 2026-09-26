@@ -156,10 +156,22 @@ describe('visibleSettingsSections — search', () => {
 });
 
 describe('visibleSettingsSections — works identically against USER_SETTINGS_SECTIONS', () => {
-  it('shows every user-settings card, since none of them declare a permission', () => {
+  it('shows every ungated user-settings card, and hides Knowledge graph without graph:write (#369)', () => {
     const result = visibleSettingsSections(USER_SETTINGS_SECTIONS, () => false);
 
-    expect(titlesOf(result).sort()).toEqual(titlesOf(USER_SETTINGS_SECTIONS).sort());
+    expect(titlesOf(result).sort()).toEqual(
+      titlesOf(USER_SETTINGS_SECTIONS)
+        .filter((title) => title !== 'Knowledge graph')
+        .sort(),
+    );
+    // Its one-card `Knowledge` group collapses with it.
+    expect(result.map((section) => section.label)).not.toContain('Knowledge');
+
+    const withGraph = visibleSettingsSections(
+      USER_SETTINGS_SECTIONS,
+      (permission) => permission === 'graph:write',
+    );
+    expect(titlesOf(withGraph).sort()).toEqual(titlesOf(USER_SETTINGS_SECTIONS).sort());
   });
 
   it('still matches by title only for the user registry', () => {

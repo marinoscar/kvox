@@ -12,6 +12,7 @@ import { GraphEntitiesService } from './graph-entities.service';
 import { GraphController } from './graph.controller';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
+import { GraphPreferencesService } from './preferences/graph-preferences.service';
 import { KgPurgeService } from './purge/kg-purge.service';
 import { KgSpeakerLinkHandler } from './handlers/kg-speaker-link.handler';
 import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listener';
@@ -41,6 +42,8 @@ import { GraphWriteService } from './write/graph-write.service';
   imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule],
   providers: [
     GraphAccessService,
+    // #369 — the `graph` user-settings namespace, resolved with defaults.
+    GraphPreferencesService,
     GraphOntologyService,
     EvidenceValidator,
     GraphWriteService,
@@ -57,6 +60,12 @@ import { GraphWriteService } from './write/graph-write.service';
   controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.
-  exports: [GraphAccessService, GraphOntologyService, EvidenceValidator, GraphWriteService],
+  exports: [
+    GraphAccessService,
+    GraphOntologyService,
+    GraphPreferencesService,
+    EvidenceValidator,
+    GraphWriteService,
+  ],
 })
 export class GraphModule {}

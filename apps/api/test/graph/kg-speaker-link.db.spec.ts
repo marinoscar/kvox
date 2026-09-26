@@ -29,6 +29,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
+import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
 import {
   SPEAKER_LINKED_ACTION,
   SPEAKER_UNLINKED_ACTION,
@@ -63,7 +64,7 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     await prisma.$connect();
     reconciler = new SpeakerLinkReconciler(
       new GraphWriteService(new EvidenceValidator()),
-      new GraphOntologyService(prisma as never),
+      new GraphOntologyService(prisma as never, new GraphPreferencesService(prisma as never)),
     );
     // Upsert by name, exactly as the seed does, so running the seed later is unaffected.
     const permission = await prisma.permission.upsert({

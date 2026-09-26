@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { ONTOLOGY_VERSION } from '@app/shared/ontology';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { GraphPreferencesService } from '../preferences/graph-preferences.service';
 import { graphOntologyResponseSchema } from '../dto/graph-ontology.dto';
 import { GraphOntologyService, toUserAttributeDef } from './graph-ontology.service';
 
@@ -31,13 +32,24 @@ const attributeDefRow = (overrides: Record<string, unknown> = {}) => ({
 
 describe('GraphOntologyService', () => {
   let service: GraphOntologyService;
-  let prisma: { kgAttributeDef: { findMany: jest.Mock } };
+  let prisma: {
+    kgAttributeDef: { findMany: jest.Mock };
+    userSettings: { findUnique: jest.Mock };
+  };
 
   beforeEach(async () => {
-    prisma = { kgAttributeDef: { findMany: jest.fn().mockResolvedValue([]) } };
+    prisma = {
+      kgAttributeDef: { findMany: jest.fn().mockResolvedValue([]) },
+      // No `user_settings` row: every graph preference is its default.
+      userSettings: { findUnique: jest.fn().mockResolvedValue(null) },
+    };
 
     const module = await Test.createTestingModule({
-      providers: [GraphOntologyService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        GraphOntologyService,
+        GraphPreferencesService,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
 
     service = module.get(GraphOntologyService);
@@ -133,10 +145,27 @@ describe('GraphOntologyService', () => {
         return ['core' as const];
       }
     }
-    const coreOnly = new CoreOnly(prisma as never);
+    const coreOnly = new CoreOnly(prisma as never, {} as never);
 
     const payload = await coreOnly.payloadFor(OWNER);
     expect(payload.domains.find((d) => d.key === 'work')?.enabled).toBe(false);
     expect(payload.entityTypes.some((t) => t.domain === 'work')).toBe(false);
+  });
+
+  it('reads enabled domains from the `graph.domains` preference (#369)', async () => {
+    prisma.userSettings.findUnique.mockResolvedValue({
+      value: {
+        theme: 'system',
+        profile: { imageSource: 'provider', imageObjectId: null },
+        graph: { domains: { work: false, personal: false } },
+      },
+    });
+
+    const schema = await service.effectiveSchemaFor(OWNER);
+    expect(schema.enabledDomains).toEqual(['core']);
+
+    const payload = await service.payloadFor(OWNER);
+    expect(payload.domains.find((d) => d.key === 'core')?.enabled).toBe(true);
+    expect(payload.domains.find((d) => d.key === 'work')?.enabled).toBe(false);
   });
 });
