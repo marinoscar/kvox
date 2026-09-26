@@ -174,6 +174,8 @@ export function EvidenceChip({ evidenceId, index }: EvidenceChipProps) {
   return (
     <>
       <Chip
+        // A span, not the default div: chips sit inside running text (<p>).
+        component="span"
         size="small"
         label={index}
         clickable

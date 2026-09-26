@@ -34,6 +34,7 @@ import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { useId } from 'react';
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -171,9 +172,22 @@ function relatedHref(source: RelatedSource): string {
 }
 
 function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+  // Explicit ids: without them MUI leaves the region unnamed, and five unnamed
+  // regions on one page are an axe `landmark-unique` violation.
+  const id = useId();
   return (
-    <Accordion defaultExpanded disableGutters elevation={0} sx={{ '&::before': { display: 'none' }, bgcolor: 'transparent' }}>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 0 }}>
+    <Accordion
+      defaultExpanded
+      disableGutters
+      elevation={0}
+      sx={{ '&::before': { display: 'none' }, bgcolor: 'transparent' }}
+    >
+      <AccordionSummary
+        id={`${id}-header`}
+        aria-controls={`${id}-content`}
+        expandIcon={<ExpandMoreIcon />}
+        sx={{ px: 0 }}
+      >
         <Typography variant="subtitle1" component="span" sx={{ fontWeight: 600 }}>
           {title}
         </Typography>
