@@ -1,5 +1,13 @@
 import { http, HttpResponse } from 'msw';
-import { mockGraphOntology } from './graphData';
+import {
+  emptyCommitResult,
+  mockEntitySearchResults,
+  mockGraphOntology,
+  mockProposalDetail,
+  proposalMock,
+  countsFor,
+} from './graphData';
+import type { ProposalItem, PatchProposalItemInput } from '../../services/graph';
 
 // Use wildcard pattern to match relative URLs
 const API_BASE = '*/api';
@@ -403,4 +411,263 @@ export const handlers = [
   http.get(`${API_BASE}/graph/attribute-defs`, () => {
     return HttpResponse.json({ data: { items: [] } });
   }),
+  // ---------------------------------------------------------------------------
+  // Graph proposals (#367) — an in-memory stand-in for #366's Contract, backed
+  // by `proposalMock` (graphData.ts). Every request is recorded so a test can
+  // assert the exact body a row action sent. Literal routes before
+  // parameterised ones (`/items/bulk` before `/items`).
+  // ---------------------------------------------------------------------------
+  http.get(`${API_BASE}/graph/notes/:noteId/proposal`, () => {
+    const detail = proposalMock.detail;
+    const visible = detail && detail.proposal.status !== 'discarded' ? detail : null;
+    return HttpResponse.json({ data: { proposal: visible } });
+  }),
+
+  http.get(`${API_BASE}/graph/proposals`, () => {
+    const detail = proposalMock.detail;
+    return HttpResponse.json({
+      data: { items: detail ? [detail.proposal] : [], nextCursor: null },
+    });
+  }),
+
+  http.get(`${API_BASE}/graph/proposals/:id`, ({ params, request }) => {
+    const detail = proposalMock.detail;
+    if (!detail || detail.proposal.id !== params.id) return graphNotFound();
+    const include = new URL(request.url).searchParams.get('include');
+    return HttpResponse.json({
+      data: { ...detail, context: include === 'context' ? proposalMock.context : null },
+    });
+  }),
+
+  http.patch(`${API_BASE}/graph/proposals/:id/items/:itemId`, async ({ params, request }) => {
+    const body = (await request.json()) as PatchProposalItemInput;
+    record('PATCH', `/graph/proposals/${params.id}/items/${params.itemId}`, body);
+    const detail = proposalMock.detail;
+    if (!detail) return graphNotFound();
+    if (detail.proposal.status !== 'draft') return graphConflict('proposal_not_draft');
+    const item = detail.items.find((row) => row.id === params.itemId);
+    if (!item) return graphNotFound();
+    const next = applyPatch(item, body);
+    detail.items = detail.items.map((row) => (row.id === item.id ? next : row));
+    detail.proposal = { ...detail.proposal, counts: countsFor(detail.items) };
+    return HttpResponse.json({ data: { item: next, counts: detail.proposal.counts } });
+  }),
+
+  http.post(`${API_BASE}/graph/proposals/:id/items/bulk`, async ({ params, request }) => {
+    const body = (await request.json()) as { itemIds: string[]; decision: 'accept' | 'reject' | 'pending' };
+    record('POST', `/graph/proposals/${params.id}/items/bulk`, body);
+    const detail = proposalMock.detail;
+    if (!detail) return graphNotFound();
+    if (detail.proposal.status !== 'draft') return graphConflict('proposal_not_draft');
+    const skipped: Array<{ itemId: string; reason: string }> = [];
+    let updated = 0;
+    for (const itemId of body.itemIds) {
+      const item = detail.items.find((row) => row.id === itemId);
+      if (!item) {
+        skipped.push({ itemId, reason: 'not_found' });
+        continue;
+      }
+      if (body.decision === 'accept' && item.kind === 'closing') {
+        skipped.push({ itemId, reason: 'closing_requires_individual_accept' });
+        continue;
+      }
+      if (
+        body.decision === 'accept' &&
+        (item.effectivePayload as { sensitivity?: unknown }).sensitivity === 'sensitive'
+      ) {
+        skipped.push({ itemId, reason: 'sensitive_requires_individual_accept' });
+        continue;
+      }
+      item.decision = body.decision;
+      updated += 1;
+    }
+    detail.items = [...detail.items];
+    detail.proposal = { ...detail.proposal, counts: countsFor(detail.items) };
+    return HttpResponse.json({ data: { updated, skipped, counts: detail.proposal.counts } });
+  }),
+
+  http.post(`${API_BASE}/graph/proposals/:id/items`, async ({ params, request }) => {
+    const body = (await request.json()) as { kind: ProposalItem['kind']; payload: Record<string, unknown> };
+    record('POST', `/graph/proposals/${params.id}/items`, body);
+    const detail = proposalMock.detail;
+    if (!detail) return graphNotFound();
+    if (detail.proposal.status !== 'draft') return graphConflict('proposal_not_draft');
+    const ref = `u${detail.items.filter((row) => row.origin === 'user').length + 1}`;
+    const payload = { ...body.payload, ref };
+    const item: ProposalItem = {
+      ...detail.items[0],
+      id: `e1000000-0000-4000-8000-${String(detail.items.length).padStart(12, '0')}`,
+      kind: body.kind,
+      origin: 'user',
+      decision: 'accept',
+      payload,
+      editedPayload: null,
+      effectivePayload: payload,
+      display: { title: String(payload.label ?? payload.title ?? ref), subtitle: null },
+      flags: [],
+      resolution: null,
+    };
+    detail.items = [...detail.items, item];
+    detail.proposal = { ...detail.proposal, counts: countsFor(detail.items) };
+    return HttpResponse.json({ data: { item, counts: detail.proposal.counts } }, { status: 201 });
+  }),
+
+  http.post(`${API_BASE}/graph/proposals/:id/commit`, async ({ params, request }) => {
+    record('POST', `/graph/proposals/${params.id}/commit`, await request.json().catch(() => null));
+    const detail = proposalMock.detail;
+    if (!detail) return graphNotFound();
+    if (detail.proposal.status !== 'draft') return graphConflict('proposal_not_draft');
+    const accepted = detail.items.filter((row) =>
+      ['accept', 'edit', 'merge_into'].includes(row.decision),
+    ).length;
+    const pending = detail.items.filter((row) => row.decision === 'pending').length;
+    detail.proposal = {
+      ...detail.proposal,
+      status: 'committed',
+      committedAt: new Date().toISOString(),
+    };
+    const result = emptyCommitResult({
+      created: { entities: accepted, relations: 0, items: 0 },
+      skippedPending: pending,
+    });
+    return HttpResponse.json({ data: { proposal: detail.proposal, result } });
+  }),
+
+  http.post(`${API_BASE}/graph/proposals/:id/discard`, async ({ params, request }) => {
+    record('POST', `/graph/proposals/${params.id}/discard`, await request.json().catch(() => null));
+    const detail = proposalMock.detail;
+    if (!detail) return graphNotFound();
+    if (detail.proposal.status !== 'draft' && detail.proposal.status !== 'failed') {
+      return graphConflict('proposal_not_draft');
+    }
+    detail.proposal = { ...detail.proposal, status: 'discarded' };
+    return HttpResponse.json({ data: { proposal: detail.proposal } });
+  }),
+
+  http.post(`${API_BASE}/graph/proposals/:id/revert`, async ({ params, request }) => {
+    const body = (await request.json()) as { confirmPartial?: boolean };
+    record('POST', `/graph/proposals/${params.id}/revert`, body);
+    const detail = proposalMock.detail;
+    if (!detail) return graphNotFound();
+    if (detail.proposal.status !== 'committed') return graphConflict('proposal_not_committed');
+    const kept = proposalMock.revertConflicts;
+    const revertible = Math.max(0, detail.proposal.counts.accepted - kept.length);
+    if (kept.length > 0 && !body.confirmPartial) {
+      return graphConflict('revert_conflict', { conflicts: kept, revertible });
+    }
+    detail.proposal = {
+      ...detail.proposal,
+      status: 'reverted',
+      revertedAt: new Date().toISOString(),
+    };
+    return HttpResponse.json({
+      data: { proposal: detail.proposal, result: { reverted: revertible, kept } },
+    });
+  }),
+
+  http.post(`${API_BASE}/graph/notes/:noteId/extract`, async ({ params, request }) => {
+    const body = await request.json().catch(() => null);
+    record('POST', `/graph/notes/${params.noteId}/extract`, body);
+    const extracting = mockProposalDetail('extracting');
+    proposalMock.detail = extracting;
+    return HttpResponse.json(
+      {
+        data: {
+          proposal: {
+            id: extracting.proposal.id,
+            noteId: String(params.noteId),
+            noteVersion: extracting.proposal.noteVersion ?? 1,
+            status: 'extracting',
+            model: extracting.proposal.model ?? 'gpt-4o-mini',
+            providerId: extracting.proposal.providerId ?? 'openai',
+            createdAt: extracting.proposal.createdAt,
+          },
+          estimate: ESTIMATE,
+        },
+      },
+      { status: 202 },
+    );
+  }),
+
+  http.get(`${API_BASE}/graph/extract/estimate`, () => HttpResponse.json({ data: ESTIMATE })),
+
+  http.get(`${API_BASE}/graph/entities`, ({ request }) => {
+    const url = new URL(request.url);
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const type = url.searchParams.get('type');
+    const items = mockEntitySearchResults.filter(
+      (row) => (!type || row.type === type) && row.label.toLowerCase().includes(q),
+    );
+    return HttpResponse.json({ data: { items, nextCursor: null } });
+  }),
 ];
+
+// ---------------------------------------------------------------------------
+// Graph proposal helpers (#367)
+// ---------------------------------------------------------------------------
+
+const ESTIMATE = {
+  providerId: 'openai',
+  model: 'gpt-4o-mini',
+  inputTokens: 4_200,
+  maxOutputTokens: 8_000,
+  availableInputTokens: 100_000,
+  fits: true,
+  requests: 1,
+  keyConfigured: true,
+};
+
+function record(method: string, path: string, body: unknown): void {
+  proposalMock.requests.push({ method, path, body });
+}
+
+function graphNotFound() {
+  return HttpResponse.json(
+    { statusCode: 404, code: 'NOT_FOUND', message: 'Proposal not found' },
+    { status: 404 },
+  );
+}
+
+function graphConflict(reason: string, extra: Record<string, unknown> = {}) {
+  return HttpResponse.json(
+    {
+      statusCode: 409,
+      code: 'CONFLICT',
+      message:
+        reason === 'proposal_not_draft'
+          ? 'This proposal is no longer a draft.'
+          : reason === 'revert_conflict'
+            ? 'Some of what this proposal added has changed since.'
+            : 'This proposal cannot be changed right now.',
+      details: { reason, ...extra },
+    },
+    { status: 409 },
+  );
+}
+
+/** #366's decision semantics, reduced to what the web can observe. */
+function applyPatch(item: ProposalItem, body: PatchProposalItemInput): ProposalItem {
+  let editedPayload = item.editedPayload;
+  if (body.decision === 'edit' && body.editedPayload) editedPayload = body.editedPayload;
+  if (body.relinkTo) {
+    editedPayload = { ...(editedPayload ?? item.payload), [body.relinkTo.field]: body.relinkTo.target };
+  }
+  const distinctFrom = body.distinctFrom ?? item.distinctFrom;
+  let resolution = item.resolution;
+  if (resolution && body.distinctFrom) {
+    resolution = {
+      ...resolution,
+      candidates: resolution.candidates.filter((c) => !distinctFrom.includes(c.entityId)),
+      ref: resolution.ref && distinctFrom.includes(resolution.ref) ? null : resolution.ref,
+    };
+  }
+  return {
+    ...item,
+    decision: body.decision,
+    editedPayload,
+    effectivePayload: editedPayload ?? item.payload,
+    mergeIntoId: body.decision === 'merge_into' ? (body.mergeIntoId ?? null) : null,
+    distinctFrom,
+    resolution,
+  };
+}

@@ -474,3 +474,25 @@ describe('SegmentList — the speaker name control (#220)', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('SegmentList — a deep-linked segment (#367)', () => {
+  it('marks every line with its id and rev', () => {
+    renderList({}, makeSegments(3));
+    const line = screen.getByText('Line number 1');
+    expect(line).toHaveAttribute('data-segment-id', 's1');
+    expect(line).toHaveAttribute('data-segment-rev', '1');
+  });
+
+  it('scrolls to, focuses and briefly highlights the linked line', async () => {
+    renderList({ highlightSegmentId: 's2' }, makeSegments(5));
+    expect(scrollTo).toHaveBeenCalled();
+    const line = screen.getByText('Line number 2');
+    await vi.waitFor(() => expect(line).toHaveFocus());
+    expect(await axe(document.body, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('ignores an id that is not in the transcript', () => {
+    renderList({ highlightSegmentId: 'nope' }, makeSegments(3));
+    expect(document.activeElement).toBe(document.body);
+  });
+});

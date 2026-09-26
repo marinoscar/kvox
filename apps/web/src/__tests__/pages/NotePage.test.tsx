@@ -8,6 +8,7 @@ import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
 import { server } from '../mocks/server';
+import { mockProposalDetail, proposalMock } from '../mocks/graphData';
 import { NOTE_ACTIVE_POLL_MS } from '../../hooks/useNotes';
 import { render, mockAdminUser } from '../utils/test-utils';
 import type { MockUser } from '../utils/test-utils';
@@ -2086,5 +2087,56 @@ describe('NotePage — a plain-text note (issue #334)', () => {
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
 
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+});
+
+// =============================================================================
+// #367 — the graph proposal entry button and review sheet
+// =============================================================================
+
+describe('NotePage — the graph proposal review (issue #367)', () => {
+  const graphUser: MockUser = {
+    ...mockAdminUser,
+    permissions: [...mockAdminUser.permissions, 'graph:read', 'graph:write'],
+  };
+
+  beforeEach(() => {
+    current = note({ status: 'ready', body: 'We will ship behind a flag.', currentVersion: 3 });
+    proposalMock.reset(mockProposalDetail('draft'));
+  });
+
+  it('is absent when the deployment has connected knowledge off', async () => {
+    aiConfig = { ...aiConfig, graphEnabled: false };
+    renderNote('/notes/n1', graphUser);
+    await screen.findByText('We will ship behind a flag.');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Graph proposal/ })).not.toBeInTheDocument();
+  });
+
+  it('is absent without graph:read', async () => {
+    aiConfig = { ...aiConfig, graphEnabled: true };
+    renderNote('/notes/n1', mockAdminUser);
+    await screen.findByText('We will ship behind a flag.');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: /Graph proposal/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the undecided count and opens the sheet beside the note', async () => {
+    aiConfig = { ...aiConfig, graphEnabled: true };
+    const user = userEvent.setup();
+    renderNote('/notes/n1', graphUser);
+    const pending = proposalMock.detail!.proposal.counts.pending;
+    const button = await screen.findByRole('button', { name: `Graph proposal, ${pending} undecided` });
+    expect(within(button).getByText(String(pending))).toBeInTheDocument();
+    await user.click(button);
+    expect(await screen.findByRole('region', { name: 'Graph proposal' })).toBeInTheDocument();
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('opens the sheet from ?review=1', async () => {
+    aiConfig = { ...aiConfig, graphEnabled: true };
+    renderNote('/notes/n1?review=1', graphUser);
+    expect(await screen.findByRole('region', { name: 'Graph proposal' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /People/ })).toBeInTheDocument();
   });
 });
