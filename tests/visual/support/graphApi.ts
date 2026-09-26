@@ -551,6 +551,12 @@ const SETTINGS_ONTOLOGY = {
   relationTypes: [],
 };
 
+/**
+ * main's own name for the settings-surface ontology (#367/#368's review and
+ * guide mocks spread it); an alias so code merged from main keeps working.
+ */
+const ONTOLOGY = SETTINGS_ONTOLOGY;
+
 function def(overrides: Record<string, unknown>) {
   return {
     id: '55555555-5555-4555-8555-555555555555',
