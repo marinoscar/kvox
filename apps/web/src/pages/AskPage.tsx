@@ -33,7 +33,6 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Drawer from '@mui/material/Drawer';
 import IconButton from '@mui/material/IconButton';
-import Link from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
@@ -51,7 +50,8 @@ import { ConversationList } from '../components/ask/ConversationList';
 import { askConversationPath, conversationTitle } from '../components/ask/ConversationListItem';
 import { DeleteConversationDialog } from '../components/ask/DeleteConversationDialog';
 import { RenameConversationDialog } from '../components/ask/RenameConversationDialog';
-import { ASK_DISABLED_COPY, askSendErrorCopy } from '../components/ask/askErrorCopy';
+import { askComposerAlert } from '../components/ask/askComposerAlert';
+import { ASK_DISABLED_COPY } from '../components/ask/askErrorCopy';
 import { EntityTypeIcon } from '../components/graph/entityTypeIcon';
 import { entityPath } from '../components/graph/EntityListRow';
 import { useAiConfig } from '../hooks/useAiConfig';
@@ -292,27 +292,7 @@ function AskWorkspace({ config }: { config: AiConfig | null }) {
     );
   }
 
-  const sendCopy = sendError ? askSendErrorCopy(sendError) : null;
-  const alert = sendCopy ? (
-    <Alert severity="warning" onClose={() => setSendError(null)}>
-      {sendCopy.message}
-      {sendCopy.link && (
-        <>
-          {' '}
-          <Link component={RouterLink} to={sendCopy.link.to}>
-            {sendCopy.link.label}
-          </Link>
-        </>
-      )}
-    </Alert>
-  ) : config && !config.keyConfigured ? (
-    <Alert severity="info">
-      Add your AI key in Settings → AI.{' '}
-      <Link component={RouterLink} to="/settings/ai">
-        Open Settings → AI
-      </Link>
-    </Alert>
-  ) : null;
+  const alert = askComposerAlert({ sendError, onDismiss: () => setSendError(null), config });
 
   const showComposer = !detail.notFound && !(id && detail.error && !conversation);
 

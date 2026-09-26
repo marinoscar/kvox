@@ -1749,8 +1749,8 @@ the read API (#370) and the entity brief (#372) with MSW, ahead of those
 routes landing on the API — the sections below describe the shipped design,
 not a plan. **The neighbourhood-canvas explorer (§22) is built too (issue
 #374)**: `/graph/explore` and the entity page's `NeighborhoodWidget`. The
-Ask panel (§21.5) is a separate, later issue (#381) and is not part of
-this.
+entity page's Ask panel (§21.5) came later, with issue #381, through the
+header's `actions` slot.
 
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
 Settings UI Pattern rule 2 (CLAUDE.md), a tab gate is about *content*
@@ -2849,6 +2849,52 @@ landing. What it does, and the decisions a neighbouring change could undo:
   everything through props and callbacks (no router coupling), and
   `useAskConversations({ scopeEntityId })` / `useAskConversation` /
   `useAskStream` are the whole data layer.
+
+**The entity Ask panel is built** (issue #381), on exactly that reuse — no
+component or hook was forked; the one extraction is `askComposerAlert`, the
+refused-send/no-key alert both surfaces now share. What it does, and the
+decisions a neighbouring change could undo:
+
+- **The action.** `EntityHeader`'s `actions` slot carries "Ask about
+  {label}" (`ChatBubbleOutline`; icon-only with the same accessible name on
+  a phone) — only while `GET /api/ai/config`'s `graphEnabled === true`. An
+  absent flag or a failed read hides it: a page-level action is not
+  advertised on an unanswered question, unlike `/ask`, which a user reached
+  deliberately.
+- **The drawer** (`components/ask/EntityAskPanel.tsx`) is a transient
+  surface over the page, not a section of it — the reasoning §13 gives for
+  the proposal sheet: ≥ 600 px a right-anchored temporary drawer 440 px wide
+  (the entity stays visible beside the answer), < 600 px a bottom sheet at
+  90vh with a 12 px radius (`NameSuggestionsPanel`'s phone pattern). One
+  page-level `down('sm')` read, not a sixth coupled breakpoint gate. Its
+  paper is a labelled `dialog`: title "Ask about {label}", "Open in Ask"
+  (`/ask/:id`, once a conversation is open) and Close.
+- **Scoped.** Every conversation it creates carries `scopeEntityId` (#378
+  then makes the entity `ent1`); the picker lists only this entity's
+  conversations (`?scopeEntityId=&limit=10`) plus "New conversation", which
+  is the default only while the entity has none — otherwise the newest
+  opens. A conversation id in the URL whose `scopeEntity` is a different
+  entity is not shown; the panel falls back to a new one. The same rows
+  appear on `/ask` with their entity chip: one store, two entry points.
+- **Suggestions** (`entityAskSuggestions.ts`, pure) are built from the
+  entity type — three each for Person, Organization and Project, "What's the
+  latest on {label}?" for anything else — and clicking one creates the scoped
+  conversation and asks it, as `/ask`'s empty state does.
+- **The URL.** `?ask=1` is open on a new conversation, `?ask=<id>` on a saved
+  one. Opening **pushes** one history entry, marked in router state, so the
+  back gesture closes the panel; every conversation change after that
+  **replaces** it; Close pops that entry (or, for a panel opened from a link
+  or a reload, drops the parameter with `replace`). A reload reopens the same
+  conversation. (The issue text said `replace` for opening too; a replace
+  there cannot make "back closes it" true, so opening pushes.)
+- **Closing mid-answer is safe.** The drawer's body mounts only while open,
+  so closing unmounts the stream — the SSE connection closes — while
+  `ask.respond` carries on server-side (the stream is a view over durable
+  state). Reopening re-reads the conversation: a still-running turn
+  reattaches, a finished one renders complete and never reconnects.
+- **An entity merged or forgotten** while the panel is open makes #376's
+  create answer 404; the panel shows "This entity is no longer in your graph"
+  and no composer.
 
 ### 21.6 Deletion
 
