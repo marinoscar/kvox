@@ -23,7 +23,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-import { GraphAccessService } from '../graph/access/graph-access.service';
+import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../graph/access/graph-access.service';
 import { readableEntitySql } from '../graph/read/read-sql';
 import { PrismaService } from '../prisma/prisma.service';
 import { ASK_CONVERSATION_NOT_FOUND, AskAccessService } from './ask-access.service';
@@ -78,6 +78,11 @@ export function toAskConversationSummary(row: AskSummaryRow): AskConversationSum
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/** Prisma's foreign-key-violation code (P2003). */
+function isForeignKeyViolation(err: unknown): boolean {
+  return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003';
 }
 
 @Injectable()
@@ -179,9 +184,20 @@ export class AskConversationsService {
       scopeEntity = { id: entity.id, label: entity.label, type: entity.type };
     }
 
-    const row = await this.prisma.askConversation.create({
-      data: { ownerId: userId, title: dto.title ?? null, scopeEntityId: scopeEntity?.id ?? null },
-    });
+    let row;
+    try {
+      row = await this.prisma.askConversation.create({
+        data: { ownerId: userId, title: dto.title ?? null, scopeEntityId: scopeEntity?.id ?? null },
+      });
+    } catch (err) {
+      // The entity was forgotten between the access check and the insert: the
+      // scope FK has nothing to point at. That is the same answer the check
+      // itself would now give — the entity's 404 — never a 500.
+      if (dto.scopeEntityId && isForeignKeyViolation(err)) {
+        throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.entity);
+      }
+      throw err;
+    }
 
     return {
       id: row.id,
