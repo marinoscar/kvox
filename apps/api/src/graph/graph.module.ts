@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
 import { JobsModule } from '../jobs/jobs.module';
-import { NotesModule } from '../notes/notes.module';
+import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
@@ -44,13 +44,16 @@ import { GraphWriteService } from './write/graph-write.service';
 // `AiModule` (#355) supplies `AiSettingsService`, read for `ai.graphEnabled`
 // before a guarded `kg.entity_digest` enqueue after a manual entity edit.
 //
-// `NotesModule` (#370) supplies `NoteAccessService`, which decides whether a
-// citation's note is still readable by the caller. One way, like the others:
-// nothing in NotesModule imports this module.
+// `NoteAccessService` (#370) decides whether a citation's note is still
+// readable by the caller. It is provided here rather than imported through
+// `NotesModule`: NotesModule imports GraphExtractionModule (#363), which
+// imports this module, so importing NotesModule back would be a cycle. The
+// service needs only PrismaService — the same choice GraphExtractionModule makes.
 @Module({
-  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, NotesModule],
+  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule],
   providers: [
     GraphAccessService,
+    NoteAccessService,
     // #369 — the `graph` user-settings namespace, resolved with defaults.
     GraphPreferencesService,
     GraphOntologyService,
