@@ -35,6 +35,10 @@ export const KG_EVAL_RUNNERS: Record<string, () => Promise<KgEvalRunner>> = {
   // ESM import, which cannot load a `.ts` file through ts-node.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   extract: async () => (require('./runners/extract-runner') as typeof import('./runners/extract-runner')).createExtractRunner(),
+  // #364: extraction, then in-memory resolution against `knownEntities`.
+  'extract+resolve': async () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    (require('./runners/extract-resolve-runner') as typeof import('./runners/extract-resolve-runner')).createExtractResolveRunner(),
 };
 
 /** The environment variable a runner's API key is read from — never a flag. */

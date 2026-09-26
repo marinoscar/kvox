@@ -1111,6 +1111,7 @@ export function TranscriptPage() {
               ? { segmentId: deepLinkSegment.id, start: 0, end: deepLinkSegment.text.length }
               : null
       }
+      highlightSegmentId={deepLinkSegmentId}
       scrollToSegmentId={
         findOpen
           ? (activeMatch?.segmentId ?? null)

@@ -965,6 +965,18 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `graph:write` and their `extraction.autoExtract` preference all allow it (`graph:write`)
 - `GET /api/graph/extract/estimate?noteId&model` - What that extraction would cost, counted over
   the exact prompt (guidance excluded); no key needed — `keyConfigured` reports it (`graph:read`)
+- `POST /api/graph/entities/{id}/merge` - Merge `:id` **into** `intoId` (issue #364): the merged
+  entity becomes a `merged` tombstone and its relations, facts, citations, mentions and aliases
+  move to the survivor (exact-duplicate relations fold, self-loops retire), all recorded in
+  `kg_merges.reversal`. 400 same id / `details.reason: "type_mismatch"`; 404 either entity
+  (`graph:write`)
+- `POST /api/graph/merges/{id}/reverse` - Undo one merge row for row; rows deleted or moved since
+  come back in `skipped`. 404 missing or already reversed; 409 `revert_conflict` when the survivor
+  was merged again since. Re-embeds both sides and queues `kg.resolve` for the restored one
+  (`graph:write`)
+- `POST /api/graph/distinct-pairs` - Record that two entities are not the same; resolution never
+  proposes the pair again. Order-free, idempotent (`created`), normalized `aId < bId`
+  (`graph:write`)
 - `GET /api/graph/entities/{id}/brief?since&as_of&markViewed` - "What's the latest on …?" in one
   call (issue #372, epic #347). **Never a provider call, never a 409** — deterministic, cited
   `sections` (What changed/Decisions/Open commitments/Risks-claims/People changes) + the latest
@@ -2170,7 +2182,12 @@ above. The `kg.*` job handlers so far are `kg.purge` (#357),
 `kg.speaker_link` (#356), `kg.extract` (#363 — one structured-output call per
 note on the owner's own key, producing a **draft proposal**, never graph rows;
 server-only, `maxAttempts: 1`, throttled per user, priority −5, auto-enqueued by
-`NoteGenerationService.commit()` for a ready note), `kg.graph_layout` (#371 —
+`NoteGenerationService.commit()` for a ready note), `kg.resolve` and `kg.embed` (#364 —
+entity resolution in `apps/api/src/graph/resolution/`, `GraphResolutionModule`: alias ∪
+`pg_trgm` ∪ pgvector candidates, the transparent `score.ts` table, `graph.adjudicate` for the
+middle band, the `resolution` proposal stage at order 100, reversible merges and distinct pairs;
+`kg.resolve` only ever writes a `resolution` proposal, never a merge; `kg.embed` is content-hash
+keyed and never embeds a `sensitive` PersonFact), `kg.graph_layout` (#371 —
 see below) and `kg.entity_digest` (#372
 — the **only** producer of brief prose: one `generateStructured` call per run,
 citing a numbered fact-handle list rather than uuids, dropping any statement
@@ -2183,16 +2200,16 @@ still only a constant. Extraction lives in
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
 `graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
-#364/#365 plug their stages into. The read layer (#370), the whole-graph
-overview (#371) and the entity brief (#372) are built; there are still no
-review/commit routes.
+#364/#365 plug their stages into. Resolution routes (merge, reverse, distinct
+pairs, #364), the read layer (#370), the whole-graph overview (#371) and the
+entity brief (#372) are built; there are still no review/commit routes.
 **The web side is built** (issue #373, epic #347): `/graph` (index) and
-`/graph/entities/:id` (entity page — header, edit, cited brief, connections,
-timeline, mentions), `EvidenceChip`, speaker-chip person links, entity hits
-above library search, and a Home "Knowledge" section, all owned by the `home`
-destination per the Navigation Destination Model above. It reads #370's read API
-and #372's brief — see `docs/specs/ontology.md` §13 for the up-to-date
-web-surfaces state.
+`/graph/entities/:id` (entity page — header, edit through #367's schema-driven
+`SchemaForm`, cited brief, connections, timeline, mentions), `EvidenceChip`,
+speaker-chip person links, entity hits above library search, and a Home
+"Knowledge" section, all owned by the `home` destination per the Navigation
+Destination Model above. It reads #370's read API and #372's brief — see
+`docs/specs/ontology.md` §13 for the up-to-date web-surfaces state.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph

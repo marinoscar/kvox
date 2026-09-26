@@ -235,10 +235,10 @@ export function EntityEditDialog({ open, entity, ontology, onClose, onSaved }: E
 
           <SchemaForm
             attributes={attributes}
-            values={props}
-            onChange={(key, value) => setProps((current) => ({ ...current, [key]: value }))}
+            value={props}
+            onChange={setProps}
             errors={fieldErrors}
-            disabled={saving}
+            readOnly={saving}
           />
         </Stack>
       </DialogContent>

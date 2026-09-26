@@ -5345,7 +5345,8 @@ ontology, extraction, review, retrieval, privacy) is
 effective ontology, the manual entity edit, and your own attribute
 definitions (issue #355), plus "forget this person" (issue #357),
 extraction — asking for, and estimating, a draft proposal from a note
-(issue #363) — the read layer — the entity index, an entity's page, its
+(issue #363), entity resolution — merging, un-merging and marking two
+entities as distinct (issue #364) — the read layer — the entity index, an entity's page, its
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
 (issue #370) — an entity's **brief**, "what's the latest on …?" in one
 call (issue #372) — and the whole-graph overview, read from a precomputed
@@ -5714,6 +5715,89 @@ whether you have one rather than refusing.
 above. **Errors:** `400` an invalid `noteId` or a model this deployment does
 not permit · `401` · `404` no such note, deleted, or not yours · `409`
 `graph_disabled`, `ai_not_configured`, `model_lacks_capability`.
+
+#### Entity resolution and merges
+
+Resolution (issue #364, [`ontology.md` §7](specs/ontology.md#7-entity-resolution-kgresolve))
+decides whether a mention is an entity you already have. It runs **inside
+extraction** — every proposed entity row arrives with a `resolution` (its top
+≤ 10 candidates, each with a `score` and the `signals` behind it:
+`alias_exact`, `trigram`, `vector`, `same_meeting`, `org_co_mention`,
+`shared_neighbour`, `recent`, `ambiguous`) — and as the bulk `kg.resolve`
+job. Your `graph.resolution` preferences set the bands: at or above
+`autoLinkThreshold` (default 0.90) the row is linked; below `newThreshold`
+(0.55) it is new; between the two it is adjudicated by the `graph.adjudicate`
+task model on your own key (`same` / `different` / `uncertain`, never
+pre-checked when uncertain), or flagged `possible_duplicate` when
+`adjudication` is `off`. A person a transcript speaker is identified as is
+linked outright (`source: "speaker"`). Changing either threshold queues one
+`kg.resolve` re-scan of your graph; its only output is a `resolution`
+proposal of suggested merges for you to review — it never merges anything
+itself.
+
+All three routes require `graph:write`; every entity id is authorised as
+above (another user's entity, a missing one and a merged tombstone are the
+same `404`).
+
+##### POST /graph/entities/:id/merge
+
+Merges `:id` **into** `intoId` (the survivor). `:id` becomes a tombstone
+(`reviewStatus: "merged"`, `mergedIntoId` set); every relation, fact,
+citation, mention and alias that named it now names the survivor, and its
+label becomes one of the survivor's aliases. Relations that became exact
+duplicates (same type, endpoints and validity) fold into one — citations
+kept — and a relation that would point at itself is retired. Every change is
+recorded for the reverse. Audited `graph.entity_merged`
+(`{ mergeId, mergedId, source }`).
+
+```json
+{ "intoId": "5f0e2b1c-9d4a-4c3e-8b7f-1a2b3c4d5e6f" }
+```
+
+**Response:** `200`
+```json
+{ "data": {
+  "merge": { "id": "…", "survivorId": "…", "mergedId": "…", "createdAt": "2026-09-26T12:00:00.000Z" },
+  "survivor": { "id": "…", "type": "Person", "label": "Sarah Chen", "aliasCount": 4 }
+} }
+```
+**Errors:** `400` the same id twice, an unknown body key, or two different
+types (`details.reason: "type_mismatch"`) · `401` · `403` without
+`graph:write` · `404` either entity.
+
+##### POST /graph/merges/:id/reverse
+
+Undoes one merge exactly: the tombstone is restored and every moved row is
+given back. A row deleted or moved elsewhere since is listed in `skipped`
+(`{ kind: relation|item|evidence|mention|alias, id, why: deleted_since|moved_since }`)
+instead of failing the reverse. Afterwards both entities are re-embedded and
+the restored one is re-checked (`kg.resolve`, `reason: "merge_reversed"`).
+Audited `graph.merge_reversed` (`{ mergeId, skipped }`). Body: `{}`.
+
+**Response:** `200` `{ merge: { id, survivorId, mergedId, reversedAt }, restored: { id, type, label }, skipped: [] }`.
+**Errors:** `400` a non-empty body · `401` · `403` · `404` no such merge,
+not yours, or **already reversed** · `409` `revert_conflict` with
+`details.conflicts: [{ entity: "survivor", id, mergedInto }]` — the survivor
+has since been merged into another entity; reverse that merge first.
+
+##### POST /graph/distinct-pairs
+
+Records that two entities are **not** the same. Resolution never proposes one
+as a match for the other again. Order-free and idempotent; audited
+`graph.distinct_pair_recorded` (`{ aId, bId, source }`) when new.
+
+```json
+{ "aId": "…", "bId": "…" }
+```
+**Response:** `200` `{ "aId": "…", "bId": "…", "created": true }` — normalized
+so `aId < bId`; `created: false` when it was already recorded.
+**Errors:** `400` the same id twice · `401` · `403` · `404` either entity.
+
+**Jobs.** `kg.resolve` (`{ maxRuntimeMs: 20 min, maxAttempts: 1 }`) and
+`kg.embed` (`{ maxRuntimeMs: 5 min, maxAttempts: 3 }`, content-hash keyed so a
+retry re-embeds nothing that is unchanged) are server-only, run on your own
+AI key, and are throttled on your own provider bucket. `kg.embed` never embeds
+a `sensitive` personal fact.
 
 #### Attribute definitions
 

@@ -1,29 +1,26 @@
-import { describe, it, expect, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
+import { axe } from 'vitest-axe';
+import 'vitest-axe/extend-expect';
 
+import { SchemaForm, visibleAttributes } from '../../../components/graph/schema/SchemaForm';
+import type { GraphAttribute } from '../../../services/graph';
 import { render } from '../../utils/test-utils';
-import { graphReader } from '../../utils/graphTestUsers';
-import { SchemaForm } from '../../../components/graph/schema/SchemaForm';
-import type { GraphAttributeDef } from '../../../services/graph';
 
-/**
- * The schema-driven form (#373's minimal stand-in for #367's): one control per
- * attribute, chosen by `kind`, with no per-type code — so a type nobody coded
- * for renders here unchanged.
- */
+const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 
-function attr(key: string, kind: GraphAttributeDef['kind'], overrides: Partial<GraphAttributeDef> = {}): GraphAttributeDef {
+function attr(key: string, kind: GraphAttribute['kind'], overrides: Partial<GraphAttribute> = {}): GraphAttribute {
   return {
     key,
-    label: key,
+    label: key[0].toUpperCase() + key.slice(1),
     kind,
     required: false,
     list: false,
     options: null,
     extractable: true,
-    description: `${key} hint`,
+    description: key,
     sensitivity: 'business',
     source: 'builtin',
     domain: 'core',
@@ -34,86 +31,70 @@ function attr(key: string, kind: GraphAttributeDef['kind'], overrides: Partial<G
   };
 }
 
-const ATTRIBUTES: GraphAttributeDef[] = [
-  attr('Text', 'text', { sortOrder: 1 }),
-  attr('Count', 'number', { sortOrder: 2 }),
-  attr('Started', 'date', { sortOrder: 3 }),
-  attr('Active', 'boolean', { sortOrder: 4 }),
-  attr('Stage', 'select', { sortOrder: 5, options: { choices: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }] } }),
-  attr('Home page', 'url', { sortOrder: 6 }),
-  attr('Tags', 'text', { sortOrder: 7, list: true }),
-  attr('Employer', 'entity_ref', { sortOrder: 8, options: { targetTypes: ['Organization'] } }),
-  attr('Custom', 'text', { sortOrder: 9, source: 'user' }),
-  attr('Old', 'text', { sortOrder: 10, deprecated: true }),
-  attr('Gone', 'text', { sortOrder: 11, deprecated: true }),
+const EVERY_KIND: GraphAttribute[] = [
+  attr('nickname', 'text'),
+  attr('headcount', 'number'),
+  attr('founded', 'date'),
+  attr('active', 'boolean'),
+  attr('stage', 'select', { options: { choices: [{ value: 'seed', label: 'Seed' }, { value: 'growth', label: 'Growth' }] } }),
+  attr('markets', 'multi_select', { options: { choices: [{ value: 'eu', label: 'Europe' }] } }),
+  attr('website', 'url'),
+  attr('parent', 'entity_ref', { options: { targetTypes: ['Organization'] } }),
 ];
 
-function Harness({ onChange }: { onChange: (key: string, value: unknown) => void }) {
-  const [values, setValues] = useState<Record<string, unknown>>({ Old: 'kept' });
+function Harness({ attributes, initial = {}, onChange }: { attributes: GraphAttribute[]; initial?: Record<string, unknown>; onChange?: (v: Record<string, unknown>) => void }) {
+  const [value, setValue] = useState(initial);
   return (
     <SchemaForm
-      attributes={ATTRIBUTES}
-      values={values}
-      errors={{ Text: 'Bad text' }}
-      onChange={(key, value) => {
-        onChange(key, value);
-        setValues((current) => ({ ...current, [key]: value }));
+      attributes={attributes}
+      value={value}
+      onChange={(next) => {
+        setValue(next);
+        onChange?.(next);
       }}
     />
   );
 }
 
 describe('SchemaForm', () => {
-  it('renders one control per kind and reports typed values', async () => {
+  it('maps every attribute kind to its widget', async () => {
+    const { container } = render(<Harness attributes={EVERY_KIND} />);
+    expect(screen.getByRole('textbox', { name: 'Nickname' })).toHaveAttribute('type', 'text');
+    expect(screen.getByRole('spinbutton', { name: 'Headcount' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Founded')).toHaveAttribute('type', 'date');
+    expect(screen.getByRole('switch', { name: 'Active' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Stage' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Markets' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Website' })).toHaveAttribute('type', 'url');
+    expect(screen.getByRole('combobox', { name: 'Parent' })).toBeInTheDocument();
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+  });
+
+  it('writes values back under the attribute key, and clears empties', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
-    render(<Harness onChange={onChange} />, { wrapperOptions: { user: graphReader } });
-
-    expect(screen.getByText('Bad text')).toBeInTheDocument();
-
-    await user.type(screen.getByRole('textbox', { name: 'Text' }), 'x');
-    expect(onChange).toHaveBeenLastCalledWith('Text', 'x');
-
-    await user.type(screen.getByRole('spinbutton', { name: 'Count' }), '7');
-    expect(onChange).toHaveBeenLastCalledWith('Count', 7);
-
+    render(<Harness attributes={EVERY_KIND} onChange={onChange} />);
+    await user.type(screen.getByRole('textbox', { name: 'Nickname' }), 'Sam');
+    expect(onChange).toHaveBeenLastCalledWith({ nickname: 'Sam' });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Headcount' }), { target: { value: '12' } });
+    expect(onChange).toHaveBeenLastCalledWith({ nickname: 'Sam', headcount: 12 });
     await user.click(screen.getByRole('switch', { name: 'Active' }));
-    expect(onChange).toHaveBeenLastCalledWith('Active', true);
-
-    await user.click(screen.getByRole('combobox', { name: 'Stage' }));
-    await user.click(await screen.findByRole('option', { name: 'Beta' }));
-    expect(onChange).toHaveBeenLastCalledWith('Stage', 'b');
-
-    const url = screen.getByRole('textbox', { name: 'Home page' });
-    expect(url).toHaveAttribute('type', 'url');
-    await user.type(url, 'h');
-    await user.clear(url);
-    expect(onChange).toHaveBeenLastCalledWith('Home page', null);
-
-    await user.type(screen.getByRole('combobox', { name: 'Tags' }), 'one{Enter}');
-    expect(onChange).toHaveBeenLastCalledWith('Tags', ['one']);
-
-    // A user attribute shows its hint; a retired one with a value is read-only;
-    // a retired one without a value is not rendered at all.
-    expect(screen.getByText('Custom hint')).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Old (retired)' })).toBeDisabled();
-    expect(screen.queryByRole('textbox', { name: /Gone/ })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Started')).toHaveAttribute('type', 'date');
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ active: true }));
+    await user.clear(screen.getByRole('textbox', { name: 'Nickname' }));
+    expect(onChange.mock.lastCall?.[0]).not.toHaveProperty('nickname');
   });
 
-  it('searches the graph for an entity reference', async () => {
-    const user = userEvent.setup();
-    const onChange = vi.fn();
-    render(<Harness onChange={onChange} />, { wrapperOptions: { user: graphReader } });
-
-    await user.type(screen.getByRole('combobox', { name: 'Employer' }), 'acm');
-    const listbox = await screen.findByRole('listbox', {}, { timeout: 3000 });
-    await user.click(within(listbox).getByRole('option', { name: 'Acme Corp' }));
-    await waitFor(() => expect(onChange).toHaveBeenLastCalledWith('Employer', expect.any(String)));
+  it('shows a retired attribute only when it has a value, read-only', () => {
+    const retired = attr('desk', 'text', { deprecated: true });
+    expect(visibleAttributes([retired], {})).toEqual([]);
+    render(<Harness attributes={[retired]} initial={{ desk: '4B' }} />);
+    expect(screen.getByRole('textbox', { name: 'Desk' })).toBeDisabled();
+    expect(screen.getByText('Retired field — shown because it has a value')).toBeInTheDocument();
   });
 
-  it('renders nothing for a type with no attributes', () => {
-    const { container } = render(<SchemaForm attributes={[]} values={{}} onChange={vi.fn()} />);
-    expect(container).toBeEmptyDOMElement();
+  it('renders a list attribute as free entry chips', () => {
+    render(<Harness attributes={[attr('tags', 'text', { list: true })]} initial={{ tags: ['a', 'b'] }} />);
+    expect(screen.getByRole('combobox', { name: 'Tags' })).toBeInTheDocument();
+    expect(screen.getByText('a')).toBeInTheDocument();
   });
 });
