@@ -67,7 +67,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { READABLE_ENTITY_STATUSES } from '../read/readable';
 import { KG_ENTITY_DIGEST_JOB_TYPE } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
-import { buildDigestFactList, DIGEST_FACT_EVIDENCE_IDS, DIGEST_MAX_FACTS, DIGEST_MAX_RELATION_FACTS } from './brief-facts';
+import {
+  buildDigestFactList,
+  DIGEST_FACT_EVIDENCE_IDS,
+  DIGEST_MAX_FACTS,
+  DIGEST_MAX_RELATION_FACTS,
+  relationAllowedInPrompt,
+} from './brief-facts';
 import {
   buildDigestPrompt,
   DIGEST_MAX_OUTPUT_TOKENS,
@@ -161,7 +167,11 @@ export class EntityDigestHandler implements JobHandler, OnModuleInit {
     // -- Input ----------------------------------------------------------------
     const now = new Date();
     const schema = await this.ontology.effectiveSchemaFor(ownerId);
-    const exclusive = exclusiveRelationTypes(schema.relationTypes);
+    // #383: a personal-sensitivity relation (SPOUSE_OF) never enters the prompt
+    // without the §14 opt-in, exactly as a personal PersonFact does not.
+    const exclusive = exclusiveRelationTypes(
+      schema.relationTypes.filter((r) => relationAllowedInPrompt(r, DIGEST_INCLUDE_PERSONAL_FACTS)),
+    );
     const exclusiveList = [...exclusive];
     const labelOf = (key: string) => schema.relationType(key)?.label ?? key;
 

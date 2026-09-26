@@ -36,7 +36,7 @@ import {
   type AskToolContext,
   type AskToolResult,
 } from './ask-tool';
-import { visiblePersonFactIds } from './sensitivity';
+import { typeVisible, visiblePersonFactIds } from './sensitivity';
 import { INLINE_EVIDENCE_PER_ENTRY } from './tool-queries';
 
 const input = z.object({
@@ -134,7 +134,9 @@ export class EntityBriefTool implements AskTool<EntityBriefToolInput> {
         yours: section(sections.openCommitments.yours),
       },
       risksClaims: section(sections.risksClaims),
-      peopleChanges: sections.peopleChanges.map(peopleChange),
+      peopleChanges: sections.peopleChanges
+        .filter((p) => typeVisible(p.type, ctx.personalFactsAllowed))
+        .map(peopleChange),
     };
 
     const resultCount =

@@ -1,6 +1,7 @@
 import { expectNoUuid, makeCtx, seedEntity, uid } from '../../../test/ask/ask-tool-fakes';
 import { AskToolError } from './ask-tool';
 import { EvidenceTool } from './evidence.tool';
+import { PERSONAL_SENSITIVITY_TYPES } from './sensitivity';
 
 // =============================================================================
 // `evidence` (#377): subject re-check (owner, readable, sensitivity), the
@@ -65,7 +66,14 @@ describe('EvidenceTool', () => {
     const h = seedEntity(ctx, ACME, 'Acme');
     const res = await tool.run(ctx, tool.input.parse({ subject: h, limit: null }));
     expect(prisma.kgEntity.count).toHaveBeenCalledWith({
-      where: { id: ACME, ownerId: ctx.user.id, reviewStatus: { in: ['accepted', 'edited'] }, mergedIntoId: null },
+      where: {
+        id: ACME,
+        ownerId: ctx.user.id,
+        reviewStatus: { in: ['accepted', 'edited'] },
+        mergedIntoId: null,
+        // #383: a personal-domain entity is never shown without the §14 opt-in.
+        type: { notIn: [...PERSONAL_SENSITIVITY_TYPES] },
+      },
     });
     expect(evidence.listForSubject).toHaveBeenCalledWith(ctx.user.id, 'entity', ACME, 6);
     const data = res.data as Array<Record<string, unknown>>;

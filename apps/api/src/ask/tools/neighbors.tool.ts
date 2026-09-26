@@ -33,7 +33,7 @@ import {
   type AskToolContext,
   type AskToolResult,
 } from './ask-tool';
-import { visiblePersonFactIds } from './sensitivity';
+import { typeVisible, visiblePersonFactIds } from './sensitivity';
 
 export const NEIGHBORS_DEFAULT_LIMIT = 25;
 export const NEIGHBORS_MAX_LIMIT = 50;
@@ -81,7 +81,11 @@ export class NeighborsTool implements AskTool<NeighborsToolInput> {
 
     const factIds = slice.nodes.filter((n) => n.nodeKind === 'item' && n.type === 'person_fact').map((n) => n.id);
     const visibleFacts = await visiblePersonFactIds(this.prisma, ctx.user.id, factIds, ctx.personalFactsAllowed);
-    const nodes = slice.nodes.filter((n) => !(n.nodeKind === 'item' && n.type === 'person_fact') || visibleFacts.has(n.id));
+    const nodes = slice.nodes.filter(
+      (n) =>
+        (!(n.nodeKind === 'item' && n.type === 'person_fact') || visibleFacts.has(n.id)) &&
+        (n.nodeKind !== 'entity' || typeVisible(n.type, ctx.personalFactsAllowed)),
+    );
 
     const refById = new Map<string, string>();
     const outNodes = nodes.map((n) => {
@@ -91,6 +95,7 @@ export class NeighborsTool implements AskTool<NeighborsToolInput> {
     });
 
     const edges = slice.edges.flatMap((e) => {
+      if (!typeVisible(e.type, ctx.personalFactsAllowed)) return [];
       const from = refById.get(e.source);
       const to = refById.get(e.target);
       if (!from || !to) return [];
