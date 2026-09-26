@@ -208,3 +208,68 @@ export async function installAskApi(page: Page): Promise<void> {
     return json(route, {});
   });
 }
+
+// =============================================================================
+// The entity page's Ask panel (#381)
+// =============================================================================
+
+/** Joe Rivera's own scoped conversation — the one the panel opens. */
+export const CONV_JOE_SCOPED_ID = id(1202);
+
+const JOE_SCOPED = {
+  ...summary(CONV_JOE_SCOPED_ID, 'What did Joe promise us?', null, true),
+  hasEarlier: false,
+  messages: [
+    message({ id: id(1311), role: 'user', conversationId: CONV_JOE_SCOPED_ID, content: 'What did Joe promise us?' }),
+    message({
+      id: id(1312),
+      role: 'assistant',
+      conversationId: CONV_JOE_SCOPED_ID,
+      model: 'gpt-4o-mini',
+      provider: 'openai',
+      finishReason: 'stop',
+      content:
+        '[^ent1] committed to ship the **Atlas beta by the end of March** [^ev1], ' +
+        'and confirmed it on the Q3 planning call [^doc1].',
+      toolCalls: [
+        { index: 0, name: 'entity_brief', arguments: {}, summary: 'Read the brief on Joe Rivera', resultCount: 4, durationMs: 80, error: null },
+        { index: 1, name: 'timeline', arguments: {}, summary: 'Read timeline', resultCount: 2, durationMs: 90, error: null },
+      ],
+      citations: [
+        citation({ marker: 'ent1', kind: 'entity', id: JOE_ID, label: 'Joe Rivera' }),
+        citation({ marker: 'ev1', kind: 'evidence', id: EV_SEGMENT, label: 'Q3 planning call' }),
+        citation({
+          marker: 'doc1',
+          kind: 'document',
+          id: TRANSCRIPT_ID,
+          label: 'Q3 planning call',
+          documentKind: 'transcript',
+          startMs: 754_000,
+        }),
+      ],
+    }),
+  ],
+};
+
+/**
+ * The Ask routes the entity panel makes, layered OVER `installGraphApi(page,
+ * { surface: 'pages' })`: install that first, then this. Playwright runs the
+ * most recently registered route first, so this answers `/ai/config` and
+ * `/ask/*` and hands every other request (`route.fallback()`) to the graph
+ * fixtures the entity page itself reads.
+ */
+export async function installEntityAskApi(page: Page): Promise<void> {
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname.replace(/^.*\/api/, '');
+
+    if (path === '/ai/config') return json(route, AI_CONFIG);
+    if (path === '/ask/conversations') {
+      const scope = url.searchParams.get('scopeEntityId');
+      const items = CONVERSATIONS.filter((row) => !scope || row.scopeEntity?.id === scope);
+      return json(route, { items, nextCursor: null });
+    }
+    if (path === `/ask/conversations/${CONV_JOE_SCOPED_ID}`) return json(route, JOE_SCOPED);
+    return route.fallback();
+  });
+}
