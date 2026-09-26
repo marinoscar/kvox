@@ -1475,7 +1475,12 @@ Home's "Knowledge" section, a named speaker's chip, and library search hits,
 never from its own tab. See `docs/specs/ontology.md` §13. `/graph/explore`
 (the sigma.js graph explorer, issue #374) is owned by the same `home` entry —
 its own prefix's `startsWith('/graph/')` match already covers it, so no
-`DESTINATION_ROUTES` change was needed to add it.
+`DESTINATION_ROUTES` change was needed to add it. **`/ask` and
+`/ask/:conversationId` (issue #380, epic #348) — Ask, the read-only agent over
+the graph — are owned by `home` too**: `DESTINATION_ROUTES.home` is
+`['/', '/graph', '/ask']`, the page is one optional-segment route
+(`/ask/:conversationId?`) gated on `graph:read`, reached from Home's Knowledge
+section, and hidden behind `ai.graphEnabled`. See `docs/specs/ontology.md` §21.5.
 
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
