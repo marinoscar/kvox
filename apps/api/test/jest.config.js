@@ -36,5 +36,14 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   globalTeardown: '<rootDir>/test/teardown.ts',
   testTimeout: 30000,
+  // Recycle a worker between test files once its heap passes 1 GB. Many
+  // suites compile the whole AppModule (createTestApp), and ts-jest's module
+  // registry is never released inside a worker, so a long-lived worker's heap
+  // only grows: once the graph grew with the Ask modules (epic #348), CI
+  // workers began dying mid-run with "Jest worker ran out of memory" on
+  // whichever suite happened to land last (ask-tools.module.spec.ts once,
+  // test-app-scheduler.spec.ts the next time). Restarting a worker costs a
+  // cold module cache for the next file; crashing costs the whole run.
+  workerIdleMemoryLimit: '1GB',
   verbose: true,
 };
