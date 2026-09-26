@@ -81,6 +81,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 
@@ -112,6 +113,8 @@ import {
   requiredWordSegmentIds,
   shouldSnapshot,
   sortForRead,
+  speakerNameChanges,
+  speakersWithChangedNames,
   summarizeOps,
   wordIndexAtCharOffset,
   type EditableSegment,
@@ -124,6 +127,10 @@ import {
   type RequestOp,
   type StateDiff,
 } from './editing';
+import {
+  TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+  TranscriptSpeakersIdentifiedEvent,
+} from './events/transcript-speakers-identified.event';
 import { TranscriptAccessService } from './transcript-access.service';
 import { TranscriptMaterializeService } from './transcript-materialize.service';
 import { TranscriptPipelineService } from './transcript-pipeline.service';
@@ -210,6 +217,9 @@ export class TranscriptEditingService {
     private readonly access: TranscriptAccessService,
     private readonly materialize: TranscriptMaterializeService,
     private readonly pipeline: TranscriptPipelineService,
+    // #356: the naming → graph hand-off. Global (`EventEmitterModule.forRoot()`
+    // in `app.module.ts`), so no module import is needed for it.
+    private readonly events: EventEmitter2,
   ) {}
 
   // ===========================================================================
@@ -272,6 +282,12 @@ export class TranscriptEditingService {
         const saved = await this.saveBatch(transcript.id, user, dto, expanded, options);
 
         await this.afterCommit(transcript.id, saved, expanded, user);
+
+        // #405: a versioned rename ("Oscar" → "Joe"), a clear back to the
+        // placeholder, a created, merged or deleted speaker — each changes
+        // which name a speaker shows, so the graph must re-reconcile exactly
+        // as it does after an identification.
+        this.emitSpeakersChanged(transcript.id, user.id, saved.speakersChanged);
 
         return saved.result;
       } catch (error) {
@@ -539,6 +555,7 @@ export class TranscriptEditingService {
     const nextVersion = transcript.currentVersion + 1;
     const summary = `Restored version ${version}`;
     let restored = target.state;
+    let restoredSpeakersChanged: string[] = [];
 
     try {
       await this.prisma.$transaction(
@@ -560,6 +577,14 @@ export class TranscriptEditingService {
           const identities = await this.readIdentities(tx, transcript.id);
 
           restored = applyIdentities(target.state, identities);
+
+          // #405: which speakers show a different name after the swap —
+          // compared with the live rows it is about to replace.
+          const live = await tx.transcriptSpeaker.findMany({
+            where: { transcriptId: transcript.id },
+            select: { id: true, displayName: true },
+          });
+          restoredSpeakersChanged = speakerNameChanges(live, restored.speakers);
 
           // ⚠ SEGMENTS BEFORE SPEAKERS, ALWAYS. `transcript_segments.speaker_id`
           // is `onDelete: Restrict` (spec §3.3), so a speaker with segments
@@ -649,6 +674,8 @@ export class TranscriptEditingService {
       version: nextVersion,
     });
 
+    this.emitSpeakersChanged(transcript.id, user.id, restoredSpeakersChanged);
+
     this.logger.log(
       `Transcript ${transcript.id} restored to v${version} as v${nextVersion} by ${user.id}`,
     );
@@ -675,7 +702,12 @@ export class TranscriptEditingService {
     dto: ApplyOperationsDto,
     expanded: ExpandedBatch,
     options: ApplyOperationsOptions,
-  ): Promise<{ result: OperationsResult; version: number; kind: 'edit' }> {
+  ): Promise<{
+    result: OperationsResult;
+    version: number;
+    kind: 'edit';
+    speakersChanged: string[];
+  }> {
     const wordsNeeded = requiredWordSegmentIds(expanded.ops);
 
     return this.prisma.$transaction(
@@ -769,6 +801,7 @@ export class TranscriptEditingService {
         return {
           version: nextVersion,
           kind: 'edit' as const,
+          speakersChanged: speakersWithChangedNames(diff),
           result: {
             version: nextVersion,
             summary,
@@ -963,6 +996,32 @@ export class TranscriptEditingService {
     }
   }
 
+  /**
+   * Tell the graph that these speakers' names changed (#356, #405).
+   *
+   * Emitted AFTER the commit and outside the transaction, by every save path
+   * that can change which name a speaker shows: an identification, a versioned
+   * batch (rename, clear back to the placeholder, create, merge) and a restore.
+   * The listener only enqueues `kg.speaker_link`, which re-reads the current
+   * names itself, so the ids here are informational. Contained: a save must
+   * never fail because the graph could not be told about it.
+   */
+  private emitSpeakersChanged(transcriptId: string, userId: string, speakerIds: string[]): void {
+    if (speakerIds.length === 0) return;
+
+    try {
+      this.events.emit(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(transcriptId, userId, speakerIds),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Transcript ${transcriptId}: could not emit ${TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT}: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   // ===========================================================================
   // The unversioned path: naming an AI-detected speaker (#323)
   // ===========================================================================
@@ -1024,6 +1083,14 @@ export class TranscriptEditingService {
       await this.audit(user.id, 'transcript.speaker_identified', transcriptId, {
         speakers: saved.identified,
       });
+
+      // #356: hand the naming to the graph, after the search enqueue and
+      // the audit.
+      this.emitSpeakersChanged(
+        transcriptId,
+        user.id,
+        saved.identified.map((s) => s.speakerId),
+      );
 
       this.logger.log(
         `Transcript ${transcriptId}: ${saved.identified.length} speaker(s) identified by ` +

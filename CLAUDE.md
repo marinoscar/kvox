@@ -2092,16 +2092,20 @@ neighbourhood, timeline, mentions, citation links, and the explorer's
 `expand`, exported as `GraphReadService`, `GraphNeighborhoodService` and
 `GraphEvidenceService` for the entity brief (#372) and the Ask agent (#377)
 to reuse) is built too; the extraction/review/commit pipeline and the
-whole-graph overview arrive with #356 and later.**
+whole-graph overview arrive later.**
+The extraction quality harness (issue #362: the synthetic golden set at
+`apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
+built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
 The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. There is still only one `kg.*` job handler (`kg.purge`; every other type
-in `apps/api/src/graph/job-types.ts` is still only a constant), no
-extraction/review/commit or whole-graph-overview routes, and no graph UI.
+above. The only `kg.*` job handlers so far are `kg.purge` (#357) and
+`kg.speaker_link` (#356); every other type in `apps/api/src/graph/job-types.ts`
+is still only a constant. There are no extraction/review/commit or
+whole-graph-overview routes yet, and no graph UI.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
@@ -2132,6 +2136,15 @@ silently resume minutes later, and there is no credential narrow enough for a
 `graph` category (`scope: 'all'`, `apps/api/src/user-data/handlers/user-data-purge.handler.ts`).
 The handler is re-entrant — every step selects what is still there and deletes it — which is
 what makes a person-initiated retry (asking again) safe without an automatic one.
+
+**Speaker naming writes the graph only through `kg.speaker_link`** (#356): every
+`TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and (#405) a
+versioned rename/clear/create/merge or a restore — emits `transcript.speakers_identified`, a
+listener only enqueues the job (`skipDedup: true`), and the server-only handler reconciles each
+speaker's **effective** name (the live row with the `speaker_identities` overlay, exactly as
+`materialize()` shows it — never `speaker_identities` alone) into the **owner's** `Person` +
+`IDENTIFIED_AS` rows — never an editor's, and only while the owner holds `graph:write`; see
+`docs/specs/ontology.md` §8.
 
 ## Specialized Subagents (MANDATORY)
 

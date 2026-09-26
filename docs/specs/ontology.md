@@ -917,6 +917,16 @@ panel (§8) exists specifically to catch what extraction gets wrong, so it
 ships regardless of where the numbers land, and the numbers are what
 determine how much the panel can safely pre-check versus leave for a human.
 
+**Measuring extraction (issue #362).** The golden set lives at
+`apps/api/test/fixtures/kg-golden/` (format, the synthetic-only rule and the
+coverage list are in its `README.md`), and the harness is `npm run kg:eval
+--workspace=api`: `--predictions gold` is the self-test that must print 1.000
+everywhere, `--predictions <dir>` scores a runner's output, `--run <runner>`
+runs a registered `KgEvalRunner` (none until `kg.extract` registers `extract`),
+`--enforce` fails on a missed target for local use (CI reports only), and
+`--real-dir`/`--export-note` are the local, opt-in real-data mode, which
+refuses any path inside the git work tree.
+
 ## 7. Entity resolution (`kg.resolve`)
 
 Resolution runs in two places: **inline**, inside `kg.extract` itself, so
@@ -1062,13 +1072,36 @@ write path, with exactly two named exceptions: the **speaker-naming write**
 (`IDENTIFIED_AS` plus a `Person` row, because the user typing a name against
 "Speaker A" *is itself* the review — there is no separate confirmation step
 that act could sensibly wait for), enqueued as **`kg.speaker_link`** (§11)
-from `TranscriptEditingService.identify()` (verified above) rather than
+from `TranscriptEditingService` (after an identification, and since #405
+after any versioned save or restore that changes a speaker's name) rather than
 performed inline in that request — CLAUDE.md's job-queue rule applies here
 exactly as everywhere else, however small the write — and a **manual edit on
 an entity page**
 (§13) — a person directly correcting a `Person`'s name or an `Organization`'s
 label after the fact, which is curation by construction and needs no
 proposal to wrap it.
+
+The speaker-naming write (#356) is **owner-only and a full reconcile**: it
+writes only into the transcript owner's graph, only when the owner performed
+the naming and holds `graph:write` (an editor-share's naming enqueues a job
+that writes nothing, §12), and each run re-derives every `IDENTIFIED_AS` edge
+for that transcript's speakers from each speaker's **effective** name under a
+per-transcript advisory lock — creating or linking the `Person`, re-pointing
+a renamed speaker, removing a cleared one, and deleting the old `Person` only
+when it existed solely through that transcript's speaker naming — so a
+repeated or concurrent run converges on the same state.
+
+The effective name is the one the user sees: the live `transcript_speakers`
+name with the `speaker_identities` overlay applied, through the same
+`applyIdentities`/`isUnidentified` pair `materialize()` uses
+(`docs/specs/transcription.md` §4.6), and a speaker still on its ingest
+placeholder has none. `speaker_identities` alone is not enough (#405): a
+rename of an already-named speaker is a **versioned** correction that writes
+only the live row, and a clear back to "Speaker A" retires the identity entry.
+So the job is enqueued after **every** save that changes which name a speaker
+shows — an identification, a versioned batch that renames, clears, creates or
+merges away a speaker, and a version restore — not only after
+`identify()`.
 
 ## 9. Retrieval
 
@@ -1356,7 +1389,7 @@ rather than being folded into a handler directory it does not belong in:
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
-| `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued from `TranscriptEditingService.identify()` (verified above) rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
+| `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
 | `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped |

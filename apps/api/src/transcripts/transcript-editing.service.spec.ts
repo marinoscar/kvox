@@ -21,10 +21,15 @@
 // =============================================================================
 
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { OP_TYPES } from './editing';
+import {
+  TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+  TranscriptSpeakersIdentifiedEvent,
+} from './events/transcript-speakers-identified.event';
 import { TranscriptAccessService } from './transcript-access.service';
 import {
   TranscriptEditingService,
@@ -87,6 +92,7 @@ describe('TranscriptEditingService', () => {
   let versionCreate: jest.Mock;
   let access: { require: jest.Mock };
   let pipeline: { enqueueSnapshot: jest.Mock; enqueueSearchIndex: jest.Mock };
+  let events: { emit: jest.Mock };
   let transcript: { id: string; currentVersion: number };
   /** `transcripts.speaker_identities`, as both the tx-locked read and the
    * out-of-transaction read see it — a `let` so a test can set it BEFORE
@@ -161,9 +167,12 @@ describe('TranscriptEditingService', () => {
       enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
     };
 
+    events = { emit: jest.fn().mockReturnValue(true) };
+
     const module = await Test.createTestingModule({
       providers: [
         TranscriptEditingService,
+        { provide: EventEmitter2, useValue: events },
         TranscriptMaterializeService,
         { provide: PrismaService, useValue: prisma },
         { provide: TranscriptAccessService, useValue: access },
@@ -334,6 +343,37 @@ describe('TranscriptEditingService', () => {
       );
     });
 
+    it('emits transcript.speakers_identified after the save, the search enqueue and the audit (#356)', async () => {
+      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar') as never, USER);
+
+      expect(events.emit).toHaveBeenCalledTimes(1);
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, ['A']),
+      );
+
+      // Order: after the search enqueue and the audit row.
+      const emitOrder = events.emit.mock.invocationCallOrder[0];
+      expect(pipeline.enqueueSearchIndex.mock.invocationCallOrder[0]).toBeLessThan(emitOrder);
+      expect(
+        (prisma.auditEvent as { create: jest.Mock }).create.mock.invocationCallOrder[0],
+      ).toBeLessThan(emitOrder);
+    });
+
+    it('still answers the naming when the emit throws (#356)', async () => {
+      events.emit.mockImplementation(() => {
+        throw new Error('listener exploded');
+      });
+
+      const result = await service.applyOperations(
+        TRANSCRIPT_ID,
+        identifyBatch('Oscar') as never,
+        USER,
+      );
+
+      expect(result.summary).toBe('Named Speaker A as Oscar');
+    });
+
     it('is idempotent: retrying an identification the speaker already carries writes nothing and enqueues nothing', async () => {
       const alreadyIdentified = [
         { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
@@ -356,6 +396,8 @@ describe('TranscriptEditingService', () => {
       expect(tx.transcript.update).not.toHaveBeenCalled();
       expect(pipeline.enqueueSearchIndex).not.toHaveBeenCalled();
       expect((prisma.auditEvent as { create: jest.Mock }).create).not.toHaveBeenCalled();
+      // #356: nothing was identified, so the graph is not told anything.
+      expect(events.emit).not.toHaveBeenCalled();
     });
 
     it('answers a stale rev with the exact 409 shape a versioned conflict uses', async () => {
@@ -435,6 +477,75 @@ describe('TranscriptEditingService', () => {
         { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
       ]);
       expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
+
+      // #405: the graph is told, exactly as it is after an identification,
+      // and only after the commit's own follow-up work.
+      expect(events.emit).toHaveBeenCalledTimes(1);
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, ['A']),
+      );
+      expect(pipeline.enqueueSearchIndex.mock.invocationCallOrder[0]).toBeLessThan(
+        events.emit.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('still answers a versioned rename when the emit throws (#405)', async () => {
+      const identified = [
+        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        speakerRows[1],
+      ];
+
+      (prisma.transcriptSpeaker as { findMany: jest.Mock }).findMany.mockResolvedValue(identified);
+      tx.transcriptSpeaker.findMany.mockResolvedValue(identified);
+      events.emit.mockImplementation(() => {
+        throw new Error('listener exploded');
+      });
+
+      const result = await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'oscar-to-joe-throws',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+        } as never,
+        USER,
+      );
+
+      expect(result.version).toBe(4);
+    });
+
+    it('emits for a speaker created in a versioned batch (#405)', async () => {
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'create-dana',
+          ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Dana' }],
+        } as never,
+        USER,
+      );
+
+      const newId = recordedOps()[0].speakerId as string;
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, [newId]),
+      );
+    });
+
+    it('does not emit for a versioned batch that changes no speaker name (#405)', async () => {
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'text-only',
+          ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'updated text' }],
+        } as never,
+        USER,
+      );
+
+      expect(versionCreate).toHaveBeenCalled();
+      expect(events.emit).not.toHaveBeenCalled();
     });
 
     it('retires the identity entry when a versioned rename puts the speaker back on its placeholder', async () => {
@@ -468,6 +579,11 @@ describe('TranscriptEditingService', () => {
         where: { id: TRANSCRIPT_ID },
         data: { speakerIdentities: {} },
       });
+      // #405: a clear is a name change too — the graph must unlink.
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, ['A']),
+      );
     });
   });
 

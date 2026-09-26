@@ -386,7 +386,20 @@ export class GraphWriteService {
       throw invalid('A relation needs fromId.', 'fromId');
     }
 
-    const props = withoutNulls(this.validatedProps(schema, input.type, input.props ?? {}, true));
+    // A speaker link's `transcriptId`/`speakerId` are SYSTEM props (#356): not
+    // attributes of the ontology's closed `IDENTIFIED_AS` props, but the
+    // storage shape #363/#370/#373 read (`props->>'transcriptId'`). They are
+    // lifted out before closed validation and stamped below from the speaker
+    // row itself, so they can never disagree with `from_speaker_id`.
+    let declaredProps: Record<string, unknown> = input.props ?? {};
+    let claimedLink: { transcriptId?: unknown; speakerId?: unknown } = {};
+    if (representation === 'speaker_link') {
+      const { transcriptId, speakerId, ...rest } = declaredProps;
+      claimedLink = { transcriptId, speakerId };
+      declaredProps = rest;
+    }
+
+    const props = withoutNulls(this.validatedProps(schema, input.type, declaredProps, true));
     this.checkTemporal(relation.temporal, input.valid, input.validPrecision, input.type);
     this.checkConfidence(input.confidence);
 
@@ -412,7 +425,15 @@ export class GraphWriteService {
         throw invalid(`'${input.type}' does not connect a ${fromType} to a ${toType}.`, 'toId');
       }
     } else {
-      await this.requireViewableSpeaker(tx, input.ownerId, input.fromSpeakerId!);
+      const speakerTranscriptId = await this.requireViewableSpeaker(tx, input.ownerId, input.fromSpeakerId!);
+      if (claimedLink.speakerId !== undefined && claimedLink.speakerId !== input.fromSpeakerId) {
+        throw invalid('props.speakerId must equal fromSpeakerId.', 'props.speakerId');
+      }
+      if (claimedLink.transcriptId !== undefined && claimedLink.transcriptId !== speakerTranscriptId) {
+        throw invalid("props.transcriptId must be the speaker's own transcript.", 'props.transcriptId');
+      }
+      props.transcriptId = speakerTranscriptId;
+      props.speakerId = input.fromSpeakerId;
     }
 
     if (input.supersedesId) {
@@ -779,16 +800,20 @@ export class GraphWriteService {
     }
   }
 
-  /** A diarized speaker, in a transcript the owner can view (the evidence rule). */
-  private async requireViewableSpeaker(tx: Tx, ownerId: string, speakerId: string): Promise<void> {
+  /**
+   * A diarized speaker, in a transcript the owner can view (the evidence rule).
+   * Returns the speaker's transcript id — a speaker link's system prop.
+   */
+  private async requireViewableSpeaker(tx: Tx, ownerId: string, speakerId: string): Promise<string> {
     const speaker = await tx.transcriptSpeaker.findFirst({
       where: {
         id: speakerId,
         transcript: { deletedAt: null, OR: [{ ownerId }, { shares: { some: { userId: ownerId } } }] },
       },
-      select: { id: true },
+      select: { id: true, transcriptId: true },
     });
     if (!speaker) throw invalid('The speaker is not in a transcript you can view.', 'fromSpeakerId');
+    return speaker.transcriptId;
   }
 
   private async requireOwnedSubject(tx: Tx, ownerId: string, kind: EvidenceSubjectKind, id: string): Promise<void> {

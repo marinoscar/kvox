@@ -1,0 +1,811 @@
+{
+  "id": "m02",
+  "title": "Halden route optimizer migration planning",
+  "tags": [
+    "client",
+    "relative-date",
+    "resolution-trap",
+    "nickname",
+    "negative-on-call",
+    "year-precision"
+  ],
+  "recordedAt": "2026-01-15T14:00:00Z",
+  "contextText": "Planning session for moving Halden Freight off their legacy route optimizer.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m02-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m02-spk-b",
+      "label": "B",
+      "displayName": "Marcus Webb"
+    },
+    {
+      "id": "m02-spk-c",
+      "label": "C",
+      "displayName": "Sarah Okonkwo"
+    },
+    {
+      "id": "m02-spk-d",
+      "label": "D",
+      "displayName": "Ravi Menon"
+    },
+    {
+      "id": "m02-spk-e",
+      "label": "E",
+      "displayName": "Jonah Jiménez"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m02-s001",
+      "speakerId": "m02-spk-a",
+      "startMs": 0,
+      "endMs": 7060,
+      "rev": 1,
+      "text": "Thanks all for joining. Today is about sequencing the route optimizer migration and agreeing the first milestones."
+    },
+    {
+      "id": "m02-s002",
+      "speakerId": "m02-spk-b",
+      "startMs": 7310,
+      "endMs": 15130,
+      "rev": 1,
+      "text": "Before we start, for anyone new, I'm Marcus Webb, CIO at Halden Freight. Sarah and Ravi are with me."
+    },
+    {
+      "id": "m02-s003",
+      "speakerId": "m02-spk-c",
+      "startMs": 15380,
+      "endMs": 20920,
+      "rev": 1,
+      "text": "Sarah Okonkwo, I lead procurement here, so contracts and licensing come through me."
+    },
+    {
+      "id": "m02-s004",
+      "speakerId": "m02-spk-d",
+      "startMs": 21170,
+      "endMs": 29750,
+      "rev": 1,
+      "text": "Ravi Menon, integration lead. I've been at Halden since 2019, so I know where most of the old integrations are buried."
+    },
+    {
+      "id": "m02-s005",
+      "speakerId": "m02-spk-a",
+      "startMs": 30000,
+      "endMs": 34400,
+      "rev": 1,
+      "text": "And JJ from our side will lead the migration engineering."
+    },
+    {
+      "id": "m02-s006",
+      "speakerId": "m02-spk-e",
+      "startMs": 34650,
+      "endMs": 39810,
+      "rev": 1,
+      "text": "Hi all. I've read through the architecture pack, it's a good start."
+    },
+    {
+      "id": "m02-s007",
+      "speakerId": "m02-spk-a",
+      "startMs": 40060,
+      "endMs": 45220,
+      "rev": 1,
+      "text": "So the first question is sequencing. Carrier data or driver schedules first?"
+    },
+    {
+      "id": "m02-s008",
+      "speakerId": "m02-spk-d",
+      "startMs": 45470,
+      "endMs": 52530,
+      "rev": 1,
+      "text": "Carrier data. It's smaller, it changes slowly, and if we get it wrong nobody misses a shift."
+    },
+    {
+      "id": "m02-s009",
+      "speakerId": "m02-spk-b",
+      "startMs": 52780,
+      "endMs": 59840,
+      "rev": 1,
+      "text": "I agree. Driver schedules touch payroll, I don't want those moving until we trust the new system."
+    },
+    {
+      "id": "m02-s010",
+      "speakerId": "m02-spk-a",
+      "startMs": 60090,
+      "endMs": 66010,
+      "rev": 1,
+      "text": "Then we migrate carrier data first and driver schedules after. Everyone comfortable with that?"
+    },
+    {
+      "id": "m02-s011",
+      "speakerId": "m02-spk-c",
+      "startMs": 66260,
+      "endMs": 71420,
+      "rev": 1,
+      "text": "Yes, that also lines up with the licensing, which I'll come to."
+    },
+    {
+      "id": "m02-s012",
+      "speakerId": "m02-spk-e",
+      "startMs": 71670,
+      "endMs": 77590,
+      "rev": 1,
+      "text": "Works for me. It also lets us test the pipelines on something low risk."
+    },
+    {
+      "id": "m02-s013",
+      "speakerId": "m02-spk-a",
+      "startMs": 77840,
+      "endMs": 79200,
+      "rev": 1,
+      "text": "Sarah, licensing?"
+    },
+    {
+      "id": "m02-s014",
+      "speakerId": "m02-spk-c",
+      "startMs": 79450,
+      "endMs": 89170,
+      "rev": 1,
+      "text": "The current optimizer license expires at the end of April. We cannot let it lapse before we've cut over, so that's our hard deadline."
+    },
+    {
+      "id": "m02-s015",
+      "speakerId": "m02-spk-b",
+      "startMs": 89420,
+      "endMs": 95340,
+      "rev": 1,
+      "text": "End of April is non-negotiable from my side too, the renewal quote was absurd."
+    },
+    {
+      "id": "m02-s016",
+      "speakerId": "m02-spk-a",
+      "startMs": 95590,
+      "endMs": 99230,
+      "rev": 1,
+      "text": "Understood. JJ, what's realistic for a dry run?"
+    },
+    {
+      "id": "m02-s017",
+      "speakerId": "m02-spk-e",
+      "startMs": 99480,
+      "endMs": 105780,
+      "rev": 1,
+      "text": "I can have the migration scripts ready for a full dry run in three weeks."
+    },
+    {
+      "id": "m02-s018",
+      "speakerId": "m02-spk-a",
+      "startMs": 106030,
+      "endMs": 110050,
+      "rev": 1,
+      "text": "Good. Ravi, what do you need to give JJ?"
+    },
+    {
+      "id": "m02-s019",
+      "speakerId": "m02-spk-d",
+      "startMs": 110300,
+      "endMs": 116980,
+      "rev": 1,
+      "text": "He needs the historical routes. I'll export the last two years of historical routes by Friday."
+    },
+    {
+      "id": "m02-s020",
+      "speakerId": "m02-spk-e",
+      "startMs": 117230,
+      "endMs": 122770,
+      "rev": 1,
+      "text": "Two years is plenty. Can you include the depot codes in the export?"
+    },
+    {
+      "id": "m02-s021",
+      "speakerId": "m02-spk-d",
+      "startMs": 123020,
+      "endMs": 125140,
+      "rev": 1,
+      "text": "Yes, depot codes included."
+    },
+    {
+      "id": "m02-s022",
+      "speakerId": "m02-spk-a",
+      "startMs": 125390,
+      "endMs": 129030,
+      "rev": 1,
+      "text": "What about support during the cutover weekend itself?"
+    },
+    {
+      "id": "m02-s023",
+      "speakerId": "m02-spk-b",
+      "startMs": 129280,
+      "endMs": 135580,
+      "rev": 1,
+      "text": "Whoever's on call that weekend can watch the cutover, we don't need a special rota."
+    },
+    {
+      "id": "m02-s024",
+      "speakerId": "m02-spk-a",
+      "startMs": 135830,
+      "endMs": 142130,
+      "rev": 1,
+      "text": "I'd still like a named contact, but we can settle that closer to the date."
+    },
+    {
+      "id": "m02-s025",
+      "speakerId": "m02-spk-b",
+      "startMs": 142380,
+      "endMs": 152860,
+      "rev": 1,
+      "text": "Fair. One more thing, I'm mostly working out of the Rotterdam office these days, so if we need to meet in person that's where I'll be."
+    },
+    {
+      "id": "m02-s026",
+      "speakerId": "m02-spk-a",
+      "startMs": 153110,
+      "endMs": 155610,
+      "rev": 1,
+      "text": "Noted, thanks Marcus. Anything else?"
+    },
+    {
+      "id": "m02-s027",
+      "speakerId": "m02-spk-c",
+      "startMs": 155860,
+      "endMs": 162160,
+      "rev": 1,
+      "text": "Just that any new vendor terms need to come to me before anyone signs anything."
+    },
+    {
+      "id": "m02-s028",
+      "speakerId": "m02-spk-a",
+      "startMs": 162410,
+      "endMs": 170990,
+      "rev": 1,
+      "text": "Absolutely. So: carrier data first, dry run in three weeks, historical routes by Friday, and the April license deadline. Thanks everyone."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Halden route optimizer migration planning\n\n**Date:** January 15\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)\n\n## Summary\n\nPlanning session for migrating Halden Freight off its legacy route optimizer. Marcus Webb (CIO) sponsors the work; Sarah Okonkwo leads procurement and owns licensing; Ravi Menon is the integration lead and has been at Halden since 2019. JJ leads migration engineering for Larkspur.\n\n## Decisions\n\n- **Carrier data migrates first**, driver schedules afterwards. Carrier data is smaller and slower-changing, and driver schedules touch payroll, so they wait until the new system is trusted.\n\n## Key facts\n\n- The current optimizer license expires at the end of April. Sarah and Marcus both treat this as a hard deadline; the renewal quote was described as absurd.\n- Any new vendor terms must go through Sarah before anyone signs.\n\n## Action items\n\n- **JJ** — have the migration scripts ready for a full dry run in three weeks.\n- **Ravi Menon** — export the last two years of historical routes, including depot codes, by Friday.\n\n## Open questions\n\n- Cutover weekend support: Marcus suggested that whoever's on call that weekend can watch the cutover. Alex would still like a named contact; to be settled closer to the date.\n\n## Notes\n\n- Marcus mostly works out of the Rotterdam office now, so in-person meetings would be there.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-marcus-webb",
+      "type": "Person",
+      "label": "Marcus Webb",
+      "aliases": [
+        "Marcus"
+      ],
+      "props": {
+        "title": "CIO"
+      },
+      "attendedFixtureIds": [
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01"
+      ]
+    },
+    {
+      "id": "g-person-sarah-okonkwo",
+      "type": "Person",
+      "label": "Sarah Okonkwo",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "Procurement Lead"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-route-optimizer-migration",
+      "type": "Project",
+      "label": "Route optimizer migration",
+      "aliases": [
+        "the migration"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Halden route optimizer migration planning",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Halden route optimizer migration planning"
+          }
+        ]
+      },
+      {
+        "key": "marcus",
+        "type": "Person",
+        "label": "Marcus Webb",
+        "aliases": [],
+        "existingId": "g-person-marcus-webb",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s002",
+            "quote": "I'm Marcus Webb, CIO at Halden Freight"
+          }
+        ]
+      },
+      {
+        "key": "sarahO",
+        "type": "Person",
+        "label": "Sarah Okonkwo",
+        "aliases": [],
+        "existingId": "g-person-sarah-okonkwo",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s003",
+            "quote": "Sarah Okonkwo, I lead procurement here"
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s004",
+            "quote": "Ravi Menon, integration lead."
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s005",
+            "quote": "And JJ from our side will lead the migration engineering."
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "halden",
+        "type": "Organization",
+        "label": "Halden Freight",
+        "aliases": [],
+        "existingId": "g-org-halden-freight",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s002",
+            "quote": "I'm Marcus Webb, CIO at Halden Freight"
+          }
+        ]
+      },
+      {
+        "key": "migration",
+        "type": "Project",
+        "label": "Route optimizer migration",
+        "aliases": [],
+        "existingId": "g-project-route-optimizer-migration",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s001",
+            "quote": "sequencing the route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "marcus",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarahO",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Sarah Okonkwo (Halden Freight), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "marcus",
+        "to": "halden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "CIO"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s002",
+            "quote": "I'm Marcus Webb, CIO at Halden Freight"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "sarahO",
+        "to": "halden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "sarahO",
+        "to": "halden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Procurement Lead"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s003",
+            "quote": "Sarah Okonkwo, I lead procurement here"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "ravi",
+        "to": "halden",
+        "validFrom": "2019-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s004",
+            "quote": "I've been at Halden since 2019"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "ravi",
+        "to": "halden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Integration Lead"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s004",
+            "quote": "Ravi Menon, integration lead."
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "migration",
+        "to": "halden",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Planning session for migrating Halden Freight off its legacy route optimizer."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "migration",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s001",
+            "quote": "sequencing the route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Migrate carrier data first",
+        "statement": "Carrier data migrates first and driver schedules afterwards.",
+        "status": null,
+        "occurredAt": "2026-01-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s010",
+            "quote": "Then we migrate carrier data first and driver schedules after."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "halden",
+        "owner": null,
+        "counterparty": null,
+        "title": "Optimizer license expires end of April",
+        "statement": "The current optimizer license expires at the end of April.",
+        "status": null,
+        "occurredAt": "2026-01-15",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s014",
+            "quote": "The current optimizer license expires at the end of April."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "jj",
+        "counterparty": null,
+        "title": "Migration scripts ready for dry run",
+        "statement": "JJ will have the migration scripts ready for a full dry run in three weeks.",
+        "status": "open",
+        "occurredAt": "2026-01-15",
+        "dueAt": "2026-02-05",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s017",
+            "quote": "I can have the migration scripts ready for a full dry run in three weeks."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "ravi",
+        "counterparty": "jj",
+        "title": "Export historical routes",
+        "statement": "Ravi will export the last two years of historical routes, including depot codes, by Friday.",
+        "status": "open",
+        "occurredAt": "2026-01-15",
+        "dueAt": "2026-01-16",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s019",
+            "quote": "I'll export the last two years of historical routes by Friday."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "marcus",
+        "owner": null,
+        "counterparty": null,
+        "title": "Works from the Rotterdam office",
+        "statement": "Marcus mostly works out of the Rotterdam office.",
+        "status": null,
+        "occurredAt": "2026-01-15",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m02-s025",
+            "quote": "I'm mostly working out of the Rotterdam office these days"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "Whoever's on call that weekend can watch the cutover",
+        "why": "No specific human is named: nothing to create, and not a Commitment with an owner."
+      }
+    ]
+  }
+}

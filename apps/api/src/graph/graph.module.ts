@@ -18,6 +18,9 @@ import { GraphEvidenceService } from './read/graph-evidence.service';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service';
 import { GraphReadController } from './read/graph-read.controller';
 import { GraphReadService } from './read/graph-read.service';
+import { KgSpeakerLinkHandler } from './handlers/kg-speaker-link.handler';
+import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listener';
+import { SpeakerLinkReconciler } from './speaker-link/speaker-link.reconciler';
 import { EvidenceValidator } from './write/evidence-validator.service';
 import { GraphWriteService } from './write/graph-write.service';
 
@@ -59,6 +62,10 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphReadService,
     GraphNeighborhoodService,
     GraphEvidenceService,
+    // #356: speaker naming → Person + IDENTIFIED_AS, via `kg.speaker_link`.
+    SpeakerLinkReconciler,
+    KgSpeakerLinkHandler,
+    SpeakerIdentifiedListener,
   ],
   controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController, GraphReadController],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
