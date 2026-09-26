@@ -1,0 +1,631 @@
+{
+  "id": "m10",
+  "title": "Corvid intake prototype review",
+  "tags": [
+    "client",
+    "relative-date"
+  ],
+  "recordedAt": "2026-03-12T13:00:00Z",
+  "contextText": "Reviewing the first clickable intake prototype with Corvid.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m10-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m10-spk-b",
+      "label": "B",
+      "displayName": "Elif Kaya"
+    },
+    {
+      "id": "m10-spk-c",
+      "label": "C",
+      "displayName": "Nadia Brooks"
+    },
+    {
+      "id": "m10-spk-d",
+      "label": "D",
+      "displayName": "Samir Haddad"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m10-s001",
+      "speakerId": "m10-spk-a",
+      "startMs": 0,
+      "endMs": 7060,
+      "rev": 1,
+      "text": "Thanks everyone. Nadia's going to walk us through the first clickable prototype of the new intake flow."
+    },
+    {
+      "id": "m10-s002",
+      "speakerId": "m10-spk-c",
+      "startMs": 7310,
+      "endMs": 14750,
+      "rev": 1,
+      "text": "So the big change is that allergies and current medication are now required and come first, not last."
+    },
+    {
+      "id": "m10-s003",
+      "speakerId": "m10-spk-d",
+      "startMs": 15000,
+      "endMs": 19400,
+      "rev": 1,
+      "text": "That alone would save my nurses a lot of chasing."
+    },
+    {
+      "id": "m10-s004",
+      "speakerId": "m10-spk-b",
+      "startMs": 19650,
+      "endMs": 23670,
+      "rev": 1,
+      "text": "How long does it take a patient to complete?"
+    },
+    {
+      "id": "m10-s005",
+      "speakerId": "m10-spk-c",
+      "startMs": 23920,
+      "endMs": 29080,
+      "rev": 1,
+      "text": "In our internal tests, about four minutes. The paper form averages seven."
+    },
+    {
+      "id": "m10-s006",
+      "speakerId": "m10-spk-b",
+      "startMs": 29330,
+      "endMs": 37150,
+      "rev": 1,
+      "text": "Our walk-in clinics see about 300 patients a day across the network, so three minutes each adds up fast."
+    },
+    {
+      "id": "m10-s007",
+      "speakerId": "m10-spk-d",
+      "startMs": 37400,
+      "endMs": 44080,
+      "rev": 1,
+      "text": "The buttons feel small though. A lot of our patients are elderly, and some have tremors."
+    },
+    {
+      "id": "m10-s008",
+      "speakerId": "m10-spk-c",
+      "startMs": 44330,
+      "endMs": 49870,
+      "rev": 1,
+      "text": "That's fair. I'll revise the prototype with larger touch targets by next Tuesday."
+    },
+    {
+      "id": "m10-s009",
+      "speakerId": "m10-spk-a",
+      "startMs": 50120,
+      "endMs": 53380,
+      "rev": 1,
+      "text": "Should we keep the paper fallback form?"
+    },
+    {
+      "id": "m10-s010",
+      "speakerId": "m10-spk-b",
+      "startMs": 53630,
+      "endMs": 58790,
+      "rev": 1,
+      "text": "I'd drop it. If we keep paper, staff will default to it."
+    },
+    {
+      "id": "m10-s011",
+      "speakerId": "m10-spk-d",
+      "startMs": 59040,
+      "endMs": 64200,
+      "rev": 1,
+      "text": "I'm nervous about that, but I agree the habit is the risk."
+    },
+    {
+      "id": "m10-s012",
+      "speakerId": "m10-spk-b",
+      "startMs": 64450,
+      "endMs": 70370,
+      "rev": 1,
+      "text": "Then let's decide it. We drop the paper fallback form for the walk-in clinics."
+    },
+    {
+      "id": "m10-s013",
+      "speakerId": "m10-spk-a",
+      "startMs": 70620,
+      "endMs": 74260,
+      "rev": 1,
+      "text": "Okay, decided. What about testing with real staff?"
+    },
+    {
+      "id": "m10-s014",
+      "speakerId": "m10-spk-b",
+      "startMs": 74510,
+      "endMs": 79290,
+      "rev": 1,
+      "text": "I'll recruit five front-desk staff for usability tests in three weeks."
+    },
+    {
+      "id": "m10-s015",
+      "speakerId": "m10-spk-c",
+      "startMs": 79540,
+      "endMs": 82800,
+      "rev": 1,
+      "text": "Five is perfect for a first round."
+    },
+    {
+      "id": "m10-s016",
+      "speakerId": "m10-spk-a",
+      "startMs": 83050,
+      "endMs": 86690,
+      "rev": 1,
+      "text": "Samir, how are you feeling, by the way?"
+    },
+    {
+      "id": "m10-s017",
+      "speakerId": "m10-spk-d",
+      "startMs": 86940,
+      "endMs": 90580,
+      "rev": 1,
+      "text": "Much better, thanks, back to nearly full hours."
+    },
+    {
+      "id": "m10-s018",
+      "speakerId": "m10-spk-a",
+      "startMs": 90830,
+      "endMs": 95990,
+      "rev": 1,
+      "text": "Glad to hear it. Elif, when's the best time for the tests?"
+    },
+    {
+      "id": "m10-s019",
+      "speakerId": "m10-spk-b",
+      "startMs": 96240,
+      "endMs": 101780,
+      "rev": 1,
+      "text": "Mornings, before clinic hours. I always prefer morning meetings, the afternoons are chaos."
+    },
+    {
+      "id": "m10-s020",
+      "speakerId": "m10-spk-c",
+      "startMs": 102030,
+      "endMs": 104530,
+      "rev": 1,
+      "text": "Morning sessions work for me."
+    },
+    {
+      "id": "m10-s021",
+      "speakerId": "m10-spk-a",
+      "startMs": 104780,
+      "endMs": 107660,
+      "rev": 1,
+      "text": "Any accessibility requirements beyond touch targets?"
+    },
+    {
+      "id": "m10-s022",
+      "speakerId": "m10-spk-d",
+      "startMs": 107910,
+      "endMs": 111930,
+      "rev": 1,
+      "text": "High contrast mode. Some clinics have very bright windows."
+    },
+    {
+      "id": "m10-s023",
+      "speakerId": "m10-spk-c",
+      "startMs": 112180,
+      "endMs": 116580,
+      "rev": 1,
+      "text": "Noted, I'll add a high contrast theme to the backlog."
+    },
+    {
+      "id": "m10-s024",
+      "speakerId": "m10-spk-a",
+      "startMs": 116830,
+      "endMs": 123510,
+      "rev": 1,
+      "text": "Great. So: larger targets by next Tuesday, no paper fallback, and five testers in three weeks."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Corvid intake prototype review\n\n**Date:** March 12\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nNadia walked the group through the first clickable prototype of the new patient intake flow for the Corvid Health walk-in clinics.\n\n## Prototype\n\n- Allergies and current medication are now required and come first rather than last. Samir expects this alone to save nurses a lot of chasing.\n- Completion takes about four minutes in internal tests, against an average of seven on the paper form.\n- Corvid's walk-in clinics see about 300 patients a day across the network, so the time saving compounds quickly.\n\n## Feedback\n\n- Buttons are too small for many elderly patients, some of whom have tremors.\n- A high contrast mode is needed because some clinics have very bright windows.\n\n## Decisions\n\n- **Drop the paper fallback form** for the walk-in clinics. Elif's reasoning: if paper stays available, staff will default to it. Samir agreed the habit is the main risk.\n\n## Action items\n\n- **Nadia Brooks** — revise the prototype with larger touch targets by next Tuesday; add a high contrast theme to the backlog.\n- **Elif Kaya** — recruit five front-desk staff for usability tests in three weeks.\n\n## Notes\n\n- Elif prefers morning meetings, before clinic hours.\n- Samir is back to nearly full hours.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-corvid-health",
+      "type": "Organization",
+      "label": "Corvid Health",
+      "aliases": [
+        "Corvid"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-elif-kaya",
+      "type": "Person",
+      "label": "Elif Kaya",
+      "aliases": [
+        "Elif"
+      ],
+      "props": {
+        "title": "Product Owner"
+      },
+      "attendedFixtureIds": [
+        "m04"
+      ]
+    },
+    {
+      "id": "g-person-nadia-brooks",
+      "type": "Person",
+      "label": "Nadia Brooks",
+      "aliases": [
+        "Nadia"
+      ],
+      "props": {
+        "title": "Product Designer"
+      },
+      "attendedFixtureIds": [
+        "m03",
+        "m04"
+      ]
+    },
+    {
+      "id": "g-person-samir-haddad",
+      "type": "Person",
+      "label": "Samir Haddad",
+      "aliases": [
+        "Dr. Haddad",
+        "Samir"
+      ],
+      "props": {
+        "title": "Clinical Lead"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-patient-intake-redesign",
+      "type": "Project",
+      "label": "Patient intake redesign",
+      "aliases": [
+        "intake redesign"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Corvid intake prototype review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Corvid intake prototype review"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "nadia",
+        "type": "Person",
+        "label": "Nadia Brooks",
+        "aliases": [],
+        "existingId": "g-person-nadia-brooks",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Nadia Brooks (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "elif",
+        "type": "Person",
+        "label": "Elif Kaya",
+        "aliases": [],
+        "existingId": "g-person-elif-kaya",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Elif Kaya (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "key": "samir",
+        "type": "Person",
+        "label": "Samir Haddad",
+        "aliases": [],
+        "existingId": "g-person-samir-haddad",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "key": "corvid",
+        "type": "Organization",
+        "label": "Corvid Health",
+        "aliases": [],
+        "existingId": "g-org-corvid-health",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "for the Corvid Health walk-in clinics"
+          }
+        ]
+      },
+      {
+        "key": "intake",
+        "type": "Project",
+        "label": "Patient intake redesign",
+        "aliases": [],
+        "existingId": "g-project-patient-intake-redesign",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the first clickable prototype of the new patient intake flow"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "nadia",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "elif",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "samir",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "intake",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s001",
+            "quote": "the first clickable prototype of the new intake flow"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "corvid",
+        "owner": null,
+        "counterparty": null,
+        "title": "Walk-in clinics see 300 patients a day",
+        "statement": "The walk-in clinics see about 300 patients a day across the network.",
+        "status": null,
+        "occurredAt": "2026-03-12",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s006",
+            "quote": "Our walk-in clinics see about 300 patients a day across the network"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "intake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prototype takes four minutes versus seven",
+        "statement": "The new intake flow takes about four minutes in internal tests, against seven on the paper form.",
+        "status": null,
+        "occurredAt": "2026-03-12",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s005",
+            "quote": "In our internal tests, about four minutes. The paper form averages seven."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "intake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Drop the paper fallback form",
+        "statement": "The paper fallback form is dropped for the walk-in clinics.",
+        "status": null,
+        "occurredAt": "2026-03-12",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s012",
+            "quote": "We drop the paper fallback form for the walk-in clinics."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "intake",
+        "owner": "nadia",
+        "counterparty": null,
+        "title": "Larger touch targets",
+        "statement": "Nadia will revise the prototype with larger touch targets by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-03-12",
+        "dueAt": "2026-03-17",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s008",
+            "quote": "I'll revise the prototype with larger touch targets by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "intake",
+        "owner": "elif",
+        "counterparty": "g-org-larkspur-labs",
+        "title": "Recruit five testers",
+        "statement": "Elif will recruit five front-desk staff for usability tests in three weeks.",
+        "status": "open",
+        "occurredAt": "2026-03-12",
+        "dueAt": "2026-04-02",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s014",
+            "quote": "I'll recruit five front-desk staff for usability tests in three weeks."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "elif",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers morning meetings",
+        "statement": "Elif prefers morning meetings, before clinic hours.",
+        "status": null,
+        "occurredAt": "2026-03-12",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m10-s019",
+            "quote": "I always prefer morning meetings"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

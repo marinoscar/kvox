@@ -1,0 +1,430 @@
+{
+  "id": "m07",
+  "title": "Gullwing Payments introductory call",
+  "tags": [
+    "client",
+    "note-only",
+    "relative-date"
+  ],
+  "recordedAt": "2026-02-19T17:00:00Z",
+  "contextText": "Intro call with Gullwing Payments, no recording — notes typed during the call.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Gullwing Payments introductory call\n\n**Date:** February 19\n**Attendees:** Alex Rivera (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)\n\n## Summary\n\nFirst conversation with Gullwing Payments about automating how they handle card chargebacks. Felix Amundsen is Gullwing's CFO and the budget holder. Wen Zhao is a risk analyst on his team who reviews disputes day to day and will be our main working contact.\n\n## Context from Gullwing\n\n- Gullwing processes around 1.2 million chargebacks a year, and the volume has grown every quarter since they entered the travel sector.\n- Almost all of the review work is manual today. Wen's team triages each dispute by reading the merchant evidence and the reason code.\n- Felix wants a chargeback automation project that pays for itself within a year. He was explicit that he will not fund an open-ended build.\n- Wen reports to Felix directly; the risk team is small and stretched.\n\n## Decisions\n\n- Gullwing decided to start with a **paid discovery phase** of four weeks rather than committing to a full build. Felix said he wants numbers before he signs anything bigger.\n- Discovery will use a sample of last year's disputes rather than live traffic.\n\n## Action items\n\n- **Alex Rivera** — send two case studies on similar automation work by Monday.\n- **Wen Zhao** — pull a sample of last year's disputes, with personal data removed, for the discovery phase.\n- **Felix Amundsen** — confirm the discovery budget internally before the end of the month.\n\n## Personal notes\n\n- Wen mentioned she is a keen birdwatcher and spends most weekends at the estuary reserves outside the city. Good small-talk topic.\n- Felix prefers short, numbers-first summaries.\n\n## Next steps\n\nOnce the budget is confirmed, we schedule a discovery kickoff with Wen's team and agree the sample size. Hana should be looped in on the commercial side.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m22"
+      ]
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Gullwing Payments introductory call",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing Payments introductory call"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "felix",
+        "type": "Person",
+        "label": "Felix Amundsen",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix Amundsen is Gullwing's CFO and the budget holder."
+          }
+        ]
+      },
+      {
+        "key": "wen",
+        "type": "Person",
+        "label": "Wen Zhao",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen Zhao is a risk analyst on his team"
+          }
+        ]
+      },
+      {
+        "key": "gullwing",
+        "type": "Organization",
+        "label": "Gullwing Payments",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "First conversation with Gullwing Payments"
+          }
+        ]
+      },
+      {
+        "key": "chargeback",
+        "type": "Project",
+        "label": "Chargeback automation",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix wants a chargeback automation project that pays for itself within a year."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "felix",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "wen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Felix Amundsen (Gullwing Payments), Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "felix",
+        "to": "gullwing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix Amundsen is Gullwing's CFO and the budget holder."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "felix",
+        "to": "gullwing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "CFO"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix Amundsen is Gullwing's CFO and the budget holder."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "wen",
+        "to": "gullwing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen Zhao (Gullwing Payments)"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "wen",
+        "to": "gullwing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Risk Analyst"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen Zhao is a risk analyst on his team"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "wen",
+        "to": "felix",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen reports to Felix directly"
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "chargeback",
+        "to": "gullwing",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "First conversation with Gullwing Payments about automating how they handle card chargebacks."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "chargeback",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "First conversation with Gullwing Payments about automating how they handle card chargebacks."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "gullwing",
+        "owner": null,
+        "counterparty": null,
+        "title": "1.2 million chargebacks a year",
+        "statement": "Gullwing processes around 1.2 million chargebacks a year.",
+        "status": null,
+        "occurredAt": "2026-02-19",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing processes around 1.2 million chargebacks a year"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "chargeback",
+        "owner": null,
+        "counterparty": null,
+        "title": "Start with paid discovery",
+        "statement": "Gullwing decided to start with a paid discovery phase of four weeks rather than a full build.",
+        "status": null,
+        "occurredAt": "2026-02-19",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Gullwing decided to start with a **paid discovery phase** of four weeks rather than committing to a full build."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "alex",
+        "counterparty": "gullwing",
+        "title": "Send two case studies",
+        "statement": "Alex will send two case studies on similar automation work by Monday.",
+        "status": "open",
+        "occurredAt": "2026-02-19",
+        "dueAt": "2026-02-23",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "send two case studies on similar automation work by Monday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "wen",
+        "counterparty": null,
+        "title": "Pull sample of disputes",
+        "statement": "Wen will pull a sample of last year's disputes, with personal data removed, for discovery.",
+        "status": "open",
+        "occurredAt": "2026-02-19",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "pull a sample of last year's disputes, with personal data removed, for the discovery phase."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "chargeback",
+        "owner": "felix",
+        "counterparty": null,
+        "title": "Confirm discovery budget",
+        "statement": "Felix will confirm the discovery budget internally before the end of the month.",
+        "status": "open",
+        "occurredAt": "2026-02-19",
+        "dueAt": "2026-02-28",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "confirm the discovery budget internally before the end of the month."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "wen",
+        "owner": null,
+        "counterparty": null,
+        "title": "Keen birdwatcher",
+        "statement": "Wen is a keen birdwatcher and spends most weekends at the estuary reserves.",
+        "status": null,
+        "occurredAt": "2026-02-19",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Wen mentioned she is a keen birdwatcher and spends most weekends at the estuary reserves outside the city."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "felix",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers numbers-first summaries",
+        "statement": "Felix prefers short, numbers-first summaries.",
+        "status": null,
+        "occurredAt": "2026-02-19",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Felix prefers short, numbers-first summaries."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

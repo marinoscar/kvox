@@ -1,0 +1,733 @@
+{
+  "id": "m13",
+  "title": "Halden northern depots cutover go/no-go",
+  "tags": [
+    "client",
+    "sensitive",
+    "resolution-trap",
+    "nickname"
+  ],
+  "recordedAt": "2026-04-02T14:00:00Z",
+  "contextText": "Go/no-go for the northern depots cutover.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m13-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m13-spk-b",
+      "label": "B",
+      "displayName": "Marcus Webb"
+    },
+    {
+      "id": "m13-spk-c",
+      "label": "C",
+      "displayName": "Ravi Menon"
+    },
+    {
+      "id": "m13-spk-d",
+      "label": "D",
+      "displayName": "Jonah Jiménez"
+    },
+    {
+      "id": "m13-spk-e",
+      "label": "E",
+      "displayName": "Sarah Okonkwo"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m13-s001",
+      "speakerId": "m13-spk-a",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "This is the go/no-go for the northern depots cutover. JJ, technical readiness first."
+    },
+    {
+      "id": "m13-s002",
+      "speakerId": "m13-spk-d",
+      "startMs": 5790,
+      "endMs": 14370,
+      "rev": 1,
+      "text": "The timezone fix is in, the rerun was clean, and the duplicate depot codes are gone. From our side we're ready."
+    },
+    {
+      "id": "m13-s003",
+      "speakerId": "m13-spk-c",
+      "startMs": 14620,
+      "endMs": 19020,
+      "rev": 1,
+      "text": "Same from integrations. The northern depot managers have been briefed."
+    },
+    {
+      "id": "m13-s004",
+      "speakerId": "m13-spk-e",
+      "startMs": 19270,
+      "endMs": 25570,
+      "rev": 1,
+      "text": "And legal approved the data processing addendum last week, so the contract side is closed."
+    },
+    {
+      "id": "m13-s005",
+      "speakerId": "m13-spk-b",
+      "startMs": 25820,
+      "endMs": 30600,
+      "rev": 1,
+      "text": "What's our rollback story if it goes wrong on the day?"
+    },
+    {
+      "id": "m13-s006",
+      "speakerId": "m13-spk-c",
+      "startMs": 30850,
+      "endMs": 38290,
+      "rev": 1,
+      "text": "We can switch back to the old optimizer within an hour, but it isn't written down properly yet."
+    },
+    {
+      "id": "m13-s007",
+      "speakerId": "m13-spk-b",
+      "startMs": 38540,
+      "endMs": 42560,
+      "rev": 1,
+      "text": "I want it written down before we flip anything."
+    },
+    {
+      "id": "m13-s008",
+      "speakerId": "m13-spk-c",
+      "startMs": 42810,
+      "endMs": 46450,
+      "rev": 1,
+      "text": "I'll write the rollback runbook by April 9."
+    },
+    {
+      "id": "m13-s009",
+      "speakerId": "m13-spk-b",
+      "startMs": 46700,
+      "endMs": 49580,
+      "rev": 1,
+      "text": "Good. Then my view is go."
+    },
+    {
+      "id": "m13-s010",
+      "speakerId": "m13-spk-a",
+      "startMs": 49830,
+      "endMs": 55370,
+      "rev": 1,
+      "text": "Anyone against? Then it's a go. Northern depots cut over on April 13."
+    },
+    {
+      "id": "m13-s011",
+      "speakerId": "m13-spk-d",
+      "startMs": 55620,
+      "endMs": 62300,
+      "rev": 1,
+      "text": "April 13 is a Monday, which is good, the weekend volumes are lower on Sunday night."
+    },
+    {
+      "id": "m13-s012",
+      "speakerId": "m13-spk-b",
+      "startMs": 62550,
+      "endMs": 67710,
+      "rev": 1,
+      "text": "I'll brief the board on the cutover plan at next week's meeting."
+    },
+    {
+      "id": "m13-s013",
+      "speakerId": "m13-spk-a",
+      "startMs": 67960,
+      "endMs": 73120,
+      "rev": 1,
+      "text": "Thanks Marcus. Ravi, who do you report to for the runbook sign-off?"
+    },
+    {
+      "id": "m13-s014",
+      "speakerId": "m13-spk-c",
+      "startMs": 73370,
+      "endMs": 77390,
+      "rev": 1,
+      "text": "I report to Marcus, so he signs it off."
+    },
+    {
+      "id": "m13-s015",
+      "speakerId": "m13-spk-b",
+      "startMs": 77640,
+      "endMs": 78620,
+      "rev": 1,
+      "text": "Correct."
+    },
+    {
+      "id": "m13-s016",
+      "speakerId": "m13-spk-a",
+      "startMs": 78870,
+      "endMs": 81370,
+      "rev": 1,
+      "text": "JJ, anything else you need?"
+    },
+    {
+      "id": "m13-s017",
+      "speakerId": "m13-spk-d",
+      "startMs": 81620,
+      "endMs": 86780,
+      "rev": 1,
+      "text": "Just a freeze on changes to the carrier tables from April 10."
+    },
+    {
+      "id": "m13-s018",
+      "speakerId": "m13-spk-e",
+      "startMs": 87030,
+      "endMs": 89910,
+      "rev": 1,
+      "text": "I'll tell the carrier team today."
+    },
+    {
+      "id": "m13-s019",
+      "speakerId": "m13-spk-a",
+      "startMs": 90160,
+      "endMs": 94180,
+      "rev": 1,
+      "text": "Great. Last thing, the team dinner after the cutover."
+    },
+    {
+      "id": "m13-s020",
+      "speakerId": "m13-spk-e",
+      "startMs": 94430,
+      "endMs": 99590,
+      "rev": 1,
+      "text": "Please don't book the seafood place again. Marcus has a shellfish allergy."
+    },
+    {
+      "id": "m13-s021",
+      "speakerId": "m13-spk-b",
+      "startMs": 99840,
+      "endMs": 103100,
+      "rev": 1,
+      "text": "Thank you, Sarah. Yes, a serious one."
+    },
+    {
+      "id": "m13-s022",
+      "speakerId": "m13-spk-a",
+      "startMs": 103350,
+      "endMs": 106610,
+      "rev": 1,
+      "text": "Noted, no seafood. We'll find somewhere else."
+    },
+    {
+      "id": "m13-s023",
+      "speakerId": "m13-spk-c",
+      "startMs": 106860,
+      "endMs": 110500,
+      "rev": 1,
+      "text": "The Italian place near the depot is good."
+    },
+    {
+      "id": "m13-s024",
+      "speakerId": "m13-spk-a",
+      "startMs": 110750,
+      "endMs": 116670,
+      "rev": 1,
+      "text": "Perfect. So: go for April 13, runbook by April 9, board briefing next week."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Halden northern depots cutover go/no-go\n\n**Date:** April 2\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)\n\n## Summary\n\nGo/no-go review for the first regional cutover of the Halden route optimizer migration.\n\n## Readiness\n\n- **Technical:** the timezone fix is in, the rerun was clean, and the duplicate depot codes have been removed.\n- **Integrations:** northern depot managers have been briefed.\n- **Contract:** legal approved the data processing addendum last week.\n- **Rollback:** the old optimizer can be restored within an hour, but the procedure is not yet written down. Marcus wants it documented before anything is switched.\n\n## Decisions\n\n- **Go.** The northern depots cut over on **April 13**.\n- Changes to the carrier tables are frozen from April 10.\n\n## Action items\n\n- **Ravi Menon** — write the rollback runbook by April 9. Ravi reports to Marcus, who signs it off.\n- **Marcus Webb** — brief the board on the cutover plan at next week's board meeting.\n- **Sarah Okonkwo** — tell the carrier team about the change freeze today.\n\n## Notes\n\n- For the post-cutover team dinner, avoid seafood restaurants. Ravi suggested the Italian place near the depot instead, and Alex will book it once the cutover date holds.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08"
+      ]
+    },
+    {
+      "id": "g-person-marcus-webb",
+      "type": "Person",
+      "label": "Marcus Webb",
+      "aliases": [
+        "Marcus"
+      ],
+      "props": {
+        "title": "CIO"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06",
+        "m09",
+        "m12"
+      ]
+    },
+    {
+      "id": "g-person-sarah-okonkwo",
+      "type": "Person",
+      "label": "Sarah Okonkwo",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "Procurement Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08"
+      ]
+    },
+    {
+      "id": "g-project-route-optimizer-migration",
+      "type": "Project",
+      "label": "Route optimizer migration",
+      "aliases": [
+        "the migration"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Halden northern depots cutover go/no-go",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Halden northern depots cutover go/no-go"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s001",
+            "quote": "JJ, technical readiness first."
+          }
+        ]
+      },
+      {
+        "key": "marcus",
+        "type": "Person",
+        "label": "Marcus Webb",
+        "aliases": [],
+        "existingId": "g-person-marcus-webb",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "key": "sarahO",
+        "type": "Person",
+        "label": "Sarah Okonkwo",
+        "aliases": [],
+        "existingId": "g-person-sarah-okonkwo",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "key": "migration",
+        "type": "Project",
+        "label": "Route optimizer migration",
+        "aliases": [],
+        "existingId": "g-project-route-optimizer-migration",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Halden route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "marcus",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarahO",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Ravi Menon (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "ravi",
+        "to": "marcus",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s014",
+            "quote": "I report to Marcus, so he signs it off."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "migration",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the first regional cutover of the Halden route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Go for northern depots cutover on April 13",
+        "statement": "The northern depots cut over on April 13.",
+        "status": null,
+        "occurredAt": "2026-04-02",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s010",
+            "quote": "Then it's a go. Northern depots cut over on April 13."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Freeze carrier table changes from April 10",
+        "statement": "Changes to the carrier tables are frozen from April 10.",
+        "status": null,
+        "occurredAt": "2026-04-02",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s017",
+            "quote": "Just a freeze on changes to the carrier tables from April 10."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m13-s018",
+            "quote": "I'll tell the carrier team today."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Legal approved the DPA",
+        "statement": "Legal approved the data processing addendum last week.",
+        "status": null,
+        "occurredAt": "2026-04-02",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s004",
+            "quote": "legal approved the data processing addendum last week"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "ravi",
+        "counterparty": "marcus",
+        "title": "Write the rollback runbook",
+        "statement": "Ravi will write the rollback runbook by April 9.",
+        "status": "open",
+        "occurredAt": "2026-04-02",
+        "dueAt": "2026-04-09",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s008",
+            "quote": "I'll write the rollback runbook by April 9."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "marcus",
+        "counterparty": null,
+        "title": "Brief the board on the cutover",
+        "statement": "Marcus will brief the board on the cutover plan at next week's meeting.",
+        "status": "open",
+        "occurredAt": "2026-04-02",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s012",
+            "quote": "I'll brief the board on the cutover plan at next week's meeting."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "sarahO",
+        "counterparty": null,
+        "title": "Tell the carrier team about the freeze",
+        "statement": "Sarah will tell the carrier team about the change freeze today.",
+        "status": "open",
+        "occurredAt": "2026-04-02",
+        "dueAt": "2026-04-02",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s018",
+            "quote": "I'll tell the carrier team today."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "marcus",
+        "owner": null,
+        "counterparty": null,
+        "title": "Serious shellfish allergy",
+        "statement": "Marcus has a serious shellfish allergy.",
+        "status": null,
+        "occurredAt": "2026-04-02",
+        "dueAt": null,
+        "sensitivity": "sensitive",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m13-s020",
+            "quote": "Marcus has a shellfish allergy."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m13-s021",
+            "quote": "Yes, a serious one."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

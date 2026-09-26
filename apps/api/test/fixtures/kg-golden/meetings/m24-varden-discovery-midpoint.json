@@ -1,0 +1,647 @@
+{
+  "id": "m24",
+  "title": "Varden discovery midpoint review",
+  "tags": [
+    "client",
+    "negative-role",
+    "relative-date"
+  ],
+  "recordedAt": "2026-06-11T13:00:00Z",
+  "contextText": "Midpoint of the six-week Varden discovery. Rosa is out, Ben covering.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m24-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m24-spk-b",
+      "label": "B",
+      "displayName": "Ben Adeyemi"
+    },
+    {
+      "id": "m24-spk-c",
+      "label": "C",
+      "displayName": "Mateo Rossi"
+    },
+    {
+      "id": "m24-spk-d",
+      "label": "D",
+      "displayName": "Rosa Delgado"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m24-s001",
+      "speakerId": "m24-spk-a",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "Thanks for joining. Rosa, good of you to dial in before your leave."
+    },
+    {
+      "id": "m24-s002",
+      "speakerId": "m24-spk-d",
+      "startMs": 5790,
+      "endMs": 10570,
+      "rev": 1,
+      "text": "Just for the first part. Ben will take it from there."
+    },
+    {
+      "id": "m24-s003",
+      "speakerId": "m24-spk-c",
+      "startMs": 10820,
+      "endMs": 17880,
+      "rev": 1,
+      "text": "I'm Mateo Rossi, solutions architect at Larkspur. I've spent the last three weeks in the portal code."
+    },
+    {
+      "id": "m24-s004",
+      "speakerId": "m24-spk-a",
+      "startMs": 18130,
+      "endMs": 20630,
+      "rev": 1,
+      "text": "Mateo, what did you find?"
+    },
+    {
+      "id": "m24-s005",
+      "speakerId": "m24-spk-c",
+      "startMs": 20880,
+      "endMs": 29080,
+      "rev": 1,
+      "text": "The biggest finding is call deflection. About 30 percent of claims calls are simple status checks the portal could answer."
+    },
+    {
+      "id": "m24-s006",
+      "speakerId": "m24-spk-d",
+      "startMs": 29330,
+      "endMs": 34870,
+      "rev": 1,
+      "text": "That's the number I needed. It pays for the project on its own."
+    },
+    {
+      "id": "m24-s007",
+      "speakerId": "m24-spk-c",
+      "startMs": 35120,
+      "endMs": 42560,
+      "rev": 1,
+      "text": "The second finding is that the policy API is old but stable. It's the portal layer that's rotten."
+    },
+    {
+      "id": "m24-s008",
+      "speakerId": "m24-spk-b",
+      "startMs": 42810,
+      "endMs": 49490,
+      "rev": 1,
+      "text": "So we rebuild the portal on top of the existing policy API rather than replacing it?"
+    },
+    {
+      "id": "m24-s009",
+      "speakerId": "m24-spk-c",
+      "startMs": 49740,
+      "endMs": 54520,
+      "rev": 1,
+      "text": "That's my recommendation. Replacing the policy API is a multi-year programme."
+    },
+    {
+      "id": "m24-s010",
+      "speakerId": "m24-spk-d",
+      "startMs": 54770,
+      "endMs": 61450,
+      "rev": 1,
+      "text": "Then let's decide it. We rebuild the portal on the existing policy API, not replace it."
+    },
+    {
+      "id": "m24-s011",
+      "speakerId": "m24-spk-a",
+      "startMs": 61700,
+      "endMs": 65340,
+      "rev": 1,
+      "text": "Decided. Ben, anything that blocks the next phase?"
+    },
+    {
+      "id": "m24-s012",
+      "speakerId": "m24-spk-b",
+      "startMs": 65590,
+      "endMs": 71510,
+      "rev": 1,
+      "text": "You need sandbox access to the policy API. I'll provide sandbox access by Friday."
+    },
+    {
+      "id": "m24-s013",
+      "speakerId": "m24-spk-c",
+      "startMs": 71760,
+      "endMs": 73120,
+      "rev": 1,
+      "text": "Thank you."
+    },
+    {
+      "id": "m24-s014",
+      "speakerId": "m24-spk-a",
+      "startMs": 73370,
+      "endMs": 76250,
+      "rev": 1,
+      "text": "Mateo, what's next on your side?"
+    },
+    {
+      "id": "m24-s015",
+      "speakerId": "m24-spk-c",
+      "startMs": 76500,
+      "endMs": 82800,
+      "rev": 1,
+      "text": "An integration spike against the sandbox. I'll produce the integration spike report in three weeks."
+    },
+    {
+      "id": "m24-s016",
+      "speakerId": "m24-spk-d",
+      "startMs": 83050,
+      "endMs": 86690,
+      "rev": 1,
+      "text": "I'll drop off now. Ben has my proxy."
+    },
+    {
+      "id": "m24-s017",
+      "speakerId": "m24-spk-a",
+      "startMs": 86940,
+      "endMs": 89060,
+      "rev": 1,
+      "text": "Get well soon, Rosa."
+    },
+    {
+      "id": "m24-s018",
+      "speakerId": "m24-spk-b",
+      "startMs": 89310,
+      "endMs": 96750,
+      "rev": 1,
+      "text": "One heads-up. The CIO will want a cost breakdown before phase two, so build that into the readout."
+    },
+    {
+      "id": "m24-s019",
+      "speakerId": "m24-spk-a",
+      "startMs": 97000,
+      "endMs": 99880,
+      "rev": 1,
+      "text": "Noted, we'll include a cost breakdown."
+    },
+    {
+      "id": "m24-s020",
+      "speakerId": "m24-spk-c",
+      "startMs": 100130,
+      "endMs": 103390,
+      "rev": 1,
+      "text": "Ben, who owns the claims status data?"
+    },
+    {
+      "id": "m24-s021",
+      "speakerId": "m24-spk-b",
+      "startMs": 103640,
+      "endMs": 107280,
+      "rev": 1,
+      "text": "The claims operations team. I can introduce you."
+    },
+    {
+      "id": "m24-s022",
+      "speakerId": "m24-spk-a",
+      "startMs": 107530,
+      "endMs": 110030,
+      "rev": 1,
+      "text": "That would help. Anything else?"
+    },
+    {
+      "id": "m24-s023",
+      "speakerId": "m24-spk-b",
+      "startMs": 110280,
+      "endMs": 112780,
+      "rev": 1,
+      "text": "No, that's it from me."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Varden discovery midpoint review\n\n**Date:** June 11\n**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)\n\n## Summary\n\nMidpoint review of the six-week discovery for the Varden Insurance claims portal rebuild. Rosa joined for the first part before her leave; Ben covers for her. Mateo Rossi, Larkspur's solutions architect, has spent three weeks in the portal code.\n\n## Findings\n\n- About 30 percent of claims calls are simple status checks the portal could answer. Rosa said that deflection alone pays for the project.\n- The policy API is old but stable; the portal layer is the problem.\n- Replacing the policy API would be a multi-year programme.\n\n## Decisions\n\n- **Rebuild the portal on top of the existing policy API**, rather than replacing the API.\n\n## Action items\n\n- **Ben Adeyemi** — provide sandbox access to the policy API by Friday; introduce Mateo to the claims operations team, who own the claims status data.\n- **Mateo Rossi** — produce the integration spike report against the sandbox in three weeks.\n- **Alex Rivera** — include a cost breakdown in the discovery readout.\n\n## Notes\n\n- Varden's CIO will want a cost breakdown before phase two.\n- Ben holds Rosa's proxy while she is out.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-varden-insurance",
+      "type": "Organization",
+      "label": "Varden Insurance",
+      "aliases": [
+        "Varden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22",
+        "m23"
+      ]
+    },
+    {
+      "id": "g-person-ben-adeyemi",
+      "type": "Person",
+      "label": "Ben Adeyemi",
+      "aliases": [
+        "Ben"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-mateo-rossi",
+      "type": "Person",
+      "label": "Mateo Rossi",
+      "aliases": [
+        "Mateo"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-rosa-delgado",
+      "type": "Person",
+      "label": "Rosa Delgado",
+      "aliases": [
+        "Rosa"
+      ],
+      "props": {
+        "title": "Claims Director"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-claims-portal-rebuild",
+      "type": "Project",
+      "label": "Claims portal rebuild",
+      "aliases": [
+        "the portal"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Varden discovery midpoint review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Varden discovery midpoint review"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "mateo",
+        "type": "Person",
+        "label": "Mateo Rossi",
+        "aliases": [],
+        "existingId": "g-person-mateo-rossi",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s003",
+            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+          }
+        ]
+      },
+      {
+        "key": "ben",
+        "type": "Person",
+        "label": "Ben Adeyemi",
+        "aliases": [],
+        "existingId": "g-person-ben-adeyemi",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ben Adeyemi (Varden Insurance)"
+          }
+        ]
+      },
+      {
+        "key": "rosa",
+        "type": "Person",
+        "label": "Rosa Delgado",
+        "aliases": [],
+        "existingId": "g-person-rosa-delgado",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Rosa Delgado (Varden Insurance, first part)"
+          }
+        ]
+      },
+      {
+        "key": "portal",
+        "type": "Project",
+        "label": "Claims portal rebuild",
+        "aliases": [],
+        "existingId": "g-project-claims-portal-rebuild",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Varden Insurance claims portal rebuild"
+          }
+        ]
+      },
+      {
+        "key": "larkspur",
+        "type": "Organization",
+        "label": "Larkspur Labs",
+        "aliases": [],
+        "existingId": "g-org-larkspur-labs",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s003",
+            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "mateo",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ben",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "rosa",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Mateo Rossi (Larkspur Labs), Ben Adeyemi (Varden Insurance), Rosa Delgado (Varden Insurance, first part)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "mateo",
+        "to": "larkspur",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s003",
+            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "mateo",
+        "to": "larkspur",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Solutions Architect"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s003",
+            "quote": "I'm Mateo Rossi, solutions architect at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "portal",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Varden Insurance claims portal rebuild"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "g-org-varden-insurance",
+        "owner": null,
+        "counterparty": null,
+        "title": "30 percent of claims calls are status checks",
+        "statement": "About 30 percent of claims calls are simple status checks the portal could answer.",
+        "status": null,
+        "occurredAt": "2026-06-11",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s005",
+            "quote": "About 30 percent of claims calls are simple status checks the portal could answer."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "portal",
+        "owner": null,
+        "counterparty": null,
+        "title": "Rebuild on the existing policy API",
+        "statement": "The portal is rebuilt on the existing policy API, not replacing it.",
+        "status": null,
+        "occurredAt": "2026-06-11",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s010",
+            "quote": "We rebuild the portal on the existing policy API, not replace it."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "ben",
+        "counterparty": "mateo",
+        "title": "Provide sandbox access",
+        "statement": "Ben will provide sandbox access to the policy API by Friday.",
+        "status": "open",
+        "occurredAt": "2026-06-11",
+        "dueAt": "2026-06-12",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s012",
+            "quote": "I'll provide sandbox access by Friday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "mateo",
+        "counterparty": null,
+        "title": "Integration spike report",
+        "statement": "Mateo will produce the integration spike report in three weeks.",
+        "status": "open",
+        "occurredAt": "2026-06-11",
+        "dueAt": "2026-07-02",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s015",
+            "quote": "I'll produce the integration spike report in three weeks."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "portal",
+        "owner": "alex",
+        "counterparty": null,
+        "title": "Cost breakdown in the readout",
+        "statement": "Alex will include a cost breakdown in the discovery readout.",
+        "status": "open",
+        "occurredAt": "2026-06-11",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m24-s019",
+            "quote": "Noted, we'll include a cost breakdown."
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "The CIO will want a cost breakdown before phase two",
+        "why": "A role (\"the CIO\"), not a named person: no Person is created."
+      }
+    ]
+  }
+}
