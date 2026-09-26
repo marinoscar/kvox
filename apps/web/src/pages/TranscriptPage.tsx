@@ -129,7 +129,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import visuallyHidden from '@mui/utils/visuallyHidden';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { TranscriptNotesSection } from '../components/notes/TranscriptNotesSection';
 import { ConflictCards } from '../components/transcripts/ConflictCard';
@@ -217,6 +217,9 @@ export function formatRecordedAt(iso: string): string {
 
 export function TranscriptPage() {
   const { id } = useParams<{ id: string }>();
+  /** `?segment=<id>` — a deep link from graph evidence (#367): scroll, focus, highlight. */
+  const [searchParams] = useSearchParams();
+  const deepLinkSegmentId = searchParams.get('segment');
   const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -1023,6 +1026,7 @@ export function TranscriptPage() {
             ? { segmentId: nameJump.segmentId, start: nameJump.start, end: nameJump.end }
             : null
       }
+      highlightSegmentId={deepLinkSegmentId}
       scrollToSegmentId={
         findOpen
           ? (activeMatch?.segmentId ?? null)

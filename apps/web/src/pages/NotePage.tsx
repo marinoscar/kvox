@@ -114,9 +114,14 @@ import HistoryIcon from '@mui/icons-material/History';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import StopCircleIcon from '@mui/icons-material/StopCircle';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { AiKeyRequired } from '../components/ai/AiKeyRequired';
+import { GraphReviewButton } from '../components/graph/GraphReviewButton';
+import {
+  ProposalReviewSheet,
+  REVIEW_SHEET_WIDTH,
+} from '../components/graph/review/ProposalReviewSheet';
 import { NoteBody } from '../components/notes/NoteBody';
 import { NoteCopyButton } from '../components/notes/NoteCopyButton';
 import { NoteBodyEditor } from '../components/notes/NoteBodyEditor';
@@ -132,6 +137,7 @@ import { RegenerateMenuButton } from '../components/notes/RegenerateMenuButton';
 import { RegenerateNoteDialogContainer } from '../components/notes/RegenerateNoteDialogContainer';
 import { RegenerateSameConfirmDialog } from '../components/notes/RegenerateSameConfirmDialog';
 import { useAiConfig } from '../hooks/useAiConfig';
+import { useGraphProposal } from '../hooks/useGraphProposal';
 import { useNoteTemplateDetail } from '../hooks/useNoteTemplates';
 import { NOTE_ACTIVE_POLL_MS, isNoteInFlight, useNote } from '../hooks/useNotes';
 import { usePermissions } from '../hooks/usePermissions';
@@ -256,6 +262,36 @@ export function NotePage() {
    */
   const templateDetail = useNoteTemplateDetail(note?.templateId);
 
+  /**
+   * The graph proposal review sheet (#367). Visible only to `graph:read` on a
+   * deployment with connected knowledge switched on — `graphEnabled`
+   * undefined (an older API) reads as "not on", so the page is unchanged.
+   * The proposal is read here rather than inside the sheet so the entry
+   * button's badge and the sheet share one request and one poll.
+   */
+  const graphVisible = hasPermission('graph:read') && aiConfig?.graphEnabled === true;
+  const graphProposal = useGraphProposal(
+    { noteId: id ?? '' },
+    { enabled: graphVisible && Boolean(id) },
+  );
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewRequested = searchParams.get('review') === '1';
+
+  /** `?review=1` opens the sheet once, then leaves the URL (`replace`). */
+  useEffect(() => {
+    if (!reviewRequested || isAiLoading) return;
+    if (graphVisible) setReviewOpen(true);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('review');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [graphVisible, isAiLoading, reviewRequested, setSearchParams]);
+
   /** The buffer the stream has produced, offset-reconciled by the service. */
   const [streamed, setStreamed] = useState('');
   /**
@@ -321,6 +357,7 @@ export function NotePage() {
     setRetitleWatch(null);
     setRetitleNotice(null);
     setRetitleError(null);
+    setReviewOpen(false);
   }, [id]);
 
   /**
@@ -695,7 +732,15 @@ export function NotePage() {
   const canSuggestTitle = suggestTitleReason === undefined;
 
   return (
-    <Box sx={{ maxWidth: 900, mx: 'auto' }}>
+    <Box
+      sx={{
+        maxWidth: 900,
+        mx: 'auto',
+        // #367: at `lg` and up the note moves aside for the review sheet; below
+        // it the sheet overlays. A responsive sx value, not a media-query read.
+        mr: { lg: reviewOpen ? `${REVIEW_SHEET_WIDTH}px` : 'auto' },
+      }}
+    >
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={1}
@@ -796,6 +841,13 @@ export function NotePage() {
           >
             History
           </Button>
+          {graphVisible && (
+            <GraphReviewButton
+              summary={graphProposal.detail === undefined ? undefined : (graphProposal.detail?.proposal ?? null)}
+              open={reviewOpen}
+              onClick={() => setReviewOpen((value) => !value)}
+            />
+          )}
           {/* ⚠ THE WHOLE MENU IS GATED, not just the item inside it — with
               `notes:write` absent there is nothing in it to open. */}
           {canWriteNotes && (
@@ -1165,6 +1217,17 @@ export function NotePage() {
           initialFocus={optionsFocus}
           onCancel={closeRegenerate}
           onConfirm={(input) => void handleRegenerate(input)}
+        />
+      )}
+
+      {graphVisible && id && (
+        <ProposalReviewSheet
+          open={reviewOpen}
+          onClose={() => setReviewOpen(false)}
+          source={{ noteId: id }}
+          proposal={graphProposal}
+          noteBodyRef={renderedBodyRef}
+          originTranscriptId={note.originTranscript?.id ?? null}
         />
       )}
 
