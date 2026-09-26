@@ -1442,6 +1442,13 @@ may see it. Full design, with rejected alternatives, in
 enforces (`transcripts:read`, `notes:read`, …), the same Settings UI Pattern
 rule 3 discipline the admin cards follow.
 
+**`/graph` and `/graph/entities/:id` (issue #373, epic #347) are owned by
+`home`, not a destination of their own.** The knowledge graph does not get a
+sixth bottom-bar slot — `home`'s `DESTINATION_ROUTES` entry is
+`['/', '/graph']`, gated on `graph:read`, and the graph is reached from
+Home's "Knowledge" section, a named speaker's chip, and library search hits,
+never from its own tab. See `docs/specs/ontology.md` §13.
+
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
 reached *by design* rather than by a coincidence of which permissions a user
@@ -2226,6 +2233,13 @@ itself), with the proposal payload contract later issues import in
 Resolution routes (merge, reverse, distinct pairs, #364), the read layer (#370), the
 whole-graph overview (#371), the entity brief (#372) and the proposal review/commit/revert
 routes (#366, `GraphProposalsModule`, `apps/api/src/graph/proposals/`) are built.
+**The web side is built** (issue #373, epic #347): `/graph` (index) and
+`/graph/entities/:id` (entity page — header, edit through #367's schema-driven
+`SchemaForm`, cited brief, connections, timeline, mentions), `EvidenceChip`,
+speaker-chip person links, entity hits above library search, and a Home
+"Knowledge" section, all owned by the `home` destination per the Navigation
+Destination Model above. It reads #370's read API and #372's brief — see
+`docs/specs/ontology.md` §13 for the up-to-date web-surfaces state.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph

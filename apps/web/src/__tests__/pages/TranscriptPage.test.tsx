@@ -5,9 +5,10 @@ import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
 
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
-  return { ...actual, useParams: () => ({ id: 't1' }), useNavigate: () => vi.fn() };
+  return { ...actual, useParams: () => ({ id: 't1' }), useNavigate: () => mockNavigate };
 });
 
 vi.mock('../../services/transcripts', () => ({
@@ -21,8 +22,9 @@ vi.mock('../../services/transcripts', () => ({
 
 vi.mock('../../contexts/NotificationContext', () => ({ useNotifications: () => null }));
 
-import { render, mockAdminUser } from '../utils/test-utils';
+import { useLocation } from 'react-router-dom';
 import { server } from '../mocks/server';
+import { render, mockAdminUser } from '../utils/test-utils';
 import {
   PROPOSAL_ID,
   mockGraphAiConfig,
@@ -740,6 +742,138 @@ describe('TranscriptPage — the segment list', () => {
     // The engine owns the element; what this asserts is that the wiring
     // reaches it at all, which a `play` that never happened would not.
     await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+  });
+});
+
+// =============================================================================
+// The evidence deep link `?segment=&t=` and speaker person links (#373)
+// =============================================================================
+
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location-search">{location.search}</output>;
+}
+
+function renderAt(route: string, user = mockAdminUser) {
+  return render(
+    <>
+      <TranscriptPage />
+      <LocationProbe />
+    </>,
+    { wrapperOptions: { user, route } },
+  );
+}
+
+/** Record every `currentTime` write — the element is never in the document. */
+function spySeeks(): { seeks: number[]; restore: () => void } {
+  const seeks: number[] = [];
+  const original = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+  Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+    configurable: true,
+    get: () => 0,
+    set: (value: number) => {
+      seeks.push(value);
+    },
+  });
+  return {
+    seeks,
+    restore: () => {
+      if (original) Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', original);
+    },
+  };
+}
+
+describe('TranscriptPage — the evidence deep link (#373)', () => {
+  it('scrolls to ?segment=, seeks to ?t= without autoplay, then clears both params', async () => {
+    const spy = spySeeks();
+    try {
+      renderAt('/transcripts/t1?segment=s3&t=16000');
+
+      const chip = await screen.findByRole('button', { name: 'Play from 0:16' });
+      expect(spy.seeks).toContain(16);
+      expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(''));
+      expect(screen.getByTestId('location-search').textContent).toBe('');
+
+      // The deep-linked line is highlighted as one range.
+      const marks = screen.getAllByTestId('search-match');
+      expect(marks.some((mark) => mark.textContent === 'Line number 3')).toBe(true);
+
+      // The chip is the explicit ▶.
+      fireEvent.click(chip);
+      await waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
+    } finally {
+      spy.restore();
+    }
+  });
+
+  it('seeks only when the segment is unknown', async () => {
+    const spy = spySeeks();
+    try {
+      renderAt('/transcripts/t1?segment=nope&t=16000');
+      await screen.findByRole('button', { name: 'Play from 0:16' });
+      expect(spy.seeks).toContain(16);
+      expect(screen.queryAllByTestId('search-match')).toHaveLength(0);
+      await waitFor(() => expect(screen.getByTestId('location-search').textContent).toBe(''));
+    } finally {
+      spy.restore();
+    }
+  });
+
+  it('keeps ?segment= alone as a scroll + highlight with no seek chip', async () => {
+    renderAt('/transcripts/t1?segment=s3');
+    await screen.findByText('Weekly standup');
+    await waitFor(() =>
+      expect(
+        screen.getAllByTestId('search-match').some((mark) => mark.textContent === 'Line number 3'),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole('button', { name: /^Play from 0:16$/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('location-search').textContent).toBe(''));
+  });
+});
+
+describe('TranscriptPage — speaker person links (#373)', () => {
+  const graphUser = {
+    ...mockAdminUser,
+    permissions: [...mockAdminUser.permissions, 'graph:read'],
+  };
+
+  it('links a named speaker to their Person page when the caller can read the graph', async () => {
+    server.use(
+      http.get('*/api/graph/entities', ({ request }) => {
+        expect(new URL(request.url).searchParams.get('transcriptId')).toBe('t1');
+        return HttpResponse.json({
+          data: {
+            items: [
+              { id: 'person-ana', type: 'Person', label: 'Ana', aliases: [], mentionCount: 1, lastSeenAt: null, speakerIds: ['sp1'] },
+            ],
+            nextCursor: null,
+          },
+        });
+      }),
+    );
+    renderAt('/transcripts/t1', graphUser);
+
+    const links = await screen.findAllByRole('button', { name: "Open Ana's page" });
+    expect(screen.queryByRole('button', { name: "Open Ben's page" })).not.toBeInTheDocument();
+    fireEvent.click(links[0]);
+    expect(mockNavigate).toHaveBeenCalledWith('/graph/entities/person-ana');
+  });
+
+  it('asks the graph nothing without graph:read', async () => {
+    const seen = vi.fn();
+    server.use(
+      http.get('*/api/graph/entities', () => {
+        seen();
+        return HttpResponse.json({ data: { items: [], nextCursor: null } });
+      }),
+    );
+    renderAt('/transcripts/t1');
+    await screen.findByText('Weekly standup');
+    expect(screen.queryByRole('button', { name: /Open .*'s page/ })).not.toBeInTheDocument();
+    expect(seen).not.toHaveBeenCalled();
   });
 });
 

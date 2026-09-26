@@ -103,7 +103,11 @@ export function owns(prefix: string, path: string): boolean {
  * would fail it as "neither owned nor deliberately unowned".
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
-  home: ['/'],
+  // `/graph` (#373, spec §13) — the knowledge graph's index and entity pages
+  // (and later `/graph/explore`, `/graph/overview`) are reached FROM Home, not
+  // from a tab of their own: the bottom bar is at its four-tab ceiling by
+  // design. #380 appends `'/ask'` here for the same reason.
+  home: ['/', '/graph'],
   // ONE PREFIX EACH SINCE #106. Each owns its whole subtree — `/transcripts`
   // covers the library, `/transcripts/new`, `/transcripts/:id` and
   // `/transcripts/:id/history` (#30, #31, epic #19); `/notes` covers `/notes`,

@@ -1,8 +1,18 @@
 import { http, HttpResponse } from 'msw';
+
+import {
+  briefFixture,
+  entityDetail,
+  evidenceFixtures,
+  graphEntitySummaries,
+  mentionFixtures,
+  mockGraphOntology,
+  neighborhoodFixture,
+  timelineFixture,
+} from './graphData';
 import {
   emptyCommitResult,
   mockEntitySearchResults,
-  mockGraphOntology,
   mockProposalDetail,
   proposalMock,
   countsFor,
@@ -402,8 +412,15 @@ export const handlers = [
     });
   }),
 
-  // Connected knowledge (#369): the caller's effective ontology (default
-  // domains) and no attribute definitions of their own. Tests override.
+  // ---------------------------------------------------------------------------
+  // Knowledge graph (#369 settings card; #373 read side against #370/#372).
+  //
+  // Only a user holding `graph:read` ever reaches these — the default test
+  // users do not — so they cost no other suite anything. A suite that cares
+  // about a specific answer overrides with `server.use(...)`.
+  // ---------------------------------------------------------------------------
+  // The caller's effective ontology (default domains) and no attribute
+  // definitions of their own (#369). Tests override.
   http.get(`${API_BASE}/graph/ontology`, () => {
     return HttpResponse.json({ data: mockGraphOntology() });
   }),
@@ -411,6 +428,81 @@ export const handlers = [
   http.get(`${API_BASE}/graph/attribute-defs`, () => {
     return HttpResponse.json({ data: { items: [] } });
   }),
+
+  http.get(`${API_BASE}/graph/entities`, ({ request }) => {
+    const url = new URL(request.url);
+    const types = url.searchParams.get('type')?.split(',').filter(Boolean) ?? [];
+    const q = url.searchParams.get('q')?.toLowerCase() ?? '';
+    const limit = Number(url.searchParams.get('limit') ?? 25);
+    const cursor = url.searchParams.get('cursor');
+    if (url.searchParams.get('transcriptId')) {
+      return HttpResponse.json({ data: { items: [], nextCursor: null } });
+    }
+    let rows = graphEntitySummaries.filter((row) => types.length === 0 || types.includes(row.type));
+    if (q) {
+      rows = rows
+        .filter(
+          (row) =>
+            row.label.toLowerCase().includes(q) ||
+            row.aliases.some((alias) => alias.toLowerCase().includes(q)),
+        )
+        .slice(0, limit);
+      // #367's re-link search fixtures (Tom Baker, Sarah Chen) answer here too,
+      // so the proposal sheet and the entity pages share one list handler.
+      const searchHits = mockEntitySearchResults
+        .filter(
+          (row) =>
+            (types.length === 0 || types.includes(row.type)) &&
+            !rows.some((existing) => existing.id === row.id) &&
+            row.label.toLowerCase().includes(q),
+        )
+        .map((row) => ({ ...row, mentionCount: 0, lastSeenAt: null }));
+      return HttpResponse.json({ data: { items: [...rows, ...searchHits].slice(0, limit), nextCursor: null } });
+    }
+    const start = cursor ? Number(cursor) : 0;
+    const page = rows.slice(start, start + limit);
+    const next = start + limit < rows.length ? String(start + limit) : null;
+    return HttpResponse.json({ data: { items: page, nextCursor: next } });
+  }),
+
+  http.get(`${API_BASE}/graph/entities/:id/brief`, () => HttpResponse.json({ data: briefFixture() })),
+
+  http.get(`${API_BASE}/graph/entities/:id/timeline`, ({ request }) => {
+    const url = new URL(request.url);
+    const includeSensitive = url.searchParams.get('includeSensitive') === 'true';
+    return HttpResponse.json({
+      data: { items: timelineFixture(includeSensitive), nextCursor: null, asOf: '2026-09-26T00:00:00.000Z' },
+    });
+  }),
+
+  http.get(`${API_BASE}/graph/entities/:id/mentions`, () =>
+    HttpResponse.json({ data: { items: mentionFixtures, nextCursor: null } }),
+  ),
+
+  http.get(`${API_BASE}/graph/entities/:id/neighborhood`, () =>
+    HttpResponse.json({ data: neighborhoodFixture() }),
+  ),
+
+  http.get(`${API_BASE}/graph/entities/:id`, ({ params }) => {
+    const id = String(params.id);
+    if (!graphEntitySummaries.some((row) => row.id === id)) {
+      return HttpResponse.json({ message: 'Entity not found', statusCode: 404 }, { status: 404 });
+    }
+    return HttpResponse.json({ data: entityDetail(id) });
+  }),
+
+  http.get(`${API_BASE}/graph/evidence`, ({ request }) => {
+    const ids = new URL(request.url).searchParams.get('ids')?.split(',') ?? [];
+    return HttpResponse.json({ data: { items: evidenceFixtures.filter((ev) => ids.includes(ev.id)) } });
+  }),
+
+  http.get(`${API_BASE}/graph/evidence/:id`, ({ params }) => {
+    const found = evidenceFixtures.find((ev) => ev.id === params.id);
+    return found
+      ? HttpResponse.json({ data: found })
+      : HttpResponse.json({ message: 'Not found', statusCode: 404 }, { status: 404 });
+  }),
+
   // ---------------------------------------------------------------------------
   // Graph proposals (#367) — an in-memory stand-in for #366's Contract, backed
   // by `proposalMock` (graphData.ts). Every request is recorded so a test can
@@ -591,15 +683,6 @@ export const handlers = [
 
   http.get(`${API_BASE}/graph/extract/estimate`, () => HttpResponse.json({ data: ESTIMATE })),
 
-  http.get(`${API_BASE}/graph/entities`, ({ request }) => {
-    const url = new URL(request.url);
-    const q = (url.searchParams.get('q') ?? '').toLowerCase();
-    const type = url.searchParams.get('type');
-    const items = mockEntitySearchResults.filter(
-      (row) => (!type || row.type === type) && row.label.toLowerCase().includes(q),
-    );
-    return HttpResponse.json({ data: { items, nextCursor: null } });
-  }),
 ];
 
 // ---------------------------------------------------------------------------

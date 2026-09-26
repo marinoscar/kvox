@@ -26,6 +26,7 @@
 
 import MergeIcon from '@mui/icons-material/Merge';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import PersonSearchOutlinedIcon from '@mui/icons-material/PersonSearchOutlined';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
@@ -126,6 +127,14 @@ interface SpeakerFilterProps {
   onToggleMergeSelection?: (speakerId: string) => void;
   /** Opens the merge dialog. Enabled only from two speakers up. */
   onMerge?: () => void;
+
+  // --- Knowledge graph (#373). Optional; absent means no person links. ------
+  /**
+   * `speakerId → entityId` for speakers identified as a Person in the caller's
+   * graph. A speaker with an entry gets a small "Open <name>'s page" button.
+   */
+  speakerEntityIds?: Readonly<Record<string, string>>;
+  onOpenSpeakerEntity?: (entityId: string) => void;
 }
 
 export function SpeakerFilter({
@@ -139,6 +148,8 @@ export function SpeakerFilter({
   mergeSelection,
   onToggleMergeSelection,
   onMerge,
+  speakerEntityIds,
+  onOpenSpeakerEntity,
 }: SpeakerFilterProps) {
   const theme = useTheme();
   const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
@@ -210,6 +221,27 @@ export function SpeakerFilter({
       ? `Stop playing only ${stat.speaker.displayName}`
       : `Play only ${stat.speaker.displayName}`;
 
+  /**
+   * The person link for one speaker, or null. Rendered only when the page
+   * supplied both the map and the callback — the map alone is not a promise
+   * that anything will happen on a click.
+   */
+  const personLink = (stat: SpeakerStat, edge?: 'end') => {
+    const entityId = speakerEntityIds?.[stat.speaker.id];
+    if (!entityId || !onOpenSpeakerEntity) return null;
+    return (
+      <IconButton
+        size="small"
+        edge={edge}
+        aria-label={`Open ${stat.speaker.displayName}'s page`}
+        onClick={() => onOpenSpeakerEntity(entityId)}
+        sx={{ flexShrink: 0 }}
+      >
+        <PersonSearchOutlinedIcon fontSize="small" />
+      </IconButton>
+    );
+  };
+
   if (variant === 'chips') {
     return (
       <Box
@@ -249,7 +281,8 @@ export function SpeakerFilter({
         {stats.map((stat) => {
           const color = speakerColor(stat.speaker.colorIndex, mode);
           const isSelected = selected.has(stat.speaker.id);
-          return (
+          const link = personLink(stat);
+          const chip = (
             <Chip
               key={stat.speaker.id}
               clickable
@@ -287,6 +320,16 @@ export function SpeakerFilter({
               }}
             />
           );
+          if (!link) return chip;
+          return (
+            <Box
+              key={stat.speaker.id}
+              sx={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, scrollSnapAlign: 'start' }}
+            >
+              {chip}
+              {link}
+            </Box>
+          );
         })}
       </Box>
     );
@@ -319,17 +362,22 @@ export function SpeakerFilter({
               key={stat.speaker.id}
               disablePadding
               secondaryAction={
-                editable ? (
-                  <IconButton
-                    edge="end"
-                    size="small"
-                    aria-label={`Actions for ${stat.speaker.displayName}`}
-                    onClick={(event) =>
-                      onOpenSpeakerActions?.(stat.speaker.id, event.currentTarget)
-                    }
-                  >
-                    <MoreVertIcon fontSize="small" />
-                  </IconButton>
+                editable || personLink(stat) ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    {personLink(stat, editable ? undefined : 'end')}
+                    {editable && (
+                      <IconButton
+                        edge="end"
+                        size="small"
+                        aria-label={`Actions for ${stat.speaker.displayName}`}
+                        onClick={(event) =>
+                          onOpenSpeakerActions?.(stat.speaker.id, event.currentTarget)
+                        }
+                      >
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
                 ) : undefined
               }
             >
@@ -353,7 +401,9 @@ export function SpeakerFilter({
                 onClick={() => onToggleSpeaker(stat.speaker.id)}
                 aria-pressed={isSelected}
                 aria-label={actionLabel(stat)}
-                sx={{ borderRadius: 1 }}
+                // Room for TWO trailing buttons (person link + actions);
+                // `secondaryAction` only reserves room for one.
+                sx={{ borderRadius: 1, ...(editable && personLink(stat) ? { pr: 10 } : {}) }}
               >
                 <Box
                   aria-hidden

@@ -222,3 +222,62 @@ describe('SpeakerFilter — the panel variant is untouched by #112', () => {
     expect(screen.getByRole('button', { name: 'Play only Ana' })).toBeInTheDocument();
   });
 });
+
+describe('SpeakerFilter — person links to the knowledge graph (#373)', () => {
+  const ENTITY_IDS = { sp1: 'entity-ana' };
+
+  function renderWith(variant: 'chips' | 'panel', onOpen = vi.fn(), editable = false) {
+    return {
+      onOpen,
+      ...render(
+        <SpeakerFilter
+          speakers={SPEAKERS}
+          segments={SEGMENTS}
+          selectedSpeakerIds={[]}
+          onToggleSpeaker={vi.fn()}
+          variant={variant}
+          editable={editable}
+          onOpenSpeakerActions={vi.fn()}
+          speakerEntityIds={ENTITY_IDS}
+          onOpenSpeakerEntity={onOpen}
+        />,
+      ),
+    };
+  }
+
+  it.each(['chips', 'panel'] as const)(
+    'renders a link only for a mapped speaker (%s variant) and fires the callback',
+    async (variant) => {
+      const user = userEvent.setup();
+      const { onOpen, container } = renderWith(variant);
+
+      const link = screen.getByRole('button', { name: "Open Ana's page" });
+      expect(screen.queryByRole('button', { name: "Open Ben's page" })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Open Carolina/ })).not.toBeInTheDocument();
+
+      await user.click(link);
+      expect(onOpen).toHaveBeenCalledWith('entity-ana');
+      expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+    },
+  );
+
+  it('keeps the actions button beside the link in the editable panel', () => {
+    renderWith('panel', vi.fn(), true);
+    expect(screen.getByRole('button', { name: "Open Ana's page" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Ana' })).toBeInTheDocument();
+  });
+
+  it('renders no link without the callback, even with a map', () => {
+    render(
+      <SpeakerFilter
+        speakers={SPEAKERS}
+        segments={SEGMENTS}
+        selectedSpeakerIds={[]}
+        onToggleSpeaker={vi.fn()}
+        variant="chips"
+        speakerEntityIds={ENTITY_IDS}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: "Open Ana's page" })).not.toBeInTheDocument();
+  });
+});

@@ -1721,6 +1721,18 @@ and `model_lacks_capability` (§20.2 — the requested model does not report
 
 ## 13. Web surfaces
 
+**Built** (issue #373, epic #347): `/graph` (the index) and
+`/graph/entities/:id` (the entity page — header with edit and "Forget this
+person…", the cited brief card, the connections list, the timeline with its
+sensitive-facts toggle, and mentions), `EvidenceChip`, speaker-chip person
+links, entity hits above library search results, and the Home "Knowledge"
+section — all described below, and all owned by the `home` destination as
+this section already specified. It was built against the **contracts** of
+the read API (#370) and the entity brief (#372) with MSW, ahead of those
+routes landing on the API — the sections below describe the shipped design,
+not a plan. The neighbourhood-canvas explorer (§22) and the Ask panel
+(§21.5) are separate, later issues (#374, #381) and are not part of this.
+
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
 Settings UI Pattern rule 2 (CLAUDE.md), a tab gate is about *content*
 within one destination, while reachability is about the *route*; the
@@ -1728,14 +1740,20 @@ proposal panel is neither a destination nor parallel content to the note
 itself — it is a transient review surface over the note that is already
 open, which is exactly what a side sheet is for and a tab strip is not.
 
-**Entity page**, at `/graph/:id` (planned) — "everything about Joe": the
-entity's properties, its 1–2-hop neighbourhood (below), its open commitments,
-its recent claims and decisions, and the entity brief (§9.1).
+**Entity page**, at `/graph/entities/:id` (built, #373) — "everything about
+Joe": the entity's properties, a plain grouped **Connections** list over its
+1-hop neighbourhood (below), its open commitments, its recent claims and
+decisions, and the entity brief (§9.1).
 
 **Neighbourhood view**, inside the entity page — 1–2 hops, entity-centred,
 never a whole-graph rendering (§3.5's "narrow schema" extended to the UI: a
 whole-graph view for a shallow, meeting-scoped graph is a view nobody asked
-for and a rendering cost nobody budgeted). The rendering library named as a
+for and a rendering cost nobody budgeted). #373's **Connections** section
+is the 1-hop list form of this — grouped by relation type, each row linking
+to the other entity, with a "Showing 100 of many — open in Explorer" link
+once truncated; the interactive sigma.js **canvas** widget this paragraph
+first describes is a separate, later addition (`NeighborhoodWidget`, #374)
+that mounts above the list on the same page. The rendering library named as a
 deferred decision here in an earlier draft of this document is deferred no
 longer — §22 chooses sigma.js + graphology and records `react-force-graph`
 and `cytoscape` as rejected, once this document actually had to build the
