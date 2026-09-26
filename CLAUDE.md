@@ -1323,6 +1323,13 @@ may see it. Full design, with rejected alternatives, in
 enforces (`transcripts:read`, `notes:read`, …), the same Settings UI Pattern
 rule 3 discipline the admin cards follow.
 
+**`/graph` and `/graph/entities/:id` (issue #373, epic #347) are owned by
+`home`, not a destination of their own.** The knowledge graph does not get a
+sixth bottom-bar slot — `home`'s `DESTINATION_ROUTES` entry is
+`['/', '/graph']`, gated on `graph:read`, and the graph is reached from
+Home's "Knowledge" section, a named speaker's chip, and library search hits,
+never from its own tab. See `docs/specs/ontology.md` §13.
+
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
 reached *by design* rather than by a coincidence of which permissions a user
@@ -2064,9 +2071,19 @@ and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
 above. There is still only one `kg.*` job handler (`kg.purge`; every other type
-in `apps/api/src/graph/job-types.ts` is still only a constant), no `/api/graph/*`
-routes beyond the ontology, the entity edit, attribute definitions and forget,
-and no graph UI. Five rules a neighbouring file can
+in `apps/api/src/graph/job-types.ts` is still only a constant), and no
+`/api/graph/*` routes beyond the ontology, the entity edit, attribute
+definitions and forget — the read API (`GET /api/graph/entities`, the entity
+detail/timeline/mentions/neighbourhood/evidence routes) and the entity brief
+(`kg.entity_digest`) are #370/#372, tracked separately.
+**The web side is built** (issue #373, epic #347): `/graph` (index) and
+`/graph/entities/:id` (entity page — header, edit, cited brief, connections,
+timeline, mentions), `EvidenceChip`, speaker-chip person links, entity hits
+above library search, and a Home "Knowledge" section, all owned by the `home`
+destination per the Navigation Destination Model above. It was built against
+#370/#372's stated contracts with MSW, ahead of those API routes landing —
+see `docs/specs/ontology.md` §13 for the up-to-date web-surfaces state. Five
+rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
