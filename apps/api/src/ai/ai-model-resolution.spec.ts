@@ -36,18 +36,21 @@ const CATALOGUE: AiModelDescriptor[] = [
     label: 'GPT-4o',
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
+    structuredOutput: true,
   },
   {
     id: 'gpt-5.4',
     label: 'GPT-5.4',
     contextWindowTokens: 1_050_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
   },
   {
     id: 'gpt-5.4-mini',
     label: 'GPT-5.4 mini',
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
   },
 ];
 
@@ -98,6 +101,7 @@ describe('resolveAllowedModel', () => {
       label: 'GPT-4o',
       contextWindowTokens: 128_000,
       maxOutputTokens: 16_384,
+      structuredOutput: true,
       source: 'catalogue',
       derivedFrom: null,
     });
@@ -118,6 +122,7 @@ describe('resolveAllowedModel', () => {
       label: 'GPT-4o',
       contextWindowTokens: 999_000,
       maxOutputTokens: 32_000,
+      structuredOutput: true,
       source: 'explicit',
       derivedFrom: null,
     });
@@ -140,6 +145,7 @@ describe('resolveAllowedModel', () => {
       label: 'gpt-6-turbo',
       contextWindowTokens: 500_000,
       maxOutputTokens: 64_000,
+      structuredOutput: false,
       source: 'explicit',
       derivedFrom: null,
     });
@@ -157,6 +163,7 @@ describe('resolveAllowedModel', () => {
         label: 'gpt-5.4-mini-2026-03-17',
         contextWindowTokens: 400_000,
         maxOutputTokens: 128_000,
+        structuredOutput: true,
         source: 'derived',
         derivedFrom: 'gpt-5.4-mini',
       },
@@ -169,6 +176,7 @@ describe('resolveAllowedModel', () => {
       label: 'llama-4-titan',
       contextWindowTokens: 128_000,
       maxOutputTokens: 16_384,
+      structuredOutput: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -188,6 +196,7 @@ describe('resolveAllowedModel', () => {
       label: 'gpt-5.4-mini-2026-03-17',
       contextWindowTokens: 400_000,
       maxOutputTokens: 64_000,
+      structuredOutput: true,
       source: 'derived',
       derivedFrom: 'gpt-5.4-mini',
     });
@@ -205,6 +214,7 @@ describe('resolveAllowedModel', () => {
       label: 'gpt-5.4-mini-2026-03-17',
       contextWindowTokens: 400_000,
       maxOutputTokens: 16_384,
+      structuredOutput: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -266,6 +276,7 @@ describe('resolveAllowedModel', () => {
         label: 'GPT-4o',
         contextWindowTokens: 300_000, // the entry's own, overriding the catalogue's 128_000
         maxOutputTokens: 16_384, // the catalogue's, since the entry named none
+        structuredOutput: true,
         source: 'catalogue', // the weaker of `explicit` and `catalogue`
         derivedFrom: null,
       },
@@ -283,6 +294,7 @@ describe('resolveAllowedModel', () => {
       label: 'llama-4-titan',
       contextWindowTokens: 128_000,
       maxOutputTokens: 64_000,
+      structuredOutput: false,
       source: 'default',
       derivedFrom: null,
     });
@@ -311,6 +323,7 @@ describe('resolveAllowedModel', () => {
           label: 'GPT-5.4 mini',
           contextWindowTokens: 400_000,
           maxOutputTokens: 128_000,
+          structuredOutput: true,
         }),
       })?.label,
     ).toBe('gpt-5.4-mini-2026-03-17');
@@ -332,6 +345,7 @@ describe('resolveAllowedModel', () => {
       label: 'gpt-4o',
       contextWindowTokens: 1_024,
       maxOutputTokens: 64,
+      structuredOutput: false,
       source: 'explicit',
       derivedFrom: null,
     });

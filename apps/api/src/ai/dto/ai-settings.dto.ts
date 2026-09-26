@@ -80,6 +80,11 @@ export const aiModelDescriptorSchema = z.object({
   maxOutputTokens: z
     .number()
     .describe('Most tokens this model will produce in one completion.'),
+  structuredOutput: z
+    .boolean()
+    .describe(
+      'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication, digest and brief require it.',
+    ),
 });
 
 /** What a provider can do, published so a form need not discover it by trying. */
@@ -97,6 +102,14 @@ export const aiProviderCapabilitiesSchema = z.object({
     .optional()
     .describe(
       'The conservative floor applied to a chat model this provider has never heard of (issue #97) — a **lower bound**, not a guess at the model\'s real size, so no model is ever un-permittable for want of two numbers. Absent means this provider declines to have one, and ids it cannot otherwise place stay unresolvable. An administrator who knows the real numbers still outranks it: an entry\'s own `contextWindowTokens`/`maxOutputTokens` win over every other source.',
+    ),
+  defaultModelFeatures: z
+    .object({
+      structuredOutput: z.boolean(),
+    })
+    .optional()
+    .describe(
+      'The conservative capability floor applied to a model id this provider cannot place (issue #358) — beside `defaultModelLimits`. OpenAI declares `structuredOutput: false` here: an unknown id could be any gateway model, and claiming support it lacks would fail a paid call. Absent means every flag is false for such an id.',
     ),
   modelDiscovery: z
     .boolean()

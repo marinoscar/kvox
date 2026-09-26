@@ -1,6 +1,7 @@
 import type { AiAllowedModel } from './ai-settings.schema';
 import type {
   AiModelDescriptor,
+  AiModelFeatureFlags,
   AiProvider,
 } from './providers/ai-provider.interface';
 
@@ -133,6 +134,12 @@ export interface AiModelKnowledge {
    * unresolvable for it — see rank 5 in the header.
    */
   fallback?: { contextWindowTokens: number; maxOutputTokens: number };
+  /**
+   * The conservative capability floor for an id this provider cannot place
+   * (#358) — `capabilities.defaultModelFeatures`. Absent means every flag
+   * resolves to `false` for such an id.
+   */
+  fallbackFeatures?: AiModelFeatureFlags;
 }
 
 /**
@@ -208,6 +215,7 @@ export function modelKnowledgeOf<TSettings>(
       ? (id: string) => provider.deriveModelDescriptor?.(id) ?? null
       : undefined,
     fallback: provider.capabilities.defaultModelLimits,
+    fallbackFeatures: provider.capabilities.defaultModelFeatures,
   };
 }
 
@@ -242,6 +250,7 @@ export function resolveAllowedModel(
   if (context.source === null || output.source === null) return null;
 
   const source = weakestSource(context.source, output.source);
+  const features = resolveFeatures(entry.id, knowledge, known);
 
   return {
     id: entry.id,
@@ -257,6 +266,7 @@ export function resolveAllowedModel(
     label: entry.label ?? known?.label ?? entry.id,
     contextWindowTokens: context.value,
     maxOutputTokens: output.value,
+    structuredOutput: features.structuredOutput,
     source,
     // Non-null exactly when the WEAKEST source is `derived`: if either number
     // fell through to the floor the pair is not "the family's numbers", and
@@ -352,6 +362,32 @@ function resolveNumber(
   }
 
   return { value: null, source: null, derivedFrom: null };
+}
+
+/**
+ * The model's capability flags, by rank (#358): an exact catalogue hit, then
+ * the family the provider derives, then the provider's feature floor, then
+ * `false`.
+ *
+ * ⚠ THE ENTRY'S OWN NUMBERS DO NOT TAKE PART. An administrator may override a
+ * context window (rank 1 of the numbers' precedence) but there is no admin
+ * override of a FLAG in v1: typing a number is describing a model; claiming a
+ * capability the build cannot verify is the false positive that fails a paid
+ * extraction. `source` likewise describes the numbers only.
+ */
+function resolveFeatures(
+  id: string,
+  knowledge: AiModelKnowledge,
+  known: AiModelDescriptor | undefined,
+): AiModelFeatureFlags {
+  if (known) return { structuredOutput: known.structuredOutput };
+
+  const derived = knowledge.derive?.(id) ?? null;
+  if (derived) return { structuredOutput: derived.structuredOutput };
+
+  return {
+    structuredOutput: knowledge.fallbackFeatures?.structuredOutput ?? false,
+  };
 }
 
 /** The weaker (higher-ranked) of two sources. See {@link AiResolvedModel}. */

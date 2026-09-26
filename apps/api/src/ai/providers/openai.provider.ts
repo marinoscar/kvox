@@ -158,6 +158,14 @@ export const OPENAI_PROVIDER_ID = 'openai';
  * ⚠ RE-VERIFY THE NUMBERS. See the file header: a context window that has grown
  * on the vendor's side makes this application refuse work it could do, and one
  * that has shrunk makes it submit a prompt the vendor rejects.
+ *
+ * ⚠ `structuredOutput: true` ON EVERY ENTRY (#358): each of these seven models
+ * supports `response_format: { type: 'json_schema', strict: true }` per
+ * OpenAI's Structured Outputs documentation as of 2026-09. Re-verify with the
+ * numbers. A catalogued model the vendor does NOT support strict mode for must
+ * say `false` here — a false positive fails a paid extraction — and a dated
+ * snapshot inherits whatever its family says, through
+ * {@link deriveOpenAiModelDescriptor}.
  */
 const MODELS: AiModelDescriptor[] = [
   {
@@ -165,24 +173,28 @@ const MODELS: AiModelDescriptor[] = [
     label: 'GPT-4o',
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
+    structuredOutput: true,
   },
   {
     id: 'gpt-4o-mini',
     label: 'GPT-4o mini',
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
+    structuredOutput: true,
   },
   {
     id: 'gpt-4.1',
     label: 'GPT-4.1',
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
+    structuredOutput: true,
   },
   {
     id: 'gpt-4.1-mini',
     label: 'GPT-4.1 mini',
     contextWindowTokens: 1_047_576,
     maxOutputTokens: 32_768,
+    structuredOutput: true,
   },
   // ---------------------------------------------------------------------------
   // The GPT-5.4 family — the REASONING models (#87)
@@ -210,18 +222,21 @@ const MODELS: AiModelDescriptor[] = [
     label: 'GPT-5.4',
     contextWindowTokens: 1_050_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
   },
   {
     id: 'gpt-5.4-mini',
     label: 'GPT-5.4 mini',
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
   },
   {
     id: 'gpt-5.4-nano',
     label: 'GPT-5.4 nano',
     contextWindowTokens: 400_000,
     maxOutputTokens: 128_000,
+    structuredOutput: true,
   },
 ];
 
@@ -254,6 +269,14 @@ const MODELS: AiModelDescriptor[] = [
 export const OPENAI_DEFAULT_MODEL_LIMITS = {
   contextWindowTokens: 128_000,
   maxOutputTokens: 16_384,
+} as const;
+
+/**
+ * The conservative capability floor for an OpenAI model id this build cannot
+ * place (#358). See `capabilities.defaultModelFeatures`.
+ */
+export const OPENAI_DEFAULT_MODEL_FEATURES = {
+  structuredOutput: false,
 } as const;
 
 /**
@@ -327,6 +350,9 @@ export function deriveOpenAiModelDescriptor(
     label: trimmed,
     contextWindowTokens: best.contextWindowTokens,
     maxOutputTokens: best.maxOutputTokens,
+    // The family's capability, like its numbers (#358): a dated snapshot of a
+    // strict-schema model is a strict-schema model.
+    structuredOutput: best.structuredOutput,
   };
 }
 
@@ -682,6 +708,11 @@ export class OpenAiProvider
     // ever un-permittable for want of two numbers. See the constant for why a
     // floor is honest where a guess is not.
     defaultModelLimits: OPENAI_DEFAULT_MODEL_LIMITS,
+    // #358: an id this build cannot place could be any gateway model, so the
+    // floor claims no structured-output support. A false negative is
+    // recoverable (pick a catalogued model); a false positive fails a paid
+    // extraction.
+    defaultModelFeatures: OPENAI_DEFAULT_MODEL_FEATURES,
     // TRUE, AND `listModels` BELOW IS WHAT MAKES THAT LEGAL (#78) — the
     // registry refuses this provider at boot if the two disagree. `GET /models`
     // is the one route every OpenAI-compatible gateway implements, which is a

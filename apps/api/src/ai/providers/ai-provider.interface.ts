@@ -71,6 +71,16 @@ export interface AiModelDescriptor {
   contextWindowTokens: number;
   /** Most tokens this model will produce in one completion. */
   maxOutputTokens: number;
+  /**
+   * Whether this model supports schema-constrained structured output through
+   * {@link AiProvider.generateStructured} (#358).
+   *
+   * REQUIRED, for the same reason the numbers are: "unknown" has no safe
+   * interpretation at the call site — connected-knowledge extraction must not
+   * be pointed at a model that will fail a paid call. See
+   * {@link AiModelFeatureFlags}.
+   */
+  structuredOutput: boolean;
 }
 
 /**
@@ -109,6 +119,16 @@ export interface AiProviderCapabilities {
    * a gap to be filled with a number somebody made up.
    */
   defaultModelLimits?: { contextWindowTokens: number; maxOutputTokens: number };
+  /**
+   * The conservative feature floor for a model id this provider cannot place
+   * (#358) — beside `defaultModelLimits`, and asymmetric for the same reason:
+   * a false negative is recoverable (an administrator picks a catalogued
+   * model), a false positive fails a paid structured call.
+   *
+   * OPTIONAL, "PRESENCE IS THE DECLARATION". Absent means an unplaceable id
+   * resolves every flag to `false`.
+   */
+  defaultModelFeatures?: AiModelFeatureFlags;
   /**
    * Whether {@link AiProvider.listModels} is implemented (#78).
    *

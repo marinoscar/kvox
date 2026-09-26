@@ -1150,6 +1150,8 @@ describe('deriveOpenAiModelDescriptor (#97)', () => {
       label: 'gpt-5.4-mini-2026-03-17',
       contextWindowTokens: 400_000,
       maxOutputTokens: 128_000,
+      // #358: the family's capability travels with its numbers.
+      structuredOutput: true,
     });
   });
 

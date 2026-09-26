@@ -29,6 +29,7 @@ function stubProvider(overrides: Partial<AiProvider<unknown>> = {}): AiProvider<
           label: 'Stub 1',
           contextWindowTokens: 8000,
           maxOutputTokens: 2000,
+          structuredOutput: false,
         },
       ],
       streaming: true,
@@ -108,6 +109,7 @@ describe('AiProviderRegistry', () => {
                 label: 'Stub 1',
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
+                structuredOutput: false,
               },
             ],
             streaming: true,
@@ -130,6 +132,7 @@ describe('AiProviderRegistry', () => {
                 label: 'Stub 1',
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
+                structuredOutput: false,
               },
             ],
             streaming: true,
@@ -272,6 +275,7 @@ describe('AiProviderRegistry', () => {
                 label: 'Stub 1',
                 contextWindowTokens: 8000,
                 maxOutputTokens: 2000,
+                structuredOutput: false,
               },
             ],
             streaming: true,
@@ -313,6 +317,7 @@ describe('AiProviderRegistry', () => {
         label: 'Injected',
         contextWindowTokens: 1,
         maxOutputTokens: 1,
+        structuredOutput: false,
       });
       described.fieldDescriptors.length = 0;
 
