@@ -67,7 +67,13 @@ export function ProposalHeader({
   return (
     <Box sx={{ px: 2, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <Typography id={headingId} variant="h6" component="h2" sx={{ flexGrow: 1, fontSize: '1.05rem' }}>
+        <Typography
+          id={headingId}
+          variant="h6"
+          component="h2"
+          tabIndex={-1}
+          sx={{ flexGrow: 1, fontSize: '1.05rem', outline: 'none' }}
+        >
           Graph proposal
         </Typography>
         {summary && (

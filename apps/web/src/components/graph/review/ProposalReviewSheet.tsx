@@ -202,6 +202,15 @@ export function ProposalReviewSheet({
     if (!open) setSuspended(false);
   }, [open]);
 
+  // The persistent drawer is not modal, so nothing moves focus into it: do it
+  // here, onto the heading, so a keyboard user lands in the sheet they opened.
+  // (The phone's bottom sheet is a Modal, which focuses itself.)
+  useEffect(() => {
+    if (!open || isCompactWindow) return;
+    const timer = window.setTimeout(() => document.getElementById(headingId)?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [headingId, isCompactWindow, open]);
+
   const notify = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
     snackKey.current += 1;
     setSnackbar({ key: snackKey.current, message, actionLabel, onAction });
