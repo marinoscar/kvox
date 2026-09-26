@@ -9,6 +9,8 @@ import {
   mockGraphOntology,
   neighborhoodFixture,
   timelineFixture,
+  expandFixture,
+  type ExpandFixtureRequest,
 } from './graphData';
 import {
   emptyCommitResult,
@@ -482,6 +484,16 @@ export const handlers = [
   http.get(`${API_BASE}/graph/entities/:id/neighborhood`, () =>
     HttpResponse.json({ data: neighborhoodFixture() }),
   ),
+
+  // #374 — the explorer's expand, walked over `explorerFixtureEdges`.
+  http.post(`${API_BASE}/graph/explore/expand`, async ({ request }) => {
+    const body = (await request.json()) as ExpandFixtureRequest;
+    const slice = expandFixture(body);
+    if (!slice) {
+      return HttpResponse.json({ message: 'Entity not found', statusCode: 404 }, { status: 404 });
+    }
+    return HttpResponse.json({ data: slice });
+  }),
 
   http.get(`${API_BASE}/graph/entities/:id`, ({ params }) => {
     const id = String(params.id);

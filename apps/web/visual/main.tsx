@@ -122,6 +122,7 @@ const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
 // identical to what they were before the section existed.
 const GraphIndexPage = lazy(() => import('../src/pages/GraphIndexPage'));
 const GraphEntityPage = lazy(() => import('../src/pages/GraphEntityPage'));
+const GraphExplorerPage = lazy(() => import('../src/pages/GraphExplorerPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
@@ -393,6 +394,14 @@ function HarnessRoutes() {
             element={
               <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
                 <GraphEntityPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/graph/explore"
+            element={
+              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
+                <GraphExplorerPage />
               </RequirePermission>
             }
           />

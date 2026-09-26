@@ -10,7 +10,8 @@ import { onboardingResponse } from './onboardingApi';
  *   - `'settings'` (the default) — the Knowledge graph settings page (issue
  *     #369, epic #346): ontology, the user's own attribute definitions and
  *     `GET /api/ai/config`.
- *   - `'pages'` — the `/graph` index and entity page (issue #373, epic #347).
+ *   - `'pages'` — the `/graph` index and entity page (issue #373, epic #347),
+ *     and the explorer's `POST /api/graph/explore/expand` (issue #374).
  *     Shapes mirror #370's read API and #372's brief (and
  *     `apps/web/src/services/graph.ts`, which mirrors those field for field).
  *
@@ -428,6 +429,100 @@ const EVIDENCE = [
   },
 ];
 
+// -----------------------------------------------------------------------------
+// Explorer (#374) — a small fixed graph `POST /api/graph/explore/expand` walks
+// one hop over. Degrees are chosen so the keyboard order (degree, then label)
+// is Joe, Acme Corp, Ana Diaz, … — the explorer spec presses ArrowRight twice
+// to select Acme and Enter to expand it.
+// -----------------------------------------------------------------------------
+
+type ExplorerNode = {
+  id: string;
+  nodeKind: 'entity' | 'item';
+  type: string;
+  label: string;
+  degree: number;
+  status: string | null;
+  occurredAt: string | null;
+};
+
+const xNode = (nodeId: string, type: string, label: string, degree: number): ExplorerNode => ({
+  id: nodeId,
+  nodeKind: /^[a-z]/.test(type) ? 'item' : 'entity',
+  type,
+  label,
+  degree,
+  status: type === 'commitment' ? 'open' : null,
+  occurredAt: type === 'commitment' ? FIXED_ISO : null,
+});
+
+const EXPLORER_NODES: ExplorerNode[] = [
+  xNode(JOE_ID, 'Person', 'Joe Rivera', 6),
+  xNode(ACME_ID, 'Organization', 'Acme Corp', 5),
+  xNode(ANA_ID, 'Person', 'Ana Diaz', 4),
+  xNode(Q3_ID, 'Meeting', 'Q3 planning', 3),
+  xNode(id(3), 'Person', 'Ben Okafor', 2),
+  xNode(id(301), 'commitment', 'Ship the Atlas beta', 1),
+  xNode(id(12), 'Person', 'Dana Li', 1),
+  xNode(id(6), 'Project', 'Project Atlas', 1),
+  xNode(id(8), 'Meeting', 'Weekly sync', 2),
+];
+
+const xEdge = (n: number, type: string, source: string, target: string, virtual = false) => ({
+  id: virtual ? `virt:${source}:${type}` : id(n),
+  type,
+  source,
+  target,
+  valid: type === 'REPORTS_TO' ? { from: '2024-02-01T00:00:00.000Z', to: null, precision: 'month' } : null,
+  confidence: virtual ? null : 0.9,
+  virtual,
+});
+
+const EXPLORER_EDGES = [
+  xEdge(410, 'WORKS_FOR', JOE_ID, ACME_ID),
+  xEdge(411, 'REPORTS_TO', JOE_ID, ANA_ID),
+  xEdge(412, 'ATTENDED', JOE_ID, Q3_ID),
+  xEdge(413, 'ATTENDED', JOE_ID, id(8)),
+  xEdge(0, 'ASSIGNED_TO', id(301), JOE_ID, true),
+  xEdge(414, 'WORKS_FOR', ANA_ID, ACME_ID),
+  xEdge(415, 'WORKS_FOR', id(12), ACME_ID),
+  xEdge(416, 'PART_OF', id(6), ACME_ID),
+  xEdge(417, 'WORKS_FOR', id(3), ACME_ID),
+  xEdge(418, 'ATTENDED', ANA_ID, Q3_ID),
+  xEdge(419, 'ATTENDED', id(3), id(8)),
+];
+
+function explorerSlice(nodeIds: string[], cap: number) {
+  const byId = new Map(EXPLORER_NODES.map((n) => [n.id, n]));
+  const depth = new Map<string, number>(nodeIds.map((n) => [n, 0]));
+  for (const e of EXPLORER_EDGES) {
+    if (nodeIds.includes(e.source) && !depth.has(e.target)) depth.set(e.target, 1);
+    if (nodeIds.includes(e.target) && !depth.has(e.source)) depth.set(e.source, 1);
+  }
+  const kept = [...depth.keys()].filter((n) => byId.has(n)).slice(0, cap);
+  const keep = new Set(kept);
+  return {
+    seedIds: nodeIds,
+    asOf: FIXED_ISO,
+    nodes: kept.map((n) => ({ ...byId.get(n)!, depth: depth.get(n)! })),
+    edges: EXPLORER_EDGES.filter((e) => keep.has(e.source) && keep.has(e.target)),
+    truncated: false,
+    cap,
+  };
+}
+
+/** 399 generated people around Joe: more than fits, so the explorer caps at 300. */
+function cappedSlice() {
+  const nodes = [{ ...EXPLORER_NODES[0], depth: 0, degree: 399 }];
+  const edges = [];
+  for (let i = 0; i < 399; i += 1) {
+    const nodeId = id(20_000 + i);
+    nodes.push({ ...xNode(nodeId, 'Person', `Person ${i + 1}`, 1 + (i % 5)), depth: 1 });
+    edges.push({ id: id(40_000 + i), type: 'WORKS_FOR', source: nodeId, target: JOE_ID, valid: null, confidence: 0.8, virtual: false });
+  }
+  return { seedIds: [JOE_ID], asOf: FIXED_ISO, nodes, edges, truncated: true, cap: 300 };
+}
+
 /** The permissions a graph baseline runs with — a reader AND a writer. */
 export const GRAPH_PERMS = [
   'user_settings:read',
@@ -445,6 +540,8 @@ export interface GraphApiOptions {
   empty?: boolean;
   /** `'settings'`: answer `GET /api/ai/config` with `graphEnabled: false`. */
   graphDisabled?: boolean;
+  /** `'pages'`: every explorer expand answers with a 300-node slice (the cap). */
+  explorerCapped?: boolean;
 }
 
 function json(route: Route, data: unknown) {
@@ -462,6 +559,12 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
     const path = url.pathname.replace(/^.*\/api/, '');
 
     if (path === '/graph/ontology') return json(route, PAGES_ONTOLOGY);
+
+    if (path === '/graph/explore/expand') {
+      if (options.explorerCapped) return json(route, cappedSlice());
+      const body = (route.request().postDataJSON() ?? {}) as { nodeIds?: string[]; cap?: number };
+      return json(route, explorerSlice(body.nodeIds ?? [JOE_ID], body.cap ?? 100));
+    }
 
     if (path === '/graph/entities') {
       if (options.empty) return json(route, { items: [], nextCursor: null });

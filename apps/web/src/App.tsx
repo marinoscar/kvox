@@ -56,6 +56,8 @@ const NoteHistoryPage = lazy(() => import('./pages/NoteHistoryPage'));
 // Knowledge graph (#373, epic #347).
 const GraphIndexPage = lazy(() => import('./pages/GraphIndexPage'));
 const GraphEntityPage = lazy(() => import('./pages/GraphEntityPage'));
+// The explorer (#374) — sigma/graphology live only behind this lazy import.
+const GraphExplorerPage = lazy(() => import('./pages/GraphExplorerPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 // `User`-prefixed to make explicit that it edits the signed-in user's own
@@ -417,6 +419,19 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <GraphEntityPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* The explorer (#374, spec §22.2). Same owner, same gate:
+                      `POST /api/graph/explore/expand` is `graph:read`. */}
+                  <Route
+                    path="/graph/explore"
+                    element={
+                      <RequirePermission
+                        permission="graph:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <GraphExplorerPage />
                       </RequirePermission>
                     }
                   />

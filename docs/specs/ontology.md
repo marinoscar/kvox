@@ -1730,8 +1730,10 @@ section — all described below, and all owned by the `home` destination as
 this section already specified. It was built against the **contracts** of
 the read API (#370) and the entity brief (#372) with MSW, ahead of those
 routes landing on the API — the sections below describe the shipped design,
-not a plan. The neighbourhood-canvas explorer (§22) and the Ask panel
-(§21.5) are separate, later issues (#374, #381) and are not part of this.
+not a plan. **The neighbourhood-canvas explorer (§22) is built too (issue
+#374)**: `/graph/explore` and the entity page's `NeighborhoodWidget`. The
+Ask panel (§21.5) is a separate, later issue (#381) and is not part of
+this.
 
 **Proposal panel** — a side sheet on the note page, **not a tab**. Per
 Settings UI Pattern rule 2 (CLAUDE.md), a tab gate is about *content*
@@ -1751,9 +1753,15 @@ whole-graph view for a shallow, meeting-scoped graph is a view nobody asked
 for and a rendering cost nobody budgeted). #373's **Connections** section
 is the 1-hop list form of this — grouped by relation type, each row linking
 to the other entity, with a "Showing 100 of many — open in Explorer" link
-once truncated; the interactive sigma.js **canvas** widget this paragraph
-first describes is a separate, later addition (`NeighborhoodWidget`, #374)
-that mounts above the list on the same page. The rendering library named as a
+once truncated. **Built** (issue #374): the interactive sigma.js **canvas**
+widget this paragraph first describes, `NeighborhoodWidget`, mounts above
+this Connections list on the same page — the list stays the accessible text
+form of the identical one-hop slice, and is what a browser without WebGL,
+or the canvas's own error/empty states, fall back to (the widget renders
+nothing rather than duplicating either). On a phone the canvas is not
+interactive — a pannable canvas inside a scrolling column would trap the
+page's scroll under a thumb — so a tap opens the explorer instead. The
+rendering library named as a
 deferred decision here in an earlier draft of this document is deferred no
 longer — §22 chooses sigma.js + graphology and records `react-force-graph`
 and `cytoscape` as rejected, once this document actually had to build the
@@ -2732,6 +2740,27 @@ below, rather than left open any further.
 
 ### 22.2 Explorer (`/graph/explore`)
 
+**Built** (issue #374). The exact versions: `sigma` `^3.0.3`, `graphology`
+`^0.26.0`, `@react-sigma/core` `^5.0.6`, `graphology-layout` `^0.6.1`,
+`graphology-layout-forceatlas2` `^0.10.1`, `graphology-types` `^0.24.8`.
+`apps/web/src/components/graph/explorer/GraphCanvas.tsx` is the **one** file
+in the codebase that imports `sigma`, generic enough that the entity page's
+`NeighborhoodWidget` (§13) and the future whole-graph overview (§22.3) both
+draw through it rather than each carrying its own renderer.
+
+⚠ **The ForceAtlas2 settle runs on the main thread, in frame-sized slices,
+for a fixed 180 iterations (2 per frame, ~1.5s at 60fps) — not in
+`graphology-layout-forceatlas2`'s own web-worker supervisor.** That
+supervisor spawns its worker from a `blob:` URL, and production's CSP
+(`infra/nginx/csp.conf`) is `worker-src 'self'`: the worker would be refused
+in exactly the environment that matters, and loosening the CSP for a layout
+is not a trade worth making. Bounding the settle by iteration count rather
+than the clock is also what makes it **deterministic** — the same graph
+always reaches the same picture regardless of how fast the machine is —
+which is what `?layout=static` (never moves a node; used by the visual test
+suite, and applied automatically whenever `prefers-reduced-motion: reduce`
+is set) depends on.
+
 Seeded from an entity page, a search result, or a bare visit to
 `/graph/explore` itself (in which case it seeds from the caller's
 most-recently-viewed entities, `kg_entity_views`, §9.2); **expand-on-click**
@@ -2751,6 +2780,17 @@ rather than silently degrading into an unreadable hairball or a frozen tab;
 force-directed layout that still redraws smoothly on an ordinary laptop, not
 against any property of this design's own graph size, which §3.5's "shallow
 by construction" scope means rarely approaches it during ordinary use.
+
+A browser with no WebGL (`webgl.ts`'s `isWebGLAvailable()`), or `?view=list`,
+renders an **accessible list view** (`ExplorerListView.tsx`) carrying the
+identical nodes and edges rather than an apology — sigma and graphology
+never enter that code path, because `GraphCanvas` is lazy-loaded a *second*
+time inside the already-lazy `/graph/explore` page. The canvas itself is
+fully keyboard-operable: arrow keys step between nodes, Enter expands the
+selected one, `+`/`-`/`0` zoom/fit, `L` toggles the list view, `O` opens the
+selected entity's page, and `Escape` deselects — each selection is also
+announced through a live region for a screen-reader user who cannot see the
+canvas at all.
 
 ### 22.3 Whole-graph overview (`/graph/overview`)
 
