@@ -1,0 +1,27 @@
+// Compiles src/ontology/**/*.ts to COMMITTED CommonJS + .d.ts under ontology/,
+// published as the `@app/shared/ontology` subpath. The output directory is
+// deliberately not `dist/`: .dockerignore drops every `**/dist`, so the images
+// would build green and die at boot with `Cannot find module`.
+//
+// After editing a source: `npm run build:ontology --workspace=@app/shared`, and
+// commit the output with the source. CI rebuilds and fails on any diff.
+{
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "src/ontology",
+    "outDir": "ontology",
+    "types": [],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "newLine": "lf"
+  },
+  "include": ["src/ontology/**/*.ts"]
+}

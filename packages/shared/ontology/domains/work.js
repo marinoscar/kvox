@@ -1,0 +1,268 @@
+"use strict";
+// =============================================================================
+// The `work` domain (docs/specs/ontology.md §5.1, §5.2, §5.4, §17.2). On by
+// default; a user may turn it off, and then none of these types or relations is
+// ever shown to them or sent to the model.
+//
+// Every `description` and `disambiguation` string below is extraction-prompt
+// copy: `kg.extract` sends it to the model verbatim.
+//
+// KEYS ARE PERMANENT (§17.1): deprecate, never rename or delete, and record
+// every new key in `shipped-keys.ts`.
+// =============================================================================
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.workDomain = exports.Decision = exports.Commitment = exports.Project = void 0;
+const define_js_1 = require("../define.js");
+exports.Project = (0, define_js_1.defineEntityType)({
+    key: 'Project',
+    domain: 'work',
+    label: 'Project',
+    pluralLabel: 'Projects',
+    description: 'A named effort with a start and an expected (even if fuzzy) end that meetings, decisions and commitments attach to, e.g. "Q2 pilot" or "the vendor migration".',
+    disambiguation: [
+        'A recurring meeting topic with no start or end and nothing attaching to it as a unit of work is a topic, not a Project.',
+        'Do not create a Project for every recurring conversation subject; create one only when it anchors work.',
+    ],
+    attributes: {
+        status: {
+            kind: 'select',
+            label: 'Status',
+            description: 'Where the project stands, only if the source says so.',
+            extractable: true,
+            options: {
+                choices: [
+                    { value: 'planned', label: 'Planned' },
+                    { value: 'active', label: 'Active' },
+                    { value: 'done', label: 'Done' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                ],
+            },
+        },
+        startDate: {
+            kind: 'date',
+            label: 'Start date',
+            description: 'The date the project started or is planned to start, if stated.',
+            extractable: true,
+        },
+        endDate: {
+            kind: 'date',
+            label: 'End date',
+            description: 'The date the project ended or is expected to end, if stated.',
+            extractable: true,
+        },
+    },
+    sensitivityDefault: 'business',
+    alignment: 'schema:Project',
+});
+exports.Commitment = (0, define_js_1.defineEntityType)({
+    key: 'Commitment',
+    domain: 'work',
+    label: 'Commitment',
+    pluralLabel: 'Commitments',
+    description: 'A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. "Sarah will send the updated proposal by Friday".',
+    disambiguation: [
+        'No owner named or clearly implied means it is not a Commitment: "we should probably look into that" is a Claim at most, or nothing.',
+        'Never force-fit a sentence into a Commitment because it sounds task-shaped.',
+    ],
+    attributes: {},
+    sensitivityDefault: 'business',
+    itemKind: 'commitment',
+    statuses: ['open', 'done', 'dropped', 'superseded'],
+    subjectTypes: ['Person', 'Organization', 'Project'],
+    subjectRequired: false,
+});
+exports.Decision = (0, define_js_1.defineEntityType)({
+    key: 'Decision',
+    domain: 'work',
+    label: 'Decision',
+    pluralLabel: 'Decisions',
+    description: 'A choice that was made: what was chosen and, when the source states it, the option that was rejected.',
+    disambiguation: [
+        'A later reversal is a new Decision that supersedes the old one; never edit the earlier Decision.',
+        'A statement of fact that involves no choice is a Claim, not a Decision.',
+    ],
+    attributes: {
+        rejectedOption: {
+            kind: 'text',
+            label: 'Rejected option',
+            description: 'The option that was considered and rejected, only if the source states it.',
+            extractable: true,
+        },
+    },
+    sensitivityDefault: 'business',
+    itemKind: 'decision',
+    statuses: ['active', 'superseded'],
+    subjectTypes: ['Person', 'Organization', 'Project'],
+    subjectRequired: false,
+});
+exports.workDomain = (0, define_js_1.defineDomain)({
+    key: 'work',
+    label: 'Work',
+    alwaysOn: false,
+    defaultEnabled: true,
+    entityTypes: [exports.Project, exports.Commitment, exports.Decision],
+    relationTypes: [
+        (0, define_js_1.defineRelationType)({
+            key: 'WORKS_FOR',
+            domain: 'work',
+            label: 'Works for',
+            description: 'A person is employed by, or works on behalf of, an organization.',
+            from: ['Person'],
+            to: ['Organization'],
+            temporal: true,
+            exclusive: 'soft',
+            exclusiveScope: 'from',
+            props: {},
+            representation: { kind: 'edge' },
+            extractable: true,
+            alignment: 'schema:worksFor',
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'HAS_ROLE',
+            domain: 'work',
+            label: 'Has role',
+            description: 'A person holds a titled role at an organization for a period of time.',
+            from: ['Person'],
+            to: ['Organization'],
+            temporal: true,
+            exclusive: 'soft',
+            exclusiveScope: 'from_to',
+            props: {
+                title: {
+                    kind: 'text',
+                    label: 'Title',
+                    description: 'The job title the person holds in this role, e.g. "Staff Engineer".',
+                    required: true,
+                    extractable: true,
+                },
+            },
+            representation: { kind: 'edge' },
+            extractable: true,
+            alignment: 'schema:hasOccupation',
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'REPORTS_TO',
+            domain: 'work',
+            label: 'Reports to',
+            description: 'A person reports to another person, their manager, for a period of time.',
+            from: ['Person'],
+            to: ['Person'],
+            temporal: true,
+            exclusive: 'soft',
+            exclusiveScope: 'from',
+            props: {},
+            representation: { kind: 'edge' },
+            extractable: true,
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'ATTENDED',
+            domain: 'work',
+            label: 'Attended',
+            description: 'A person took part in a meeting.',
+            from: ['Person'],
+            to: ['Meeting'],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'edge' },
+            extractable: true,
+            alignment: 'schema:attendee',
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'DISCUSSED',
+            domain: 'work',
+            label: 'Discussed',
+            description: 'A meeting discussed a project as a substantive topic.',
+            from: ['Meeting'],
+            to: ['Project'],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'edge' },
+            extractable: true,
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'PART_OF',
+            domain: 'work',
+            label: 'Part of',
+            description: 'A project belongs to an organization, or a meeting belongs to a project.',
+            from: ['Project', 'Meeting'],
+            to: ['Organization', 'Project'],
+            allowedPairs: [
+                ['Project', 'Organization'],
+                ['Meeting', 'Project'],
+            ],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'edge' },
+            extractable: true,
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'ASSIGNED_TO',
+            domain: 'work',
+            label: 'Assigned to',
+            description: 'The person who owns a commitment and is expected to carry it out.',
+            from: ['Commitment'],
+            to: ['Person'],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'item_column', column: 'owner_person_id' },
+            extractable: false,
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'OWED_TO',
+            domain: 'work',
+            label: 'Owed to',
+            description: 'The person or organization a commitment is owed to, when one is stated.',
+            from: ['Commitment'],
+            to: ['Person', 'Organization'],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'item_column', column: 'counterparty_id' },
+            extractable: false,
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'CREATED_IN',
+            domain: 'work',
+            label: 'Created in',
+            description: 'The meeting in which a commitment was made.',
+            from: ['Commitment'],
+            to: ['Meeting'],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'item_column', column: 'meeting_id' },
+            extractable: false,
+        }),
+        (0, define_js_1.defineRelationType)({
+            key: 'DECIDED_IN',
+            domain: 'work',
+            label: 'Decided in',
+            description: 'The meeting in which a decision was made.',
+            from: ['Decision'],
+            to: ['Meeting'],
+            temporal: false,
+            exclusive: 'none',
+            props: {},
+            representation: { kind: 'item_column', column: 'meeting_id' },
+            extractable: false,
+        }),
+    ],
+    mixins: [
+        {
+            entityType: 'Person',
+            attributes: {
+                title: {
+                    kind: 'text',
+                    label: 'Job title',
+                    description: "The person's job title, only if the source states it.",
+                    extractable: true,
+                    sensitivity: 'business',
+                },
+            },
+        },
+    ],
+});

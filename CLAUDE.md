@@ -1902,8 +1902,14 @@ gate, retrieval, privacy) is [`docs/specs/ontology.md`](docs/specs/ontology.md).
 The same document also specifies a review UI for overriding extraction,
 per-task-and-per-user AI model selection, a read-only "Ask" agent over the
 graph, and an explorer/whole-graph visualization (§19–§22).
-**Nothing described there is built** — no `kg_*` tables, no `graph.*` jobs,
-no `/api/graph/*` routes, no graph UI. Five rules a neighbouring file can
+**The ontology definition package is built (issue #350); nothing else
+described there is.** Its sources live at `packages/shared/src/ontology/`,
+compiled with `npm run build:ontology --workspace=@app/shared` into
+committed output at `packages/shared/ontology/` and consumed as
+`@app/shared/ontology`. Edit sources, rebuild, and commit the compiled
+output in the same commit as the source change — CI rebuilds and fails on
+any diff. There are still no `kg_*` tables, no `graph.*` jobs, no
+`/api/graph/*` routes, and no graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
