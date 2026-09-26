@@ -26,8 +26,16 @@ export interface KgEvalRunner {
   run(fixture: GoldenFixture, opts: KgEvalRunOptions): Promise<KgEvalPrediction>;
 }
 
-/** Runners add entries; empty until the kg.extract issue registers `extract`. */
-export const KG_EVAL_RUNNERS: Record<string, () => Promise<KgEvalRunner>> = {};
+/**
+ * Runners add entries — lazy factories, so a `--predictions` run never loads
+ * provider code. `extract` is kg.extract's own pipeline (#363).
+ */
+export const KG_EVAL_RUNNERS: Record<string, () => Promise<KgEvalRunner>> = {
+  // `require`, not `import()`: under NodeNext a dynamic import stays a native
+  // ESM import, which cannot load a `.ts` file through ts-node.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  extract: async () => (require('./runners/extract-runner') as typeof import('./runners/extract-runner')).createExtractRunner(),
+};
 
 /** The environment variable a runner's API key is read from — never a flag. */
 export const KG_EVAL_API_KEY_ENV = 'KG_EVAL_OPENAI_API_KEY';
