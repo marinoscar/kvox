@@ -116,6 +116,25 @@ export const goldenFixtureSchema = z.object({
       }),
     )
     .default([]),
+  /**
+   * #365: the prior graph's accepted temporal/other edges between known
+   * entities, so the in-memory `work-item-dedup`/`temporal-closing` pass has
+   * something to find `known` and to close. Optional; absent = none.
+   */
+  knownRelations: z
+    .array(
+      z.object({
+        id: z.string(),
+        type: z.string(),
+        from: z.string(),
+        to: z.string(),
+        props: propsSchema,
+        validFrom: isoDateSchema.nullable().default(null),
+        validTo: isoDateSchema.nullable().default(null),
+        precision: validPrecisionSchema.default('unknown'),
+      }),
+    )
+    .default([]),
   labels: z.object({
     entities: z.array(goldenEntityLabelSchema),
     relations: z.array(goldenRelationLabelSchema),

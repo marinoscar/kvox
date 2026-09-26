@@ -6,7 +6,7 @@
 
 import { loadGoldenSet, selectFixtures } from '../../scripts/kg-eval/load';
 import { KG_EVAL_RUNNERS } from '../../scripts/kg-eval/runner';
-import { resolveRowsInMemory, trigramSimilarity } from '../../scripts/kg-eval/runners/extract-resolve-runner';
+import { applyDedupStagesInMemory, resolveRowsInMemory, trigramSimilarity } from '../../scripts/kg-eval/runners/extract-resolve-runner';
 import { fixtureToInput } from '../../scripts/kg-eval/runners/extract-runner';
 import type { ProposedRow } from '../../src/graph/extraction/validate';
 
@@ -50,5 +50,48 @@ describe('kg:eval extract+resolve runner (#364)', () => {
     const [row] = resolveRowsInMemory(fixture, [{ ...personRow('e1', known.label), payload: { ...personRow('e1', known.label).payload, type: known.type } } as ProposedRow]);
     expect(row.resolution?.candidates[0]).toMatchObject({ entityId: known.id });
     expect(row.resolution?.candidates[0].signals).toContain('alias_exact');
+  });
+
+  describe('#365 dedup and closing, in memory', () => {
+    const linkedEntity = (ref: string, type: string, id: string): ProposedRow => ({
+      kind: 'entity',
+      payload: { ref, type, label: ref, aliases: [], props: {}, occurredAt: null },
+      resolution: { ref: id, score: 1, source: 'alias', candidates: [], adjudication: null },
+      flags: [],
+      evidence: [],
+    });
+    const worksFor = (validFrom: string, to = 'e2'): ProposedRow => ({
+      kind: 'relation',
+      payload: { ref: 'r1', type: 'WORKS_FOR', from: { ref: 'e1' }, to: { ref: to }, props: {}, validFrom, validTo: null, precision: 'year' },
+      resolution: null,
+      flags: [],
+      evidence: [],
+    });
+    const withPrior = {
+      ...m01,
+      knownRelations: [
+        { id: 'k-works', type: 'WORKS_FOR', from: 'g-joe', to: 'g-acme', props: {}, validFrom: '2019-01-01', validTo: '2025-01-01', precision: 'year' as const },
+        { id: 'k-role', type: 'WORKS_FOR', from: 'g-ann', to: 'g-acme', props: {}, validFrom: '2019-01-01', validTo: null, precision: 'year' as const },
+      ],
+    };
+
+    it('a fact inside a known edge is known; a new employer closes an open edge', () => {
+      const known = applyDedupStagesInMemory(withPrior, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-acme'), worksFor('2020-01-01')]);
+      expect(known.rows[2].flags).toEqual(['known']);
+      expect(known.stats).toMatchObject({ known: 1, closings: 0 });
+
+      const moved = applyDedupStagesInMemory(withPrior, [
+        linkedEntity('e1', 'Person', 'g-ann'),
+        linkedEntity('e3', 'Organization', 'g-globex'),
+        worksFor('2026-01-01', 'e3'),
+      ]);
+      expect(moved.stats).toMatchObject({ known: 0, closings: 1, overlaps: 0 });
+    });
+
+    it('does nothing without prior edges (every golden fixture today)', () => {
+      const out = applyDedupStagesInMemory(m01, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-acme'), worksFor('2020-01-01')]);
+      expect(out.stats).toEqual({ known: 0, closings: 0, overlaps: 0, unordered: 0 });
+      expect(out.rows[2].flags).toEqual([]);
+    });
   });
 });

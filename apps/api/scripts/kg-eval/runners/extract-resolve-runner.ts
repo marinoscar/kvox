@@ -19,6 +19,13 @@
 // production does. Adjudication is OFF — the eval measures the deterministic
 // bands; a middle-band row is `possible_duplicate` and never pre-checked.
 //
+// #365: after resolution, the pure cores of `work-item-dedup` (relations) and
+// `temporal-closing` run against the fixture's `knownRelations` through #353's
+// planner, so a restated edge is `known`, an overlap is flagged and a closing
+// is counted (`stats.closings`) exactly as production would propose them.
+// Item dedup needs an embedding and an adjudication call, neither of which an
+// eval run makes; it is covered by the stage's own tests instead.
+//
 // ⚠ The key reaches the provider context only (inside `runExtraction`).
 // =============================================================================
 
@@ -27,6 +34,20 @@ import type { AiProvider } from '../../../src/ai/providers/ai-provider.interface
 import { OpenAiProvider } from '../../../src/ai/providers/openai.provider';
 import { normalizeForMatch } from '../../../src/graph/extraction/extraction-context';
 import type { ProposedRow } from '../../../src/graph/extraction/validate';
+import { computeEffectiveSchema } from '@app/shared/ontology';
+import {
+  candidateEdge,
+  entityView,
+  existingId,
+  isExclusiveTemporal,
+  placeholderId,
+  proposedRelationRange,
+  relationKnown,
+  resolveEndpoint,
+  ruleForEffectiveRelation,
+  type ProposalEntityView,
+} from '../../../src/graph/dedup/dedup-core';
+import { planTemporalInsert, type TemporalEdge } from '../../../src/graph/temporal';
 import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '../../../src/graph/preferences/graph-preferences.defaults';
 import { decide } from '../../../src/graph/resolution/resolution.service';
 import { bandFor, rankCandidates, scoreCandidate } from '../../../src/graph/resolution/score';
@@ -129,6 +150,51 @@ export function resolveRowsInMemory(
   });
 }
 
+/**
+ * PURE. #365's relation dedup and closing plan, in memory, against the
+ * fixture's prior edges: `known` rows flagged (and so pre-accepted), `overlaps`
+ * / `unordered` copied from #353's plan, and closings counted.
+ */
+export function applyDedupStagesInMemory(
+  fixture: GoldenFixture,
+  rows: readonly ProposedRow[],
+): { rows: ProposedRow[]; stats: { known: number; closings: number; overlaps: number; unordered: number } } {
+  const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+  const prior: TemporalEdge[] = fixture.knownRelations.map((r) => {
+    const { range, precision } = proposedRelationRange(r, 'state');
+    return { id: r.id, type: r.type, fromId: r.from, toId: r.to, props: r.props, valid: range, precision, reviewStatus: 'accepted' };
+  });
+  const entities = new Map<string, ProposalEntityView>();
+  for (const row of rows) if (row.kind === 'entity') entities.set(row.payload.ref, entityView(row.payload, row.resolution));
+
+  const stats = { known: 0, closings: 0, overlaps: 0, unordered: 0 };
+  const closed = new Set<string>();
+  const out = rows.map((row) => {
+    if (row.kind !== 'relation') return row;
+    const p = row.payload;
+    const type = schema.relationType(p.type);
+    const fromId = existingId(resolveEndpoint(p.from, entities));
+    if (!type || !fromId) return row;
+    const rule = ruleForEffectiveRelation(type);
+    const to = resolveEndpoint(p.to, entities);
+    const toId = existingId(to);
+    if (toId && relationKnown(prior, p, fromId, toId, rule).known) {
+      stats.known += 1;
+      return { ...row, flags: [...new Set([...row.flags, 'known' as const])] };
+    }
+    if (!isExclusiveTemporal(rule)) return row;
+    const plan = planTemporalInsert(prior, candidateEdge(p, fromId, placeholderId(to), rule), rule);
+    if (plan.action !== 'create') return row;
+    for (const c of plan.closes) if (!closed.has(c.edgeId)) closed.add(c.edgeId);
+    const flags = plan.flags.filter((f) => f === 'overlaps' || f === 'unordered');
+    if (flags.includes('overlaps')) stats.overlaps += 1;
+    if (flags.includes('unordered')) stats.unordered += 1;
+    return flags.length > 0 ? { ...row, flags: [...new Set([...row.flags, ...flags])] } : row;
+  });
+  stats.closings = closed.size;
+  return { rows: out, stats };
+}
+
 export function createExtractResolveRunner(deps: ExtractRunnerDeps = {}): KgEvalRunner {
   const provider = deps.provider ?? (new OpenAiProvider(new AiProviderRegistry()) as unknown as AiProvider<unknown>);
   return {
@@ -139,7 +205,8 @@ export function createExtractResolveRunner(deps: ExtractRunnerDeps = {}): KgEval
         return { fixtureId: fixture.id, model: opts.model, entities: [], relations: [], items: [], stats: { invalidOutput: 1 } };
       }
       const resolved = resolveRowsInMemory(fixture, extracted.rows);
-      return precheckToPrediction(fixture.id, opts.model, resolved, extracted.stats);
+      const deduped = applyDedupStagesInMemory(fixture, resolved);
+      return precheckToPrediction(fixture.id, opts.model, deduped.rows, { ...extracted.stats, ...deduped.stats });
     },
   };
 }
