@@ -456,6 +456,16 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/graph');
     });
 
+    it('shows Back + "Overview" on the whole-graph overview, going up to the graph index (#375)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/graph/overview' } });
+
+      expect(screen.getByText('Overview')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/graph');
+    });
+
     it('shows Back + "Knowledge" on the graph index, going up to Home (#373)', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);

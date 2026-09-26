@@ -2248,6 +2248,9 @@ Destination Model above. It reads #370's read API and #372's brief — see
 page's `NeighborhoodWidget` above its Connections list, both drawing through
 the one file that imports sigma, `GraphCanvas.tsx` — see `docs/specs/ontology.md`
 §22 for the library choice and the shipped design.
+The whole-graph overview (`/graph/overview`, issue #375) draws #371's stored layout snapshot
+with the explorer's `GraphCanvas` (static, never laid out client-side) and drills into
+`/graph/explore` through the in-memory `explorerHandoff`; see `docs/specs/ontology.md` §22.3.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph

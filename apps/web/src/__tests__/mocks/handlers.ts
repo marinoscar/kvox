@@ -8,6 +8,7 @@ import {
   mentionFixtures,
   mockGraphOntology,
   neighborhoodFixture,
+  overviewFixture,
   timelineFixture,
   expandFixture,
   type ExpandFixtureRequest,
@@ -494,6 +495,14 @@ export const handlers = [
     }
     return HttpResponse.json({ data: slice });
   }),
+
+  // #375 — the whole-graph overview (#371): a ready snapshot; suites override
+  // for the pending/stale/none/tooLarge/truncated states.
+  http.get(`${API_BASE}/graph/overview`, () => HttpResponse.json({ data: overviewFixture() })),
+
+  http.post(`${API_BASE}/graph/overview/refresh`, () =>
+    HttpResponse.json({ data: { jobId: 'job-layout-1', deduplicated: false } }, { status: 202 }),
+  ),
 
   http.get(`${API_BASE}/graph/entities/:id`, ({ params }) => {
     const id = String(params.id);

@@ -32,6 +32,8 @@ import type {
   GraphEdge,
   GraphEntitySummary,
   GraphOntology,
+  GraphOverview,
+  GraphOverviewNode,
   GraphSlice,
   TimelineEvent,
   CommitResult,
@@ -1249,3 +1251,72 @@ export function manyNodesSlice(seedId: string, count: number, offset = 5000): Gr
   }
   return { seedIds: [seedId], asOf: '2026-09-26T00:00:00.000Z', nodes, edges, truncated: false, cap: 300 };
 }
+
+// ---------------------------------------------------------------------------
+// Whole-graph overview (#375, against #371's `GET /api/graph/overview`)
+// ---------------------------------------------------------------------------
+
+export const LONE_ID = gid(20);
+export const OVERVIEW_COMPUTED_AT = '2026-09-20T15:00:00.000Z';
+
+/** Positioned nodes: three clusters around the fixture's entities, plus one isolated person. */
+export const overviewNodes: GraphOverviewNode[] = [
+  { id: ACME_ID, label: 'Acme Corp', type: 'Organization', x: -400, y: 120, clusterId: 0, degree: 5 },
+  { id: JOE_ID, label: 'Joe Rivera', type: 'Person', x: -330, y: 60, clusterId: 0, degree: 5 },
+  { id: ATLAS_ID, label: 'Project Atlas', type: 'Project', x: -470, y: 40, clusterId: 0, degree: 3 },
+  { id: BEN_ID, label: 'Ben Okafor', type: 'Person', x: -350, y: 210, clusterId: 0, degree: 2 },
+  { id: DANA_ID, label: 'Dana Li', type: 'Person', x: -460, y: 200, clusterId: 0, degree: 1 },
+  { id: Q3_MEETING_ID, label: 'Q3 planning', type: 'Meeting', x: -300, y: 160, clusterId: 0, degree: 2 },
+  { id: GLOBEX_ID, label: 'Globex', type: 'Organization', x: 380, y: -150, clusterId: 1, degree: 3 },
+  { id: ANA_ID, label: 'Ana Diaz', type: 'Person', x: 440, y: -90, clusterId: 1, degree: 3 },
+  { id: CARLA_ID, label: 'Carla Mendes', type: 'Person', x: 320, y: -210, clusterId: 1, degree: 2 },
+  { id: SYNC_MEETING_ID, label: 'Weekly sync', type: 'Meeting', x: 450, y: -220, clusterId: 1, degree: 2 },
+  { id: INITECH_ID, label: 'Initech', type: 'Organization', x: 150, y: 420, clusterId: 2, degree: 1 },
+  { id: BEACON_ID, label: 'Project Beacon', type: 'Project', x: 210, y: 470, clusterId: 2, degree: 1 },
+  { id: LONE_ID, label: 'Lee Park', type: 'Person', x: 700, y: 600, clusterId: -1, degree: 0 },
+];
+
+function sampleOf(clusterId: number) {
+  return overviewNodes
+    .filter((n) => n.clusterId === clusterId)
+    .sort((a, b) => b.degree - a.degree || a.label.localeCompare(b.label))
+    .slice(0, 8)
+    .map(({ id, label, type, degree }) => ({ id, label, type, degree }));
+}
+
+/** A ready, fresh snapshot. Override any field for the other states. */
+export function overviewFixture(overrides: Partial<GraphOverview> = {}): GraphOverview {
+  return {
+    status: 'ready',
+    pending: false,
+    computedAt: OVERVIEW_COMPUTED_AT,
+    stale: false,
+    tooLarge: false,
+    nodeCount: 13,
+    edgeCount: 16,
+    clusters: [
+      { id: 0, label: 'Acme Corp', labelEntityId: ACME_ID, size: 6, x: -385, y: 125, radius: 48.99, typeCounts: { Person: 3, Organization: 1, Project: 1, Meeting: 1 }, memberSample: sampleOf(0) },
+      { id: 1, label: 'Globex', labelEntityId: GLOBEX_ID, size: 4, x: 397, y: -167, radius: 40, typeCounts: { Person: 2, Organization: 1, Meeting: 1 }, memberSample: sampleOf(1) },
+      { id: 2, label: 'Cluster 3', labelEntityId: null, size: 2, x: 180, y: 445, radius: 28.28, typeCounts: { Organization: 1, Project: 1 }, memberSample: sampleOf(2) },
+      { id: -1, label: 'Unconnected', labelEntityId: null, size: 1, x: 700, y: 600, radius: 20, typeCounts: { Person: 1 }, memberSample: sampleOf(-1) },
+    ],
+    clusterEdges: [
+      { a: 0, b: 1, weight: 3 },
+      { a: 0, b: 2, weight: 1 },
+    ],
+    nodes: overviewNodes,
+    nodesTruncated: false,
+    ...overrides,
+  };
+}
+
+/** The named states the page renders, for `?fixture`-style lookups in tests. */
+export const overviewStates = {
+  ready: () => overviewFixture(),
+  stale: () => overviewFixture({ stale: true }),
+  pending: () => overviewFixture({ stale: true, pending: true }),
+  building: () => overviewFixture({ status: 'none', pending: true, computedAt: null, nodeCount: 0, edgeCount: 0, clusters: [], clusterEdges: [], nodes: [] }),
+  empty: () => overviewFixture({ status: 'none', pending: false, computedAt: null, nodeCount: 0, edgeCount: 0, clusters: [], clusterEdges: [], nodes: [] }),
+  tooLarge: () => overviewFixture({ tooLarge: true, nodeCount: 60_000, edgeCount: 250_000, clusters: [], clusterEdges: [], nodes: [] }),
+  truncated: () => overviewFixture({ nodesTruncated: true, nodeCount: 6_200, edgeCount: 21_000 }),
+} satisfies Record<string, () => GraphOverview>;

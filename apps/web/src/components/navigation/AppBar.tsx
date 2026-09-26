@@ -161,6 +161,12 @@ const DRILL_DOWN_ROUTES: {
     title: 'Explore',
     upPath: () => '/graph',
   },
+  // The whole-graph overview (#375). Up is the index it is reached from.
+  {
+    pattern: /^\/graph\/overview\/?$/,
+    title: 'Overview',
+    upPath: () => '/graph',
+  },
   {
     pattern: /^\/graph\/?$/,
     title: 'Knowledge',

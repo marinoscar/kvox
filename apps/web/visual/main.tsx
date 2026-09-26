@@ -123,6 +123,8 @@ const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
 const GraphIndexPage = lazy(() => import('../src/pages/GraphIndexPage'));
 const GraphEntityPage = lazy(() => import('../src/pages/GraphEntityPage'));
 const GraphExplorerPage = lazy(() => import('../src/pages/GraphExplorerPage'));
+// The whole-graph overview (#375), mirroring `App.tsx`.
+const GraphOverviewPage = lazy(() => import('../src/pages/GraphOverviewPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
@@ -402,6 +404,14 @@ function HarnessRoutes() {
             element={
               <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
                 <GraphExplorerPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/graph/overview"
+            element={
+              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
+                <GraphOverviewPage />
               </RequirePermission>
             }
           />

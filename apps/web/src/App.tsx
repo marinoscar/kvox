@@ -58,6 +58,9 @@ const GraphIndexPage = lazy(() => import('./pages/GraphIndexPage'));
 const GraphEntityPage = lazy(() => import('./pages/GraphEntityPage'));
 // The explorer (#374) — sigma/graphology live only behind this lazy import.
 const GraphExplorerPage = lazy(() => import('./pages/GraphExplorerPage'));
+// The whole-graph overview (#375) — draws #371's stored snapshot with the
+// explorer's own `GraphCanvas`, so sigma stays behind these lazy imports too.
+const GraphOverviewPage = lazy(() => import('./pages/GraphOverviewPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
 // `User`-prefixed to make explicit that it edits the signed-in user's own
@@ -432,6 +435,20 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <GraphExplorerPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* The whole-graph overview (#375, spec §22.3). Same owner,
+                      same gate: `GET /api/graph/overview` is `graph:read`;
+                      its Refresh (`graph:write`) is gated inside the page. */}
+                  <Route
+                    path="/graph/overview"
+                    element={
+                      <RequirePermission
+                        permission="graph:read"
+                        fallback={<Navigate to="/" replace />}
+                      >
+                        <GraphOverviewPage />
                       </RequirePermission>
                     }
                   />
