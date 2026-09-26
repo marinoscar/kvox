@@ -119,6 +119,9 @@ export const KG_PURGE_ALL_PLAN = [
   'entities',
   'evidence',
   'attributeDefs',
+  // #371 — the whole-graph layout snapshots. Ids and coordinates only (labels
+  // are never stored), but they are still a map of the graph being wiped.
+  'graphLayouts',
 ] as const;
 
 export type KgPurgePersonStep = (typeof KG_PURGE_PERSON_PLAN)[number];
@@ -139,6 +142,7 @@ export interface KgPurgeCounts {
   digests: number;
   views: number;
   attributeDefs: number;
+  graphLayouts: number;
 }
 
 /** What `purgePerson` reports: the counts, and the set of ids it forgot. */
@@ -163,6 +167,7 @@ export function emptyKgPurgeCounts(): KgPurgeCounts {
     digests: 0,
     views: 0,
     attributeDefs: 0,
+    graphLayouts: 0,
   };
 }
 
@@ -489,6 +494,11 @@ export class KgPurgeService {
             counts.attributeDefs += (await tx.kgAttributeDef.deleteMany({ where: { id: { in: ids } } })).count;
           },
         );
+
+      case 'graphLayouts':
+        // A handful of rows per owner (retention keeps two): one statement.
+        counts.graphLayouts += (await this.prisma.kgGraphLayout.deleteMany({ where: owned })).count;
+        return;
     }
   }
 
