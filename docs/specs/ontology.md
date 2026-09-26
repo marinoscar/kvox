@@ -1152,29 +1152,51 @@ merges away a speaker, and a version restore — not only after
 
 ### 9.1 Entity brief
 
-`GET /api/graph/entities/:id/brief?since=&as_of=` (§12, planned) answers
-"what's the latest on Company A" (or a person, or a project) in one call:
+`GET /api/graph/entities/:id/brief?since=&as_of=&markViewed=` (§12, **built,
+issue #372**, `apps/api/src/graph/brief/`) answers "what's the latest on
+Company A" (or a person, or a project) in one call. **This endpoint never
+calls an AI model and never answers 409** — the brief is assembled entirely
+from stored rows:
 
-1. **Entity → 1–2-hop walk**, bounded, over `kg_relations` — direct
-   connections and, where the first hop is another entity rather than an
-   item, one hop further (never deeper — §3.5's "narrow schema" principle
-   extended to query shape: an unbounded walk over a graph this size answers
-   a question nobody asked and costs latency nobody budgeted).
-2. **Items in the requested window** (`occurred_at > since`, or the digest's
-   `covers_until` when no `since` is given, §9.2) — the `Claim`s,
-   `Decision`s, and `Commitment`s that actually changed.
-3. **FTS + pgvector over segments and notes**, fused with
-   **`reciprocalRankFusion()`** (`apps/api/src/search/search-fusion.ts`,
+1. **Deterministic, cited sections**, computed in one bounded, statement-
+   timeout-guarded transaction (`withGraphStatementTimeout`, 503
+   `graph_query_timeout` past 3 s — the same posture the neighbourhood and
+   timeline endpoints take, §12): the entity's own items (`subject_id`,
+   `owner_person_id`, `counterparty_id` or `meeting_id` naming it — for an
+   Organization/Project's "theirs" open commitments, the items owned by any
+   Person with an open `WORKS_FOR` to it at `as_of`), plus, for
+   **People changes**, the closing/opening of `exclusive: 'soft'` relations
+   (§5.4, §5.6, the ontology registry's own flag — never a hardcoded list)
+   touching the entity or its one-hop Persons. Every entry carries up to 5
+   evidence ids (§5.3); `sensitive` PersonFacts are dropped before a section
+   is ever built.
+2. **The latest `kg.entity_digest` row**, shown exactly as that job last
+   wrote it (§9.2) — never recomputed inside this request. Staleness is a
+   read-only comparison against the entity's newest change; a stale digest
+   is refreshed by *enqueueing* `kg.entity_digest`, never by composing a
+   summary here.
+3. **FTS + pgvector over segments and notes** (`SearchService`, itself
+   already FTS+vector fused) **fused with the graph's own cited documents**
+   using **`reciprocalRankFusion()`** (`apps/api/src/search/search-fusion.ts`,
    verified above, `RRF_K = 60`) — the *exact same* fusion function
    `docs/specs/search.md` already uses for its two retrieval arms, reused
    rather than re-implemented, because a second RRF implementation that
    could disagree with the first about how two rankings combine is exactly
    the kind of drift `docs/specs/notes.md`'s own "one function, two callers"
    discipline (§2.5) argues against wherever it recurs in this codebase.
-4. **× recency × confidence**, then an **LLM composition step** that writes
-   the brief with **mandatory citations** — every stated fact traces, through
-   its item id, to the evidence (§5.3) that supports it, down to the ▶
-   segment or note span a reader can click through to.
+4. **× recency (`0.5 ^ (ageDays / 90)`) × confidence** (the mean `confidence`
+   of the entity's cited rows in that document; 1 for a text-only hit),
+   ranked, top 8, `inGraph` naming whether the graph arm (step 3) found the
+   document too.
+
+⚠ **There is no per-request LLM composition step, and there never will be.**
+Every stated fact in `sections` traces, through its item or relation id, to
+the evidence (§5.3) that supports it — down to the ▶ segment or note span a
+reader can click through to — by construction of steps 1 and 3, with no
+model call anywhere between the request and the response. The **only** AI
+prose in a brief is the digest step 2 shows as stored, produced entirely by
+the `kg.entity_digest` job (§9.2) on its own schedule, never synchronously
+with a `GET`.
 
 Sections, in order: **What changed** · **Decisions** · **Open commitments
 (theirs / yours)** · **Risks / claims** · **People changes**. **People
@@ -1194,22 +1216,53 @@ every `valid` range against that date instead of the present moment.
 
 ### 9.2 Entity digest (`kg.entity_digest`)
 
-A per-entity rolling summary, so a busy entity's brief does not have to
-re-read and re-summarize its entire history on every view. Deduplicated per
-entity (one pending digest job per entity at a time — the ordinary queue
-dedup, no `skipDedup` needed), it writes `kg_entity_digests (entity_id,
-summary, citations, covers_until, generated_at)` — the running summary plus
-the timestamp up to which it accounts for everything. A brief request is
-then: the digest, plus whatever items are newer than `covers_until`, never a
-full re-summarization from scratch. Enqueued after every commit that touches
-the entity (§8), and its `covers_until` is what makes the entity brief cheap
-even for an entity mentioned in fifty meetings.
+**Built, issue #372** (`apps/api/src/graph/brief/entity-digest.handler.ts`,
+`entity-digest.enqueuer.ts`) — a per-entity rolling summary, so a busy
+entity's brief does not have to re-read and re-summarize its entire history
+on every view, and **the only place any AI model ever writes brief prose**.
+Deduplicated per entity (one pending digest job per entity at a time — the
+ordinary queue dedup, no `skipDedup` needed; `EntityDigestEnqueuer` is the
+one shape every caller enqueues with), it writes `kg_entity_digests
+(entity_id, summary, citations, covers_until, generated_at, model)` — the
+running summary plus the timestamp up to which it accounts for everything.
+A brief request is then: the digest, plus whatever items are newer than
+`covers_until`, never a full re-summarization from scratch.
+
+The model never sees a uuid: the previous digest's statements plus every
+item newer than `covers_until` and any exclusive relation that opened or
+closed since become a numbered fact list `F1…Fn` (`brief-facts.ts`), and one
+`generateStructured` call (§20's `graph.digest` task) returns statements
+that must each cite the fact handles they rely on. A statement citing
+nothing, or an unknown handle, is dropped before it is stored
+(`citation-validation.ts`); if every statement is dropped, the job **fails**
+and the previous digest is kept rather than replaced with an empty one.
+`sensitive` PersonFacts never enter the fact list, ever; `personal` ones
+only with the §14 personal-facts-in-prompts opt-in, which no preference
+defines yet, so it is always `false` today. `profile: { maxRuntimeMs: 5m,
+maxAttempts: 1 }` — one attempt, for `note.generate`'s exact reason: a retry
+would bill the owner's own key a second time for a different, non-
+deterministic answer. Server-only, permanently, for the identical reason —
+no vendor here offers a job-scoped sub-key a `nodeSecretBroker` could mint.
+
+**Enqueued from two places, never unconditionally.** The commit/revert path
+(§8), the manual edit (§8's second exception) and a merge/reverse each
+enqueue only while `ai.graphEnabled` is on (`enqueueIfEnabled`) — the
+triggering write has already committed, so a failed enqueue there is logged,
+never reported as "not saved." The brief `GET` (§9.1) enqueues
+unconditionally when it needs to, but only after its own resolver check
+finds a usable provider and key, and only when the latest job for this
+entity did not fail less than 15 minutes ago — so a caller with no key never
+gets a job that can only return, and a down provider is not re-billed on
+every view.
 
 **"Since I last looked"** is a separate, per-viewer fact: `kg_entity_views
 (user_id, entity_id, last_viewed_at)` (§10), read to compute what's "new"
 *for this specific reader* on top of the shared digest — two different
 users looking at the same entity see the same underlying digest but a
-different "what's changed since you last checked" delta.
+different "what's changed since you last checked" delta. `EntityViewService`
+(#372) upserts it from the brief `GET` whenever `markViewed` and no `as_of`,
+**after** the response is assembled, so a visit's own delta is against the
+*previous* visit, never itself.
 
 ### 9.3 Agent tools
 
@@ -1479,7 +1532,7 @@ rather than in one shared handler directory:
 |---|---|---|---|
 | `kg.extract` | `{ maxRuntimeMs: 10m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it |
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
-| `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — same credential reasoning; deduplicated per entity |
+| `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`apps/api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
@@ -1556,8 +1609,8 @@ nothing was ever shared there to revoke.
 are the five routes this section's bullet list already named above as
 `graph:read`; `apps/api/src/graph/read/` (`GraphReadController`,
 `GraphReadService`, `GraphNeighborhoodService`, `GraphEvidenceService`) is the
-implementation, exported from `GraphModule` for the entity brief (§9.1, #372)
-and the Ask agent's tools (§9.3, #377) to call directly rather than
+implementation, exported from `GraphModule` for the entity brief (§9.1, **built,
+#372**) and the Ask agent's tools (§9.3, #377) to call directly rather than
 re-querying `kg_entities`/`kg_relations`/`kg_items` themselves. Two routes are
 **additive** to the list this issue started from, both `graph:read`, and
 folded into the same controller: `GET /api/graph/entities/:id/mentions` (the
@@ -1575,9 +1628,19 @@ issue's original text: evaluating a relation `as_of` reads
 own `AS_OF_STATUSES` engine (`apps/api/src/graph/temporal/`) exactly, rather
 than the plain readable set — an `as_of` question about January 2024 must
 still see the edge a later `as_of`-unaware read would call superseded.
-Extraction (§6, issue #363) and the whole-graph overview (§22.3, issue #371,
-below) are also built; review, commit, and the brief remain unbuilt and
-follow in #356 and later.
+
+**The entity brief is built too (issue #372, epic #347).** `GET
+/api/graph/entities/:id/brief` (§9.1, §9.2, `graph:read`,
+`apps/api/src/graph/brief/`, `EntityBriefController`/`EntityBriefService`)
+sits directly on the read layer above: its deterministic sections are built
+from `GraphOntologyService.effectiveSchemaFor()`'s exclusive-relation list
+and the same `readable.ts` statuses, and its `related` sources fuse
+`SearchService`'s hybrid search with the entity's own `kg_evidence`-cited
+documents. It never calls `GraphReadService` for its sections directly
+(its window/section shape is its own, per §9.1) but shares the read layer's
+`withGraphStatementTimeout` posture and 503 on a slow query. Extraction (§6, issue #363) and the whole-graph overview (§22.3, issue
+#371, below) are also built; review and commit remain unbuilt and follow
+in later issues.
 
 **Additional routes §19–§22 add, under the same two permissions.**
 `graph:read` also gates the read side of proposal review — `GET
