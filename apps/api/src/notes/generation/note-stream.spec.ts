@@ -4,6 +4,7 @@ import {
   NOTE_STREAM_ERROR_EVENT,
   NoteStreamCursor,
   parseLastEventId,
+  resolveStreamOffset,
   toDeltaFrame,
   toDoneFrame,
   toErrorFrame,
@@ -162,6 +163,28 @@ describe('parseLastEventId', () => {
     ]) {
       expect(parseLastEventId(value as string | undefined)).toBe(0);
     }
+  });
+});
+
+describe('resolveStreamOffset', () => {
+  it('prefers a usable header over the query', () => {
+    expect(resolveStreamOffset('42', '7')).toBe(42);
+  });
+
+  it('falls back to the query when the header is absent, zero or garbage', () => {
+    expect(resolveStreamOffset(undefined, '7')).toBe(7);
+    expect(resolveStreamOffset('0', '7')).toBe(7);
+    expect(resolveStreamOffset('nope', '7')).toBe(7);
+  });
+
+  it('is 0 when neither is usable — replay everything, never skip', () => {
+    expect(resolveStreamOffset(undefined, undefined)).toBe(0);
+    expect(resolveStreamOffset('-1', 'abc')).toBe(0);
+  });
+
+  it('takes the first of a repeated value on either side', () => {
+    expect(resolveStreamOffset(['5', '9'], undefined)).toBe(5);
+    expect(resolveStreamOffset(undefined, ['3', '4'])).toBe(3);
   });
 });
 
