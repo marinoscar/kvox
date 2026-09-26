@@ -244,17 +244,17 @@ describe('UserKnowledgeGraphPage', () => {
     const domainSwitch = (name: string) =>
       within(screen.getByRole('region', { name: 'Domains' })).getByRole('switch', { name });
 
-    it('Core is always on, Personal is disabled for a later release', async () => {
+    it('Core is always on; Personal life is off by default and can be switched (#383)', async () => {
       await renderPage();
-      await waitFor(() => expect(domainSwitch('Personal')).toBeInTheDocument());
+      await waitFor(() => expect(domainSwitch('Personal life')).toBeInTheDocument());
 
       expect(domainSwitch('Core')).toBeChecked();
       expect(domainSwitch('Core')).toBeDisabled();
       expect(domainSwitch('Work')).toBeChecked();
       expect(domainSwitch('Work')).toBeEnabled();
-      expect(domainSwitch('Personal')).not.toBeChecked();
-      expect(domainSwitch('Personal')).toBeDisabled();
-      expect(screen.getByText('Coming in a later release')).toBeInTheDocument();
+      expect(domainSwitch('Personal life')).not.toBeChecked();
+      expect(domainSwitch('Personal life')).toBeEnabled();
+      expect(screen.queryByText('Coming in a later release')).not.toBeInTheDocument();
     });
 
     it('turning Work off asks first, and cancel sends nothing', async () => {

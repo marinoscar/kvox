@@ -539,8 +539,8 @@ export interface GraphPreferencesSettings {
     newThreshold: number;
     adjudication: GraphAdjudication;
   };
-  /** `core` is always on and never stored. `personal` is `false` until #383. */
-  domains?: { work: boolean; personal: false };
+  /** `core` is always on and never stored. `personal` is off by default (#383). */
+  domains?: { work: boolean; personal: boolean };
 }
 
 /** PATCH form: every field optional; `null` resets to the default. */
@@ -552,7 +552,7 @@ export interface GraphPreferencesPatch {
     newThreshold?: number | null;
     adjudication?: GraphAdjudication | null;
   } | null;
-  domains?: { work?: boolean | null; personal?: false | null } | null;
+  domains?: { work?: boolean | null; personal?: boolean | null } | null;
 }
 
 /**
