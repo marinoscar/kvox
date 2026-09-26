@@ -1107,90 +1107,40 @@ export class OpenAiProvider
     ctx: AiProviderContext<OpenAiSettings>,
     request: AiGenerateRequest,
   ): AsyncIterable<AiDelta> {
-    const response = await this.fetchImpl(
-      `${this.baseUrl(ctx.settings)}/chat/completions`,
-      {
-        method: 'POST',
-        headers: {
-          ...this.authHeaders(ctx.apiKey),
-          'content-type': 'application/json',
-          accept: 'text/event-stream',
-        },
-        body: JSON.stringify({
-          model: request.model,
-          stream: true,
-          stream_options: { include_usage: true },
-          max_completion_tokens: request.maxOutputTokens,
-          // ⚠ SPREAD, SO THE KEY IS ABSENT AND NOT `'none'` — see
-          // `reasoningEffortBody` for why absent is the only correct shape at
-          // the default, and for why the parameter is the FLAT
-          // `reasoning_effort` string rather than Responses API's
-          // `reasoning: { effort }`.
-          ...this.reasoningEffortBody(request.reasoningEffort),
-          // Spread for the same reason: absent at the default, so a gateway
-          // that rejects unknown parameters never sees `response_format` on
-          // an ordinary prose request. JSON mode is `json_object` (not
-          // `json_schema`) — the caller validates the shape itself (#328).
-          ...(request.responseFormat === 'json'
-            ? { response_format: { type: 'json_object' } }
-            : {}),
-          messages: [
-            { role: 'system', content: request.systemPrompt },
-            { role: 'user', content: request.userContent },
-          ],
-        }),
-        signal:
-          request.timeoutMs && request.timeoutMs > 0
-            ? AbortSignal.timeout(request.timeoutMs)
-            : undefined,
-      },
-    );
-
-    await this.assertOk(response, `generate with model "${request.model}"`);
-
-    if (!response.body) {
-      // A 2xx with no body is either a vendor incident or an API change; both
-      // deserve another attempt before the work is written off, so this is a
-      // plain (retryable) Error.
-      throw new Error(
-        'The provider accepted the completion request but returned no response body to stream.',
-      );
-    }
+    const body = {
+      model: request.model,
+      stream: true,
+      stream_options: { include_usage: true },
+      max_completion_tokens: request.maxOutputTokens,
+      // ⚠ SPREAD, SO THE KEY IS ABSENT AND NOT `'none'` — see
+      // `reasoningEffortBody` for why absent is the only correct shape at
+      // the default, and for why the parameter is the FLAT
+      // `reasoning_effort` string rather than Responses API's
+      // `reasoning: { effort }`.
+      ...this.reasoningEffortBody(request.reasoningEffort),
+      // Spread for the same reason: absent at the default, so a gateway
+      // that rejects unknown parameters never sees `response_format` on
+      // an ordinary prose request. JSON mode is `json_object` (not
+      // `json_schema`) — the caller validates the shape itself (#328).
+      ...(request.responseFormat === 'json'
+        ? { response_format: { type: 'json_object' } }
+        : {}),
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userContent },
+      ],
+    };
 
     let finishReason: AiFinishReason | null = null;
     let usage: AiUsage | null = null;
     let completionText = '';
 
-    for await (const data of parseSseData(response.body)) {
-      // The vendor's end-of-stream sentinel. Not JSON, and parsing it as JSON
-      // is the classic way this loop throws on a perfectly healthy stream.
-      if (data === '[DONE]') break;
-
-      let chunk: OpenAiStreamChunk;
-      try {
-        chunk = JSON.parse(data) as OpenAiStreamChunk;
-      } catch {
-        // A frame this build cannot read. SKIPPED RATHER THAN FATAL: SSE
-        // permits comments and keep-alives, and gateways insert their own
-        // frames. Abandoning a paid-for generation over one unparseable frame
-        // is the worse failure.
-        this.logger.debug('Skipping an unparseable OpenAI stream frame.');
-        continue;
-      }
-
-      // ⚠ A MID-STREAM ERROR FRAME. The request succeeded with a 200 and the
-      // failure arrives inside the stream — which is why `assertOk` above is
-      // not enough on its own, and why this branch exists at all. It is mapped
-      // through the SAME classifier the HTTP path uses, so a content-policy
-      // refusal is an `AiRefusedError` whether the vendor reported it at 400 or
-      // at token 300.
-      if (chunk.error) {
-        throw this.classifyErrorBody(
-          asString(chunk.error.message) ?? 'The provider reported an error mid-stream.',
-          asString(chunk.error.code) ?? asString(chunk.error.type),
-        );
-      }
-
+    for await (const chunk of this.streamChatCompletion(
+      ctx,
+      body,
+      `generate with model "${request.model}"`,
+      request.timeoutMs,
+    )) {
       const choice = chunk.choices?.[0];
 
       const text = choice?.delta?.content;
@@ -1259,6 +1209,90 @@ export class OpenAiProvider
           completionTokens: this.countTokens(completionText, request.model),
         },
     };
+  }
+
+  /**
+   * The streaming core every `/chat/completions` call shape shares (#358).
+   *
+   * `POST {baseUrl}/chat/completions` with `body`, then yield each parsed
+   * stream frame. It owns everything that is about the WIRE rather than about
+   * what a caller does with the frames: the injected `fetchImpl`, `assertOk`'s
+   * HTTP taxonomy, the no-body error, the `[DONE]` sentinel, skipping
+   * unparseable frames, and classifying a mid-stream error frame. `generate`
+   * and `generateStructured` (and #359's tool calling) each consume it and
+   * decide what the frames MEAN — one parser for every call shape, so a
+   * framing fix or a gateway quirk is handled once.
+   *
+   * `label` completes the sentence "…when trying to <label>" in `assertOk`'s
+   * messages. `timeoutMs` arms an `AbortSignal` when positive.
+   *
+   * ⚠ `ctx` REACHES ONLY `authHeaders`. Nothing here logs it, the body, or a
+   * frame's content.
+   */
+  private async *streamChatCompletion(
+    ctx: AiProviderContext<OpenAiSettings>,
+    body: Record<string, unknown>,
+    label: string,
+    timeoutMs?: number,
+  ): AsyncGenerator<OpenAiStreamChunk> {
+    const response = await this.fetchImpl(
+      `${this.baseUrl(ctx.settings)}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          ...this.authHeaders(ctx.apiKey),
+          'content-type': 'application/json',
+          accept: 'text/event-stream',
+        },
+        body: JSON.stringify(body),
+        signal:
+          timeoutMs && timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined,
+      },
+    );
+
+    await this.assertOk(response, label);
+
+    if (!response.body) {
+      // A 2xx with no body is either a vendor incident or an API change; both
+      // deserve another attempt before the work is written off, so this is a
+      // plain (retryable) Error.
+      throw new Error(
+        'The provider accepted the completion request but returned no response body to stream.',
+      );
+    }
+
+    for await (const data of parseSseData(response.body)) {
+      // The vendor's end-of-stream sentinel. Not JSON, and parsing it as JSON
+      // is the classic way this loop throws on a perfectly healthy stream.
+      if (data === '[DONE]') return;
+
+      let chunk: OpenAiStreamChunk;
+      try {
+        chunk = JSON.parse(data) as OpenAiStreamChunk;
+      } catch {
+        // A frame this build cannot read. SKIPPED RATHER THAN FATAL: SSE
+        // permits comments and keep-alives, and gateways insert their own
+        // frames. Abandoning a paid-for generation over one unparseable frame
+        // is the worse failure.
+        this.logger.debug('Skipping an unparseable OpenAI stream frame.');
+        continue;
+      }
+
+      // ⚠ A MID-STREAM ERROR FRAME. The request succeeded with a 200 and the
+      // failure arrives inside the stream — which is why `assertOk` above is
+      // not enough on its own, and why this branch exists at all. It is mapped
+      // through the SAME classifier the HTTP path uses, so a content-policy
+      // refusal is an `AiRefusedError` whether the vendor reported it at 400 or
+      // at token 300.
+      if (chunk.error) {
+        throw this.classifyErrorBody(
+          asString(chunk.error.message) ?? 'The provider reported an error mid-stream.',
+          asString(chunk.error.code) ?? asString(chunk.error.type),
+        );
+      }
+
+      yield chunk;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -1567,7 +1601,7 @@ export class OpenAiProvider
    * Which terminal class does this error body describe?
    *
    * ONE FUNCTION, TWO CALLERS — the HTTP path (`assertOk`) and the mid-stream
-   * error frame in `generate`. Deliberately shared: the same refusal reported
+   * error frame in `streamChatCompletion`. Deliberately shared: the same refusal reported
    * at 400 and reported at token 300 must produce the same class, or a user
    * gets a different explanation for the same event depending on how fast the
    * vendor noticed.
