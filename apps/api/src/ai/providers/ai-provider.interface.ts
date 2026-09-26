@@ -495,6 +495,116 @@ export interface AiModelFeatureFlags {
   structuredOutput: boolean;
 }
 
+// =============================================================================
+// MULTI-TURN CHAT AND TOOL CALLING (issue #359, epic #345)
+// =============================================================================
+//
+// A conversation, not a prompt: the Ask agent (docs/specs/ontology.md §21)
+// sends a message list, lets the model call READ-ONLY typed tools (§9.3), and
+// appends each call and its result before asking again. `generate()` cannot
+// carry that — it takes exactly one system prompt and one user message.
+//
+// ⚠ THE PROVIDER TRANSPORTS, IT NEVER EXECUTES. A tool definition goes out, a
+// complete tool call comes back as an event; running the tool, validating its
+// arguments and deciding whether to loop are the caller's job (#377/#378).
+//
+// ⚠ CALLERS SEE COMPLETE CALLS, NEVER FRAGMENTS. A vendor streams a tool call's
+// arguments in pieces; assembling them is the provider's job, because the
+// fragment format is the vendor's, and every caller reimplementing it would be
+// N chances to get interleaving wrong.
+//
+// ⚠ NO PARALLEL TOOL CALLS IN v1. A provider asks its vendor for at most one
+// call per turn (OpenAI: `parallel_tool_calls: false`) — strict schemas are not
+// guaranteed for parallel calls, and the agent's step cap is simpler to reason
+// about with one call per step. Assembly still handles several defensively.
+// =============================================================================
+
+/** One tool the model may call. The provider sends it; it never runs it. */
+export interface AiToolDefinition {
+  /** `/^[a-zA-Z0-9_-]{1,64}$/`, unique within one request. */
+  name: string;
+  /** Shown to the model. 1..1024 characters. */
+  description: string;
+  /**
+   * The arguments' shape: an OBJECT schema in the strict subset, checked by
+   * `assertStrictJsonSchema` before any request is sent.
+   */
+  parameters: JsonSchema;
+}
+
+/**
+ * Whether, and which, tool the model must call. `{ name }` forces one declared
+ * tool. Defaults to `'auto'` when tools are present; MUST be absent when they
+ * are not.
+ */
+export type AiToolChoice = 'auto' | 'none' | 'required' | { name: string };
+
+/**
+ * One complete tool call the model made.
+ *
+ * ⚠ `argumentsJson` IS UNTRUSTED MODEL OUTPUT. The provider passes it through
+ * exactly as the vendor streamed it — unparsed, unvalidated. It may not be
+ * JSON at all, and when it is it may not match the tool's schema even under
+ * strict mode (a gateway may ignore `strict`). The caller MUST parse it and
+ * validate it with the tool's own Zod schema before acting on a single field.
+ */
+export interface AiToolCall {
+  /** The vendor's id for this call — echoed back as `toolCallId`. */
+  id: string;
+  name: string;
+  /** Raw, untrusted JSON text. See above. */
+  argumentsJson: string;
+}
+
+/**
+ * One message of a conversation. A `tool` message answers a PRECEDING
+ * assistant message's `toolCalls[].id` — an orphan `toolCallId` is refused
+ * before any network call.
+ */
+export type AiChatMessage =
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string }
+  | { role: 'assistant'; content: string | null; toolCalls?: AiToolCall[] }
+  | { role: 'tool'; toolCallId: string; content: string };
+
+/** One request for a streamed, possibly tool-calling, chat turn. */
+export interface AiChatRequest {
+  /** The provider's own model id. Must be permitted by the `ai` policy. */
+  model: string;
+  /** At least one. The first may be `system`. */
+  messages: AiChatMessage[];
+  /** At most 32, unique names. Absent means a plain chat turn. */
+  tools?: AiToolDefinition[];
+  /** Default `'auto'` when tools are present; must be absent without tools. */
+  toolChoice?: AiToolChoice;
+  /** Upper bound on the completion, in tokens. POLICY — never raised. */
+  maxOutputTokens: number;
+  /** Abandon the request after this many milliseconds. */
+  timeoutMs?: number;
+  /**
+   * Same semantics as {@link AiGenerateRequest.reasoningEffort}, including the
+   * rule that it NEVER raises {@link AiChatRequest.maxOutputTokens}.
+   */
+  reasoningEffort?: AiReasoningEffort;
+}
+
+/**
+ * Why a chat turn ended. Unlike {@link AiFinishReason}, `tool_calls` is a real
+ * outcome here: the model is waiting for tool results. `content_filter` is
+ * listed for vocabulary parity, but a provider THROWS `AiRefusedError` for it
+ * exactly as `generate` does.
+ */
+export type AiChatFinishReason = 'stop' | 'length' | 'content_filter' | 'tool_calls';
+
+/**
+ * One item yielded by `chat`: text deltas as they arrive, then every complete
+ * tool call (in index order), then exactly one `done`.
+ */
+export type AiChatEvent =
+  | { kind: 'delta'; text: string }
+  | { kind: 'tool_call'; id: string; name: string; argumentsJson: string }
+  | { kind: 'done'; finishReason: AiChatFinishReason; usage: AiUsage };
+
 /** The outcome of `testConnection` — always resolved, never thrown. */
 export interface AiConnectionTest {
   ok: boolean;
@@ -890,6 +1000,30 @@ export interface AiProvider<TSettings = unknown> {
     ctx: AiProviderContext<TSettings>,
     request: AiStructuredRequest,
   ): Promise<AiStructuredResult<T>>;
+
+  /**
+   * One streamed, multi-turn chat turn that may call tools (#359). See the
+   * MULTI-TURN CHAT AND TOOL CALLING section above.
+   *
+   * OPTIONAL, AND "PRESENCE IS THE DECLARATION": a provider that declares any
+   * model (or its `defaultModelFeatures` floor) with `toolCalling: true` MUST
+   * implement it — `AiProviderRegistry.register` refuses the provider at boot
+   * otherwise, the same check `generateStructured` gets.
+   *
+   * YIELDS `delta` events as text arrives, then one `tool_call` per assembled
+   * call, then exactly one `done`. THROWS TO FAIL, like `generate`: a plain
+   * `Error` for an invalid request (before any network call), a truncated
+   * stream or a malformed tool call; `AiRefusedError` for `content_filter`;
+   * and the ordinary HTTP taxonomy (`AiAuthError`, `AiInputError`,
+   * `RateLimitError`, …) otherwise.
+   *
+   * ⚠ `ctx.apiKey` IS THE CALLING USER'S OWN KEY, exactly as for `generate`.
+   * Nothing logs it — nor any message, tool argument or tool result.
+   */
+  chat?(
+    ctx: AiProviderContext<TSettings>,
+    request: AiChatRequest,
+  ): AsyncIterable<AiChatEvent>;
 }
 
 /** The publishable description of one provider. See `registry.describeAll()`. */
