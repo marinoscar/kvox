@@ -192,6 +192,7 @@ function computeEffectiveSchemaFor(registry, input) {
             exclusiveScope: r.exclusiveScope ?? 'from',
             representation: JSON.parse(JSON.stringify(r.representation)),
             extractable: r.extractable,
+            ...(r.symmetric === true ? { symmetric: true } : {}),
             alignment: r.alignment ?? null,
             deprecated: r.deprecated !== undefined,
             props: builtinAttributes(r.props, 'builtin', r.domain, 'business', 0),

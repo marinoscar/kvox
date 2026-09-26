@@ -125,6 +125,13 @@ export interface RelationTypeSpec {
   props: Record<string, AttributeSpec>;
   representation: RelationRepresentation;
   extractable: boolean;
+  /**
+   * Default false. True means `(a, b)` and `(b, a)` are the SAME fact
+   * (SPOUSE_OF, FRIEND_OF): only one row is ever stored (§5.2), and dedup and
+   * the "known, skipped" check compare both directions. Requires `from` and
+   * `to` to be the same single type.
+   */
+  symmetric?: boolean;
   alignment?: string;
   deprecated?: Deprecation;
 }
