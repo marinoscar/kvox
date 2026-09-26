@@ -32,7 +32,8 @@
     "db:test": "node scripts/test-db-connection.js",
     "smoke": "node scripts/smoke-test.mjs",
     "openapi:dump": "ts-node -P scripts/tsconfig.json --transpile-only scripts/dump-openapi.ts",
-    "openapi:typecheck": "tsc -p scripts/tsconfig.json"
+    "openapi:typecheck": "tsc -p scripts/tsconfig.json",
+    "kg:eval": "ts-node -P scripts/tsconfig.json --transpile-only scripts/kg-eval.ts"
   },
   "dependencies": {
     "@app/shared": "*",

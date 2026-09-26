@@ -34,6 +34,7 @@
 // `../jobs/db-test-support.ts` for the reachability probe.
 // =============================================================================
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -106,7 +107,7 @@ describeWithDb('Transcript corrections (real Postgres)', () => {
     return {
       objects,
       materialize: materializeService,
-      editing: new TranscriptEditingService(service, access, materializeService, pipeline),
+      editing: new TranscriptEditingService(service, access, materializeService, pipeline, new EventEmitter2()),
     };
   }
 

@@ -5,8 +5,8 @@ import {
   entityDetail,
   evidenceFixtures,
   graphEntitySummaries,
-  graphOntologyFixture,
   mentionFixtures,
+  mockGraphOntology,
   neighborhoodFixture,
   timelineFixture,
 } from './graphData';
@@ -405,13 +405,21 @@ export const handlers = [
   }),
 
   // ---------------------------------------------------------------------------
-  // Knowledge graph read side (#373, built against #370/#372's contracts).
+  // Knowledge graph (#369 settings card; #373 read side against #370/#372).
   //
   // Only a user holding `graph:read` ever reaches these — the default test
   // users do not — so they cost no other suite anything. A suite that cares
   // about a specific answer overrides with `server.use(...)`.
   // ---------------------------------------------------------------------------
-  http.get(`${API_BASE}/graph/ontology`, () => HttpResponse.json({ data: graphOntologyFixture })),
+  // The caller's effective ontology (default domains) and no attribute
+  // definitions of their own (#369). Tests override.
+  http.get(`${API_BASE}/graph/ontology`, () => {
+    return HttpResponse.json({ data: mockGraphOntology() });
+  }),
+
+  http.get(`${API_BASE}/graph/attribute-defs`, () => {
+    return HttpResponse.json({ data: { items: [] } });
+  }),
 
   http.get(`${API_BASE}/graph/entities`, ({ request }) => {
     const url = new URL(request.url);

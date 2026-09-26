@@ -353,6 +353,9 @@ function harness(world: World) {
       // constructor argument is required, and a real one here would queue a
       // `search.index` job against a database these suites do not own.
       { enqueue: jest.fn().mockResolvedValue(undefined) } as never,
+      // #363's graph-extraction hook, stubbed: a silent no-op, as when the
+      // deployment's graph switch is off.
+      { enqueueForReadyNote: jest.fn().mockResolvedValue(null) } as never,
     ),
     sources,
     new ProviderThrottleService({ get: () => undefined } as never),

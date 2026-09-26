@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AiModule } from '../ai/ai.module';
+import { GraphExtractionModule } from '../graph/extraction/extraction.module';
 import { JobsModule } from '../jobs/jobs.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -106,6 +107,10 @@ import { NotesHousekeepingTask } from './tasks/notes-housekeeping.task';
     // `notes` through Prisma directly and imports nothing from here — which is
     // what keeps both edges out of a `forwardRef`.
     SearchIndexingModule,
+    // Graph extraction (#363): `NoteGenerationService.commit()` asks it to
+    // queue a `kg.extract` once a note is ready. ONE-WAY: that module provides
+    // the two note services it needs itself and never imports this one.
+    GraphExtractionModule,
   ],
   // #53's TEN NOTE ROUTES (`/api/notes/*`), #51's ONE
   // (`POST /api/notes/sources/documents`), #50's SEVEN

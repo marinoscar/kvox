@@ -1,0 +1,611 @@
+{
+  "id": "m03",
+  "title": "Larkspur weekly delivery sync",
+  "tags": [
+    "internal",
+    "negative-topic",
+    "negative-vague-task"
+  ],
+  "recordedAt": "2026-01-22T09:30:00Z",
+  "contextText": null,
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m03-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m03-spk-b",
+      "label": "B",
+      "displayName": "Priya Raman"
+    },
+    {
+      "id": "m03-spk-c",
+      "label": "C",
+      "displayName": "Hana Sato"
+    },
+    {
+      "id": "m03-spk-d",
+      "label": "D",
+      "displayName": "Nadia Brooks"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m03-s001",
+      "speakerId": "m03-spk-a",
+      "startMs": 0,
+      "endMs": 8200,
+      "rev": 1,
+      "text": "Morning all. Quick one today, I want to go account by account and then talk about the meeting slot itself."
+    },
+    {
+      "id": "m03-s002",
+      "speakerId": "m03-spk-c",
+      "startMs": 8450,
+      "endMs": 14370,
+      "rev": 1,
+      "text": "Before accounts, can we fix the slot? Mondays keep colliding with client steering calls."
+    },
+    {
+      "id": "m03-s003",
+      "speakerId": "m03-spk-b",
+      "startMs": 14620,
+      "endMs": 20160,
+      "rev": 1,
+      "text": "Same for me. Wednesday mornings are almost always free for the whole team."
+    },
+    {
+      "id": "m03-s004",
+      "speakerId": "m03-spk-a",
+      "startMs": 20410,
+      "endMs": 24050,
+      "rev": 1,
+      "text": "Any objections to moving this sync to Wednesdays?"
+    },
+    {
+      "id": "m03-s005",
+      "speakerId": "m03-spk-d",
+      "startMs": 24300,
+      "endMs": 27560,
+      "rev": 1,
+      "text": "None, Wednesday is better for me too."
+    },
+    {
+      "id": "m03-s006",
+      "speakerId": "m03-spk-a",
+      "startMs": 27810,
+      "endMs": 32970,
+      "rev": 1,
+      "text": "Okay, decided, from next week the weekly sync moves to Wednesday mornings."
+    },
+    {
+      "id": "m03-s007",
+      "speakerId": "m03-spk-c",
+      "startMs": 33220,
+      "endMs": 39520,
+      "rev": 1,
+      "text": "Great. Accounts then. Northwind is fine, the pilot kicked off well and Sarah seems happy."
+    },
+    {
+      "id": "m03-s008",
+      "speakerId": "m03-spk-a",
+      "startMs": 39770,
+      "endMs": 47210,
+      "rev": 1,
+      "text": "Agreed. Halden is also moving, JJ is on the migration and the license deadline is keeping everyone focused."
+    },
+    {
+      "id": "m03-s009",
+      "speakerId": "m03-spk-b",
+      "startMs": 47460,
+      "endMs": 55280,
+      "rev": 1,
+      "text": "Speaking of staffing, just so everyone knows, we're under a hiring freeze until March. No new reqs until then."
+    },
+    {
+      "id": "m03-s010",
+      "speakerId": "m03-spk-c",
+      "startMs": 55530,
+      "endMs": 59550,
+      "rev": 1,
+      "text": "That's going to hurt if the Corvid work grows."
+    },
+    {
+      "id": "m03-s011",
+      "speakerId": "m03-spk-a",
+      "startMs": 59800,
+      "endMs": 65720,
+      "rev": 1,
+      "text": "Let's make sure it doesn't grow faster than we can staff it. Nadia, Corvid?"
+    },
+    {
+      "id": "m03-s012",
+      "speakerId": "m03-spk-d",
+      "startMs": 65970,
+      "endMs": 74170,
+      "rev": 1,
+      "text": "The intake discovery workshop with Corvid is next week. I'll share the first intake wireframes with you before the workshop."
+    },
+    {
+      "id": "m03-s013",
+      "speakerId": "m03-spk-a",
+      "startMs": 74420,
+      "endMs": 79200,
+      "rev": 1,
+      "text": "Perfect, send them by Tuesday so I can read them properly."
+    },
+    {
+      "id": "m03-s014",
+      "speakerId": "m03-spk-d",
+      "startMs": 79450,
+      "endMs": 81190,
+      "rev": 1,
+      "text": "Will do, Tuesday."
+    },
+    {
+      "id": "m03-s015",
+      "speakerId": "m03-spk-b",
+      "startMs": 81440,
+      "endMs": 88120,
+      "rev": 1,
+      "text": "And Nadia, as your manager I'm happy to review them too before they go to Alex."
+    },
+    {
+      "id": "m03-s016",
+      "speakerId": "m03-spk-b",
+      "startMs": 88370,
+      "endMs": 96190,
+      "rev": 1,
+      "text": "Unrelated, but AI code review came up again in the engineering channel. It keeps coming up every few weeks."
+    },
+    {
+      "id": "m03-s017",
+      "speakerId": "m03-spk-a",
+      "startMs": 96440,
+      "endMs": 102740,
+      "rev": 1,
+      "text": "It does. We should probably look into that at some point, but not this month."
+    },
+    {
+      "id": "m03-s018",
+      "speakerId": "m03-spk-c",
+      "startMs": 102990,
+      "endMs": 107010,
+      "rev": 1,
+      "text": "Agreed, there's no appetite for tooling changes right now."
+    },
+    {
+      "id": "m03-s019",
+      "speakerId": "m03-spk-b",
+      "startMs": 107260,
+      "endMs": 111280,
+      "rev": 1,
+      "text": "I'll just keep noting it when it comes up."
+    },
+    {
+      "id": "m03-s020",
+      "speakerId": "m03-spk-a",
+      "startMs": 111530,
+      "endMs": 114410,
+      "rev": 1,
+      "text": "Hana, anything from the commercial side?"
+    },
+    {
+      "id": "m03-s021",
+      "speakerId": "m03-spk-c",
+      "startMs": 114660,
+      "endMs": 125520,
+      "rev": 1,
+      "text": "Only that I'm going to be a bit slower on email on Friday mornings, I'm training for the Lisbon half marathon and my long runs are Friday."
+    },
+    {
+      "id": "m03-s022",
+      "speakerId": "m03-spk-a",
+      "startMs": 125770,
+      "endMs": 128650,
+      "rev": 1,
+      "text": "Good luck with that. Anything else?"
+    },
+    {
+      "id": "m03-s023",
+      "speakerId": "m03-spk-d",
+      "startMs": 128900,
+      "endMs": 134820,
+      "rev": 1,
+      "text": "Can we get Corvid access sorted before the workshop? I need their brand guidelines."
+    },
+    {
+      "id": "m03-s024",
+      "speakerId": "m03-spk-c",
+      "startMs": 135070,
+      "endMs": 137950,
+      "rev": 1,
+      "text": "I'll ask Elif for them today."
+    },
+    {
+      "id": "m03-s025",
+      "speakerId": "m03-spk-a",
+      "startMs": 138200,
+      "endMs": 142220,
+      "rev": 1,
+      "text": "Great, I think that's everything. See you all Wednesday."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Larkspur weekly delivery sync\n\n**Date:** January 22\n**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks\n\n## Summary\n\nInternal weekly sync covering the meeting slot, account health across Northwind, Halden and Corvid, staffing, and a recurring tooling topic.\n\n## Decisions\n\n- The weekly delivery sync moves to **Wednesday mornings**, starting next week, because Mondays collide with client steering calls.\n\n## Accounts\n\n- **Northwind Robotics** — the pick-path pilot kicked off well and Sarah seems happy.\n- **Halden Freight** — JJ is on the migration; the license deadline is keeping everyone focused.\n- **Corvid Health** — the intake discovery workshop is next week.\n\n## Staffing\n\nLarkspur is under a hiring freeze until March, with no new reqs until then. Hana flagged that this could hurt if the Corvid work grows.\n\n## Action items\n\n- **Nadia Brooks** — share the first intake wireframes with Alex before the Corvid workshop, by Tuesday.\n- **Hana Sato** — ask Elif at Corvid for their brand guidelines today.\n\n## Other topics\n\n- AI code review came up again in the engineering channel; it resurfaces every few weeks. Nobody took it on — \"we should probably look into that at some point\", but not this month.\n- Hana will be slower on email on Friday mornings while she trains for the Lisbon half marathon.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-corvid-health",
+      "type": "Organization",
+      "label": "Corvid Health",
+      "aliases": [
+        "Corvid"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-elif-kaya",
+      "type": "Person",
+      "label": "Elif Kaya",
+      "aliases": [
+        "Elif"
+      ],
+      "props": {
+        "title": "Product Owner"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-hana-sato",
+      "type": "Person",
+      "label": "Hana Sato",
+      "aliases": [
+        "Hana"
+      ],
+      "props": {
+        "title": "Account Director"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-nadia-brooks",
+      "type": "Person",
+      "label": "Nadia Brooks",
+      "aliases": [
+        "Nadia"
+      ],
+      "props": {
+        "title": "Product Designer"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": [
+        "m01"
+      ]
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Larkspur weekly delivery sync",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Larkspur weekly delivery sync"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Raman"
+          }
+        ]
+      },
+      {
+        "key": "hana",
+        "type": "Person",
+        "label": "Hana Sato",
+        "aliases": [],
+        "existingId": "g-person-hana-sato",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hana Sato"
+          }
+        ]
+      },
+      {
+        "key": "nadia",
+        "type": "Person",
+        "label": "Nadia Brooks",
+        "aliases": [],
+        "existingId": "g-person-nadia-brooks",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "key": "larkspur",
+        "type": "Organization",
+        "label": "Larkspur Labs",
+        "aliases": [],
+        "existingId": "g-org-larkspur-labs",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Larkspur is under a hiring freeze until March"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "hana",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "nadia",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera, Priya Raman, Hana Sato, Nadia Brooks"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "nadia",
+        "to": "priya",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m03-s015",
+            "quote": "Nadia, as your manager I'm happy to review them too"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "larkspur",
+        "owner": null,
+        "counterparty": null,
+        "title": "Move weekly sync to Wednesdays",
+        "statement": "The weekly delivery sync moves to Wednesday mornings starting next week.",
+        "status": null,
+        "occurredAt": "2026-01-22",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m03-s006",
+            "quote": "from next week the weekly sync moves to Wednesday mornings"
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "larkspur",
+        "owner": null,
+        "counterparty": null,
+        "title": "Hiring freeze until March",
+        "statement": "Larkspur is under a hiring freeze until March, with no new reqs.",
+        "status": null,
+        "occurredAt": "2026-01-22",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m03-s009",
+            "quote": "we're under a hiring freeze until March"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "nadia",
+        "owner": "nadia",
+        "counterparty": "alex",
+        "title": "Share intake wireframes",
+        "statement": "Nadia will share the first intake wireframes with Alex before the Corvid workshop, by Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-01-22",
+        "dueAt": "2026-01-27",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m03-s012",
+            "quote": "I'll share the first intake wireframes with you before the workshop."
+          },
+          {
+            "source": "segment",
+            "segmentId": "m03-s014",
+            "quote": "Will do, Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "g-org-corvid-health",
+        "owner": "hana",
+        "counterparty": null,
+        "title": "Ask Elif for Corvid brand guidelines",
+        "statement": "Hana will ask Elif at Corvid for their brand guidelines today.",
+        "status": "open",
+        "occurredAt": "2026-01-22",
+        "dueAt": "2026-01-22",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m03-s024",
+            "quote": "I'll ask Elif for them today."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "hana",
+        "owner": null,
+        "counterparty": null,
+        "title": "Training for the Lisbon half marathon",
+        "statement": "Hana is training for the Lisbon half marathon, with long runs on Friday mornings.",
+        "status": null,
+        "occurredAt": "2026-01-22",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m03-s021",
+            "quote": "I'm training for the Lisbon half marathon"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "AI code review came up again in the engineering channel",
+        "why": "A recurring topic with no start, end or work attached: a Meeting topic, not a Project."
+      },
+      {
+        "quote": "We should probably look into that at some point",
+        "why": "No owner named or implied: not a Commitment."
+      }
+    ]
+  }
+}

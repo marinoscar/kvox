@@ -31,6 +31,7 @@ import { TranscriptsModule } from './transcripts/transcripts.module';
 import { AiModule } from './ai/ai.module';
 import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
+import { GraphExtractionModule } from './graph/extraction/extraction.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
@@ -222,6 +223,11 @@ import configuration from './config/configuration';
     // (imported for #355's evidence validation); imported by nothing, so the
     // dependency edge runs one way.
     GraphModule,
+
+    // Graph extraction (#363): `kg.extract`, its two routes and the proposal
+    // stage registry. NotesModule imports it too (the note-ready hook); listed
+    // here explicitly for the reason SearchIndexingModule is below.
+    GraphExtractionModule,
 
     // Semantic search, indexing half (#188, epic #165): the `search.index` job
     // and the enqueue/forget surface its callers use. Listed explicitly even

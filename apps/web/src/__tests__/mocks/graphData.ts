@@ -1,5 +1,6 @@
 /**
- * Knowledge-graph MSW fixtures (#373's read side; #367 appends proposal fixtures).
+ * Knowledge-graph MSW fixtures (#369's settings card; #373's read side; #367
+ * appends proposal fixtures).
  *
  * TYPED BY `services/graph.ts`, which mirrors #370/#372's Zod shapes field for
  * field — so a field renamed on the API fails `tsc` here instead of leaving a
@@ -15,9 +16,15 @@
  * edited segment and an unavailable source.
  */
 
-import { computeEffectiveSchema, toEffectiveSchemaPayload } from '@app/shared/ontology';
+import {
+  computeEffectiveSchema,
+  toEffectiveSchemaPayload,
+  type DomainKey,
+  type UserAttributeDef,
+} from '@app/shared/ontology';
 
 import type {
+  AttributeDef,
   EntityBrief,
   EntityMention,
   EvidenceLink,
@@ -37,9 +44,35 @@ export function gid(n: number): string {
 // Ontology
 // ---------------------------------------------------------------------------
 
-export const graphOntologyFixture: GraphOntology = toEffectiveSchemaPayload(
-  computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] }),
-) as GraphOntology;
+export function mockGraphOntology(
+  enabledDomains: DomainKey[] = ['core', 'work'],
+  userAttributes: UserAttributeDef[] = [],
+): GraphOntology {
+  return toEffectiveSchemaPayload(computeEffectiveSchema({ enabledDomains, userAttributes }));
+}
+
+/** The default-domains ontology the read-side suites share. */
+export const graphOntologyFixture: GraphOntology = mockGraphOntology();
+
+/** One of the caller's own attribute definitions (#355's shape). */
+export function mockAttributeDef(overrides: Partial<AttributeDef> = {}): AttributeDef {
+  return {
+    id: '55555555-5555-4555-8555-555555555555',
+    entityType: 'Person',
+    key: 'u_nickname01',
+    label: 'Nickname',
+    kind: 'text',
+    options: null,
+    extractable: true,
+    extractionHint: 'How teammates address them informally',
+    sensitivity: null,
+    sortOrder: 0,
+    deprecatedAt: null,
+    createdAt: '2026-09-01T00:00:00.000Z',
+    updatedAt: '2026-09-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Entities

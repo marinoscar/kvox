@@ -986,6 +986,34 @@ If-Match: 1
 - 400 Bad Request - Same `profile.imageSource`/`profile.imageObjectId` validation as `PUT /user-settings` above.
 - 409 Conflict - `If-Match` version mismatch.
 
+**The `graph` namespace (issue #369, epic #346):** per-user connected-knowledge
+preferences — docs/specs/ontology.md §7, §10, §13. **Absent means every
+default** (it is never seeded into a new row); a present sub-object always
+carries all of its fields.
+
+| Field | Values | Default |
+|---|---|---|
+| `graph.extraction.autoExtract` | boolean — queue an extraction proposal when a note is ready | `true` |
+| `graph.resolution.mode` | `precheck_confident` \| `review_all` | `precheck_confident` |
+| `graph.resolution.autoLinkThreshold` | 0.80–0.99 | `0.90` |
+| `graph.resolution.newThreshold` | 0.30–0.94, and at least 0.05 below `autoLinkThreshold` | `0.55` |
+| `graph.resolution.adjudication` | `llm` \| `off` — ask the AI (on the caller's own key) about uncertain matches | `llm` |
+| `graph.domains.work` | boolean — `core` is always on and never stored | `true` |
+| `graph.domains.personal` | `false` only, until #383 ships that domain | `false` |
+
+PATCH merges it **per sub-object**: send only what changed
+(`{ "graph": { "resolution": { "autoLinkThreshold": 0.93 } } }` — the other
+resolution fields are filled from the stored value or the defaults). `null`
+on a field restores its default, `null` on a sub-object
+(`{ "graph": { "resolution": null } }`) resets that sub-object, and
+`{ "graph": null }` resets everything. **400** for an out-of-range value,
+an unknown key, `personal: true`, or a threshold pair out of order — including
+one only the merge with the stored value reveals. A write whose resolved
+preferences actually change emits the in-process `graph.preferences_changed`
+event (no audit event, consistent with every other user-settings namespace).
+The `Knowledge graph` settings card (`/settings/knowledge-graph`, gated
+`graph:write`) is the UI over this namespace and #355's attribute definitions.
+
 ---
 
 #### GET /user-settings/profile-image
@@ -5315,9 +5343,12 @@ your transcripts and notes (issue #354, epic #344). Full design (the
 ontology, extraction, review, retrieval, privacy) is
 [`docs/specs/ontology.md`](specs/ontology.md). Today this group carries the
 effective ontology, the manual entity edit, and your own attribute
-definitions (issue #355), plus "forget this person" (issue #357); entity
-reads, relation, fact and search routes arrive with later issues and follow
-the access posture below.
+definitions (issue #355), plus "forget this person" (issue #357),
+extraction — asking for, and estimating, a draft proposal from a note
+(issue #363) — and the read layer — the entity index, an entity's page, its
+neighbourhood, timeline, mentions and citations, plus the explorer's expand
+(issue #370); the review/commit routes and the whole-graph overview arrive
+with later issues and follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
@@ -5346,8 +5377,9 @@ you can already see the row and a 404 would only mislead you.
 **Conflicts.** A 409 from a graph route names its cause in
 `details.reason` (`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
 `extraction_running`, `proposal_not_draft`, `stale_note_version`,
-`revert_conflict`, `model_lacks_capability`); none is raised by the routes
-below.
+`revert_conflict`, `model_lacks_capability`, `note_not_ready`); the
+extraction routes below raise the AI four plus `extraction_running` and
+`note_not_ready`.
 
 **Every write goes through one service, and every fact keeps a citation.**
 Nothing writes an entity, relation or fact except `GraphWriteService`, and an
@@ -5364,8 +5396,8 @@ bad row in `details.invalidEvidence`, never a 404.
 
 Your **effective ontology**: the schema your graph is made of, and the one
 response every graph form is generated from. It is the `core` domain, plus
-every domain you have enabled (`work` by default — choosing your own domains
-arrives with a later issue), plus the attributes those domains mix into each
+every domain you have enabled (your `graph.domains` user-settings
+preference, issue #369 — `work` by default), plus the attributes those domains mix into each
 other's types (`work` adds a `title` to `Person`), plus your own attribute
 definitions — **deprecated ones included**, flagged `deprecated: true`, so
 values already stored under them stay readable. Relation endpoints and item
@@ -5568,6 +5600,119 @@ entity is not a Person · `401` · `403` your own entity without
 `graph:write` · `404` `Entity not found` — no such entity, another user's,
 or merged.
 
+#### POST /graph/notes/{noteId}/extract
+
+Extract a **draft proposal** from one of your notes (issue #363;
+`docs/specs/ontology.md` §6, §8, §19, §20). Queues a `kg.extract` job that
+reads the note at its current version, its source transcript (segments and
+identified speakers), the meeting context you typed and your **effective
+ontology**, makes **one** structured-output call on **your own** AI key, and
+writes a proposal: people, organizations, projects, relations, decisions,
+commitments, claims and person facts, each citing the transcript line or note
+span it came from. **Nothing is added to your graph** until you review and
+commit the proposal. A ready note is also extracted automatically once, when
+connected knowledge is on, you hold `graph:write` and your
+`extraction.autoExtract` preference is on (the default) — the same job,
+`reason: "note_ready"`.
+
+**Requires:** `graph:write`. The note must be yours (`404` otherwise).
+
+**Request** (every field optional; an empty body is `{}`):
+```json
+{
+  "model": "gpt-5.4-mini",
+  "userGuidance": {
+    "pinnedEntityIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
+    "entityTypes": ["Person", "Organization", "Commitment"],
+    "relationTypes": ["WORKS_FOR"],
+    "instructions": "Only the commitments Northwind made."
+  }
+}
+```
+
+- `model` — run on this model instead of the `graph.extract` task model. It
+  must be one this deployment permits (`400` otherwise) and support
+  structured output (`409 model_lacks_capability`).
+- `userGuidance` — narrows the run (§19.1): `pinnedEntityIds` (≤ 50) are
+  live entities of yours to focus on; `entityTypes` / `relationTypes` (≤ 50
+  each, ontology keys) limit what is proposed — absent means every type in
+  your ontology; `instructions` (≤ 2,000 characters) are preferences that
+  narrow or focus the proposal and never override the extraction rules. It is
+  stored on the proposal.
+
+**Response:** `202`
+```json
+{
+  "data": {
+    "proposal": {
+      "id": "5d1c…",
+      "noteId": "8a2f…",
+      "noteVersion": 3,
+      "status": "extracting",
+      "model": "gpt-5.4-mini",
+      "providerId": "openai",
+      "createdAt": "2026-09-26T12:00:00.000Z"
+    },
+    "estimate": {
+      "providerId": "openai",
+      "model": "gpt-5.4-mini",
+      "inputTokens": 11840,
+      "maxOutputTokens": 8000,
+      "availableInputTokens": 120000,
+      "fits": true,
+      "requests": 1,
+      "keyConfigured": true
+    }
+  },
+  "meta": { "timestamp": "2026-09-26T12:00:00.000Z" }
+}
+```
+
+The proposal exists at once with `status: "extracting"`; it becomes `draft`
+when the job finishes (or `failed`, with `stats.failure.errorClass` one of
+`auth`, `refusal`, `rate_limit`, `budget`, `invalid_output`, `other` and a
+message). A newer draft for the same note **discards** the older one
+(`stats.discardReason: "superseded"`). The model, provider, exact system
+prompt and user content are recorded on the proposal **before** the provider
+is called, so a failed run still shows what was asked. Every proposed row
+cites at least one piece of evidence it was actually given; rows that do not —
+or that name a type outside your ontology, break its attribute rules, or
+point at a dropped row — are dropped and counted in `stats.dropped`
+(`uncited`, `invalid`, `unknownType`, `dangling`). The request is audited as
+`graph.extraction_requested` (`proposalId`, `model`, `reason`, and whether
+guidance was given — never its text). The job is `maxAttempts: 1`: a
+re-extraction is a person asking again, never an automatic retry on your key.
+
+**Errors:**
+- `400` — a model this deployment does not permit; an unknown type key
+  (`details.unknownTypes: string[]`); a pinned id that is not a live entity
+  of yours (`details.invalidPinnedIds: string[]`); the prompt is over the
+  token budget (the message names the numbers, and `details` carries
+  `{ promptTokens, availableInputTokens, model }`) — refused, never
+  truncated.
+- `401` · `403` without `graph:write`.
+- `404` `Note not found` — no such note, deleted, or not yours (the same
+  answer for all three).
+- `409` `details.reason`: `graph_disabled` (connected knowledge is switched
+  off for this deployment), `ai_not_configured`, `ai_key_missing` (the run
+  uses your own key), `model_lacks_capability`, `extraction_running` (this
+  note already has an extraction in progress — decided by the database at
+  insert, so two concurrent requests get one `202` and one `409`),
+  `note_not_ready` (the note is not `ready`).
+
+#### GET /graph/extract/estimate?noteId=&model=
+
+What extracting a note would cost, without running it: tokens counted with
+the provider's own tokenizer over the **exact** prompt a run would send
+(reviewer guidance excluded — it is at most 2,000 characters), the budget it
+must fit, and `requests: 1`. **Needs no API key** — `keyConfigured` reports
+whether you have one rather than refusing.
+
+**Requires:** `graph:read`. **Response:** `200` the `estimate` object shown
+above. **Errors:** `400` an invalid `noteId` or a model this deployment does
+not permit · `401` · `404` no such note, deleted, or not yours · `409`
+`graph_disabled`, `ai_not_configured`, `model_lacks_capability`.
+
 #### Attribute definitions
 
 Your own attributes on the ontology's types — "Nickname" on `Person`, "Tier"
@@ -5659,6 +5804,299 @@ second call returns the same definition with the same `deprecatedAt`.
 
 **Requires:** `graph:write`. **Response:** `200` the definition with
 `deprecatedAt` set. **Errors:** `401` · `403` without `graph:write` · `404`.
+
+#### Reading your graph
+
+The read layer (issue #370, epic #347): the entity index and an entity's
+page, its bounded neighbourhood and timeline, its mentions, citation links,
+and the explorer's one-hop expand. `apps/api/src/graph/read/` is the whole
+surface, exported as `GraphReadService`, `GraphNeighborhoodService` and
+`GraphEvidenceService` for the entity brief and the Ask agent to reuse
+(later issues) rather than re-querying these tables themselves.
+
+**Requires:** `graph:read` on every route below. **Owner-scoped and
+404-never-403**, exactly as stated above: a row that does not exist, is
+another owner's, was never accepted into the graph (`unreviewed`/
+`rejected`), or is a merge tombstone all answer the identical 404. The
+timeline is the one exception that shows more than the readable set — it
+also returns `superseded` items, flagged, because a timeline's purpose is
+history.
+
+`as_of` (every as-of-aware route below) is `YYYY-MM-DD` (meaning
+`00:00:00Z` that day) or a full ISO 8601 datetime with an offset; absent
+means now. It evaluates temporal relations and items exactly as
+`docs/specs/ontology.md` §5.4 defines "as of": half-open `[from, to)`
+ranges, a `null` bound meaning unbounded. ⚠ **Deliberate deviation from
+this issue's original text**: evaluating a relation `as_of` also considers
+`superseded` relations, not only `accepted`/`edited` ones — matching
+#353's own `AS_OF_STATUSES` engine exactly, because a relation an
+`as_of` query is asking about may be exactly the one a later edit closed
+and superseded (`docs/specs/ontology.md` §5.4's worked example). A bad
+`as_of` is a **400**.
+
+The neighbourhood, expand and timeline queries run under a **3-second
+statement timeout**; a query that exceeds it is a **503** with
+`details.reason: "graph_query_timeout"` rather than hanging the request.
+
+##### GET /graph/entities
+
+The entity index: your people, organizations, projects and meetings,
+keyset-paginated by `nextCursor`.
+
+| Parameter | Notes |
+|---|---|
+| `type` | Comma-separated entity type keys, e.g. `Person,Organization`. Default: every type. An unknown key is a **400** naming it. |
+| `q` | Fuzzy match (pg_trgm) on labels and aliases. Returns the top `limit` by similarity; `nextCursor` is always `null` and `sort` is ignored. |
+| `transcriptId` | Only the Persons `IDENTIFIED_AS` a speaker in this transcript, each with the `speakerIds` identified as them. **404** without `view` access to the transcript. |
+| `sort` | `updated` (default): most recently changed first. `viewed`: only entities you have opened (your `kg_entity_views`), most recent first. Ignored with `q`. |
+| `cursor` | `nextCursor` from a previous page of **this same route**; a cursor from another list is a **400**. |
+| `limit` | 1–50, default 25. |
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "items": [
+      {
+        "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+        "type": "Person",
+        "label": "Sarah Chen-Li",
+        "aliases": ["Sarah Chen"],
+        "mentionCount": 4,
+        "lastSeenAt": "2026-09-20T10:00:00.000Z",
+        "speakerIds": ["A"]
+      }
+    ],
+    "nextCursor": null
+  }
+}
+```
+
+`speakerIds` is present only with `?transcriptId=`.
+
+**Errors:** `400` unknown `type` key, a cursor from another list, or no
+`view` access is distinguished from "no such transcript" only by the 404
+below · `401` · `403` without `graph:read` · `404` `transcriptId` does not
+exist or you cannot view it.
+
+##### GET /graph/entities/{id}
+
+One entity: its attributes, every alias, when it was first and last seen in
+a meeting, and the counts its page shows (`sensitive` person facts are not
+counted).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "id": "0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11",
+    "type": "Person",
+    "label": "Sarah Chen-Li",
+    "props": { "title": "CTO" },
+    "aliases": [{ "id": "…", "alias": "Sarah Chen", "source": "extraction" }],
+    "occurredAt": null,
+    "reviewStatus": "edited",
+    "ontologyVersion": "1.0.0",
+    "firstSeenAt": "2026-01-10T09:00:00.000Z",
+    "lastSeenAt": "2026-09-20T10:00:00.000Z",
+    "counts": {
+      "relations": 6,
+      "mentions": 4,
+      "evidence": 11,
+      "items": { "commitment": 2, "decision": 0, "claim": 3, "person_fact": 1 },
+      "openCommitments": 1
+    },
+    "createdAt": "2026-01-10T09:00:00.000Z",
+    "updatedAt": "2026-09-20T10:00:00.000Z"
+  }
+}
+```
+
+**Errors:** `401` · `403` without `graph:read` · `404` no such entity, not
+yours, or merged.
+
+##### GET /graph/entities/{id}/mentions
+
+The notes and transcripts linked to this entity, one row per document,
+newest first, keyset-paginated by `nextCursor`. A document that was
+deleted, or a transcript whose share you lost, stays in the list with
+`available: false` and `title: null`.
+
+Query: `cursor`, `limit` (1–50, default 25).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "items": [
+      { "kind": "transcript", "id": "…", "title": "Q3 Pricing Review", "occurredAt": "2026-09-20T10:00:00.000Z", "available": true }
+    ],
+    "nextCursor": null
+  }
+}
+```
+
+**Errors:** `400` a cursor from another list · `401` · `403` without
+`graph:read` · `404` no such entity, not yours, or merged.
+
+##### GET /graph/entities/{id}/neighborhood
+
+The entity and what is connected to it, one or two hops out, as a **graph
+slice**: nodes (entities, and the commitments, decisions, claims and person
+facts about them) and every edge between them.
+
+- A walk never continues **through** an item — an item is always a leaf.
+- Edges touching an item are **derived from the item's own columns**
+  (`subject_id` → `ABOUT`, `owner_person_id` → `ASSIGNED_TO`,
+  `counterparty_id` → `OWED_TO`, `meeting_id` → `CREATED_IN`/`DECIDED_IN`)
+  and carry `virtual: true`; a stored relation always has its own id and
+  wins over a virtual edge with the same `(type, from, to)`.
+- `types` keeps only those entity types / item kinds (the seed is always
+  kept); `relationTypes` walks only along those edge types. An unknown key
+  in either is a **400**.
+- At most `limit` nodes (≤ 300, default 150); `truncated` says more were
+  reachable — the closest and best-connected nodes are kept.
+- `sensitive` person facts are never part of a slice, at any `as_of`.
+
+Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
+`limit` (1–300, default 150).
+
+**Response:** `200` a `GraphSlice` (shared shape with expand, below):
+```json
+{
+  "data": {
+    "seedIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"],
+    "asOf": "2026-09-26T12:00:00.000Z",
+    "nodes": [
+      { "id": "0b6f…", "nodeKind": "entity", "type": "Person", "label": "Sarah Chen-Li", "depth": 0, "degree": 6, "status": null, "occurredAt": null },
+      { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z" }
+    ],
+    "edges": [
+      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true },
+      { "id": "3c1f…", "type": "WORKS_FOR", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.92, "virtual": false }
+    ],
+    "truncated": false,
+    "cap": 150
+  }
+}
+```
+
+**Errors:** `400` invalid parameter or unknown `type`/`relationTypes` key ·
+`401` · `403` without `graph:read` · `404` no such entity, not yours, or
+merged · `503` `graph_query_timeout`.
+
+##### GET /graph/entities/{id}/timeline
+
+Everything dated about this entity, newest first, keyset-paginated by
+`nextCursor`: the commitments, decisions, claims and person facts that name
+it (a **superseded** one stays, flagged `superseded: true`), when each of
+its relations started and ended, and the meetings it attended, discussed or
+is part of. Each event carries up to five evidence ids and the total.
+
+- `as_of` drops events after that instant.
+- `kinds` keeps a subset of `commitment, decision, claim, person_fact,
+  relation, meeting`. An unknown one is a **400**.
+- `sensitive` person facts appear only with `includeSensitive=true`.
+
+Query: `as_of`, `kinds`, `includeSensitive` (`true`/`false`, default
+`false`), `cursor`, `limit` (1–50, default 25).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "items": [
+      {
+        "id": "9a2e…",
+        "eventKind": "item",
+        "at": "2026-09-01T00:00:00.000Z",
+        "precision": "day",
+        "item": {
+          "id": "9a2e…", "kind": "commitment", "title": null,
+          "statement": "Ship the Q3 pricing memo", "status": "open",
+          "dueAt": "2026-09-15T00:00:00.000Z",
+          "ownerPerson": { "id": "0b6f…", "label": "Sarah Chen-Li", "type": "Person" },
+          "counterparty": null, "sensitivity": null,
+          "superseded": false, "supersededById": null
+        },
+        "evidenceIds": ["e1…"],
+        "evidenceCount": 1
+      }
+    ],
+    "nextCursor": null,
+    "asOf": "2026-09-26T12:00:00.000Z"
+  }
+}
+```
+
+**Errors:** `400` unknown `kinds` key, invalid `as_of`, or a cursor from
+another list · `401` · `403` without `graph:read` · `404` no such entity,
+not yours, or merged · `503` `graph_query_timeout`.
+
+##### POST /graph/explore/expand
+
+One hop out from each of up to 50 nodes, as one `GraphSlice` (the seeds
+come back at `depth: 0`). A **read**, even though it is a `POST` — the node
+list does not fit a query string.
+
+`types`/`relationTypes` narrow what the expansion may **add**, never the
+seeds themselves. At most `cap` nodes (≤ 300, default 100); `truncated`
+says more were reachable.
+
+**Request:**
+```json
+{ "nodeIds": ["0b6f0c1e-3a57-4d6e-9d8a-2b0f7f1c9a11"], "types": ["Person", "Organization"], "as_of": "2024-01-15", "cap": 100 }
+```
+
+**Response:** `200` a `GraphSlice` (same shape as the neighbourhood above).
+
+**Errors:** `400` invalid body or unknown type key · `401` · `403` without
+`graph:read` · `404` **all-or-nothing**: if even one `nodeIds` entry is not
+one of your readable entities or items, the whole request is a 404 that
+does not say which · `503` `graph_query_timeout`.
+
+##### GET /graph/evidence/{id}
+
+One citation, resolved to a link you can open: a transcript segment
+(`/transcripts/:id?segment=…&t=…`, playable at the quoted moment) or the
+exact note version it was drawn from (`/notes/:id?v=…`). `textChanged`/
+`versionChanged` say the source has been edited since the citation was
+made. When the source was deleted, or you can no longer view it (a revoked
+transcript share), `available` is `false` and there is no link — but the
+`quote` is always returned, because it is your own graph data.
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "id": "e1a2b3c4-…", "subjectKind": "item", "subjectId": "9a2e…",
+    "quote": "I'll get the pricing memo out by the 15th.",
+    "createdAt": "2026-09-01T00:05:00.000Z",
+    "source": {
+      "kind": "segment", "transcriptId": "…", "transcriptTitle": "Q3 Pricing Review",
+      "segmentId": "…", "segmentRev": 3, "currentSegmentRev": 3,
+      "startMs": 184200, "endMs": 187900,
+      "textChanged": false, "available": true,
+      "href": "/transcripts/…?segment=…&t=184200"
+    }
+  }
+}
+```
+
+**Errors:** `401` · `403` without `graph:read` · `404` no such evidence, or
+not yours.
+
+##### GET /graph/evidence?ids=
+
+Up to 50 evidence ids, comma-separated, resolved to links in **request
+order** — for rendering a row of citation chips in one round trip. An id
+that is not yours or does not exist is **silently omitted**, never a 404
+for the batch.
+
+**Response:** `200` `{ "data": { "items": [ /* EvidenceLink, as above */ ] } }`.
+
+**Errors:** `400` missing, malformed, or more than 50 ids · `401` · `403`
+without `graph:read`.
 
 ### Search
 

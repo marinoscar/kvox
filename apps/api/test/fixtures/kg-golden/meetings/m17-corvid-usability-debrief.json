@@ -1,0 +1,580 @@
+{
+  "id": "m17",
+  "title": "Corvid usability test debrief",
+  "tags": [
+    "client"
+  ],
+  "recordedAt": "2026-04-30T13:00:00Z",
+  "contextText": "Debrief after the first usability round with front-desk staff.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m17-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m17-spk-b",
+      "label": "B",
+      "displayName": "Elif Kaya"
+    },
+    {
+      "id": "m17-spk-c",
+      "label": "C",
+      "displayName": "Nadia Brooks"
+    },
+    {
+      "id": "m17-spk-d",
+      "label": "D",
+      "displayName": "Samir Haddad"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m17-s001",
+      "speakerId": "m17-spk-a",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "Thanks all. Nadia ran the usability sessions this week, so over to her."
+    },
+    {
+      "id": "m17-s002",
+      "speakerId": "m17-spk-c",
+      "startMs": 5790,
+      "endMs": 13990,
+      "rev": 1,
+      "text": "We tested with five front-desk staff across two clinics. Four of the five completed a full intake without any help."
+    },
+    {
+      "id": "m17-s003",
+      "speakerId": "m17-spk-b",
+      "startMs": 14240,
+      "endMs": 16740,
+      "rev": 1,
+      "text": "That's better than I expected."
+    },
+    {
+      "id": "m17-s004",
+      "speakerId": "m17-spk-c",
+      "startMs": 16990,
+      "endMs": 23290,
+      "rev": 1,
+      "text": "The one who struggled got stuck on the medication search. The list was too long."
+    },
+    {
+      "id": "m17-s005",
+      "speakerId": "m17-spk-d",
+      "startMs": 23540,
+      "endMs": 30220,
+      "rev": 1,
+      "text": "Medication is where accuracy matters most, so I'd rather we fix that than simplify it away."
+    },
+    {
+      "id": "m17-s006",
+      "speakerId": "m17-spk-c",
+      "startMs": 30470,
+      "endMs": 34870,
+      "rev": 1,
+      "text": "Agreed. I'm thinking type-ahead with the most common medications first."
+    },
+    {
+      "id": "m17-s007",
+      "speakerId": "m17-spk-a",
+      "startMs": 35120,
+      "endMs": 40280,
+      "rev": 1,
+      "text": "We also tested the two layouts. Single page versus the step-by-step wizard."
+    },
+    {
+      "id": "m17-s008",
+      "speakerId": "m17-spk-c",
+      "startMs": 40530,
+      "endMs": 47210,
+      "rev": 1,
+      "text": "Single page won clearly. Staff could see everything at once and jump back to fix mistakes."
+    },
+    {
+      "id": "m17-s009",
+      "speakerId": "m17-spk-b",
+      "startMs": 47460,
+      "endMs": 50720,
+      "rev": 1,
+      "text": "Then we keep the single-page form. Decided."
+    },
+    {
+      "id": "m17-s010",
+      "speakerId": "m17-spk-d",
+      "startMs": 50970,
+      "endMs": 55750,
+      "rev": 1,
+      "text": "Fine by me, as long as allergies stay at the top."
+    },
+    {
+      "id": "m17-s011",
+      "speakerId": "m17-spk-c",
+      "startMs": 56000,
+      "endMs": 57360,
+      "rev": 1,
+      "text": "They will."
+    },
+    {
+      "id": "m17-s012",
+      "speakerId": "m17-spk-a",
+      "startMs": 57610,
+      "endMs": 61250,
+      "rev": 1,
+      "text": "What's left before we can hand over designs?"
+    },
+    {
+      "id": "m17-s013",
+      "speakerId": "m17-spk-c",
+      "startMs": 61500,
+      "endMs": 68940,
+      "rev": 1,
+      "text": "The medication search, the high contrast theme, and error states. I'll ship the final designs by May 15."
+    },
+    {
+      "id": "m17-s014",
+      "speakerId": "m17-spk-b",
+      "startMs": 69190,
+      "endMs": 73590,
+      "rev": 1,
+      "text": "I'd like to see them before they go to engineering."
+    },
+    {
+      "id": "m17-s015",
+      "speakerId": "m17-spk-c",
+      "startMs": 73840,
+      "endMs": 77480,
+      "rev": 1,
+      "text": "Of course, I'll send them to you first."
+    },
+    {
+      "id": "m17-s016",
+      "speakerId": "m17-spk-a",
+      "startMs": 77730,
+      "endMs": 80610,
+      "rev": 1,
+      "text": "Samir, anything from the clinical side?"
+    },
+    {
+      "id": "m17-s017",
+      "speakerId": "m17-spk-d",
+      "startMs": 80860,
+      "endMs": 89820,
+      "rev": 1,
+      "text": "The wording on the consent step needs clinical review. I'll review the consent wording and send changes to Nadia by next Friday."
+    },
+    {
+      "id": "m17-s018",
+      "speakerId": "m17-spk-c",
+      "startMs": 90070,
+      "endMs": 91050,
+      "rev": 1,
+      "text": "Thanks."
+    },
+    {
+      "id": "m17-s019",
+      "speakerId": "m17-spk-b",
+      "startMs": 91300,
+      "endMs": 97600,
+      "rev": 1,
+      "text": "One organisational thing, I'm the product owner for this but Samir signs off anything clinical."
+    },
+    {
+      "id": "m17-s020",
+      "speakerId": "m17-spk-a",
+      "startMs": 97850,
+      "endMs": 99590,
+      "rev": 1,
+      "text": "Understood, two sign-offs."
+    },
+    {
+      "id": "m17-s021",
+      "speakerId": "m17-spk-d",
+      "startMs": 99840,
+      "endMs": 101200,
+      "rev": 1,
+      "text": "That's right."
+    },
+    {
+      "id": "m17-s022",
+      "speakerId": "m17-spk-a",
+      "startMs": 101450,
+      "endMs": 107370,
+      "rev": 1,
+      "text": "Great. So: single page, final designs by May 15, consent wording by next Friday."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Corvid usability test debrief\n\n**Date:** April 30\n**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)\n\n## Summary\n\nDebrief of the first usability round on the Corvid Health patient intake redesign. Nadia ran the sessions this week with five front-desk staff across two clinics.\n\n## Results\n\n- Four of the five testers completed a full intake without any help.\n- The one who struggled got stuck on the medication search; the list was too long.\n- Samir wants the medication step fixed rather than simplified, because medication is where accuracy matters most. Nadia proposed type-ahead with the most common medications first.\n- The single-page layout clearly beat the step-by-step wizard: staff could see everything at once and jump back to fix mistakes.\n\n## Decisions\n\n- **Keep the single-page form**, with allergies at the top.\n- Two sign-offs apply: Elif as product owner, and Samir for anything clinical.\n\n## Action items\n\n- **Nadia Brooks** — ship the final designs (medication search, high contrast theme, error states) by May 15, sending them to Elif before engineering.\n- **Samir Haddad** — review the consent step wording and send changes to Nadia by next Friday.\n\n## Next steps\n\nOnce designs are signed off, engineering picks up the build for the first walk-in clinic.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-corvid-health",
+      "type": "Organization",
+      "label": "Corvid Health",
+      "aliases": [
+        "Corvid"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-elif-kaya",
+      "type": "Person",
+      "label": "Elif Kaya",
+      "aliases": [
+        "Elif"
+      ],
+      "props": {
+        "title": "Product Owner"
+      },
+      "attendedFixtureIds": [
+        "m04",
+        "m10"
+      ]
+    },
+    {
+      "id": "g-person-nadia-brooks",
+      "type": "Person",
+      "label": "Nadia Brooks",
+      "aliases": [
+        "Nadia"
+      ],
+      "props": {
+        "title": "Product Designer"
+      },
+      "attendedFixtureIds": [
+        "m03",
+        "m04",
+        "m10"
+      ]
+    },
+    {
+      "id": "g-person-samir-haddad",
+      "type": "Person",
+      "label": "Samir Haddad",
+      "aliases": [
+        "Dr. Haddad",
+        "Samir"
+      ],
+      "props": {
+        "title": "Clinical Lead"
+      },
+      "attendedFixtureIds": [
+        "m10"
+      ]
+    },
+    {
+      "id": "g-project-patient-intake-redesign",
+      "type": "Project",
+      "label": "Patient intake redesign",
+      "aliases": [
+        "intake redesign"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Corvid usability test debrief",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Corvid usability test debrief"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "nadia",
+        "type": "Person",
+        "label": "Nadia Brooks",
+        "aliases": [],
+        "existingId": "g-person-nadia-brooks",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Nadia Brooks (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "elif",
+        "type": "Person",
+        "label": "Elif Kaya",
+        "aliases": [],
+        "existingId": "g-person-elif-kaya",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Elif Kaya (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "key": "samir",
+        "type": "Person",
+        "label": "Samir Haddad",
+        "aliases": [],
+        "existingId": "g-person-samir-haddad",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "key": "intake",
+        "type": "Project",
+        "label": "Patient intake redesign",
+        "aliases": [],
+        "existingId": "g-project-patient-intake-redesign",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Corvid Health patient intake redesign"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "nadia",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "elif",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "samir",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Nadia Brooks (Larkspur Labs), Elif Kaya (Corvid Health), Samir Haddad (Corvid Health)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "intake",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Debrief of the first usability round on the Corvid Health patient intake redesign."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "intake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Four of five testers completed intake unaided",
+        "statement": "Four of the five front-desk testers completed a full intake without any help.",
+        "status": null,
+        "occurredAt": "2026-04-30",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m17-s002",
+            "quote": "Four of the five completed a full intake without any help."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "intake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Keep the single-page form",
+        "statement": "The intake keeps the single-page form rather than the step-by-step wizard.",
+        "status": null,
+        "occurredAt": "2026-04-30",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m17-s009",
+            "quote": "Then we keep the single-page form. Decided."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "intake",
+        "owner": null,
+        "counterparty": null,
+        "title": "Samir signs off clinical content",
+        "statement": "Elif signs off as product owner and Samir signs off anything clinical.",
+        "status": null,
+        "occurredAt": "2026-04-30",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m17-s019",
+            "quote": "I'm the product owner for this but Samir signs off anything clinical."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "intake",
+        "owner": "nadia",
+        "counterparty": "elif",
+        "title": "Ship final designs",
+        "statement": "Nadia will ship the final designs by May 15, sending them to Elif first.",
+        "status": "open",
+        "occurredAt": "2026-04-30",
+        "dueAt": "2026-05-15",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m17-s013",
+            "quote": "I'll ship the final designs by May 15."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "intake",
+        "owner": "samir",
+        "counterparty": "nadia",
+        "title": "Review consent wording",
+        "statement": "Samir will review the consent wording and send changes to Nadia by next Friday.",
+        "status": "open",
+        "occurredAt": "2026-04-30",
+        "dueAt": "2026-05-08",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m17-s017",
+            "quote": "I'll review the consent wording and send changes to Nadia by next Friday."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

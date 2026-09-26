@@ -896,7 +896,7 @@ to all three roles; owner-only, and **404, never 403**, for any graph row the ca
 transcript share never grants graph access. See [`docs/API.md`](docs/API.md#graph) and
 [`docs/specs/ontology.md`](docs/specs/ontology.md).
 - `GET /api/graph/ontology` - The caller's **effective ontology**: `core` + enabled domains
-  (`core`,`work` by default until #369 persists the choice) + mixins + their own
+  (the caller's `graph.domains` preference, #369; `core`,`work` by default) + mixins + their own
   `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
   generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
   is not an AI call
@@ -922,6 +922,49 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   aliases, relations, items, mentions, evidence and draft proposal references; your transcripts
   and notes are untouched. 400 wrong confirmation or non-Person; 404 no access or merged; 403
   your own entity without `graph:write` (`graph:write`)
+- `GET /api/graph/entities` - The entity index: list/search your people, organizations, projects
+  and meetings (issue #370, epic #347). `type` filters (400 on an unknown key); `q` is a trigram
+  fuzzy match on label/alias (top `limit`, `nextCursor` always null); `sort=updated`|`viewed`;
+  `transcriptId` narrows to the Persons `IDENTIFIED_AS` a speaker in that transcript, each with
+  `speakerIds` — 404 without view access to it. Keyset-paginated otherwise (`graph:read`)
+- `GET /api/graph/entities/{id}` - One entity: attributes, aliases, `firstSeenAt`/`lastSeenAt`,
+  and the page counts (`sensitive` person facts not counted) (`graph:read`)
+- `GET /api/graph/entities/{id}/neighborhood?hops&types&relationTypes&as_of&limit` - The entity's
+  bounded 1–2-hop neighbourhood as a `GraphSlice` {seedIds, asOf, nodes, edges, truncated, cap}
+  (issue #370). An item is always a walk leaf; edges touching one are derived from its own
+  columns (`virtual: true`) and a stored relation with the same `(type,from,to)` wins. `limit`
+  ≤ 300; `sensitive` person facts never appear. 503 `graph_query_timeout` past a 3 s statement
+  timeout (`graph:read`)
+- `GET /api/graph/entities/{id}/timeline?as_of&kinds&includeSensitive&cursor&limit` - Everything
+  dated about this entity, newest first (issue #370); a **superseded** item stays, flagged.
+  `includeSensitive=true` reveals `sensitive` person facts. Keyset-paginated; 503
+  `graph_query_timeout` (`graph:read`)
+- `GET /api/graph/entities/{id}/mentions` - The notes/transcripts linked to this entity, newest
+  first (issue #370, additive to the original route list). A deleted document or a revoked
+  transcript share stays with `available: false` (`graph:read`)
+- `POST /api/graph/explore/expand` - One hop out from up to 50 nodes as one `GraphSlice`, seeds
+  at depth 0 (issue #370). A read, despite the verb — the node list does not fit a query string.
+  `cap` ≤ 300; **all-or-nothing 404** if any `nodeIds` entry is not one of your readable
+  entities/items; 503 `graph_query_timeout` (`graph:read`)
+- `GET /api/graph/evidence/{id}` - Resolve one citation to an openable link — a transcript
+  segment (playable at the quoted moment) or a note version (issue #370). `available: false`
+  (quote still returned) when the source is gone or no longer viewable (`graph:read`)
+- `GET /api/graph/evidence?ids=` - Batch-resolve up to 50 citation ids in request order for a row
+  of citation chips (issue #370, additive to the original route list); unknown ids are silently
+  omitted (`graph:read`)
+- `POST /api/graph/notes/{noteId}/extract` - Extract a **draft proposal** from one of your notes
+  (issue #363): creates the proposal (`status: extracting`) **and** queues `kg.extract` in one
+  transaction; **202** with the proposal and a cost `estimate`. Optional `model` (a permitted
+  override of the `graph.extract` task model) and `userGuidance` (`pinnedEntityIds`,
+  `entityTypes`, `relationTypes`, `instructions`). 400 unpermitted model /
+  `details.unknownTypes` / `details.invalidPinnedIds` / over budget with the numbers; 404 not
+  your note (one message for missing, deleted, not yours); 409 `graph_disabled`,
+  `ai_not_configured`, `ai_key_missing`, `model_lacks_capability`, `extraction_running` (decided
+  by `kg_proposals_note_extracting_uniq_idx` at insert, never a lookup first), `note_not_ready`.
+  A ready note is also extracted automatically once, when the graph switch, the owner's
+  `graph:write` and their `extraction.autoExtract` preference all allow it (`graph:write`)
+- `GET /api/graph/extract/estimate?noteId&model` - What that extraction would cost, counted over
+  the exact prompt (guidance excluded); no key needed — `keyConfigured` reports it (`graph:read`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -1017,7 +1060,10 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `### Onboarding` above and [`docs/specs/onboarding.md`](docs/specs/onboarding.md)). Absent from
   `DEFAULT_USER_SETTINGS` on purpose: absent is how "never onboarded" is spelled. Guarded by
   `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the six-file parity check user
-  settings never had before this namespace
+  settings never had before this namespace. Also `graph` (issue #369): per-user connected-knowledge
+  preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
+  adjudication}`, `domains.work` — absent means every default, resolved by
+  `GraphPreferencesService`; see `docs/specs/ontology.md` §10
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
 - `allowed_emails` - Allowlist for access control. `reminder_count`/`last_reminder_at` (issue
@@ -2063,27 +2109,44 @@ graph, and an explorer/whole-graph visualization (§19–§22).
 are built, and so is the graph write layer (issue #355: `GraphWriteService`, the evidence
 invariant trigger, the manual entity edit and attribute definitions); "forget this person"
 (issue #357: `POST /api/graph/entities/:id/forget`, the `kg.purge` job type, and the Danger
-Zone's `graph` category) is also built; the remaining services arrive with #356 and later.**
+Zone's `graph` category) is also built; the read layer (issue #370, epic #347:
+`apps/api/src/graph/read/` — the entity index, an entity's page, its
+neighbourhood, timeline, mentions, citation links, and the explorer's
+`expand`, exported as `GraphReadService`, `GraphNeighborhoodService` and
+`GraphEvidenceService` for the entity brief (#372) and the Ask agent (#377)
+to reuse) is built too; the extraction/review/commit pipeline and the
+whole-graph overview arrive later.**
+The extraction quality harness (issue #362: the synthetic golden set at
+`apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
+built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
 The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. There is still only one `kg.*` job handler (`kg.purge`; every other type
-in `apps/api/src/graph/job-types.ts` is still only a constant), and no
-`/api/graph/*` routes beyond the ontology, the entity edit, attribute
-definitions and forget — the read API (`GET /api/graph/entities`, the entity
-detail/timeline/mentions/neighbourhood/evidence routes) and the entity brief
-(`kg.entity_digest`) are #370/#372, tracked separately.
+above. The only `kg.*` job handlers so far are `kg.purge` (#357),
+`kg.speaker_link` (#356) and `kg.extract` (#363 — one structured-output call per
+note on the owner's own key, producing a **draft proposal**, never graph rows;
+server-only, `maxAttempts: 1`, throttled per user, priority −5, auto-enqueued by
+`NoteGenerationService.commit()` for a ready note); every other type in
+`apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
+`apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
+`NotesModule` for the hook — one-way: it provides the two note services it needs
+itself), with the proposal payload contract later issues import in
+`graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
+#364/#365 plug their stages into. The read layer (#370, `apps/api/src/graph/read/`,
+contract in `read/dto/graph-read.dto.ts`) is built; the entity brief
+(`kg.entity_digest`, #372) is not yet, and there are still no review/commit or
+whole-graph-overview routes.
 **The web side is built** (issue #373, epic #347): `/graph` (index) and
 `/graph/entities/:id` (entity page — header, edit, cited brief, connections,
 timeline, mentions), `EvidenceChip`, speaker-chip person links, entity hits
 above library search, and a Home "Knowledge" section, all owned by the `home`
-destination per the Navigation Destination Model above. It was built against
-#370/#372's stated contracts with MSW, ahead of those API routes landing —
-see `docs/specs/ontology.md` §13 for the up-to-date web-surfaces state. Five
-rules a neighbouring file can
+destination per the Navigation Destination Model above. It reads #370's read API
+and was built against #372's stated brief contract with MSW, ahead of that route
+landing — see `docs/specs/ontology.md` §13 for the up-to-date web-surfaces state.
+Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
@@ -2113,6 +2176,15 @@ silently resume minutes later, and there is no credential narrow enough for a
 `graph` category (`scope: 'all'`, `apps/api/src/user-data/handlers/user-data-purge.handler.ts`).
 The handler is re-entrant — every step selects what is still there and deletes it — which is
 what makes a person-initiated retry (asking again) safe without an automatic one.
+
+**Speaker naming writes the graph only through `kg.speaker_link`** (#356): every
+`TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and (#405) a
+versioned rename/clear/create/merge or a restore — emits `transcript.speakers_identified`, a
+listener only enqueues the job (`skipDedup: true`), and the server-only handler reconciles each
+speaker's **effective** name (the live row with the `speaker_identities` overlay, exactly as
+`materialize()` shows it — never `speaker_identities` alone) into the **owner's** `Person` +
+`IDENTIFIED_AS` rows — never an editor's, and only while the owner holds `graph:write`; see
+`docs/specs/ontology.md` §8.
 
 ## Specialized Subagents (MANDATORY)
 

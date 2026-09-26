@@ -917,13 +917,46 @@ panel (§8) exists specifically to catch what extraction gets wrong, so it
 ships regardless of where the numbers land, and the numbers are what
 determine how much the panel can safely pre-check versus leave for a human.
 
+**Measuring extraction (issue #362).** The golden set lives at
+`apps/api/test/fixtures/kg-golden/` (format, the synthetic-only rule and the
+coverage list are in its `README.md`), and the harness is `npm run kg:eval
+--workspace=api`: `--predictions gold` is the self-test that must print 1.000
+everywhere, `--predictions <dir>` scores a runner's output, `--run <runner>`
+runs a registered `KgEvalRunner` (`extract`, issue #363, below),
+`--enforce` fails on a missed target for local use (CI reports only), and
+`--real-dir`/`--export-note` are the local, opt-in real-data mode, which
+refuses any path inside the git work tree.
+
+**As built (issue #363).** `apps/api/src/graph/extraction/` holds the pure
+core — `buildExtractionContext` (short aliases: segments `s1…sN` in ordinal
+order, known entities `k1…kM`, the note `N`; the offered schema; the
+known-entities list, max 60: pinned → speakers' identified Persons → their
+`WORKS_FOR` organizations → entities named in Context → most-mentioned in 90
+days; the meeting date and whether it was `stated`), `assembleExtractionPrompt`,
+`buildExtractionOutputSchema` (strict JSON Schema, one `anyOf` branch per
+offered type) and `validateExtraction` (the envelope, per-row type/props/
+endpoint/date checks, quote location within the cited segment's text,
+whole-segment fallback flagged `quote_not_located`, the `dangling` cascade) —
+plus `ExtractionInputLoader`, the only database reader, and
+`ProposalWriter`. The model never emits the meeting: the validator adds one
+`Meeting` row (ref `meeting`, linked to an existing Meeting whose
+`props.transcriptId`/`noteId` matches) and one `ATTENDED` per identified
+speaker, and gives every commitment and decision `meeting: { ref: 'meeting' }`.
+Between persisting the rows and pre-checking them, the job runs every stage
+registered with `ProposalStageRegistry`, in order — #364's `resolution`,
+#365's `work-item-dedup`, `temporal-closing`, `rejection-memory`. The payload
+shapes every later issue imports are `graph/proposals/proposal-payload.schema.ts`.
+`npm run kg:eval -- --run extract --model <id>` runs this same pure pipeline
+against the golden set with `KG_EVAL_OPENAI_API_KEY` and no database.
+
 ## 7. Entity resolution (`kg.resolve`)
 
 Resolution runs in two places: **inline**, inside `kg.extract` itself, so
 the review panel can already show proposed matches rather than a wall of
 "new" rows the user has to link by hand; and **on demand**, as a standalone
 `kg.resolve` job, for a bulk re-scan, a re-check after a merge reversal, or a
-re-check after a threshold change in the `graph` settings namespace (§10).
+re-check after a threshold change in the per-user `graph` user-settings
+namespace (§10).
 
 **Candidate generation** unions three signals, deliberately over-generating
 candidates for the scoring step below to narrow rather than trying to be
@@ -949,8 +982,11 @@ attendee/speaker match** (strong — the two "Sarah"s were in the same room),
 **shared-neighbour overlap** (medium — both connect to the same `Project`),
 **recency** (weak — a tie-breaker only, never a deciding signal on its own).
 
-**Thresholds**, stored in the `graph` system-settings namespace (§10,
-default values given here): **auto-link ≥ 0.90**, **new < 0.55**, and
+**Thresholds**, stored per user in the `graph` **user-settings** namespace
+(`graph.resolution.*` — §10, §13; issue #369 corrected an earlier draft that
+put them in a system-settings namespace: they are a preference over one's own
+graph, and the one deployment-wide switch is `ai.graphEnabled`, §20), default
+values given here: **auto-link ≥ 0.90**, **new < 0.55**, and
 everything between routed to **LLM adjudication** — a small, bounded request
 carrying a dossier per candidate (its 1–2-hop neighbourhood plus its
 supporting quotes, matching the "small, bounded, verification-shaped, never
@@ -1012,9 +1048,16 @@ unremarked.
 
 **`kg_proposals`** (§10) records one row per extraction run: `note_id`,
 `note_version`, the generation-context snapshot (§6), `status`
-(`draft | committed | discarded | failed`), and `stats` (counts of proposed,
-dropped-for-uncited-evidence, and — post-commit — accepted/edited/rejected
-items). **`kg_proposal_items`** holds one row per proposed entity, relation,
+(`extracting | draft | committed | discarded | failed | reverted` — the
+lifecycle is §10's), and `stats` (counts of proposed rows, rows dropped and
+why — `uncited`, `invalid`, `unknownType`, `dangling` — located-quote misses,
+provider usage, a failure class when the run failed, and — post-commit —
+accepted/edited/rejected items). The row is created by the request, in
+`extracting`, **before** the job runs (issue #363): the caller gets an id to
+poll, and "an extraction is already running" is decided by a partial unique
+index at insert rather than by a lookup before it. A newer draft for the same
+note discards the older one (`stats.discardReason: 'superseded'`) in the
+transaction that makes it a draft. **`kg_proposal_items`** holds one row per proposed entity, relation,
 or item: `kind`, `payload`, a `resolution` object (`{ ref, score,
 candidates[] }` from §7), a per-item `decision`
 (`pending | accept | edit | reject | merge_into`), and its `evidence[]`.
@@ -1027,7 +1070,19 @@ where §7's resolution produced one — its matched entity.
 **Pre-check rule.** A row is pre-checked (defaulted to `accept`) exactly
 when: its resolution score is at or above the auto-link threshold **and**
 its kind is not `PersonFact` **and** it is not flagged as a possible
-duplicate by §7's own uncertain-adjudication path. `PersonFact` is
+duplicate by §7's own uncertain-adjudication path. As implemented
+(issue #363, `apps/api/src/graph/extraction/precheck.ts`, run once after
+every pipeline stage): nothing is pre-checked under the `review_all`
+resolution mode; an **entity** is pre-checked when it links to an existing
+entity at or above `autoLinkThreshold` with an adjudication that is not
+`uncertain`, or is new with no candidate at or above `newThreshold` — never
+with a `possible_duplicate`, `ambiguous` or `model_claimed_match` flag (a
+model saying "this is `k3`" is re-scored by §7, never taken at its word); a
+**relation or item** is pre-checked when every entity endpoint is an existing
+entity or a pre-checked proposal entity and it carries none of
+`possible_duplicate`, `overlaps`, `unordered`, `supersedes`,
+`previously_rejected`, `stale_ontology`; a `person_fact` and a `closing` row
+are **never** pre-checked. `PersonFact` is
 categorically excluded from pre-checking regardless of resolution
 confidence — resolving *who* the fact is about being confident says nothing
 about whether surfacing the fact itself was the reviewer's intent, which is
@@ -1062,13 +1117,36 @@ write path, with exactly two named exceptions: the **speaker-naming write**
 (`IDENTIFIED_AS` plus a `Person` row, because the user typing a name against
 "Speaker A" *is itself* the review — there is no separate confirmation step
 that act could sensibly wait for), enqueued as **`kg.speaker_link`** (§11)
-from `TranscriptEditingService.identify()` (verified above) rather than
+from `TranscriptEditingService` (after an identification, and since #405
+after any versioned save or restore that changes a speaker's name) rather than
 performed inline in that request — CLAUDE.md's job-queue rule applies here
 exactly as everywhere else, however small the write — and a **manual edit on
 an entity page**
 (§13) — a person directly correcting a `Person`'s name or an `Organization`'s
 label after the fact, which is curation by construction and needs no
 proposal to wrap it.
+
+The speaker-naming write (#356) is **owner-only and a full reconcile**: it
+writes only into the transcript owner's graph, only when the owner performed
+the naming and holds `graph:write` (an editor-share's naming enqueues a job
+that writes nothing, §12), and each run re-derives every `IDENTIFIED_AS` edge
+for that transcript's speakers from each speaker's **effective** name under a
+per-transcript advisory lock — creating or linking the `Person`, re-pointing
+a renamed speaker, removing a cleared one, and deleting the old `Person` only
+when it existed solely through that transcript's speaker naming — so a
+repeated or concurrent run converges on the same state.
+
+The effective name is the one the user sees: the live `transcript_speakers`
+name with the `speaker_identities` overlay applied, through the same
+`applyIdentities`/`isUnidentified` pair `materialize()` uses
+(`docs/specs/transcription.md` §4.6), and a speaker still on its ingest
+placeholder has none. `speaker_identities` alone is not enough (#405): a
+rename of an already-named speaker is a **versioned** correction that writes
+only the live row, and a clear back to "Speaker A" retires the identity entry.
+So the job is enqueued after **every** save that changes which name a speaker
+shows — an identification, a versioned batch that renames, clears, creates or
+merges away a speaker, and a version restore — not only after
+`identify()`.
 
 ## 9. Retrieval
 
@@ -1243,11 +1321,27 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   (`extraction | import | resolution` — `resolution` landed by issue #351
   alongside every other proposal-model column below, so #364 needs no schema
   change of its own; #364 owns the prose for what a `resolution` proposal
-  is), `status` (`draft | extracting | committed | discarded | failed |
-  reverted` — `extracting` landed by issue #351 for the identical
-  no-later-migration reason; #363 owns the prose for the `extracting`
-  lifecycle: `extracting → draft | failed`, `draft → committed | discarded`,
-  `failed → discarded`, `committed → reverted`), `model`/`provider` (§20 — which task-model resolution
+  is — see the `resolution` kind below), `status` (`draft | extracting |
+  committed | discarded | failed | reverted` — `extracting` landed by issue
+  #351 for the identical no-later-migration reason). **The `extracting`
+  lifecycle (issue #363):** `POST /api/graph/notes/:noteId/extract` (or the
+  note-ready hook) inserts the row in `extracting`, with its `job_id`, in the
+  same transaction as the `kg.extract` job; `kg_proposals_note_extracting_
+  uniq_idx` makes a second concurrent insert for the note fail, which is the
+  409 `extraction_running`. The job moves it `extracting → draft` (items,
+  evidence, stats written, stages run, pre-check applied — and any older
+  `draft` for the note moved to `discarded` with `stats.discardReason:
+  'superseded'` first, in the same transaction, because
+  `kg_proposals_note_draft_uniq_idx` allows one draft per note) or
+  `extracting → failed` (`stats.failure: { errorClass, message }`, the
+  prompt still recorded). A rate-limited run stays `extracting` while the
+  queue defers it. Then `draft → committed | discarded`, `failed →
+  discarded`, `committed → reverted` (#366). **The `resolution` kind** is a
+  proposal with no note (`note_id`/`note_version` NULL): #364's bulk
+  resolution suggestions — "these entities look like the same person" found
+  across the whole graph rather than inside one extraction — reviewed and
+  committed through the same panel and the same commit path as an
+  extraction. `model`/`provider` (§20 — which task-model resolution
   actually ran, recorded rather than re-derived, so an administrator
   changing the default tomorrow never rewrites what an already-committed
   proposal used yesterday), `system_prompt`/`user_content` (the generation-
@@ -1338,6 +1432,33 @@ plain b-tree a bare pair of timestamp columns would have used);
 `(owner_id, subject_id, occurred_at desc)` on `kg_items` (§9.1's brief
 query); a partial unique on `kg_entity_views(user_id, entity_id)`.
 
+**Per-user preferences are not a table.** Automatic extraction, the
+resolution thresholds, mode and adjudication switch, and the enabled domains
+live in the `graph` namespace of the existing `user_settings` JSONB row
+(issue #369 — `apps/api/src/common/schemas/user-settings-namespaces.schema.ts`,
+all six user-settings parity places), read through `GraphPreferencesService`
+(`apps/api/src/graph/preferences/`), which fills every absent field from
+`GRAPH_PREFERENCE_DEFAULTS` at read time and never writes a default into the
+row:
+
+```ts
+graph?: {
+  extraction?: { autoExtract: boolean };                          // default true
+  resolution?: { mode: 'precheck_confident' | 'review_all';       // default precheck_confident
+                 autoLinkThreshold: number;  /* 0.80–0.99 */      // default 0.90
+                 newThreshold: number;       /* 0.30–0.94, ≥ 0.05 below auto-link */ // default 0.55
+                 adjudication: 'llm' | 'off' };                   // default llm
+  domains?: { work: boolean; personal: false };                   // core is never stored (always on)
+}
+```
+
+`PATCH /api/user-settings` merges it per sub-object (`null` resets a
+sub-object or a field to its default; `graph: null` resets everything). A write
+whose resolved values change emits `graph.preferences_changed`
+(`{ userId, changed, previous, next }`); a listener may only enqueue (#364's
+`kg.resolve` on a threshold change). `personal` is `z.literal(false)` until
+#383 ships that domain.
+
 **`pg_trgm` is a new migration requirement for this codebase — pgvector
 already is not** (`SearchEmbedding` already depends on it, verified above),
 worth stating plainly because it is the one new PostgreSQL extension this
@@ -1356,7 +1477,7 @@ rather than being folded into a handler directory it does not belong in:
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |
-| `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued from `TranscriptEditingService.identify()` (verified above) rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
+| `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
 | `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped |
@@ -1424,6 +1545,35 @@ recording itself, a different object entirely. The stated consequence:
 revoking a transcript share revokes nothing on the graph side, because
 nothing was ever shared there to revoke.
 
+**The read layer is built (issue #370, epic #347).** `GET
+/api/graph/entities` (list/search, with `sort`/`type`/`q`/`transcriptId`),
+`GET /api/graph/entities/:id`, `GET /api/graph/entities/:id/neighborhood`,
+`GET /api/graph/entities/:id/timeline`, and `POST /api/graph/explore/expand`
+are the five routes this section's bullet list already named above as
+`graph:read`; `apps/api/src/graph/read/` (`GraphReadController`,
+`GraphReadService`, `GraphNeighborhoodService`, `GraphEvidenceService`) is the
+implementation, exported from `GraphModule` for the entity brief (§9.1, #372)
+and the Ask agent's tools (§9.3, #377) to call directly rather than
+re-querying `kg_entities`/`kg_relations`/`kg_items` themselves. Two routes are
+**additive** to the list this issue started from, both `graph:read`, and
+folded into the same controller: `GET /api/graph/entities/:id/mentions` (the
+notes and transcripts linked to an entity — this section already listed
+"mentions" under `graph:read` above, this is its route) and `GET
+/api/graph/evidence?ids=` (batch citation resolution, alongside the
+single-id `GET /api/graph/evidence/:id` also shipped here, for rendering a
+row of citation chips in one round trip). `READABLE_ENTITY_STATUSES`,
+`READABLE_RELATION_STATUSES`, `READABLE_ITEM_STATUSES` and
+`TIMELINE_ITEM_STATUSES` (`apps/api/src/graph/read/readable.ts`) are the one
+definition of "readable" every one of these routes, and every later read
+surface, imports rather than re-deriving. One deliberate deviation from this
+issue's original text: evaluating a relation `as_of` reads
+`AS_OF_RELATION_STATUSES` (readable **plus** `superseded`), matching §5.4's
+own `AS_OF_STATUSES` engine (`apps/api/src/graph/temporal/`) exactly, rather
+than the plain readable set — an `as_of` question about January 2024 must
+still see the edge a later `as_of`-unaware read would call superseded.
+Extraction, review, commit, the brief, and the whole-graph overview remain
+unbuilt and follow in #356 and later.
+
 **Additional routes §19–§22 add, under the same two permissions.**
 `graph:read` also gates the read side of proposal review — `GET
 /api/graph/proposals`, `GET /api/graph/proposals/:id`, `GET
@@ -1465,8 +1615,9 @@ the caller have a key" contract that endpoint already answers for
 `docs/specs/notes.md`'s own feature.
 
 **New 409 `details.reason` values this epic adds:** `graph_disabled`
-(`ai.graphEnabled` is off), `extraction_running` (a draft proposal already
-exists for this note version), `proposal_not_draft` (acting on a
+(`ai.graphEnabled` is off), `extraction_running` (a proposal for this note is
+already `extracting`), `note_not_ready` (issue #363 — extracting a note whose
+status is not `ready`), `proposal_not_draft` (acting on a
 committed/discarded/reverted proposal), `stale_note_version` (extracting
 against a note version that has since changed), `revert_conflict` (§19.4 —
 one or more of the proposal's committed rows has been touched since commit),
@@ -1538,8 +1689,10 @@ proposal panel on a note (§8, §19); an entity chip added to a transcript's
 speaker list (linking a named speaker to their `Person` page); and from
 search results that resolve to a graph entity.
 
-**A user-settings card, `Knowledge graph`** (thresholds, resolution mode,
-domain toggles, a user-defined-attribute browser, gated `graph:write`) is
+**A user-settings card, `Knowledge graph`** (automatic extraction,
+thresholds, resolution mode, domain toggles, a user-defined-attribute browser,
+gated `graph:write`; built by issue #369 at `/settings/knowledge-graph`, in its
+own `Knowledge` group, over the `graph` user-settings namespace §10 describes) is
 the **only** registry entry this document adds, in
 `apps/web/src/config/userSettingsSections.tsx`'s `USER_SETTINGS_SECTIONS`
 (Settings UI Pattern rule 1) — no admin card, because resolution thresholds

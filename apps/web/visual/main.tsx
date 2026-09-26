@@ -98,6 +98,9 @@ const GettingStartedPage = lazy(() => import('../src/pages/GettingStartedPage'))
 const UserProfilePage = lazy(() => import('../src/pages/UserProfilePage'));
 const UserAppearancePage = lazy(() => import('../src/pages/UserAppearancePage'));
 const UserTokensPage = lazy(() => import('../src/pages/UserTokensPage'));
+// Issue #369, epic #346. Registered for the same reason every route in this
+// file is: a route the harness cannot reach is one this suite cannot capture.
+const UserKnowledgeGraphPage = lazy(() => import('../src/pages/UserKnowledgeGraphPage'));
 // Two pages since #106, where one served both routes — the harness mirrors
 // `App.tsx`'s lazy imports exactly, so a page split there is a page split here.
 const TranscriptsPage = lazy(() => import('../src/pages/TranscriptsPage'));
@@ -180,6 +183,11 @@ const DEFAULT_PERMISSIONS = [
   // `GET /api/storage/objects/:id` is what resolves a note row's source name
   // and a document's extraction progress. Seeded to every role.
   'storage:read',
+  // Connected knowledge (#354/#369, epic #346). Seeded to all three roles, and
+  // `graph:write` gates the `Knowledge graph` card in `USER_SETTINGS_SECTIONS`
+  // — a harness user without it would screenshot a user hub missing that card.
+  'graph:read',
+  'graph:write',
 ];
 
 interface HarnessParams {
@@ -398,6 +406,18 @@ function HarnessRoutes() {
           <Route path="/settings/profile" element={<UserProfilePage />} />
           <Route path="/settings/appearance" element={<UserAppearancePage />} />
           <Route path="/settings/tokens" element={<UserTokensPage />} />
+          {/* Issue #369 — gate copied verbatim from `App.tsx`. */}
+          <Route
+            path="/settings/knowledge-graph"
+            element={
+              <RequirePermission
+                permission="graph:write"
+                fallback={<Navigate to="/settings" replace />}
+              >
+                <UserKnowledgeGraphPage />
+              </RequirePermission>
+            }
+          />
 
           <Route path="/admin" element={<Navigate to="/admin/settings" replace />} />
           <Route

@@ -3,9 +3,16 @@ import type { Page, Route } from '@playwright/test';
 import { onboardingResponse } from './onboardingApi';
 
 /**
- * A mocked knowledge-graph read API for the visual harness — issue #373,
- * epic #347. Shapes mirror #370's read API and #372's brief (and
- * `apps/web/src/services/graph.ts`, which mirrors those field for field).
+ * A mocked knowledge-graph API for the visual harness. Two surfaces, each
+ * with its own fixed fixtures so neither's baselines move when the other's
+ * change (select with `GraphApiOptions.surface`):
+ *
+ *   - `'settings'` (the default) — the Knowledge graph settings page (issue
+ *     #369, epic #346): ontology, the user's own attribute definitions and
+ *     `GET /api/ai/config`.
+ *   - `'pages'` — the `/graph` index and entity page (issue #373, epic #347).
+ *     Shapes mirror #370's read API and #372's brief (and
+ *     `apps/web/src/services/graph.ts`, which mirrors those field for field).
  *
  * Self-contained on purpose, like `notesApi.ts`: this project never imports
  * app source or workspace packages at runtime, so the effective ontology is a
@@ -72,7 +79,7 @@ const entityType = (key: string, label: string, pluralLabel: string, attributes:
   attributes,
 });
 
-const ONTOLOGY = {
+const PAGES_ONTOLOGY = {
   version: '1.0.0',
   domains: [
     { key: 'core', label: 'Core', enabled: true, alwaysOn: true },
@@ -432,8 +439,12 @@ export const GRAPH_PERMS = [
 ];
 
 export interface GraphApiOptions {
-  /** An empty graph — the index's first-run state. */
+  /** Which surface's fixtures to serve. Default `'settings'`. */
+  surface?: 'settings' | 'pages';
+  /** `'pages'`: an empty graph — the index's first-run state. */
   empty?: boolean;
+  /** `'settings'`: answer `GET /api/ai/config` with `graphEnabled: false`. */
+  graphDisabled?: boolean;
 }
 
 function json(route: Route, data: unknown) {
@@ -445,11 +456,12 @@ function json(route: Route, data: unknown) {
 }
 
 export async function installGraphApi(page: Page, options: GraphApiOptions = {}): Promise<void> {
+  if ((options.surface ?? 'settings') === 'settings') return installSettingsApi(page, options);
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname.replace(/^.*\/api/, '');
 
-    if (path === '/graph/ontology') return json(route, ONTOLOGY);
+    if (path === '/graph/ontology') return json(route, PAGES_ONTOLOGY);
 
     if (path === '/graph/entities') {
       if (options.empty) return json(route, { items: [], nextCursor: null });
@@ -474,6 +486,137 @@ export async function installGraphApi(page: Page, options: GraphApiOptions = {})
 
     // Anything else the chrome asks for (notification bell, etc.) gets the
     // quietest answer.
+    return json(route, {});
+  });
+}
+
+// =============================================================================
+// Settings surface (#369) — the Knowledge graph settings page's fixtures,
+// hand-copied from what `computeEffectiveSchema` returns for `core` + `work`,
+// trimmed to the fields the page reads.
+// =============================================================================
+
+function attribute(key: string, label: string, source: 'builtin' | 'mixin' = 'builtin') {
+  return {
+    key,
+    label,
+    kind: 'text',
+    required: false,
+    list: false,
+    options: null,
+    extractable: true,
+    description: label,
+    sensitivity: 'business',
+    source,
+    domain: source === 'mixin' ? 'work' : 'core',
+    attributeDefId: null,
+    deprecated: false,
+    sortOrder: 0,
+  };
+}
+
+function settingsEntityType(key: string, label: string, attributes: unknown[], domain = 'core') {
+  return {
+    key,
+    domain,
+    label,
+    pluralLabel: `${label}s`,
+    description: label,
+    disambiguation: [],
+    storage: 'entity',
+    itemKind: null,
+    statuses: null,
+    subjectTypes: null,
+    subjectRequired: false,
+    sensitivityDefault: key === 'Person' ? 'personal' : 'business',
+    alignment: null,
+    extractable: true,
+    deprecated: false,
+    attributes,
+  };
+}
+
+const SETTINGS_ONTOLOGY = {
+  version: '1.0.0',
+  domains: [
+    { key: 'core', label: 'Core', enabled: true, alwaysOn: true },
+    { key: 'work', label: 'Work', enabled: true, alwaysOn: false },
+  ],
+  entityTypes: [
+    settingsEntityType('Person', 'Person', [attribute('title', 'Job title', 'mixin')]),
+    settingsEntityType('Organization', 'Organization', [attribute('website', 'Website')]),
+    settingsEntityType('Meeting', 'Meeting', [attribute('topics', 'Topics')]),
+    settingsEntityType('Project', 'Project', [attribute('status', 'Status')], 'work'),
+  ],
+  relationTypes: [],
+};
+
+function def(overrides: Record<string, unknown>) {
+  return {
+    id: '55555555-5555-4555-8555-555555555555',
+    entityType: 'Person',
+    key: 'u_nickname01',
+    label: 'Nickname',
+    kind: 'text',
+    options: null,
+    extractable: true,
+    extractionHint: 'How teammates address them informally',
+    sensitivity: null,
+    sortOrder: 0,
+    deprecatedAt: null,
+    createdAt: FIXED_ISO,
+    updatedAt: FIXED_ISO,
+    ...overrides,
+  };
+}
+
+const ATTRIBUTE_DEFS = [
+  def({}),
+  def({
+    id: '66666666-6666-4666-8666-666666666666',
+    key: 'u_oldfield01',
+    label: 'Desk number',
+    extractable: false,
+    extractionHint: null,
+    deprecatedAt: FIXED_ISO,
+  }),
+  def({
+    id: '77777777-7777-4777-8777-777777777777',
+    entityType: 'Organization',
+    key: 'u_industry01',
+    label: 'Industry',
+    kind: 'select',
+    options: { choices: [{ value: 'saas', label: 'SaaS' }] },
+    extractable: false,
+    extractionHint: null,
+    sensitivity: 'business',
+  }),
+];
+
+async function installSettingsApi(page: Page, options: GraphApiOptions): Promise<void> {
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname.replace(/^.*\/api/, '');
+
+    if (path === '/ai/config') {
+      return json(route, {
+        available: true,
+        provider: 'openai',
+        providerLabel: 'OpenAI',
+        models: [],
+        defaultModel: 'gpt-4o-mini',
+        maxInputTokens: 100_000,
+        maxOutputTokens: 8_000,
+        keyConfigured: true,
+        graphEnabled: !options.graphDisabled,
+      });
+    }
+    if (path === '/graph/ontology') return json(route, SETTINGS_ONTOLOGY);
+    if (path === '/graph/attribute-defs') return json(route, { items: ATTRIBUTE_DEFS });
+
+    const onboarding = onboardingResponse(path);
+    if (onboarding) return json(route, onboarding);
+
     return json(route, {});
   });
 }

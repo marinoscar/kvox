@@ -1,0 +1,764 @@
+{
+  "id": "m01",
+  "title": "Northwind pick-path pilot kickoff",
+  "tags": [
+    "kickoff",
+    "client",
+    "relative-date",
+    "negative-role"
+  ],
+  "recordedAt": "2026-01-08T15:00:00Z",
+  "contextText": "Kickoff for the pick-path optimisation pilot with Northwind Robotics. Sarah is our exec sponsor.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m01-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m01-spk-b",
+      "label": "B",
+      "displayName": "Sarah Chen"
+    },
+    {
+      "id": "m01-spk-c",
+      "label": "C",
+      "displayName": "Tomás Aguilar"
+    },
+    {
+      "id": "m01-spk-d",
+      "label": "D",
+      "displayName": "Priya Raman"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m01-s001",
+      "speakerId": "m01-spk-a",
+      "startMs": 0,
+      "endMs": 11620,
+      "rev": 1,
+      "text": "Okay, I think everyone's here. Thanks for making the time. This is the kickoff for the pick-path pilot, so I'd like to cover scope, timeline and who owns what."
+    },
+    {
+      "id": "m01-s002",
+      "speakerId": "m01-spk-b",
+      "startMs": 11870,
+      "endMs": 19690,
+      "rev": 1,
+      "text": "Great. For the record, I'm Sarah Chen, VP of Operations at Northwind Robotics. I'm sponsoring this on our side."
+    },
+    {
+      "id": "m01-s003",
+      "speakerId": "m01-spk-c",
+      "startMs": 19940,
+      "endMs": 27380,
+      "rev": 1,
+      "text": "And I'm Tomás Aguilar, I'm an engineer on the warehouse systems team. I'll be the day-to-day technical contact."
+    },
+    {
+      "id": "m01-s004",
+      "speakerId": "m01-spk-d",
+      "startMs": 27630,
+      "endMs": 33550,
+      "rev": 1,
+      "text": "Priya Raman, engineering manager at Larkspur. I'll be staffing the team from our side."
+    },
+    {
+      "id": "m01-s005",
+      "speakerId": "m01-spk-a",
+      "startMs": 33800,
+      "endMs": 43140,
+      "rev": 1,
+      "text": "Perfect. So the short version: we want to prove that re-ordering pick paths based on live order mix cuts walking distance for pickers."
+    },
+    {
+      "id": "m01-s006",
+      "speakerId": "m01-spk-b",
+      "startMs": 43390,
+      "endMs": 57290,
+      "rev": 1,
+      "text": "Right, and I want to be clear on where. My preference is that we run this in Building 3 only. It's our most predictable site and the floor supervisors there are open to trying things."
+    },
+    {
+      "id": "m01-s007",
+      "speakerId": "m01-spk-a",
+      "startMs": 57540,
+      "endMs": 63840,
+      "rev": 1,
+      "text": "Building 3 only works for us. Do we all agree on that as the scope?"
+    },
+    {
+      "id": "m01-s008",
+      "speakerId": "m01-spk-c",
+      "startMs": 64090,
+      "endMs": 70010,
+      "rev": 1,
+      "text": "Yes, Building 3 has the newest shelving too, so the location data is cleaner."
+    },
+    {
+      "id": "m01-s009",
+      "speakerId": "m01-spk-b",
+      "startMs": 70260,
+      "endMs": 75040,
+      "rev": 1,
+      "text": "Then let's call it decided. Building 3 only for the pilot."
+    },
+    {
+      "id": "m01-s010",
+      "speakerId": "m01-spk-a",
+      "startMs": 75290,
+      "endMs": 78930,
+      "rev": 1,
+      "text": "On timing, what are you telling your leadership?"
+    },
+    {
+      "id": "m01-s011",
+      "speakerId": "m01-spk-b",
+      "startMs": 79180,
+      "endMs": 86620,
+      "rev": 1,
+      "text": "The pilot is scheduled for Q1. That's what's in our operating plan and what the board has seen."
+    },
+    {
+      "id": "m01-s012",
+      "speakerId": "m01-spk-d",
+      "startMs": 86870,
+      "endMs": 92030,
+      "rev": 1,
+      "text": "Q1 is tight but doable if we get the floor data early."
+    },
+    {
+      "id": "m01-s013",
+      "speakerId": "m01-spk-a",
+      "startMs": 92280,
+      "endMs": 100480,
+      "rev": 1,
+      "text": "Which brings me to data. Sarah, can your team get us the current floor plans and the shelf location export?"
+    },
+    {
+      "id": "m01-s014",
+      "speakerId": "m01-spk-b",
+      "startMs": 100730,
+      "endMs": 106270,
+      "rev": 1,
+      "text": "Yes. I'll send the floor plans and the location export by next Tuesday."
+    },
+    {
+      "id": "m01-s015",
+      "speakerId": "m01-spk-a",
+      "startMs": 106520,
+      "endMs": 109400,
+      "rev": 1,
+      "text": "Thank you. Priya, on our side?"
+    },
+    {
+      "id": "m01-s016",
+      "speakerId": "m01-spk-d",
+      "startMs": 109650,
+      "endMs": 118610,
+      "rev": 1,
+      "text": "I'll staff two engineers on this from the start of February. JJ is one of them, the other I'll confirm this week."
+    },
+    {
+      "id": "m01-s017",
+      "speakerId": "m01-spk-c",
+      "startMs": 118860,
+      "endMs": 125540,
+      "rev": 1,
+      "text": "Will they need access to the warehouse management system directly or can we work from exports?"
+    },
+    {
+      "id": "m01-s018",
+      "speakerId": "m01-spk-a",
+      "startMs": 125790,
+      "endMs": 133230,
+      "rev": 1,
+      "text": "Exports are fine for the first month. We don't want to touch production systems until we've earned it."
+    },
+    {
+      "id": "m01-s019",
+      "speakerId": "m01-spk-b",
+      "startMs": 133480,
+      "endMs": 140920,
+      "rev": 1,
+      "text": "Good, because anything touching the WMS directly will need sign-off from the CIO eventually, and that takes weeks."
+    },
+    {
+      "id": "m01-s020",
+      "speakerId": "m01-spk-a",
+      "startMs": 141170,
+      "endMs": 143670,
+      "rev": 1,
+      "text": "Understood. We'll plan around exports."
+    },
+    {
+      "id": "m01-s021",
+      "speakerId": "m01-spk-b",
+      "startMs": 143920,
+      "endMs": 155920,
+      "rev": 1,
+      "text": "One more thing, and this is just how I work: I'd much rather get a short written update every Friday than another recurring call. My calendar is already a mess."
+    },
+    {
+      "id": "m01-s022",
+      "speakerId": "m01-spk-a",
+      "startMs": 156170,
+      "endMs": 159430,
+      "rev": 1,
+      "text": "That's easy. Friday written updates it is."
+    },
+    {
+      "id": "m01-s023",
+      "speakerId": "m01-spk-c",
+      "startMs": 159680,
+      "endMs": 165980,
+      "rev": 1,
+      "text": "Can I be copied on those? I'd like to see what the engineers are seeing."
+    },
+    {
+      "id": "m01-s024",
+      "speakerId": "m01-spk-a",
+      "startMs": 166230,
+      "endMs": 169870,
+      "rev": 1,
+      "text": "Of course. Tomás, you'll be on every update."
+    },
+    {
+      "id": "m01-s025",
+      "speakerId": "m01-spk-d",
+      "startMs": 170120,
+      "endMs": 176800,
+      "rev": 1,
+      "text": "Last thing from me, do we have a named person on your side for security questions?"
+    },
+    {
+      "id": "m01-s026",
+      "speakerId": "m01-spk-b",
+      "startMs": 177050,
+      "endMs": 181070,
+      "rev": 1,
+      "text": "Tomás can route those. He knows who to ask."
+    },
+    {
+      "id": "m01-s027",
+      "speakerId": "m01-spk-a",
+      "startMs": 181320,
+      "endMs": 189520,
+      "rev": 1,
+      "text": "Great. So to recap: Building 3 only, target Q1, floor plans by next Tuesday, and Friday written updates. Thanks everyone."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Northwind pick-path pilot kickoff\n\n**Date:** January 8\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)\n\n## Summary\n\nKickoff for the pick-path pilot with Northwind Robotics. The goal is to show that re-ordering pick paths based on the live order mix reduces picker walking distance. Sarah Chen, VP of Operations, is the executive sponsor; Tomás Aguilar, an engineer on the warehouse systems team, is the day-to-day technical contact.\n\n## Decisions\n\n- The pilot will run in **Building 3 only**, Northwind's most predictable site with the newest shelving and cleaner location data.\n- The team will work from data exports for the first month rather than connecting to the warehouse management system directly.\n\n## Timeline\n\nSarah confirmed that the pilot is scheduled for Q1; this is what appears in Northwind's operating plan and what their board has seen. Priya considers Q1 tight but achievable if floor data arrives early.\n\n## Action items\n\n- **Sarah Chen** — send the Building 3 floor plans and shelf location export by next Tuesday.\n- **Priya Raman** — staff two engineers on the pilot from the start of February (JJ plus one more, to be confirmed this week).\n- **Alex Rivera** — send a short written update every Friday, copying Tomás.\n\n## Notes\n\n- Any direct integration with the warehouse management system will eventually need sign-off from Northwind's CIO, which takes weeks, so the plan avoids it for now.\n- Sarah prefers a short written update every Friday over another recurring call.\n- Tomás will route security questions to the right people at Northwind.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northwind pick-path pilot kickoff",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind pick-path pilot kickoff"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarah",
+        "type": "Person",
+        "label": "Sarah Chen",
+        "aliases": [],
+        "existingId": "g-person-sarah-chen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s002",
+            "quote": "I'm Sarah Chen, VP of Operations at Northwind Robotics"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomás Aguilar",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s003",
+            "quote": "I'm Tomás Aguilar, I'm an engineer on the warehouse systems team"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s004",
+            "quote": "Priya Raman, engineering manager at Larkspur"
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s002",
+            "quote": "VP of Operations at Northwind Robotics"
+          }
+        ]
+      },
+      {
+        "key": "larkspur",
+        "type": "Organization",
+        "label": "Larkspur Labs",
+        "aliases": [],
+        "existingId": "g-org-larkspur-labs",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [
+          "the pilot"
+        ],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s001",
+            "quote": "This is the kickoff for the pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarah",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "tomas",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "sarah",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s002",
+            "quote": "I'm Sarah Chen, VP of Operations at Northwind Robotics"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "sarah",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "VP of Operations"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s002",
+            "quote": "I'm Sarah Chen, VP of Operations at Northwind Robotics"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "tomas",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Tomás Aguilar (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "tomas",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Engineer"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s003",
+            "quote": "I'm an engineer on the warehouse systems team"
+          }
+        ]
+      },
+      {
+        "type": "PART_OF",
+        "from": "pilot",
+        "to": "nwr",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Kickoff for the pick-path pilot with Northwind Robotics."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s001",
+            "quote": "This is the kickoff for the pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Run the pilot in Building 3 only",
+        "statement": "The pilot will run in Building 3 only.",
+        "status": null,
+        "occurredAt": "2026-01-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s009",
+            "quote": "Then let's call it decided. Building 3 only for the pilot."
+          },
+          {
+            "source": "note",
+            "quote": "The pilot will run in **Building 3 only**"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Work from exports for the first month",
+        "statement": "The team will work from data exports for the first month rather than connecting to the warehouse management system directly.",
+        "status": null,
+        "occurredAt": "2026-01-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s018",
+            "quote": "Exports are fine for the first month."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Pilot scheduled for Q1",
+        "statement": "The pick-path pilot is scheduled for Q1.",
+        "status": null,
+        "occurredAt": "2026-01-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s011",
+            "quote": "The pilot is scheduled for Q1."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "sarah",
+        "counterparty": "larkspur",
+        "title": "Send floor plans and location export",
+        "statement": "Sarah will send the Building 3 floor plans and shelf location export by next Tuesday.",
+        "status": "open",
+        "occurredAt": "2026-01-08",
+        "dueAt": "2026-01-13",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s014",
+            "quote": "I'll send the floor plans and the location export by next Tuesday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "priya",
+        "counterparty": null,
+        "title": "Staff two engineers on the pilot",
+        "statement": "Priya will staff two engineers on the pilot from the start of February.",
+        "status": "open",
+        "occurredAt": "2026-01-08",
+        "dueAt": "2026-02-01",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s016",
+            "quote": "I'll staff two engineers on this from the start of February."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "alex",
+        "counterparty": "sarah",
+        "title": "Send Friday written updates",
+        "statement": "Alex will send a short written update every Friday, copying Tomás.",
+        "status": "open",
+        "occurredAt": "2026-01-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s022",
+            "quote": "Friday written updates it is."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "sarah",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers written updates to calls",
+        "statement": "Sarah prefers a short written update every Friday over another recurring call.",
+        "status": null,
+        "occurredAt": "2026-01-08",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s021",
+            "quote": "I'd much rather get a short written update every Friday than another recurring call."
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "sign-off from the CIO eventually",
+        "why": "A role (\"the CIO\"), not a named person: no Person is created."
+      }
+    ]
+  }
+}

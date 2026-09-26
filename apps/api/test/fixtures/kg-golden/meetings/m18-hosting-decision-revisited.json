@@ -1,0 +1,663 @@
+{
+  "id": "m18",
+  "title": "Pilot hosting decision revisited",
+  "tags": [
+    "vendor",
+    "supersedes",
+    "nickname",
+    "resolution-trap"
+  ],
+  "recordedAt": "2026-05-07T15:00:00Z",
+  "contextText": "Revisiting where the pilot runs after the pricing came in.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m18-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m18-spk-b",
+      "label": "B",
+      "displayName": "Priya Raman"
+    },
+    {
+      "id": "m18-spk-c",
+      "label": "C",
+      "displayName": "Jonah Jiménez"
+    },
+    {
+      "id": "m18-spk-d",
+      "label": "D",
+      "displayName": "Owen Barker"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m18-s001",
+      "speakerId": "m18-spk-a",
+      "startMs": 0,
+      "endMs": 6300,
+      "rev": 1,
+      "text": "Thanks for joining, Owen. We need to revisit the hosting decision we made in February."
+    },
+    {
+      "id": "m18-s002",
+      "speakerId": "m18-spk-b",
+      "startMs": 6550,
+      "endMs": 14750,
+      "rev": 1,
+      "text": "The committed-use pricing from Estuary finally came in, and it's about 40 percent above the budget we agreed with Northwind."
+    },
+    {
+      "id": "m18-s003",
+      "speakerId": "m18-spk-d",
+      "startMs": 15000,
+      "endMs": 23200,
+      "rev": 1,
+      "text": "That's a non-starter for us. And honestly, since I joined we've built out an on-prem cluster that's sitting half empty."
+    },
+    {
+      "id": "m18-s004",
+      "speakerId": "m18-spk-c",
+      "startMs": 23450,
+      "endMs": 32410,
+      "rev": 1,
+      "text": "I've looked at it. It has everything the pilot needs, and the floor data never leaves Northwind's network, which security will love."
+    },
+    {
+      "id": "m18-s005",
+      "speakerId": "m18-spk-a",
+      "startMs": 32660,
+      "endMs": 35920,
+      "rev": 1,
+      "text": "What would it cost us to move?"
+    },
+    {
+      "id": "m18-s006",
+      "speakerId": "m18-spk-c",
+      "startMs": 36170,
+      "endMs": 40950,
+      "rev": 1,
+      "text": "The services are containerised already. JJ's estimate, three weeks including testing."
+    },
+    {
+      "id": "m18-s007",
+      "speakerId": "m18-spk-b",
+      "startMs": 41200,
+      "endMs": 44460,
+      "rev": 1,
+      "text": "And we'd avoid the Estuary contract entirely."
+    },
+    {
+      "id": "m18-s008",
+      "speakerId": "m18-spk-d",
+      "startMs": 44710,
+      "endMs": 51390,
+      "rev": 1,
+      "text": "From my side, I'd rather the pilot runs on our cluster anyway. My team supports it."
+    },
+    {
+      "id": "m18-s009",
+      "speakerId": "m18-spk-a",
+      "startMs": 51640,
+      "endMs": 59460,
+      "rev": 1,
+      "text": "Then I think we reverse the February decision. The pilot moves off Estuary Cloud to Northwind's own on-prem cluster."
+    },
+    {
+      "id": "m18-s010",
+      "speakerId": "m18-spk-b",
+      "startMs": 59710,
+      "endMs": 60690,
+      "rev": 1,
+      "text": "Agreed."
+    },
+    {
+      "id": "m18-s011",
+      "speakerId": "m18-spk-d",
+      "startMs": 60940,
+      "endMs": 61920,
+      "rev": 1,
+      "text": "Agreed."
+    },
+    {
+      "id": "m18-s012",
+      "speakerId": "m18-spk-a",
+      "startMs": 62170,
+      "endMs": 64290,
+      "rev": 1,
+      "text": "JJ, what's the plan?"
+    },
+    {
+      "id": "m18-s013",
+      "speakerId": "m18-spk-c",
+      "startMs": 64540,
+      "endMs": 69700,
+      "rev": 1,
+      "text": "I'll migrate the pilot services to the Northwind cluster by May 29."
+    },
+    {
+      "id": "m18-s014",
+      "speakerId": "m18-spk-d",
+      "startMs": 69950,
+      "endMs": 74350,
+      "rev": 1,
+      "text": "My team will give you namespaces and access by Monday."
+    },
+    {
+      "id": "m18-s015",
+      "speakerId": "m18-spk-a",
+      "startMs": 74600,
+      "endMs": 78240,
+      "rev": 1,
+      "text": "Priya, can you let Theo at Estuary know?"
+    },
+    {
+      "id": "m18-s016",
+      "speakerId": "m18-spk-b",
+      "startMs": 78490,
+      "endMs": 85170,
+      "rev": 1,
+      "text": "Yes, I'll tell Theo this week. He was helpful, so I want to do it properly."
+    },
+    {
+      "id": "m18-s017",
+      "speakerId": "m18-spk-a",
+      "startMs": 85420,
+      "endMs": 88300,
+      "rev": 1,
+      "text": "Good. Anything else for the move?"
+    },
+    {
+      "id": "m18-s018",
+      "speakerId": "m18-spk-c",
+      "startMs": 88550,
+      "endMs": 92570,
+      "rev": 1,
+      "text": "Monitoring. We need to plug into your existing dashboards."
+    },
+    {
+      "id": "m18-s019",
+      "speakerId": "m18-spk-d",
+      "startMs": 92820,
+      "endMs": 97600,
+      "rev": 1,
+      "text": "I'll set JJ up with read access to our monitoring stack."
+    },
+    {
+      "id": "m18-s020",
+      "speakerId": "m18-spk-a",
+      "startMs": 97850,
+      "endMs": 104150,
+      "rev": 1,
+      "text": "Great. Unrelated, for the go-live lunch, JJ's vegetarian, so let's not do the barbecue place."
+    },
+    {
+      "id": "m18-s021",
+      "speakerId": "m18-spk-c",
+      "startMs": 104400,
+      "endMs": 106140,
+      "rev": 1,
+      "text": "Thank you, yes."
+    },
+    {
+      "id": "m18-s022",
+      "speakerId": "m18-spk-a",
+      "startMs": 106390,
+      "endMs": 110410,
+      "rev": 1,
+      "text": "Okay, that's it. Off Estuary, on-prem by May 29."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Pilot hosting decision revisited\n\n**Date:** May 7\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)\n\n## Summary\n\nThe team revisited February's hosting decision for the Northwind pick-path pilot after Estuary Cloud's committed-use pricing arrived.\n\n## Discussion\n\n- Estuary's pricing came in about 40 percent above the budget agreed with Northwind. Owen called it a non-starter.\n- Since Owen joined, Northwind has built out an on-prem cluster that is half empty. JJ has reviewed it: it has everything the pilot needs, and floor data would never leave Northwind's network.\n- The services are already containerised; JJ estimates three weeks to move, including testing.\n- Owen's team supports the cluster and would rather the pilot runs there.\n\n## Decisions\n\n- **Reverse the February decision.** The pilot moves off Estuary Cloud to **Northwind's own on-prem cluster**, avoiding the Estuary contract entirely.\n\n## Action items\n\n- **JJ** — migrate the pilot services to the Northwind cluster by May 29.\n- **Owen Barker** — provide namespaces and access by Monday, and read access to the monitoring stack for JJ.\n- **Priya Raman** — tell Theo at Estuary about the change this week.\n\n## Notes\n\n- For the go-live lunch, choose a place with good vegetarian options.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-estuary-cloud",
+      "type": "Organization",
+      "label": "Estuary Cloud",
+      "aliases": [
+        "Estuary"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08",
+        "m13",
+        "m15"
+      ]
+    },
+    {
+      "id": "g-person-owen-barker",
+      "type": "Person",
+      "label": "Owen Barker",
+      "aliases": [
+        "Owen"
+      ],
+      "props": {
+        "title": "Head of Platform"
+      },
+      "attendedFixtureIds": [
+        "m12"
+      ]
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m03",
+        "m05",
+        "m14"
+      ]
+    },
+    {
+      "id": "g-person-theo-lindqvist",
+      "type": "Person",
+      "label": "Theo Lindqvist",
+      "aliases": [
+        "Theo"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Pilot hosting decision revisited",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Pilot hosting decision revisited"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s006",
+            "quote": "JJ's estimate, three weeks including testing."
+          }
+        ]
+      },
+      {
+        "key": "owen",
+        "type": "Person",
+        "label": "Owen Barker",
+        "aliases": [],
+        "existingId": "g-person-owen-barker",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "estuary",
+        "type": "Organization",
+        "label": "Estuary Cloud",
+        "aliases": [],
+        "existingId": "g-org-estuary-cloud",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s009",
+            "quote": "The pilot moves off Estuary Cloud"
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Northwind pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "owen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Northwind pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Move pilot to Northwind's on-prem cluster",
+        "statement": "The pilot moves off Estuary Cloud to Northwind's own on-prem cluster.",
+        "status": null,
+        "occurredAt": "2026-05-07",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": "m05#decision-1",
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s009",
+            "quote": "The pilot moves off Estuary Cloud to Northwind's own on-prem cluster."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "estuary",
+        "owner": null,
+        "counterparty": null,
+        "title": "Estuary pricing 40 percent over budget",
+        "statement": "Estuary's committed-use pricing came in about 40 percent above the budget agreed with Northwind.",
+        "status": null,
+        "occurredAt": "2026-05-07",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s002",
+            "quote": "it's about 40 percent above the budget we agreed with Northwind"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "jj",
+        "counterparty": null,
+        "title": "Migrate pilot services to the Northwind cluster",
+        "statement": "JJ will migrate the pilot services to the Northwind cluster by May 29.",
+        "status": "open",
+        "occurredAt": "2026-05-07",
+        "dueAt": "2026-05-29",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s013",
+            "quote": "I'll migrate the pilot services to the Northwind cluster by May 29."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "owen",
+        "counterparty": "jj",
+        "title": "Provide namespaces and access",
+        "statement": "Owen's team will provide namespaces and access by Monday.",
+        "status": "open",
+        "occurredAt": "2026-05-07",
+        "dueAt": "2026-05-11",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s014",
+            "quote": "My team will give you namespaces and access by Monday."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "estuary",
+        "owner": "priya",
+        "counterparty": "g-person-theo-lindqvist",
+        "title": "Tell Theo about the change",
+        "statement": "Priya will tell Theo at Estuary about the change this week.",
+        "status": "open",
+        "occurredAt": "2026-05-07",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s016",
+            "quote": "I'll tell Theo this week."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "jj",
+        "owner": null,
+        "counterparty": null,
+        "title": "Vegetarian",
+        "statement": "JJ is vegetarian.",
+        "status": null,
+        "occurredAt": "2026-05-07",
+        "dueAt": null,
+        "sensitivity": "personal",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m18-s020",
+            "quote": "JJ's vegetarian"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

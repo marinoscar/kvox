@@ -1,0 +1,764 @@
+{
+  "id": "m29",
+  "title": "Halden southern depots cutover review",
+  "tags": [
+    "client",
+    "supersedes",
+    "two-sarahs",
+    "resolution-trap"
+  ],
+  "recordedAt": "2026-07-23T14:00:00Z",
+  "contextText": "Review after the southern depots cutover; first meeting with Aurelia.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m29-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m29-spk-b",
+      "label": "B",
+      "displayName": "Marcus Webb"
+    },
+    {
+      "id": "m29-spk-c",
+      "label": "C",
+      "displayName": "Aurelia Grant"
+    },
+    {
+      "id": "m29-spk-d",
+      "label": "D",
+      "displayName": "Jonah Jiménez"
+    },
+    {
+      "id": "m29-spk-e",
+      "label": "E",
+      "displayName": "Sarah Okonkwo"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m29-s001",
+      "speakerId": "m29-spk-a",
+      "startMs": 0,
+      "endMs": 6680,
+      "rev": 1,
+      "text": "Thanks all. This is the review of the southern depots cutover, and a welcome to Aurelia."
+    },
+    {
+      "id": "m29-s002",
+      "speakerId": "m29-spk-c",
+      "startMs": 6930,
+      "endMs": 13610,
+      "rev": 1,
+      "text": "Thanks. I'm Aurelia Grant, I joined Halden in June as integration lead, taking over from Ravi."
+    },
+    {
+      "id": "m29-s003",
+      "speakerId": "m29-spk-b",
+      "startMs": 13860,
+      "endMs": 17500,
+      "rev": 1,
+      "text": "Aurelia reports to me, same as Ravi did."
+    },
+    {
+      "id": "m29-s004",
+      "speakerId": "m29-spk-a",
+      "startMs": 17750,
+      "endMs": 21010,
+      "rev": 1,
+      "text": "Welcome. JJ, how did the cutover go?"
+    },
+    {
+      "id": "m29-s005",
+      "speakerId": "m29-spk-d",
+      "startMs": 21260,
+      "endMs": 30980,
+      "rev": 1,
+      "text": "The southern depots cut over on July 20, three days later than planned, because of a carrier data issue. Since then it's been clean."
+    },
+    {
+      "id": "m29-s006",
+      "speakerId": "m29-spk-b",
+      "startMs": 31230,
+      "endMs": 35630,
+      "rev": 1,
+      "text": "Three days late is fine. Nothing broke for the drivers."
+    },
+    {
+      "id": "m29-s007",
+      "speakerId": "m29-spk-a",
+      "startMs": 35880,
+      "endMs": 39900,
+      "rev": 1,
+      "text": "So every region is now on the new optimizer?"
+    },
+    {
+      "id": "m29-s008",
+      "speakerId": "m29-spk-d",
+      "startMs": 40150,
+      "endMs": 41890,
+      "rev": 1,
+      "text": "Yes, all regions."
+    },
+    {
+      "id": "m29-s009",
+      "speakerId": "m29-spk-b",
+      "startMs": 42140,
+      "endMs": 48440,
+      "rev": 1,
+      "text": "Then I want the old optimizer gone. We decommission the old optimizer by September 30."
+    },
+    {
+      "id": "m29-s010",
+      "speakerId": "m29-spk-a",
+      "startMs": 48690,
+      "endMs": 51190,
+      "rev": 1,
+      "text": "Decided. What's left before that?"
+    },
+    {
+      "id": "m29-s011",
+      "speakerId": "m29-spk-c",
+      "startMs": 51440,
+      "endMs": 60780,
+      "rev": 1,
+      "text": "The rollback runbook. Ravi's draft was never finished. I'll close out the rollback runbook by August 7, since it's still needed until decommission."
+    },
+    {
+      "id": "m29-s012",
+      "speakerId": "m29-spk-b",
+      "startMs": 61030,
+      "endMs": 63150,
+      "rev": 1,
+      "text": "Good, it's yours now."
+    },
+    {
+      "id": "m29-s013",
+      "speakerId": "m29-spk-e",
+      "startMs": 63400,
+      "endMs": 72360,
+      "rev": 1,
+      "text": "On the commercial side, the old license runs to the end of the year. I'll renegotiate the license termination by August 14."
+    },
+    {
+      "id": "m29-s014",
+      "speakerId": "m29-spk-a",
+      "startMs": 72610,
+      "endMs": 75870,
+      "rev": 1,
+      "text": "Do you need anything from us, Sarah?"
+    },
+    {
+      "id": "m29-s015",
+      "speakerId": "m29-spk-e",
+      "startMs": 76120,
+      "endMs": 80900,
+      "rev": 1,
+      "text": "A letter confirming the migration is complete. That helps the negotiation."
+    },
+    {
+      "id": "m29-s016",
+      "speakerId": "m29-spk-a",
+      "startMs": 81150,
+      "endMs": 84410,
+      "rev": 1,
+      "text": "I'll send you that letter by Monday."
+    },
+    {
+      "id": "m29-s017",
+      "speakerId": "m29-spk-d",
+      "startMs": 84660,
+      "endMs": 90960,
+      "rev": 1,
+      "text": "One thing for Aurelia, the depot mappings walkthrough Ravi recorded is on the shared drive."
+    },
+    {
+      "id": "m29-s018",
+      "speakerId": "m29-spk-c",
+      "startMs": 91210,
+      "endMs": 94090,
+      "rev": 1,
+      "text": "Thanks, I've watched it twice already."
+    },
+    {
+      "id": "m29-s019",
+      "speakerId": "m29-spk-b",
+      "startMs": 94340,
+      "endMs": 101780,
+      "rev": 1,
+      "text": "Aurelia prefers a quick call over long email threads, so don't be shy about picking up the phone."
+    },
+    {
+      "id": "m29-s020",
+      "speakerId": "m29-spk-c",
+      "startMs": 102030,
+      "endMs": 106430,
+      "rev": 1,
+      "text": "It's true. Ten minutes on a call beats twenty emails."
+    },
+    {
+      "id": "m29-s021",
+      "speakerId": "m29-spk-a",
+      "startMs": 106680,
+      "endMs": 112600,
+      "rev": 1,
+      "text": "Understood. So: decommission by September 30, runbook by August 7, license by August 14."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Halden southern depots cutover review\n\n**Date:** July 23\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)\n\n## Summary\n\nReview of the southern depots cutover on the Halden route optimizer migration, and a first meeting with Aurelia Grant, who joined Halden Freight in June as integration lead, replacing Ravi. Aurelia reports to Marcus.\n\n## Cutover\n\n- The southern depots cut over on July 20, three days later than planned because of a carrier data issue; it has been clean since. Nothing broke for drivers.\n- All regions are now on the new optimizer.\n\n## Decisions\n\n- **Decommission the old optimizer by September 30.**\n\n## Action items\n\n- **Aurelia Grant** — close out the rollback runbook by August 7. Ravi's draft was never finished, and the runbook is needed until decommission.\n- **Sarah Okonkwo** — renegotiate the old license termination by August 14; the license otherwise runs to the end of the year.\n- **Alex Rivera** — send Sarah a letter confirming the migration is complete, by Monday.\n\n## Notes\n\n- Ravi's recorded walkthrough of the depot mappings is on the shared drive; Aurelia has already watched it.\n- Aurelia prefers a quick call over long email threads.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08",
+        "m09",
+        "m10",
+        "m11",
+        "m12",
+        "m13",
+        "m14",
+        "m15",
+        "m16",
+        "m17",
+        "m18",
+        "m19",
+        "m20",
+        "m21",
+        "m22",
+        "m23",
+        "m24",
+        "m25",
+        "m26",
+        "m27",
+        "m28"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06",
+        "m08",
+        "m13",
+        "m15",
+        "m18",
+        "m26"
+      ]
+    },
+    {
+      "id": "g-person-marcus-webb",
+      "type": "Person",
+      "label": "Marcus Webb",
+      "aliases": [
+        "Marcus"
+      ],
+      "props": {
+        "title": "CIO"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m13",
+        "m15",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08",
+        "m13",
+        "m15",
+        "m19",
+        "m22",
+        "m27"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06",
+        "m09",
+        "m12",
+        "m20",
+        "m28"
+      ]
+    },
+    {
+      "id": "g-person-sarah-okonkwo",
+      "type": "Person",
+      "label": "Sarah Okonkwo",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "Procurement Lead"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m08",
+        "m13"
+      ]
+    },
+    {
+      "id": "g-project-route-optimizer-migration",
+      "type": "Project",
+      "label": "Route optimizer migration",
+      "aliases": [
+        "the migration"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Halden southern depots cutover review",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Halden southern depots cutover review"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s004",
+            "quote": "JJ, how did the cutover go?"
+          }
+        ]
+      },
+      {
+        "key": "marcus",
+        "type": "Person",
+        "label": "Marcus Webb",
+        "aliases": [],
+        "existingId": "g-person-marcus-webb",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Marcus Webb (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "key": "aurelia",
+        "type": "Person",
+        "label": "Aurelia Grant",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s002",
+            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+          }
+        ]
+      },
+      {
+        "key": "sarahO",
+        "type": "Person",
+        "label": "Sarah Okonkwo",
+        "aliases": [
+          "Sarah"
+        ],
+        "existingId": "g-person-sarah-okonkwo",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Okonkwo (Halden Freight)"
+          },
+          {
+            "source": "segment",
+            "segmentId": "m29-s014",
+            "quote": "Do you need anything from us, Sarah?"
+          }
+        ]
+      },
+      {
+        "key": "halden",
+        "type": "Organization",
+        "label": "Halden Freight",
+        "aliases": [],
+        "existingId": "g-org-halden-freight",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s002",
+            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+          }
+        ]
+      },
+      {
+        "key": "migration",
+        "type": "Project",
+        "label": "Route optimizer migration",
+        "aliases": [],
+        "existingId": "g-project-route-optimizer-migration",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "the Halden route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "marcus",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "aurelia",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarahO",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Marcus Webb (Halden Freight), Aurelia Grant (Halden Freight), Sarah Okonkwo (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "aurelia",
+        "to": "halden",
+        "validFrom": "2026-06-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s002",
+            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "aurelia",
+        "to": "halden",
+        "validFrom": "2026-06-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {
+          "title": "Integration Lead"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s002",
+            "quote": "I'm Aurelia Grant, I joined Halden in June as integration lead"
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "aurelia",
+        "to": "marcus",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s003",
+            "quote": "Aurelia reports to me, same as Ravi did."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "migration",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Review of the southern depots cutover on the Halden route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Southern depots cut over three days late",
+        "statement": "The southern depots cut over on July 20, three days later than planned.",
+        "status": null,
+        "occurredAt": "2026-07-20",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s005",
+            "quote": "The southern depots cut over on July 20, three days later than planned"
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Decommission the old optimizer by September 30",
+        "statement": "The old optimizer will be decommissioned by September 30.",
+        "status": null,
+        "occurredAt": "2026-07-23",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s009",
+            "quote": "We decommission the old optimizer by September 30."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "aurelia",
+        "counterparty": "marcus",
+        "title": "Close out the rollback runbook",
+        "statement": "Aurelia will close out the rollback runbook by August 7.",
+        "status": "open",
+        "occurredAt": "2026-07-23",
+        "dueAt": "2026-08-07",
+        "sensitivity": null,
+        "supersedesLabel": "m15#commitment-1",
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s011",
+            "quote": "I'll close out the rollback runbook by August 7"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "halden",
+        "owner": "sarahO",
+        "counterparty": null,
+        "title": "Renegotiate license termination",
+        "statement": "Sarah will renegotiate the old license termination by August 14.",
+        "status": "open",
+        "occurredAt": "2026-07-23",
+        "dueAt": "2026-08-14",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s013",
+            "quote": "I'll renegotiate the license termination by August 14."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "alex",
+        "counterparty": "sarahO",
+        "title": "Send migration completion letter",
+        "statement": "Alex will send Sarah a letter confirming the migration is complete by Monday.",
+        "status": "open",
+        "occurredAt": "2026-07-23",
+        "dueAt": "2026-07-27",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s016",
+            "quote": "I'll send you that letter by Monday."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "aurelia",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers calls to email threads",
+        "statement": "Aurelia prefers a quick call over long email threads.",
+        "status": null,
+        "occurredAt": "2026-07-23",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m29-s019",
+            "quote": "Aurelia prefers a quick call over long email threads"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

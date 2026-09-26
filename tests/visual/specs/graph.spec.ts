@@ -30,7 +30,7 @@ const WIDTHS = [
 test.describe('Knowledge index', () => {
   for (const [name, viewport] of WIDTHS) {
     test(`graph index @ ${name}`, async ({ page }) => {
-      await installGraphApi(page);
+      await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
       await page.goto(harnessUrl({ route: '/graph', perms: GRAPH_PERMS }));
       await waitForInter(page);
@@ -46,7 +46,7 @@ test.describe('Knowledge index', () => {
   }
 
   test('graph index empty state @ phone-390', async ({ page }) => {
-    await installGraphApi(page, { empty: true });
+    await installGraphApi(page, { surface: 'pages', empty: true });
     await page.setViewportSize(PHONE);
     await page.goto(harnessUrl({ route: '/graph', perms: GRAPH_PERMS }));
     await waitForInter(page);
@@ -60,7 +60,7 @@ test.describe('Knowledge index', () => {
 test.describe('Entity page', () => {
   for (const [name, viewport] of WIDTHS) {
     test(`entity page @ ${name}`, async ({ page }) => {
-      await installGraphApi(page);
+      await installGraphApi(page, { surface: 'pages' });
       await page.setViewportSize(viewport);
       await page.goto(harnessUrl({ route: `/graph/entities/${JOE_ID}`, perms: GRAPH_PERMS }));
       await waitForInter(page);
@@ -79,7 +79,7 @@ test.describe('Entity page', () => {
   }
 
   test('evidence sheet open @ phone-390', async ({ page }) => {
-    await installGraphApi(page);
+    await installGraphApi(page, { surface: 'pages' });
     await page.setViewportSize(PHONE);
     await page.goto(harnessUrl({ route: `/graph/entities/${JOE_ID}`, perms: GRAPH_PERMS }));
     await waitForInter(page);

@@ -1,0 +1,637 @@
+{
+  "id": "m05",
+  "title": "Hosting vendor selection for the pilot",
+  "tags": [
+    "vendor",
+    "nickname",
+    "resolution-trap"
+  ],
+  "recordedAt": "2026-02-05T16:00:00Z",
+  "contextText": "Choosing where the Northwind pilot services will be hosted.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m05-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m05-spk-b",
+      "label": "B",
+      "displayName": "Priya Raman"
+    },
+    {
+      "id": "m05-spk-c",
+      "label": "C",
+      "displayName": "Jonah Jiménez"
+    },
+    {
+      "id": "m05-spk-d",
+      "label": "D",
+      "displayName": "Theo Lindqvist"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m05-s001",
+      "speakerId": "m05-spk-a",
+      "startMs": 0,
+      "endMs": 9340,
+      "rev": 1,
+      "text": "Thanks for joining, Theo. For context, we need somewhere to host the services for the Northwind pick-path pilot, and we're deciding this week."
+    },
+    {
+      "id": "m05-s002",
+      "speakerId": "m05-spk-d",
+      "startMs": 9590,
+      "endMs": 17410,
+      "rev": 1,
+      "text": "Happy to help. I'm Theo Lindqvist, account manager at Estuary Cloud. I look after most of our consulting partners."
+    },
+    {
+      "id": "m05-s003",
+      "speakerId": "m05-spk-b",
+      "startMs": 17660,
+      "endMs": 23580,
+      "rev": 1,
+      "text": "Our shortlist is Estuary's managed Kubernetes or running it ourselves on a small cluster."
+    },
+    {
+      "id": "m05-s004",
+      "speakerId": "m05-spk-c",
+      "startMs": 23830,
+      "endMs": 34690,
+      "rev": 1,
+      "text": "I'd rather not run our own cluster for a pilot. JJ's opinion, for what it's worth, is that we'd spend a week on plumbing we don't need."
+    },
+    {
+      "id": "m05-s005",
+      "speakerId": "m05-spk-a",
+      "startMs": 34940,
+      "endMs": 42380,
+      "rev": 1,
+      "text": "That was going to be my question for you, JJ. How much effort is managed Kubernetes on Estuary?"
+    },
+    {
+      "id": "m05-s006",
+      "speakerId": "m05-spk-c",
+      "startMs": 42630,
+      "endMs": 49310,
+      "rev": 1,
+      "text": "A couple of days to set up the pipelines. We've done it before on another client."
+    },
+    {
+      "id": "m05-s007",
+      "speakerId": "m05-spk-d",
+      "startMs": 49560,
+      "endMs": 56620,
+      "rev": 1,
+      "text": "And we can give you a dedicated namespace with support included for the length of the pilot."
+    },
+    {
+      "id": "m05-s008",
+      "speakerId": "m05-spk-b",
+      "startMs": 56870,
+      "endMs": 62790,
+      "rev": 1,
+      "text": "What about data residency? Northwind is strict about keeping floor data in the EU."
+    },
+    {
+      "id": "m05-s009",
+      "speakerId": "m05-spk-d",
+      "startMs": 63040,
+      "endMs": 67820,
+      "rev": 1,
+      "text": "Our Frankfurt region covers that. All data stays in the EU."
+    },
+    {
+      "id": "m05-s010",
+      "speakerId": "m05-spk-c",
+      "startMs": 68070,
+      "endMs": 72470,
+      "rev": 1,
+      "text": "Has Frankfurt been stable? I remember some noise about outages."
+    },
+    {
+      "id": "m05-s011",
+      "speakerId": "m05-spk-d",
+      "startMs": 72720,
+      "endMs": 79400,
+      "rev": 1,
+      "text": "There were two short outages in Frankfurt last year, both under an hour. Nothing this year."
+    },
+    {
+      "id": "m05-s012",
+      "speakerId": "m05-spk-b",
+      "startMs": 79650,
+      "endMs": 82150,
+      "rev": 1,
+      "text": "That's acceptable for a pilot."
+    },
+    {
+      "id": "m05-s013",
+      "speakerId": "m05-spk-a",
+      "startMs": 82400,
+      "endMs": 89840,
+      "rev": 1,
+      "text": "Then I think we're agreed. We'll host the pilot on Estuary Cloud managed Kubernetes in the Frankfurt region."
+    },
+    {
+      "id": "m05-s014",
+      "speakerId": "m05-spk-b",
+      "startMs": 90090,
+      "endMs": 91070,
+      "rev": 1,
+      "text": "Agreed."
+    },
+    {
+      "id": "m05-s015",
+      "speakerId": "m05-spk-c",
+      "startMs": 91320,
+      "endMs": 94580,
+      "rev": 1,
+      "text": "Agreed. I'll start on the pipelines Monday."
+    },
+    {
+      "id": "m05-s016",
+      "speakerId": "m05-spk-a",
+      "startMs": 94830,
+      "endMs": 100370,
+      "rev": 1,
+      "text": "Theo, the missing piece is pricing. What's the timeline on a committed-use quote?"
+    },
+    {
+      "id": "m05-s017",
+      "speakerId": "m05-spk-d",
+      "startMs": 100620,
+      "endMs": 104640,
+      "rev": 1,
+      "text": "I'll send you committed-use pricing by Friday February 13."
+    },
+    {
+      "id": "m05-s018",
+      "speakerId": "m05-spk-a",
+      "startMs": 104890,
+      "endMs": 108910,
+      "rev": 1,
+      "text": "Good. Please send it to me and copy Priya."
+    },
+    {
+      "id": "m05-s019",
+      "speakerId": "m05-spk-d",
+      "startMs": 109160,
+      "endMs": 118120,
+      "rev": 1,
+      "text": "Will do. And a small thing about me, I'm much better on email than on calls, I'm on the road a lot."
+    },
+    {
+      "id": "m05-s020",
+      "speakerId": "m05-spk-a",
+      "startMs": 118370,
+      "endMs": 122770,
+      "rev": 1,
+      "text": "Email it is. JJ, anything else you need from Theo?"
+    },
+    {
+      "id": "m05-s021",
+      "speakerId": "m05-spk-c",
+      "startMs": 123020,
+      "endMs": 127420,
+      "rev": 1,
+      "text": "Just the namespace and credentials once the contract is signed."
+    },
+    {
+      "id": "m05-s022",
+      "speakerId": "m05-spk-d",
+      "startMs": 127670,
+      "endMs": 130930,
+      "rev": 1,
+      "text": "Those usually take a day after signature."
+    },
+    {
+      "id": "m05-s023",
+      "speakerId": "m05-spk-b",
+      "startMs": 131180,
+      "endMs": 136340,
+      "rev": 1,
+      "text": "Then the critical path is really the pricing and our own sign-off."
+    },
+    {
+      "id": "m05-s024",
+      "speakerId": "m05-spk-a",
+      "startMs": 136590,
+      "endMs": 140990,
+      "rev": 1,
+      "text": "Right. Let's reconvene when the pricing is in. Thanks Theo."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Hosting vendor selection for the pilot\n\n**Date:** February 5\n**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)\n\n## Summary\n\nThe team chose where to host the services for the Northwind pick-path pilot. The shortlist was Estuary Cloud's managed Kubernetes versus a self-run cluster. Theo Lindqvist, account manager at Estuary Cloud, joined to answer questions.\n\n## Discussion\n\n- JJ argued against running a cluster ourselves for a pilot: a week of plumbing we don't need. Setting up pipelines on Estuary's managed Kubernetes takes a couple of days, and the team has done it before for another client.\n- Estuary offers a dedicated namespace with support included for the pilot's duration.\n- Northwind requires floor data to stay in the EU; Estuary's Frankfurt region covers that.\n- Frankfurt had two short outages last year, both under an hour, and none this year. Priya judged that acceptable for a pilot.\n\n## Decisions\n\n- The pilot will be **hosted on Estuary Cloud managed Kubernetes in the Frankfurt region**.\n\n## Action items\n\n- **Theo Lindqvist** — send committed-use pricing by Friday February 13, to Alex with Priya copied.\n- **JJ** — start on the deployment pipelines on Monday.\n- Namespace and credentials follow about a day after contract signature.\n\n## Notes\n\n- Theo is much easier to reach by email than on calls; he travels a lot.\n- The critical path is now the pricing and Larkspur's own sign-off.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m22"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02"
+      ]
+    },
+    {
+      "id": "g-person-priya-raman",
+      "type": "Person",
+      "label": "Priya Raman",
+      "aliases": [
+        "Priya"
+      ],
+      "props": {
+        "title": "Engineering Manager"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m03"
+      ]
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Hosting vendor selection for the pilot",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Hosting vendor selection for the pilot"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "priya",
+        "type": "Person",
+        "label": "Priya Raman",
+        "aliases": [],
+        "existingId": "g-person-priya-raman",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Priya Raman (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s004",
+            "quote": "JJ's opinion, for what it's worth"
+          }
+        ]
+      },
+      {
+        "key": "theo",
+        "type": "Person",
+        "label": "Theo Lindqvist",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s002",
+            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+          }
+        ]
+      },
+      {
+        "key": "estuary",
+        "type": "Organization",
+        "label": "Estuary Cloud",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s002",
+            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s001",
+            "quote": "the Northwind pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "priya",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "theo",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Priya Raman (Larkspur Labs), JJ (Larkspur Labs), Theo Lindqvist (Estuary Cloud)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "theo",
+        "to": "estuary",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s002",
+            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "theo",
+        "to": "estuary",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Account Manager"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s002",
+            "quote": "I'm Theo Lindqvist, account manager at Estuary Cloud."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s001",
+            "quote": "the Northwind pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Host the pilot on Estuary Cloud",
+        "statement": "The pilot will be hosted on Estuary Cloud managed Kubernetes in the Frankfurt region.",
+        "status": null,
+        "occurredAt": "2026-02-05",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s013",
+            "quote": "We'll host the pilot on Estuary Cloud managed Kubernetes in the Frankfurt region."
+          }
+        ]
+      },
+      {
+        "kind": "claim",
+        "subject": "estuary",
+        "owner": null,
+        "counterparty": null,
+        "title": "Two short Frankfurt outages last year",
+        "statement": "Estuary's Frankfurt region had two short outages last year, both under an hour, and none this year.",
+        "status": null,
+        "occurredAt": "2026-02-05",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s011",
+            "quote": "There were two short outages in Frankfurt last year, both under an hour."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "theo",
+        "counterparty": "alex",
+        "title": "Send committed-use pricing",
+        "statement": "Theo will send committed-use pricing by Friday February 13.",
+        "status": "open",
+        "occurredAt": "2026-02-05",
+        "dueAt": "2026-02-13",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s017",
+            "quote": "I'll send you committed-use pricing by Friday February 13."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "jj",
+        "counterparty": null,
+        "title": "Start on the deployment pipelines",
+        "statement": "JJ will start on the deployment pipelines on Monday.",
+        "status": "open",
+        "occurredAt": "2026-02-05",
+        "dueAt": "2026-02-09",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s015",
+            "quote": "I'll start on the pipelines Monday."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "theo",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers email to calls",
+        "statement": "Theo is much easier to reach by email than on calls because he travels a lot.",
+        "status": null,
+        "occurredAt": "2026-02-05",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m05-s019",
+            "quote": "I'm much better on email than on calls, I'm on the road a lot."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}
