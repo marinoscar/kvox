@@ -35,6 +35,23 @@ import type { EvidenceLink } from './dto/graph-read.dto';
 
 export type EvidenceSourceKind = 'segment' | 'note' | 'import';
 
+/** The subjects `listForSubject` accepts — the three kinds of curated graph row. */
+export type EvidenceSubjectKind = 'entity' | 'relation' | 'item';
+
+/** One citation of a subject, with the date of the source it quotes. */
+export interface SubjectEvidence {
+  link: EvidenceLink;
+  /**
+   * The cited source's date — a transcript's `recorded_at`, a note's
+   * `created_at` — or null when unknown or when the source is no longer
+   * available to the caller (its date is then not theirs to see either).
+   */
+  occurredAt: Date | null;
+}
+
+/** The most citations `listForSubject` returns. */
+export const SUBJECT_EVIDENCE_MAX = 50;
+
 /** Which anchor a row cites. `note_version`/`segment_rev` survive `SetNull`, so the kind does too. */
 export function evidenceSourceKind(
   row: Pick<
@@ -87,6 +104,40 @@ export class GraphEvidenceService {
       userId,
       unique.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : [])),
     );
+  }
+
+  /**
+   * The caller's citations of one subject, NEWEST SOURCE FIRST (a transcript's
+   * `recorded_at`, a note's `created_at`, then the citation's own
+   * `created_at`), resolved to links (#377's `evidence` tool).
+   *
+   * Owner-scoped in the statement itself: another owner's subject id yields an
+   * empty list, never their rows. Does not check that the subject is readable
+   * — callers that must (the Ask tool) check first.
+   */
+  async listForSubject(
+    ownerId: string,
+    subjectKind: EvidenceSubjectKind,
+    subjectId: string,
+    limit: number,
+  ): Promise<SubjectEvidence[]> {
+    const take = Math.max(1, Math.min(SUBJECT_EVIDENCE_MAX, Math.floor(limit)));
+    const ordered = await this.prisma.$queryRaw<{ id: string; at: Date | null }[]>`
+      SELECT ev.id::text AS id, coalesce(t.recorded_at, n.created_at) AS at
+      FROM kg_evidence ev
+      LEFT JOIN transcripts t ON t.id = ev.transcript_id
+      LEFT JOIN notes n ON n.id = ev.note_id
+      WHERE ev.owner_id = ${ownerId}::uuid
+        AND ev.subject_kind = ${subjectKind}::kg_evidence_subject_kind
+        AND ev.subject_id = ${subjectId}::uuid
+      ORDER BY coalesce(t.recorded_at, n.created_at) DESC NULLS LAST, ev.created_at DESC, ev.id DESC
+      LIMIT ${take}`;
+    if (ordered.length === 0) return [];
+    const rows = await this.prisma.kgEvidence.findMany({ where: { id: { in: ordered.map((r) => r.id) }, ownerId } });
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const present = ordered.filter((r) => byId.has(r.id));
+    const links = await this.resolve(ownerId, present.map((r) => byId.get(r.id)!));
+    return links.map((link, i) => ({ link, occurredAt: link.source.available ? present[i].at : null }));
   }
 
   /**
