@@ -38,6 +38,9 @@ const EMAIL_PREFIX = 'kg-speaker-link-test';
 describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   let prisma: PrismaClient;
   let reconciler: SpeakerLinkReconciler;
+  // A role of this suite's own that carries `graph:write`. CI's smoke job runs
+  // `test:db` BEFORE `prisma:seed`, so the seeded roles cannot be relied on.
+  let graphWriterRoleId: string;
 
   beforeAll(async () => {
     if (!dbReachable) return;
@@ -48,9 +51,30 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
       new GraphWriteService(new EvidenceValidator()),
       new GraphOntologyService(prisma as never),
     );
+    // Upsert by name, exactly as the seed does, so running the seed later is unaffected.
+    const permission = await prisma.permission.upsert({
+      where: { name: 'graph:write' },
+      update: {},
+      create: { name: 'graph:write' },
+    });
+    const role = await prisma.role.upsert({
+      where: { name: `${EMAIL_PREFIX}-graph-writer` },
+      update: {},
+      create: { name: `${EMAIL_PREFIX}-graph-writer` },
+    });
+    await prisma.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+      update: {},
+      create: { roleId: role.id, permissionId: permission.id },
+    });
+    graphWriterRoleId = role.id;
   });
 
   afterAll(async () => {
+    if (dbReachable && prisma) {
+      // Cascades role_permissions and user_roles; the permission row is kept (the seed owns it).
+      await prisma.role.deleteMany({ where: { name: `${EMAIL_PREFIX}-graph-writer` } });
+    }
     await prisma?.$disconnect();
   });
 
@@ -79,16 +103,13 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
   // Fixtures
   // ---------------------------------------------------------------------------
 
-  /** A user holding the seeded `viewer` role (which carries `graph:write`), or no role at all. */
+  /** A user holding this suite's `graph:write` role, or no role at all. */
   async function createUser(suffix: string, withRole = true) {
     const user = await prisma.user.create({
       data: { email: `${EMAIL_PREFIX}-${suffix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.test` },
     });
     if (withRole) {
-      const role = await prisma.role.findFirstOrThrow({
-        where: { rolePermissions: { some: { permission: { name: 'graph:write' } } }, name: { in: ['viewer', 'Viewer'] } },
-      });
-      await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
+      await prisma.userRole.create({ data: { userId: user.id, roleId: graphWriterRoleId } });
     }
     return user;
   }
