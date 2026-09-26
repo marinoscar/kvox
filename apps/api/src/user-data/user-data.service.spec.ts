@@ -177,6 +177,15 @@ describe('UserDataService', () => {
       expect(prisma.kgItem.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
     });
 
+    it('counts the caller\'s saved Ask conversations (#376)', async () => {
+      prisma.askConversation.count.mockResolvedValue(4);
+
+      const result = await service.summary(USER_ID);
+
+      expect(result.askConversations).toEqual({ count: 4 });
+      expect(prisma.askConversation.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
+    });
+
     it('conforms to the published summary schema, graph field included', async () => {
       const result = await service.summary(USER_ID);
 

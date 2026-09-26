@@ -148,6 +148,12 @@ describe('scopeIncludes — mirrored from apps/api/src/user-data/job-types.ts, a
     }
   });
 
+  it('Ask conversations are covered by "content" and "everything" only — never by a narrow scope (#376)', () => {
+    for (const scope of ALL_SCOPES) {
+      expect(scopeIncludes(scope, 'ask')).toBe(scope === 'content' || scope === 'everything');
+    }
+  });
+
   it('the knowledge graph is covered by "content" and "everything" only — never by a narrow scope (#357)', () => {
     for (const scope of ALL_SCOPES) {
       expect(scopeIncludes(scope, 'graph')).toBe(scope === 'content' || scope === 'everything');
