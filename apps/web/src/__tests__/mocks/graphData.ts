@@ -486,3 +486,76 @@ export function emptyCommitResult(overrides: Partial<CommitResult> = {}): Commit
     ...overrides,
   };
 }
+
+// =============================================================================
+// #368 — guide the graph, add from a selection, Home "Waiting for review"
+// =============================================================================
+
+/** `GET /api/ai/config` with the graph on and three models, one without structured output. */
+export function mockGraphAiConfig(overrides: Record<string, unknown> = {}) {
+  const model = (id: string, label: string, structuredOutput: boolean) => ({
+    id,
+    label,
+    contextWindowTokens: 128_000,
+    maxOutputTokens: 16_000,
+    source: 'catalogue',
+    derivedFrom: null,
+    structuredOutput,
+    toolCalling: structuredOutput,
+  });
+  const task = (taskModel: string | null) => ({
+    model: taskModel,
+    source: taskModel ? 'task' : 'none',
+    reasoningEffort: 'medium',
+    requires: ['structuredOutput'],
+    usable: taskModel !== null,
+    reason: taskModel ? null : 'no_model',
+  });
+  return {
+    available: true,
+    provider: 'openai',
+    providerLabel: 'OpenAI',
+    models: [
+      model('gpt-4o-mini', 'GPT-4o mini', true),
+      model('gpt-4.1', 'GPT-4.1', true),
+      model('legacy-text', 'Legacy text model', false),
+    ],
+    defaultModel: 'gpt-4o-mini',
+    maxInputTokens: 100_000,
+    maxOutputTokens: 8_000,
+    keyConfigured: true,
+    graphEnabled: true,
+    taskModels: {
+      'graph.extract': task('gpt-4.1'),
+      'graph.adjudicate': task('gpt-4o-mini'),
+      'graph.digest': task('gpt-4o-mini'),
+      'graph.agent': task('gpt-4o-mini'),
+    },
+    ...overrides,
+  };
+}
+
+/** `GET /api/graph/extract/estimate`'s answer. */
+export function mockExtractEstimate(
+  overrides: Partial<import('../../services/graph').ExtractionEstimate> = {},
+): import('../../services/graph').ExtractionEstimate {
+  return {
+    providerId: 'openai',
+    model: 'gpt-4.1',
+    inputTokens: 4_200,
+    maxOutputTokens: 8_000,
+    availableInputTokens: 100_000,
+    fits: true,
+    requests: 1,
+    keyConfigured: true,
+    ...overrides,
+  };
+}
+
+/** One row of `GET /api/graph/proposals` (a `ProposalSummary`). */
+export function proposalSummaryRow(
+  id: string,
+  overrides: Partial<ProposalSummary> = {},
+): ProposalSummary {
+  return proposalSummary(draftItems(), { id, ...overrides });
+}
