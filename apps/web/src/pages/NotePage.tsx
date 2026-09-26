@@ -118,6 +118,9 @@ import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'rea
 
 import { AiKeyRequired } from '../components/ai/AiKeyRequired';
 import { GraphReviewButton } from '../components/graph/GraphReviewButton';
+import { ExtractDialog } from '../components/graph/guide/ExtractDialog';
+import { GuidanceSummary } from '../components/graph/guide/GuidanceSummary';
+import { userDecisionCount } from '../components/graph/guide/guidance';
 import {
   ProposalReviewSheet,
   REVIEW_SHEET_WIDTH,
@@ -275,6 +278,9 @@ export function NotePage() {
     { enabled: graphVisible && Boolean(id) },
   );
   const [reviewOpen, setReviewOpen] = useState(false);
+  /** #368: the extract / re-extract dialog, mounted only while open. */
+  const [extractMode, setExtractMode] = useState<'extract' | 're-extract' | null>(null);
+  const canWriteGraph = hasPermission('graph:write');
   const [searchParams, setSearchParams] = useSearchParams();
   const reviewRequested = searchParams.get('review') === '1';
 
@@ -1228,6 +1234,32 @@ export function NotePage() {
           proposal={graphProposal}
           noteBodyRef={renderedBodyRef}
           originTranscriptId={note.originTranscript?.id ?? null}
+          onRequestExtract={canWriteGraph ? (mode) => setExtractMode(mode) : undefined}
+          headerSlot={
+            <GuidanceSummary
+              guidance={graphProposal.detail?.proposal.userGuidance}
+              items={graphProposal.detail?.items}
+              onEdit={canWriteGraph ? () => setExtractMode('re-extract') : undefined}
+            />
+          }
+        />
+      )}
+
+      {graphVisible && canWriteGraph && id && extractMode && (
+        <ExtractDialog
+          open
+          onClose={() => setExtractMode(null)}
+          noteId={id}
+          mode={extractMode}
+          initialGuidance={graphProposal.detail?.proposal.userGuidance ?? null}
+          pendingDecisions={
+            graphProposal.detail?.proposal.status === 'draft'
+              ? userDecisionCount(graphProposal.detail.items)
+              : 0
+          }
+          items={graphProposal.detail?.items}
+          submit={(_noteId, body) => graphProposal.requestExtract(body)}
+          onStarted={() => setReviewOpen(true)}
         />
       )}
 
