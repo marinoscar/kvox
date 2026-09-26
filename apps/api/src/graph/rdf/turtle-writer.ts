@@ -14,7 +14,8 @@
 //   - subjects are sorted by full IRI;
 //   - predicates are sorted by full IRI, except `rdf:type`, written first as `a`;
 //   - the objects of one predicate are sorted by their serialized form
-//     (RDF lists keep their order — a list's order is its meaning).
+//     (RDF lists keep their order — a list's order is its meaning);
+//   - `xsd:boolean` and `xsd:integer` use Turtle's bare `true` / `1` syntax.
 // Subjects given more than once are merged, and duplicate objects collapse, so
 // a generator may describe one IRI from several places.
 //
@@ -23,6 +24,8 @@
 
 export const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 const XSD_STRING = 'http://www.w3.org/2001/XMLSchema#string';
+const XSD_BOOLEAN = 'http://www.w3.org/2001/XMLSchema#boolean';
+const XSD_INTEGER = 'http://www.w3.org/2001/XMLSchema#integer';
 
 export type TurtleTerm =
   | { readonly kind: 'iri'; readonly value: string }
@@ -160,6 +163,9 @@ class Writer {
       if (!LANG_TAG.test(term.lang)) throw new Error(`turtle-writer: '${term.lang}' is not a language tag`);
       return `${quoted}@${term.lang.toLowerCase()}`;
     }
+    // Turtle's own shorthand for the two datatypes it has literal syntax for.
+    if (term.datatype === XSD_BOOLEAN && (term.value === 'true' || term.value === 'false')) return term.value;
+    if (term.datatype === XSD_INTEGER && /^[+-]?\d+$/.test(term.value)) return term.value;
     if (term.datatype !== undefined && term.datatype !== XSD_STRING) {
       return `${quoted}^^${this.iri(term.datatype)}`;
     }
@@ -197,7 +203,9 @@ class Writer {
   predicateLines(props: readonly TurtlePredicate[], indent: string): string[] {
     return this.sortedProps(props).map((p) => {
       const objects = p.objects.map((o) => this.object(o, indent));
-      return `${indent}${this.predicate(p.predicate)} ${objects.join(`,\n${indent}    `)}`;
+      // Several multi-line blank nodes chain as `], [`; anything else gets a line each.
+      const separator = objects.some((o) => o.includes('\n')) ? ', ' : `,\n${indent}    `;
+      return `${indent}${this.predicate(p.predicate)} ${objects.join(separator)}`;
     });
   }
 
