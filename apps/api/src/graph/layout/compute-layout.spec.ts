@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+
 import {
   CLUSTER_SAMPLE_SIZE,
   clusterRadius,
@@ -217,24 +220,31 @@ describe('computeLayout', () => {
     expect(fa2Iterations(10_000)).toBe(80);
   });
 
-  it('lays out a 10k-node / 40k-edge graph within budget', () => {
-    const rng = mulberry32(7);
-    const n = 10_000;
-    const nodes = Array.from({ length: n }, (_, i) => ({ id: `n${String(i).padStart(5, '0')}`, type: i % 5 === 0 ? 'Meeting' : 'Person' }));
-    const edges: LayoutInput['edges'] = [];
-    // Community structure: 100 groups of 100, most edges inside a group.
-    for (let e = 0; e < 40_000; e += 1) {
-      const a = Math.floor(rng() * n);
-      const group = Math.floor(a / 100);
-      const b = rng() < 0.9 ? group * 100 + Math.floor(rng() * 100) : Math.floor(rng() * n);
-      edges.push({ source: nodes[a].id, target: nodes[b].id, weight: 1 });
-    }
-    const started = Date.now();
-    const out = computeLayout({ nodes, edges }, { seed: 'perf' });
-    const ms = Date.now() - started;
+  it('lays out a 10k-node / 40k-edge graph within budget (plain Node, not Jest)', () => {
+    // See test/graph/compute-layout.perf.ts for why this runs in a child process.
+    const script = join(__dirname, '../../../test/graph/compute-layout.perf.ts');
+    const result = spawnSync(process.execPath, ['-r', 'ts-node/register', script], {
+      cwd: join(__dirname, '../../..'),
+      env: {
+        ...process.env,
+        TS_NODE_TRANSPILE_ONLY: '1',
+        TS_NODE_COMPILER_OPTIONS: JSON.stringify({ rootDir: '.' }),
+      },
+      encoding: 'utf8',
+      timeout: 5 * 60_000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout.trim().split('\n').pop() as string) as {
+      ms: number;
+      positions: number;
+      clusters: number;
+      modularity: number;
+    };
     // eslint-disable-next-line no-console
-    console.log(`computeLayout 10k/40k: ${ms} ms, ${out.clusters.length} clusters, modularity ${out.modularity}`);
-    expect(out.positions).toHaveLength(n);
-    expect(ms).toBeLessThan(5 * 60_000);
-  }, 5 * 60_000);
+    console.log(`computeLayout 10k/40k: ${JSON.stringify(report)}`);
+    expect(report.positions).toBe(10_000);
+    expect(report.modularity).toBeGreaterThan(0.5);
+    expect(report.ms).toBeLessThan(5 * 60_000);
+  }, 5 * 60_000 + 10_000);
 });
