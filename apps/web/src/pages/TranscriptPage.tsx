@@ -1038,6 +1038,12 @@ export function TranscriptPage() {
     ? (segments.find((segment) => segment.id === deepLinkSegmentId) ?? null)
     : null;
 
+  /** The whole deep-linked line as one highlighted range, for two seconds. */
+  // Plain values, not hooks: this runs after the page's early returns.
+  const deepLinkMatches = deepLinkSegment
+    ? new Map([[deepLinkSegment.id, [{ start: 0, end: deepLinkSegment.text.length }]]])
+    : undefined;
+
   /** The explicit ▶ a deep link offers instead of autoplay (#373). */
   const deepLinkPlayChip =
     deepLinkPlayMs !== null && !playerBlocked ? (
@@ -1090,7 +1096,11 @@ export function TranscriptPage() {
           : undefined
       }
       matchesBySegment={
-        findOpen ? matchesBySegment : nameHighlightsOn ? nameMatchesBySegment : undefined
+        findOpen
+          ? matchesBySegment
+          : nameHighlightsOn
+            ? nameMatchesBySegment
+            : deepLinkMatches
       }
       activeMatch={
         findOpen
