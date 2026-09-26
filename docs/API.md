@@ -3127,6 +3127,12 @@ no access.
 recording is the ordinary case here and `JSON.stringify` throws on a BigInt
 rather than rounding it.
 
+`recordedAt` (issue #352) is on this response and on every list/summary item
+too: when the recording was made, ISO 8601, defaulting to the upload instant
+and correctable by the owner or an editor through `PATCH /transcripts/{id}`
+below. It is the meeting date connected knowledge reads, deliberately distinct
+from `createdAt` (the upload instant) and never versioned.
+
 #### GET /transcripts/{id}/segments
 Every segment in reading order, **without word timings** — those are the single
 largest thing in this schema, and a segment list carrying them would be tens of
@@ -3161,9 +3167,31 @@ decide whether to trust the browser to play it.
 **Requires:** `transcripts:read`, plus `view` access
 
 #### PATCH /transcripts/{id}
-Changes the title. **Not versioned**: a title is metadata about the recording,
-not content of it, so recording a rename as a version would put a no-op in the
-edit history that a later restore could "undo" into a name nobody chose.
+Renames the transcript, sets when it was recorded, or both. **Not versioned**:
+a title and a recording date are metadata about the recording, not content of
+it, so recording either as a version would put a no-op in the edit history
+that a later restore could "undo" into a name or date nobody chose.
+
+**Body:** `{ title?, recordedAt? }` — at least one required. `recordedAt` is
+ISO 8601 **with an explicit offset** (`z.iso.datetime({ offset: true })`), the
+same field every list/summary/detail response now carries: when the recording
+was made, defaulting to the upload instant and readable/writable by the owner
+or an editor. It is the meeting date connected knowledge reads (`docs/specs/
+ontology.md` §5.4) — never the upload date, which is what `createdAt` already
+means.
+
+**Response:** `200` with the full `TranscriptDetail`, ETag unchanged
+(`W/"v<currentVersion>[-fingerprint]"` — neither field moves `currentVersion`).
+
+| Status | When |
+|---|---|
+| `400` | Empty body; an invalid or offset-less `recordedAt`; `recordedAt` before `1970-01-01T00:00:00Z`; `recordedAt` more than 24 hours after the server's clock ("A recording cannot be dated in the future.") |
+| `404` | No access — unchanged posture, never 403 |
+
+A changed `recordedAt` writes an audit row `transcript.recorded_at_changed`
+with `{ previous, next }`, because this date drives graph dating and "who
+re-dated this meeting?" should have an answer. A title-only change stays
+unaudited, as today.
 
 **Requires:** `transcripts:write`, plus `edit` access (owner or `editor` share)
 
