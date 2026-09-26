@@ -714,7 +714,7 @@ export const handlers = [
     const url = new URL(request.url);
     recordAsk('GET', url, undefined);
     const scope = url.searchParams.get('scopeEntityId');
-    const limit = Number(url.searchParams.get('limit') ?? askMock.pageSize);
+    const limit = Math.min(Number(url.searchParams.get('limit') ?? askMock.pageSize), askMock.pageSize);
     const offset = Number(url.searchParams.get('cursor') ?? 0);
     const rows = askMock.conversations
       .map((conv) => conv.summary)
