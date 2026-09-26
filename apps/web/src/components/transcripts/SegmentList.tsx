@@ -693,7 +693,14 @@ export function SegmentList({
                           role: 'button',
                           tabIndex: 0,
                           'aria-label': `Edit the line at ${formatTimestamp(segment.startMs)}`,
-                          onClick: () => startEdit(segment),
+                          // #368: a drag that SELECTS text ends in a click
+                          // too; that is a reader choosing words for "Add to
+                          // graph", not asking to edit the line.
+                          onClick: () => {
+                            const selection = window.getSelection();
+                            if (selection && !selection.isCollapsed && selection.toString().trim() !== '') return;
+                            startEdit(segment);
+                          },
                           onKeyDown: (event: React.KeyboardEvent) => {
                             if (event.key === 'Enter') {
                               event.preventDefault();

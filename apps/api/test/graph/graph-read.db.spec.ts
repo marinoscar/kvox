@@ -216,7 +216,8 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
         openCommitments: 1,
       },
     });
-    expect(detail.aliases.map((a) => a.alias)).toEqual(['Joe', 'Joseph']);
+    // Both aliases are inserted at the same instant, so the (createdAt, id) order between them is a uuid coin toss.
+    expect(detail.aliases.map((a) => a.alias).sort()).toEqual(['Joe', 'Joseph']);
 
     const summary = (await list(user.id, { type: 'Person' })).items.find((i) => i.id === joe)!;
     expect(summary).toMatchObject({ mentionCount: 2, lastSeenAt: '2026-04-10T00:00:00.000Z', aliases: ['Joseph'] });

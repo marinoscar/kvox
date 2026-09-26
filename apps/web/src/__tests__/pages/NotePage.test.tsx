@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, beforeAll, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { Route, Routes } from 'react-router-dom';
@@ -2138,5 +2138,109 @@ describe('NotePage — the graph proposal review (issue #367)', () => {
     renderNote('/notes/n1?review=1', graphUser);
     expect(await screen.findByRole('region', { name: 'Graph proposal' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: /People/ })).toBeInTheDocument();
+  });
+});
+
+// =============================================================================
+// #368 — guide the graph, re-extract with a model, add from a selection
+// =============================================================================
+
+describe('NotePage — guide the graph and add from a selection (issue #368)', () => {
+  const graphUser: MockUser = {
+    ...mockAdminUser,
+    permissions: [...mockAdminUser.permissions, 'graph:read', 'graph:write'],
+  };
+  const BODY = 'We will ship **behind a flag** next week.';
+
+  beforeEach(() => {
+    current = note({ status: 'ready', body: BODY, currentVersion: 3 });
+    aiConfig = { ...aiConfig, graphEnabled: true };
+    proposalMock.reset(mockProposalDetail('draft'));
+  });
+
+  function selectRendered(fromText: string, fromOffset: number, toText: string, toOffset: number) {
+    const find = (text: string) => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        if (node.textContent === text) return node;
+      }
+      throw new Error(`No text node "${text}"`);
+    };
+    const range = document.createRange();
+    range.setStart(find(fromText), fromOffset);
+    range.setEnd(find(toText), toOffset);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.pointerUp(document);
+  }
+
+  it('Extract from the empty sheet opens the extract dialog, then shows the run', async () => {
+    proposalMock.reset(null);
+    const user = userEvent.setup();
+    renderNote('/notes/n1?review=1', graphUser);
+    await user.click(await screen.findByRole('button', { name: 'Extract' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Extract to your graph' });
+    await within(dialog).findByText(/input tokens/);
+    await user.click(within(dialog).getByRole('button', { name: 'Extract' }));
+    expect(await screen.findByText('Reading your note and transcript…')).toBeInTheDocument();
+    const extract = proposalMock.requests.filter((request) => request.path.endsWith('/extract'));
+    expect(extract).toHaveLength(1);
+    expect(extract[0].body).toEqual({});
+  });
+
+  it('shows the guidance summary and Edit guidance re-opens the dialog pre-filled', async () => {
+    const detail = mockProposalDetail('draft');
+    detail.proposal = {
+      ...detail.proposal,
+      userGuidance: { pinnedEntityIds: [], instructions: 'Only the migration', entityTypes: ['Person', 'Project'] },
+    };
+    proposalMock.reset(detail);
+    const user = userEvent.setup();
+    renderNote('/notes/n1?review=1', graphUser);
+    expect(await screen.findByText('2 types · instructions')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Edit guidance' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Extract again' });
+    expect(await within(dialog).findByRole('textbox', { name: 'Instructions' })).toHaveValue('Only the migration');
+    expect(within(dialog).getByRole('checkbox', { name: 'Claim' })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('adds a selection from the rendered body to the draft, and opens the sheet on it', async () => {
+    renderNote('/notes/n1', graphUser);
+    await screen.findByText('behind a flag');
+    await screen.findByRole('button', { name: /Graph proposal/ });
+    act(() => selectRendered('We will ship ', 3, 'behind a flag', 6));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to graph' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add to graph' });
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveValue('will ship **behind');
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Add to draft' })).toBeEnabled());
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add to draft' }));
+    expect(await screen.findByRole('region', { name: 'Graph proposal' })).toBeInTheDocument();
+    const sheet = screen.getByRole('region', { name: 'Graph proposal' });
+    const title = await within(sheet).findByText('will ship **behind');
+    const row = title.closest('[data-testid^="proposal-row-"]') as HTMLElement;
+    expect(within(row).getByText('Added by you')).toBeInTheDocument();
+    const add = proposalMock.requests.find((request) => request.path.endsWith('/items'));
+    expect(add?.body).toMatchObject({
+      evidence: [
+        {
+          source: 'note',
+          noteVersion: 3,
+          charStart: BODY.indexOf('will'),
+          charEnd: BODY.indexOf('behind') + 'behind'.length,
+          quote: 'will ship **behind',
+        },
+      ],
+    });
+  });
+
+  it('offers nothing for a selection without graph:write', async () => {
+    const reader: MockUser = { ...mockAdminUser, permissions: [...mockAdminUser.permissions, 'graph:read'] };
+    renderNote('/notes/n1', reader);
+    await screen.findByText('behind a flag');
+    await screen.findByRole('button', { name: /Graph proposal/ });
+    act(() => selectRendered('We will ship ', 3, 'behind a flag', 6));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: 'Add to graph' })).not.toBeInTheDocument();
   });
 });

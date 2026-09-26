@@ -89,6 +89,11 @@ export interface ProposalReviewSheetProps {
    * entry button's badge). Absent: the sheet reads the proposal itself.
    */
   proposal?: UseGraphProposalReturn;
+  /**
+   * A row to bring into view once it is rendered (#368: the row "Add to
+   * graph" just created). Scrolled to once per id.
+   */
+  focusItemId?: string | null;
 }
 
 /** Desktop drawer width. The note page's `lg` margin matches it. */
@@ -167,6 +172,7 @@ export function ProposalReviewSheet({
   onRequestExtract,
   headerSlot,
   proposal: external,
+  focusItemId = null,
 }: ProposalReviewSheetProps) {
   const theme = useTheme();
   const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
@@ -210,6 +216,20 @@ export function ProposalReviewSheet({
     const timer = window.setTimeout(() => document.getElementById(headingId)?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [headingId, isCompactWindow, open]);
+
+  // #368: bring a just-added row into view, once, as soon as it is drawn.
+  const focusedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !focusItemId || focusedRef.current === focusItemId) return;
+    if (!items.some((item) => item.id === focusItemId)) return;
+    const timer = window.setTimeout(() => {
+      const row = document.querySelector<HTMLElement>(`[data-testid="proposal-row-${focusItemId}"]`);
+      if (!row) return;
+      focusedRef.current = focusItemId;
+      row.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [focusItemId, items, open]);
 
   const notify = useCallback((message: string, actionLabel?: string, onAction?: () => void) => {
     snackKey.current += 1;

@@ -37,6 +37,8 @@ export interface ModelSelectProps {
   label?: string;
   helperText?: string;
   disabled?: boolean;
+  /** Draws the field in its error state; `helperText` carries the reason. */
+  error?: boolean;
 }
 
 export function ModelSelect({
@@ -46,6 +48,7 @@ export function ModelSelect({
   label = 'Model',
   helperText,
   disabled = false,
+  error = false,
 }: ModelSelectProps) {
   // A generated id rather than a constant: unlike the generation-context panel,
   // two of these can legitimately be on one page (a form and a dialog over it),
@@ -53,7 +56,7 @@ export function ModelSelect({
   const labelId = useId();
 
   return (
-    <FormControl fullWidth size="small" disabled={disabled}>
+    <FormControl fullWidth size="small" disabled={disabled} error={error}>
       <InputLabel id={labelId}>{label}</InputLabel>
       <Select
         labelId={labelId}

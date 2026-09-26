@@ -612,3 +612,57 @@ export function graphValidationIssues(
       message: typeof issue.message === 'string' ? issue.message : 'Invalid value',
     }));
 }
+
+// =============================================================================
+// Guide the graph, re-extract, add from a selection (#368, epic #346)
+// =============================================================================
+
+/** #363's `userGuidanceSchema`, as the extract dialog holds it. */
+export type UserGuidance = ProposalUserGuidance;
+
+/** #363's `userGuidanceSchema` limits. */
+export const GUIDANCE_MAX_PINNED = 50;
+export const GUIDANCE_MAX_INSTRUCTIONS = 2000;
+
+/** `GET /api/graph/extract/estimate?noteId&model` — what a run would cost; needs no key. */
+export async function getExtractEstimate(noteId: string, model?: string): Promise<ExtractionEstimate> {
+  const query = new URLSearchParams({ noteId });
+  if (model) query.set('model', model);
+  return api.get<ExtractionEstimate>(`/graph/extract/estimate?${query.toString()}`);
+}
+
+/**
+ * What a 400 from `POST …/extract` (or the estimate) names, read off
+ * `details`: unknown guidance types, pins that are not live entities, an
+ * unpermitted model (#360's `details.reason`), or the token budget.
+ */
+export interface ExtractBadRequest {
+  unknownTypes: string[];
+  invalidPinnedIds: string[];
+  modelNotPermitted: boolean;
+  budget: { promptTokens: number; availableInputTokens: number; model: string | null } | null;
+}
+
+export function extractBadRequest(err: unknown): ExtractBadRequest | null {
+  if (!(err instanceof ApiError) || err.status !== 400) return null;
+  const details = (typeof err.details === 'object' && err.details !== null ? err.details : {}) as Record<
+    string,
+    unknown
+  >;
+  const strings = (value: unknown): string[] =>
+    Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+  const budget =
+    typeof details.promptTokens === 'number' && typeof details.availableInputTokens === 'number'
+      ? {
+          promptTokens: details.promptTokens,
+          availableInputTokens: details.availableInputTokens,
+          model: typeof details.model === 'string' ? details.model : null,
+        }
+      : null;
+  return {
+    unknownTypes: strings(details.unknownTypes),
+    invalidPinnedIds: strings(details.invalidPinnedIds),
+    modelNotPermitted: details.reason === 'model_not_permitted',
+    budget,
+  };
+}
