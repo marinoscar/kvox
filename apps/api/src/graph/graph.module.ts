@@ -12,6 +12,11 @@ import { GraphEntitiesController } from './graph-entities.controller';
 import { GraphEntitiesService } from './graph-entities.service';
 import { GraphController } from './graph.controller';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
+import { GraphLayoutEnqueuer } from './layout/graph-layout.enqueuer';
+import { KgGraphLayoutHandler } from './layout/graph-layout.handler';
+import { GraphLayoutListener } from './layout/graph-layout.listener';
+import { GraphOverviewController } from './layout/graph-overview.controller';
+import { GraphOverviewService } from './layout/graph-overview.service';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { GraphPreferencesService } from './preferences/graph-preferences.service';
 import { KgPurgeService } from './purge/kg-purge.service';
@@ -72,8 +77,20 @@ import { GraphWriteService } from './write/graph-write.service';
     SpeakerLinkReconciler,
     KgSpeakerLinkHandler,
     SpeakerIdentifiedListener,
+    // #371 — `kg.graph_layout`: the whole-graph overview snapshot, its three
+    // enqueue triggers (refresh, bootstrap, material change) and the read.
+    GraphLayoutEnqueuer,
+    KgGraphLayoutHandler,
+    GraphLayoutListener,
+    GraphOverviewService,
   ],
-  controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController, GraphReadController],
+  controllers: [
+    GraphController,
+    GraphEntitiesController,
+    GraphAttributeDefsController,
+    GraphReadController,
+    GraphOverviewController,
+  ],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.
   exports: [
