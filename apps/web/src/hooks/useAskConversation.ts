@@ -67,11 +67,20 @@ export function mergeConversation(
   fresh: AskConversationDetail,
 ): AskConversationDetail {
   if (!held || held.id !== fresh.id || fresh.messages.length === 0) return fresh;
-  const freshIds = new Set(fresh.messages.map((m) => m.id));
-  const firstFresh = fresh.messages[0];
+  // A turn this client already saw settle (its stream said `done`/`error`)
+  // never goes back to running because a read raced the row's own update —
+  // that would re-attach the stream to a finished answer.
+  const heldById = new Map(held.messages.map((m) => [m.id, m]));
+  const settled = (m: AskMessage) => m.status === 'complete' || m.status === 'failed';
+  const messages = fresh.messages.map((m) => {
+    const known = heldById.get(m.id);
+    return known && settled(known) && !settled(m) ? known : m;
+  });
+  const freshIds = new Set(messages.map((m) => m.id));
+  const firstFresh = messages[0];
   const olderHeld = held.messages.filter((m) => !freshIds.has(m.id) && m.createdAt < firstFresh.createdAt);
-  if (olderHeld.length === 0) return fresh;
-  return { ...fresh, messages: [...olderHeld, ...fresh.messages], hasEarlier: held.hasEarlier };
+  if (olderHeld.length === 0) return { ...fresh, messages };
+  return { ...fresh, messages: [...olderHeld, ...messages], hasEarlier: held.hasEarlier };
 }
 
 function withMessage(
