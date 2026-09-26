@@ -100,13 +100,32 @@ describe('applyPrecheck (#363)', () => {
       expect(run(items)).toEqual(['accept', 'pending', 'accept', 'pending']);
     });
 
-    it.each(['possible_duplicate', 'overlaps', 'unordered', 'supersedes', 'previously_rejected', 'stale_ontology'])(
+    it.each(['possible_duplicate', 'overlaps', 'unordered', 'supersedes', 'stale_ontology'])(
       'never accepts a row flagged %s',
       (flag) => {
         expect(run([relation({ entityId: EXISTING }, { entityId: EXISTING }, [flag])])).toEqual(['pending']);
         expect(run([item('claim', { subject: { entityId: EXISTING } }, [flag])])).toEqual(['pending']);
       },
     );
+
+    it('defaults a previously_rejected row to reject (#365)', () => {
+      expect(run([relation({ entityId: EXISTING }, { entityId: EXISTING }, ['previously_rejected'])])).toEqual(['reject']);
+      expect(run([item('claim', { subject: { entityId: EXISTING } }, ['previously_rejected'])])).toEqual(['reject']);
+    });
+
+    it('pre-accepts a known row whatever else it carries, person facts included — never a sensitive one (#365)', () => {
+      expect(run([relation({ entityId: EXISTING }, { entityId: EXISTING }, ['known', 'overlaps'])])).toEqual(['accept']);
+      expect(run([item('claim', { subject: { entityId: EXISTING } }, ['known', 'possible_duplicate'])])).toEqual(['accept']);
+      expect(run([item('person_fact', { subject: { entityId: EXISTING } }, ['known'])])).toEqual(['accept']);
+      const sensitive = item('person_fact', { subject: { entityId: EXISTING } }, ['known']);
+      sensitive.payload.sensitivity = 'sensitive';
+      expect(run([sensitive])).toEqual(['pending']);
+    });
+
+    it('a known row still waits on a pending proposal endpoint (#365)', () => {
+      const items = [entity('e1', null, ['ambiguous']), relation({ ref: 'e1' }, { entityId: EXISTING }, ['known'])];
+      expect(run(items)).toEqual(['pending', 'pending']);
+    });
 
     it('a quote_not_located flag alone does not block', () => {
       expect(run([relation({ entityId: EXISTING }, { entityId: EXISTING }, ['quote_not_located'])])).toEqual(['accept']);
