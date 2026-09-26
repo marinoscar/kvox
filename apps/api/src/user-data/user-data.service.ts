@@ -102,6 +102,8 @@ export class UserDataService {
       noteTemplates,
       aiKeys,
       accessTokens,
+      graphEntities,
+      graphItems,
       activeDeletion,
     ] = await Promise.all([
       this.prisma.transcript.count({ where: { ownerId: userId, deletedAt: null } }),
@@ -126,6 +128,10 @@ export class UserDataService {
       this.prisma.noteTemplate.count({ where: { ownerId: userId } }),
       this.prisma.userAiCredential.count({ where: { userId } }),
       this.prisma.personalAccessToken.count({ where: { userId, revokedAt: null } }),
+      // #357: merge tombstones are the same human as their survivor, so
+      // counting them would show one person twice.
+      this.prisma.kgEntity.count({ where: { ownerId: userId, reviewStatus: { not: 'merged' } } }),
+      this.prisma.kgItem.count({ where: { ownerId: userId } }),
       this.findActiveDeletion(userId),
     ]);
 
@@ -138,6 +144,7 @@ export class UserDataService {
       },
       noteTemplates: { count: noteTemplates },
       credentials: { aiKeys, accessTokens },
+      graph: { entities: graphEntities, items: graphItems },
       activeDeletion,
     };
   }
