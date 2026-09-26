@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
@@ -17,6 +17,7 @@ import {
   SENSITIVE_FACT_STATEMENT,
   briefFixture,
   entityDetail,
+  mockGraphAiConfig,
   neighborhoodFixture,
   timelineFixture,
 } from '../mocks/graphData';
@@ -25,6 +26,7 @@ import GraphIndexPage from '../../pages/GraphIndexPage';
 import { BRIEF_SECTION_TITLES, DIGEST_UNAVAILABLE_COPY } from '../../components/graph/EntityBriefCard';
 import { buildEntityPatch, issuesToFieldErrors } from '../../components/graph/EntityEditDialog';
 import { clearEvidenceCache } from '../../hooks/useGraphEvidence';
+import { CONV_JOE_ID, resetAskMock } from '../mocks/askData';
 import type { DigestUnavailableReason, EntityBrief } from '../../services/graph';
 
 /**
@@ -484,5 +486,66 @@ describe('GraphEntityPage — mentions', () => {
     expect(note.getAttribute('href')).toMatch(/^\/notes\//);
     const gone = within(section).getByRole('button', { name: /No longer available/ });
     expect(gone).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('GraphEntityPage — Ask about … (#381)', () => {
+  function LocationProbe() {
+    const location = useLocation();
+    return <output data-testid="location">{location.search}</output>;
+  }
+
+  function renderWithAsk(search = '') {
+    return render(
+      <>
+        <Routes>
+          <Route path="/graph/entities/:id" element={<GraphEntityPage />} />
+        </Routes>
+        <LocationProbe />
+      </>,
+      { wrapperOptions: { route: `/graph/entities/${JOE_ID}${search}`, user: graphReader } },
+    );
+  }
+
+  const askParam = () => new URLSearchParams(screen.getByTestId('location').textContent ?? '').get('ask');
+
+  beforeEach(() => resetAskMock());
+
+  it('hides the action while connected knowledge is off', async () => {
+    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })));
+    renderWithAsk();
+    await pageReady();
+    await waitFor(() => expect(requests.some((r) => r.url.pathname.endsWith('/ai/config'))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
+  });
+
+  it('hides the action when the deployment does not say (no graphEnabled)', async () => {
+    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: {} })));
+    renderWithAsk();
+    await pageReady();
+    await waitFor(() => expect(requests.some((r) => r.url.pathname.endsWith('/ai/config'))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: 'Ask about Joe Rivera' })).not.toBeInTheDocument();
+  });
+
+  it('shows the action with connected knowledge on, and syncs ?ask with the panel', async () => {
+    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
+    const user = userEvent.setup();
+    renderWithAsk();
+    await pageReady();
+    await user.click(await screen.findByRole('button', { name: 'Ask about Joe Rivera' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
+    // Opens on the entity's newest scoped conversation, written back with replace.
+    await waitFor(() => expect(askParam()).toBe(CONV_JOE_ID));
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(askParam()).toBeNull());
+  });
+
+  it('opens the panel from ?ask on load', async () => {
+    server.use(http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })));
+    renderWithAsk(`?ask=${CONV_JOE_ID}`);
+    const dialog = await screen.findByRole('dialog', { name: 'Ask about Joe Rivera' });
+    expect(await within(dialog).findByText(/Joe committed to the Atlas launch/)).toBeInTheDocument();
   });
 });
