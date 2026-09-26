@@ -37,7 +37,7 @@ kv:AssertionShape
         sh:name "Title" ;
         sh:path kv:HAS_ROLE.title
     ], [
-        sh:in ( kv:HAS_ROLE kv:REPORTS_TO kv:WORKS_FOR ) ;
+        sh:in ( kv:ATTENDED kv:DISCUSSED kv:HAS_ROLE kv:PART_OF kv:REPORTS_TO kv:WORKS_FOR ) ;
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:path rdf:predicate
@@ -68,11 +68,42 @@ kv:ClaimShape
         sh:nodeKind sh:IRI ;
         sh:path kv:SUPERSEDES
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Due at" ;
+        sh:path kv:dueAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid from" ;
+        sh:path prov:startedAtTime
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid until" ;
+        sh:path prov:endedAtTime
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "active" "superseded" ) ;
         sh:maxCount 1 ;
         sh:name "Status" ;
         sh:path kv:status
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "day" "month" "year" "unknown" ) ;
+        sh:maxCount 1 ;
+        sh:path kv:validPrecision
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "Statement" ;
+        sh:path kv:Claim.statement
     ], [
         sh:maxCount 1 ;
         sh:minCount 1 ;
@@ -109,11 +140,42 @@ kv:CommitmentShape
         sh:nodeKind sh:IRI ;
         sh:path kv:ASSIGNED_TO
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Due at" ;
+        sh:path kv:dueAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid from" ;
+        sh:path prov:startedAtTime
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid until" ;
+        sh:path prov:endedAtTime
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "day" "month" "year" "unknown" ) ;
+        sh:maxCount 1 ;
+        sh:path kv:validPrecision
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "open" "done" "dropped" "superseded" ) ;
         sh:maxCount 1 ;
         sh:name "Status" ;
         sh:path kv:status
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "Statement" ;
+        sh:path kv:Commitment.statement
     ], [
         sh:maxCount 1 ;
         sh:name "About" ;
@@ -149,11 +211,42 @@ kv:DecisionShape
         sh:nodeKind sh:IRI ;
         sh:path kv:DECIDED_IN
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Due at" ;
+        sh:path kv:dueAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid from" ;
+        sh:path prov:startedAtTime
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid until" ;
+        sh:path prov:endedAtTime
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "active" "superseded" ) ;
         sh:maxCount 1 ;
         sh:name "Status" ;
         sh:path kv:status
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "day" "month" "year" "unknown" ) ;
+        sh:maxCount 1 ;
+        sh:path kv:validPrecision
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "Statement" ;
+        sh:path kv:Decision.statement
     ], [
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
@@ -187,6 +280,11 @@ kv:MeetingShape
         sh:nodeKind sh:IRI ;
         sh:path kv:PART_OF
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "stated" "note_created_at" ) ;
         sh:maxCount 1 ;
@@ -202,6 +300,10 @@ kv:MeetingShape
         sh:maxCount 1 ;
         sh:name "Transcript" ;
         sh:path kv:Meeting.transcriptId
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
     ], [
         sh:datatype xsd:string ;
         sh:name "Topics" ;
@@ -224,11 +326,20 @@ kv:OrganizationShape
         sh:path schema:url ;
         sh:pattern "^https?://"
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "gold" "silver" ) ;
         sh:maxCount 1 ;
         sh:name "Tier" ;
         sh:path <https://fixture.app/ns#attr/11111111-1111-4111-8111-111111111111>
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
     ], [
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
@@ -248,11 +359,42 @@ kv:PersonFactShape
         sh:nodeKind sh:IRI ;
         sh:path kv:ABOUT
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Due at" ;
+        sh:path kv:dueAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid from" ;
+        sh:path prov:startedAtTime
+    ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Valid until" ;
+        sh:path prov:endedAtTime
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "active" "superseded" ) ;
         sh:maxCount 1 ;
         sh:name "Status" ;
         sh:path kv:status
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "day" "month" "year" "unknown" ) ;
+        sh:maxCount 1 ;
+        sh:path kv:validPrecision
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:minCount 1 ;
+        sh:name "Statement" ;
+        sh:path kv:PersonFact.statement
     ], [
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
@@ -285,10 +427,19 @@ kv:PersonShape
         sh:nodeKind sh:IRI ;
         sh:path kv:REPORTS_TO
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
         sh:name "Job title" ;
         sh:path schema:jobTitle
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
     ], [
         sh:minCount 1 ;
         sh:nodeKind sh:IRI ;
@@ -316,11 +467,20 @@ kv:ProjectShape
         sh:name "Start date" ;
         sh:path kv:Project.startDate
     ], [
+        sh:datatype xsd:dateTime ;
+        sh:maxCount 1 ;
+        sh:name "Occurred at" ;
+        sh:path kv:occurredAt
+    ], [
         sh:datatype xsd:string ;
         sh:in ( "planned" "active" "done" "cancelled" ) ;
         sh:maxCount 1 ;
         sh:name "Status" ;
         sh:path kv:Project.status
+    ], [
+        sh:datatype xsd:string ;
+        sh:name "Alias" ;
+        sh:path skos:altLabel
     ], [
         sh:maxCount 1 ;
         sh:name "Sponsor" ;

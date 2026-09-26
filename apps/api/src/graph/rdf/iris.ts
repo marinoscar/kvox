@@ -18,9 +18,14 @@
 //   relation            kv:<RELATION_KEY>
 //   annotations         kv:reviewStatus kv:confidence kv:ontologyVersion kv:validPrecision
 //   item status         kv:status
+//   item statement      kv:<ItemType>.statement
+//   dates (#386)        kv:occurredAt kv:dueAt; an item's validity range is
+//                       prov:startedAtTime/prov:endedAtTime + kv:validPrecision,
+//                       exactly as on a reified assertion
 //   reified assertion   kv:Assertion (rdf:subject/predicate/object + prov times)
 //   resources (#386)    kv:entity/<uuid> kv:item/<uuid> kv:relation/<uuid>
 //                       kv:evidence/<uuid> kv:segment/<uuid> kv:note/<uuid>/v<version>
+//                       kv:export/<uuid> (the export document itself)
 //
 // Every function validates its input and throws on anything that could make
 // an IRI mean something else — a key outside the ontology's own key patterns,
@@ -39,6 +44,7 @@ export const XSD = RDF_PREFIXES.xsd;
 export const SH = RDF_PREFIXES.sh;
 export const PROV = RDF_PREFIXES.prov;
 export const OA = RDF_PREFIXES.oa;
+export const SKOS = RDF_PREFIXES.skos;
 
 const TYPE_KEY = /^[A-Z][A-Za-z]+$/;
 const RELATION_KEY = /^[A-Z][A-Z_]+$/;
@@ -130,7 +136,26 @@ export function itemStatusIri(ns: string): string {
   return under(ns, 'status');
 }
 
-/** `kv:Assertion` — the reified node a temporal edge is exported as (§18.1). */
+/**
+ * `kv:<ItemType>.statement` — an item's statement (the `kg_items.statement`
+ * column). Named like a built-in attribute because it is one in all but
+ * storage: every item carries exactly one.
+ */
+export function itemStatementIri(ns: string, itemTypeKey: string): string {
+  return attributeIri(ns, itemTypeKey, 'statement');
+}
+
+/** `kv:occurredAt` — when a meeting or an item happened (`occurred_at`), an `xsd:dateTime`. */
+export function occurredAtIri(ns: string): string {
+  return under(ns, 'occurredAt');
+}
+
+/** `kv:dueAt` — when an item (a commitment) is due (`due_at`), an `xsd:dateTime`. */
+export function dueAtIri(ns: string): string {
+  return under(ns, 'dueAt');
+}
+
+/** `kv:Assertion` — the reified node every exported edge carries its range, props, confidence and citations on (§18.1, #386). */
 export function assertionClassIri(ns: string): string {
   return under(ns, 'Assertion');
 }
@@ -154,6 +179,8 @@ export const itemIri = (ns: string, id: string): string => resource(ns, 'item', 
 export const relationInstanceIri = (ns: string, id: string): string => resource(ns, 'relation', id);
 export const evidenceIri = (ns: string, id: string): string => resource(ns, 'evidence', id);
 export const segmentIri = (ns: string, id: string): string => resource(ns, 'segment', id);
+/** `kv:export/<uuid>` — the export document (#386): its generation time and ontology version. */
+export const exportIri = (ns: string, id: string): string => resource(ns, 'export', id);
 
 /** `kv:note/<uuid>/v<version>` — one version of a note, the anchor of a note-span citation. */
 export function noteSpanIri(ns: string, noteId: string, version: number): string {
