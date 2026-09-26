@@ -94,7 +94,11 @@ export default defineConfig({
   // line the harness renders a blank page and all eleven pixel specs fail on a
   // missing element rather than on a diff — which is what makes the real cause
   // easy to misread as a baseline problem.
-  optimizeDeps: { include: ['@app/shared'] },
+  //
+  // `@app/shared/ontology` (issue #350) is the compiled CommonJS subpath of the
+  // same package and needs its own entry: a subpath is pre-bundled only when it
+  // is listed, not because its parent package is.
+  optimizeDeps: { include: ['@app/shared', '@app/shared/ontology'] },
   server: {
     port: 5183,
     strictPort: true,

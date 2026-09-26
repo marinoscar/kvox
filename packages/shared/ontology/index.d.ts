@@ -1,0 +1,11 @@
+export { ATTRIBUTE_KINDS, DEFAULT_ENABLED_DOMAINS, DOMAIN_KEYS, ITEM_KINDS, PSEUDO_TYPES, SENSITIVITIES, USER_ATTRIBUTE_KEY_PREFIX, VALID_PRECISIONS, } from './constants.js';
+export { CHANGELOG, ONTOLOGY_VERSION } from './version.js';
+export type { OntologyChangelogEntry } from './version.js';
+export { SHIPPED_KEYS } from './shipped-keys.js';
+export type { AttributeKind, AttributeOptions, AttributeSpec, DomainKey, DomainModule, EffectiveAttribute, EffectiveAttributePayload, EffectiveDomainPayload, EffectiveEntityType, EffectiveEntityTypePayload, EffectiveRelationType, EffectiveRelationTypePayload, EffectiveSchema, EffectiveSchemaPayload, EntityTypeSpec, KgItemKind, OntologyRegistry, PropsIssue, RelationRepresentation, RelationTypeSpec, Sensitivity, UserAttributeDef, ValidatePropsResult, ValidPrecision, } from './types.js';
+export { OntologyDefinitionError, defineDomain, defineEntityType, defineRelationType } from './define.js';
+export { ONTOLOGY, buildOntologyRegistry } from './registry.js';
+export { computeEffectiveSchema, toEffectiveSchemaPayload } from './effective-schema.js';
+export type { ComputeEffectiveSchemaInput } from './effective-schema.js';
+export { buildPropsSchema, validateProps } from './props-schema.js';
+export { buildPropsJsonSchema, extractableEntityTypes, extractableRelationTypes } from './json-schema.js';

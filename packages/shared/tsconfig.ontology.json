@@ -1,0 +1,26 @@
+{
+  // Compiles the ontology subpath (`@app/shared/ontology`) and nothing else.
+  // Sources: src/ontology/**. Output: ontology/ -- COMMITTED, and deliberately
+  // not dist/ (the repo's .dockerignore drops every **/dist, so a dist/ output
+  // would build green images that die at boot with "Cannot find module").
+  // CI rebuilds it and fails on `git diff --exit-code -- packages/shared/ontology`,
+  // so an edited source committed without a rebuild is caught. See README.md.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "src/ontology",
+    "outDir": "ontology",
+    "types": [],
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "newLine": "lf"
+  },
+  "include": ["src/ontology/**/*.ts"]
+}

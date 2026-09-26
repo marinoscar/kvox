@@ -93,7 +93,11 @@ export default defineConfig({
   // help, which is precisely why the failure surfaces in the dev-server-backed
   // visual harness and nowhere else. See `visual/vite.config.ts`, which needs
   // the same line for the same reason.
-  optimizeDeps: { include: ['@app/shared'] },
+  //
+  // `@app/shared/ontology` (issue #350) is the same package's compiled CommonJS
+  // subpath, so it needs its own entry for the identical reason: a subpath is
+  // pre-bundled only when it is listed, not because its parent package is.
+  optimizeDeps: { include: ['@app/shared', '@app/shared/ontology'] },
   server: {
     port: 5173,
     host: true,

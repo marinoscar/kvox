@@ -10,15 +10,27 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
+    },
+    "./ontology": {
+      "types": "./ontology/index.d.ts",
+      "default": "./ontology/index.js"
     }
   },
   "files": [
     "index.js",
     "index.d.ts",
-    "identity.json"
+    "identity.json",
+    "ontology"
   ],
   "scripts": {
-    "typecheck": "echo 'No TypeScript sources (hand-written index.d.ts) - nothing to check'",
+    "build:ontology": "tsc -p tsconfig.ontology.json",
+    "typecheck": "tsc -p tsconfig.ontology.json --noEmit",
     "lint": "echo 'No linter configured'"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
   }
 }

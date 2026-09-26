@@ -81,6 +81,18 @@ jobs:
       - run: npm run typecheck --workspace=web
       - run: npm run typecheck --workspace=cli
 
+      # `@app/shared/ontology` (issue #350) is the one compiled part of
+      # `@app/shared`: TypeScript sources in packages/shared/src/ontology/,
+      # committed CommonJS + .d.ts in packages/shared/ontology/. Nothing builds
+      # it on install, so the committed output IS what every consumer runs.
+      # Rebuild and diff: a source edit committed without its rebuilt output
+      # fails here instead of shipping stale code. The `git status` half also
+      # catches a NEW source file whose output was never committed at all,
+      # which `git diff` alone cannot see (untracked files have no diff).
+      # See packages/shared/README.md.
+      - run: npm run typecheck --workspace=@app/shared
+      - run: npm run build:ontology --workspace=@app/shared && git diff --exit-code -- packages/shared/ontology && test -z "$(git status --porcelain -- packages/shared/ontology)"
+
       - run: npm test --workspace=api
       - run: npm run test:run --workspace=cli
 
