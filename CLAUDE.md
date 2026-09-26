@@ -9,7 +9,7 @@ Web Application Foundation with React UI + Node API + PostgreSQL. Production-gra
 ## Technology Stack
 
 - **Backend**: Node.js + TypeScript, NestJS with Fastify adapter
-- **Frontend**: React + TypeScript, Material UI (MUI)
+- **Frontend**: React + TypeScript, Material UI (MUI), sigma.js + graphology (graph explorer)
 - **CLI**: TypeScript, Commander (subcommands) + ink (interactive menu)
 - **Database**: PostgreSQL with Prisma ORM
 - **Auth**: Passport strategies (Google OAuth required)
@@ -1447,7 +1447,10 @@ rule 3 discipline the admin cards follow.
 sixth bottom-bar slot — `home`'s `DESTINATION_ROUTES` entry is
 `['/', '/graph']`, gated on `graph:read`, and the graph is reached from
 Home's "Knowledge" section, a named speaker's chip, and library search hits,
-never from its own tab. See `docs/specs/ontology.md` §13.
+never from its own tab. See `docs/specs/ontology.md` §13. `/graph/explore`
+(the sigma.js graph explorer, issue #374) is owned by the same `home` entry —
+its own prefix's `startsWith('/graph/')` match already covers it, so no
+`DESTINATION_ROUTES` change was needed to add it.
 
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
@@ -2240,6 +2243,11 @@ speaker-chip person links, entity hits above library search, and a Home
 "Knowledge" section, all owned by the `home` destination per the Navigation
 Destination Model above. It reads #370's read API and #372's brief — see
 `docs/specs/ontology.md` §13 for the up-to-date web-surfaces state.
+**So is the sigma.js graph explorer** (issue #374, epic #347): `/graph/explore`
+(bounded, interactive, expand-on-click, a hard 300-node cap) and the entity
+page's `NeighborhoodWidget` above its Connections list, both drawing through
+the one file that imports sigma, `GraphCanvas.tsx` — see `docs/specs/ontology.md`
+§22 for the library choice and the shipped design.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
