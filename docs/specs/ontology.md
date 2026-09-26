@@ -231,14 +231,14 @@ maintained mapping table. A vocabulary named in this section with no
 `alignment` value on any type is aspirational only; §18 is where the mapping
 becomes something a generator actually runs against.
 
-**Namespace.** `kv:` / `https://kvox.app/ns#` is named here as the *future*
-IRI base for a JSON-LD/RDF export (§18), and it is a placeholder only: it
-binds no running system today, resolves no real endpoint, and is not read or
-written by any code in this repository. Choosing it now costs nothing and
-avoids a later rename if export is ever built; deferring the choice would
-not have made the eventual export any easier and would have left one more
-undecided detail hanging over a document whose entire purpose is to stop
-deferring decisions.
+**Namespace.** `kv:` / `https://kvox.app/ns#` is the IRI base for the
+RDF artefacts and the JSON-LD/RDF export (§18). It is **derived, never
+spelled**: `kvNamespace(APP_SLUG)` in `packages/shared/src/ontology/rdf-namespaces.ts`
+builds `https://<app slug>.app/ns#`, so a renamed fork's artefacts name its own
+namespace with no edit here. It resolves no real endpoint — an IRI is an
+identifier, not a URL anyone must serve — and since issue #385 it is what
+`GET /api/graph/ontology.ttl` and `…/ontology.shacl.ttl` (§18.2) write every
+`kv:` term in.
 
 ## 3. Design principles
 
@@ -2285,6 +2285,41 @@ IRIs follow §2's namespace pattern (`kv:` / `https://kvox.app/ns#`); every
 makes a round-trip (export, then re-import elsewhere, §18.3) lossless on
 identity rather than merely on content.
 
+**Attribute alignment (#385).** `AttributeSpec.alignment` is optional
+metadata on a built-in or mixin attribute, a CURIE with a prefix from
+`RDF_PREFIXES` (`rdf rdfs owl xsd sh prov oa schema foaf skos`) — the ontology
+parity test's rule 11 fails any other prefix, on types, relations and
+attributes alike. Shipped: `Person.title` (the `work` mixin) →
+`schema:jobTitle`, `Organization.website` → `schema:url`. Adding one is a
+**patch** bump (§17.4): it changes no stored row and no validation.
+
+**IRI rules, as built (#385).** One pure function each in
+`apps/api/src/graph/rdf/iris.ts`; the generators and #386's data serializer
+build every IRI through them, so exported data and the shapes that validate it
+agree by construction. Each function refuses input that would make an IRI name
+something else (a key outside the ontology's key patterns, a resource id that
+is not a UUID).
+
+| Term | IRI |
+|---|---|
+| Entity/item type | `kv:<TypeKey>` (shape: `kv:<TypeKey>Shape`) |
+| Built-in attribute | `kv:<TypeKey>.<attrKey>`, or its `alignment` when set (the standard property itself) |
+| Relation prop | `kv:<RELATION_KEY>.<propKey>` (carried on the reified assertion), or its `alignment` |
+| User attribute | `kv:attr/<definition id>` |
+| Relation type | `kv:<RELATION_KEY>` (`rdfs:subPropertyOf` its `alignment`) |
+| Annotation properties | `kv:reviewStatus`, `kv:confidence`, `kv:ontologyVersion`, `kv:validPrecision` |
+| Item status | `kv:status` (one of the item type's declared `statuses`) |
+| Reified temporal edge | `kv:Assertion` with `rdf:subject`/`rdf:predicate`/`rdf:object`, `prov:startedAtTime`/`prov:endedAtTime`, `kv:validPrecision` |
+| Resources (#386) | `kv:entity/<uuid>`, `kv:item/<uuid>`, `kv:relation/<uuid>`, `kv:evidence/<uuid>`, `kv:segment/<uuid>`, note span `kv:note/<uuid>/v<version>` |
+
+Because an aligned attribute's IRI **is** the standard property, the OWL
+output never asserts `rdfs:domain`/`rdfs:range` on it — `schema:jobTitle
+rdfs:domain kv:Person` would claim everything on the web with a job title is
+one of our Person rows. It states Schema.org's own non-inferring
+`schema:domainIncludes`/`schema:rangeIncludes` instead; the same honesty that
+makes every alignment `rdfs:subClassOf`/`rdfs:subPropertyOf` rather than an
+equivalence.
+
 ### 18.2 Export — three artefacts from one source
 
 Because all three are generated from the same definition file rather than
@@ -2312,6 +2347,59 @@ schema the way three independently maintained documents could.
    standard vocabulary. This runs as **`kg.export`** (§11), a queue job like
    `note.export`, producing a 7-day signed download exactly as
    `docs/specs/notes.md` §8 already establishes for a note's own exports.
+
+**As built (#385).** `generateOwl` and `generateShacl`
+(`apps/api/src/graph/rdf/`) are pure functions of
+`(registry, userAttributes, ns)`, deterministic to the byte, and run over
+**every** domain in the registry, not the caller's enabled ones — the artefacts
+must describe every row that can exist, including rows of a domain its owner
+later switched off.
+
+- **OWL/RDFS**: `<ns> a owl:Ontology; owl:versionInfo "<ONTOLOGY_VERSION>";
+  rdfs:label "<app name> ontology"`; each type an `owl:Class` (label, comment,
+  `rdfs:subClassOf` its alignment); each attribute an `owl:DatatypeProperty`
+  (`entity_ref` → `owl:ObjectProperty`) with domain and range (`text`/selects
+  → `xsd:string`, `number` → `xsd:decimal`, `date` → `xsd:date`, `boolean` →
+  `xsd:boolean`, `url` → `xsd:anyURI`, `entity_ref` → its target classes,
+  `owl:unionOf` for several) and `owl:deprecated true` when deprecated; each
+  exported relation an `owl:ObjectProperty` (`SUPERSEDES` ⊑
+  `prov:wasRevisionOf`); the caller's attribute definitions as
+  `kv:attr/<id>`. `IDENTIFIED_AS`, `MENTIONS` and `SUPPORTED_BY` are **not**
+  properties — speakers are not exported, mentions are coarse, and evidence is
+  `prov:wasDerivedFrom` + `oa:Annotation` (the rule keys on the relation's
+  `representation`, not on a list of names).
+- **SHACL**: one `kv:<Type>Shape` per type, `sh:closed true` with
+  `sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence
+  kv:ontologyVersion prov:wasDerivedFrom …the standard properties this type's
+  relations align to )`; per attribute a datatype (or `sh:class`), `sh:maxCount
+  1` unless multi-valued, `sh:minCount 1` if required, `sh:in` for selects,
+  `sh:pattern "^https?://"` for URLs; per relation from the type an
+  `sh:class` (`sh:or` for several), narrowed by `allowedPairs` and by an item's
+  `subjectTypes`, with `sh:maxCount 1` for an item column and `sh:minCount 1`
+  for a required subject; `kv:status` `sh:in` each item type's statuses;
+  `prov:wasDerivedFrom sh:minCount 1` on every shape; and a closed
+  `kv:AssertionShape` (one subject/predicate/object, the predicate one of the
+  reified relations, at most one `xsd:dateTime` start and end, `kv:validPrecision`
+  `sh:in ("day" "month" "year" "unknown")`, a citation, and HAS_ROLE's required
+  `title` enforced only when the predicate is HAS_ROLE, through `sh:or`/`sh:not`).
+- **`sensitive` attribute definitions appear in neither artefact** — not as a
+  shape and not as a vocabulary label: they are never exported (§18.1), so a
+  closed shape rejects their property outright.
+- **Served** as `GET /api/graph/ontology.ttl` and `GET
+  /api/graph/ontology.shacl.ttl` (`graph:read`, raw `text/turtle;
+  charset=utf-8`), with `ETag: W/"sha256(ONTOLOGY_VERSION + ':' +
+  fingerprint of the caller's attribute definitions)"`, `304` on
+  `If-None-Match` before anything is generated, `Cache-Control: private,
+  max-age=0, must-revalidate`, and a 500-entry in-memory LRU keyed by the
+  ETag. The ETag hashes everything the output depends on, so a cached body is
+  never stale.
+- **A hand-written Turtle writer** (`turtle-writer.ts`, no dependency) writes
+  both: sorted prefixes, subjects and predicates, escaped literals, RDF lists
+  and blank-node property lists. Hand-written because §18.4 keeps RDF
+  libraries out of the request path, and a vocabulary's Turtle is a small,
+  closed problem; the tests parse every output with `n3` and run the shapes
+  through `rdf-validate-shacl` over valid and invalid fixture graphs, and a
+  grep test keeps both libraries out of `apps/api/src`.
 
 **Because the shapes and the data are generated from the same definitions,
 an export validates against its own shapes by construction** — there is no
@@ -2382,6 +2470,11 @@ path, and never as a dependency of anything §9's retrieval design touches,
 because §1's non-goals already rule out any endpoint accepting or generating
 a query language from a model or a user, and pulling a SPARQL engine into
 the request path would be the first step toward exactly that.
+
+The two ontology routes (§18.2) are not an exception to this: they write
+Turtle with the hand-written `apps/api/src/graph/rdf/turtle-writer.ts`, and in
+#385 the four libraries are test-only `devDependencies`. #386/#387 move what
+their handlers need to `dependencies`.
 
 ## 19. Review UI and overrides
 
