@@ -1670,4 +1670,92 @@ describe('SystemSettingsService', () => {
       expect(result.ai.providers.openai.defaultModel).toBe('gpt-5.4-mini');
     });
   });
+  // ===========================================================================
+  // ai.taskModels / ai.graphEnabled (#360)
+  //
+  // The sixth parity place — the hand merge — is behaviour, so it is pinned
+  // here: `taskModels` REPLACES wholesale when present and is untouched when
+  // absent; `graphEnabled` merges like any scalar.
+  // ===========================================================================
+  describe('ai.taskModels and ai.graphEnabled (#360)', () => {
+    const storedAi = {
+      ...DEFAULT_SYSTEM_SETTINGS.ai,
+      graphEnabled: true,
+      taskModels: {
+        'graph.extract': { model: 'gpt-5.4' },
+        'graph.agent': { model: 'gpt-5.4', reasoningEffort: 'high' },
+      },
+    };
+
+    function storeAi(ai: unknown) {
+      mockPrisma.systemSettings.findUnique.mockResolvedValue({
+        ...mockSystemSettings,
+        value: { ...DEFAULT_SYSTEM_SETTINGS, ai } as any,
+      } as any);
+      mockPrisma.systemSettings.update.mockImplementation(((args: any) =>
+        Promise.resolve({
+          ...mockSystemSettings,
+          value: args.data.value,
+          version: 2,
+        })) as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+    }
+
+    it('replaces taskModels wholesale when the patch carries it', async () => {
+      storeAi(storedAi);
+
+      await service.patchSettings(
+        { ai: { taskModels: { 'graph.digest': { model: 'gpt-5.4-mini' } } } },
+        mockUserId,
+      );
+
+      const updateArgs = mockPrisma.systemSettings.update.mock
+        .calls[0][0] as any;
+      expect(updateArgs.data.value.ai.taskModels).toEqual({
+        'graph.digest': { model: 'gpt-5.4-mini' },
+      });
+      expect(updateArgs.data.value.ai.graphEnabled).toBe(true);
+    });
+
+    it('an empty taskModels map clears every override', async () => {
+      storeAi(storedAi);
+
+      await service.patchSettings({ ai: { taskModels: {} } }, mockUserId);
+
+      const updateArgs = mockPrisma.systemSettings.update.mock
+        .calls[0][0] as any;
+      expect(updateArgs.data.value.ai.taskModels).toEqual({});
+    });
+
+    it('leaves taskModels untouched when the patch omits it, and merges graphEnabled', async () => {
+      storeAi(storedAi);
+
+      await service.patchSettings(
+        { ai: { graphEnabled: false } },
+        mockUserId,
+      );
+
+      const updateArgs = mockPrisma.systemSettings.update.mock
+        .calls[0][0] as any;
+      expect(updateArgs.data.value.ai.taskModels).toEqual(storedAi.taskModels);
+      expect(updateArgs.data.value.ai.graphEnabled).toBe(false);
+    });
+
+    it('reads a row whose ai namespace predates #360 as taskModels {} and graphEnabled false', async () => {
+      const { taskModels: _t, graphEnabled: _g, ...legacyAi } =
+        DEFAULT_SYSTEM_SETTINGS.ai;
+      storeAi({ ...legacyAi, maxOutputTokens: 20_000 });
+
+      const result = await service.getSettings();
+
+      expect(result.ai.taskModels).toEqual({});
+      expect(result.ai.graphEnabled).toBe(false);
+      expect(result.ai.maxOutputTokens).toBe(20_000);
+    });
+
+    it('a fresh deployment defaults to taskModels {} and graphEnabled false', () => {
+      expect(DEFAULT_SYSTEM_SETTINGS.ai.taskModels).toEqual({});
+      expect(DEFAULT_SYSTEM_SETTINGS.ai.graphEnabled).toBe(false);
+    });
+  });
 });

@@ -376,3 +376,121 @@ describe('AiConfigService — the toolCalling flag (#359)', () => {
     ]);
   });
 });
+
+// =============================================================================
+// graphEnabled + taskModels (issue #360)
+// =============================================================================
+
+describe('AiConfigService — connected-knowledge task models (#360)', () => {
+  const KEYS = ['graph.extract', 'graph.adjudicate', 'graph.digest', 'graph.agent'];
+
+  function service(value: SystemAiValue): AiConfigService {
+    return new AiConfigService(
+      settingsStub(value),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+  }
+
+  it('graph enabled with a capable default → every task usable on the default', async () => {
+    const config = await service(
+      policy({ provider: 'openai', graphEnabled: true }),
+    ).getConfig('user-1');
+
+    expect(config.graphEnabled).toBe(true);
+    expect(Object.keys(config.taskModels)).toEqual(KEYS);
+    for (const key of KEYS) {
+      expect(config.taskModels[key as keyof typeof config.taskModels]).toEqual({
+        model: 'gpt-4o',
+        source: 'default',
+        reasoningEffort: 'none',
+        requires:
+          key === 'graph.agent' ? ['toolCalling'] : ['structuredOutput'],
+        usable: true,
+        reason: null,
+      });
+    }
+  });
+
+  it('a task model and its own effort are reported for that task', async () => {
+    const config = await service(
+      policy({
+        provider: 'openai',
+        graphEnabled: true,
+        taskModels: {
+          'graph.extract': { model: 'gpt-4o', reasoningEffort: 'high' },
+        },
+      }),
+    ).getConfig('user-1');
+
+    expect(config.taskModels['graph.extract']).toEqual(
+      expect.objectContaining({
+        model: 'gpt-4o',
+        source: 'task',
+        reasoningEffort: 'high',
+      }),
+    );
+  });
+
+  it('graph disabled → every task unusable with graph_disabled, model still computed', async () => {
+    const config = await service(
+      policy({ provider: 'openai', graphEnabled: false }),
+    ).getConfig('user-1');
+
+    expect(config.graphEnabled).toBe(false);
+    for (const key of KEYS) {
+      expect(config.taskModels[key as keyof typeof config.taskModels]).toEqual(
+        expect.objectContaining({
+          model: 'gpt-4o',
+          usable: false,
+          reason: 'graph_disabled',
+        }),
+      );
+    }
+  });
+
+  it('a default lacking the capabilities → model_lacks_capability', async () => {
+    const base = policy({ provider: 'openai', graphEnabled: true });
+    const config = await service({
+      ...base,
+      providers: {
+        openai: {
+          ...base.providers.openai,
+          // Unplaceable id: takes the provider floor, which claims no flags.
+          allowedModels: [{ id: 'mystery-model' }],
+          defaultModel: 'mystery-model',
+        },
+      },
+    }).getConfig('user-1');
+
+    expect(config.taskModels['graph.agent']).toEqual(
+      expect.objectContaining({
+        model: 'mystery-model',
+        usable: false,
+        reason: 'model_lacks_capability',
+      }),
+    );
+    expect(config.taskModels['graph.extract'].reason).toBe(
+      'model_lacks_capability',
+    );
+  });
+
+  it('AI not available → every task no_model (graph enabled)', async () => {
+    const config = await service(
+      policy({ provider: 'openai', enabled: false, graphEnabled: true }),
+    ).getConfig('user-1');
+
+    expect(config.available).toBe(false);
+    expect(config.graphEnabled).toBe(true);
+    for (const key of KEYS) {
+      expect(config.taskModels[key as keyof typeof config.taskModels]).toEqual(
+        expect.objectContaining({
+          model: null,
+          source: 'none',
+          usable: false,
+          reason: 'no_model',
+        }),
+      );
+    }
+  });
+});

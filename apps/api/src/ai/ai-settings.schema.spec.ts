@@ -1,8 +1,15 @@
 import { AiProviderRegistry } from './ai-provider.registry';
 import {
+  AI_TASK_KEYS,
+  AI_TASK_MODEL_CARRIES_NO_SECRET,
   aiAllowedModelEntrySchema,
   aiProvidersSchema,
+  aiTaskModelsSchema,
+  systemAiPatchSchema,
+  systemAiSchema,
+  type AiTaskModelCarriesNoSecret,
 } from './ai-settings.schema';
+import { DEFAULT_SYSTEM_SETTINGS } from '../common/types/settings.types';
 import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { OpenAiProvider } from './providers/openai.provider';
 
@@ -190,4 +197,80 @@ describe('the GPT-5.4 family in the real catalogue (#87)', () => {
       );
     },
   );
+});
+
+// =============================================================================
+// ai.taskModels / ai.graphEnabled (issue #360)
+// =============================================================================
+
+describe('aiTaskModelsSchema — a PARTIAL record over the task keys (#360)', () => {
+  it('accepts an empty map (every task uses defaultModel)', () => {
+    expect(aiTaskModelsSchema.parse({})).toEqual({});
+  });
+
+  it('accepts a subset of the task keys, with or without an effort', () => {
+    const value = {
+      'graph.extract': { model: 'gpt-5.4' },
+      'graph.agent': { model: 'gpt-5.4-mini', reasoningEffort: 'high' },
+    };
+    expect(aiTaskModelsSchema.parse(value)).toEqual(value);
+  });
+
+  it('accepts every task key', () => {
+    const all = Object.fromEntries(
+      AI_TASK_KEYS.map((key) => [key, { model: 'gpt-5.4' }]),
+    );
+    expect(aiTaskModelsSchema.parse(all)).toEqual(all);
+  });
+
+  it('rejects an unknown task key — there is no graph.brief', () => {
+    expect(
+      aiTaskModelsSchema.safeParse({ 'graph.brief': { model: 'gpt-5.4' } })
+        .success,
+    ).toBe(false);
+  });
+
+  it.each(['none', 'xhigh', 'extreme'])(
+    'rejects the reasoning effort %s',
+    (effort) => {
+      expect(
+        aiTaskModelsSchema.safeParse({
+          'graph.extract': { model: 'gpt-5.4', reasoningEffort: effort },
+        }).success,
+      ).toBe(false);
+    },
+  );
+
+  it('rejects an empty model id', () => {
+    expect(
+      aiTaskModelsSchema.safeParse({ 'graph.extract': { model: '  ' } }).success,
+    ).toBe(false);
+  });
+});
+
+describe('systemAiSchema / systemAiPatchSchema carry both #360 fields', () => {
+  it('the defaults parse through the value schema', () => {
+    const parsed = systemAiSchema.parse(DEFAULT_SYSTEM_SETTINGS.ai);
+    expect(parsed.taskModels).toEqual({});
+    expect(parsed.graphEnabled).toBe(false);
+  });
+
+  it('the patch schema keeps both fields rather than stripping them', () => {
+    expect(
+      systemAiPatchSchema.parse({
+        graphEnabled: true,
+        taskModels: { 'graph.digest': { model: 'gpt-5.4-mini' } },
+      }),
+    ).toEqual({
+      graphEnabled: true,
+      taskModels: { 'graph.digest': { model: 'gpt-5.4-mini' } },
+    });
+  });
+
+  it('the no-secret proof covers a taskModels entry', () => {
+    // A compile-time proof; this line only fails to COMPILE if an entry grows
+    // a secret-bearing field.
+    const proof: AiTaskModelCarriesNoSecret = AI_TASK_MODEL_CARRIES_NO_SECRET;
+    expect(proof).toBe(true);
+  });
 });
