@@ -50,7 +50,6 @@ import { MergeService, type ReverseResult } from '../resolution/merge.service';
 import { toGraphHttpException } from '../write/graph-write.errors';
 import type { RevertKept, RevertResponse, RevertResult } from './dto/proposal.dto';
 import {
-  emptyCommitLog,
   isSerializationFailure,
   itemState,
   ProposalCommitService,
@@ -76,7 +75,6 @@ interface RevertOutcome {
 /** Read a stored commit log tolerantly: missing arrays are empty. */
 export function readCommitLog(raw: unknown): CommitLog {
   const log = asObject(raw);
-  const base = emptyCommitLog();
   const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
   const created = asObject(log.created);
   return {
@@ -89,7 +87,6 @@ export function readCommitLog(raw: unknown): CommitLog {
     merges: arr(log.merges),
     itemChanges: arr(log.itemChanges),
     closings: arr(log.closings),
-    ...(raw === null || raw === undefined ? base : {}),
   };
 }
 
