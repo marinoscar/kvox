@@ -22,6 +22,10 @@ import {
 import { assertStrictJsonSchema } from '../structured/strict-json-schema';
 import { EMBEDDING_DIMENSIONS } from './ai-provider.interface';
 import type {
+  AiChatEvent,
+  AiChatFinishReason,
+  AiChatMessage,
+  AiChatRequest,
   AiConnectionTest,
   AiDelta,
   AiDiscoveredModel,
@@ -435,6 +439,15 @@ const PROBE_TIMEOUT_MS = 15_000;
 /** `json_schema.name`'s documented pattern (#358). Checked before any request. */
 const SCHEMA_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
+/** A tool name the vendor accepts (#359) — the same pattern as a schema name. */
+const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/** Most tools one chat request may declare (#359). */
+const MAX_TOOLS = 32;
+
+/** Longest tool description one chat request may carry (#359). */
+const MAX_TOOL_DESCRIPTION_LENGTH = 1024;
+
 /** Most characters of a model's refusal text quoted into an `AiRefusedError`. */
 const REFUSAL_QUOTE_LIMIT = 300;
 
@@ -500,7 +513,16 @@ interface OpenAiStreamChunk {
      * its explanation here INSTEAD of `content`, so a refusal is not an empty
      * answer that fails `JSON.parse` — it is its own signal.
      */
-    delta?: { content?: unknown; refusal?: unknown };
+    delta?: {
+      content?: unknown;
+      refusal?: unknown;
+      /**
+       * #359: a tool call arrives as FRAGMENTS keyed by `index` — `id` and
+       * `function.name` on (usually) the first, `function.arguments` split
+       * across many, and the fragments of different indexes may interleave.
+       */
+      tool_calls?: unknown;
+    };
     finish_reason?: unknown;
   }>;
   usage?: {
@@ -595,6 +617,145 @@ function mapFinishReason(raw: unknown): AiFinishReason | null {
       return 'content_filter';
     default:
       return null;
+  }
+}
+
+/**
+ * `finish_reason` for a CHAT turn (#359) — deliberately a separate function
+ * from {@link mapFinishReason}, which `generate` and `generateStructured` keep
+ * using unchanged: there, no tools are ever sent, so `tool_calls` can only be a
+ * vendor quirk and folds into `stop`. Here it is the outcome the agent loop
+ * branches on.
+ *
+ * Returns `null` for a missing or unrecognised value; the caller decides which
+ * of the two it was (a missing one is a truncated stream, an unrecognised one
+ * a warning). The "`stop` despite assembled tool calls" upgrade happens at the
+ * end of the stream, where it is known whether any call was assembled.
+ */
+function mapChatFinishReason(raw: unknown): AiChatFinishReason | null {
+  switch (raw) {
+    case 'tool_calls':
+    case 'function_call': // the legacy name for the same outcome
+      return 'tool_calls';
+    case 'stop':
+      return 'stop';
+    case 'length':
+      return 'length';
+    case 'content_filter':
+      return 'content_filter';
+    default:
+      return null;
+  }
+}
+
+/** One tool call being assembled from stream fragments (#359). */
+interface ToolCallAccumulator {
+  id: string | null;
+  name: string | null;
+  arguments: string;
+}
+
+/**
+ * Refuse a chat request that is a programming error in the CALLER's code
+ * (#359), before any byte is sent and before the user's account is metered.
+ * A plain `Error`, like `generateStructured`'s schema pre-flight.
+ */
+function assertValidChatRequest(request: AiChatRequest): void {
+  if (request.messages.length === 0) {
+    throw new Error('A chat request must carry at least one message.');
+  }
+
+  const seenToolCallIds = new Set<string>();
+  request.messages.forEach((message, position) => {
+    if (message.role === 'assistant') {
+      for (const call of message.toolCalls ?? []) seenToolCallIds.add(call.id);
+    } else if (message.role === 'tool' && !seenToolCallIds.has(message.toolCallId)) {
+      throw new Error(
+        `Chat message ${position} is a tool result for toolCallId ${JSON.stringify(message.toolCallId)}, which no preceding assistant message called.`,
+      );
+    }
+  });
+
+  const tools = request.tools;
+  if (tools === undefined) {
+    if (request.toolChoice !== undefined) {
+      throw new Error('A chat request sets toolChoice but declares no tools.');
+    }
+    return;
+  }
+
+  if (tools.length > MAX_TOOLS) {
+    throw new Error(
+      `A chat request may declare at most ${MAX_TOOLS} tools; this one declares ${tools.length}.`,
+    );
+  }
+
+  const names = new Set<string>();
+  for (const tool of tools) {
+    if (!TOOL_NAME_PATTERN.test(tool.name)) {
+      throw new Error(
+        `Tool name ${JSON.stringify(tool.name)} must match ${TOOL_NAME_PATTERN.source}; the vendor refuses any other name.`,
+      );
+    }
+    if (names.has(tool.name)) {
+      throw new Error(`Tool name ${JSON.stringify(tool.name)} is declared more than once.`);
+    }
+    names.add(tool.name);
+
+    if (
+      tool.description.length < 1 ||
+      tool.description.length > MAX_TOOL_DESCRIPTION_LENGTH
+    ) {
+      throw new Error(
+        `Tool ${JSON.stringify(tool.name)} needs a description of 1..${MAX_TOOL_DESCRIPTION_LENGTH} characters.`,
+      );
+    }
+
+    try {
+      assertStrictJsonSchema(tool.parameters);
+    } catch (error) {
+      throw new Error(
+        `Tool ${JSON.stringify(tool.name)} parameters are not a strict JSON schema: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  const choice = request.toolChoice;
+  if (typeof choice === 'object' && !names.has(choice.name)) {
+    throw new Error(
+      `toolChoice names tool ${JSON.stringify(choice.name)}, which this request does not declare.`,
+    );
+  }
+}
+
+/** One {@link AiChatMessage} in the vendor's wire shape (#359). */
+function toOpenAiMessage(message: AiChatMessage): Record<string, unknown> {
+  switch (message.role) {
+    case 'system':
+    case 'user':
+      return { role: message.role, content: message.content };
+    case 'assistant':
+      return {
+        role: 'assistant',
+        content: message.content,
+        // Spread: an assistant turn without calls carries no `tool_calls` key
+        // at all — some gateways reject an empty array.
+        ...(message.toolCalls && message.toolCalls.length > 0
+          ? {
+              tool_calls: message.toolCalls.map((call) => ({
+                id: call.id,
+                type: 'function',
+                function: { name: call.name, arguments: call.argumentsJson },
+              })),
+            }
+          : {}),
+      };
+    case 'tool':
+      return {
+        role: 'tool',
+        tool_call_id: message.toolCallId,
+        content: message.content,
+      };
   }
 }
 
@@ -1416,6 +1577,217 @@ export class OpenAiProvider
           completionTokens: this.countTokens(content, request.model),
         },
       finishReason: 'stop',
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Multi-turn chat and tool calling (#359)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * `POST {baseUrl}/chat/completions` with a message list and, optionally,
+   * strict function tools — streamed through the shared
+   * `streamChatCompletion`.
+   *
+   * TEXT IS YIELDED AS IT ARRIVES; TOOL CALLS ARE YIELDED WHOLE. Each
+   * `delta.tool_calls[]` fragment is accumulated by its `index` (`id` and
+   * `name` from the first fragment carrying them, `arguments` concatenated in
+   * arrival order, indexes possibly interleaved). When the stream ends, one
+   * `tool_call` event per index is emitted in ascending order — after every
+   * text delta and before `done`. A call still missing `id` or `name` then is
+   * a plain (retryable) `Error`.
+   *
+   * `tools`, `tool_choice` and `parallel_tool_calls: false` are sent ONLY when
+   * tools are present, so a plain chat turn puts no tool vocabulary on the
+   * wire for a gateway to reject.
+   *
+   * ⚠ `argumentsJson` IS PASSED THROUGH UNPARSED. See `AiToolCall`: the caller
+   * validates it with the tool's own Zod schema.
+   *
+   * ⚠ NOTHING HERE LOGS A MESSAGE, A TOOL ARGUMENT OR A TOOL RESULT. The one
+   * `warn` names the unrecognised finish reason only.
+   */
+  async *chat(
+    ctx: AiProviderContext<OpenAiSettings>,
+    request: AiChatRequest,
+  ): AsyncIterable<AiChatEvent> {
+    assertValidChatRequest(request);
+
+    const tools = request.tools;
+    const choice = request.toolChoice ?? 'auto';
+
+    const body = {
+      model: request.model,
+      stream: true,
+      stream_options: { include_usage: true },
+      max_completion_tokens: request.maxOutputTokens,
+      // Spread — absent, never `'none'`. See `reasoningEffortBody`.
+      ...this.reasoningEffortBody(request.reasoningEffort),
+      messages: request.messages.map(toOpenAiMessage),
+      // Spread: only when tools are present (see the doc comment).
+      ...(tools !== undefined
+        ? {
+            tools: tools.map((tool) => ({
+              type: 'function',
+              function: {
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+                strict: true,
+              },
+            })),
+            tool_choice:
+              typeof choice === 'string'
+                ? choice
+                : { type: 'function', function: { name: choice.name } },
+            // v1 asks for at most one call per turn — see the interface's
+            // MULTI-TURN CHAT section.
+            parallel_tool_calls: false,
+          }
+        : {}),
+    };
+
+    let rawFinish: AiChatFinishReason | null = null;
+    let usage: AiUsage | null = null;
+    let completionText = '';
+    const calls = new Map<number, ToolCallAccumulator>();
+
+    for await (const chunk of this.streamChatCompletion(
+      ctx,
+      body,
+      `chat with model "${request.model}"`,
+      request.timeoutMs,
+    )) {
+      const streamChoice = chunk.choices?.[0];
+
+      const text = streamChoice?.delta?.content;
+      if (typeof text === 'string' && text.length > 0) {
+        completionText += text;
+        yield { kind: 'delta', text };
+      }
+
+      const fragments = streamChoice?.delta?.tool_calls;
+      if (Array.isArray(fragments)) {
+        for (const fragment of fragments as unknown[]) {
+          if (typeof fragment !== 'object' || fragment === null) continue;
+          const f = fragment as {
+            index?: unknown;
+            id?: unknown;
+            function?: { name?: unknown; arguments?: unknown } | null;
+          };
+          const index = asFiniteNumber(f.index);
+          if (index === null) continue;
+
+          let call = calls.get(index);
+          if (!call) {
+            call = { id: null, name: null, arguments: '' };
+            calls.set(index, call);
+          }
+          const id = asString(f.id);
+          if (call.id === null && id) call.id = id;
+          const name = asString(f.function?.name);
+          if (call.name === null && name) call.name = name;
+          const args = asString(f.function?.arguments);
+          if (args !== null) call.arguments += args;
+        }
+      }
+
+      const mapped = mapChatFinishReason(streamChoice?.finish_reason);
+      if (mapped !== null) {
+        rawFinish = mapped;
+      } else if (
+        streamChoice?.finish_reason !== undefined &&
+        streamChoice.finish_reason !== null
+      ) {
+        this.logger.warn(
+          `OpenAI returned an unrecognised finish_reason "${String(streamChoice.finish_reason)}"; treating it as a normal stop.`,
+        );
+        rawFinish = 'stop';
+      }
+
+      if (chunk.usage) {
+        const promptTokens = asFiniteNumber(chunk.usage.prompt_tokens);
+        const completionTokens = asFiniteNumber(chunk.usage.completion_tokens);
+        if (promptTokens !== null && completionTokens !== null) {
+          usage = { promptTokens, completionTokens };
+        }
+      }
+    }
+
+    if (rawFinish === null) {
+      throw new Error(
+        'The provider closed the chat stream without a finish reason; the response was truncated.',
+      );
+    }
+
+    if (rawFinish === 'content_filter') {
+      // Identical to `generate`: a refusal is a throw, never a `done`.
+      throw new AiRefusedError(
+        'The provider declined to complete this request because its content filter matched. Rewording the instructions or the source, or choosing a different model, is the only thing that changes the answer.',
+        'finish_reason: content_filter',
+        this.id,
+      );
+    }
+
+    const assembled = [...calls.entries()].sort(([a], [b]) => a - b);
+    let completionArguments = '';
+    const events: AiChatEvent[] = [];
+    for (const [index, call] of assembled) {
+      if (call.id === null || call.name === null) {
+        // Retryable: a dropped or mangled frame, not a property of the request.
+        throw new Error(
+          `The provider streamed a malformed tool call (index ${index}) with no ${call.id === null ? 'id' : 'name'}.`,
+        );
+      }
+      completionArguments += call.arguments;
+      events.push({
+        kind: 'tool_call',
+        id: call.id,
+        name: call.name,
+        argumentsJson: call.arguments,
+      });
+    }
+    yield* events;
+
+    // Some gateways report `stop` (or something unrecognised) even though they
+    // streamed tool calls; the calls are what the caller must act on.
+    const finishReason: AiChatFinishReason =
+      rawFinish === 'stop' && assembled.length > 0 ? 'tool_calls' : rawFinish;
+
+    yield {
+      kind: 'done',
+      finishReason,
+      usage:
+        usage ?? {
+          // Never zero — see `generate`. Tool definitions travel with the
+          // prompt, so they are counted as prompt.
+          promptTokens: Math.max(
+            1,
+            this.countTokens(
+              [
+                ...request.messages.map((message) =>
+                  message.role === 'assistant'
+                    ? [
+                        message.content ?? '',
+                        ...(message.toolCalls ?? []).map(
+                          (call) => `${call.name} ${call.argumentsJson}`,
+                        ),
+                      ].join('\n')
+                    : message.content,
+                ),
+                ...(tools !== undefined ? [JSON.stringify(tools)] : []),
+              ].join('\n'),
+              request.model,
+            ),
+          ),
+          completionTokens: Math.max(
+            1,
+            this.countTokens(
+              `${completionText}${completionArguments}`,
+              request.model,
+            ),
+          ),
+        },
     };
   }
 
