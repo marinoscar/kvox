@@ -380,6 +380,101 @@ export type AiDelta =
 /** docs/specs/notes.md §2.1's name for {@link AiDelta}. The same type. */
 export type AiGenerateEvent = AiDelta;
 
+// =============================================================================
+// STRUCTURED OUTPUT (issue #358, epic #345)
+// =============================================================================
+//
+// One call that returns ONE schema-shaped JSON value — the shape graph
+// extraction, resolution adjudication, the entity digest and the brief all
+// need (docs/specs/ontology.md §6, §7, §9). `responseFormat: 'json'` on
+// {@link AiGenerateRequest} guarantees syntax only; this path asks the vendor
+// to constrain DECODING to a schema, so a missing or renamed key becomes rare
+// rather than routine.
+//
+// ⚠ THE METHOD IS THE CONTRACT, NOT THE MECHANISM. OpenAI implements it with
+// `response_format: { type: 'json_schema', strict: true }`; a future vendor with
+// no JSON-schema mode may implement it with a single forced tool call behind the
+// same signature. Callers never learn which.
+//
+// ⚠ THE RESULT IS PARSED, NEVER VALIDATED. Strict decoding narrows how often a
+// Zod parse fails; it does not remove the need for one — a gateway may ignore
+// `response_format`, and ontology §6 requires Zod validation regardless. The
+// generic parameter on {@link AiStructuredResult} is a HINT for the caller's
+// own variable naming, not a promise, which is why `value` stays `unknown`.
+// =============================================================================
+
+/**
+ * A JSON Schema object in OpenAI's strict subset — see
+ * `../structured/strict-json-schema.ts` for the rules and the checker that
+ * enforces them before any request is sent.
+ */
+export type JsonSchema = Record<string, unknown>;
+
+/** One request for a schema-constrained answer. See the section header. */
+export interface AiStructuredRequest {
+  /** The provider's own model id. Must be permitted by the `ai` policy. */
+  model: string;
+  /** The system role's content, already assembled by the caller. */
+  systemPrompt: string;
+  /** The user role's content, already assembled by the caller. */
+  userContent: string;
+  /**
+   * The answer's shape. The ROOT MUST BE AN OBJECT SCHEMA in the strict subset
+   * — `assertStrictJsonSchema` is run as a pre-flight and a violation throws a
+   * plain `Error` before any network call, because it is a programming error,
+   * not something the vendor should be paid to discover.
+   */
+  schema: JsonSchema;
+  /**
+   * A name for the schema, sent to the vendor alongside it.
+   * `/^[a-zA-Z0-9_-]{1,64}$/` — checked in the same pre-flight.
+   */
+  schemaName: string;
+  /** Upper bound on the completion, in tokens. POLICY — never raised. */
+  maxOutputTokens: number;
+  /** Abandon the request after this many milliseconds. */
+  timeoutMs?: number;
+  /**
+   * Same semantics as {@link AiGenerateRequest.reasoningEffort}, including the
+   * rule that it NEVER raises {@link AiStructuredRequest.maxOutputTokens}.
+   */
+  reasoningEffort?: AiReasoningEffort;
+}
+
+/**
+ * What one {@link AiProvider.generateStructured} call produced.
+ *
+ * `T` IS A HINT ONLY — see the section header. The caller validates `value`.
+ */
+export interface AiStructuredResult<T = unknown> {
+  /** Parsed JSON, NOT validated against a Zod schema — the caller validates. */
+  value: unknown;
+  /**
+   * Vendor-reported usage, else a `countTokens` estimate — never zero, which
+   * would read as "this call was free".
+   */
+  usage: AiUsage;
+  /**
+   * Always `'stop'` on a returned result. Every other ending THROWS: a
+   * refusal is an `AiRefusedError`, a `length` cut-off an
+   * `AiStructuredOutputError('truncated')` — a truncated object that happened
+   * to parse would silently drop entities.
+   */
+  finishReason: AiFinishReason;
+}
+
+/**
+ * Capability flags a model descriptor carries (#358). Extended by #359 with
+ * `toolCalling`.
+ */
+export interface AiModelFeatureFlags {
+  /**
+   * Whether this model can return schema-constrained structured output through
+   * {@link AiProvider.generateStructured}.
+   */
+  structuredOutput: boolean;
+}
+
 /** The outcome of `testConnection` — always resolved, never thrown. */
 export interface AiConnectionTest {
   ok: boolean;
@@ -750,6 +845,31 @@ export interface AiProvider<TSettings = unknown> {
     ctx: AiProviderContext<TSettings>,
     request: AiEmbedRequest,
   ): Promise<AiEmbedResult>;
+
+  /**
+   * One schema-constrained answer, parsed (#358). See the STRUCTURED OUTPUT
+   * section above.
+   *
+   * OPTIONAL, AND "PRESENCE IS THE DECLARATION": a provider that declares any
+   * model (or its `defaultModelFeatures` floor) with `structuredOutput: true`
+   * MUST implement it — `AiProviderRegistry.register` refuses the provider at
+   * boot otherwise, the same one-line check `modelDiscovery`/`listModels`
+   * gets.
+   *
+   * THROWS TO FAIL, like `generate`: a plain `Error` for a truncated stream or
+   * a schema that fails the strict pre-flight, `AiRefusedError` for a refusal,
+   * `AiStructuredOutputError` for a `length` cut-off (`'truncated'`) or an
+   * answer that is not JSON (`'invalid_json'`), and the ordinary HTTP taxonomy
+   * (`AiAuthError`, `AiInputError`, `RateLimitError`, …) otherwise.
+   *
+   * ⚠ `ctx.apiKey` IS THE CALLING USER'S OWN KEY, exactly as for `generate`.
+   * Nothing logs it — and nothing logs the prompt, the schema or the output
+   * either.
+   */
+  generateStructured?<T = unknown>(
+    ctx: AiProviderContext<TSettings>,
+    request: AiStructuredRequest,
+  ): Promise<AiStructuredResult<T>>;
 }
 
 /** The publishable description of one provider. See `registry.describeAll()`. */
