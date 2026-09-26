@@ -189,6 +189,11 @@ export const graphOntologyRelationTypeSchema = z
       .describe(
         'Present (always `true`) only on a symmetric relation such as `SPOUSE_OF`: `(a, b)` and `(b, a)` are the same fact, stored once. Absent means the relation is directed.',
       ),
+    sensitivityDefault: sensitivitySchema
+      .optional()
+      .describe(
+        'Present only when the relation type declares a sensitivity (every `personal`-domain relation: `personal`, never pre-checked in review). Absent means `business`.',
+      ),
     alignment: z
       .string()
       .nullable()
