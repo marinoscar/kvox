@@ -6586,8 +6586,8 @@ unattended edits. **Never a `409`.**
 ### Ask
 
 Saved conversations with the read-only graph agent — issue #376, epic #348.
-Posting a question and the `ask.respond` job arrive in #378, the answer
-stream in #379; this group is the storage and its CRUD. Full design is
+The storage and its CRUD are #376; posting a question and the `ask.respond`
+job that answers it are #378; the answer stream is #379. Full design is
 [`docs/specs/ontology.md`](specs/ontology.md) §21.
 
 **Permissions.** Every route is `graph:read` — asking is a read of your own
@@ -6722,6 +6722,72 @@ Both optional. `title` is trimmed, 1–120 characters.
 **Errors:** `400` invalid body · `401` · `403` · `404` when `scopeEntityId`
 is not one of your readable entities (missing, not yours, not reviewed, or
 merged) — the same 404 every graph entity route answers.
+
+#### POST /ask/conversations/{id}/messages
+
+Ask a question (issue #378). Saves it and queues **one `ask.respond` job**
+for the answer, which runs on **your own AI key** with the `graph.agent`
+task model — or `model`, when this deployment permits it and it can call
+tools. The request never waits for the answer.
+
+**Requires:** `graph:read`.
+
+**Body:**
+```json
+{ "content": "What did we decide about Atlas?", "model": "gpt-4.1" }
+```
+`content` is trimmed, 1–4000 characters. `model` is optional (≤ 200
+characters).
+
+**Response:** `202`
+```json
+{ "data": { "userMessage": { "role": "user", "status": "complete", "…": "…" },
+            "assistantMessage": { "role": "assistant", "status": "pending",
+                                  "model": "gpt-4.1", "provider": "openai", "…": "…" } } }
+```
+Both in the message shape above. An untitled conversation takes its title
+from this first question (whitespace collapsed, at most 80 characters) and
+its `updatedAt` moves.
+
+**Order of checks:** the conversation (`404`) → the resolver (`409`
+`graph_disabled` / `ai_not_configured` / `ai_key_missing` /
+`model_lacks_capability`, `400` for a model this deployment does not permit —
+the same bodies every connected-knowledge route answers) → one transaction
+that writes both messages and the job, where a second running turn is
+refused by `ask_messages_one_running_turn_uniq_idx` → `409 ask_turn_running`
+(decided by the index at insert, so two tabs racing get exactly one `202`).
+
+**What the answer turn does.** `ask.respond` (priority −10, `maxAttempts: 1`,
+server-only, throttled per user) replays up to the last 10 complete messages
+of the conversation (a failed turn skipped whole, citation markers stripped;
+oldest dropped first to fit the model's input budget — a question that does
+not fit on its own fails `budget`, never truncated), then loops: a model
+call that may request tools (at most **4** executed per step, extras answered
+with an error), each tool recorded in `toolCalls` as it runs. It stops
+requesting tools after **8** steps (`finishReason: "step_cap"`), after 4
+minutes (`time_cap`), or when the input budget has no room for another step
+(`token_cap`); an answer cut off by the output ceiling (2000 tokens a call)
+is `token_cap` too. Each of those still ends `complete` with its best answer.
+
+- `content` is written as the answer streams and **only ever appended to**.
+  Text a model emits before calling a tool in the same call ("Let me look
+  that up…") is held back and never reaches it.
+- `citations` is computed once the answer is done: each distinct marker is
+  checked against the handles **this turn's** tools returned. An invented
+  or stale one stays in `content` and is listed with `valid: false` — hide it
+  and show the count.
+- `model`/`provider` are what the turn actually ran on (re-validated against
+  today's policy when the job starts); `promptTokens`/`completionTokens` are
+  summed over every call.
+- `failed` keeps whatever was streamed. `errorClass`: `auth` (no key, or the
+  provider refused it), `refusal` (declined, or an empty answer), `budget`,
+  `timeout` (one call took over 60 s), `rate_limit` (a 429 **after** answer
+  text was written — a 429 before any is invisible: the turn goes back to
+  `pending` and is retried later without charging an attempt), `other`.
+- Deleting the conversation mid-turn stops it; nothing is written after.
+
+**Errors:** `400` invalid body or unpermitted model · `401` · `403` without
+`graph:read` · `404` no such conversation, or not yours · `409` as above.
 
 #### PATCH /ask/conversations/{id}
 

@@ -1563,7 +1563,7 @@ epic's foundation phase (§16, P1) actually needs to enable.
 ## 11. Job types
 
 Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
-`ask.respond`, which lives under `apps/api/src/ask/handlers/` (planned) —
+`ask.respond`, which lives under `apps/api/src/ask/handlers/` (built, issue #378) —
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
 As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
@@ -1583,7 +1583,7 @@ rather than in one shared handler directory:
 | `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
-| `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table |
+| `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
 
 **Priorities.** `kg.extract` runs at priority **−5** — someone is plausibly
 watching the review panel for their note fill in, the same "someone is
@@ -2716,6 +2716,64 @@ the rendered answer and counted in the message's own stats, the identical
 already enforces for extraction, applied here to an agent's answer instead
 of a proposal.
 
+**As built (issue #378)** — `AskMessagesController`/`AskMessagesService` and
+`AskRespondHandler` in `apps/api/src/ask/`, with the caps in `ask-limits.ts`.
+
+- *The POST* checks the conversation (404), then `AiTaskModelResolver
+  .resolve(user, 'graph.agent', model)` (its 409s and 400 passed through
+  unchanged — `graph_disabled` first), then writes the user message, the
+  `pending` assistant message (model + provider), the `ask.respond` job
+  (`enqueueWithin`, priority −10, subject `ask_message`) and its `job_id`,
+  the derived title (first 80 characters, whitespace collapsed, only while
+  `title` is still null) and `updated_at` in **one transaction**. A second
+  running turn violates `ask_messages_one_running_turn_uniq_idx` → 409
+  `ask_turn_running`. Enqueueing inside the transaction (rather than after
+  commit, as first drafted) is deliberate: a pending row whose enqueue failed
+  after commit would hold the index forever and 409 every later question.
+- *History*: up to 10 earlier `complete` messages, a failed turn skipped whole
+  (its question too), assistant markers stripped (handles are per turn);
+  oldest dropped until `system + history + question + tool definitions` fits
+  `min(contextWindow − maxOutput − margin, ai.maxInputTokens)`. The question
+  alone not fitting fails the turn `budget` before any call — never truncated.
+  The model is **re-validated** at run time with the payload's model; a
+  resolver refusal then fails the turn (`auth` for `ai_key_missing`, else
+  `other`).
+- *The loop*: `chat()` with all seven tools, `toolChoice: 'auto'` while fewer
+  than 8 steps have run, less than 4 minutes have passed and the input budget
+  still has room for one more full step (4 results at the 3000-token cap);
+  otherwise one final `toolChoice: 'none'` call with the system line "Tool
+  budget used. Answer now…". At most 4 calls execute per step — extras get
+  an `ok: false` result so every call id is still answered. Each executed
+  call is appended to `tool_calls` and written immediately (#379's `step`
+  frames). Output is `min(2000, the model's ceiling)` tokens a call, 60 s a
+  call (narrowed by `ai.requestTimeoutMs`).
+- *The hold rule* (`answer-hold.ts`): a call's text is held until 64
+  characters arrive with no tool call; a tool call first discards it from the
+  answer (it is replayed to the model as that step's assistant message). A
+  later call's answer joins earlier streamed text on a new paragraph. The
+  buffer is flushed on `StreamFlusher`'s 250 ms / 256-character cadence and
+  every write extends the previous one.
+- *Finish*: `stop`; `step_cap`/`time_cap`/`token_cap` for a forced final call
+  (the input budget forcing it is `token_cap`), and `token_cap` for a
+  `length` finish. `content_filter` fails `refusal`, keeping the text; an
+  empty answer fails `refusal`.
+- *Citations* (`citations.ts`): distinct `[^(ev|ent|doc|itm|rel)N]` markers of
+  the final content, each resolved through the turn's `HandleRegistry`;
+  `itm`/`rel` → the subject's first evidence row (owner-scoped, newest meeting
+  first) as `kind: 'evidence'` with `via`; an evidence handle whose row is gone
+  and an `itm`/`rel` with no evidence are `valid: false`. Labels, document
+  kind and `startMs` come from one owner-scoped read; a source title only
+  while the owner can still see it. Invalid markers stay in `content`.
+- *Failures* keep the streamed text and return normally (`auth`, `refusal`,
+  `budget`, `timeout`, `AiInputError` → `other`); a 429 before any flushed
+  text resets the row to `pending`/`tool_calls: []` and rethrows (deferred,
+  no attempt charged), after it fails `rate_limit`; anything else fails
+  `other` and is rethrown for `Job.lastError`. Every write is conditioned on
+  `status = 'streaming'`, so a conversation deleted mid-turn stops the loop
+  with no further write.
+- Logged per turn: ids, step/tool/citation counts, tokens and ms — never text.
+  OTEL span `ask.respond` with `steps`, `tool_calls`, `tokens`.
+
 ### 21.4 The stream
 
 `GET /api/ask/messages/:id/stream` — the same `delta | done | error` frame
@@ -3293,7 +3351,7 @@ serve for their own epics.
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |
 | Saving `ai.taskModels` refuses an entry whose model lacks the capability its task requires (`structuredOutput` for extract/adjudicate/digest, `toolCalling` for agent) | `apps/api/src/ai/ai-task-model-resolver.service.spec.ts` and a `PUT /api/ai-settings` integration test asserting the save is rejected, not merely warned about |
-| Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `apps/api/src/ask/ask-respond.handler.spec.ts`, asserting a deliberately fabricated citation id is stripped before the message is marked `complete` and counted in its stats |
+| Every citation in a `complete` Ask message resolves to an id one of that turn's own tool calls actually returned — no citation is ever invented or reused from a different turn | `apps/api/src/ask/citations.spec.ts` and `apps/api/src/ask/handlers/ask-respond.handler.spec.ts`, asserting a marker no tool issued in that turn is recorded `valid: false, id: null` in `citations` when the message is marked `complete` (it stays in the append-only `content`; the UI drops and counts it), and `test/ask/ask-respond.db.spec.ts` doing the same end to end |
 | `POST /api/graph/explore/expand` refuses a request whose resulting node count would exceed 300, naming the cap in the response, rather than silently truncating the result | An integration test seeding a fixture graph large enough to cross the cap and asserting the specific refusal, distinct from an ordinary paginated/truncated response |
 
 ## Sources
