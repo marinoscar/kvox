@@ -4732,16 +4732,52 @@ the admin page renders itself from.
       "maxOutputTokens": 16384,
       "requestTimeoutMs": 600000,
       "reasoningEffort": "none",
-      "maxDocumentBytes": 26214400
+      "maxDocumentBytes": 26214400,
+      "taskModels": { "graph.extract": { "model": "gpt-5.4-mini" } },
+      "graphEnabled": false
     },
     "providers": [ { "id": "openai", "label": "OpenAI", "capabilities": { "models": [ "…" ], "streaming": true, "modelDiscovery": true }, "fieldDescriptors": [ "…" ] } ],
     "unknownModels": [],
+    "tasks": [ { "key": "graph.extract", "label": "Graph extraction", "description": "…", "requires": ["structuredOutput"] } ],
+    "modelCapabilities": [ { "id": "gpt-5.4-mini", "structuredOutput": true, "toolCalling": true, "source": "catalogue" } ],
+    "taskModelStatus": [ { "task": "graph.extract", "configuredModel": "gpt-5.4-mini", "effectiveModel": "gpt-5.4-mini", "source": "task", "missing": [], "problem": null } ],
     "version": 3,
     "updatedAt": "2024-01-01T00:00:00.000Z",
     "updatedBy": { "id": "…", "email": "admin@example.com" }
   }
 }
 ```
+
+**`taskModels`/`graphEnabled` (issue #360)** are the connected-knowledge
+policy: `taskModels` maps an `AiTaskKey` (`graph.extract`/`graph.adjudicate`/
+`graph.digest`/`graph.agent` — there is deliberately no `graph.brief`; the
+entity brief never calls a model in a request, it shows `graph.digest`'s own
+output) to `{ model, reasoningEffort? }`. An absent task key means that task
+uses `providers.<provider>.defaultModel`. `graphEnabled` (default `false`) is
+the spending switch: while off, no graph task calls a model on anybody's
+key, but already-curated graph data stays readable — this never gates a
+`graph:*` read.
+
+**`tasks`/`modelCapabilities`/`taskModelStatus` (issue #360)** are additive,
+admin-only projections that let the form render itself without hardcoding
+anything:
+- `tasks` is `AI_TASK_DEFINITIONS` verbatim — every task's label,
+  description and required capabilities (`structuredOutput`/`toolCalling`).
+- `modelCapabilities` is the capability flags of every stored
+  `allowedModels` entry this build can resolve, in policy order — filter a
+  task's picker by its `requires`. An entry nothing can resolve is in
+  `unknownModels` instead.
+- `taskModelStatus` reports, per task, what would run *right now*:
+  `configuredModel` (the administrator's own pick, or null), `effectiveModel`
+  (what actually resolves), `source` (`task`/`default`/`none`), `missing`
+  (required capabilities `effectiveModel` lacks) and `problem`
+  (`lacks_capability`/`no_model`, or null). **Computed without the
+  `graphEnabled` gate**, so an administrator can configure every task before
+  switching the feature on. `problem: 'not_permitted'` is part of the
+  published union but never reported here: a configured task model that is
+  no longer in `allowedModels` falls back to the default (`source:
+  'default'`) rather than being treated as broken — removing a model a task
+  used is an accepted change, not an error.
 
 `provider` (#78) is the active provider, or `null` when none has been
 chosen — a separate axis from `enabled`, so an operator can switch vendors
@@ -4832,6 +4868,17 @@ vendor's whole discovered catalogue is now realistically selectable in one
 pass rather than hand-typed two numbers at a time) — the cap bounds the
 stored settings blob, not how many models a deployment may permit.
 
+**`taskModels` (issue #360) replaces wholesale, exactly like
+`allowedModels`** — the admin form always sends the full map, and there is
+no per-key merge. Every entry **present in the patch** is validated before
+the write: its `model` must be in the effective allow-list (the patch's own
+`allowedModels` when the same request carries one, the stored list
+otherwise), and the resolved model must support every capability its task
+requires. **Narrowing `allowedModels` so a stored task model is no longer
+permitted is allowed** — the resolver falls back to the default at run time
+and `taskModelStatus` reports it; a task model never blocks removing a
+model.
+
 **Requires:** `system_settings:write`
 
 **Headers:** `If-Match: <version>` (optional) — `0` asserts nothing is stored yet; omit to overwrite unconditionally.
@@ -4840,6 +4887,8 @@ stored settings blob, not how many models a deployment may permit.
 
 **Error Cases:**
 - `400` - Validation error, or an `allowedModels` entry **nothing** in this deployment can budget for — no typed numbers, no catalogue hit, no family derivation, and no provider floor (in practice: the policy names a provider this build does not implement). The message names the missing field(s) and is not a statement that the model is forbidden.
+- `400` - A `taskModels` entry's model is not in the effective allow-list: `details: { reason: "model_not_permitted", task, model }`, message naming the task's label and the model, e.g. `The task model for "Graph extraction" (gpt-x) is not in the permitted models list.`
+- `400` - A `taskModels` entry's model lacks a capability its task requires: `details: { reason: "model_lacks_capability", task, model, missing }`, e.g. a `graph.agent` entry pointing at a model with no `toolCalling` support
 - `409` - Version conflict
 
 ---
@@ -5111,6 +5160,20 @@ axis as `structuredOutput` above — its own independent boolean, never
 narrowed by `Math.min` and never overridden by an administrator's typed
 numbers.
 
+**`graphEnabled`/`taskModels` (issue #360)** let a picker for the
+connected-knowledge features offer the right model without re-deriving
+`AiTaskModelResolver`'s own logic. `graphEnabled` mirrors the stored
+`ai.graphEnabled` switch. `taskModels` always carries all four `AiTaskKey`
+entries (`graph.extract`/`graph.adjudicate`/`graph.digest`/`graph.agent`),
+each computed for **this caller** with the identical `chooseTaskModel`
+function the admin view and the resolver use: `model` (the task's default,
+computed even while `graphEnabled` is false, filtering only through this
+caller's own permitted models), `source` (`task`/`default`/`none`),
+`reasoningEffort`, `requires` (the capabilities a per-run override must
+have — filter `models` by these before offering it as a pick), `usable`,
+and `reason` (`graph_disabled`/`model_lacks_capability`/`no_model`, or null
+when `usable` is true).
+
 **Response:**
 ```json
 {
@@ -5125,7 +5188,14 @@ numbers.
     "defaultModel": "gpt-5.4-mini",
     "maxInputTokens": 100000,
     "maxOutputTokens": 16384,
-    "keyConfigured": false
+    "keyConfigured": false,
+    "graphEnabled": false,
+    "taskModels": {
+      "graph.extract": { "model": "gpt-5.4-mini", "source": "default", "reasoningEffort": "none", "requires": ["structuredOutput"], "usable": false, "reason": "graph_disabled" },
+      "graph.adjudicate": { "model": "gpt-5.4-mini", "source": "default", "reasoningEffort": "none", "requires": ["structuredOutput"], "usable": false, "reason": "graph_disabled" },
+      "graph.digest": { "model": "gpt-5.4-mini", "source": "default", "reasoningEffort": "none", "requires": ["structuredOutput"], "usable": false, "reason": "graph_disabled" },
+      "graph.agent": { "model": "gpt-5.4-mini", "source": "default", "reasoningEffort": "none", "requires": ["toolCalling"], "usable": false, "reason": "graph_disabled" }
+    }
   }
 }
 ```

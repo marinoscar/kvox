@@ -681,7 +681,7 @@ rejects, hidden two levels deeper in a settings blob every
 ### 2.6 `generateStructured` and the `structuredOutput` capability flag (issue #358)
 
 Connected-knowledge extraction (`docs/specs/ontology.md` §6), resolution
-adjudication (§7), the entity digest (§9.2) and the brief (§9.1) all need one
+adjudication (§7) and the entity digest (§9.2) all need one
 provider call that returns a **validated, schema-shaped** answer, not free
 text the caller hopes parses. `generate`'s `responseFormat: 'json'` (OpenAI's
 `json_object` mode) only guarantees syntactically valid JSON — the caller
@@ -919,6 +919,80 @@ model or `defaultModelFeatures` floor declaring `toolCalling: true` while
 /api/ai/config` and the admin catalogue in `GET /api/ai-settings` both
 publish it per model, beside `structuredOutput` — see the `### AI Settings`
 and `GET /ai/config` sections of [`docs/API.md`](../API.md).
+
+### 2.8 Per-task models and `AiTaskModelResolver` (issue #360)
+
+Connected knowledge (`docs/specs/ontology.md` §20) makes four kinds of model
+call with different cost and capability profiles — `graph.extract`,
+`graph.adjudicate`, `graph.digest` and `graph.agent` — and one deployment
+reasonably wants a cheap model doing bulk extraction and a stronger one
+running the agent. `ai.taskModels: Partial<Record<AiTaskKey, { model:
+string; reasoningEffort?: 'low'|'medium'|'high' }>>` is a new field on the
+existing `ai` namespace, and `ai.graphEnabled: boolean` (default `false`) is
+the deployment switch that keeps a fresh install from spending anybody's key
+on automatic extraction before an administrator turns it on. Both fields
+follow the identical six-place settings-parity discipline §2.5 already
+establishes for `allowedModels` (CLAUDE.md's "Database Tables" section).
+
+**`chooseTaskModel` is the one pure function three surfaces call**, so they
+can never disagree about which model a task would run on: the run-time
+resolver below, the admin view's `taskModelStatus` (computed *without* the
+`graphEnabled` gate, so tasks can be configured before the switch is on),
+and `GET /api/ai/config`'s per-caller `taskModels`. Its rank order:
+
+1. `!ai.graphEnabled` → the problem is `graph_disabled` (the model is still
+   computed, so the admin view can show what *would* run);
+2. a caller-`requested` model not in the permitted, usable list →
+   `not_permitted`; otherwise it wins outright (`source: 'requested'`);
+3. else the task's configured model, when it is still in that list
+   (`source: 'task'`) — a configured model no longer permitted falls through
+   to the next rank instead of refusing, and the caller logs a `warn`;
+4. else `providers.<active>.defaultModel`, when it is in the list
+   (`source: 'default'`), otherwise the problem is `no_model` and there is
+   nothing to run on;
+5. the task's own `reasoningEffort` applies only when the chosen model *is*
+   the administrator's configured task model; every other rank uses the
+   deployment's `ai.reasoningEffort`.
+
+**Capability requirement**, checked at both save time and run time:
+
+| Task | Requires |
+|---|---|
+| `graph.extract` | `structuredOutput` |
+| `graph.adjudicate` | `structuredOutput` |
+| `graph.digest` | `structuredOutput` |
+| `graph.agent` | `toolCalling` |
+
+A model missing a required capability the chosen rank landed on is
+`lacks_capability` — a 400 at save time (`AiSettingsService.update`, before
+`allowedModels` narrows any further) and a 409 at run time (the resolver
+below), never a silent substitution.
+
+**`AiTaskModelResolver` (`apps/api/src/ai/ai-task-model-resolver.service.ts`,
+provided and exported by `AiModule`) is the one place a run decides which
+provider, model and reasoning effort it uses.** `resolve(userId, task,
+requested?)` layers `chooseTaskModel` under the checks every AI-calling path
+already needs — `ai.graphEnabled`, `AiConfigService.getConfig(userId)` for
+"is AI configured at all" and "does this caller have a key," a `requested`
+model's permission, and finally the task's capability requirement — answering
+409 `graph_disabled`/`ai_not_configured`/`ai_key_missing`/
+`model_lacks_capability` or 400 `model_not_permitted`, in that order.
+Bring-your-own-key holds by construction: a `requested` model is only ever
+matched against `AiConfigService.getConfig(userId).models`, the caller's own
+permitted, budgetable list, so no request can reach a model the deployment
+does not permit, and every resolved call still runs on the resolving user's
+own key.
+
+**`resolveForGeneration(userId, requested, messages)` is the notes path,
+extracted onto the same resolver with no behaviour change.**
+`NoteGenerationRequestService.resolveModel` — verified above as the
+behaviour to preserve — keeps its exact signature, its three messages per
+generation intent, its `NOTE_CONFLICT_REASONS` values and its check order;
+its body now delegates to `resolveForGeneration`, which has no task and no
+capability requirement, and takes the caller's own refusal sentences instead
+of a task's. This is the shared core §2.5's opening paragraph anticipated:
+one resolver, so #363/#364/#372/#378 never each reimplement the ranking
+`chooseTaskModel` already states once.
 
 ## 3. Prompt assembly and the token budget
 

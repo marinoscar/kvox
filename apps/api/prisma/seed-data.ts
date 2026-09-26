@@ -407,6 +407,10 @@ export const DEFAULT_SYSTEM_SETTINGS = {
     reasoningEffort: 'none' as const,
     // 25 MB (#51) — the ceiling on one uploaded note source document.
     maxDocumentBytes: 26214400,
+    // #360 — no per-task model overrides; every graph task uses defaultModel.
+    taskModels: {},
+    // #360 — connected-knowledge AI spending is OFF until an admin enables it.
+    graphEnabled: false,
   },
   maintenance: {
     enabled: false,

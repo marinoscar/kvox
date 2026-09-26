@@ -443,6 +443,98 @@ describe('AI settings and config integration', () => {
       expect(own[0].data.targetId).toBe('ai');
     });
 
+    // #360 — save-time validation of taskModels, over the wire.
+    it('persists graphEnabled and a permitted, capable task model (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings(ENABLED) as never,
+      );
+
+      const res = await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({
+          graphEnabled: true,
+          taskModels: { 'graph.extract': { model: 'gpt-4o', reasoningEffort: 'high' } },
+        })
+        .expect(200);
+
+      const written = prismaMock.systemSettings.update.mock.calls[0][0].data.value;
+      expect(written.ai.graphEnabled).toBe(true);
+      expect(written.ai.taskModels).toEqual({
+        'graph.extract': { model: 'gpt-4o', reasoningEffort: 'high' },
+      });
+      expect(res.body.data.tasks.map((t: { key: string }) => t.key)).toEqual([
+        'graph.extract',
+        'graph.adjudicate',
+        'graph.digest',
+        'graph.agent',
+      ]);
+      expect(Array.isArray(res.body.data.modelCapabilities)).toBe(true);
+      expect(res.body.data.taskModelStatus).toHaveLength(4);
+    });
+
+    it('400s model_not_permitted, naming the task label, for a task model outside allowedModels (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings(ENABLED) as never,
+      );
+
+      const res = await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({ taskModels: { 'graph.extract': { model: 'gpt-x' } } })
+        .expect(400);
+
+      expect(res.body.message).toContain('Graph extraction');
+      expect(res.body.details).toEqual({
+        reason: 'model_not_permitted',
+        task: 'graph.extract',
+        model: 'gpt-x',
+      });
+      expect(prismaMock.systemSettings.update).not.toHaveBeenCalled();
+    });
+
+    it('400s model_lacks_capability for graph.agent on a model without toolCalling (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+      // An id the real provider can only floor — and its floor claims no
+      // capabilities (#358/#359).
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings({
+          ...ENABLED,
+          providers: {
+            openai: {
+              ...ENABLED.providers.openai,
+              allowedModels: ['gpt-4o', 'unplaceable-model'],
+            },
+          },
+        }) as never,
+      );
+
+      const res = await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({ taskModels: { 'graph.agent': { model: 'unplaceable-model' } } })
+        .expect(400);
+
+      expect(res.body.details).toEqual({
+        reason: 'model_lacks_capability',
+        task: 'graph.agent',
+        model: 'unplaceable-model',
+        missing: ['toolCalling'],
+      });
+    });
+
+    it('rejects an unknown task key at the wire schema (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+
+      await request(context.app.getHttpServer())
+        .put(SETTINGS)
+        .set(authHeader(admin.accessToken))
+        .send({ taskModels: { 'graph.brief': { model: 'gpt-4o' } } })
+        .expect(400);
+    });
+
     it('rejects an out-of-range ceiling at the wire schema', async () => {
       const admin = await createMockAdminUser(context);
 
@@ -1088,6 +1180,55 @@ describe('AI settings and config integration', () => {
       // behind it.
       expect(res.text).not.toContain('api.openai.com');
       expect(res.text).not.toMatch(/requestTimeoutMs|apiKey|secret/);
+    });
+
+    it('includes graphEnabled and all four taskModels entries for every role (#360)', async () => {
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings({ ...ENABLED, provider: 'openai' }) as never,
+      );
+
+      for (const user of [
+        await createMockViewerUser(context),
+        await createMockContributorUser(context),
+        await createMockAdminUser(context),
+      ]) {
+        const res = await request(context.app.getHttpServer())
+          .get(CONFIG)
+          .set(authHeader(user.accessToken))
+          .expect(200);
+
+        expect(res.body.data.graphEnabled).toBe(false);
+        expect(Object.keys(res.body.data.taskModels)).toEqual([
+          'graph.extract',
+          'graph.adjudicate',
+          'graph.digest',
+          'graph.agent',
+        ]);
+        expect(res.body.data.taskModels['graph.extract']).toEqual({
+          model: 'gpt-4o',
+          source: 'default',
+          reasoningEffort: 'none',
+          requires: ['structuredOutput'],
+          usable: false,
+          reason: 'graph_disabled',
+        });
+      }
+    });
+
+    it('reports a task usable once graphEnabled is on (#360)', async () => {
+      const viewer = await createMockViewerUser(context);
+      prismaMock.systemSettings.findUnique.mockResolvedValue(
+        storedSettings({ ...ENABLED, provider: 'openai', graphEnabled: true }) as never,
+      );
+
+      const res = await request(context.app.getHttpServer())
+        .get(CONFIG)
+        .set(authHeader(viewer.accessToken))
+        .expect(200);
+
+      expect(res.body.data.taskModels['graph.agent']).toEqual(
+        expect.objectContaining({ model: 'gpt-4o', usable: true, reason: null }),
+      );
     });
 
     it('refuses an unauthenticated caller', async () => {

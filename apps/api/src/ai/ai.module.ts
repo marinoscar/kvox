@@ -9,6 +9,7 @@ import { AiModelDiscoveryService } from './ai-model-discovery.service';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiSettingsController } from './ai-settings.controller';
 import { AiSettingsService } from './ai-settings.service';
+import { AiTaskModelResolver } from './ai-task-model-resolver.service';
 import {
   OPENAI_FETCH,
   OpenAiProvider,
@@ -75,6 +76,9 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
     // out of a `forwardRef` cycle with `UserAiCredentialsService`, which
     // already injects `AiSettingsService` — see the service's own header.
     AiModelDiscoveryService,
+    // #360. The one run-time model resolver: notes generation and every
+    // connected-knowledge task resolve provider + model through it.
+    AiTaskModelResolver,
     // ⚠ THE `fetch` SEAM IS REGISTERED HERE, unlike `ASSEMBLYAI_FETCH` which
     // exists only as an `@Optional()` constructor default. The difference is
     // not stylistic: `Test.createTestingModule(...).overrideProvider(token)` is
@@ -116,6 +120,9 @@ import { UserAiCredentialsService } from './user-ai-credentials.service';
     // could then report the feature usable on a deployment the config probe
     // (and therefore the UI) calls unavailable.
     AiConfigService,
+    // #360: `NoteGenerationRequestService.resolveModel` delegates to it, and
+    // every graph job (#363, #364, #372, #378) will.
+    AiTaskModelResolver,
   ],
 })
 export class AiModule {}

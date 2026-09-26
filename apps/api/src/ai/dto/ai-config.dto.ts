@@ -1,6 +1,8 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { AI_REASONING_EFFORTS, AI_TASK_KEYS } from '../ai-settings.schema';
+
 // =============================================================================
 // `GET /api/ai/config` — what a NON-ADMIN client needs (issue #47, epic #45)
 // =============================================================================
@@ -52,7 +54,7 @@ export const aiConfigModelSchema = z.object({
   structuredOutput: z
     .boolean()
     .describe(
-      'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication, digest and brief require it.',
+      'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication and digest require it.',
     ),
   toolCalling: z
     .boolean()
@@ -73,6 +75,39 @@ export const aiConfigModelSchema = z.object({
 });
 
 export type AiConfigModel = z.infer<typeof aiConfigModelSchema>;
+
+/**
+ * What one connected-knowledge task would run on for THIS caller (issue #360),
+ * computed with the same `chooseTaskModel` the run-time resolver uses.
+ */
+export const aiConfigTaskModelSchema = z.object({
+  model: z
+    .string()
+    .nullable()
+    .describe(
+      'The model this task runs on by default — the administrator\'s task model, else the default model. Computed even while `graphEnabled` is false. Null when no permitted model is available.',
+    ),
+  source: z
+    .enum(['task', 'default', 'none'])
+    .describe('`task` — an administrator chose it for this task; `default` — the deployment default model; `none` — nothing is available.'),
+  reasoningEffort: z
+    .enum(AI_REASONING_EFFORTS)
+    .describe('The reasoning effort a run would use: the task\'s own when it runs on its configured model, else the deployment\'s.'),
+  requires: z
+    .array(z.enum(['structuredOutput', 'toolCalling']))
+    .describe('Capabilities this task\'s model must have. A per-run picker offers only `models` whose flags satisfy all of them.'),
+  usable: z
+    .boolean()
+    .describe('Whether the task can run right now on `model`. Independent of `keyConfigured`, like `available`.'),
+  reason: z
+    .enum(['graph_disabled', 'model_lacks_capability', 'no_model'])
+    .nullable()
+    .describe(
+      'Why `usable` is false, or null when it is true: `graph_disabled` — connected knowledge is switched off; `model_lacks_capability` — `model` lacks a required capability; `no_model` — nothing permitted is available.',
+    ),
+});
+
+export type AiConfigTaskModel = z.infer<typeof aiConfigTaskModelSchema>;
 
 export const aiConfigSchema = z.object({
   available: z
@@ -113,6 +148,20 @@ export const aiConfigSchema = z.object({
     .boolean()
     .describe(
       'Whether **the calling user** has saved an API key for the active provider. This is the one field every AI surface gates on: false means render the "set up your AI key" prompt, true means render the feature. It never reveals anything about the key beyond its existence, and it is deliberately independent of `available`, so a user can save and verify a key before an administrator finishes enabling the feature.',
+    ),
+  graphEnabled: z
+    .boolean()
+    .describe(
+      'Whether connected knowledge may spend AI on this deployment (issue #360). While false every graph task is unusable with `reason: "graph_disabled"`; already-curated graph data stays readable.',
+    ),
+  taskModels: z
+    .object(
+      Object.fromEntries(
+        AI_TASK_KEYS.map((key) => [key, aiConfigTaskModelSchema]),
+      ) as Record<(typeof AI_TASK_KEYS)[number], typeof aiConfigTaskModelSchema>,
+    )
+    .describe(
+      'Every connected-knowledge task, always all four keys, with the model it would run on for this caller and whether it can (issue #360).',
     ),
 });
 

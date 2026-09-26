@@ -28,9 +28,7 @@ import type { AiProvider } from '../../ai/providers/ai-provider.interface';
 function service(): NoteGenerationRequestService {
   return new NoteGenerationRequestService(
     {} as never, // PrismaService — unused by assertPromptFits
-    {} as never, // AiConfigService
-    {} as never, // AiSettingsService
-    {} as never, // AiProviderRegistry
+    {} as never, // AiTaskModelResolver
     {} as never, // TranscriptAccessService
     {} as never, // NoteAccessService
   );
@@ -71,6 +69,8 @@ function policyPermitting(model: {
     requestTimeoutMs: 60_000,
     reasoningEffort: 'none',
     maxDocumentBytes: 1_000_000,
+    taskModels: {},
+    graphEnabled: false,
   };
 }
 
