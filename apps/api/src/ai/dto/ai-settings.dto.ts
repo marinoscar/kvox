@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   AI_PROVIDER_IDS,
   AI_REASONING_EFFORTS,
+  AI_TASK_KEYS,
+  AI_TASK_REASONING_EFFORTS,
   systemAiPatchSchema,
 } from '../ai-settings.schema';
 
@@ -237,6 +239,31 @@ export const aiSettingsResponseSchema = z.object({
         .number()
         .describe(
           'Ceiling on one uploaded note source document, in bytes. An AI policy rather than a storage one: every byte becomes input tokens on the uploading user\'s own vendor account, and `note.source.extract` must hold a whole PDF in memory to read it.',
+        ),
+      taskModels: z
+        .partialRecord(
+          z.enum(AI_TASK_KEYS),
+          z.object({
+            model: z
+              .string()
+              .describe(
+                'The model this task runs on. Must be in `allowedModels` and support every capability the task requires, checked when saved.',
+              ),
+            reasoningEffort: z
+              .enum(AI_TASK_REASONING_EFFORTS)
+              .optional()
+              .describe(
+                'How hard this task\'s model may reason. Absent means the deployment-wide `reasoningEffort`.',
+              ),
+          }),
+        )
+        .describe(
+          'The model an administrator picked per connected-knowledge task (issue #360). An absent task key means that task uses `providers.<provider>.defaultModel`. `PUT` replaces the whole map, so send every entry you want to keep. A task model later removed from `allowedModels` is not an error: the task falls back to the default model, and `taskModelStatus` reports it.',
+        ),
+      graphEnabled: z
+        .boolean()
+        .describe(
+          'The connected-knowledge spending switch (issue #360). While false, no graph task calls a model on anybody\'s key. It does not hide already-curated graph data. Defaults to false, because enabling it spends every user\'s own key on automatic extraction.',
         ),
     })
     .describe('The stored AI policy. Carries no secret, by construction.'),

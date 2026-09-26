@@ -374,5 +374,11 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // because `note.source.extract` has to hold a whole PDF in memory to read
     // it.
     maxDocumentBytes: 26_214_400,
+    // EMPTY (#360): every connected-knowledge task uses
+    // `providers.<id>.defaultModel` until an administrator picks one per task.
+    taskModels: {},
+    // OFF (#360). Turning it on spends every user's OWN key on automatic graph
+    // extraction, which is an administrator's decision to take, never a default.
+    graphEnabled: false,
   },
 };

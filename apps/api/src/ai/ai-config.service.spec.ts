@@ -41,6 +41,8 @@ function policy(overrides: Partial<SystemAiValue> = {}): SystemAiValue {
     requestTimeoutMs: 60_000,
     reasoningEffort: 'none',
     maxDocumentBytes: 1_000_000,
+    taskModels: {},
+    graphEnabled: false,
     ...overrides,
   };
 }

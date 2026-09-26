@@ -113,6 +113,16 @@ export const systemSettingsResponseSchema = z.object({
     maxOutputTokens: z.number(),
     requestTimeoutMs: z.number(),
     maxDocumentBytes: z.number(),
+    // #360: per-task models (absent key = the provider's defaultModel) and the
+    // connected-knowledge spending switch.
+    taskModels: z.partialRecord(
+      z.enum(['graph.extract', 'graph.adjudicate', 'graph.digest', 'graph.agent']),
+      z.object({
+        model: z.string(),
+        reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+      }),
+    ),
+    graphEnabled: z.boolean(),
   }),
   updatedAt: z.iso.datetime(),
   updatedBy: z

@@ -207,6 +207,17 @@ const aiSettingsSchema = z.object({
   // Ceiling on one uploaded note source document, in bytes (#51). See
   // `ai-settings.schema.ts` for why an AI policy and not a storage one.
   maxDocumentBytes: z.number().int().min(65_536).max(268_435_456),
+  // Per-task models (#360), restated from `ai-settings.schema.ts`. A partial
+  // record — an absent task key means "use the provider's defaultModel".
+  taskModels: z.partialRecord(
+    z.enum(['graph.extract', 'graph.adjudicate', 'graph.digest', 'graph.agent']),
+    z.object({
+      model: z.string().trim().min(1).max(128),
+      reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+    }),
+  ),
+  // The connected-knowledge spending switch (#360).
+  graphEnabled: z.boolean(),
 });
 
 // Full replacement (PUT)
@@ -372,6 +383,24 @@ export const patchSystemSettingsSchema = z.object({
         .enum(['none', 'low', 'medium', 'high', 'xhigh'])
         .optional(),
       maxDocumentBytes: z.number().int().min(65_536).max(268_435_456).optional(),
+      // #360. Missing either line is this file's silent no-op: `PATCH { "ai":
+      // { "graphEnabled": true } }` would parse to `{}` and answer 200.
+      // `taskModels` REPLACES WHOLESALE, like `allowedModels`.
+      taskModels: z
+        .partialRecord(
+          z.enum([
+            'graph.extract',
+            'graph.adjudicate',
+            'graph.digest',
+            'graph.agent',
+          ]),
+          z.object({
+            model: z.string().trim().min(1).max(128),
+            reasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
+          }),
+        )
+        .optional(),
+      graphEnabled: z.boolean().optional(),
     })
     .optional(),
 });
