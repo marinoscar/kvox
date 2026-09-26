@@ -28,7 +28,7 @@
 // props may be personal.
 // =============================================================================
 
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { KgEntity, KgEntityAlias, Prisma } from '@prisma/client';
 
 import { AiSettingsService } from '../ai/ai-settings.service';
@@ -39,16 +39,25 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GraphAccessService } from './access/graph-access.service';
 import type { GraphEntityResponse, PatchEntityDto } from './dto/graph-entity.dto';
 import {
+  FORGET_CONFIRMATION_MESSAGE,
+  FORGET_NOT_PERSON_MESSAGE,
+  forgetEntitySchema,
+  type ForgetEntityResponse,
+} from './dto/graph-forget.dto';
+import {
   KG_EMBED_JOB_TYPE,
   KG_ENTITY_DIGEST_JOB_TYPE,
+  KG_PURGE_JOB_TYPE,
   KG_SUBJECT_ENTITY,
   KG_SUBJECT_USER,
 } from './job-types';
+import { KG_PERSON_TYPE } from './purge/kg-purge.service';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { toGraphHttpException } from './write/graph-write.errors';
 import { GraphWriteService, type EntityUpdateResult } from './write/graph-write.service';
 
 export const GRAPH_ENTITY_EDITED_ACTION = 'graph.entity_edited';
+export const GRAPH_PERSON_FORGET_REQUESTED_ACTION = 'graph.person_forget_requested';
 
 /** The entity projection (`GraphEntityDto`). #370 extends it with counts. */
 export function toGraphEntityResponse(
@@ -120,6 +129,60 @@ export class GraphEntitiesService {
     }
 
     return toGraphEntityResponse(result.entity, aliases);
+  }
+
+  /**
+   * `POST /api/graph/entities/:id/forget` (#357, §15) — QUEUE the forgetting
+   * of a Person; `kg.purge` does the deleting (a table-spanning sweep is
+   * long-running work, CLAUDE.md rule 1).
+   *
+   * Order: the confirmation first (a 400 that says nothing about the id),
+   * then `GraphAccessService` — 404 for no access or a merged entity, 403 for
+   * the caller's own entity without `graph:write` — then the Person check.
+   *
+   * The job's subject is the entity, so the queue's ordinary active dedup
+   * makes a second request while the first is pending/running return THAT
+   * job. Every request is audited, deduplicated or not: it is the record of
+   * somebody asking. The entity stays visible until the job completes; there
+   * is deliberately no interim "forgotten" state column.
+   */
+  async forget(id: string, body: unknown, user: RequestUser): Promise<ForgetEntityResponse> {
+    if (!forgetEntitySchema.safeParse(body ?? {}).success) {
+      throw new BadRequestException(FORGET_CONFIRMATION_MESSAGE);
+    }
+
+    const entity = await this.access.require(user.id, 'entity', id, 'edit', user.permissions);
+    if (entity.type !== KG_PERSON_TYPE) {
+      throw new BadRequestException(FORGET_NOT_PERSON_MESSAGE);
+    }
+
+    const job = await this.jobs.enqueue({
+      type: KG_PURGE_JOB_TYPE,
+      reason: 'rerun',
+      subjectType: KG_SUBJECT_ENTITY,
+      subjectId: id,
+      payload: { userId: user.id, scope: 'person', entityId: id },
+    });
+
+    await this.prisma.auditEvent.create({
+      data: {
+        actorUserId: user.id,
+        action: GRAPH_PERSON_FORGET_REQUESTED_ACTION,
+        targetType: KG_SUBJECT_ENTITY,
+        targetId: id,
+        meta: { entityId: id, jobId: job.id },
+      },
+    });
+
+    this.logger.warn(`User ${user.id} asked to forget person ${id} (job ${job.id})`);
+
+    return {
+      jobId: job.id,
+      entityId: id,
+      // A deduplicated answer is the live job, which is pending or running by
+      // definition of the dedup index; a fresh insert is pending.
+      status: job.status === 'running' ? 'running' : 'pending',
+    };
   }
 
   /**
