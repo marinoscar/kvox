@@ -29,6 +29,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
+import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
 import { itemValidAt, itemValidAtSql, relationValidAtSql } from '../../src/graph/read/as-of';
 import type { GraphSlice } from '../../src/graph/read/dto/graph-read.dto';
 import { GraphNeighborhoodService } from '../../src/graph/read/graph-neighborhood.service';
@@ -60,7 +61,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     prisma = connectTestPrisma();
     await prisma.$connect();
     const asService = prisma as unknown as PrismaService;
-    svc = new GraphNeighborhoodService(asService, new GraphAccessService(asService), new GraphOntologyService(asService));
+    svc = new GraphNeighborhoodService(asService, new GraphAccessService(asService), new GraphOntologyService(asService, new GraphPreferencesService(asService)));
   });
 
   afterAll(async () => {

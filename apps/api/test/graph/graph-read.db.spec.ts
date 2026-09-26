@@ -27,6 +27,7 @@ import type { PrismaClient } from '@prisma/client';
 import { NoteAccessService } from '../../src/notes/access/note-access.service';
 import { GraphAccessService } from '../../src/graph/access/graph-access.service';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
+import { GraphPreferencesService } from '../../src/graph/preferences/graph-preferences.service';
 import { GraphEvidenceService } from '../../src/graph/read/graph-evidence.service';
 import { GraphReadService } from '../../src/graph/read/graph-read.service';
 import { encodeGraphCursor } from '../../src/graph/read/graph-cursor';
@@ -51,7 +52,7 @@ describeWithDb('GraphReadService and GraphEvidenceService (real Postgres)', () =
     const p = prisma as unknown as PrismaService;
     const access = new GraphAccessService(p);
     const transcriptAccess = new TranscriptAccessService(p);
-    reads = new GraphReadService(p, access, new GraphOntologyService(p), transcriptAccess);
+    reads = new GraphReadService(p, access, new GraphOntologyService(p, new GraphPreferencesService(p)), transcriptAccess);
     evidence = new GraphEvidenceService(p, access, transcriptAccess, new NoteAccessService(p));
   });
 
