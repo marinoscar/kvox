@@ -104,6 +104,7 @@ export class UserDataService {
       accessTokens,
       graphEntities,
       graphItems,
+      askConversations,
       activeDeletion,
     ] = await Promise.all([
       this.prisma.transcript.count({ where: { ownerId: userId, deletedAt: null } }),
@@ -132,6 +133,8 @@ export class UserDataService {
       // counting them would show one person twice.
       this.prisma.kgEntity.count({ where: { ownerId: userId, reviewStatus: { not: 'merged' } } }),
       this.prisma.kgItem.count({ where: { ownerId: userId } }),
+      // #376: saved Ask conversations (their messages go with them).
+      this.prisma.askConversation.count({ where: { ownerId: userId } }),
       this.findActiveDeletion(userId),
     ]);
 
@@ -145,6 +148,7 @@ export class UserDataService {
       noteTemplates: { count: noteTemplates },
       credentials: { aiKeys, accessTokens },
       graph: { entities: graphEntities, items: graphItems },
+      askConversations: { count: askConversations },
       activeDeletion,
     };
   }

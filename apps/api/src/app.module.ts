@@ -35,6 +35,7 @@ import { GraphExtractionModule } from './graph/extraction/extraction.module';
 import { GraphResolutionModule } from './graph/resolution/resolution.module';
 import { GraphDedupModule } from './graph/dedup/dedup.module';
 import { GraphProposalsModule } from './graph/proposals/proposals.module';
+import { AskModule } from './ask/ask.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
@@ -245,6 +246,11 @@ import configuration from './config/configuration';
     // (the one general write path into the graph) and its revert. Imports
     // GraphResolutionModule for merges, distinct pairs and alias learning.
     GraphProposalsModule,
+
+    // Ask (#376, epic #348): saved conversations with the read-only graph
+    // agent. Imports GraphModule for `GraphAccessService` (scope validation);
+    // imported by nothing, so the edge runs one way.
+    AskModule,
 
     // Semantic search, indexing half (#188, epic #165): the `search.index` job
     // and the enqueue/forget surface its callers use. Listed explicitly even

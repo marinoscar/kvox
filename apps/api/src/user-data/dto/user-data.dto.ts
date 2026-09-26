@@ -161,6 +161,10 @@ export const userDataSummarySchema = z.object({
       'scope touches it. Your recordings and notes are what the graph was derived from; ' +
       'deleting the graph never changes them.',
   ),
+  askConversations: userDataCountOnlySchema.describe(
+    "The caller's saved Ask conversations (and every message in them). Removed by `content` " +
+      'and `everything` only — no narrow scope touches them.',
+  ),
   activeDeletion: activeUserDataDeletionSchema
     .nullable()
     .describe('The deletion already queued or running for this caller, or `null`.'),
@@ -180,7 +184,8 @@ export const createUserDataDeletionSchema = z.object({
     .describe(
       'What to delete. Each narrow scope removes exactly the category it names — `notes` ' +
         'does **not** take your note templates with it. `content` is every recording, note, ' +
-        'uploaded file, your own custom note templates **and** your knowledge graph; ' +
+        'uploaded file, your own custom note templates, your knowledge graph **and** your Ask ' +
+        'conversations; ' +
         '`everything` is that plus your AI provider keys and your personal access tokens.',
     ),
   confirmation: z

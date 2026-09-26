@@ -307,10 +307,16 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
       `Starting bulk deletion of scope "${scope}" for user ${userId} (job ${job.id})`,
     );
 
-    // #357: the knowledge graph goes FIRST (after #376's `ask` step, when
-    // present), so graph rows citing about-to-be-deleted notes and transcripts
-    // go away with them. Correctness does not depend on the order — every
-    // evidence anchor FK is SetNull.
+    // #376: Ask conversations go first — inline, one indexed DELETE. Nothing
+    // else depends on the order: a message carries no FK into `kg_*` besides
+    // the conversation's SetNull scope.
+    if (scopeIncludes(scope, 'ask')) {
+      await this.deleteAskConversations(userId);
+    }
+
+    // #357: the knowledge graph goes next, so graph rows citing
+    // about-to-be-deleted notes and transcripts go away with them. Correctness
+    // does not depend on the order — every evidence anchor FK is SetNull.
     if (scopeIncludes(scope, 'graph')) {
       await this.enqueueGraphPurge(userId);
     }
@@ -354,6 +360,23 @@ export class UserDataPurgeHandler implements JobHandler, OnModuleInit {
   // ===========================================================================
   // The semantic index (#188, epic #165)
   // ===========================================================================
+
+  /**
+   * Delete every one of the user's saved Ask conversations (#376, epic #348).
+   *
+   * INLINE rather than a job of its own: it is one indexed `DELETE` on
+   * `ask_conversations (owner_id, …)` inside this already-queued job, and every
+   * message goes with its conversation through the `conversation_id` Cascade —
+   * a turn still streaming included (`ask.respond` returns normally when its
+   * row is gone). Counts only in the audit, never content.
+   */
+  private async deleteAskConversations(userId: string): Promise<void> {
+    const { count } = await this.prisma.askConversation.deleteMany({ where: { ownerId: userId } });
+
+    await this.audit(userId, 'user_data:ask_conversations_deleted', { count });
+
+    this.logger.warn(`User ${userId}: ${count} Ask conversation(s) deleted`);
+  }
 
   /**
    * Hand the user's whole knowledge graph to `kg.purge { scope: 'all' }`

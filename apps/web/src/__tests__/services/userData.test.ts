@@ -148,6 +148,12 @@ describe('scopeIncludes — mirrored from apps/api/src/user-data/job-types.ts, a
     }
   });
 
+  it('Ask conversations are covered by "content" and "everything" only — never by a narrow scope (#376)', () => {
+    for (const scope of ALL_SCOPES) {
+      expect(scopeIncludes(scope, 'ask')).toBe(scope === 'content' || scope === 'everything');
+    }
+  });
+
   it('the knowledge graph is covered by "content" and "everything" only — never by a narrow scope (#357)', () => {
     for (const scope of ALL_SCOPES) {
       expect(scopeIncludes(scope, 'graph')).toBe(scope === 'content' || scope === 'everything');
@@ -207,6 +213,7 @@ describe('getUserDataSummary', () => {
       noteTemplates: { count: 0 },
       credentials: { aiKeys: 0, accessTokens: 0 },
       graph: { entities: 3, items: 5 },
+      askConversations: { count: 4 },
       activeDeletion: null,
     };
     server.use(

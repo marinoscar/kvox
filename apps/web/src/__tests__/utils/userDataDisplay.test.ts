@@ -57,6 +57,7 @@ function emptySummary(overrides: Partial<UserDataSummary> = {}): UserDataSummary
     noteTemplates: { count: 0 },
     credentials: { aiKeys: 0, accessTokens: 0 },
     graph: { entities: 0, items: 0 },
+    askConversations: { count: 0 },
     activeDeletion: null,
     ...overrides,
   };
@@ -270,6 +271,22 @@ describe('buildDeletionInventory', () => {
         'Right now that is 1 recording and 4 knowledge graph entities (1.0 MB in total).',
       );
     }
+  });
+
+  // #376: Ask conversations are a `content`/`everything` category, a count only.
+  it('names Ask conversations last, for both compound scopes, with no byte weight', () => {
+    const summary = emptySummary({
+      notes: { count: 1, bytes: '1000000' },
+      graph: { entities: 1, items: 0 },
+      askConversations: { count: 2 },
+    });
+
+    for (const scope of COMPOUND_SCOPES) {
+      expect(buildDeletionInventory(scope, summary)).toBe(
+        'Right now that is 1 note, 1 knowledge graph entity and 2 Ask conversations (1.0 MB in total).',
+      );
+    }
+    expect(buildDeletionInventory('notes', summary)).toBeNull();
   });
 
   it('a graph-only account is not reported as having nothing stored', () => {

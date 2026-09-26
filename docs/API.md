@@ -6583,6 +6583,178 @@ unattended edits. **Never a `409`.**
 
 **Errors:** `401` · `403` without `graph:write`.
 
+### Ask
+
+Saved conversations with the read-only graph agent — issue #376, epic #348.
+Posting a question and the `ask.respond` job arrive in #378, the answer
+stream in #379; this group is the storage and its CRUD. Full design is
+[`docs/specs/ontology.md`](specs/ontology.md) §21.
+
+**Permissions.** Every route is `graph:read` — asking is a read of your own
+graph, so there is deliberately **no `ask:*` permission pair**, and
+`graph:read` is seeded to every role. Conversations are **owner-only**: a
+conversation id you do not own answers the **same 404, with the same
+message,** as one that does not exist — never a 403 — and there is no admin
+read path, because a conversation is derived from your private recordings.
+
+**Citation markers.** An assistant message's `content` cites what it read
+with markers written `[^ev7]` (evidence), `[^ent2]` (entity), `[^doc1]`
+(transcript/note), `[^itm3]` (item) and `[^rel4]` (relation); `citations[]`
+resolves each one (`marker` is the handle without brackets). Previews strip
+them.
+
+**The message shape** (used unchanged by the posting, streaming and UI
+issues):
+
+```json
+{
+  "id": "…", "conversationId": "…",
+  "role": "assistant",
+  "content": "Sarah leads Atlas.[^ev1]",
+  "status": "complete",
+  "toolCalls": [
+    { "index": 0, "name": "search", "arguments": { "q": "Atlas" },
+      "summary": "Searched for Atlas", "resultCount": 3, "durationMs": 41, "error": null }
+  ],
+  "citations": [
+    { "marker": "ev1", "kind": "evidence", "id": "…", "via": null, "valid": true,
+      "label": "Weekly sync", "documentKind": "transcript", "startMs": 754000 }
+  ],
+  "model": "…", "provider": "openai",
+  "promptTokens": 1830, "completionTokens": 212,
+  "errorClass": null,
+  "finishReason": "stop",
+  "createdAt": "2026-09-26T10:00:00.000Z"
+}
+```
+
+- `status`: `pending | streaming | complete | failed`. An assistant message
+  that is `pending`/`streaming` is still being written; its `content` is the
+  durable buffer the stream reads, append-only while streaming.
+- `errorClass` (on `failed`): `auth | refusal | rate_limit | budget | timeout | other`.
+- `finishReason`: `stop | step_cap | token_cap | time_cap` — anything but
+  `stop` means the turn hit a cap and ended with its best answer so far
+  ("stopped early").
+- `citations[].kind` is `evidence | entity | document`; an `itm`/`rel` marker
+  is resolved to its first evidence row (`kind: "evidence"`, `via` naming the
+  item or relation). `valid: false` (with `id: null`) marks a handle no tool
+  issued in that turn.
+
+**One running turn per conversation.** The database refuses a second
+`pending`/`streaming` assistant message in one conversation
+(`ask_messages_one_running_turn_uniq_idx`); posting while a turn runs
+answers `409 details.reason: "ask_turn_running"` (#378).
+
+#### GET /ask/conversations
+
+Your conversations, most recently updated first (`updatedAt` desc, then
+`id` desc), keyset-paginated.
+
+**Requires:** `graph:read`.
+
+**Query:** `cursor` (the previous page's `nextCursor`) · `limit` 1–50,
+default 20 · `scopeEntityId` (uuid) — only conversations scoped to that
+entity (the entity page's Ask panel).
+
+**Response:** `200`
+```json
+{
+  "data": {
+    "items": [
+      {
+        "id": "…",
+        "title": "Who owns Atlas?",
+        "scopeEntity": { "id": "…", "label": "Sarah Chen", "type": "Person" },
+        "lastMessagePreview": "Sarah leads Atlas.",
+        "running": false,
+        "createdAt": "2026-09-26T09:59:00.000Z",
+        "updatedAt": "2026-09-26T10:00:00.000Z"
+      }
+    ],
+    "nextCursor": null
+  }
+}
+```
+
+- `title` is `null` until the first message (then its first 80 characters).
+- `scopeEntity` is read **live**: a renamed entity shows its new label, and
+  it is `null` for an unscoped conversation and once the entity was merged
+  or forgotten — the conversation itself is kept.
+- `lastMessagePreview` is the newest message with text, at most 140
+  characters, citation markers stripped; `null` when there is none.
+- `running` is `true` while an assistant turn is `pending`/`streaming`.
+
+**Errors:** `400` — invalid parameter, or a cursor minted for another caller
+or another `scopeEntityId` filter (never a silent restart) · `401` · `403`
+without `graph:read`.
+
+#### GET /ask/conversations/{id}
+
+The conversation and its newest **100** messages, oldest first.
+
+**Requires:** `graph:read`.
+
+**Query:** `before` (uuid, optional) — only messages before that message;
+page backwards with `?before=<messages[0].id>`.
+
+**Response:** `200` — the summary shape above without
+`lastMessagePreview`, plus `messages` (message shape above) and `hasEarlier`
+(older messages exist).
+
+**Errors:** `400` — `before` does not name a message in this conversation ·
+`401` · `403` · `404` no such conversation, or not yours.
+
+#### POST /ask/conversations
+
+Start an empty conversation.
+
+**Requires:** `graph:read`.
+
+**Body:**
+```json
+{ "scopeEntityId": "…", "title": "Atlas questions" }
+```
+Both optional. `title` is trimmed, 1–120 characters.
+
+**Response:** `201` — the summary shape, with `running: false` and
+`lastMessagePreview: null`.
+
+**Errors:** `400` invalid body · `401` · `403` · `404` when `scopeEntityId`
+is not one of your readable entities (missing, not yours, not reviewed, or
+merged) — the same 404 every graph entity route answers.
+
+#### PATCH /ask/conversations/{id}
+
+Rename a conversation.
+
+**Requires:** `graph:read`.
+
+**Body:** `{ "title": "…" }` — trimmed, 1–120 characters.
+
+**Response:** `200` — the summary shape.
+
+**Errors:** `400` · `401` · `403` · `404`.
+
+#### DELETE /ask/conversations/{id}
+
+Delete a conversation and every message in it. **Allowed while a turn is
+running:** the turn stops writing (its job finds its row gone and returns)
+and its stream ends with `error { errorClass: "gone" }`. Audited as
+`ask.conversation_deleted` with `{ messageCount, scopeEntityId }` — counts
+and ids only, never content. There is no path back.
+
+**Requires:** `graph:read`.
+
+**Response:** `204`, no body.
+
+**Errors:** `401` · `403` · `404`.
+
+**Deletion elsewhere.** The Danger Zone's `content`/`everything` scopes
+delete all of your conversations ([User Data](#user-data)); deleting your
+account removes them by cascade.
+
+---
+
 ### Search
 
 Ranked full-text search over the **content** of your transcripts and notes —
@@ -6727,13 +6899,13 @@ the one definition; the table below is a rendering of it, not a second copy.
 Every narrow scope maps to exactly one category — only the two composites fan
 out:
 
-| Scope | Transcripts | Notes | Note Templates | Files | Graph | Credentials |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `transcripts` | ✓ | | | | | |
-| `notes` | | ✓ | | | | |
-| `files` | | | | ✓ | | |
-| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Scope | Transcripts | Notes | Note Templates | Files | Graph | Ask conversations | Credentials |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `transcripts` | ✓ | | | | | | |
+| `notes` | | ✓ | | | | | |
+| `files` | | | | ✓ | | | |
+| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 `content` is everything the user **made**; `everything` is `content` plus
 their **credentials** (AI provider keys and personal access tokens) — the
@@ -6751,6 +6923,13 @@ these two scopes enqueue a `kg.purge { scope: "all" }` job and let that
 handler own the plan, the same fan-out-to-an-existing-handler pattern
 `transcript.purge`/`note.purge` already use, rather than a second
 implementation of graph deletion living here.
+
+⚠ Saved Ask conversations (issue #376, epic #348) ride with `content`/
+`everything` as well, on the graph's line — a conversation is content you
+made — and no narrow scope reaches them. They are deleted inline (one
+`DELETE`, every message following by cascade), first, before the graph's
+`kg.purge` is queued. Like the graph, `ask` is a category of these two
+scopes, not a scope of its own: the five scope strings are unchanged.
 
 **No scope deletes the account.** The `users` row, `user_roles`,
 `refresh_tokens` and the caller's session are untouched by every scope,
@@ -6788,6 +6967,7 @@ shrink only when the caller acts, never on their own.
     "files": { "count": 3, "bytes": "552012" },
     "noteTemplates": { "count": 2 },
     "graph": { "entities": 7, "items": 12 },
+    "askConversations": { "count": 4 },
     "credentials": { "aiKeys": 1, "accessTokens": 2 },
     "activeDeletion": null
   }
@@ -6798,7 +6978,9 @@ shrink only when the caller acts, never on their own.
 an entity `merged_into_id` points at someone else is not something the
 caller still holds) and `kg_items` (commitments, decisions, claims, person
 facts); a graph row has no byte size of its own the way a transcript or file
-does, so there is no `bytes` field here.
+does, so there is no `bytes` field here. `askConversations` counts the
+caller's saved Ask conversations (their messages go with them), a count
+only for the same reason.
 
 `activeDeletion` is non-null while a `user.data.purge` job is `pending` or
 `running` for this caller — `{ id, scope, status, requestedAt }`. A client

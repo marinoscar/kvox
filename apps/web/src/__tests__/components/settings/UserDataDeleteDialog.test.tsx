@@ -31,6 +31,7 @@ const RICH_SUMMARY: UserDataSummary = {
   noteTemplates: { count: 5 },
   credentials: { aiKeys: 1, accessTokens: 2 },
   graph: { entities: 3, items: 5 },
+  askConversations: { count: 0 },
   activeDeletion: null,
 };
 

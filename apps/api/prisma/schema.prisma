@@ -130,6 +130,13 @@ model User {
   kgEntityViews   KgEntityView[]
   kgGraphLayouts  KgGraphLayout[]
 
+  // Ask conversations (issue #376, epic #348). CASCADES — a saved question
+  // and its answers are the user's own content, derived from their private
+  // recordings, with no read path for anyone else (no `ask:read_any`), so a
+  // deleted account leaves no Ask history. See the block comment above
+  // `AskConversation`.
+  askConversations AskConversation[]
+
   @@map("users")
 }
 
@@ -1419,6 +1426,13 @@ model Job {
   // `@unique`/nullable/`SetNull` because a proposal's own review lifetime is
   // independent of `job.history.purge`'s schedule for this row.
   kgProposal KgProposal?
+
+  // The `ask_messages` assistant turn this job is producing (or produced),
+  // when `type` is `'ask.respond'` (epic #348, issues #376/#378). Same
+  // one-to-one shape as `noteGeneration` above, for the same reason:
+  // `AskMessage.jobId` is `@unique`/nullable/`SetNull` because a saved
+  // conversation outlives `job.history.purge`'s schedule for this row.
+  askMessage AskMessage?
 
   // See the block comment above ("Prisma-expressible indexes...") for why
   // these eight are declared here and three more exist only in
@@ -4331,22 +4345,26 @@ model KgEntity {
   owner      User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   mergedInto KgEntity? @relation("KgEntityMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
 
-  mergedFrom              KgEntity[]       @relation("KgEntityMergedInto")
+  mergedFrom              KgEntity[]        @relation("KgEntityMergedInto")
   aliases                 KgEntityAlias[]
-  relationsFrom           KgRelation[]     @relation("KgRelationFrom")
-  relationsTo             KgRelation[]     @relation("KgRelationTo")
-  itemsAsSubject          KgItem[]         @relation("KgItemSubject")
-  itemsAsMeeting          KgItem[]         @relation("KgItemMeeting")
-  itemsAsOwnerPerson      KgItem[]         @relation("KgItemOwnerPerson")
-  itemsAsCounterparty     KgItem[]         @relation("KgItemCounterparty")
+  relationsFrom           KgRelation[]      @relation("KgRelationFrom")
+  relationsTo             KgRelation[]      @relation("KgRelationTo")
+  itemsAsSubject          KgItem[]          @relation("KgItemSubject")
+  itemsAsMeeting          KgItem[]          @relation("KgItemMeeting")
+  itemsAsOwnerPerson      KgItem[]          @relation("KgItemOwnerPerson")
+  itemsAsCounterparty     KgItem[]          @relation("KgItemCounterparty")
   mentions                KgMention[]
-  proposalItemsMergedInto KgProposalItem[] @relation("KgProposalItemMergeInto")
-  mergesAsSurvivor        KgMerge[]        @relation("KgMergeSurvivor")
-  mergesAsMerged          KgMerge[]        @relation("KgMergeMerged")
-  distinctPairsAsA        KgDistinctPair[] @relation("KgDistinctPairA")
-  distinctPairsAsB        KgDistinctPair[] @relation("KgDistinctPairB")
+  proposalItemsMergedInto KgProposalItem[]  @relation("KgProposalItemMergeInto")
+  mergesAsSurvivor        KgMerge[]         @relation("KgMergeSurvivor")
+  mergesAsMerged          KgMerge[]         @relation("KgMergeMerged")
+  distinctPairsAsA        KgDistinctPair[]  @relation("KgDistinctPairA")
+  distinctPairsAsB        KgDistinctPair[]  @relation("KgDistinctPairB")
   digest                  KgEntityDigest?
   views                   KgEntityView[]
+  // Ask conversations scoped to this entity (issue #376). SetNull on the
+  // conversation's side — forgetting or merging a person drops the scope
+  // link, never the user's own conversation.
+  askConversationsScoped  AskConversation[]
 
   // "This owner's entities of type X, by review state" and "this owner's
   // entities, recently updated" — the two shapes an entity list/filter reads.
@@ -4907,7 +4925,7 @@ model KgEntityView {
 /// rather than typed columns, produced by the pure `computeLayout()` function and consumed only
 /// by `GraphOverviewService`, which joins live entity rows back in at read time.
 model KgGraphLayout {
-  id     String @id @default(uuid()) @db.Uuid
+  id      String @id @default(uuid()) @db.Uuid
   ownerId String @map("owner_id") @db.Uuid
 
   computedAt DateTime @map("computed_at") @db.Timestamptz(6)
@@ -4928,4 +4946,109 @@ model KgGraphLayout {
 
   @@index([ownerId, computedAt(sort: Desc)])
   @@map("kg_graph_layouts")
+}
+
+// =============================================================================
+// Ask — saved conversations with the read-only graph agent (issue #376, epic #348)
+// =============================================================================
+//
+// `ask_conversations` is one saved conversation; `ask_messages` is one turn in
+// it. An assistant turn's `content` is the DURABLE STREAM BUFFER the
+// `ask.respond` job (#378) appends to while it streams and the SSE endpoint
+// (#379) reads from — the same "durable buffer, stream is a view" contract
+// `note_generations` established (docs/specs/notes.md), so a turn completes
+// identically whether or not anyone is watching.
+//
+// Ownership: `owner_id` CASCADES (a deleted account leaves no Ask history, and
+// there is deliberately no `ask:read_any` — a conversation derives from the
+// owner's private recordings). `scope_entity_id` is SetNull: forgetting or
+// merging the scoped person drops only the scope link; the conversation text
+// is the user's own content, never graph data. `conversation_id` CASCADES.
+// `job_id` mirrors `TranscriptExport.jobId` exactly (`@unique`/nullable/SetNull).
+//
+// INTENTIONAL SCHEMA DRIFT: `ask_messages_one_running_turn_uniq_idx` — a
+// partial UNIQUE index on `(conversation_id) WHERE role = 'assistant' AND
+// status IN ('pending','streaming')` — exists ONLY in migration.sql, because
+// Prisma cannot express a partial index. It is what enforces "at most one
+// running turn per conversation" (the `database_backup_runs_active_uniq_idx`
+// pattern — never a `findFirst` before the insert, which races). #378 maps a
+// violation to 409 `ask_turn_running`. Do not "fix" the drift with a
+// `@@unique`.
+// =============================================================================
+
+enum AskMessageRole {
+  user
+  assistant
+}
+
+enum AskMessageStatus {
+  pending
+  streaming
+  complete
+  failed
+}
+
+enum AskErrorClass {
+  auth
+  refusal
+  rate_limit
+  budget
+  timeout
+  other
+}
+
+// Why an assistant turn ended (spec §21.3). Anything but `stop` means the
+// turn hit a cap and ended with its best answer — the UI says "stopped early".
+enum AskFinishReason {
+  stop
+  step_cap
+  token_cap
+  time_cap
+}
+
+model AskConversation {
+  id            String       @id @default(uuid()) @db.Uuid
+  ownerId       String       @map("owner_id") @db.Uuid
+  owner         User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  // null until the first message; then the first 80 chars of it (#378).
+  title         String?
+  scopeEntityId String?      @map("scope_entity_id") @db.Uuid
+  // Forgetting a person drops the scope, keeps the conversation.
+  scopeEntity   KgEntity?    @relation(fields: [scopeEntityId], references: [id], onDelete: SetNull)
+  messages      AskMessage[]
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([ownerId, updatedAt(sort: Desc)])
+  @@index([ownerId, scopeEntityId])
+  @@map("ask_conversations")
+}
+
+model AskMessage {
+  id               String           @id @default(uuid()) @db.Uuid
+  conversationId   String           @map("conversation_id") @db.Uuid
+  conversation     AskConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role             AskMessageRole
+  // assistant: the durable stream buffer, APPEND-ONLY while streaming.
+  content          String           @default("") @db.Text
+  status           AskMessageStatus @default(pending)
+  // AskToolCall[] / AskCitation[] — see `apps/api/src/ask/dto/ask.dto.ts`.
+  toolCalls        Json             @default("[]") @map("tool_calls")
+  citations        Json             @default("[]")
+  model            String?
+  provider         String?
+  promptTokens     Int?             @map("prompt_tokens")
+  completionTokens Int?             @map("completion_tokens")
+  errorClass       AskErrorClass?   @map("error_class")
+  // spec §21.3: a capped turn ends with its best answer and says so.
+  finishReason     AskFinishReason? @map("finish_reason")
+  // Mirrors TranscriptExport.jobId.
+  jobId            String?          @unique @map("job_id") @db.Uuid
+  job              Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([conversationId, createdAt])
+  // HAND-WRITTEN in migration.sql only: `ask_messages_one_running_turn_uniq_idx`
+  // — see the section header's "INTENTIONAL SCHEMA DRIFT" note.
+  @@map("ask_messages")
 }

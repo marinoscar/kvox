@@ -59,7 +59,7 @@ export function formatDataSize(value: string | null | undefined): string {
  * the dialog states that part of `everything`'s blast radius in prose instead.
  */
 const CATEGORY_NOUNS: Record<
-  Exclude<UserDataCategory, 'credentials' | 'onboarding' | 'graph'>,
+  Exclude<UserDataCategory, 'credentials' | 'onboarding' | 'graph' | 'ask'>,
   [singular: string, plural: string]
 > = {
   transcripts: ['recording', 'recordings'],
@@ -175,6 +175,13 @@ export function buildDeletionInventory(
       if (items > 0) {
         parts.push(countPhrase(items, ['knowledge graph fact', 'knowledge graph facts']));
       }
+      continue;
+    }
+
+    if (category === 'ask') {
+      // A count only (#376) — conversations have no storage object behind them.
+      const { count } = summary.askConversations;
+      if (count > 0) parts.push(countPhrase(count, ['Ask conversation', 'Ask conversations']));
       continue;
     }
 

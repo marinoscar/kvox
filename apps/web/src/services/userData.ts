@@ -98,6 +98,12 @@ export interface UserDataSummary {
    * `graph` scope.
    */
   graph: { entities: number; items: number };
+  /**
+   * The caller's saved Ask conversations (issue #376) — a count only; their
+   * messages go with them. Deleted by `content` and `everything` only, like
+   * the graph — a category, not a scope.
+   */
+  askConversations: { count: number };
   activeDeletion: UserDataDeletion | null;
 }
 
@@ -138,7 +144,7 @@ export const USER_DATA_CONFIRMATION: Record<UserDataScope, string> = {
 // =============================================================================
 
 /**
- * The seven categories a scope may or may not cover.
+ * The eight categories a scope may or may not cover.
  *
  * Named exactly as `apps/api/src/user-data/job-types.ts` names them, and in the
  * same order, so the two functions can be read side by side.
@@ -150,7 +156,8 @@ export type UserDataCategory =
   | 'files'
   | 'credentials'
   | 'onboarding'
-  | 'graph';
+  | 'graph'
+  | 'ask';
 
 /** Every category, for callers that need to ask about all of them. */
 export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
@@ -161,6 +168,7 @@ export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
   'credentials',
   'onboarding',
   'graph',
+  'ask',
 ];
 
 /**
@@ -227,6 +235,11 @@ export function scopeIncludes(scope: UserDataScope, category: UserDataCategory):
     // on the note-templates line; no narrow scope takes it, and there is
     // deliberately no `graph` scope. A category, not a scope.
     case 'graph':
+      return scope === 'content' || scope === 'everything';
+    // ⚠ ASK CONVERSATIONS ARE `content`/`everything` ONLY (#376) — content the
+    // user made, on the graph's line; no narrow scope takes them and there is
+    // no `ask` scope. A category, not a scope.
+    case 'ask':
       return scope === 'content' || scope === 'everything';
   }
 }

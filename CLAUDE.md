@@ -1024,6 +1024,21 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `revert_conflict` `{ conflicts, revertible }` unless `confirmPartial: true`, 409
   `proposal_not_committed`; audited `graph.proposal_reverted` (`graph:write`)
 
+### Ask
+Saved conversations with the read-only graph agent (issue #376, epic #348). Every route is
+`graph:read` — there is deliberately no `ask:*` pair — owner-only, **404, never 403**, through
+`AskAccessService` (`apps/api/src/ask/`). The `AskMessage` wire schema in `ask/dto/ask.dto.ts`
+is the contract #378–#382 use unchanged. See [`docs/API.md`](docs/API.md#ask) and
+[`docs/specs/ontology.md`](docs/specs/ontology.md) §21.
+- `GET /api/ask/conversations?cursor&limit&scopeEntityId` - `updated_at DESC, id DESC`, keyset
+  cursor fingerprinted to caller + filter (400 otherwise); `running` and a ≤140-char
+  marker-stripped `lastMessagePreview` per row
+- `GET /api/ask/conversations/{id}?before` - The newest 100 messages oldest-first + `hasEarlier`
+- `POST /api/ask/conversations` - **201**; 404 when `scopeEntityId` is not the caller's readable entity
+- `PATCH /api/ask/conversations/{id}` - Rename
+- `DELETE /api/ask/conversations/{id}` - **204**, allowed while a turn runs (cascade); audited
+  `ask.conversation_deleted` with counts/ids only
+
 ### Health
 - `GET /api/health/live` - Liveness check
 - `GET /api/health/ready` - Readiness check (includes DB)
@@ -1428,6 +1443,16 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `max(updated_at)` over the owner's `kg_entities`/`kg_relations` at the moment the snapshot was
   computed, stamped **before** the read starts; `GET /api/graph/overview` compares it against a
   fresh count to report `stale: true` without ever recomputing itself.
+- `ask_conversations` - One saved Ask conversation (issue #376, epic #348). `owner_id`
+  **Cascade**; `scope_entity_id` **SetNull** into `kg_entities` — forgetting or merging the
+  scoped entity drops the link, never the conversation; `title` null until the first message.
+- `ask_messages` - One turn. `content` is the assistant's durable stream buffer (append-only
+  while streaming — the `note_generations` contract); `tool_calls`/`citations` JSONB,
+  `error_class`, `finish_reason` (`stop | step_cap | token_cap | time_cap`; non-`stop` =
+  "stopped early"), `job_id` `@unique`/SetNull like `transcript_exports.job_id`;
+  `conversation_id` Cascade. `ask_messages_one_running_turn_uniq_idx` (hand-written partial
+  unique, `migration.sql` only — intentional drift) allows one `pending`/`streaming` assistant
+  turn per conversation; #378 maps its violation to 409 `ask_turn_running`.
 
 ## Navigation Destination Model
 
@@ -2134,7 +2159,8 @@ with nothing left in the database that knows they exist, the exact failure
 The scope matrix (`scopeIncludes` in `apps/api/src/user-data/job-types.ts`):
 `transcripts`/`notes`/`files` each remove exactly one category; `content` is
 transcripts + notes + the caller's own note templates + files + the caller's
-knowledge graph; `everything` is `content` plus credentials (AI provider
+knowledge graph + their saved Ask conversations (the `ask` category, #376 — deleted inline,
+first; no new scope string); `everything` is `content` plus credentials (AI provider
 keys, personal access tokens). No scope deletes the account. The graph
 (issue #357, epic #344) is not deleted inline like the others: `content`/
 `everything` enqueue `kg.purge {scope: 'all'}` and let that job's handler own

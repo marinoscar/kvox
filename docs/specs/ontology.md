@@ -1482,10 +1482,27 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   `note_generations` already uses, verified above), `tool_calls` JSONB (the
   agent's own tool-call trace, read by the citation-validity check in
   §"Verification"), `citations` JSONB, `model`/`provider` (§20.3), token
-  counts, `error_class`, `job_id`. `owner_id`-equivalent access runs through
+  counts, `error_class`, `finish_reason`, `job_id`. `owner_id`-equivalent access runs through
   `ask_conversations.owner_id`; `ask_messages` has no owner column of its
   own, mirroring how `note_generations.noteId` (verified above) carries
   ownership through its parent rather than duplicating it.
+  **As built (issue #376):** migration `20260926050000_add_ask_conversations`.
+  `ask_conversations.owner_id` Cascade; `scope_entity_id` **SetNull** into
+  `kg_entities` (forgetting or merging the scoped person drops the scope link,
+  never the conversation — the text is the user's own content, only the link
+  is graph data). `ask_messages.conversation_id` Cascade; `job_id`
+  `@unique`/nullable/SetNull, mirroring `transcript_exports.job_id`.
+  `error_class` is `auth | refusal | rate_limit | budget | timeout | other`;
+  `finish_reason` is `stop | step_cap | token_cap | time_cap` — anything but
+  `stop` means the turn hit a cap (§21.3) and ended with its best answer,
+  which the UI renders as "stopped early". **Intentional schema drift:** the
+  hand-written partial unique index `ask_messages_one_running_turn_uniq_idx`
+  (`(conversation_id) WHERE role = 'assistant' AND status IN ('pending',
+  'streaming')`) caps each conversation at one running turn in the database
+  itself — the `database_backup_runs_active_uniq_idx` pattern, never a
+  `findFirst` before the insert — and #378 maps its violation to **409
+  `ask_turn_running`**. It lives in `migration.sql` only; Prisma cannot
+  express it.
 - **`kg_merges`** — one row per merge (§7), with the full reversal payload.
 - **`kg_distinct_pairs`** — confirmed-not-the-same pairs (§7), skipped by
   every future candidate-generation pass.
@@ -1687,7 +1704,7 @@ override), entity `merge`/`merges/:id/reverse`/`distinct-pairs` (§7),
 manual re-cluster).
 
 **Ask is a separate controller and OpenAPI tag (`Ask`,
-`apps/api/src/ask/ask.controller.ts`, planned) but a reused permission.**
+`apps/api/src/ask/ask-conversations.controller.ts`, built by #376) but a reused permission.**
 `GET/POST/PATCH/DELETE /api/ask/conversations[...]`, `POST .../messages`, and
 `GET /api/ask/messages/:id/stream` (§21) are gated on `graph:read` alone,
 with no `ask:*` pair — asking a question of one's own graph is a read of it,
@@ -2639,6 +2656,28 @@ without the user having to name it. `GET/POST/PATCH/DELETE
 conversation is the caller's own scratch history over data they can already
 read.
 
+**As built (issue #376)** — `apps/api/src/ask/`, OpenAPI tag `Ask`, wire
+schemas in `ask/dto/ask.dto.ts` (the `AskMessage` shape #378–#382 use
+unchanged; see `docs/API.md` `### Ask`). The list is ordered `updated_at
+DESC, id DESC` with a keyset cursor fingerprinted to the caller and the
+`scopeEntityId` filter (a cursor from another list is a 400, never a silent
+restart); each summary carries `running` (a turn is `pending`/`streaming`)
+and a `lastMessagePreview` of at most 140 characters with citation markers
+(`[^ev7]`, `[^ent2]`, `[^doc1]`, `[^itm3]`, `[^rel4]`) stripped. The detail
+returns the newest 100 messages oldest-first with `hasEarlier`, paged by
+`?before=<messageId>`. Creating with a `scopeEntityId` that is not one of the
+caller's readable entities (missing, foreign, unreviewed, merged) is the
+entity's own **404**; `scopeEntity` is read live and is `null` once the
+entity is merged or forgotten. A foreign and a missing conversation id are
+the same 404 (`AskAccessService`, which also exposes `requireMessage` for
+#378/#379). Deleting a conversation whose turn is running is allowed — the
+cascade removes the message, `ask.respond` returns normally when its row is
+gone, and the stream emits `error { errorClass: 'gone' }`. A delete is
+audited `ask.conversation_deleted` with `{ messageCount, scopeEntityId }`
+only, never content. At most one running turn per conversation is enforced
+by `ask_messages_one_running_turn_uniq_idx` (§10), which #378 maps to 409
+`ask_turn_running`.
+
 ### 21.3 One turn, one job
 
 `POST /api/ask/conversations/:id/messages` `{ content, model? }` enqueues
@@ -2711,6 +2750,17 @@ document's scope matrix already uses for every other category, with no new
 purge job needed because a plain cascading delete is sufficient here —
 unlike a transcript or a note, an Ask conversation has no external storage
 object or provider-side state to clean up alongside the row.
+
+**As built (issue #376):** `ask` is a **category, not a scope** —
+`scopeIncludes(scope, 'ask')` is true for `content`/`everything` only, and
+`USER_DATA_SCOPES` is unchanged (no new scope string; the narrow
+`transcripts`/`notes`/`files` scopes never touch conversations, the same
+reasoning as note templates and the graph). `user.data.purge` deletes the
+caller's conversations **first and inline** (`askConversation.deleteMany({
+where: { ownerId } })`, messages by cascade), then enqueues `kg.purge` for the
+`graph` category, then the existing steps. A deleted **account** loses its
+conversations through `ask_conversations.owner_id` Cascade instead.
+`GET /api/user-data/summary` reports `askConversations: { count }`.
 
 ## 22. Visualization — explorer and overview
 

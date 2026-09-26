@@ -69,13 +69,13 @@ anywhere else in the module; the two are separated by a queue and by
 minutes, and nothing would report a disagreement between two copies of the
 same rule if one existed.
 
-| Scope | Transcripts | Notes | Note Templates | Files | Graph | Credentials |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| `transcripts` | ✓ | | | | | |
-| `notes` | | ✓ | | | | |
-| `files` | | | | ✓ | | |
-| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Scope | Transcripts | Notes | Note Templates | Files | Graph | Ask conversations | Credentials |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `transcripts` | ✓ | | | | | | |
+| `notes` | | ✓ | | | | | |
+| `files` | | | | ✓ | | | |
+| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 The rule the table encodes: **every narrow scope maps to exactly one
 category; only the two composites fan out.** `content` is everything the
@@ -140,6 +140,22 @@ citing a transcript or note this same request is about to delete go away
 alongside them (though correctness never depends on that order, since every
 evidence anchor is `SetNull` rather than `Restrict`).
 
+Saved **Ask conversations** (`ask_conversations`/`ask_messages`, issue #376,
+epic #348) sit on the graph's line for the same reason: a conversation is
+content the user made — their own questions and the answers they asked for —
+so it is `content`/`everything` only, and no narrow scope touches it. Like
+`graph` and `noteTemplates`, `ask` is a **category** of `scopeIncludes`, not a
+new scope string: `USER_DATA_SCOPES` is unchanged. Unlike the graph it **is**
+deleted inline — one owner-scoped `DELETE` on `ask_conversations`, every
+message following through the `conversation_id` cascade (a turn still
+streaming included) — because a conversation has no storage object, no
+provider-side state and no other table pointing at it, so there is no plan
+for a job of its own to own. It runs **first**, before the graph's `kg.purge`
+enqueue; nothing depends on that order (a conversation's only link into
+`kg_*` is its `SetNull` scope). The summary reports it as
+`askConversations: { count }`. Deleting the **account** removes the same rows
+by the `ask_conversations.owner_id` cascade instead.
+
 Credentials sit at the opposite end of the same argument: they are
 `everything`-only because revoking a user's API tokens is not implied by
 "delete my recordings," and a `content` scope that silently signed a user's
@@ -202,12 +218,13 @@ it does not disable a constraint. Every blocking column involved is
 `Restrict`, so the handler clears the reference **first**, and the delete
 that follows is then an ordinary one the database was always going to allow.
 The order the five steps run in is a direct consequence of which columns
-point at which tables, not a preference. The knowledge graph (`content`/
-`everything` only) is not one of the five: it participates in no `Restrict`
-foreign key from this handler's own tables, so its `kg.purge` enqueue is not
-ordered against them by necessity either — it simply runs before all five,
-so that graph rows citing a transcript or note about to be deleted below go
-with them.
+point at which tables, not a preference. Ask conversations and the knowledge
+graph (both `content`/`everything` only) are not among the five: Ask
+conversations are deleted inline before everything else, and the graph
+participates in no `Restrict` foreign key from this handler's own tables, so
+its `kg.purge` enqueue is not ordered against them by necessity either — it
+simply runs next, before all five, so that graph rows citing a transcript or
+note about to be deleted below go with them.
 
 1. **Credentials** (`everything` only) — `user_ai_credentials` and
    `personal_access_tokens` both cascade from `users` and from nothing else,
