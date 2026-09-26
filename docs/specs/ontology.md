@@ -1150,7 +1150,9 @@ summary):
 - **`kg_entities`** — `Person`, `Organization`, `Project`, `Meeting` (`type`
   enum, `label`, `props` JSONB, `embedding vector(1536)` — reusing the exact
   model/dimension contract `SearchEmbedding` already carries, verified above,
-  rather than a second embedding convention — `review_status` (§5.5),
+  rather than a second embedding convention — `embedding_model`/
+  `embedding_hash` (the content hash `kg.embed` keys on to skip re-embedding
+  an unchanged entity, #364), `review_status` (§5.5),
   `merged_into_id` (self-relation, nullable), `occurred_at` (`Meeting` only),
   `ontology_version` (§17.4 — the definition-file version this row was
   written against). `owner_id` **Cascade** — the same reasoning `notes.owner_id`/
@@ -1165,8 +1167,11 @@ summary):
   column can hold the strings but not which of three very different origins
   each one came from, and that provenance is exactly what §7's "learning"
   step needs to record. `entity_id` **Cascade**.
-- **`kg_relations`** — `type` (§5.2's sixteen), `from_id`, `to_id`, `props`
-  JSONB, `valid tstzrange` + `valid_precision` (`day | month | year |
+- **`kg_relations`** — `type` (§5.2's sixteen), `from_id`, `to_id`, plus
+  `from_speaker_id` (nullable, FK into `transcript_speakers`, Cascade — the
+  source of an `IDENTIFIED_AS` edge is a diarized speaker, not yet a graph
+  entity; exactly one of `from_id`/`from_speaker_id` is ever set, #351),
+  `props` JSONB, `valid tstzrange` + `valid_precision` (`day | month | year |
   unknown`, §5.4 — `valid_from`/`valid_to` name the range's lower and upper
   bound throughout this document's prose, but there is exactly one stored
   column, a range, never two nullable timestamps), `review_status` (§5.5),
@@ -1177,10 +1182,13 @@ summary):
   `statement`/`title`, `status`, `occurred_at`, `due_at`, `valid tstzrange` +
   `valid_precision` alongside `occurred_at` (§5.4 — the same bitemporal pair
   `kg_relations` carries, so an item's own valid period, when it has one, is
-  never a second stored shape from its edges' shape), `owner_id`
-  (Person), `counterparty_id`, `superseded_by_id`, `sensitivity` (nullable —
+  never a second stored shape from its edges' shape), `owner_person_id`
+  (Person), `counterparty_id`, `meeting_id` (nullable, FK into `kg_entities`,
+  `SetNull` — a contract addition backing `CREATED_IN`/`DECIDED_IN`, #350,
+  #351), `superseded_by_id`, `sensitivity` (nullable —
   only meaningful when `kind = 'person_fact'`, §5.6), `statement_hash` (§7's
-  dedup and suppression key), `embedding`, `ontology_version` (§17.4). One
+  dedup and suppression key), `embedding`/`embedding_model`/`embedding_hash`,
+  `ontology_version` (§17.4). One
   table because all four kinds
   share the same lifecycle (§5.5), the same evidence and dedup mechanics
   (§7), and the same `occurred_at`-sorted "what's changed" query (§9.1) —
@@ -1202,18 +1210,29 @@ summary):
   section reads. `entity_id`/`note_id`/`transcript_id` **Cascade** — a
   mention has no meaning once either side is gone, unlike evidence's
   pointer relationship above.
-- **`kg_proposals`** — one row per extraction (or import, §18.3) run:
-  `note_id`/`note_version` (null for an import), `kind` (`extraction |
-  import` — the value §18.3's own prose already assumed for an import row;
-  made an explicit column here rather than left implicit), `status` (`draft |
-  committed | discarded | failed | reverted` — `reverted` added by §19's
-  revert-commit), `model`/`provider` (§20 — which task-model resolution
+- **`kg_proposals`** — one row per extraction, import or resolution
+  (§18.3, #364) run: `note_id`/`note_version`, non-null if and only if
+  `kind = 'extraction'` (null for `import`/`resolution`) — enforced by
+  `kg_proposals_note_source_chk`, keyed on `note_version` rather than
+  `note_id` because `note_id` is `SetNull`: hard-deleting a note nulls
+  `note_id` on its extraction proposals as a side effect of that FK, and a
+  CHECK keyed on `note_id` would then fail rows the delete never meant to
+  touch (#351; #363 owns the prose for the `extracting` lifecycle this
+  column feeds). `kind` (`extraction | import | resolution` — the value
+  §18.3's own prose already assumed for an import row; made an explicit
+  column here rather than left implicit; `resolution` is #364's own kind),
+  `status` (`draft | extracting | committed | discarded | failed | reverted`
+  — `extracting` is #363's in-flight state, `reverted` is #366's
+  revert-commit; #363 owns the lifecycle prose), `model`/`provider` (§20 —
+  which task-model resolution
   actually ran, recorded rather than re-derived, so an administrator
   changing the default tomorrow never rewrites what an already-committed
   proposal used yesterday), `system_prompt`/`user_content` (the generation-
   context snapshot, §6), `user_guidance` JSONB (§19.1 — pinned entities, a
   type selection, free text, read by `kg.extract`'s prompt builder), `stats`
-  JSONB, `committed_at`/`reverted_at`, `job_id`. `owner_id` Cascade.
+  JSONB, `committed_at`/`reverted_at`, `job_id`, `commit_log` JSONB (#366 —
+  the internal undo record the commit writes and the revert reads; never
+  serialized to clients, `stats` is the display copy). `owner_id` Cascade.
 - **`kg_proposal_items`** — one row per proposed entity, relation, or item:
   `kind` (`entity | relation | item | closing` — `closing` is §7's "closing
   a temporal edge is a proposal row" case), `payload`, `resolution` JSONB
@@ -1227,7 +1246,12 @@ summary):
   precision/recall accounting in §6's eval harness for the identical reason
   a human's own correction is never scored as a model error), `committed_ref_id`
   (the `kg_entities`/`kg_relations`/`kg_items` row this item became once
-  committed — §19.4's revert reads this to know exactly what to undo).
+  committed — §19.4's revert reads this to know exactly what to undo),
+  `merge_into_id` (#366 — nullable, FK into `kg_entities`, `SetNull`, set if
+  and only if `decision = 'merge_into'`; losing the target entity clears the
+  override rather than blocking the delete) and `distinct_from` (#366 — a
+  reviewer's "not the same as" candidates, recorded as `kg_distinct_pairs`
+  rows at commit).
 - **`kg_graph_layouts`** — one row per computed whole-graph layout (§22):
   `computed_at`, `node_count`, `edge_count`, `clusters` JSONB (which
   community each node belongs to), `positions` JSONB (precomputed 2D
@@ -1275,7 +1299,12 @@ and `kg_items` (§5.4 — the range-containment (`@>`) and overlap (`&&`)
 queries §5.4's worked examples and closing rule depend on need this, not the
 plain b-tree a bare pair of timestamp columns would have used);
 `(owner_id, subject_id, occurred_at desc)` on `kg_items` (§9.1's brief
-query); a partial unique on `kg_entity_views(user_id, entity_id)`.
+query); a partial unique on `kg_entity_views(user_id, entity_id)`; partial
+uniques on `kg_proposals(note_id) WHERE status = 'draft'` (at most one open
+draft per note) and `kg_proposals(note_id) WHERE status = 'extracting'` (at
+most one running extraction per note, #363's 409 `extraction_running`), plus
+`kg_proposals(owner_id) WHERE kind = 'import' AND status = 'extracting'`
+(at most one running import per owner, #387) — #351.
 
 **`pg_trgm` is a new migration requirement for this codebase — pgvector
 already is not** (`SearchEmbedding` already depends on it, verified above),
