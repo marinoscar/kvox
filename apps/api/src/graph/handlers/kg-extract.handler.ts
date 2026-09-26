@@ -170,7 +170,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     }
     const proposal = await this.prisma.kgProposal.findUnique({
       where: { id: payload.proposalId },
-      select: { id: true, status: true, ownerId: true, stats: true },
+      select: { id: true, status: true, ownerId: true },
     });
     if (!proposal || proposal.status !== 'extracting' || proposal.ownerId !== payload.userId) {
       this.logger.log(`${KG_EXTRACT_JOB_TYPE} proposal ${payload.proposalId} is not extracting; job ${job.id} is a no-op`);
