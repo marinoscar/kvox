@@ -30,8 +30,16 @@
 
 import type { AskCitation } from '../../services/ask';
 
-/** Matches one marker. Global — reset `lastIndex` or use `matchAll`. */
+/**
+ * Matches one marker. The shared constant is NEVER used for matching directly:
+ * a global regex carries `lastIndex` between calls (and `matchAll` copies it),
+ * so every use goes through {@link markerRe} for a fresh instance.
+ */
 export const ASK_MARKER_RE = /\[\^(ev|ent|doc|itm|rel)(\d+)\]/g;
+
+function markerRe(): RegExp {
+  return new RegExp(ASK_MARKER_RE.source, 'g');
+}
 
 /** The same shape, anchored, for a footnote identifier/label (`ev7`). */
 const MARKER_ID_RE = /^(ev|ent|doc|itm|rel)\d+$/;
@@ -106,12 +114,11 @@ export default function remarkAskCitations(options: RemarkAskCitationsOptions) {
     };
 
     const rewriteText = (value: string): MdNode[] | null => {
-      ASK_MARKER_RE.lastIndex = 0;
-      if (!ASK_MARKER_RE.test(value)) return null;
+      if (!markerRe().test(value)) return null;
       const out: MdNode[] = [];
       let pending = '';
       let last = 0;
-      for (const match of value.matchAll(ASK_MARKER_RE)) {
+      for (const match of value.matchAll(markerRe())) {
         const start = match.index ?? 0;
         pending += value.slice(last, start);
         last = start + match[0].length;
@@ -123,7 +130,7 @@ export default function remarkAskCitations(options: RemarkAskCitationsOptions) {
         } else {
           // Removed. Tidy the seam against the text up to the next marker.
           const rest = value.slice(last);
-          const nextMarker = rest.search(ASK_MARKER_RE);
+          const nextMarker = rest.search(markerRe());
           const following = nextMarker === -1 ? rest : rest.slice(0, nextMarker);
           pending = trimBeforeRemoval(pending, following);
         }
@@ -196,7 +203,7 @@ export function summarizeAskCitations(
   const seen = new Set<string>();
   let validCount = 0;
   let invalidCount = 0;
-  for (const match of stripMarkdownCode(content).matchAll(ASK_MARKER_RE)) {
+  for (const match of stripMarkdownCode(content).matchAll(markerRe())) {
     const marker = `${match[1]}${match[2]}`;
     if (seen.has(marker)) continue;
     seen.add(marker);
