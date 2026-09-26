@@ -607,6 +607,72 @@ export class GraphWriteService {
     return { ...created, validPrecision } as KgItem;
   }
 
+  /**
+   * Close a live temporal relation at `to` (#365's `closing` row, applied by
+   * the proposal commit #366): `valid` becomes `[lower(valid), to)` and
+   * `superseded_by_id` names the relation that closed it. The review status
+   * is untouched — a closed period is still a curated fact, history is the
+   * point (§5.4). `validPrecision` is the precision to keep; the lower bound
+   * keeps its own.
+   */
+  async closeRelation(
+    tx: Tx,
+    ownerId: string,
+    relationId: string,
+    input: { valid: ValidRange; validPrecision: ValidPrecision; supersededById: string | null },
+  ): Promise<void> {
+    const relation = await tx.kgRelation.findFirst({
+      where: { id: relationId, ownerId, reviewStatus: { in: LIVE_STATUSES } },
+      select: { id: true, type: true },
+    });
+    if (!relation) throw invalid('The relation to close is not in your graph.', 'relationId');
+    if (input.validPrecision === 'unknown') throw invalid('A closed range needs a known precision.', 'validPrecision');
+    if (input.supersededById) {
+      const successor = await tx.kgRelation.findFirst({
+        where: { id: input.supersededById, ownerId },
+        select: { id: true },
+      });
+      if (!successor) throw invalid('The closing relation is not in your graph.', 'supersededById');
+    }
+    const literal = toPgRange(input.valid);
+    await tx.$executeRaw`
+      UPDATE kg_relations
+         SET valid = ${literal}::tstzrange,
+             valid_precision = ${input.validPrecision}::kg_valid_precision,
+             superseded_by_id = ${input.supersededById}::uuid,
+             updated_at = now()
+       WHERE id = ${relationId}::uuid`;
+  }
+
+  /**
+   * A restated commitment's changes (#365's `same` verdict, applied by the
+   * proposal commit #366): status and/or due date, validated against the
+   * item type's own statuses. Evidence is added separately.
+   */
+  async updateItemState(
+    tx: Tx,
+    ownerId: string,
+    itemId: string,
+    changes: { status?: string; dueAt?: Date | null },
+    schema: EffectiveSchema,
+  ): Promise<KgItem> {
+    const item = await tx.kgItem.findFirst({ where: { id: itemId, ownerId, reviewStatus: { in: LIVE_STATUSES } } });
+    if (!item) throw new NotFoundException(GRAPH_NOT_FOUND_MESSAGES.item);
+    if (changes.status !== undefined) {
+      const type = schema.entityTypes.find((t) => t.storage === 'item' && t.itemKind === item.kind);
+      if (!(type?.statuses ?? []).includes(changes.status)) {
+        throw invalid(`'${changes.status}' is not a status of this item.`, 'status');
+      }
+    }
+    return tx.kgItem.update({
+      where: { id: itemId },
+      data: {
+        ...(changes.status !== undefined ? { status: changes.status } : {}),
+        ...(changes.dueAt !== undefined ? { dueAt: changes.dueAt } : {}),
+      },
+    });
+  }
+
   // ===========================================================================
   // Evidence
   // ===========================================================================

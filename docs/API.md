@@ -5349,9 +5349,9 @@ extraction — asking for, and estimating, a draft proposal from a note
 entities as distinct (issue #364) — the read layer — the entity index, an entity's page, its
 neighbourhood, timeline, mentions and citations, plus the explorer's expand
 (issue #370) — an entity's **brief**, "what's the latest on …?" in one
-call (issue #372) — and the whole-graph overview, read from a precomputed
-snapshot, plus its manual refresh (issue #371); the review/commit routes
-arrive with a later issue and follow the access posture below.
+call (issue #372) — the whole-graph overview, read from a precomputed
+snapshot, plus its manual refresh (issue #371) — and reviewing, committing and
+reverting proposals (issue #366); all follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
@@ -5380,7 +5380,8 @@ you can already see the row and a 404 would only mislead you.
 **Conflicts.** A 409 from a graph route names its cause in
 `details.reason` (`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
 `extraction_running`, `proposal_not_draft`, `stale_note_version`,
-`revert_conflict`, `model_lacks_capability`, `note_not_ready`); the
+`revert_conflict`, `model_lacks_capability`, `note_not_ready`,
+`proposal_not_committed`, `stale_segment_rev`); the
 extraction routes below raise the AI four plus `extraction_running` and
 `note_not_ready`.
 
@@ -5798,6 +5799,211 @@ so `aId < bId`; `created: false` when it was already recorded.
 retry re-embeds nothing that is unchanged) are server-only, run on your own
 AI key, and are throttled on your own provider bucket. `kg.embed` never embeds
 a `sensitive` personal fact.
+
+#### Proposals — review, commit, revert
+
+A **proposal** is what extraction (and `kg.resolve`, and later imports)
+produces instead of writing your graph: a set of rows — entities, relations,
+facts, and `closing` edits to existing time-bounded relations — each with its
+citations, waiting for your decision (issue #366,
+[`ontology.md` §8, §19](specs/ontology.md#8-the-proposal-and-send-to-graph)).
+Nothing reaches your graph until you **commit** it, and the commit is the one
+transaction where the no-orphans rule is enforced. Every route below is
+owner-only through `GraphAccessService`: another user's proposal and a missing
+one are the same `404` (`Proposal not found`); your own without
+`graph:write` is a `403`. Reads need `graph:read`, every write `graph:write`.
+
+Lifecycle: `extracting → draft | failed`, `draft → committed | discarded`,
+`failed → discarded`, `committed → reverted`. Review writes (decide, bulk,
+add, commit) take a row lock on the proposal and answer **409**
+`proposal_not_draft` once it has left `draft` — including the loser of two
+concurrent commits.
+
+**Shapes.** A *summary* is `{ id, kind (extraction|import|resolution), status,
+noteId, noteTitle, noteVersion, noteCurrentVersion, model, providerId,
+userGuidance, counts, stats, failure: { errorClass, message } | null,
+createdAt, committedAt, revertedAt }`. `counts` is `{ total, pending, accepted
+(accept+edit+merge_into), rejected, known, byGroup }` with **every** group key
+present: `Person`, `Organization`, `Project`, `Meeting`, `Decision`,
+`Commitment`, `Claim`, `PersonFact`, `Other` (any further entity type),
+`relations`, `closings`. A *row* is `{ id, kind (entity|relation|item|closing),
+origin (ai|user), groupKey, decision (pending|accept|edit|reject|merge_into),
+payload, editedPayload, effectivePayload (editedPayload ?? payload), display:
+{ title, subtitle }, resolution (+ refLabel) | null, mergeIntoId, distinctFrom,
+flags, prechecked, evidence[], committedRefId }`. `display` is rendered by the
+server — `"Sarah Chen → works for → Northwind Robotics"`, `"Commitment · Sarah
+Chen · due Mar 10, 2026"`, `"Closes: Sarah Chen works for OldCo, 2019 → Mar
+2026"` — so a client never re-derives it. Each `evidence` entry is `{ id,
+source: segment|note, transcriptId, segmentId, segmentRev, startMs, endMs,
+noteId, noteVersion, charStart, charEnd, quote, speakerName, stale }`;
+`stale` is true once the segment's `rev` or the note's version has moved on,
+or its source is gone. `prechecked` is what the extraction pre-check ticked,
+kept even after you change the row.
+
+##### GET /graph/proposals?status&kind&noteId&transcriptId&cursor&limit
+
+Your proposals, newest first (`createdAt desc, id desc`). `status` defaults to
+`draft`; `transcriptId` finds proposals whose note came from that transcript,
+directly or through a chain of notes. `limit` 1–50 (default 20); `cursor` is
+opaque — an unreadable one is a `400`, never a silent restart.
+**Response:** `200` `{ items: Summary[], nextCursor: string | null }`.
+
+##### GET /graph/proposals/:id?include=context
+
+`200` `{ proposal: Summary, items: Row[], context }`. Rows are ordered by the
+group order above, then `display.title`. `context` is `null` unless
+`?include=context`, which returns `{ systemPrompt, userContent }` — the exact
+prompt the extraction sent, your own data.
+
+##### GET /graph/notes/:noteId/proposal
+
+`200` `{ proposal: Detail | null }` — the newest proposal for the note whose
+status is anything but `discarded`. `404` for a note you cannot see.
+
+##### PATCH /graph/proposals/:id/items/:itemId
+
+Record one decision:
+
+```json
+{ "decision": "edit",
+  "editedPayload": { "type": "Person", "label": "Sarah Chen", "aliases": [], "props": {} },
+  "relinkTo": { "field": "to", "target": { "entityId": "…" } },
+  "distinctFrom": ["…"],
+  "evidence": { "add": [{ "source": "note", "noteVersion": 4, "charStart": 120, "charEnd": 131, "quote": "Sarah Chen" }], "remove": ["…"] } }
+```
+
+- `accept` takes the payload (keeping an earlier edit); `edit` requires the
+  **full** `editedPayload`, validated against your effective ontology with
+  closed props (`details.issues`, each `{ path, message }`). An entity may
+  change `type` — its link is cleared, only candidates of the new type stay,
+  and it gains the `type_changed` flag. An item's `statementHash` is always
+  recomputed. `reject`; `pending`; `merge_into` (entity rows only,
+  `mergeIntoId` required): "this is the existing X" — at commit the proposed
+  entity is not created, its label becomes an alias of X and its citations
+  attach to X. `mergeIntoId` must be a live entity of yours (`404`) of the
+  same type (`400`).
+- `relinkTo` re-points one endpoint (`from`/`to` on a relation;
+  `subject`/`owner`/`counterparty`/`meeting` on an item; `null` only for the
+  last three). A `{ ref }` target must be an entity row of this proposal that
+  is not rejected; a `{ entityId }` target a live entity of yours. The type
+  must fit the relation's or item's allowed endpoint types.
+- `distinctFrom` (entity rows): "not the same as" these candidates — they
+  leave `resolution.candidates` (and `resolution.ref`, if it was one) and are
+  recorded as distinct pairs at commit.
+- `evidence.add` spans are validated (below); `evidence.remove` ids must be
+  this row's citations, and a row can never be left with none (`400`
+  `details.reason: "would_orphan"`).
+
+**Response:** `200` `{ item: Row, counts }`. Per-row decisions are not
+audited — the commit is.
+**Errors:** `400` as above, or a field that does not go with the decision ·
+`404` proposal, row, entity or evidence · `409` `proposal_not_draft`,
+`stale_note_version`, `stale_segment_rev`.
+
+**Span validation** (here and on add). A `note` span must name the note's
+**current** version (`409` `stale_note_version` otherwise) with `0 ≤ charStart
+< charEnd ≤ body length`, and `body.slice(charStart, charEnd)` must equal
+`quote` after Unicode NFC and whitespace collapse on both sides (`400`
+`span_mismatch`). A `segment` span must be a line of the note's **origin
+transcript** (`400` `span_outside_source` for any other, even one you can
+read), at its current `rev` (`409` `stale_segment_rev`), with the same quote
+check; the stored citation carries the line's `startMs`/`endMs`.
+
+##### POST /graph/proposals/:id/items/bulk
+
+`{ "itemIds": ["…"], "decision": "accept" | "reject" | "pending" }` (1–500).
+**Response:** `200` `{ updated, skipped: [{ itemId, reason }], counts }`. A
+sensitive person fact and a closing are **never** accepted in bulk
+(`sensitive_requires_individual_accept`, `closing_requires_individual_accept`
+— accept them one at a time); an id that is not a row of this proposal is
+`not_found`. **Errors:** `404` · `409` `proposal_not_draft`.
+
+##### POST /graph/proposals/:id/items
+
+Add what the extraction missed, from a text selection:
+
+```json
+{ "kind": "relation",
+  "payload": { "type": "WORKS_FOR", "from": { "ref": "e1" }, "to": { "entityId": "…" },
+               "validFrom": null, "validTo": null, "precision": "unknown" },
+  "evidence": [{ "source": "segment", "segmentId": "…", "segmentRev": 2, "charStart": 8, "charEnd": 18, "quote": "Sarah Chen" }] }
+```
+
+The server assigns the row's `ref` (`u1`, `u2`, …), marks it `origin: "user"`
+and `accept`s it; for an entity, `existingEntityId` makes it `merge_into` that
+entity instead. 1–10 spans, validated as above. **Response:** `201` `{ item,
+counts }`. **Errors:** `400` payload (`details.issues`), `span_mismatch`,
+`span_outside_source` · `404` proposal or `existingEntityId` · `409`
+`proposal_not_draft`, `stale_note_version`, `stale_segment_rev`.
+
+##### POST /graph/proposals/:id/commit
+
+"Send to graph". Body `{}`. **One Serializable transaction**:
+
+1. every `accept`/`edit`/`merge_into` row is validated first — effective
+   ontology, closed props, endpoint types, every `{ ref }` endpoint an
+   accepted entity row, link and merge targets still there. Any failure is a
+   `400` `details.items: [{ itemId, issues: [{ path, message, code? }] }]`
+   (codes include `endpoint_not_accepted`, `merge_target_gone`,
+   `link_target_gone`) and **nothing is written**;
+2. entities: a row with `resolution.ref` or `merge_into` links — its
+   citations attach to the existing entity and its label is learned as an
+   alias; otherwise the entity is created (`edited` when you edited it);
+3. relations, then facts, per the dedup verdict: `known` / `same` add the
+   citations to the existing row (`same` on a commitment also applies its
+   status / due-date change); `supersedes` inserts and retires the old row;
+   anything else inserts — and a fact already in your graph verbatim is
+   "known, skipped", its citations attached there. A start-only
+   `WORKS_FOR`/`HAS_ROLE`/`REPORTS_TO` is a continuing state (`[from, )`);
+4. closings: the old open relation's validity ends at `closeAt` and it points
+   at the relation that closed it — skipped when that relation was not
+   committed;
+5. every row this commit created or linked is checked **inside the
+   transaction** for at least one citation. A violation is a bug, not your
+   input: `500`, logged, and the whole commit rolls back;
+6. distinct pairs and note mentions are recorded; a `resolution` proposal's
+   accepted suggestions become merges and its rejections distinct pairs.
+
+Rows still `pending` are not sent and not remembered as rejected. Afterwards
+(never failing the response) `kg.embed` and `kg.entity_digest` are queued for
+what changed — each only while its handler is registered, the digest also
+only while connected knowledge is enabled. Audited `graph.proposal_committed`
+(the result plus `noteId`).
+
+**Response:** `200` `{ proposal: Summary, result: { created: { entities,
+relations, items }, linked, evidenceAdded, closingsApplied, closingsSkipped,
+superseded, aliasesAdded, distinctPairsRecorded, skippedPending } }`.
+**Errors:** `400` as above · `404` · `409` `proposal_not_draft` · `500`
+no-orphans violation.
+
+##### POST /graph/proposals/:id/discard
+
+Body `{}`. A `draft` or `failed` proposal becomes `discarded`. Audited
+`graph.proposal_discarded` (`{ noteId }`). **Response:** `200` `{ proposal }`.
+**Errors:** `404` · `409` `proposal_not_draft` for any other status.
+
+##### POST /graph/proposals/:id/revert
+
+`{ "confirmPartial": false }`. Undoes a commit — but only what nobody has
+touched since. A created entity, relation or fact is reverted when it was not
+edited since, has no citations beyond the commit's own, is not named by
+anything created later, and was not merged since; a changed fact or closed
+relation is restored when it still holds exactly what the commit wrote;
+citations, learned aliases, mentions and distinct pairs are always removed;
+merges are reversed. Everything else is **kept** and listed as `{ kind:
+entity|relation|item|closing|alias|item_change, id, label, why:
+edited_since|referenced_since|merged_since|evidence_since }` (an entity a kept
+row still names is kept too, `referenced_since`).
+
+With anything to keep and `confirmPartial: false`, the answer is **409**
+`revert_conflict` with `details: { conflicts, revertible }` and **nothing
+changes**; send `confirmPartial: true` to revert the rest. The proposal
+becomes `reverted`; its rows keep their decisions. Audited
+`graph.proposal_reverted` (`{ reverted, kept, partial }`).
+
+**Response:** `200` `{ proposal: Summary, result: { reverted, kept } }`.
+**Errors:** `404` · `409` `proposal_not_committed` (not, or no longer,
+committed), `revert_conflict`.
 
 #### Attribute definitions
 
