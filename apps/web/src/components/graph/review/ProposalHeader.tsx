@@ -21,7 +21,7 @@ import type { ProposalStatus, ProposalSummary } from '../../../services/graph';
 export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   extracting: 'Extracting',
   draft: 'Draft',
-  committed: 'Sent to graph',
+  committed: 'Sent',
   discarded: 'Discarded',
   failed: 'Failed',
   reverted: 'Reverted',

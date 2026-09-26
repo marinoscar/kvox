@@ -217,7 +217,16 @@ interface SegmentListProps {
   activeMatch?: { segmentId: string; start: number; end: number } | null;
   /** Scroll this segment into view. Changing it is what "Next" does. */
   scrollToSegmentId?: string | null;
+  /**
+   * A deep link's target (`/transcripts/:id?segment=`, #367): scrolled to,
+   * focused, and highlighted for {@link DEEP_LINK_HIGHLIGHT_MS}. Handled once
+   * per id, as soon as the segments containing it have loaded.
+   */
+  highlightSegmentId?: string | null;
 }
+
+/** How long a deep-linked segment stays highlighted. */
+export const DEEP_LINK_HIGHLIGHT_MS = 2_000;
 
 export function SegmentList({
   segments,
@@ -243,6 +252,7 @@ export function SegmentList({
   matchesBySegment,
   activeMatch = null,
   scrollToSegmentId = null,
+  highlightSegmentId = null,
 }: SegmentListProps) {
   const theme = useTheme();
   const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
@@ -324,6 +334,40 @@ export function SegmentList({
     setFollowing(false);
     virtualizer.scrollToIndex(index, { align: 'center' });
   }, [scrollToSegmentId, segments, virtualizer]);
+
+  // #367: a deep-linked segment — scroll, focus once it is rendered (the list
+  // is virtualized, so it may take a frame or two), and highlight briefly.
+  const [flashSegmentId, setFlashSegmentId] = useState<string | null>(null);
+  const handledHighlight = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightSegmentId || handledHighlight.current === highlightSegmentId) return;
+    const index = segments.findIndex((segment) => segment.id === highlightSegmentId);
+    if (index < 0) return;
+    handledHighlight.current = highlightSegmentId;
+    setFollowing(false);
+    virtualizer.scrollToIndex(index, { align: 'center' });
+    setFlashSegmentId(highlightSegmentId);
+
+    let attempts = 0;
+    let focusTimer: ReturnType<typeof setTimeout> | undefined;
+    const focus = () => {
+      const target = Array.from(
+        scrollRef.current?.querySelectorAll<HTMLElement>('[data-segment-id]') ?? [],
+      ).find((element) => element.dataset.segmentId === highlightSegmentId);
+      if (target) {
+        target.focus({ preventScroll: true });
+        return;
+      }
+      attempts += 1;
+      if (attempts < 10) focusTimer = setTimeout(focus, 50);
+    };
+    focusTimer = setTimeout(focus, 0);
+    const clear = setTimeout(() => setFlashSegmentId(null), DEEP_LINK_HIGHLIGHT_MS);
+    return () => {
+      if (focusTimer) clearTimeout(focusTimer);
+      clearTimeout(clear);
+    };
+  }, [highlightSegmentId, segments, virtualizer]);
 
   const jumpToCurrent = useCallback(() => {
     setFollowing(true);
@@ -423,6 +467,7 @@ export function SegmentList({
             const words = isCurrent && !isEditing ? wordsBySegment.get(segment.id) : undefined;
             const wordIndex = words ? findWordIndexAt(words, positionMs) : -1;
             const ranges = matchesBySegment?.get(segment.id) ?? [];
+            const flashing = flashSegmentId === segment.id;
 
             return (
               <Box
@@ -441,7 +486,12 @@ export function SegmentList({
                   transform: `translateY(${virtualRow.start}px)`,
                   px: 2,
                   py: 1.25,
-                  backgroundColor: isCurrent ? 'action.selected' : 'transparent',
+                  backgroundColor: flashing
+                    ? 'action.focus'
+                    : isCurrent
+                      ? 'action.selected'
+                      : 'transparent',
+                  transition: 'background-color 400ms',
                   // Dimming rather than hiding: a filtered-out speaker's words
                   // are still part of the conversation being read, and removing
                   // them would make the transcript lie about what was said.
@@ -635,6 +685,9 @@ export function SegmentList({
                     variant="body2"
                     component="p"
                     sx={{ mt: 0.25 }}
+                    data-segment-id={segment.id}
+                    data-segment-rev={segment.rev}
+                    tabIndex={-1}
                     {...(editable
                       ? {
                           role: 'button',
