@@ -6,16 +6,26 @@
 // Naming a speaker is the highest-confidence resolution act the product sees,
 // and §8's FIRST NAMED EXCEPTION to "nothing enters the graph without a
 // reviewed proposal": the user's naming IS the review. This file turns one
-// transcript's `speaker_identities` into `Person` entities and `IDENTIFIED_AS`
+// transcript's named speakers into `Person` entities and `IDENTIFIED_AS`
 // edges in the transcript OWNER's graph.
 //
+// THE NAME IS THE ONE THE USER SEES (#405). A speaker's effective name is its
+// live `transcript_speakers.display_name` with the `speaker_identities`
+// overlay applied — `applyIdentities`, the exact precedence `materialize()`
+// and every read use (docs/specs/transcription.md §4.6) — and a speaker still
+// on its ingest placeholder (`isUnidentified`) has no name. Reading
+// `speaker_identities` alone missed a versioned rename ("Oscar" → "Joe",
+// which only writes the live row) and a name that rode along in a versioned
+// batch; a clear back to "Speaker A" retires the identity entry in the same
+// transaction, so it reads as unnamed either way.
+//
 // A FULL RECONCILE, NOT A DELTA. Every run reads the transcript's CURRENT
-// identities and makes the owner's edges for that transcript's speakers agree
+// names and makes the owner's edges for that transcript's speakers agree
 // with them — so two queued runs (`kg.speaker_link` is enqueued with
 // `skipDedup`) converge on the same end state, and a retry after a partial
 // failure is harmless. The advisory lock serialises runs for one transcript.
 // §5.1's "do not duplicate the naming" holds because the edge is DERIVED from
-// `speaker_identities` on every run; nothing here keeps its own copy.
+// the speakers' current names on every run; nothing here keeps its own copy.
 //
 // OWNER-ONLY (§12). Only the owner's own naming writes into the owner's graph:
 // an editor's act on somebody else's recording curates nobody's graph, and a
@@ -34,7 +44,11 @@ import type { EffectiveSchema } from '@app/shared/ontology';
 import { Prisma } from '@prisma/client';
 
 import { PERMISSIONS } from '../../common/constants/roles.constants';
-import { parseSpeakerIdentities } from '../../transcripts/editing/speaker-identity';
+import {
+  applyIdentities,
+  isUnidentified,
+  parseSpeakerIdentities,
+} from '../../transcripts/editing/speaker-identity';
 import type { EvidenceInput } from '../dto/graph-evidence.dto';
 import { KG_SUBJECT_TRANSCRIPT } from '../job-types';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
@@ -121,6 +135,33 @@ export function pickPerson(
   };
 }
 
+/**
+ * Each speaker's effective name — what the user sees — or no entry for a
+ * speaker still on its ingest placeholder (#405). The live row with the
+ * `speaker_identities` overlay applied, through the same `applyIdentities` /
+ * `isUnidentified` pair `materialize()` uses, so the graph can never name a
+ * speaker differently from the transcript page.
+ */
+export function effectiveSpeakerNames(
+  speakers: ReadonlyArray<{ id: string; label: string | null; displayName: string }>,
+  identitiesJson: unknown,
+): Map<string, string> {
+  const overlaid = applyIdentities(
+    {
+      speakers: speakers.map((s) => ({ ...s, colorIndex: 0, rev: 0 })),
+      segments: [],
+    },
+    parseSpeakerIdentities(identitiesJson),
+  );
+  const names = new Map<string, string>();
+  for (const speaker of overlaid.speakers) {
+    if (isUnidentified(speaker)) continue;
+    const displayName = speaker.displayName.trim();
+    if (displayName.length > 0) names.set(speaker.id, displayName);
+  }
+  return names;
+}
+
 function emptySummary(skipped: SpeakerLinkSkip | null, ownerId: string | null): SpeakerLinkSummary {
   return { skipped, ownerId, linked: 0, created: 0, unlinked: 0, createdPersonIds: [] };
 }
@@ -166,14 +207,15 @@ export class SpeakerLinkReconciler {
     if (!canWrite) return emptySummary('no_permission', ownerId);
 
     // 3. speakerId → the name's comparable form, for speakers still in the transcript.
-    const speakers = await tx.transcriptSpeaker.findMany({ where: { transcriptId }, select: { id: true } });
+    const speakers = await tx.transcriptSpeaker.findMany({
+      where: { transcriptId },
+      select: { id: true, label: true, displayName: true },
+    });
     const speakerIds = speakers.map((s) => s.id);
-    const identities = parseSpeakerIdentities(transcript.speakerIdentities);
     const named = new Map<string, { displayName: string; normalized: string }>();
-    for (const id of speakerIds) {
-      const displayName = identities[id]?.trim();
-      const normalized = displayName ? safeNormalize(displayName) : null;
-      if (displayName && normalized) named.set(id, { displayName, normalized });
+    for (const [id, displayName] of effectiveSpeakerNames(speakers, transcript.speakerIdentities)) {
+      const normalized = safeNormalize(displayName);
+      if (normalized) named.set(id, { displayName, normalized });
     }
 
     // 4. The owner's existing edges for those speakers.

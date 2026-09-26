@@ -8,6 +8,7 @@ import {
   SPEAKER_LINKED_ACTION,
   SPEAKER_UNLINKED_ACTION,
   SpeakerLinkReconciler,
+  effectiveSpeakerNames,
   pickPerson,
   safeNormalize,
   type PersonCandidate,
@@ -29,6 +30,8 @@ function setup(opts: {
   transcript?: { ownerId: string; speakerIdentities: unknown; deletedAt: Date | null } | null;
   canWrite?: boolean;
   speakers?: string[];
+  /** Live `transcript_speakers` names (#405); default: each speaker still on its placeholder. */
+  liveNames?: Record<string, string>;
   edges?: Array<{ id: string; speakerId: string; personId: string; label: string; aliases?: string[]; status?: string }>;
   persons?: Array<{ id: string; label: string; aliases?: string[]; identified?: number; updatedAt?: Date }>;
   segments?: Record<string, ReturnType<typeof segment>[]>;
@@ -48,7 +51,13 @@ function setup(opts: {
     },
     user: { findFirst: jest.fn().mockResolvedValue(opts.canWrite === false ? null : { id: OWNER }) },
     transcriptSpeaker: {
-      findMany: jest.fn().mockResolvedValue((opts.speakers ?? [SPEAKER_A, SPEAKER_B]).map((id) => ({ id }))),
+      findMany: jest.fn().mockResolvedValue(
+        (opts.speakers ?? [SPEAKER_A, SPEAKER_B]).map((id) => ({
+          id,
+          label: id,
+          displayName: opts.liveNames?.[id] ?? `Speaker ${id}`,
+        })),
+      ),
     },
     transcriptSegment: {
       findMany: jest.fn().mockImplementation(async ({ where }: { where: { speakerId: string } }) =>
@@ -309,6 +318,30 @@ describe('SpeakerLinkReconciler', () => {
     });
   });
 
+  describe('a versioned rename, read from the live row (#405)', () => {
+    it('re-points the edge to the live name even though speaker_identities still holds the old one', async () => {
+      const s = setup({
+        transcript: { ownerId: OWNER, speakerIdentities: { [SPEAKER_A]: 'Sarah Chen' }, deletedAt: null },
+        liveNames: { [SPEAKER_A]: 'Marcus Webb' },
+        edges: [{ id: 'e-old', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' }],
+      });
+      const summary = await s.run();
+
+      expect(s.write.createEntity.mock.calls[0][1]).toMatchObject({ label: 'Marcus Webb' });
+      expect(s.tx.kgRelation.delete).toHaveBeenCalledWith({ where: { id: 'e-old' } });
+      expect(summary).toMatchObject({ linked: 1, created: 1, unlinked: 0 });
+    });
+
+    it('unlinks a speaker whose live row is back on its placeholder and has no identity', async () => {
+      const s = setup({
+        transcript: { ownerId: OWNER, speakerIdentities: {}, deletedAt: null },
+        liveNames: { [SPEAKER_A]: `Speaker ${SPEAKER_A}` },
+        edges: [{ id: 'e-1', speakerId: SPEAKER_A, personId: 'p-sarah', label: 'Sarah Chen' }],
+      });
+      expect(await s.run()).toMatchObject({ linked: 0, unlinked: 1 });
+    });
+  });
+
   describe('a cleared name', () => {
     it('removes the edge, audits the unlink, and applies the same cleanup rule', async () => {
       const s = setup({
@@ -328,6 +361,33 @@ describe('SpeakerLinkReconciler', () => {
         }),
       ]);
     });
+  });
+});
+
+describe('effectiveSpeakerNames (#405)', () => {
+  const speaker = (id: string, label: string | null, displayName: string) => ({ id, label, displayName });
+
+  it('overlays an identity only on a speaker still on its placeholder', () => {
+    const names = effectiveSpeakerNames(
+      [speaker('a', 'A', 'Speaker A'), speaker('b', 'B', 'Joe')],
+      { a: 'Oscar', b: 'Oscar' },
+    );
+    // `b` was renamed Oscar → Joe through the versioned path: the correction
+    // recorded in the live row outranks the stale identity, as in materialize().
+    expect(Object.fromEntries(names)).toEqual({ a: 'Oscar', b: 'Joe' });
+  });
+
+  it('reads a live name that has no identity entry (a versioned rename, a created speaker)', () => {
+    const names = effectiveSpeakerNames(
+      [speaker('a', 'A', 'Marcus Webb'), speaker('c', null, 'Guest')],
+      {},
+    );
+    expect(Object.fromEntries(names)).toEqual({ a: 'Marcus Webb', c: 'Guest' });
+  });
+
+  it('gives a placeholder speaker no name', () => {
+    expect(effectiveSpeakerNames([speaker('a', 'A', 'Speaker A')], {}).size).toBe(0);
+    expect(effectiveSpeakerNames([speaker('a', 'A', 'Speaker A')], 'garbage').size).toBe(0);
   });
 });
 
