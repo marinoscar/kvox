@@ -397,29 +397,11 @@ describeWithDb('Connected Knowledge schema (real Postgres)', () => {
       ).resolves.toMatchObject({ fromSpeakerId: speaker.id });
     });
 
-    // ⚠ SCHEMA BUG DISCOVERED BY THIS TEST (reported, not silently patched —
-    // see this file's own header and the handback report for issue #351).
-    // The constraint reads:
-    //   CHECK ((valid IS NULL) = (valid_precision IS NULL) OR valid_precision = 'unknown')
-    // and the header/model comment states the intent as "valid/validPrecision
-    // are null together, except a range with real bounds may still carry an
-    // admittedly unknown precision." But that intent is ALREADY fully
-    // satisfied by the bare equality alone (validPrecision = 'unknown' is
-    // just an ordinary non-null value, so valid NOT NULL + validPrecision
-    // NOT NULL already satisfies `false = false`) — the trailing
-    // `OR valid_precision = 'unknown'` is not just redundant, it is actively
-    // harmful: when validPrecision IS NULL, `valid_precision = 'unknown'`
-    // evaluates to SQL NULL (three-valued logic), and `false OR NULL` is
-    // NULL, not FALSE. PostgreSQL treats a CHECK expression that evaluates
-    // to NULL as SATISFIED (only an explicit FALSE fails a CHECK) — so a
-    // `valid` set with a NULL `valid_precision` is silently ACCEPTED, the
-    // exact case this constraint exists to reject. Verified directly: `SELECT
-    // false OR NULL` returns NULL. A correct version would need an explicit
-    // null guard, e.g. `... OR (valid_precision IS NOT NULL AND
-    // valid_precision = 'unknown')` — or, since that guard makes the OR
-    // branch imply the equality branch already covers it, simply dropping
-    // the `OR valid_precision = 'unknown'` clause entirely and keeping the
-    // bare `(valid IS NULL) = (valid_precision IS NULL)`.
+    // kg_relations_valid_precision_chk uses `IS NOT DISTINCT FROM 'unknown'`
+    // rather than `= 'unknown'`: with `=`, a NULL precision made the OR branch
+    // NULL, `false OR NULL` is NULL, and a CHECK treats NULL as satisfied — so
+    // a set `valid` with no precision was silently accepted. The third test
+    // below pins that hole shut.
     it('kg_relations_valid_precision_chk: a range with real bounds and an admittedly unknown precision is accepted (as designed)', async () => {
       const owner = await createUser('relations-valid-precision');
       const from = await createEntity(owner.id);
@@ -437,26 +419,52 @@ describeWithDb('Connected Knowledge schema (real Postgres)', () => {
       ).resolves.toBeDefined();
     });
 
-    it('kg_relations_valid_precision_chk: KNOWN GAP — a set valid with a NULL validPrecision is currently (incorrectly) accepted', async () => {
-      const owner = await createUser('relations-valid-precision-gap');
+    it('kg_relations_valid_precision_chk: an unknown time with no range is accepted', async () => {
+      const owner = await createUser('relations-valid-precision-unknown');
       const from = await createEntity(owner.id);
       const to = await createEntity(owner.id);
-      const id = randomUUID();
 
-      // This documents the bug above rather than hiding it: the CHECK's
-      // intent (see the block comment above) is for this insert to be
-      // REJECTED, but PostgreSQL's three-valued `OR` logic lets it through.
-      // If the CHECK is ever corrected, this assertion should flip to
-      // `.rejects.toThrow(/kg_relations_valid_precision_chk/)`.
       await expect(
         prisma.$executeRaw`
           INSERT INTO kg_relations
             (id, owner_id, type, from_id, to_id, valid, valid_precision, ontology_version, updated_at)
           VALUES
-            (${id}::uuid, ${owner.id}::uuid, 'MENTIONS', ${from.id}::uuid, ${to.id}::uuid,
-             tstzrange('2019-01-01', '2026-03-01', '[)'), NULL, ${ONTOLOGY_VERSION}, CURRENT_TIMESTAMP)
+            (${randomUUID()}::uuid, ${owner.id}::uuid, 'MENTIONS', ${from.id}::uuid, ${to.id}::uuid,
+             NULL, 'unknown', ${ONTOLOGY_VERSION}, CURRENT_TIMESTAMP)
         `,
       ).resolves.toBeDefined();
+    });
+
+    it('kg_relations_valid_precision_chk rejects a set valid with a NULL validPrecision', async () => {
+      const owner = await createUser('relations-valid-precision-null');
+      const from = await createEntity(owner.id);
+      const to = await createEntity(owner.id);
+
+      await expect(
+        prisma.$executeRaw`
+          INSERT INTO kg_relations
+            (id, owner_id, type, from_id, to_id, valid, valid_precision, ontology_version, updated_at)
+          VALUES
+            (${randomUUID()}::uuid, ${owner.id}::uuid, 'MENTIONS', ${from.id}::uuid, ${to.id}::uuid,
+             tstzrange('2019-01-01', '2026-03-01', '[)'), NULL, ${ONTOLOGY_VERSION}, CURRENT_TIMESTAMP)
+        `,
+      ).rejects.toThrow(/kg_relations_valid_precision_chk/);
+    });
+
+    it('kg_relations_valid_precision_chk rejects a precision other than unknown with no range', async () => {
+      const owner = await createUser('relations-valid-precision-day');
+      const from = await createEntity(owner.id);
+      const to = await createEntity(owner.id);
+
+      await expect(
+        prisma.$executeRaw`
+          INSERT INTO kg_relations
+            (id, owner_id, type, from_id, to_id, valid, valid_precision, ontology_version, updated_at)
+          VALUES
+            (${randomUUID()}::uuid, ${owner.id}::uuid, 'MENTIONS', ${from.id}::uuid, ${to.id}::uuid,
+             NULL, 'day', ${ONTOLOGY_VERSION}, CURRENT_TIMESTAMP)
+        `,
+      ).rejects.toThrow(/kg_relations_valid_precision_chk/);
     });
 
     it('kg_items_sensitivity_chk rejects a person_fact with no sensitivity, and a claim with one', async () => {

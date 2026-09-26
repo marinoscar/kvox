@@ -747,10 +747,14 @@ ALTER TABLE kg_relations ADD CONSTRAINT kg_relations_one_source_chk
 ALTER TABLE kg_relations ADD CONSTRAINT kg_relations_speaker_type_chk
   CHECK (from_speaker_id IS NULL OR type = 'IDENTIFIED_AS');
 
--- valid and valid_precision are null together, except that a range with
--- real bounds may still carry an admittedly unknown precision.
+-- valid and valid_precision are null together, except that a relation whose
+-- time is admittedly unknown may carry valid_precision = 'unknown' with no
+-- range. `IS NOT DISTINCT FROM`, not `=`: with `= 'unknown'` a NULL precision
+-- makes the OR branch NULL, and `false OR NULL` is NULL — which a CHECK
+-- treats as satisfied, silently admitting a set `valid` with no precision.
 ALTER TABLE kg_relations ADD CONSTRAINT kg_relations_valid_precision_chk
-  CHECK ((valid IS NULL) = (valid_precision IS NULL) OR valid_precision = 'unknown');
+  CHECK ((valid IS NULL) = (valid_precision IS NULL)
+         OR valid_precision IS NOT DISTINCT FROM 'unknown');
 
 -- sensitivity is set if and only if kind = 'person_fact' (§5.6) — the one
 -- item kind capable of holding data this deployment must never let leave it.
