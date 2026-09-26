@@ -48,7 +48,7 @@ kv:ATTENDED
 
 kv:Assertion
     a owl:Class ;
-    rdfs:comment "A temporal relation, reified: rdf:subject/rdf:predicate/rdf:object name the edge and prov:startedAtTime/prov:endedAtTime its validity range." ;
+    rdfs:comment "A relation, reified: rdf:subject/rdf:predicate/rdf:object name the edge, prov:startedAtTime/prov:endedAtTime its validity range, and prov:wasDerivedFrom its citations." ;
     rdfs:label "Assertion" ;
     rdfs:subClassOf rdf:Statement .
 
@@ -64,10 +64,24 @@ kv:Claim
     rdfs:comment "A dated statement of fact about an entity that is neither a decision nor a commitment, e.g. \\"the budget was cut 20%\\" or \\"the pilot moved to Q2\\"." ;
     rdfs:label "Claim" .
 
+kv:Claim.statement
+    a owl:DatatypeProperty ;
+    rdfs:comment "What the item states, in one sentence." ;
+    rdfs:domain kv:Claim ;
+    rdfs:label "Statement" ;
+    rdfs:range xsd:string .
+
 kv:Commitment
     a owl:Class ;
     rdfs:comment "A task with an owner and, optionally, a counterparty and a due date, stated or clearly implied by the source, e.g. \\"Sarah will send the updated proposal by Friday\\"." ;
     rdfs:label "Commitment" .
+
+kv:Commitment.statement
+    a owl:DatatypeProperty ;
+    rdfs:comment "What the item states, in one sentence." ;
+    rdfs:domain kv:Commitment ;
+    rdfs:label "Statement" ;
+    rdfs:range xsd:string .
 
 kv:DECIDED_IN
     a owl:ObjectProperty ;
@@ -93,6 +107,13 @@ kv:Decision.rejectedOption
     rdfs:comment "The option that was considered and rejected, only if the source states it." ;
     rdfs:domain kv:Decision ;
     rdfs:label "Rejected option" ;
+    rdfs:range xsd:string .
+
+kv:Decision.statement
+    a owl:DatatypeProperty ;
+    rdfs:comment "What the item states, in one sentence." ;
+    rdfs:domain kv:Decision ;
+    rdfs:label "Statement" ;
     rdfs:range xsd:string .
 
 kv:HAS_ROLE
@@ -184,6 +205,13 @@ kv:PersonFact
     rdfs:comment "A statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style." ;
     rdfs:label "Person fact" .
 
+kv:PersonFact.statement
+    a owl:DatatypeProperty ;
+    rdfs:comment "What the item states, in one sentence." ;
+    rdfs:domain kv:PersonFact ;
+    rdfs:label "Statement" ;
+    rdfs:range xsd:string .
+
 kv:Project
     a owl:Class ;
     rdfs:comment "A named effort with a start and an expected (even if fuzzy) end that meetings, decisions and commitments attach to, e.g. \\"Q2 pilot\\" or \\"the vendor migration\\"." ;
@@ -257,6 +285,22 @@ kv:confidence
     a owl:AnnotationProperty ;
     rdfs:comment "The extraction confidence recorded for a graph row, between 0 and 1." ;
     rdfs:label "Confidence" .
+
+kv:dueAt
+    a owl:DatatypeProperty ;
+    rdfs:comment "When an item, typically a commitment, is due." ;
+    rdfs:domain [
+        a owl:Class ;
+        owl:unionOf ( kv:Claim kv:Commitment kv:Decision kv:PersonFact )
+    ] ;
+    rdfs:label "Due at" ;
+    rdfs:range xsd:dateTime .
+
+kv:occurredAt
+    a owl:DatatypeProperty ;
+    rdfs:comment "When a meeting or an item happened." ;
+    rdfs:label "Occurred at" ;
+    rdfs:range xsd:dateTime .
 
 kv:ontologyVersion
     a owl:AnnotationProperty ;

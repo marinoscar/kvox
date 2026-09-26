@@ -137,11 +137,11 @@ describe('generated SHACL shapes validate hand-written graph data (rdf-validate-
     ]);
   });
 
-  it('rejects an assertion with a bad precision, a non-dateTime start or a non-temporal predicate', async () => {
+  it('rejects an assertion with a bad precision, a non-dateTime start or a predicate that is not an edge', async () => {
     const report = await validate(`${PREFIXES}
       rel:d0000000-0000-4000-8000-000000000003 a kv:Assertion ;
         rdf:subject ent:a0000000-0000-4000-8000-000000000001 ;
-        rdf:predicate kv:ATTENDED ;
+        rdf:predicate kv:ABOUT ;
         rdf:object ent:a0000000-0000-4000-8000-000000000002 ;
         prov:startedAtTime "2019" ;
         kv:validPrecision "week" ;

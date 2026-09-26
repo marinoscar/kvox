@@ -9,11 +9,15 @@ import {
   assertionShapeIri,
   attributeIri,
   classIri,
+  dueAtIri,
   entityIri,
   evidenceIri,
+  exportIri,
   itemIri,
+  itemStatementIri,
   itemStatusIri,
   noteSpanIri,
+  occurredAtIri,
   relationInstanceIri,
   relationIri,
   relationPropIri,
@@ -107,6 +111,14 @@ describe('resource IRIs (#386)', () => {
     expect(relationInstanceIri(NS, UUID)).toBe(`${NS}relation/${UUID}`);
     expect(evidenceIri(NS, UUID)).toBe(`${NS}evidence/${UUID}`);
     expect(segmentIri(NS, UUID)).toBe(`${NS}segment/${UUID}`);
+    expect(exportIri(NS, UUID)).toBe(`${NS}export/${UUID}`);
+  });
+
+  it('names the row columns an export writes (#386)', () => {
+    expect(itemStatementIri(NS, 'Commitment')).toBe(`${NS}Commitment.statement`);
+    expect(occurredAtIri(NS)).toBe(`${NS}occurredAt`);
+    expect(dueAtIri(NS)).toBe(`${NS}dueAt`);
+    expect(() => itemStatementIri(NS, 'not a type')).toThrow();
   });
 
   it('names a note span by note id and version', () => {

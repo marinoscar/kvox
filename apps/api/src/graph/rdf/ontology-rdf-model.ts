@@ -162,3 +162,20 @@ export function sortedTypes(registry: OntologyRegistry): Readonly<EntityTypeSpec
     .slice()
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
+
+/**
+ * The relations an export writes as `kg_relations` edges — and therefore the
+ * predicates a `kv:Assertion` may reify (#386). Every exported edge is reified,
+ * not only temporal ones: the reified node is where an edge's citations
+ * (`prov:wasDerivedFrom`), confidence and props live, and every accepted edge
+ * carries at least one citation (the no-orphans invariant). Item columns and
+ * SUPERSEDES are properties of the item itself, never reified.
+ */
+export function reifiedRelations(registry: OntologyRegistry): Readonly<RelationTypeSpec>[] {
+  return exportedRelations(registry).filter((r) => r.representation.kind === 'edge');
+}
+
+/** The item type stored under one `kg_items.kind`, or undefined. */
+export function itemTypeForKind(registry: OntologyRegistry, kind: string): Readonly<EntityTypeSpec> | undefined {
+  return registry.entityTypes().find((t) => t.itemKind === kind);
+}

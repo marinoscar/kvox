@@ -11,6 +11,8 @@
 //   kv:<Type>.<a>  a owl:DatatypeProperty | owl:ObjectProperty (entity_ref)
 //   kv:<REL>       a owl:ObjectProperty; rdfs:subPropertyOf <alignment>
 //   kv:attr/<id>   the caller's own attribute definitions
+//   kv:<Item>.statement, kv:occurredAt, kv:dueAt — the row columns an export
+//                  writes that are not attributes (#386)
 //
 // ALIGNMENTS ARE `rdfs:subClassOf` / `rdfs:subPropertyOf`, NEVER EQUIVALENCE:
 // a `kv:Person` row is a `schema:Person`, not the other way round.
@@ -49,7 +51,10 @@ import {
   assertionClassIri,
   attributeIri,
   classIri,
+  dueAtIri,
+  itemStatementIri,
   itemStatusIri,
+  occurredAtIri,
   relationIri,
   relationPropIri,
   userAttributeIri,
@@ -220,6 +225,42 @@ export function generateOwl(
     });
   }
 
+  // --- Row columns an export writes (#386) ----------------------------------
+  for (const key of itemTypes) {
+    subjects.push({
+      subject: itemStatementIri(ns, key),
+      props: [
+        po(RDF_TYPE, iri(`${OWL}DatatypeProperty`)),
+        po(`${RDFS}label`, literal('Statement')),
+        po(`${RDFS}comment`, literal('What the item states, in one sentence.')),
+        po(`${RDFS}domain`, iri(classIri(ns, key))),
+        po(`${RDFS}range`, iri(`${XSD}string`)),
+      ],
+    });
+  }
+  subjects.push({
+    subject: occurredAtIri(ns),
+    props: [
+      po(RDF_TYPE, iri(`${OWL}DatatypeProperty`)),
+      po(`${RDFS}label`, literal('Occurred at')),
+      po(`${RDFS}comment`, literal('When a meeting or an item happened.')),
+      po(`${RDFS}range`, iri(`${XSD}dateTime`)),
+    ],
+  });
+  if (itemTypes.length > 0) {
+    const domain = classOrUnion(ns, itemTypes);
+    subjects.push({
+      subject: dueAtIri(ns),
+      props: [
+        po(RDF_TYPE, iri(`${OWL}DatatypeProperty`)),
+        po(`${RDFS}label`, literal('Due at')),
+        po(`${RDFS}comment`, literal('When an item, typically a commitment, is due.')),
+        ...(domain !== undefined ? [po(`${RDFS}domain`, domain)] : []),
+        po(`${RDFS}range`, iri(`${XSD}dateTime`)),
+      ],
+    });
+  }
+
   // --- Relations, their props, and the reified assertion -------------------
   const relations = exportedRelations(registry);
   for (const relation of relations) {
@@ -251,8 +292,8 @@ export function generateOwl(
       po(
         `${RDFS}comment`,
         literal(
-          'A temporal relation, reified: rdf:subject/rdf:predicate/rdf:object name the edge and ' +
-            'prov:startedAtTime/prov:endedAtTime its validity range.',
+          'A relation, reified: rdf:subject/rdf:predicate/rdf:object name the edge, ' +
+            'prov:startedAtTime/prov:endedAtTime its validity range, and prov:wasDerivedFrom its citations.',
         ),
       ),
       po(`${RDFS}subClassOf`, iri(`${RDF}Statement`)),
