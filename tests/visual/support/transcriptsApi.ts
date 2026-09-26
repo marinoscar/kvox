@@ -87,6 +87,7 @@ function listItem(
     failureReason: null,
     access: 'owner',
     createdAt: FIXED_ISO,
+    recordedAt: FIXED_ISO,
     updatedAt: FIXED_ISO,
     ...overrides,
   };
