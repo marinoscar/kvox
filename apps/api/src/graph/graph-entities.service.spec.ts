@@ -1,3 +1,5 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
+
 import type { AiSettingsService } from '../ai/ai-settings.service';
 import type { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import type { JobsService } from '../jobs/jobs.service';
@@ -57,6 +59,7 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
   };
   const access = { require: jest.fn(async (): Promise<typeof entityRow> => entityRow) };
   const ontology = { effectiveSchemaFor: jest.fn(async () => ({})) };
+  const events = { emit: jest.fn() };
   const service = new GraphEntitiesService(
     prisma as unknown as PrismaService,
     access as unknown as GraphAccessService,
@@ -65,8 +68,9 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
     jobs as unknown as JobsService,
     registry as unknown as JobHandlerRegistry,
     aiSettings as unknown as AiSettingsService,
+    events as unknown as EventEmitter2,
   );
-  return { service, registry, jobs, aiSettings, prisma, access, write };
+  return { service, registry, jobs, aiSettings, prisma, access, write, events };
 }
 
 const user = { id: OWNER, permissions: ['graph:write'] } as never;
@@ -135,6 +139,20 @@ describe('GraphEntitiesService', () => {
     await service.patch(ENTITY, { label: 'Sarah' }, user);
     expect(jobs.enqueue).not.toHaveBeenCalled();
     expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('emits graph.changed (manual_edit) after a committed change, and not for a no-op', async () => {
+    const changed = setup();
+    await changed.service.patch(ENTITY, { label: 'Sarah' }, user);
+    expect(changed.events.emit).toHaveBeenCalledWith('graph.changed', { ownerId: OWNER, reason: 'manual_edit' });
+    // After the transaction, never inside it.
+    expect(changed.events.emit.mock.invocationCallOrder[0]).toBeGreaterThan(
+      changed.prisma.$transaction.mock.invocationCallOrder[0],
+    );
+
+    const unchanged = setup({ changed: false });
+    await unchanged.service.patch(ENTITY, { label: 'Sarah' }, user);
+    expect(unchanged.events.emit).not.toHaveBeenCalled();
   });
 
   it('does not fail the edit when a follow-up enqueue throws', async () => {
