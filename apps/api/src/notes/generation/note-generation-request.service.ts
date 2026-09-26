@@ -63,33 +63,54 @@
 
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 
 import { AiBudgetError } from '../../ai/ai-errors';
-import { AiConfigService } from '../../ai/ai-config.service';
 import {
   modelKnowledgeOf,
   resolveAllowedModel,
 } from '../../ai/ai-model-resolution';
-import { AiProviderRegistry } from '../../ai/ai-provider.registry';
 import type { AiAllowedModel } from '../../ai/ai-settings.schema';
-import { AiSettingsService } from '../../ai/ai-settings.service';
+import {
+  AiTaskModelResolver,
+  type GenerationRefusalMessages,
+} from '../../ai/ai-task-model-resolver.service';
 import type { AiProvider } from '../../ai/providers/ai-provider.interface';
 import type { SystemAiValue } from '../../common/schemas/settings.schema';
 import type { RequestUser } from '../../auth/interfaces/authenticated-user.interface';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TranscriptAccessService } from '../../transcripts/transcript-access.service';
 import { NoteAccessService } from '../access/note-access.service';
-import { NOTE_CONFLICT_REASONS, type NoteSourceDto } from '../dto/note.dto';
+import type { NoteSourceDto } from '../dto/note.dto';
 import { NOTES_MANAGED_BY } from '../job-types';
 import { assertWithinBudget, computeTokenBudget } from './token-budget';
 import type { SourceSelector } from './note-source.service';
 
 /** Which of the two entry points is asking. Shapes the refusal sentences only. */
 export type GenerationIntent = 'note' | 'preview';
+
+/**
+ * The two 409 sentences for each intent. `ai_not_configured`/`ai_key_missing`
+ * are the same `details.reason` strings `NOTE_CONFLICT_REASONS` publishes.
+ */
+function refusalMessagesFor(intent: GenerationIntent): GenerationRefusalMessages {
+  return {
+    notConfigured:
+      'AI features are not configured for this deployment, so ' +
+      (intent === 'preview'
+        ? 'a template cannot be previewed. '
+        : 'a note cannot be generated. ') +
+      'An administrator can enable them in system settings.',
+    keyMissing:
+      'You have not saved an AI API key. ' +
+      (intent === 'preview'
+        ? 'A preview is a real generation on your own provider account, so it needs your key. '
+        : 'A note is generated on your own provider account, so it needs your key. ') +
+      'Add one in your settings and try again.',
+  };
+}
 
 /** The provider, model and policy one generation will run under. */
 export interface ResolvedModel {
@@ -111,9 +132,7 @@ export interface PromptFitInput {
 export class NoteGenerationRequestService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiConfig: AiConfigService,
-    private readonly aiSettings: AiSettingsService,
-    private readonly providers: AiProviderRegistry,
+    private readonly taskModels: AiTaskModelResolver,
     private readonly transcriptAccess: TranscriptAccessService,
     private readonly noteAccess: NoteAccessService,
   ) {}
@@ -127,56 +146,16 @@ export class NoteGenerationRequestService {
     requested: string | null,
     intent: GenerationIntent = 'note',
   ): Promise<ResolvedModel> {
-    const config = await this.aiConfig.getConfig(userId);
+    // #360: the checks, their order, the 400 wording and the 409 reasons now
+    // live in `AiTaskModelResolver.resolveForGeneration`, shared with every
+    // connected-knowledge task. Only the SENTENCES are this caller's.
+    const r = await this.taskModels.resolveForGeneration(
+      userId,
+      requested,
+      refusalMessagesFor(intent),
+    );
 
-    if (!config.available || !config.provider) {
-      throw new ConflictException({
-        message:
-          'AI features are not configured for this deployment, so ' +
-          (intent === 'preview'
-            ? 'a template cannot be previewed. '
-            : 'a note cannot be generated. ') +
-          'An administrator can enable them in system settings.',
-        details: { reason: NOTE_CONFLICT_REASONS.AI_NOT_CONFIGURED },
-      });
-    }
-
-    if (!config.keyConfigured) {
-      throw new ConflictException({
-        message:
-          'You have not saved an AI API key. ' +
-          (intent === 'preview'
-            ? 'A preview is a real generation on your own provider account, so it needs your key. '
-            : 'A note is generated on your own provider account, so it needs your key. ') +
-          'Add one in your settings and try again.',
-        details: { reason: NOTE_CONFLICT_REASONS.AI_KEY_MISSING },
-      });
-    }
-
-    const permitted = config.models.map((entry) => entry.id);
-    const model = requested ?? config.defaultModel;
-
-    if (!model || !permitted.includes(model)) {
-      throw new BadRequestException(
-        `The model "${model ?? 'none'}" is not one this deployment permits. Choose one of: ` +
-          `${permitted.join(', ')}.`,
-      );
-    }
-
-    const provider = this.providers.get(config.provider);
-
-    if (!provider) {
-      // `AiConfigService.available` already required the provider to be
-      // registered, so this is unreachable in practice; it is a 409 rather than
-      // a thrown 500 because "this build does not have that provider" is a
-      // deployment state, not a bug in the request.
-      throw new ConflictException({
-        message: `This version of the application does not have the "${config.provider}" provider.`,
-        details: { reason: NOTE_CONFLICT_REASONS.AI_NOT_CONFIGURED },
-      });
-    }
-
-    return { provider, model, policy: await this.aiSettings.get() };
+    return { provider: r.provider, model: r.model, policy: r.policy };
   }
 
   /**

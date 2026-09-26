@@ -220,6 +220,71 @@ export const AI_REASONING_EFFORTS = [
 export type AiReasoningEffort = (typeof AI_REASONING_EFFORTS)[number];
 
 /**
+ * The AI tasks connected knowledge makes model calls for (issue #360, spec
+ * docs/specs/ontology.md §20).
+ *
+ * ⚠ A VALUE HERE IS PERMANENT ONCE AN ADMINISTRATOR HAS SAVED A MODEL FOR IT:
+ * it is a key of the stored `ai.taskModels` map, and renaming one silently
+ * drops that administrator's choice (the per-field degrade in
+ * `readNamespace` would read the whole map as `{}`).
+ *
+ * There is deliberately no `'graph.brief'`: the entity brief never calls a
+ * model inside a request (#372) — its prose IS the digest, which
+ * `'graph.digest'` writes from a queue job.
+ */
+export const AI_TASK_KEYS = [
+  'graph.extract',
+  'graph.adjudicate',
+  'graph.digest',
+  'graph.agent',
+] as const;
+
+/** One AI task. See {@link AI_TASK_KEYS}. */
+export type AiTaskKey = (typeof AI_TASK_KEYS)[number];
+
+/**
+ * The reasoning efforts a per-task override may name.
+ *
+ * A SUBSET of {@link AI_REASONING_EFFORTS}: a task override exists to say "this
+ * task should think more (or less) than the deployment default", so `'none'`
+ * (use the default by leaving the field out) and `'xhigh'` (a cost an
+ * administrator should choose deployment-wide, deliberately) are not offered.
+ */
+export const AI_TASK_REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+
+/** One per-task reasoning effort. See {@link AI_TASK_REASONING_EFFORTS}. */
+export type AiTaskReasoningEffort = (typeof AI_TASK_REASONING_EFFORTS)[number];
+
+/**
+ * One `ai.taskModels` entry: the model an administrator picked for one task,
+ * and optionally how hard it should reason.
+ *
+ * ⚠ NO SECRET-BEARING FIELD MAY BE ADDED HERE — the compile-time proof at the
+ * bottom of this file checks this type as well. "Run extraction on a different
+ * account" is the deployment-wide fallback key docs/specs/notes.md §9 rejected.
+ */
+export const aiTaskModelSchema = z.object({
+  model: z.string().trim().min(1).max(128),
+  reasoningEffort: z.enum(AI_TASK_REASONING_EFFORTS).optional(),
+});
+
+export type AiTaskModel = z.infer<typeof aiTaskModelSchema>;
+
+/**
+ * The per-task model map.
+ *
+ * `z.partialRecord`, NOT `z.record`: Zod 4's `z.record(z.enum(...))` is
+ * EXHAUSTIVE and would require every task key to be present. An ABSENT key is
+ * the ordinary case and means "use `providers.<id>.defaultModel`".
+ */
+export const aiTaskModelsSchema = z.partialRecord(
+  z.enum(AI_TASK_KEYS),
+  aiTaskModelSchema,
+);
+
+export type AiTaskModels = z.infer<typeof aiTaskModelsSchema>;
+
+/**
  * The `ai` system-settings namespace.
  *
  * `enabled` is a MASTER SWITCH separate from every other field, exactly as it
@@ -355,6 +420,22 @@ export const systemAiSchema = z.object({
    * accept anyway.
    */
   maxDocumentBytes: z.number().int().min(65_536).max(268_435_456),
+
+  /**
+   * The model (and optional reasoning effort) an administrator picked per
+   * connected-knowledge task (#360). An absent key means "use
+   * `providers.<id>.defaultModel`". Validated against the allow-list and the
+   * task's required capabilities at SAVE time by `AiSettingsService.update`,
+   * and again at RUN time by `AiTaskModelResolver`.
+   */
+  taskModels: aiTaskModelsSchema,
+
+  /**
+   * The connected-knowledge SPENDING switch (#360). While false no graph task
+   * calls a model on anybody's key. It does not gate reading already-curated
+   * graph data — it controls AI spend, not access.
+   */
+  graphEnabled: z.boolean(),
 });
 
 export type SystemAiValue = z.infer<typeof systemAiSchema>;
@@ -404,6 +485,11 @@ export const systemAiPatchSchema = z.object({
   // value in the enum (`'none'`), not an absence.
   reasoningEffort: z.enum(AI_REASONING_EFFORTS).optional(),
   maxDocumentBytes: z.number().int().min(65_536).max(268_435_456).optional(),
+  // #360. REPLACES WHOLESALE, RFC 7396's arrays rule applied to this map: the
+  // admin form always sends the full map, and a per-key merge would need a
+  // `null`-deletes convention nothing else in this namespace uses.
+  taskModels: aiTaskModelsSchema.optional(),
+  graphEnabled: z.boolean().optional(),
 });
 
 export type SystemAiPatchValue = z.infer<typeof systemAiPatchSchema>;
@@ -460,3 +546,8 @@ export const OPENAI_SETTINGS_CARRY_NO_SECRET: OpenAiSettingsCarryNoSecret = true
 
 export const AI_ALLOWED_MODEL_CARRIES_NO_SECRET: AiAllowedModelCarriesNoSecret =
   true;
+
+/** #360: one `taskModels` entry is an object too, so it is checked as well. */
+export type AiTaskModelCarriesNoSecret = CarriesNoSecret<AiTaskModel>;
+
+export const AI_TASK_MODEL_CARRIES_NO_SECRET: AiTaskModelCarriesNoSecret = true;

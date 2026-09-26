@@ -1191,6 +1191,11 @@ export class SystemSettingsService {
           dto.ai?.reasoningEffort ?? currentValue.ai.reasoningEffort,
         maxDocumentBytes:
           dto.ai?.maxDocumentBytes ?? currentValue.ai.maxDocumentBytes,
+        // #360. `??` is right for both: neither has a meaningful `null`.
+        // `taskModels` REPLACES WHOLESALE when present (RFC 7396's arrays
+        // rule, as `allowedModels`), so `{}` clears every task override.
+        taskModels: dto.ai?.taskModels ?? currentValue.ai.taskModels,
+        graphEnabled: dto.ai?.graphEnabled ?? currentValue.ai.graphEnabled,
       },
       maintenance: {
         enabled: dto.maintenance?.enabled ?? currentValue.maintenance.enabled,

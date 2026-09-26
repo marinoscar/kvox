@@ -147,7 +147,15 @@ export class AiSettingsController {
       'A **400** is therefore returned only for an entry **nothing** could budget for: no ' +
       'numbers on the entry and no provider knowledge of any kind, which in practice means the ' +
       'policy names a provider this build does not implement. The message names the missing ' +
-      'fields — it is not a statement that the model is forbidden.',
+      'fields — it is not a statement that the model is forbidden.\n\n' +
+      '**`taskModels` (issue #360) also REPLACES wholesale** — send the full map. Each entry ' +
+      'present is checked: a model outside the permitted list (after this same request\'s ' +
+      '`allowedModels`, if any) is a **400** with `details.reason: "model_not_permitted"` and ' +
+      '`details.task`; a model lacking a capability the task requires is a **400** with ' +
+      '`details.reason: "model_lacks_capability"` and `details.missing`. Narrowing ' +
+      '`allowedModels` under a stored task model is allowed: the task falls back to the default ' +
+      'model and `taskModelStatus` reports it. `graphEnabled` switches connected-knowledge AI ' +
+      'spending on or off.',
   })
   @ApiHeader({
     name: 'If-Match',
@@ -164,7 +172,7 @@ export class AiSettingsController {
   @ApiResponse({
     status: 400,
     description:
-      'Validation error, or a model id nothing in this deployment can supply a context window for',
+      'Validation error, a model id nothing in this deployment can supply a context window for, or an invalid task model (`details.reason`: `model_not_permitted` / `model_lacks_capability`)',
   })
   @ApiResponse({ status: 409, description: 'Version conflict' })
   async updateSettings(

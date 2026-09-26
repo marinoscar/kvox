@@ -4,6 +4,8 @@ import { z } from 'zod';
 import {
   AI_PROVIDER_IDS,
   AI_REASONING_EFFORTS,
+  AI_TASK_KEYS,
+  AI_TASK_REASONING_EFFORTS,
   systemAiPatchSchema,
 } from '../ai-settings.schema';
 
@@ -83,7 +85,7 @@ export const aiModelDescriptorSchema = z.object({
   structuredOutput: z
     .boolean()
     .describe(
-      'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication, digest and brief require it.',
+      'Whether this model can return schema-constrained structured output (OpenAI strict JSON schema). Connected-knowledge extraction, adjudication and digest require it.',
     ),
   toolCalling: z
     .boolean()
@@ -189,6 +191,57 @@ export const aiAllowedModelResponseSchema = z.object({
     ),
 });
 
+const aiModelCapabilityEnum = z.enum(['structuredOutput', 'toolCalling']);
+
+/** One connected-knowledge task (issue #360). `AI_TASK_DEFINITIONS` verbatim. */
+export const aiTaskDefinitionSchema = z.object({
+  key: z.enum(AI_TASK_KEYS).describe('Stable task key, as used in `settings.taskModels`.'),
+  label: z.string().describe('Human name for the admin form.'),
+  description: z.string().describe('One or two sentences on what the task does and what it costs.'),
+  requires: z
+    .array(aiModelCapabilityEnum)
+    .describe('Capabilities the task\'s model must have. Checked when saved and again when the task runs.'),
+});
+
+/** One permitted model's capability flags (issue #360). */
+export const aiModelCapabilitiesSchema = z.object({
+  id: z.string().describe("The provider's own model id."),
+  structuredOutput: z.boolean().describe('Whether the model supports schema-constrained structured output.'),
+  toolCalling: z.boolean().describe('Whether the model supports tool (function) calling.'),
+  source: z
+    .enum(['explicit', 'catalogue', 'derived', 'default'])
+    .describe(
+      'How this build learnt the model\'s numbers (issue #97) — the weakest of the two. The capability flags come from the catalogue, the family derivation or the provider floor, never from an administrator override.',
+    ),
+});
+
+/** What one task would run on right now (issue #360). */
+export const aiTaskModelStatusSchema = z.object({
+  task: z.enum(AI_TASK_KEYS).describe('The task key.'),
+  configuredModel: z
+    .string()
+    .nullable()
+    .describe('The model an administrator picked for this task, or null when unset.'),
+  effectiveModel: z
+    .string()
+    .nullable()
+    .describe('The model the task would actually run on, or null when no permitted model is available.'),
+  source: z
+    .enum(['task', 'default', 'none'])
+    .describe(
+      '`task` — the configured model; `default` — the provider\'s default model, because none is configured or the configured one is no longer permitted; `none` — no permitted model at all.',
+    ),
+  missing: z
+    .array(aiModelCapabilityEnum)
+    .describe('Required capabilities `effectiveModel` lacks. Empty when it has them all.'),
+  problem: z
+    .enum(['not_permitted', 'lacks_capability', 'no_model'])
+    .nullable()
+    .describe(
+      'Why the task could not run, or null when it could. `lacks_capability` — `effectiveModel` lacks what `missing` names; `no_model` — nothing permitted to run on. `not_permitted` is reserved and not currently reported: a configured model that is no longer permitted falls back to the default instead.',
+    ),
+});
+
 /**
  * `GET`/`PUT /api/ai-settings` — the response.
  *
@@ -238,6 +291,31 @@ export const aiSettingsResponseSchema = z.object({
         .describe(
           'Ceiling on one uploaded note source document, in bytes. An AI policy rather than a storage one: every byte becomes input tokens on the uploading user\'s own vendor account, and `note.source.extract` must hold a whole PDF in memory to read it.',
         ),
+      taskModels: z
+        .partialRecord(
+          z.enum(AI_TASK_KEYS),
+          z.object({
+            model: z
+              .string()
+              .describe(
+                'The model this task runs on. Must be in `allowedModels` and support every capability the task requires, checked when saved.',
+              ),
+            reasoningEffort: z
+              .enum(AI_TASK_REASONING_EFFORTS)
+              .optional()
+              .describe(
+                'How hard this task\'s model may reason. Absent means the deployment-wide `reasoningEffort`.',
+              ),
+          }),
+        )
+        .describe(
+          'The model an administrator picked per connected-knowledge task (issue #360). An absent task key means that task uses `providers.<provider>.defaultModel`. `PUT` replaces the whole map, so send every entry you want to keep. A task model later removed from `allowedModels` is not an error: the task falls back to the default model, and `taskModelStatus` reports it.',
+        ),
+      graphEnabled: z
+        .boolean()
+        .describe(
+          'The connected-knowledge spending switch (issue #360). While false, no graph task calls a model on anybody\'s key. It does not hide already-curated graph data. Defaults to false, because enabling it spends every user\'s own key on automatic extraction.',
+        ),
     })
     .describe('The stored AI policy. Carries no secret, by construction.'),
   providers: z
@@ -247,6 +325,21 @@ export const aiSettingsResponseSchema = z.object({
     .array(z.string())
     .describe(
       'Model ids the policy permits that **nothing** can supply a context window for — not the entry itself, not the build catalogue, not the family derivation, not the provider floor (issue #97). Normally empty: for a registered provider that declares a floor it cannot be populated at all, so a non-empty list almost always means the policy names a provider this build does not implement. Reported rather than silently dropped, because such a model is saved, listed back, and then never offered to a single user with nothing anywhere to explain why.',
+    ),
+  tasks: z
+    .array(aiTaskDefinitionSchema)
+    .describe(
+      'Every connected-knowledge task a model can be chosen for (issue #360), with its label, description and required capabilities — so a form never hardcodes them.',
+    ),
+  modelCapabilities: z
+    .array(aiModelCapabilitiesSchema)
+    .describe(
+      'The capability flags of each permitted model this build can resolve, in policy order (issue #360). Filter a task\'s model picker by its `requires`. Unresolvable entries appear in `unknownModels` instead.',
+    ),
+  taskModelStatus: z
+    .array(aiTaskModelStatusSchema)
+    .describe(
+      'What each task would run on right now (issue #360), computed exactly as the run-time resolver chooses but **without** the `graphEnabled` gate, so tasks can be configured before the feature is switched on.',
     ),
   version: z
     .number()

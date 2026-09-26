@@ -4,7 +4,13 @@ import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiSettingsService } from './ai-settings.service';
 import { UserAiCredentialsService } from './user-ai-credentials.service';
-import type { AiConfigResponse, AiConfigModel } from './dto/ai-config.dto';
+import { AI_TASK_KEYS, type SystemAiValue } from './ai-settings.schema';
+import { chooseTaskModel, taskDefinition } from './ai-task-models';
+import type {
+  AiConfigResponse,
+  AiConfigModel,
+  AiConfigTaskModel,
+} from './dto/ai-config.dto';
 
 // =============================================================================
 // AiConfigService (issue #47, epic #45)
@@ -190,6 +196,10 @@ export class AiConfigService {
         maxInputTokens: policy.maxInputTokens,
         maxOutputTokens: policy.maxOutputTokens,
         keyConfigured,
+        // #360. With no model on offer every task reads `no_model` (or
+        // `graph_disabled`, which outranks it).
+        graphEnabled: policy.graphEnabled,
+        taskModels: this.describeTaskModels(policy, []),
       };
     }
 
@@ -276,6 +286,48 @@ export class AiConfigService {
       maxInputTokens: policy.maxInputTokens,
       maxOutputTokens: policy.maxOutputTokens,
       keyConfigured,
+      graphEnabled: policy.graphEnabled,
+      taskModels: this.describeTaskModels(policy, usable),
     };
+  }
+
+  /**
+   * Every connected-knowledge task as THIS caller would run it (#360), chosen
+   * from exactly the `models` this response offers — by the same
+   * `chooseTaskModel` `AiTaskModelResolver` runs, so "usable" here is what a
+   * run would then accept.
+   */
+  private describeTaskModels(
+    policy: SystemAiValue,
+    models: AiConfigModel[],
+  ): AiConfigResponse['taskModels'] {
+    const entries = AI_TASK_KEYS.map((task): [string, AiConfigTaskModel] => {
+      const choice = chooseTaskModel({ policy, models, task });
+      const reason: AiConfigTaskModel['reason'] =
+        choice.problem === 'graph_disabled'
+          ? 'graph_disabled'
+          : choice.problem === 'lacks_capability'
+            ? 'model_lacks_capability'
+            : choice.problem === null
+              ? null
+              : // `no_model`; `not_permitted` needs a requested model, and
+                // none is passed here.
+                'no_model';
+
+      return [
+        task,
+        {
+          model: choice.model,
+          // No requested model is passed, so `requested` cannot occur.
+          source: choice.source as AiConfigTaskModel['source'],
+          reasoningEffort: choice.reasoningEffort,
+          requires: [...taskDefinition(task).requires],
+          usable: reason === null,
+          reason,
+        },
+      ];
+    });
+
+    return Object.fromEntries(entries) as AiConfigResponse['taskModels'];
   }
 }

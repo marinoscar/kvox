@@ -16,7 +16,23 @@ import {
   resolveAllowedModel,
 } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
-import type { SystemAiPatchValue, SystemAiValue } from './ai-settings.schema';
+import type {
+  AiTaskKey,
+  SystemAiPatchValue,
+  SystemAiValue,
+} from './ai-settings.schema';
+import {
+  AI_MODEL_LACKS_CAPABILITY,
+  AI_MODEL_NOT_PERMITTED,
+  AI_TASK_DEFINITIONS,
+  chooseTaskModel,
+  missingCapabilities,
+  taskDefinition,
+  type AiModelCapability,
+  type AiTaskDefinition,
+} from './ai-task-models';
+import type { AiModelLimitSource } from './ai-model-resolution';
+import type { AiConfigModel } from './dto/ai-config.dto';
 import type { AiProviderDescription } from './providers/ai-provider.interface';
 import { OPENAI_FETCH, type FetchLike } from './providers/openai.provider';
 
@@ -88,10 +104,54 @@ export interface AiSettingsAdminView {
    * anywhere to explain why.
    */
   unknownModels: string[];
+  /**
+   * Every connected-knowledge task (#360) — `AI_TASK_DEFINITIONS` verbatim, so
+   * the admin form never hardcodes a label or a capability requirement.
+   */
+  tasks: AiTaskDefinition[];
+  /**
+   * The capability flags of each stored `allowedModels` entry this build can
+   * resolve (#360), so the form can filter a task's picker by `requires`.
+   * Unresolvable entries are in `unknownModels` instead.
+   */
+  modelCapabilities: AiModelCapabilities[];
+  /**
+   * What each task would run on right now (#360), computed with the same
+   * `chooseTaskModel` the run-time resolver uses but WITHOUT the
+   * `graphEnabled` gate, so an administrator can configure tasks before
+   * switching the feature on.
+   */
+  taskModelStatus: AiTaskModelStatus[];
   /** Bumped on every write of the `global` row. The `If-Match` token. */
   version: number;
   updatedAt: Date | null;
   updatedBy: { id: string; email: string } | null;
+}
+
+/** One permitted model's capability flags, as the admin view reports them. */
+export interface AiModelCapabilities {
+  id: string;
+  structuredOutput: boolean;
+  toolCalling: boolean;
+  source: AiModelLimitSource;
+}
+
+/** What one task would run on, as the admin view reports it. */
+export interface AiTaskModelStatus {
+  task: AiTaskKey;
+  /** The administrator's `taskModels[task].model`, or null when unset. */
+  configuredModel: string | null;
+  /** The model the task would actually run on, or null when none can be. */
+  effectiveModel: string | null;
+  source: 'task' | 'default' | 'none';
+  missing: AiModelCapability[];
+  /**
+   * `not_permitted` is part of the published union for the web contract, but
+   * the admin view never reports it: a configured task model that is no longer
+   * permitted falls back to the default (`source: 'default'`), which is the
+   * designed behaviour rather than a problem.
+   */
+  problem: null | 'not_permitted' | 'lacks_capability' | 'no_model';
 }
 
 /** The outcome of the reachability probe. See `testReachability`. */
@@ -151,10 +211,23 @@ export class AiSettingsService {
       }),
     ]);
 
+    const resolved = this.resolvePermittedModels(settings);
+
     return {
       settings,
       providers: this.registry.describeAll(),
       unknownModels: this.findUnknownModels(settings),
+      tasks: AI_TASK_DEFINITIONS.map((task) => ({
+        ...task,
+        requires: [...task.requires],
+      })),
+      modelCapabilities: resolved.map((model) => ({
+        id: model.id,
+        structuredOutput: model.structuredOutput,
+        toolCalling: model.toolCalling,
+        source: model.source,
+      })),
+      taskModelStatus: this.describeTaskModels(settings, resolved),
       version: row?.version ?? 0,
       updatedAt: row?.updatedAt ?? null,
       updatedBy: row?.updatedByUser ?? null,
@@ -257,6 +330,10 @@ export class AiSettingsService {
             `${knowledge.catalogue.map((model) => model.id).join(', ') || 'none'}.`,
         );
       }
+    }
+
+    if (patch.taskModels) {
+      this.assertTaskModelsValid(patch, stored, providerId);
     }
 
     await this.systemSettings.patchSettings(
@@ -438,6 +515,103 @@ export class AiSettingsService {
     return settings.providers[providerId].allowedModels
       .filter((entry) => resolveAllowedModel(entry, modelKnowledgeOf(provider)) === null)
       .map((entry) => entry.id);
+  }
+
+  /**
+   * Save-time validation of `patch.taskModels` (#360). 400, because it is
+   * invalid admin input; the run-time resolver's 409 is the other half.
+   *
+   * Only the entries PRESENT in the patch are checked, against the allow-list
+   * this same patch will leave behind (`patch`'s own `allowedModels` when it
+   * carries one, the stored list otherwise). The reverse — narrowing
+   * `allowedModels` under a stored task model — is deliberately allowed: the
+   * resolver falls back to the default and `taskModelStatus` reports it.
+   */
+  private assertTaskModelsValid(
+    patch: SystemAiPatchValue,
+    stored: SystemAiValue,
+    providerId: SystemAiValue['provider'],
+  ): void {
+    const allowed = providerId
+      ? (patch.providers?.[providerId]?.allowedModels ??
+        stored.providers[providerId].allowedModels)
+      : [];
+    const knowledge = modelKnowledgeOf(
+      providerId ? this.registry.get(providerId) : undefined,
+    );
+
+    for (const [task, entry] of Object.entries(patch.taskModels ?? {}) as Array<
+      [AiTaskKey, { model: string } | undefined]
+    >) {
+      if (!entry) continue;
+      const definition = taskDefinition(task);
+      const permitted = allowed.find((model) => model.id === entry.model);
+
+      if (!permitted) {
+        throw new BadRequestException({
+          message: `The task model for "${definition.label}" (${entry.model}) is not in the permitted models list.`,
+          details: { reason: AI_MODEL_NOT_PERMITTED, task, model: entry.model },
+        });
+      }
+
+      const resolved = resolveAllowedModel(permitted, knowledge);
+      // An entry nothing can resolve has no known capabilities at all, so it
+      // lacks every one the task requires.
+      const missing = resolved
+        ? missingCapabilities(resolved, definition.requires)
+        : [...definition.requires];
+
+      if (missing.length > 0) {
+        throw new BadRequestException({
+          message: `The task model for "${definition.label}" (${entry.model}) does not support ${missing.join(', ')}, which this task requires.`,
+          details: {
+            reason: AI_MODEL_LACKS_CAPABILITY,
+            task,
+            model: entry.model,
+            missing,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * The stored policy's permitted models this build can resolve, with their
+   * capability flags, in the policy's order. The same `resolveAllowedModel`
+   * `AiConfigService` publishes with.
+   */
+  private resolvePermittedModels(settings: SystemAiValue): AiConfigModel[] {
+    const providerId = settings.provider;
+    if (!providerId) return [];
+
+    const knowledge = modelKnowledgeOf(this.registry.get(providerId));
+
+    return settings.providers[providerId].allowedModels
+      .map((entry) => resolveAllowedModel(entry, knowledge))
+      .filter((model): model is NonNullable<typeof model> => model !== null);
+  }
+
+  /** `taskModelStatus`: `chooseTaskModel` for every task, ungated. */
+  private describeTaskModels(
+    settings: SystemAiValue,
+    models: AiConfigModel[],
+  ): AiTaskModelStatus[] {
+    // The graph switch is lifted here on purpose — see `taskModelStatus`.
+    const ungated: SystemAiValue = { ...settings, graphEnabled: true };
+
+    return AI_TASK_DEFINITIONS.map(({ key }) => {
+      const choice = chooseTaskModel({ policy: ungated, models, task: key });
+
+      return {
+        task: key,
+        configuredModel: settings.taskModels[key]?.model ?? null,
+        effectiveModel: choice.model,
+        // No `requested` model and no gate: only these three ranks occur.
+        source: choice.source as AiTaskModelStatus['source'],
+        missing: choice.missing,
+        problem: choice.problem as AiTaskModelStatus['problem'],
+      };
+    });
   }
 
   /**

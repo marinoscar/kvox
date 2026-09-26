@@ -609,6 +609,147 @@ describe('System Settings Integration', () => {
       expect(updateArgs.data.value.maintenance).toEqual(stored.maintenance);
     });
 
+    // #360 — the two new `ai` fields. A wire DTO missing either would parse the
+    // body to `{}` and answer 200 with nothing stored: the silent no-op
+    // `settings-parity.spec.ts` warns about, proved closed here over HTTP.
+    it('persists ai.graphEnabled and ai.taskModels from a PATCH (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+
+      const expectedAi = {
+        ...DEFAULT_SYSTEM_SETTINGS.ai,
+        graphEnabled: true,
+        taskModels: { 'graph.extract': { model: 'gpt-5.4' } },
+      };
+
+      context.prismaMock.systemSettings.update.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: { ...DEFAULT_SYSTEM_SETTINGS, ai: expectedAi } as any,
+        version: 2,
+        updatedAt: new Date(),
+        updatedByUserId: admin.id,
+        updatedByUser: { id: admin.id, email: admin.email },
+      });
+      context.prismaMock.auditEvent.create.mockResolvedValue({} as any);
+
+      const patched = await request(context.app.getHttpServer())
+        .patch('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .send({
+          ai: {
+            graphEnabled: true,
+            taskModels: { 'graph.extract': { model: 'gpt-5.4' } },
+          },
+        })
+        .expect(200);
+
+      const updateArgs = context.prismaMock.systemSettings.update.mock
+        .calls[0][0] as any;
+      expect(updateArgs.data.value.ai).toEqual(expectedAi);
+      expect(patched.body.data.ai.graphEnabled).toBe(true);
+      expect(patched.body.data.ai.taskModels).toEqual({
+        'graph.extract': { model: 'gpt-5.4' },
+      });
+      expect(() =>
+        systemSettingsResponseSchema.parse(patched.body.data),
+      ).not.toThrow();
+    });
+
+    it('replaces ai.taskModels wholesale rather than merging it (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+
+      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: {
+          ...DEFAULT_SYSTEM_SETTINGS,
+          ai: {
+            ...DEFAULT_SYSTEM_SETTINGS.ai,
+            taskModels: {
+              'graph.extract': { model: 'gpt-5.4' },
+              'graph.agent': { model: 'gpt-5.4', reasoningEffort: 'high' },
+            },
+          },
+        } as any,
+        version: 1,
+        updatedAt: new Date(),
+        updatedByUserId: null,
+        updatedByUser: null,
+      });
+      context.prismaMock.systemSettings.update.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: DEFAULT_SYSTEM_SETTINGS as any,
+        version: 2,
+        updatedAt: new Date(),
+        updatedByUserId: admin.id,
+        updatedByUser: { id: admin.id, email: admin.email },
+      });
+      context.prismaMock.auditEvent.create.mockResolvedValue({} as any);
+
+      await request(context.app.getHttpServer())
+        .patch('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .send({ ai: { taskModels: { 'graph.digest': { model: 'gpt-5.4-mini' } } } })
+        .expect(200);
+
+      const updateArgs = context.prismaMock.systemSettings.update.mock
+        .calls[0][0] as any;
+      expect(updateArgs.data.value.ai.taskModels).toEqual({
+        'graph.digest': { model: 'gpt-5.4-mini' },
+      });
+    });
+
+    it('rejects an unknown task key or reasoning effort rather than storing it (#360)', async () => {
+      const admin = await createMockAdminUser(context);
+
+      await request(context.app.getHttpServer())
+        .patch('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .send({ ai: { taskModels: { 'graph.brief': { model: 'gpt-5.4' } } } })
+        .expect(400);
+
+      await request(context.app.getHttpServer())
+        .patch('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .send({
+          ai: {
+            taskModels: {
+              'graph.extract': { model: 'gpt-5.4', reasoningEffort: 'xhigh' },
+            },
+          },
+        })
+        .expect(400);
+
+      expect(context.prismaMock.systemSettings.update).not.toHaveBeenCalled();
+    });
+
+    it('reads a stored ai namespace that predates #360 as taskModels {} and graphEnabled false', async () => {
+      const admin = await createMockAdminUser(context);
+      const { taskModels: _t, graphEnabled: _g, ...legacyAi } =
+        DEFAULT_SYSTEM_SETTINGS.ai;
+
+      context.prismaMock.systemSettings.findUnique.mockResolvedValue({
+        id: 'settings-1',
+        key: 'global',
+        value: { ...DEFAULT_SYSTEM_SETTINGS, ai: { ...legacyAi, enabled: true } } as any,
+        version: 1,
+        updatedAt: new Date(),
+        updatedByUserId: null,
+        updatedByUser: null,
+      });
+
+      const res = await request(context.app.getHttpServer())
+        .get('/api/system-settings')
+        .set(authHeader(admin.accessToken))
+        .expect(200);
+
+      expect(res.body.data.ai.taskModels).toEqual({});
+      expect(res.body.data.ai.graphEnabled).toBe(false);
+      // The per-field degrade: the rest of the namespace survives.
+      expect(res.body.data.ai.enabled).toBe(true);
+    });
+
     it('rejects a databaseBackup value outside its bounds rather than storing it (#256)', async () => {
       const admin = await createMockAdminUser(context);
 
