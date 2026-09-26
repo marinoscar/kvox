@@ -2224,8 +2224,8 @@ itself), with the proposal payload contract later issues import in
 #364/#365 plug their stages into (#365's `GraphDedupModule`, `apps/api/src/graph/dedup/`:
 `work-item-dedup` 200, `temporal-closing` 300, `rejection-memory` 400 — see spec §7).
 Resolution routes (merge, reverse, distinct pairs, #364), the read layer (#370), the
-whole-graph overview (#371) and the entity brief (#372) are built; there are still no
-review/commit routes.
+whole-graph overview (#371), the entity brief (#372) and the proposal review/commit/revert
+routes (#366, `GraphProposalsModule`, `apps/api/src/graph/proposals/`) are built.
 Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
