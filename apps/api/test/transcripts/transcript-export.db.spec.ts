@@ -27,6 +27,7 @@
 // `npm run test:db`. See `../jobs/db-test-support.ts` for the probe.
 // =============================================================================
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -182,7 +183,7 @@ describeWithDb('Transcript exports (real Postgres)', () => {
       // it after every committed op batch and after a restore, so a missing
       // member is a TypeError that fails the suite, not a silent no-op.
       enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
-    } as unknown as TranscriptPipelineService);
+    } as unknown as TranscriptPipelineService, new EventEmitter2());
 
     const account = await prisma.user.create({
       data: { email: `${EMAIL_PREFIX}-${randomUUID()}@example.test` },

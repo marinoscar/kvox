@@ -13,6 +13,9 @@ import { GraphController } from './graph.controller';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphOntologyService } from './ontology/graph-ontology.service';
 import { KgPurgeService } from './purge/kg-purge.service';
+import { KgSpeakerLinkHandler } from './handlers/kg-speaker-link.handler';
+import { SpeakerIdentifiedListener } from './listeners/speaker-identified.listener';
+import { SpeakerLinkReconciler } from './speaker-link/speaker-link.reconciler';
 import { EvidenceValidator } from './write/evidence-validator.service';
 import { GraphWriteService } from './write/graph-write.service';
 
@@ -46,6 +49,10 @@ import { GraphWriteService } from './write/graph-write.service';
     // #357 — `kg.purge`: forget-a-person and the Danger Zone's `graph` category.
     KgPurgeService,
     KgPurgeHandler,
+    // #356: speaker naming → Person + IDENTIFIED_AS, via `kg.speaker_link`.
+    SpeakerLinkReconciler,
+    KgSpeakerLinkHandler,
+    SpeakerIdentifiedListener,
   ],
   controllers: [GraphController, GraphEntitiesController, GraphAttributeDefsController],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,

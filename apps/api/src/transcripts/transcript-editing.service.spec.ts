@@ -21,10 +21,15 @@
 // =============================================================================
 
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { OP_TYPES } from './editing';
+import {
+  TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+  TranscriptSpeakersIdentifiedEvent,
+} from './events/transcript-speakers-identified.event';
 import { TranscriptAccessService } from './transcript-access.service';
 import {
   TranscriptEditingService,
@@ -87,6 +92,7 @@ describe('TranscriptEditingService', () => {
   let versionCreate: jest.Mock;
   let access: { require: jest.Mock };
   let pipeline: { enqueueSnapshot: jest.Mock; enqueueSearchIndex: jest.Mock };
+  let events: { emit: jest.Mock };
   let transcript: { id: string; currentVersion: number };
   /** `transcripts.speaker_identities`, as both the tx-locked read and the
    * out-of-transaction read see it — a `let` so a test can set it BEFORE
@@ -161,9 +167,12 @@ describe('TranscriptEditingService', () => {
       enqueueSearchIndex: jest.fn().mockResolvedValue(undefined),
     };
 
+    events = { emit: jest.fn().mockReturnValue(true) };
+
     const module = await Test.createTestingModule({
       providers: [
         TranscriptEditingService,
+        { provide: EventEmitter2, useValue: events },
         TranscriptMaterializeService,
         { provide: PrismaService, useValue: prisma },
         { provide: TranscriptAccessService, useValue: access },
@@ -334,6 +343,37 @@ describe('TranscriptEditingService', () => {
       );
     });
 
+    it('emits transcript.speakers_identified after the save, the search enqueue and the audit (#356)', async () => {
+      await service.applyOperations(TRANSCRIPT_ID, identifyBatch('Oscar') as never, USER);
+
+      expect(events.emit).toHaveBeenCalledTimes(1);
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, ['A']),
+      );
+
+      // Order: after the search enqueue and the audit row.
+      const emitOrder = events.emit.mock.invocationCallOrder[0];
+      expect(pipeline.enqueueSearchIndex.mock.invocationCallOrder[0]).toBeLessThan(emitOrder);
+      expect(
+        (prisma.auditEvent as { create: jest.Mock }).create.mock.invocationCallOrder[0],
+      ).toBeLessThan(emitOrder);
+    });
+
+    it('still answers the naming when the emit throws (#356)', async () => {
+      events.emit.mockImplementation(() => {
+        throw new Error('listener exploded');
+      });
+
+      const result = await service.applyOperations(
+        TRANSCRIPT_ID,
+        identifyBatch('Oscar') as never,
+        USER,
+      );
+
+      expect(result.summary).toBe('Named Speaker A as Oscar');
+    });
+
     it('is idempotent: retrying an identification the speaker already carries writes nothing and enqueues nothing', async () => {
       const alreadyIdentified = [
         { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
@@ -356,6 +396,8 @@ describe('TranscriptEditingService', () => {
       expect(tx.transcript.update).not.toHaveBeenCalled();
       expect(pipeline.enqueueSearchIndex).not.toHaveBeenCalled();
       expect((prisma.auditEvent as { create: jest.Mock }).create).not.toHaveBeenCalled();
+      // #356: nothing was identified, so the graph is not told anything.
+      expect(events.emit).not.toHaveBeenCalled();
     });
 
     it('answers a stale rev with the exact 409 shape a versioned conflict uses', async () => {

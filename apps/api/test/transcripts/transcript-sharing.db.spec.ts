@@ -30,6 +30,7 @@
 // `../jobs/db-test-support.ts` for the reachability probe.
 // =============================================================================
 
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomUUID } from 'node:crypto';
 
 import { ConfigService } from '@nestjs/config';
@@ -137,6 +138,7 @@ describeWithDb('Transcript sharing (real Postgres)', () => {
       access,
       new TranscriptMaterializeService(service, objects),
       pipeline,
+      new EventEmitter2(),
     );
 
     notify = jest.fn().mockResolvedValue(undefined);
