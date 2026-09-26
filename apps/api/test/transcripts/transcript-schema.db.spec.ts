@@ -388,6 +388,48 @@ describeWithDb('Transcript schema (real Postgres)', () => {
       expect(names).toContain('transcripts_owner_id_updated_at_idx');
       expect(names).toContain('transcripts_status_idx');
     });
+
+    it('has the (owner_id, recorded_at DESC) index (#352)', async () => {
+      const rows = await prisma.$queryRaw<Array<{ indexdef: string }>>`
+        SELECT indexdef FROM pg_indexes
+        WHERE tablename = 'transcripts' AND indexname = 'transcripts_owner_id_recorded_at_idx'
+      `;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].indexdef).toMatch(/\(owner_id, recorded_at DESC\)/);
+    });
+  });
+
+  // ===========================================================================
+  // recorded_at (issue #352)
+  // ===========================================================================
+
+  describe('transcripts.recorded_at (#352)', () => {
+    it('is a NOT NULL timestamptz with a default', async () => {
+      const rows = await prisma.$queryRaw<
+        Array<{ is_nullable: string; data_type: string; column_default: string | null }>
+      >`
+        SELECT is_nullable, data_type, column_default FROM information_schema.columns
+        WHERE table_name = 'transcripts' AND column_name = 'recorded_at'
+      `;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].is_nullable).toBe('NO');
+      expect(rows[0].data_type).toBe('timestamp with time zone');
+      expect(rows[0].column_default).toMatch(/CURRENT_TIMESTAMP|now\(\)/i);
+    });
+
+    it('defaults a row created without it, and round-trips an explicit value', async () => {
+      const owner = await createUser('recorded-at');
+      const source = await createSourceObject(owner.id, 'recorded-at');
+      const transcript = await createTranscript(owner.id, source.id, 'recorded-at');
+
+      expect(transcript.recordedAt).toBeInstanceOf(Date);
+
+      const updated = await prisma.transcript.update({
+        where: { id: transcript.id },
+        data: { recordedAt: new Date('2026-03-02T20:00:00.000Z') },
+      });
+      expect(updated.recordedAt.toISOString()).toBe('2026-03-02T20:00:00.000Z');
+    });
   });
 
   // ===========================================================================

@@ -80,6 +80,7 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   completedAt: new Date('2026-01-01T00:10:00.000Z'),
   deletedAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  recordedAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-01T00:10:00.000Z'),
   ...overrides,
 });
@@ -314,6 +315,8 @@ describe('Transcripts Integration', () => {
 
       expect(response.body.data.total).toBe(42);
       expect(response.body.data.items).toHaveLength(1);
+      // #352: every list row carries the recording date.
+      expect(response.body.data.items[0].recordedAt).toBe('2026-01-01T00:00:00.000Z');
     });
 
     it('counts over the FILTERS, never over the keyset-bounded page', async () => {
@@ -434,6 +437,141 @@ describe('Transcripts Integration', () => {
         .delete(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
         .set(authHeader(sharee.accessToken))
         .expect(404);
+    });
+  });
+
+  // ==========================================================================
+  // PATCH — title and/or recordedAt (issue #352)
+  // ==========================================================================
+
+  describe('PATCH /api/transcripts/:id', () => {
+    /** The owner of the stock transcript, with `update` echoing its data. */
+    const asOwner = async () => {
+      const owner = await createMockTestUser(context, { email: 'patcher@example.com' });
+
+      prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow({ ownerId: owner.id }));
+      prismaMock.transcript.update.mockImplementation((({ data }: { data: object }) =>
+        Promise.resolve(transcriptRow({ ownerId: owner.id, ...data }))) as never);
+      prismaMock.transcriptSpeaker.findMany.mockResolvedValue([]);
+      prismaMock.storageObject.findUnique.mockResolvedValue({
+        name: 'meeting.mp3',
+        mimeType: 'audio/mpeg',
+        size: BigInt(5_000_000),
+      } as never);
+      prismaMock.auditEvent.create.mockResolvedValue({} as never);
+
+      return owner;
+    };
+
+    it('sets recordedAt, answering it in UTC, with the title and version untouched', async () => {
+      const owner = await asOwner();
+
+      const response = await request(context.app.getHttpServer())
+        .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .send({ recordedAt: '2026-03-02T15:00:00-05:00' })
+        .expect(200);
+
+      expect(response.body.data.recordedAt).toBe('2026-03-02T20:00:00.000Z');
+      expect(response.body.data.title).toBe('A recording');
+      expect(response.body.data.currentVersion).toBe(3);
+      expect(prismaMock.transcript.update).toHaveBeenCalledWith({
+        where: { id: TRANSCRIPT_ID },
+        data: { recordedAt: new Date('2026-03-02T20:00:00.000Z') },
+      });
+      expect(prismaMock.transcriptVersion.create).not.toHaveBeenCalled();
+      expect(prismaMock.auditEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'transcript.recorded_at_changed',
+            targetId: TRANSCRIPT_ID,
+            meta: {
+              previous: '2026-01-01T00:00:00.000Z',
+              next: '2026-03-02T20:00:00.000Z',
+            },
+          }),
+        }),
+      );
+    });
+
+    it('renames without writing an audit row', async () => {
+      const owner = await asOwner();
+
+      const response = await request(context.app.getHttpServer())
+        .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .send({ title: '  Renamed  ' })
+        .expect(200);
+
+      expect(response.body.data.title).toBe('Renamed');
+      expect(response.body.data.recordedAt).toBe('2026-01-01T00:00:00.000Z');
+      expect(prismaMock.auditEvent.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'transcript.recorded_at_changed' }),
+        }),
+      );
+    });
+
+    it.each([
+      ['an empty body', {}],
+      ['an invalid datetime', { recordedAt: 'not a date' }],
+      ['an offset-less datetime', { recordedAt: '2026-03-02T15:00:00' }],
+      ['a pre-1970 date', { recordedAt: '1969-12-31T23:59:59Z' }],
+    ])('is a 400 for %s, and writes nothing', async (_label, body) => {
+      const owner = await asOwner();
+
+      await request(context.app.getHttpServer())
+        .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .send(body)
+        .expect(400);
+
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('is a 400 more than 24 hours in the future', async () => {
+      const owner = await asOwner();
+      const future = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+
+      const response = await request(context.app.getHttpServer())
+        .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(owner.accessToken))
+        .send({ recordedAt: future })
+        .expect(400);
+
+      expect(response.body.message).toBe('A recording cannot be dated in the future.');
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('gives a stranger a 404, not a 403, and writes nothing', async () => {
+      const stranger = await createMockTestUser(context, { email: 'stranger@example.com' });
+
+      prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
+      prismaMock.transcriptShare.findUnique.mockResolvedValue(null);
+
+      const response = await request(context.app.getHttpServer())
+        .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(stranger.accessToken))
+        .send({ recordedAt: '2026-03-02T20:00:00Z' })
+        .expect(404);
+
+      expect(response.body.message).toBe('Transcript not found');
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a viewer share exactly as it refuses a rename (404)', async () => {
+      const sharee = await createMockTestUser(context, { email: 'viewer-share@example.com' });
+
+      prismaMock.transcript.findUnique.mockResolvedValue(transcriptRow());
+      prismaMock.transcriptShare.findUnique.mockResolvedValue({ role: 'viewer' } as never);
+
+      await request(context.app.getHttpServer())
+        .patch(`${TRANSCRIPTS}/${TRANSCRIPT_ID}`)
+        .set(authHeader(sharee.accessToken))
+        .send({ recordedAt: '2026-03-02T20:00:00Z' })
+        .expect(404);
+
+      expect(prismaMock.transcript.update).not.toHaveBeenCalled();
     });
   });
 
