@@ -19,6 +19,8 @@ import {
 } from './readable';
 
 const IDENT = /^[a-z][a-z0-9_]*$/;
+/** Enum members and ontology keys: `accepted`, `person_fact`, `ATTENDED`. */
+const LITERAL = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 /** A table alias or column name from this codebase's own literals. */
 export function ident(name: string): Prisma.Sql {
@@ -29,7 +31,7 @@ export function ident(name: string): Prisma.Sql {
 /** `('a','b')` from constant, pattern-checked values. */
 export function literalList(values: readonly string[]): Prisma.Sql {
   if (values.length === 0) throw new Error('literalList needs at least one value');
-  for (const v of values) if (!IDENT.test(v)) throw new Error(`invalid SQL literal '${v}'`);
+  for (const v of values) if (!LITERAL.test(v)) throw new Error(`invalid SQL literal '${v}'`);
   return Prisma.raw(`(${values.map((v) => `'${v}'`).join(',')})`);
 }
 

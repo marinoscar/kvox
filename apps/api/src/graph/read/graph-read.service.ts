@@ -391,18 +391,18 @@ export class GraphReadService {
         WHERE r.owner_id = ${owner} AND (r.from_id = ${me} OR r.to_id = ${me}) AND r.from_id IS NOT NULL
           AND r.valid IS NOT NULL AND ${asOfRelationSql('r')}`;
       branches.push(Prisma.sql`
-        SELECT 'rel:' || r.id::text || ':start', 'relation_started', lower(r.valid), r.id,
-               coalesce(r.valid_precision::text, 'unknown')
+        SELECT 'rel:' || r.id::text || ':start' AS id, 'relation_started' AS event_kind, lower(r.valid) AS at,
+               r.id AS ref_id, coalesce(r.valid_precision::text, 'unknown') AS precision
         ${relBase} AND NOT lower_inf(r.valid)`);
       branches.push(Prisma.sql`
-        SELECT 'rel:' || r.id::text || ':end', 'relation_ended', upper(r.valid), r.id,
-               coalesce(r.valid_precision::text, 'unknown')
+        SELECT 'rel:' || r.id::text || ':end' AS id, 'relation_ended' AS event_kind, upper(r.valid) AS at,
+               r.id AS ref_id, coalesce(r.valid_precision::text, 'unknown') AS precision
         ${relBase} AND NOT upper_inf(r.valid)`);
     }
     if (kinds.has('meeting')) {
       branches.push(Prisma.sql`
-        SELECT m.id::text, 'meeting', m.occurred_at, m.id,
-               CASE WHEN m.occurred_at IS NULL THEN 'unknown' ELSE 'day' END
+        SELECT m.id::text AS id, 'meeting' AS event_kind, m.occurred_at AS at, m.id AS ref_id,
+               CASE WHEN m.occurred_at IS NULL THEN 'unknown' ELSE 'day' END AS precision
         FROM kg_entities m
         WHERE m.owner_id = ${owner} AND m.type = 'Meeting' AND ${readableEntitySql('m')} AND m.id <> ${me}
           AND m.id IN (
