@@ -95,3 +95,31 @@ never from a list in the test.
 - Supersedes chains: a decision reversed in a later fixture, and "the pilot
   moved to Q2" after "the pilot is scheduled for Q1".
 - ≥ 2 note-only meetings (`note-only`).
+
+## The Ask evaluation's question file (issue #382, epic #348)
+
+`ask-questions.json` (beside this README) is a **separate** golden set, over
+the **same** meetings: ≥ 40 hand-written questions with expectations, scored
+against the Ask agent (#377/#378) rather than against extraction. It is
+validated by `apps/api/test/ask/ask-eval-questions.spec.ts`, scored by
+`npm run ask:eval --workspace=api`, and its schema lives in
+`apps/api/scripts/ask-eval/question-schema.ts`. See that file's own comments
+for the full contract (`category`, `expected.{entities,answerAll,answerNone,
+citeFrom,notFound}`); the short version:
+
+- `citeFrom` names a segment id **exactly as this set's own `mNN-sNNN` ids
+  read** (e.g. `"m01-s009"`), or `"mNN#note"` for a meeting's note — never a
+  new naming scheme.
+- A question's `id` (`q01`, `q02`, …) is **permanent** once committed, for the
+  identical reason a fixture's `id` is: a report stays comparable run over
+  run. Retire a question by noting it here, never by renumbering.
+- The seeder (`apps/api/scripts/ask-eval/seed-graph.ts`) always loads **every**
+  fixture in this directory and writes the meetings' hand LABELS (never a
+  model's extraction) as the graph the agent is asked about — so a question's
+  `fixtures` field is provenance for a reviewer, not a scoping instruction.
+- Adding a fixture here (a new meeting) is safe and additive: it does not
+  break an existing question's `citeFrom`/entity expectations, because those
+  reference specific ids this set already has. Adding a QUESTION instead
+  requires only that its `citeFrom`/`entities` name real ids/labels somewhere
+  in this directory — `ask-eval-questions.spec.ts` checks that referential
+  integrity on every run.
