@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { JobsModule } from '../jobs/jobs.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
+import { GraphAccessService } from './access/graph-access.service';
 
 // =============================================================================
 // GraphModule (#354, epic #344, docs/specs/ontology.md)
@@ -22,8 +23,8 @@ import { TranscriptsModule } from '../transcripts/transcripts.module';
 
 @Module({
   imports: [PrismaModule, JobsModule, TranscriptsModule],
-  providers: [],
+  providers: [GraphAccessService],
   controllers: [],
-  exports: [],
+  exports: [GraphAccessService],
 })
 export class GraphModule {}
