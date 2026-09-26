@@ -30,6 +30,8 @@ export const EXTRACTION_SCHEMA_NAME = 'kg_extraction';
 
 const PRECISIONS = ['day', 'month', 'year', 'unknown'];
 
+const ALWAYS_NULL: JsonSchema = { type: 'null', description: 'Always null for this kind.' };
+
 const nullableString = (description: string): JsonSchema => ({ type: ['string', 'null'], description });
 
 function citeSchema(): JsonSchema {
@@ -100,7 +102,8 @@ function relationSchema(ctx: ExtractionContext, r: ExtractionContext['offered'][
 
 function itemSchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchema {
   const kind = t.itemKind as string;
-  const statuses = kind === 'commitment' ? ['open', 'done', 'dropped'] : [];
+  const isCommitment = kind === 'commitment';
+  const statuses = isCommitment ? ['open', 'done', 'dropped'] : [];
   return object(
     {
       kind: { type: 'string', enum: [kind] },
@@ -110,19 +113,21 @@ function itemSchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchema 
         `What it is about (${(t.subjectTypes ?? []).join('|')}): a \`k#\` or \`e#\`${t.subjectRequired ? '' : ', or null'}.`,
         true,
       ),
-      owner: endpoint('Commitment only: the Person who owes it (`k#`/`e#`), else null.', true),
-      counterparty: endpoint('Commitment only: the Person or Organization it is owed to, else null.', true),
+      owner: isCommitment ? endpoint('The Person who owes it: a `k#` or `e#`.') : ALWAYS_NULL,
+      counterparty: isCommitment
+        ? endpoint('The Person or Organization it is owed to (`k#`/`e#`), or null.', true)
+        : ALWAYS_NULL,
       status:
         statuses.length > 0
           ? { type: ['string', 'null'], enum: [...statuses, null], description: 'Commitment status.' }
-          : { type: 'null', description: 'Always null for this kind.' },
+          : ALWAYS_NULL,
       occurredAt: nullableString('When it happened or was stated (YYYY-MM-DD), or null.'),
-      dueAt: nullableString('Commitment only: due date (YYYY-MM-DD), or null.'),
+      dueAt: isCommitment ? nullableString('Due date (YYYY-MM-DD), or null.') : ALWAYS_NULL,
       ...temporalProps(),
       sensitivity:
         kind === 'person_fact'
           ? { type: ['string', 'null'], enum: ['business', 'personal', 'sensitive', null], description: 'How sensitive this fact is.' }
-          : { type: 'null', description: 'Always null for this kind.' },
+          : ALWAYS_NULL,
       props: buildPropsJsonSchema(ctx.effectiveSchema, t.key),
       evidence: citeSchema(),
     },

@@ -92,6 +92,7 @@ function entityTypesSection(ctx: ExtractionContext): string[] {
 
 function relationTypesSection(ctx: ExtractionContext): string[] {
   const lines: string[] = [HEADING_RELATION_TYPES];
+  if (ctx.offered.relationTypes.length === 0) lines.push('(none — propose no relations)');
   for (const r of ctx.offered.relationTypes) {
     const temporal = r.type.temporal ? ', temporal' : '';
     lines.push(`- ${r.type.key}: ${r.from.join('|')} → ${r.to.join('|')}${temporal} — ${r.type.description}`);
@@ -102,6 +103,7 @@ function relationTypesSection(ctx: ExtractionContext): string[] {
 
 function factKindsSection(ctx: ExtractionContext): string[] {
   const lines: string[] = [HEADING_FACT_KINDS];
+  if (ctx.offered.itemTypes.length === 0) lines.push('(none — propose no facts)');
   for (const t of ctx.offered.itemTypes) {
     const kind = t.itemKind ?? t.key;
     lines.push(`- ${kind} (${t.key}): ${FACT_KIND_DEFINITIONS[kind] ?? t.description}`);
