@@ -14,7 +14,7 @@
 // ⚠ Never log a label, a statement or a quote — ids and counts only.
 // =============================================================================
 
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -26,13 +26,21 @@ import type {
   GraphEntityDetail,
   ListEntitiesQuery,
   ListEntitiesResponse,
+  GraphEntityRef,
   MentionsQuery,
   MentionsResponse,
+  TimelineEvent,
+  TimelineQuery,
+  TimelineResponse,
 } from './dto/graph-read.dto';
+import { withGraphStatementTimeout } from './graph-query-timeout';
+import { edgeValid } from './graph-neighborhood.service';
 import { decodeGraphCursor, encodeGraphCursor, GraphCursorError, type GraphCursorRoute } from './graph-cursor';
-import { resolveEntityTypes } from './read-params';
+import { asOfOr400, resolveEntityTypes, resolveTimelineKinds } from './read-params';
 import {
+  asOfRelationSql,
   isoMicrosSql,
+  literalList,
   readableEntitySql,
   readableItemSql,
   readableMentionSql,
@@ -42,6 +50,7 @@ import {
   textArray,
 } from './read-sql';
 import { relationValidAtSql } from './as-of';
+import { TIMELINE_ITEM_STATUSES } from './readable';
 
 /** Up to this many aliases on an index row. */
 const SUMMARY_ALIAS_LIMIT = 5;
@@ -63,8 +72,19 @@ export function decodeCursorOr400(cursor: string, route: GraphCursorRoute) {
 
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
+/** Relation types that tie an entity to a Meeting on its timeline (§9.1). */
+export const TIMELINE_MEETING_RELATIONS = ['ATTENDED', 'DISCUSSED', 'PART_OF'] as const;
+/** Evidence ids returned per timeline event. */
+const TIMELINE_EVIDENCE_IDS = 5;
+
+type Precision = 'day' | 'month' | 'year' | 'unknown';
+const asPrecision = (p: string | null | undefined): Precision =>
+  p === 'day' || p === 'month' || p === 'year' ? p : 'unknown';
+
 @Injectable()
 export class GraphReadService {
+  private readonly logger = new Logger(GraphReadService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: GraphAccessService,
@@ -319,6 +339,230 @@ export class GraphReadService {
       })),
       nextCursor,
     };
+  }
+
+  // ===========================================================================
+  // GET /api/graph/entities/:id/timeline
+  // ===========================================================================
+
+  /**
+   * One `UNION ALL` over (a) items naming this entity in any column —
+   * `superseded` ones included and flagged, history being the point; (b) its
+   * temporal relations, as a start event at `lower(valid)` and, when finite,
+   * an end event at `upper(valid)`; (c) the Meetings it ATTENDED / DISCUSSED /
+   * is PART_OF. `as_of` drops events after that instant. Newest first,
+   * `at DESC NULLS LAST, id DESC`, keyset-paged over `(at, id)`.
+   */
+  async timeline(user: GraphReader, id: string, query: TimelineQuery): Promise<TimelineResponse> {
+    const ownerId = user.id;
+    await this.access.require(ownerId, 'entity', id, 'view');
+    const kinds = resolveTimelineKinds(query.kinds);
+    const asOf = asOfOr400(query.as_of);
+    const itemKinds = (['commitment', 'decision', 'claim', 'person_fact'] as const).filter((k) => kinds.has(k));
+
+    const keyset: Prisma.Sql = query.cursor
+      ? (() => {
+          const pos = decodeCursorOr400(query.cursor, 'timeline');
+          return pos.k === null
+            ? Prisma.sql`(ev.at IS NULL AND ev.id < ${pos.id})`
+            : Prisma.sql`(ev.at < ${pos.k}::timestamptz OR (ev.at = ${pos.k}::timestamptz AND ev.id < ${pos.id}) OR ev.at IS NULL)`;
+        })()
+      : Prisma.sql`TRUE`;
+
+    const owner = Prisma.sql`${ownerId}::uuid`;
+    const me = Prisma.sql`${id}::uuid`;
+    const other = Prisma.sql`CASE WHEN r.from_id = ${me} THEN r.to_id ELSE r.from_id END`;
+    const branches: Prisma.Sql[] = [];
+
+    if (itemKinds.length > 0) {
+      branches.push(Prisma.sql`
+        SELECT i.id::text AS id, 'item' AS event_kind, i.occurred_at AS at, i.id AS ref_id,
+               coalesce(i.valid_precision::text, CASE WHEN i.occurred_at IS NULL THEN 'unknown' ELSE 'day' END) AS precision
+        FROM kg_items i
+        WHERE i.owner_id = ${owner}
+          AND (i.subject_id = ${me} OR i.owner_person_id = ${me} OR i.counterparty_id = ${me} OR i.meeting_id = ${me})
+          AND ${readableItemSql('i', TIMELINE_ITEM_STATUSES)}
+          AND i.kind IN ${literalList(itemKinds)}
+          ${query.includeSensitive ? Prisma.empty : Prisma.sql`AND ${notSensitiveSql('i')}`}`);
+    }
+    if (kinds.has('relation')) {
+      const relBase = Prisma.sql`FROM kg_relations r
+        JOIN kg_entities o ON o.id = ${other} AND o.owner_id = ${owner} AND ${readableEntitySql('o')}
+        WHERE r.owner_id = ${owner} AND (r.from_id = ${me} OR r.to_id = ${me}) AND r.from_id IS NOT NULL
+          AND r.valid IS NOT NULL AND ${asOfRelationSql('r')}`;
+      branches.push(Prisma.sql`
+        SELECT 'rel:' || r.id::text || ':start', 'relation_started', lower(r.valid), r.id,
+               coalesce(r.valid_precision::text, 'unknown')
+        ${relBase} AND NOT lower_inf(r.valid)`);
+      branches.push(Prisma.sql`
+        SELECT 'rel:' || r.id::text || ':end', 'relation_ended', upper(r.valid), r.id,
+               coalesce(r.valid_precision::text, 'unknown')
+        ${relBase} AND NOT upper_inf(r.valid)`);
+    }
+    if (kinds.has('meeting')) {
+      branches.push(Prisma.sql`
+        SELECT m.id::text, 'meeting', m.occurred_at, m.id,
+               CASE WHEN m.occurred_at IS NULL THEN 'unknown' ELSE 'day' END
+        FROM kg_entities m
+        WHERE m.owner_id = ${owner} AND m.type = 'Meeting' AND ${readableEntitySql('m')} AND m.id <> ${me}
+          AND m.id IN (
+            SELECT ${other} FROM kg_relations r
+            WHERE r.owner_id = ${owner} AND (r.from_id = ${me} OR r.to_id = ${me}) AND r.from_id IS NOT NULL
+              AND r.type IN ${literalList(TIMELINE_MEETING_RELATIONS)} AND ${readableRelationSql('r')})`);
+    }
+
+    if (branches.length === 0) return { items: [], nextCursor: null, asOf: asOf.toISOString() };
+
+    return withGraphStatementTimeout(this.prisma, this.logger, { ownerId, route: 'timeline' }, async (tx) => {
+      const rows = await tx.$queryRaw<
+        { id: string; event_kind: TimelineEvent['eventKind']; at: Date | null; at_key: string | null; ref_id: string; precision: string }[]
+      >`
+        SELECT ev.id, ev.event_kind, ev.at, ${isoMicrosSql(Prisma.sql`ev.at`)} AS at_key, ev.ref_id::text AS ref_id, ev.precision
+        FROM (${Prisma.join(branches, ' UNION ALL ')}) ev
+        WHERE (ev.at IS NULL OR ev.at <= ${asOf}::timestamptz) AND ${keyset}
+        ORDER BY ev.at DESC NULLS LAST, ev.id DESC
+        LIMIT ${query.limit + 1}`;
+
+      let nextCursor: string | null = null;
+      if (rows.length > query.limit) {
+        const last = rows[query.limit - 1];
+        nextCursor = encodeGraphCursor('timeline', { k: last.at_key, id: last.id });
+      }
+      const page = rows.slice(0, query.limit);
+
+      const itemIds = page.filter((r) => r.event_kind === 'item').map((r) => r.ref_id);
+      const relationIds = [
+        ...new Set(page.filter((r) => r.event_kind === 'relation_started' || r.event_kind === 'relation_ended').map((r) => r.ref_id)),
+      ];
+      const meetingIds = page.filter((r) => r.event_kind === 'meeting').map((r) => r.ref_id);
+
+      const [items, relations, meetings, evidence] = await Promise.all([
+        itemIds.length
+          ? tx.kgItem.findMany({
+              where: { id: { in: itemIds }, ownerId },
+              include: {
+                ownerPerson: { select: { id: true, label: true, type: true, reviewStatus: true, mergedIntoId: true } },
+                counterparty: { select: { id: true, label: true, type: true, reviewStatus: true, mergedIntoId: true } },
+              },
+            })
+          : [],
+        relationIds.length
+          ? tx.$queryRaw<
+              {
+                id: string;
+                type: string;
+                from_id: string;
+                other_id: string;
+                other_label: string;
+                other_type: string;
+                vfrom: Date | null;
+                vto: Date | null;
+                precision: string | null;
+              }[]
+            >`
+              SELECT r.id::text AS id, r.type, r.from_id::text AS from_id,
+                     o.id::text AS other_id, o.label AS other_label, o.type AS other_type,
+                     lower(r.valid) AS vfrom, upper(r.valid) AS vto, r.valid_precision::text AS precision
+              FROM kg_relations r
+              JOIN kg_entities o ON o.id = ${other}
+              WHERE r.owner_id = ${owner} AND r.id = ANY(${uuidArray(relationIds)})`
+          : [],
+        meetingIds.length
+          ? tx.kgEntity.findMany({ where: { id: { in: meetingIds }, ownerId }, select: { id: true, label: true, type: true } })
+          : [],
+        this.evidenceSummary(tx, ownerId, { item: itemIds, relation: relationIds, entity: meetingIds }),
+      ]);
+
+      const itemById = new Map(items.map((i) => [i.id, i]));
+      const relById = new Map(relations.map((r) => [r.id, r]));
+      const meetingById = new Map(meetings.map((m) => [m.id, m]));
+      const ref = (e: { id: string; label: string; type: string; reviewStatus: string; mergedIntoId: string | null } | null): GraphEntityRef | null =>
+        e && (e.reviewStatus === 'accepted' || e.reviewStatus === 'edited') && e.mergedIntoId === null
+          ? { id: e.id, label: e.label, type: e.type }
+          : null;
+
+      const events: TimelineEvent[] = [];
+      for (const r of page) {
+        const base = { id: r.id, eventKind: r.event_kind, at: r.at ? r.at.toISOString() : null, precision: asPrecision(r.precision) };
+        if (r.event_kind === 'item') {
+          const i = itemById.get(r.ref_id);
+          if (!i) continue;
+          const ev = evidence.get(`item:${i.id}`);
+          events.push({
+            ...base,
+            item: {
+              id: i.id,
+              kind: i.kind,
+              title: i.title,
+              statement: i.statement,
+              status: i.status,
+              dueAt: i.dueAt ? i.dueAt.toISOString() : null,
+              ownerPerson: ref(i.ownerPerson),
+              counterparty: ref(i.counterparty),
+              sensitivity: i.sensitivity,
+              superseded: i.reviewStatus === 'superseded',
+              supersededById: i.supersededById,
+            },
+            evidenceIds: ev?.ids ?? [],
+            evidenceCount: ev?.count ?? 0,
+          });
+        } else if (r.event_kind === 'meeting') {
+          const m = meetingById.get(r.ref_id);
+          if (!m) continue;
+          const ev = evidence.get(`entity:${m.id}`);
+          events.push({ ...base, meeting: { id: m.id, label: m.label, type: m.type }, evidenceIds: ev?.ids ?? [], evidenceCount: ev?.count ?? 0 });
+        } else {
+          const rel = relById.get(r.ref_id);
+          if (!rel) continue;
+          const ev = evidence.get(`relation:${rel.id}`);
+          events.push({
+            ...base,
+            relation: {
+              id: rel.id,
+              type: rel.type,
+              direction: rel.from_id === id ? 'out' : 'in',
+              other: { id: rel.other_id, label: rel.other_label, type: rel.other_type },
+              valid: edgeValid({ vfrom: rel.vfrom, vto: rel.vto, vnull: false, precision: rel.precision }),
+            },
+            evidenceIds: ev?.ids ?? [],
+            evidenceCount: ev?.count ?? 0,
+          });
+        }
+      }
+      return { items: events, nextCursor, asOf: asOf.toISOString() };
+    });
+  }
+
+  /** Up to five evidence ids (oldest first) and the total, per subject — one query. */
+  private async evidenceSummary(
+    tx: Prisma.TransactionClient,
+    ownerId: string,
+    subjects: { item: string[]; relation: string[]; entity: string[] },
+  ): Promise<Map<string, { ids: string[]; count: number }>> {
+    const out = new Map<string, { ids: string[]; count: number }>();
+    const clauses: Prisma.Sql[] = [];
+    for (const kind of ['item', 'relation', 'entity'] as const) {
+      if (subjects[kind].length) {
+        clauses.push(Prisma.sql`(ev.subject_kind = ${Prisma.raw(`'${kind}'`)} AND ev.subject_id = ANY(${uuidArray(subjects[kind])}))`);
+      }
+    }
+    if (clauses.length === 0) return out;
+    const rows = await tx.$queryRaw<{ kind: string; subject_id: string; id: string; n: number }[]>`
+      SELECT x.kind, x.subject_id, x.id, x.n FROM (
+        SELECT ev.subject_kind::text AS kind, ev.subject_id::text AS subject_id, ev.id::text AS id,
+               count(*) OVER (PARTITION BY ev.subject_kind, ev.subject_id)::int AS n,
+               row_number() OVER (PARTITION BY ev.subject_kind, ev.subject_id ORDER BY ev.created_at, ev.id) AS rn
+        FROM kg_evidence ev
+        WHERE ev.owner_id = ${ownerId}::uuid AND (${Prisma.join(clauses, ' OR ')})
+      ) x WHERE x.rn <= ${TIMELINE_EVIDENCE_IDS}
+      ORDER BY x.kind, x.subject_id, x.rn`;
+    for (const r of rows) {
+      const key = `${r.kind}:${r.subject_id}`;
+      const entry = out.get(key) ?? { ids: [], count: r.n };
+      entry.ids.push(r.id);
+      out.set(key, entry);
+    }
+    return out;
   }
 
   // ===========================================================================

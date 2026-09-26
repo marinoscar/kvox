@@ -15,6 +15,10 @@ import {
   GraphSliceDto,
   expandRequestSchema,
   neighborhoodQuerySchema,
+  TimelineResponseDto,
+  timelineQuerySchema,
+  type TimelineQuery,
+  type TimelineResponse,
   type ExpandRequest,
   type GraphSlice,
   type NeighborhoodQuery,
@@ -177,6 +181,40 @@ export class GraphReadController {
     @CurrentUser() user: RequestUser,
   ): Promise<GraphSlice> {
     return this.neighborhoods.neighborhood(user, id, query);
+  }
+
+  @Get('entities/:id/timeline')
+  @Auth({ permissions: [PERMISSIONS.GRAPH_READ] })
+  @ApiOperation({
+    summary: "An entity's timeline",
+    description:
+      'Everything dated about this entity, newest first: the commitments, decisions, claims ' +
+      'and person facts that name it (a **superseded** one stays, flagged `superseded: true` — ' +
+      'history is the point), when each of its relations started and ended, and the meetings ' +
+      'it attended, discussed or is part of. Each event carries up to five evidence ids and ' +
+      'the total.\n\n' +
+      '- **`as_of`** drops events after that instant.\n' +
+      '- **`kinds`** keeps a subset of `commitment, decision, claim, person_fact, relation, meeting`.\n' +
+      '- `sensitive` person facts appear only with **`includeSensitive=true`**.\n\n' +
+      'Keyset-paginated by `nextCursor`. A query that runs longer than 3 s is a **503** with ' +
+      '`details.reason: "graph_query_timeout"`.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @ApiQuery({ name: 'as_of', required: false, type: String, description: 'YYYY-MM-DD or ISO 8601 with offset' })
+  @ApiQuery({ name: 'kinds', required: false, type: String, description: 'Comma-separated event kinds' })
+  @ApiQuery({ name: 'includeSensitive', required: false, enum: ['true', 'false'] })
+  @ApiQuery({ name: 'cursor', required: false, type: String })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: '1-50 (default 25)' })
+  @ApiDataResponse(TimelineResponseDto, { description: 'A page of events' })
+  @ApiResponse({ status: 400, description: 'Invalid parameter, unknown kind, or a cursor from another list' })
+  @ApiResponse({ status: 404, description: NOT_FOUND_ENTITY })
+  @ApiResponse({ status: 503, description: 'The query exceeded its 3 s budget (`graph_query_timeout`)' })
+  async timeline(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query(new ZodValidationPipe(timelineQuerySchema)) query: TimelineQuery,
+    @CurrentUser() user: RequestUser,
+  ): Promise<TimelineResponse> {
+    return this.reads.timeline(user, id, query);
   }
 
   // ---------------------------------------------------------------------------

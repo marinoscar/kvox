@@ -38,14 +38,14 @@
 // so the seeds, then the best-connected neighbours, survive the cap.
 // =============================================================================
 
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { trace } from '@opentelemetry/api';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';
 import { GraphOntologyService } from '../ontology/graph-ontology.service';
-import { AsOfParseError, itemValidAtSql, parseAsOf, relationValidAtSql } from './as-of';
+import { itemValidAtSql, relationValidAtSql } from './as-of';
 import type {
   ExpandRequest,
   GraphEdge,
@@ -54,7 +54,7 @@ import type {
   NeighborhoodQuery,
 } from './dto/graph-read.dto';
 import { withGraphStatementTimeout } from './graph-query-timeout';
-import { resolveNodeTypes, resolveRelationTypes, type NodeTypeFilter } from './read-params';
+import { asOfOr400, resolveNodeTypes, resolveRelationTypes, type NodeTypeFilter } from './read-params';
 import {
   asOfRelationSql,
   ident,
@@ -455,14 +455,4 @@ export function edgeValid(r: Pick<EdgeRow, 'vfrom' | 'vto' | 'vnull' | 'precisio
     to: r.vto ? new Date(r.vto).toISOString() : null,
     precision,
   };
-}
-
-/** `as_of` → instant, or a 400. */
-export function asOfOr400(raw: string | undefined): Date {
-  try {
-    return parseAsOf(raw, new Date());
-  } catch (err) {
-    if (err instanceof AsOfParseError) throw new BadRequestException(err.message);
-    throw err;
-  }
 }

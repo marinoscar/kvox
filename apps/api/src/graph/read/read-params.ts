@@ -12,6 +12,7 @@
 import { BadRequestException } from '@nestjs/common';
 import { ITEM_KINDS, type EffectiveSchema, type KgItemKind } from '@app/shared/ontology';
 
+import { AsOfParseError, parseAsOf } from './as-of';
 import { TIMELINE_KINDS, type TimelineKind } from './dto/graph-read.dto';
 
 /** `"A, B,,C"` → `['A','B','C']`, de-duplicated; `undefined` for an absent/empty value. */
@@ -93,4 +94,14 @@ export function resolveTimelineKinds(raw: string | undefined): Set<TimelineKind>
   const bad = keys.filter((k) => !(TIMELINE_KINDS as readonly string[]).includes(k));
   if (bad.length > 0) throw unknownKeys('kinds', bad, [...TIMELINE_KINDS]);
   return new Set(keys as TimelineKind[]);
+}
+
+/** `as_of` → the instant it names (absent = now), or a 400. */
+export function asOfOr400(raw: string | undefined, now: Date = new Date()): Date {
+  try {
+    return parseAsOf(raw, now);
+  } catch (err) {
+    if (err instanceof AsOfParseError) throw new BadRequestException(err.message);
+    throw err;
+  }
 }
