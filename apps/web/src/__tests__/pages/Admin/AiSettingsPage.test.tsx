@@ -54,7 +54,8 @@ import {
   testAiReachability,
   updateAiSettings,
 } from '../../../services/ai';
-import type { AiSettingsAdminView } from '../../../services/ai';
+import type { AiSettingsAdminView, AiTaskDefinition } from '../../../services/ai';
+import { ApiError } from '../../../services/api';
 
 const mockUsePermissions = vi.mocked(usePermissions);
 const mockGet = vi.mocked(getAiSettings);
@@ -79,6 +80,35 @@ function setPermissions(granted: string[]) {
     isAdmin: true,
   });
 }
+
+// #361. The API's own task list — labels, order and requirements all come from
+// here, never from the web app.
+const TASKS: AiTaskDefinition[] = [
+  {
+    key: 'graph.extract',
+    label: 'Extraction',
+    description: 'Turns a finished note into a graph proposal.',
+    requires: ['structuredOutput'],
+  },
+  {
+    key: 'graph.adjudicate',
+    label: 'Adjudication',
+    description: 'Decides whether two entities are the same.',
+    requires: ['structuredOutput'],
+  },
+  {
+    key: 'graph.digest',
+    label: 'Digest',
+    description: 'Summarises what changed.',
+    requires: [],
+  },
+  {
+    key: 'graph.agent',
+    label: 'Ask',
+    description: 'Answers questions about the graph.',
+    requires: ['toolCalling'],
+  },
+];
 
 const baseView: AiSettingsAdminView = {
   settings: {
@@ -131,7 +161,7 @@ const baseView: AiSettingsAdminView = {
             contextWindowTokens: 128_000,
             maxOutputTokens: 16_384,
             structuredOutput: true,
-            toolCalling: true,
+            toolCalling: false,
           },
         ],
         streaming: true,
@@ -141,9 +171,19 @@ const baseView: AiSettingsAdminView = {
     },
   ],
   unknownModels: [],
-  tasks: [],
-  modelCapabilities: [],
-  taskModelStatus: [],
+  tasks: TASKS,
+  modelCapabilities: [
+    { id: 'gpt-4o', structuredOutput: true, toolCalling: true, source: 'catalogue' },
+    { id: 'gpt-4o-mini', structuredOutput: true, toolCalling: false, source: 'catalogue' },
+  ],
+  taskModelStatus: TASKS.map((task) => ({
+    task: task.key,
+    configuredModel: null,
+    effectiveModel: 'gpt-4o',
+    source: 'default' as const,
+    missing: [],
+    problem: null,
+  })),
   version: 7,
   updatedAt: '2026-01-05T08:00:00.000Z',
   updatedBy: { id: 'admin-user-id', email: 'admin@example.com' },
@@ -593,6 +633,242 @@ describe('AiSettingsPage', () => {
   // ==========================================================================
   // Accessibility, in both themes
   // ==========================================================================
+
+  // ==========================================================================
+  // #361: connected knowledge and task models
+  // ==========================================================================
+
+  describe('#361: connected knowledge and task models', () => {
+    const modelSelect = (label: string) =>
+      screen.getByRole('combobox', { name: new RegExp(`^model for ${label}`, 'i') });
+    const reasoningSelect = (label: string) =>
+      screen.getByRole('combobox', { name: new RegExp(`^reasoning for ${label}`, 'i') });
+
+    async function choose(
+      user: ReturnType<typeof userEvent.setup>,
+      select: HTMLElement,
+      option: string | RegExp,
+    ) {
+      await user.click(select);
+      const listbox = await screen.findByRole('listbox');
+      await user.click(within(listbox).getByRole('option', { name: option }));
+    }
+
+    it('renders both sections between "Permitted models" and "Limits", with one row per API task in order', async () => {
+      await renderPage();
+
+      const sections = screen
+        .getAllByRole('heading', { level: 2 })
+        .map((heading) => heading.textContent);
+      const at = (name: string) => sections.indexOf(name);
+      expect(at('Permitted models')).toBeGreaterThanOrEqual(0);
+      expect(at('Connected knowledge')).toBe(at('Permitted models') + 1);
+      expect(at('Task models')).toBe(at('Connected knowledge') + 1);
+      expect(at('Limits')).toBe(at('Task models') + 1);
+
+      for (const task of TASKS) {
+        expect(modelSelect(task.label)).toHaveTextContent('Default (gpt-4o)');
+      }
+      expect(screen.getAllByRole('combobox', { name: /^model for /i })).toHaveLength(4);
+    });
+
+    it('seeds the draft from the loaded settings', async () => {
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: {
+          ...baseView.settings,
+          graphEnabled: true,
+          taskModels: { 'graph.digest': { model: 'gpt-4o-mini', reasoningEffort: 'low' } },
+        },
+      });
+      await renderPage();
+
+      expect(screen.getByRole('switch', { name: /enable connected knowledge/i })).toBeChecked();
+      expect(modelSelect('Digest')).toHaveTextContent('gpt-4o-mini');
+      expect(reasoningSelect('Digest')).toHaveTextContent('Low');
+    });
+
+    it('saves graphEnabled and taskModels with Default rows and Default reasoning omitted', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: {
+          ...baseView.settings,
+          // A stored row the administrator will put back on Default.
+          taskModels: { 'graph.agent': { model: 'gpt-4o', reasoningEffort: 'medium' } },
+        },
+      });
+      await renderPage();
+
+      await user.click(screen.getByRole('switch', { name: /enable connected knowledge/i }));
+      await choose(user, modelSelect('Extraction'), 'gpt-4o-mini');
+      await choose(user, reasoningSelect('Extraction'), 'High');
+      await choose(user, modelSelect('Digest'), 'gpt-4o');
+      await choose(user, modelSelect('Ask'), 'Default (gpt-4o)');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      const [body] = mockUpdate.mock.calls[0];
+      expect(body.graphEnabled).toBe(true);
+      // Exactly this map: the API replaces it wholesale, so an absent task IS
+      // "use the default model".
+      expect(body.taskModels).toEqual({
+        'graph.extract': { model: 'gpt-4o-mini', reasoningEffort: 'high' },
+        'graph.digest': { model: 'gpt-4o' },
+      });
+    });
+
+    it('warns, without blocking, when a chosen model lacks what the task needs', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+
+      await choose(user, modelSelect('Ask'), 'gpt-4o-mini');
+
+      expect(
+        screen.getByText(/gpt-4o-mini can't do Tool calling, which Ask needs/i),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+    });
+
+    it('offers a model added to the draft permitted list immediately, judged by its catalogue flags', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue({
+        ...baseView,
+        providers: [
+          {
+            ...baseView.providers[0],
+            capabilities: {
+              ...baseView.providers[0].capabilities,
+              models: [
+                ...baseView.providers[0].capabilities.models,
+                // In the catalogue, NOT yet permitted, so absent from
+                // `modelCapabilities` — only the catalogue can judge it.
+                {
+                  id: 'gpt-plain',
+                  label: 'GPT Plain',
+                  contextWindowTokens: 32_000,
+                  maxOutputTokens: 4_096,
+                  structuredOutput: false,
+                  toolCalling: false,
+                },
+              ],
+            },
+          },
+        ],
+      });
+      await renderPage();
+
+      await user.type(screen.getByLabelText(/^model id$/i), 'gpt-plain');
+      await user.click(screen.getByRole('button', { name: /add model/i }));
+      await choose(user, modelSelect('Extraction'), 'gpt-plain');
+
+      expect(
+        screen.getByText(/gpt-plain can't do Structured output, which Extraction needs/i),
+      ).toBeInTheDocument();
+    });
+
+    it('says an id in neither the catalogue nor the stored flags is checked on save', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+
+      await user.type(screen.getByLabelText(/^model id$/i), 'gpt-unheard-of');
+      await user.click(screen.getByRole('button', { name: /add model/i }));
+      await choose(user, modelSelect('Ask'), 'gpt-unheard-of');
+
+      expect(screen.getByText('Capabilities are checked when you save.')).toBeInTheDocument();
+    });
+
+    it('blocks the save, naming "Task models", when a task uses a model removed from the permitted list', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: {
+          ...baseView.settings,
+          taskModels: { 'graph.extract': { model: 'gpt-4o-mini' } },
+        },
+      });
+      await renderPage();
+
+      await user.click(screen.getByRole('button', { name: /stop permitting gpt-4o-mini/i }));
+
+      expect(
+        screen.getByText('No longer permitted — choose another or use Default'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+      expect(screen.getByText(/save is unavailable until you fix/i)).toHaveTextContent(
+        /under “Task models”/,
+      );
+
+      // Putting the task back on Default clears it.
+      await choose(user, modelSelect('Extraction'), 'Default (gpt-4o)');
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeEnabled();
+      expect(screen.queryByText(/save is unavailable until you fix/i)).toBeNull();
+    });
+
+    it('shows a server 400 and highlights the task it names in details.task', async () => {
+      const user = userEvent.setup();
+      mockUpdate.mockRejectedValue(
+        new ApiError('gpt-4o-mini cannot call tools, which Ask needs.', 400, 'BAD_REQUEST', {
+          reason: 'model_lacks_capability',
+          task: 'graph.agent',
+        }),
+      );
+      await renderPage();
+
+      await choose(user, modelSelect('Ask'), 'gpt-4o-mini');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      expect(
+        await screen.findByText('gpt-4o-mini cannot call tools, which Ask needs.'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/the last save was refused for this task/i).closest(
+          '[data-testid="task-model-row-graph.agent"]',
+        ),
+      ).not.toBeNull();
+      expect(screen.getAllByText(/the last save was refused for this task/i)).toHaveLength(1);
+    });
+
+    it('re-seeds the draft from the response after a save', async () => {
+      const user = userEvent.setup();
+      mockUpdate.mockResolvedValue({
+        ...baseView,
+        version: 8,
+        settings: {
+          ...baseView.settings,
+          graphEnabled: true,
+          // The server's answer, not what was typed — e.g. normalised.
+          taskModels: { 'graph.adjudicate': { model: 'gpt-4o-mini' } },
+        },
+      });
+      await renderPage();
+
+      await choose(user, modelSelect('Digest'), 'gpt-4o-mini');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(modelSelect('Adjudication')).toHaveTextContent('gpt-4o-mini'));
+      expect(modelSelect('Digest')).toHaveTextContent('Default (gpt-4o)');
+      expect(screen.getByRole('switch', { name: /enable connected knowledge/i })).toBeChecked();
+    });
+
+    it('disables every new control for a read-only admin', async () => {
+      setPermissions(READ_ONLY);
+      mockGet.mockResolvedValue({
+        ...baseView,
+        settings: {
+          ...baseView.settings,
+          taskModels: { 'graph.extract': { model: 'gpt-4o' } },
+        },
+      });
+      await renderPage();
+
+      expect(screen.getByRole('switch', { name: /enable connected knowledge/i })).toBeDisabled();
+      for (const task of TASKS) {
+        expect(modelSelect(task.label)).toHaveAttribute('aria-disabled', 'true');
+        expect(reasoningSelect(task.label)).toHaveAttribute('aria-disabled', 'true');
+      }
+    });
+  });
 
   describe('accessibility', () => {
     it('passes axe in the light theme', async () => {
