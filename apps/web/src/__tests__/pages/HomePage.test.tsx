@@ -1617,3 +1617,61 @@ describe('HomePage — the search entry point', () => {
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
   });
 });
+
+// =============================================================================
+// Knowledge section isolation (#373, PR #415's visual regression)
+// =============================================================================
+
+describe('HomePage — the Knowledge section can never break the rest of Home', () => {
+  const graphHomeUser: MockUser = {
+    ...homeUser,
+    permissions: [...homeUser.permissions, 'graph:read'],
+  };
+
+  async function expectHomeIntact() {
+    await waitForLoaded();
+    expect(await screen.findByRole('heading', { name: 'Recent', exact: true })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Recent notes' })).toBeInTheDocument();
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Knowledge' })).not.toBeInTheDocument();
+  }
+
+  it('renders Home unchanged when the graph answers a 200 that is not an entity list', async () => {
+    // Exactly the visual harness's catch-all `{}`: before the fix this threw
+    // during render and replaced the whole page with the root ErrorBoundary.
+    server.use(http.get(`${API_BASE}/graph/entities`, () => HttpResponse.json({ data: {} })));
+    renderHome(graphHomeUser);
+    await expectHomeIntact();
+  });
+
+  it('renders Home unchanged when a graph row makes the section throw', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      server.use(
+        http.get(`${API_BASE}/graph/entities`, () =>
+          HttpResponse.json({ data: { items: [null], nextCursor: null } }),
+        ),
+      );
+      renderHome(graphHomeUser);
+      // Wait for the throw itself, so the assertions below run AFTER it.
+      await waitFor(() =>
+        expect(consoleError).toHaveBeenCalledWith(
+          'Knowledge section failed to render:',
+          expect.anything(),
+          expect.anything(),
+        ),
+      );
+      await expectHomeIntact();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('renders Home unchanged when the graph request fails outright', async () => {
+    server.use(
+      http.get(`${API_BASE}/graph/entities`, () => HttpResponse.json({ message: 'down' }, { status: 500 })),
+    );
+    renderHome(graphHomeUser);
+    await expectHomeIntact();
+  });
+});

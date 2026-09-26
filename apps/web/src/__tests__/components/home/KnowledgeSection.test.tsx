@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { axe } from 'vitest-axe';
@@ -56,6 +56,39 @@ describe('KnowledgeSection', () => {
     const { container } = render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
     await waitFor(() => expect(graphRequests).toHaveLength(1));
     await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  it('is hidden, not crashed, on a 200 whose body is not an entity list', async () => {
+    // PR #415's visual regression: a stub answering `{}` reached render as
+    // `items: undefined` and threw on `.length`, taking the whole app into the
+    // root ErrorBoundary. `listGraphEntities` now refuses the shape.
+    server.use(http.get('*/api/graph/entities', () => HttpResponse.json({ data: {} })));
+    const { container } = render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
+    await waitFor(() => expect(graphRequests).toHaveLength(1));
+    await waitFor(() => expect(container).toBeEmptyDOMElement());
+  });
+
+  it('contains a render-time throw to itself and renders nothing', async () => {
+    // An array that passes the shape check but whose rows are not entities —
+    // the section's own boundary must absorb the throw.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      server.use(
+        http.get('*/api/graph/entities', () => HttpResponse.json({ data: { items: [null], nextCursor: null } })),
+      );
+      const { container } = render(<KnowledgeSection />, { wrapperOptions: { user: graphReader } });
+      await waitFor(() => expect(graphRequests).toHaveLength(1));
+      await waitFor(() =>
+        expect(consoleError).toHaveBeenCalledWith(
+          'Knowledge section failed to render:',
+          expect.anything(),
+          expect.anything(),
+        ),
+      );
+      expect(container).toBeEmptyDOMElement();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('asks nothing and renders nothing without graph:read', async () => {
