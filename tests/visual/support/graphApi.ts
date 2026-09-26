@@ -905,7 +905,7 @@ const GUIDE_ESTIMATE = {
 
 function itemType(key: string, label: string, itemKind: string) {
   return {
-    ...entityType(key, label, [], 'work'),
+    ...settingsEntityType(key, label, [], 'work'),
     storage: 'item',
     itemKind,
     subjectTypes: ['Person', 'Organization', 'Project'],
