@@ -89,6 +89,15 @@ export interface UserDataSummary {
   /** Templates have no meaningful byte weight, so this pair carries only a count. */
   noteTemplates: { count: number };
   credentials: { aiKeys: number; accessTokens: number };
+  /**
+   * The caller's knowledge graph (issue #357) — row counts only, no bytes: the
+   * graph is rows of structured text with no storage object behind them.
+   * `entities` excludes merged tombstones; `items` is every commitment,
+   * decision, claim and person fact. Deleted by `content` and `everything`
+   * only — never by a narrow scope, and there is deliberately no narrow
+   * `graph` scope.
+   */
+  graph: { entities: number; items: number };
   activeDeletion: UserDataDeletion | null;
 }
 

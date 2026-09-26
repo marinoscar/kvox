@@ -177,6 +177,24 @@ function describeCategory(
   return `${count} ${noun} · ${formatDataSize(bytes)}`;
 }
 
+/**
+ * "Knowledge graph: 3 entities, 5 facts" — the graph's line in the compound
+ * inventory (issue #357).
+ *
+ * The graph appears only in LAYER 2, never as a layer-1 row: it is a category
+ * that `content` and `everything` delete, not a scope of its own, so a row with
+ * its own button would be offering a deletion the API has no word for. Counts
+ * only — the summary reports no bytes for it. Both counts at zero reads
+ * "nothing stored" rather than "0 entities, 0 facts", the same never-a-bare-zero
+ * rule `describeCategory` follows.
+ */
+function describeGraph({ entities, items }: UserDataSummary['graph']): string {
+  if (entities <= 0 && items <= 0) return 'Knowledge graph: nothing stored';
+  const entityNoun = entities === 1 ? 'entity' : 'entities';
+  const itemNoun = items === 1 ? 'fact' : 'facts';
+  return `Knowledge graph: ${entities} ${entityNoun}, ${items} ${itemNoun}`;
+}
+
 export default function UserDangerZonePage() {
   const {
     summary,
@@ -329,8 +347,8 @@ export default function UserDangerZonePage() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           <strong>Delete all content</strong> removes every recording, transcript, note, note
-          template and uploaded file. Your account, profile, settings and access tokens are
-          kept.
+          template and uploaded file, and your knowledge graph. Your account, profile, settings
+          and access tokens are kept.
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           <strong>Delete everything</strong> removes all of that and also your stored AI
@@ -339,6 +357,13 @@ export default function UserDangerZonePage() {
           welcome and the setup checklist are offered again from the start. Your account is
           still <strong>not</strong> deleted, and you stay signed in.
         </Typography>
+        {/* Both compound scopes take the graph, so its numbers sit once, after
+            both descriptions, rather than being repeated under each. */}
+        {summary && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {describeGraph(summary.graph)}
+          </Typography>
+        )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <Button
