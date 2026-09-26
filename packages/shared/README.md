@@ -176,3 +176,68 @@ Export it from `index.js`, declare it in `index.d.ts`, and add a row to the
 table above. Anything Node-only, Nest-only, or DOM-only does **not** belong
 here — all three apps import this package, and one of them has no DOM while
 another has no Node.
+
+## Ontology subpath (`@app/shared/ontology`)
+
+The knowledge-graph ontology (issue #350, [`docs/specs/ontology.md`](../../docs/specs/ontology.md)
+§17) lives in this package as a **subpath export**, and it is the one part of
+`@app/shared` that is compiled:
+
+| | Path |
+|---|---|
+| Sources (edit these) | `src/ontology/**/*.ts` |
+| Compiled output (committed, never hand-edited) | `ontology/**/*.js` + `ontology/**/*.d.ts` |
+| Import as | `import { ONTOLOGY, validateProps } from '@app/shared/ontology'` |
+
+### Why this subpath is compiled while the rest of the package is not
+
+The root constants are a few strings, so a hand-written `.d.ts` beside
+hand-written JavaScript costs nothing. The ontology is Zod schemas and
+non-trivial types; hand-writing it twice would be two declarations that
+drift — the exact failure a single definition file exists to remove. So its
+source is TypeScript, and the packaging keeps every guarantee the header of
+[`index.js`](./index.js) argues for:
+
+- **Committed output, no build on install.** `apps/api` never compiles
+  TypeScript from outside its `rootDir`, its Jest config transforms nothing
+  under `node_modules`, and no CI job or Dockerfile builds a fourth
+  workspace — all three simply `require()` the committed CommonJS.
+- **`ontology/`, not `dist/`.** `.dockerignore` drops every `**/dist`, so a
+  `dist/` output would build green images that die at boot with
+  `Cannot find module`.
+- **CommonJS** (`module: NodeNext` in a `"type": "commonjs"` package), for
+  the same three consumers as the root entry. The web app lists
+  `@app/shared/ontology` in `optimizeDeps.include` beside `@app/shared`, for
+  the dev-server reason described [above](#if-you-consume-this-from-a-vite-app).
+- **Domains are listed explicitly** in `src/ontology/registry.ts`
+  (`buildOntologyRegistry([coreDomain, workDomain], ...)`) rather than
+  self-registering on import: under Vite pre-bundling versus Jest `require`,
+  import side-effect order is not something to depend on.
+
+`zod` is a real dependency of this package for this subpath only;
+`apps/web` should import **types** and small constants (`ATTRIBUTE_KINDS`,
+`ONTOLOGY_VERSION`) and render forms from the `GET /api/graph/ontology`
+payload, never from the registry, because a user's effective schema includes
+their own attribute definitions.
+
+### Editing it
+
+```bash
+# after any change under src/ontology/
+npm run build:ontology --workspace=@app/shared
+npm run typecheck --workspace=@app/shared
+```
+
+Commit the rebuilt `ontology/` output **in the same commit** as the source
+change. CI's Build & Test job runs the same build and then
+`git diff --exit-code -- packages/shared/ontology` (plus a check for
+untracked files there), so a source edit committed without its rebuilt
+output fails CI rather than shipping stale code. If you delete or rename a
+source file, delete its stale `.js`/`.d.ts` from `ontology/` by hand — `tsc`
+never removes output.
+
+A changed description is a PATCH bump of `ONTOLOGY_VERSION`, an added
+type/attribute a MINOR, a changed meaning a MAJOR — each with a `CHANGELOG`
+entry in `src/ontology/version.ts`. A key that ever shipped is never removed,
+only deprecated; `src/ontology/shipped-keys.ts` is the append-only ledger and
+`apps/api/test/ontology/ontology-parity.spec.ts` enforces it.

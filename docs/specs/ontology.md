@@ -1639,12 +1639,18 @@ child-issue breakdown for the pattern).
 
 The ontology is not a fixed set of Prisma enums and a hand-maintained
 extraction prompt kept in step with them by discipline alone — it is a single
-TypeScript + Zod declaration, planned at `packages/shared/ontology/` — a new
-`ontology/` directory inside the existing `@app/shared` package
+TypeScript + Zod declaration inside the existing `@app/shared` package
 (`packages/shared/`), because both `apps/api` and `apps/web` already depend
 on that package for exactly this reason: the API to validate and extract
 against, the web app to render a form from, one declaration shared rather
-than two hand-copied ones.
+than two hand-copied ones. **Location (issue #350):** the sources are
+`packages/shared/src/ontology/**/*.ts`; they compile to committed CommonJS +
+`.d.ts` under `packages/shared/ontology/`, which consumers import as the
+`@app/shared/ontology` subpath export. The compiled output is rebuilt with
+`npm run build:ontology --workspace=@app/shared` and committed alongside every
+source change, and CI fails when the two disagree — see
+`packages/shared/README.md` ("Ontology subpath") for why this one subpath is
+compiled while the rest of the package is not.
 Zod is not a new dependency reached for here — it is already this codebase's
 single source of truth for settings (CLAUDE.md's Adding a Setting rule, and
 the six-file settings-parity discipline `settings-parity.spec.ts` enforces),
@@ -1747,9 +1753,21 @@ recipes already establish for their own registries:
   `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
 - **`personal.ts`** — `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, `Interest`,
   `Trip`, `Milestone`. **Off by default**, a later phase (§16, P6).
-- **`index.ts`** — the registry: every module calls `register()` from its own
-  `onModuleInit`-equivalent at startup, and a user's **effective schema** is
-  computed as `core ∪ {enabled domains}` — never hand-assembled per caller.
+- **The registry** (`registry.ts`, re-exported from `index.ts`) — a user's
+  **effective schema** is computed as `core ∪ {enabled domains}` — never
+  hand-assembled per caller.
+
+**As built (issue #350): domain modules are listed explicitly, not
+self-registered.** The sketch above describes modules registering themselves
+by import side effect; the shipped registry instead names them in one call,
+`buildOntologyRegistry([coreDomain, workDomain], ONTOLOGY_VERSION)` in
+`packages/shared/src/ontology/registry.ts`. `@app/shared/ontology` is a
+CommonJS package that Vite pre-bundles for the web app and Jest `require`s
+for the API, so with side-effect registration the registration order — and
+whether a module had registered at all when the registry was first read —
+would depend on the bundler. One line per domain keeps adding a domain a
+single-line change without that dependency. The mixin rule below is
+unchanged.
 
 **Why `Person` and `Organization` are `core` rather than `work`, specifically
 — this is the reason to design domains at all rather than ship one flat

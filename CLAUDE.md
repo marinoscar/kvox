@@ -1913,9 +1913,14 @@ FTS/vector fusion is mandatory, not a fallback; every `kg.*` job runs
 server-only, on the calling user's own AI provider key, exactly like
 `note.generate`; and a `sensitive`-classified `PersonFact` never leaves this
 deployment for any purpose, under any setting. The ontology itself is
-defined in one TypeScript + Zod file (planned: `packages/shared/ontology/`)
-that is the single source of truth for every type and attribute, and every
-graph row carries the `ontology_version` it was written against. Don't
+defined in one TypeScript + Zod declaration (issue #350) that is the single
+source of truth for every type and attribute: sources in
+`packages/shared/src/ontology/`, compiled CommonJS + `.d.ts` committed under
+`packages/shared/ontology/` and imported as `@app/shared/ontology`. ⚠ After
+editing a source, run `npm run build:ontology --workspace=@app/shared` and
+commit the output in the same commit — CI rebuilds and fails on any diff (see
+`packages/shared/README.md`). Every graph row carries the `ontology_version`
+it was written against. Don't
 restate any of that here; extend the spec instead.
 
 ## Specialized Subagents (MANDATORY)
