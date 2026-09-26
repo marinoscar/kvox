@@ -125,19 +125,21 @@ export function AsOfSlider({ minDate, value, onChange, now, disabled }: AsOfSlid
       >
         {label(index)}
       </Typography>
-      <Button
-        size="small"
-        variant="text"
-        disabled={disabled || index >= last}
-        onClick={() => {
-          if (pending.current) clearTimeout(pending.current);
-          pending.current = null;
-          setIndex(last);
-          onChangeRef.current(null);
-        }}
-      >
-        Now
-      </Button>
+      {index < last && (
+        <Button
+          size="small"
+          variant="text"
+          disabled={disabled}
+          onClick={() => {
+            if (pending.current) clearTimeout(pending.current);
+            pending.current = null;
+            setIndex(last);
+            onChangeRef.current(null);
+          }}
+        >
+          Now
+        </Button>
+      )}
     </Box>
   );
 }

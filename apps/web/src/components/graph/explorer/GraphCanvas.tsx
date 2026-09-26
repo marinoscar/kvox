@@ -41,6 +41,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import type Graph from 'graphology';
 import forceAtlas2, { inferSettings } from 'graphology-layout-forceatlas2';
 import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
+import type { Settings } from 'sigma/settings';
 
 /**
  * One ForceAtlas2 settle: a FIXED number of iterations, a few per animation
@@ -49,6 +50,39 @@ import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react
  */
 export const FA2_SETTLE_ITERATIONS = 180;
 const FA2_ITERATIONS_PER_FRAME = 2;
+
+/**
+ * Sigma's default hover/selection label is a WHITE box with the label colour
+ * on top — unreadable in dark mode, where the label colour is near-white. This
+ * draws the same box in the theme's own paper and text colours.
+ */
+function themedHover(background: string, text: string, border: string): Settings['defaultDrawNodeHover'] {
+  return (context, data, settings) => {
+    const size = settings.labelSize;
+    context.font = `${settings.labelWeight} ${size}px ${settings.labelFont}`;
+    const label = typeof data.label === 'string' ? data.label : '';
+    const pad = 4;
+    const textWidth = label ? context.measureText(label).width : 0;
+    const height = Math.max(size + pad * 2, data.size * 2 + pad);
+    const left = data.x - data.size - pad;
+    const width = data.size * 2 + pad * 2 + (label ? textWidth + pad + 2 : 0);
+    context.beginPath();
+    context.fillStyle = background;
+    context.strokeStyle = border;
+    context.lineWidth = 1;
+    context.roundRect(left, data.y - height / 2, width, height, 4);
+    context.fill();
+    context.stroke();
+    context.beginPath();
+    context.fillStyle = data.color;
+    context.arc(data.x, data.y, data.size, 0, Math.PI * 2);
+    context.fill();
+    if (label) {
+      context.fillStyle = text;
+      context.fillText(label, data.x + data.size + pad, data.y + size / 3);
+    }
+  };
+}
 
 export interface GraphCanvasControls {
   zoomIn: () => void;
@@ -90,6 +124,12 @@ export default function GraphCanvas(props: GraphCanvasProps) {
       labelColor: { color: theme.palette.text.primary },
       labelFont: theme.typography.fontFamily as string,
       labelSize: 12,
+      stagePadding: 40,
+      defaultDrawNodeHover: themedHover(
+        theme.palette.background.paper,
+        theme.palette.text.primary,
+        theme.palette.divider,
+      ),
       defaultEdgeType: 'arrow',
       renderEdgeLabels: false,
       enableEdgeEvents: Boolean(onEdgeClick) && interactive,
@@ -98,7 +138,7 @@ export default function GraphCanvas(props: GraphCanvasProps) {
       zIndex: true,
       allowInvalidContainer: true,
     }),
-    [theme.palette.text.primary, theme.typography.fontFamily, onEdgeClick, interactive],
+    [theme.palette.text.primary, theme.palette.background.paper, theme.palette.divider, theme.typography.fontFamily, onEdgeClick, interactive],
   );
 
   return (
@@ -139,7 +179,7 @@ function CanvasBehaviour({
   const registerEvents = useRegisterEvents();
   const camera = useCamera({ duration: 300, factor: 1.5 });
   const theme = useTheme();
-  const dimColor = alpha(theme.palette.text.disabled, 0.35);
+  const dimColor = alpha(theme.palette.text.disabled, theme.palette.mode === 'dark' ? 0.4 : 0.6);
 
   useImperativeHandle(
     controlsRef,
@@ -150,6 +190,18 @@ function CanvasBehaviour({
     }),
     [camera],
   );
+
+  // Labels are drawn onto a 2D canvas once; if the webfont lands after the
+  // first frame they would stay in the fallback face until the next redraw.
+  useEffect(() => {
+    let cancelled = false;
+    void document.fonts?.ready.then(() => {
+      if (!cancelled) sigma.refresh();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sigma]);
 
   // --- Reducers: visibility and selection dimming ---------------------------
   useEffect(() => {

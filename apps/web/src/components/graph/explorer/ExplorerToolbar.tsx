@@ -12,6 +12,7 @@
  * below.
  */
 
+import CheckIcon from '@mui/icons-material/Check';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -106,8 +107,9 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
             <Chip
               key={`domain-${domain.key}`}
               label={domain.label}
+              icon={shown ? <CheckIcon fontSize="small" /> : undefined}
               color={shown ? 'primary' : 'default'}
-              variant={shown ? 'filled' : 'outlined'}
+              variant="outlined"
               onClick={() => onToggleDomain(domain)}
               aria-pressed={shown}
               aria-label={`${domain.label} domain`}
@@ -123,8 +125,9 @@ export function ExplorerToolbar(props: ExplorerToolbarProps) {
               key={type.key}
               label={type.label}
               size="small"
+              icon={shown ? <CheckIcon fontSize="small" /> : undefined}
               color={shown ? 'primary' : 'default'}
-              variant={shown ? 'filled' : 'outlined'}
+              variant="outlined"
               onClick={() => onToggleType(type.key)}
               aria-pressed={shown}
               disabled={disabled}
