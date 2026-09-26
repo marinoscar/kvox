@@ -125,6 +125,8 @@ const GraphEntityPage = lazy(() => import('../src/pages/GraphEntityPage'));
 const GraphExplorerPage = lazy(() => import('../src/pages/GraphExplorerPage'));
 // The whole-graph overview (#375), mirroring `App.tsx`.
 const GraphOverviewPage = lazy(() => import('../src/pages/GraphOverviewPage'));
+// Ask (#380), mirroring `App.tsx`: one optional-segment route, `graph:read`.
+const AskPage = lazy(() => import('../src/pages/AskPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
@@ -412,6 +414,14 @@ function HarnessRoutes() {
             element={
               <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
                 <GraphOverviewPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/ask/:conversationId?"
+            element={
+              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
+                <AskPage />
               </RequirePermission>
             }
           />

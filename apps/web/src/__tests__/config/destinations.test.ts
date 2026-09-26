@@ -67,6 +67,8 @@ describe('destinations — route ownership', () => {
         '/graph/explore',
         // #375 — the whole-graph overview, likewise.
         '/graph/overview',
+        // #380 — Ask, `/ask` and `/ask/:id` as one optional-segment route.
+        '/ask/:conversationId?',
         '/admin',
         '/admin/users',
         '/admin/settings',
@@ -145,6 +147,11 @@ describe('destinations — the knowledge graph (#373)', () => {
     expect(resolveActiveDestination('/graph/explore')).toBe('home');
     expect(resolveActiveDestination('/graph/overview')).toBe('home');
     expect(resolveActiveDestination('/graphs')).toBeNull();
+    // #380 — Ask is owned by `home` too, and is no tab of its own.
+    expect(resolveActiveDestination('/ask')).toBe('home');
+    expect(resolveActiveDestination('/ask/abc-123')).toBe('home');
+    expect(resolveActiveDestination('/asking')).toBeNull();
+    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).not.toContain('/ask');
     expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).not.toContain('/graph');
   });
 });

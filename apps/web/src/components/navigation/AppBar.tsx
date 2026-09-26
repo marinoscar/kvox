@@ -172,6 +172,18 @@ const DRILL_DOWN_ROUTES: {
     title: 'Knowledge',
     upPath: () => '/',
   },
+  // Ask (#380). A conversation goes up to the conversation list; `/ask`
+  // itself goes up to Home, which owns it (config/destinations.ts).
+  {
+    pattern: /^\/ask\/([^/]+)\/?$/,
+    title: 'Ask',
+    upPath: () => '/ask',
+  },
+  {
+    pattern: /^\/ask\/?$/,
+    title: 'Ask',
+    upPath: () => '/',
+  },
 ];
 
 interface DrillDown {

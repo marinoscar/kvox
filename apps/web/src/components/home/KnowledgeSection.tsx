@@ -17,9 +17,15 @@
  * costs the Knowledge section only — never the transcripts and notes above
  * it. Before this boundary existed, a harness stub answering `{}` crashed
  * the whole app into the root `ErrorBoundary` (PR #415's visual regression).
+ *
+ * The "Ask" button (#380) opens `/ask`. It asks `GET /api/ai/config` only once
+ * the section itself is on screen, and appears only when the answer says
+ * connected knowledge is on (`graphEnabled === true`, the `GraphReviewCard`
+ * rule) — Ask would only answer "turned off" otherwise.
  */
 
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import QuestionAnswerOutlinedIcon from '@mui/icons-material/QuestionAnswerOutlined';
 import Avatar from '@mui/material/Avatar';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -33,6 +39,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import { EntityTypeIcon } from '../graph/entityTypeIcon';
 import { entityPath } from '../graph/EntityListRow';
+import { useAiConfig } from '../../hooks/useAiConfig';
 import { useGraphEntities } from '../../hooks/useGraphEntities';
 import { usePermissions } from '../../hooks/usePermissions';
 import { initials } from '../../utils/graphDisplay';
@@ -87,7 +94,8 @@ function KnowledgeSectionContent() {
         <Typography id="home-knowledge" variant="h6" component="h2" sx={{ fontWeight: 600 }}>
           Knowledge
         </Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
+          <KnowledgeAskButton />
           <Button size="small" component={RouterLink} to="/graph/explore">
             Explore
           </Button>
@@ -126,6 +134,17 @@ function KnowledgeSectionContent() {
         ))}
       </Grid>
     </Box>
+  );
+}
+
+/** "Ask" → `/ask`, only while connected knowledge is on (#380). */
+function KnowledgeAskButton() {
+  const { config } = useAiConfig();
+  if (config?.graphEnabled !== true) return null;
+  return (
+    <Button size="small" component={RouterLink} to="/ask" startIcon={<QuestionAnswerOutlinedIcon />}>
+      Ask
+    </Button>
   );
 }
 

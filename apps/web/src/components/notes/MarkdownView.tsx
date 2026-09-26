@@ -51,7 +51,7 @@ import Link from '@mui/material/Link';
 import Typography from '@mui/material/Typography';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { Components } from 'react-markdown';
+import type { Components, Options as MarkdownOptions } from 'react-markdown';
 
 /**
  * Markdown element → MUI element.
@@ -122,6 +122,19 @@ const COMPONENTS: Components = {
 export interface MarkdownViewProps {
   /** The markdown source. Model output — never treated as markup. */
   children: string;
+  /**
+   * Extra REMARK plugins, run after `remark-gfm` (#380: Ask's citation
+   * markers). Markdown-tree transforms only — there is deliberately no
+   * `rehypePlugins` passthrough, so nothing a caller passes can turn raw HTML
+   * on (see the header).
+   */
+  remarkPlugins?: MarkdownOptions['remarkPlugins'];
+  /**
+   * Extra element renderers, merged OVER the MUI map below (#380 maps its
+   * citation nodes onto chips). Existing callers pass neither prop and render
+   * exactly as before.
+   */
+  components?: Components;
 }
 
 /**
@@ -149,12 +162,14 @@ export const MARKDOWN_CONTAINER_SX = {
   '& > :first-of-type': { mt: 0 },
 } as const;
 
-export function MarkdownView({ children }: MarkdownViewProps) {
+export function MarkdownView({ children, remarkPlugins, components }: MarkdownViewProps) {
+  const plugins = remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm];
+  const mapped = components ? { ...COMPONENTS, ...components } : COMPONENTS;
   return (
     <Box sx={MARKDOWN_CONTAINER_SX}>
       {/* ⚠ NO `rehypePlugins`. See this file's header — adding `rehype-raw`
           here would enable raw HTML from model output. */}
-      <Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+      <Markdown remarkPlugins={plugins} components={mapped}>
         {children}
       </Markdown>
     </Box>
