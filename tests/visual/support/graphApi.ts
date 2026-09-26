@@ -838,7 +838,7 @@ export async function installGraphReviewApi(
         graphEnabled: true,
       });
     }
-    if (path === '/graph/ontology') return json(route, ONTOLOGY);
+    if (path === '/graph/ontology') return json(route, SETTINGS_ONTOLOGY);
     if (path === '/graph/notes/n1/proposal') return json(route, { proposal: detail });
     if (path === `/graph/proposals/${PROPOSAL_ID}`) return json(route, detail);
     if (path === '/graph/entities') return json(route, { items: [], nextCursor: null });
