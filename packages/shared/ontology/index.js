@@ -8,7 +8,7 @@
 // fails when the committed output is stale.
 // =============================================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ONTOLOGY = exports.extractableRelationTypes = exports.extractableEntityTypes = exports.buildPropsJsonSchema = exports.validateProps = exports.buildPropsSchema = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
+exports.ONTOLOGY = exports.extractableRelationTypes = exports.extractableEntityTypes = exports.buildPropsJsonSchema = exports.validateProps = exports.buildPropsSchema = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.kvNamespace = exports.expandCurie = exports.RDF_PREFIXES = exports.KV_PREFIX = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
 exports.computeEffectiveSchema = computeEffectiveSchema;
 var constants_js_1 = require("./constants.js");
 Object.defineProperty(exports, "ATTRIBUTE_KINDS", { enumerable: true, get: function () { return constants_js_1.ATTRIBUTE_KINDS; } });
@@ -27,6 +27,11 @@ Object.defineProperty(exports, "OntologyDefinitionError", { enumerable: true, ge
 var version_js_1 = require("./version.js");
 Object.defineProperty(exports, "CHANGELOG", { enumerable: true, get: function () { return version_js_1.CHANGELOG; } });
 Object.defineProperty(exports, "ONTOLOGY_VERSION", { enumerable: true, get: function () { return version_js_1.ONTOLOGY_VERSION; } });
+var rdf_namespaces_js_1 = require("./rdf-namespaces.js");
+Object.defineProperty(exports, "KV_PREFIX", { enumerable: true, get: function () { return rdf_namespaces_js_1.KV_PREFIX; } });
+Object.defineProperty(exports, "RDF_PREFIXES", { enumerable: true, get: function () { return rdf_namespaces_js_1.RDF_PREFIXES; } });
+Object.defineProperty(exports, "expandCurie", { enumerable: true, get: function () { return rdf_namespaces_js_1.expandCurie; } });
+Object.defineProperty(exports, "kvNamespace", { enumerable: true, get: function () { return rdf_namespaces_js_1.kvNamespace; } });
 var shipped_keys_js_1 = require("./shipped-keys.js");
 Object.defineProperty(exports, "SHIPPED_KEYS", { enumerable: true, get: function () { return shipped_keys_js_1.SHIPPED_KEYS; } });
 var registry_js_1 = require("./registry.js");

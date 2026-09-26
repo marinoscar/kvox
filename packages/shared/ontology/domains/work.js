@@ -261,6 +261,7 @@ exports.workDomain = (0, define_js_1.defineDomain)({
                     description: "The person's job title, only if the source states it.",
                     extractable: true,
                     sensitivity: 'business',
+                    alignment: 'schema:jobTitle',
                 },
             },
         },

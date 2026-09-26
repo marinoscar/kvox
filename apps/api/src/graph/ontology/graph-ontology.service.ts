@@ -67,18 +67,25 @@ export class GraphOntologyService {
 
   /** The caller's resolved, frozen effective schema. */
   async effectiveSchemaFor(userId: string): Promise<EffectiveSchema> {
-    const [enabledDomains, rows] = await Promise.all([
+    const [enabledDomains, userAttributes] = await Promise.all([
       this.enabledDomains(userId),
-      this.prisma.kgAttributeDef.findMany({
-        where: { ownerId: userId },
-        orderBy: [{ entityType: 'asc' }, { sortOrder: 'asc' }, { key: 'asc' }],
-      }),
+      this.attributeDefsFor(userId),
     ]);
 
-    return computeEffectiveSchema({
-      enabledDomains,
-      userAttributes: rows.map(toUserAttributeDef),
+    return computeEffectiveSchema({ enabledDomains, userAttributes });
+  }
+
+  /**
+   * The caller's own attribute definitions — ALL of them, deprecated
+   * included — as plain data. One owner-scoped query; also what the RDF
+   * artefacts (#385) are generated from.
+   */
+  async attributeDefsFor(userId: string): Promise<UserAttributeDef[]> {
+    const rows = await this.prisma.kgAttributeDef.findMany({
+      where: { ownerId: userId },
+      orderBy: [{ entityType: 'asc' }, { sortOrder: 'asc' }, { key: 'asc' }],
     });
+    return rows.map(toUserAttributeDef);
   }
 
   /** Exactly what `GET /api/graph/ontology` returns. */
