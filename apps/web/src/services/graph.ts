@@ -553,6 +553,38 @@ export function getEntityNeighborhood(
   return api.get<GraphSlice>(`/graph/entities/${enc(id)}/neighborhood${query}`, { signal });
 }
 
+/** #370's cap on one slice, and on the explorer (§22.2). */
+export const GRAPH_NODE_CAP = 300;
+/** #370's cap on `nodeIds` in one expand. */
+export const GRAPH_EXPAND_MAX_SEEDS = 50;
+
+export interface GraphExpandParams {
+  /** 1–50 readable entity or item ids. Any unreadable one → 404 for the whole call. */
+  nodeIds: readonly string[];
+  /** Entity type keys / item kinds expansion may ADD (seeds are always kept). */
+  types?: readonly string[];
+  /** Relation types expansion may walk along. */
+  relationTypes?: readonly string[];
+  /** `YYYY-MM-DD` or an ISO datetime with offset. */
+  asOf?: string;
+  /** 1–300. */
+  cap: number;
+}
+
+/**
+ * `POST /api/graph/explore/expand` (#370) — one hop out from each node, as one
+ * slice. A read, even though it is a POST. `asOf` is sent as the API's
+ * `as_of`; an absent filter is omitted rather than sent empty, because an
+ * empty list would mean "nothing" rather than "everything".
+ */
+export function expandGraph(params: GraphExpandParams, signal?: AbortSignal): Promise<GraphSlice> {
+  const body: Record<string, unknown> = { nodeIds: [...params.nodeIds], cap: params.cap };
+  if (params.types) body.types = [...params.types];
+  if (params.relationTypes) body.relationTypes = [...params.relationTypes];
+  if (params.asOf) body.as_of = params.asOf;
+  return api.post<GraphSlice>('/graph/explore/expand', body, { signal });
+}
+
 export function getEvidence(id: string, signal?: AbortSignal): Promise<EvidenceLink> {
   return api.get<EvidenceLink>(`/graph/evidence/${enc(id)}`, { signal });
 }
