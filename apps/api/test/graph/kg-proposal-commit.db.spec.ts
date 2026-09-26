@@ -174,10 +174,12 @@ describeWithDb('graph proposal commit (real Postgres)', () => {
     });
     expect(added.item).toEqual(expect.objectContaining({ origin: 'user', decision: 'accept', groupKey: 'relations' }));
     expect(added.item.effectivePayload.ref).toBe('u1');
-    expect(added.item.evidence).toEqual([
+    // Citations written in one statement share a timestamp; their order is by id.
+    expect(added.item.evidence).toHaveLength(2);
+    expect(added.item.evidence).toEqual(expect.arrayContaining([
       expect.objectContaining({ source: 'note', stale: false }),
       expect.objectContaining({ source: 'segment', transcriptId: f.transcript.id, startMs: 0, endMs: 4000, speakerName: 'Sarah Chen', stale: false }),
-    ]);
+    ]));
 
     // A stale version, a stale rev, a mismatched quote.
     const stale = await services.proposals
