@@ -68,6 +68,7 @@ import { FeedCountLine } from './FeedCountLine';
 import { FeedDateSeparator } from './FeedDateSeparator';
 import { TranscriptRowActions } from './TranscriptRowActions';
 import { SearchResultsView } from '../search/SearchResultsView';
+import { EntitySearchHits } from '../graph/EntitySearchHits';
 import { TranscriptStatusChip } from '../transcripts/TranscriptStatusChip';
 import { useLibraryAudioPreview } from '../../hooks/useLibraryAudioPreview';
 import type { AudioPreviewState } from '../../hooks/useLibraryAudioPreview';
@@ -509,6 +510,11 @@ export function TranscriptsLibraryView() {
       )}
 
       {searchMode ? (
+        <>
+        {/* Knowledge-graph entity hits (#373) ABOVE the ranked results. Renders
+            nothing without `graph:read`, with no hits, or on any graph error —
+            library search never depends on the graph. */}
+        <EntitySearchHits query={search} />
         <SearchResultsView
           type="transcript"
           query={search}
@@ -517,6 +523,7 @@ export function TranscriptsLibraryView() {
           onOpen={(result: SearchResult) => openTranscript(result.id)}
           unappliedStatusFilter={status !== 'all'}
         />
+        </>
       ) : (
         <>
         {error && (

@@ -306,6 +306,17 @@ export async function installHomeApi(
     const onboarding = onboardingResponse(path, options.onboarding);
     if (onboarding) return json(route, onboarding);
 
+    // Home's Knowledge section (#373) — the default harness user holds
+    // `graph:read`, so it asks on every Home capture. An EMPTY graph hides
+    // the section entirely, which keeps these baselines identical to Home
+    // before the section existed. Before this answer existed the catch-all's
+    // `{}` reached the section as `items: undefined` and crashed the whole
+    // app into `ErrorBoundary` (PR #415); `services/graph.ts` now refuses
+    // that shape too, but the fixture should say what it means.
+    if (path === '/graph/entities') {
+      return json(route, { items: [], nextCursor: null });
+    }
+
     // Everything else (`/notifications/config`, …) answers an
     // empty object rather than being left to fail: an unproxied `/api` is safe
     // for the NAV specs (see `apps/web/visual/main.tsx`), but a page body

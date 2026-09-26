@@ -114,6 +114,14 @@ const TranscriptHistoryPage = lazy(() => import('../src/pages/TranscriptHistoryP
 const NewNotePage = lazy(() => import('../src/pages/NewNotePage'));
 const NotePage = lazy(() => import('../src/pages/NotePage'));
 const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
+// Knowledge graph (#373, epic #347). Mirrors `App.tsx`: owned by `home`,
+// gated on `graph:read`. The default harness user DOES hold `graph:read`
+// (see `DEFAULT_PERMISSIONS`, #369), so Home's Knowledge section asks
+// `GET /graph/entities` in every Home baseline — `support/homeApi.ts` answers
+// it with an empty list, which hides the section, keeping Home's captures
+// identical to what they were before the section existed.
+const GraphIndexPage = lazy(() => import('../src/pages/GraphIndexPage'));
+const GraphEntityPage = lazy(() => import('../src/pages/GraphEntityPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
 const AdminUsersPage = lazy(() => import('../src/pages/Admin/UsersPage'));
 // Issue #298, follow-up to epic #271 / PR #286. See the `GettingStartedPage`
@@ -368,6 +376,23 @@ function HarnessRoutes() {
             element={
               <RequirePermission permission="notes:read" fallback={<Navigate to="/" replace />}>
                 <NoteHistoryPage />
+              </RequirePermission>
+            }
+          />
+
+          <Route
+            path="/graph"
+            element={
+              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
+                <GraphIndexPage />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/graph/entities/:id"
+            element={
+              <RequirePermission permission="graph:read" fallback={<Navigate to="/" replace />}>
+                <GraphEntityPage />
               </RequirePermission>
             }
           />
