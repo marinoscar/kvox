@@ -15,8 +15,12 @@
 
 import { defineDomain, defineEntityType, defineRelationType } from '../define.js';
 
-/** Every type stored in `kg_entities`, across all domains (endpoint lists below). */
-const ENTITY_STORAGE_TYPES = ['Person', 'Organization', 'Meeting', 'Project'];
+/**
+ * Every type stored in `kg_entities`, across all domains (endpoint lists below).
+ * The effective schema prunes each list to the caller's enabled domains, so a
+ * `personal` type here is invisible to a user who never turned `personal` on.
+ */
+const ENTITY_STORAGE_TYPES = ['Person', 'Organization', 'Meeting', 'Project', 'Interest', 'Trip', 'Milestone'];
 
 /** Every declared type, across all domains, for SUPPORTED_BY. */
 const ALL_TYPES = [
@@ -28,6 +32,9 @@ const ALL_TYPES = [
   'Project',
   'Commitment',
   'Decision',
+  'Interest',
+  'Trip',
+  'Milestone',
 ];
 
 export const Person = defineEntityType({

@@ -232,6 +232,9 @@ function defineRelationType(spec) {
             fail(where, 'a symmetric relation has one endpoint pair; do not declare allowedPairs');
         }
     }
+    if (spec.sensitivityDefault !== undefined && !includes(constants_js_1.SENSITIVITIES, spec.sensitivityDefault)) {
+        fail(where, `sensitivityDefault must be one of ${constants_js_1.SENSITIVITIES.join(', ')}`);
+    }
     if (typeof spec.extractable !== 'boolean')
         fail(where, 'extractable must be a boolean');
     if (spec.extractable && rep.kind !== 'edge')

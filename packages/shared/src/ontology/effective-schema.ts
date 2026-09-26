@@ -98,6 +98,12 @@ export interface EffectiveRelationTypePayload {
    * payload of every directed relation is unchanged by the flag's existence.
    */
   symmetric?: true;
+  /**
+   * Present only when the relation type declares one (every `personal`-domain
+   * relation: `personal`). Absent means `business`. Omitted rather than
+   * defaulted so the entries of `core`/`work` relations are unchanged.
+   */
+  sensitivityDefault?: Sensitivity;
   alignment: string | null;
   deprecated: boolean;
   props: EffectiveAttributePayload[];
@@ -322,9 +328,10 @@ export function computeEffectiveSchemaFor(registry: OntologyRegistry, input: Com
       representation: JSON.parse(JSON.stringify(r.representation)) as RelationRepresentation,
       extractable: r.extractable,
       ...(r.symmetric === true ? { symmetric: true as const } : {}),
+      ...(r.sensitivityDefault !== undefined ? { sensitivityDefault: r.sensitivityDefault } : {}),
       alignment: r.alignment ?? null,
       deprecated: r.deprecated !== undefined,
-      props: builtinAttributes(r.props, 'builtin', r.domain, 'business', 0),
+      props: builtinAttributes(r.props, 'builtin', r.domain, r.sensitivityDefault ?? 'business', 0),
     });
   }
 

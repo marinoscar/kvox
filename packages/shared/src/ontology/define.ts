@@ -231,6 +231,9 @@ export function defineRelationType(spec: RelationTypeSpec): Readonly<RelationTyp
       fail(where, 'a symmetric relation has one endpoint pair; do not declare allowedPairs');
     }
   }
+  if (spec.sensitivityDefault !== undefined && !includes(SENSITIVITIES, spec.sensitivityDefault)) {
+    fail(where, `sensitivityDefault must be one of ${SENSITIVITIES.join(', ')}`);
+  }
   if (typeof spec.extractable !== 'boolean') fail(where, 'extractable must be a boolean');
   if (spec.extractable && rep.kind !== 'edge') fail(where, "only an 'edge' relation can be extractable");
   checkAttributes(where, spec.props, 'props');

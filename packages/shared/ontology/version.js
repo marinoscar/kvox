@@ -23,5 +23,13 @@ exports.CHANGELOG = Object.freeze([
             'attribute alignment metadata: Person.title -> schema:jobTitle, Organization.website -> schema:url (#385)',
         ]),
     }),
+    Object.freeze({
+        version: '1.1.0',
+        date: '2026-09-26',
+        changes: Object.freeze([
+            'personal domain: Interest, Trip, Milestone, SPOUSE_OF, PARENT_OF, FRIEND_OF, INTERESTED_IN, TRAVELED_ON, HAS_MILESTONE; relation `symmetric` flag',
+            'relation `sensitivityDefault` (personal-domain relations are `personal`)',
+        ]),
+    }),
 ]);
-exports.ONTOLOGY_VERSION = '1.0.1';
+exports.ONTOLOGY_VERSION = '1.1.0';
