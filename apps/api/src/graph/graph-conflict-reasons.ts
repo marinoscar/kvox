@@ -40,6 +40,10 @@ export const GRAPH_CONFLICT_REASONS = {
   MODEL_LACKS_CAPABILITY: 'model_lacks_capability',
   /** The note is not `ready` (still generating, failed, …) — #363. */
   NOTE_NOT_READY: 'note_not_ready',
+  /** A revert of a proposal that is not (or no longer) `committed` — #366. */
+  PROPOSAL_NOT_COMMITTED: 'proposal_not_committed',
+  /** An evidence span names a segment `rev` that has moved on since — #366. */
+  STALE_SEGMENT_REV: 'stale_segment_rev',
 } as const;
 
 export type GraphConflictReason =

@@ -143,9 +143,13 @@ export class ProposalWriter {
            AND "status" = 'draft'
            AND "id" <> ${proposalId}::uuid`;
 
+      // `stats.prechecked` (#366): which rows the pre-check ticked, kept apart
+      // from `decision` (which the reviewer overwrites) so the review sheet can
+      // still say "pre-checked" after the reviewer has changed a row.
+      const prechecked = decisions.filter((d) => d.decision === 'accept').map((d) => d.id);
       await tx.kgProposal.update({
         where: { id: proposalId },
-        data: { status: 'draft', stats: stats as unknown as Prisma.InputJsonValue },
+        data: { status: 'draft', stats: { ...stats, prechecked } as unknown as Prisma.InputJsonValue },
       });
       return true;
     });
