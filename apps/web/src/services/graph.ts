@@ -478,7 +478,34 @@ export function listGraphEntities(
     cursor: params.cursor,
     limit: params.limit,
   });
-  return api.get<GraphEntityListResponse>(`/graph/entities${query}`, { signal });
+  return api
+    .get<unknown>(`/graph/entities${query}`, { signal })
+    .then(parseGraphEntityListResponse);
+}
+
+/**
+ * Refuse a list response that is not the shape the API's Zod schema promises.
+ *
+ * ⚠ LOAD-BEARING, NOT DEFENSIVE NOISE. `useGraphEntities` feeds `items` into
+ * render code (`KnowledgeSection` reads `.length` on Home), so a body without
+ * an `items` array — a proxy's error page, a stub answering `{}` — used to
+ * reach React as `undefined` and throw during render, taking the WHOLE app
+ * into `ErrorBoundary` rather than just the section. Rejecting here turns it
+ * into an ordinary failed request, which every caller already handles (Home's
+ * Knowledge section hides; the index page shows its error). Same reasoning as
+ * `services/onboarding.ts`'s `parseOnboardingState`.
+ */
+export function parseGraphEntityListResponse(body: unknown): GraphEntityListResponse {
+  if (typeof body === 'object' && body !== null) {
+    const { items, nextCursor } = body as { items?: unknown; nextCursor?: unknown };
+    if (Array.isArray(items)) {
+      return {
+        items: items as GraphEntitySummary[],
+        nextCursor: typeof nextCursor === 'string' ? nextCursor : null,
+      };
+    }
+  }
+  throw new Error('Unexpected response from /graph/entities');
 }
 
 export function getGraphEntity(id: string, signal?: AbortSignal): Promise<GraphEntityDetail> {

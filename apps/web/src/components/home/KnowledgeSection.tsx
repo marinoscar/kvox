@@ -10,6 +10,13 @@
  * no error box. Home is about the user's recordings and notes; a section that
  * flashes a placeholder and then vanishes for everyone without a graph would
  * be noise on the page most people open first.
+ *
+ * ⚠ IT CAN NEVER TAKE HOME DOWN WITH IT. The section renders inside its own
+ * error boundary that renders nothing on a throw, so a render-time bug here
+ * (or a malformed response slipping past `listGraphEntities`' shape check)
+ * costs the Knowledge section only — never the transcripts and notes above
+ * it. Before this boundary existed, a harness stub answering `{}` crashed
+ * the whole app into the root `ErrorBoundary` (PR #415's visual regression).
  */
 
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -21,6 +28,7 @@ import Grid from '@mui/material/Grid';
 import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { EntityTypeIcon } from '../graph/entityTypeIcon';
@@ -33,7 +41,36 @@ import { formatRelativeTime } from '../../utils/relativeTime';
 export const KNOWLEDGE_TYPES = ['Person', 'Organization'] as const;
 export const KNOWLEDGE_LIMIT = 6;
 
+/**
+ * Swallows a render error in the section below it and renders nothing — the
+ * section is optional content, so "absent" is the right failure, not a banner.
+ * Logged so the bug is still visible in the console.
+ */
+class KnowledgeSectionBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  public state = { failed: false };
+
+  public static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  public componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('Knowledge section failed to render:', error, info);
+  }
+
+  public render(): ReactNode {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 export function KnowledgeSection() {
+  return (
+    <KnowledgeSectionBoundary>
+      <KnowledgeSectionContent />
+    </KnowledgeSectionBoundary>
+  );
+}
+
+function KnowledgeSectionContent() {
   const { hasPermission } = usePermissions();
   const enabled = hasPermission('graph:read');
   const recent = useGraphEntities({ type: KNOWLEDGE_TYPES, limit: KNOWLEDGE_LIMIT, enabled });

@@ -115,9 +115,11 @@ const NewNotePage = lazy(() => import('../src/pages/NewNotePage'));
 const NotePage = lazy(() => import('../src/pages/NotePage'));
 const NoteHistoryPage = lazy(() => import('../src/pages/NoteHistoryPage'));
 // Knowledge graph (#373, epic #347). Mirrors `App.tsx`: owned by `home`,
-// gated on `graph:read`. The default harness user does NOT hold it (so no
-// existing Home/transcript baseline starts asking the graph for data); the
-// graph spec passes `perms` explicitly.
+// gated on `graph:read`. The default harness user DOES hold `graph:read`
+// (see `DEFAULT_PERMISSIONS`, #369), so Home's Knowledge section asks
+// `GET /graph/entities` in every Home baseline — `support/homeApi.ts` answers
+// it with an empty list, which hides the section, keeping Home's captures
+// identical to what they were before the section existed.
 const GraphIndexPage = lazy(() => import('../src/pages/GraphIndexPage'));
 const GraphEntityPage = lazy(() => import('../src/pages/GraphEntityPage'));
 const SettingsHubPage = lazy(() => import('../src/pages/Admin/SettingsHubPage'));
