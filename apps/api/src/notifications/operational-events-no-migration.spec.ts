@@ -136,6 +136,9 @@ const MIGRATIONS_AT_288 = [
   // #398 (epic #344): closes a NULL hole in kg_relations_valid_precision_chk.
   // A graph constraint fix, and equally not about notifications.
   '20260926030000_fix_kg_relations_valid_precision_chk',
+  // #352: `transcripts.recorded_at`, when the recording was made — the meeting
+  // date connected knowledge reads. Transcript metadata, not notifications.
+  '20260926030100_add_transcript_recorded_at',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

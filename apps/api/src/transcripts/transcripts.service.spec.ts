@@ -14,6 +14,7 @@ import {
   decodeCursor,
   defaultTitle,
   encodeCursor,
+  parseRecordedAt,
   readWords,
   TranscriptsService,
 } from './transcripts.service';
@@ -61,6 +62,7 @@ const transcriptRow = (overrides: Record<string, unknown> = {}) => ({
   completedAt: null,
   deletedAt: null,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  recordedAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   ...overrides,
 });
@@ -274,6 +276,16 @@ describe('TranscriptsService', () => {
       );
     });
 
+    it('stamps recordedAt with the SAME Date instance as createdAt (#352)', async () => {
+      await service.create(dto, USER);
+
+      const { data } = prisma.transcript.create.mock.calls[0][0];
+      expect(data.createdAt).toBeInstanceOf(Date);
+      // Identity, not merely equality: one `new Date()` for both columns, so
+      // a new row's recording date is its upload instant exactly.
+      expect(data.recordedAt).toBe(data.createdAt);
+    });
+
     it('writes an audit event', async () => {
       await service.create(dto, USER);
 
@@ -314,6 +326,118 @@ describe('TranscriptsService', () => {
 
       await expect(service.create(dto, USER)).rejects.toThrow();
       expect(prisma.transcript.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // update — PATCH /api/transcripts/:id (title and/or recordedAt, issue #352)
+  // ===========================================================================
+
+  describe('update', () => {
+    const ORIGINAL_RECORDED_AT = new Date('2026-01-01T00:00:00.000Z');
+
+    beforeEach(() => {
+      prisma.transcript.update.mockImplementation(
+        ({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve(transcriptRow(data)),
+      );
+    });
+
+    it('applies a title-only change, trimmed, and writes no audit row', async () => {
+      const detail = await service.update(TRANSCRIPT_ID, { title: '  Renamed  ' }, USER);
+
+      expect(prisma.transcript.update).toHaveBeenCalledWith({
+        where: { id: TRANSCRIPT_ID },
+        data: { title: 'Renamed' },
+      });
+      expect(detail.title).toBe('Renamed');
+      expect(detail.recordedAt).toBe(ORIGINAL_RECORDED_AT.toISOString());
+      expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('applies a recordedAt-only change, normalised to UTC, without touching the title', async () => {
+      const detail = await service.update(
+        TRANSCRIPT_ID,
+        { recordedAt: '2026-03-02T15:00:00-05:00' },
+        USER,
+      );
+
+      expect(prisma.transcript.update).toHaveBeenCalledWith({
+        where: { id: TRANSCRIPT_ID },
+        data: { recordedAt: new Date('2026-03-02T20:00:00.000Z') },
+      });
+      expect(detail.recordedAt).toBe('2026-03-02T20:00:00.000Z');
+      expect(detail.title).toBe('A recording');
+    });
+
+    it('applies both fields together', async () => {
+      await service.update(
+        TRANSCRIPT_ID,
+        { title: 'Both', recordedAt: '2026-03-02T20:00:00Z' },
+        USER,
+      );
+
+      expect(prisma.transcript.update).toHaveBeenCalledWith({
+        where: { id: TRANSCRIPT_ID },
+        data: { title: 'Both', recordedAt: new Date('2026-03-02T20:00:00.000Z') },
+      });
+    });
+
+    it('audits a changed recordedAt with previous and next', async () => {
+      await service.update(TRANSCRIPT_ID, { recordedAt: '2026-03-02T20:00:00Z' }, USER);
+
+      expect(prisma.auditEvent.create).toHaveBeenCalledTimes(1);
+      expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+        data: {
+          actorUserId: USER.id,
+          action: 'transcript.recorded_at_changed',
+          targetType: 'transcript',
+          targetId: TRANSCRIPT_ID,
+          meta: {
+            previous: ORIGINAL_RECORDED_AT.toISOString(),
+            next: '2026-03-02T20:00:00.000Z',
+          },
+        },
+      });
+    });
+
+    it('does not audit a recordedAt that names the instant already stored', async () => {
+      // Same instant, different offset spelling — not a change.
+      await service.update(TRANSCRIPT_ID, { recordedAt: '2025-12-31T19:00:00-05:00' }, USER);
+
+      expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('requires edit access, and answers whatever the access check answers', async () => {
+      const { NotFoundException } = await import('@nestjs/common');
+      access.require.mockRejectedValue(new NotFoundException());
+
+      await expect(
+        service.update(TRANSCRIPT_ID, { recordedAt: '2026-03-02T20:00:00Z' }, USER),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(access.require).toHaveBeenCalledWith(
+        USER.id,
+        TRANSCRIPT_ID,
+        'edit',
+        USER.permissions,
+      );
+      expect(prisma.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('is a 400 before 1970, and writes nothing', async () => {
+      await expect(
+        service.update(TRANSCRIPT_ID, { recordedAt: '1969-12-31T23:59:59Z' }, USER),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.transcript.update).not.toHaveBeenCalled();
+    });
+
+    it('is a 400 more than 24 h in the future, and writes nothing', async () => {
+      const future = new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString();
+
+      await expect(
+        service.update(TRANSCRIPT_ID, { recordedAt: future }, USER),
+      ).rejects.toThrow('A recording cannot be dated in the future.');
+      expect(prisma.transcript.update).not.toHaveBeenCalled();
     });
   });
 
@@ -711,6 +835,38 @@ describe('TranscriptsService', () => {
 
       expect(segments).toEqual(conditional.payload);
     });
+  });
+});
+
+describe('parseRecordedAt (#352)', () => {
+  const NOW = new Date('2026-09-26T12:00:00.000Z');
+
+  it('accepts the epoch itself', () => {
+    expect(parseRecordedAt('1970-01-01T00:00:00Z', NOW).toISOString()).toBe(
+      '1970-01-01T00:00:00.000Z',
+    );
+  });
+
+  it('refuses one millisecond before the epoch', () => {
+    expect(() => parseRecordedAt('1969-12-31T23:59:59.999Z', NOW)).toThrow(BadRequestException);
+  });
+
+  it('accepts exactly 24 h after now — a clock or zone a little ahead is tolerated', () => {
+    expect(parseRecordedAt('2026-09-27T12:00:00Z', NOW).toISOString()).toBe(
+      '2026-09-27T12:00:00.000Z',
+    );
+  });
+
+  it('refuses anything later than 24 h after now', () => {
+    expect(() => parseRecordedAt('2026-09-27T12:00:00.001Z', NOW)).toThrow(
+      'A recording cannot be dated in the future.',
+    );
+  });
+
+  it('normalises an offset to UTC', () => {
+    expect(parseRecordedAt('2026-03-02T15:00:00-05:00', NOW).toISOString()).toBe(
+      '2026-03-02T20:00:00.000Z',
+    );
   });
 });
 

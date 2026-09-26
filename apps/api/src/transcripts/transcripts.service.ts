@@ -58,6 +58,7 @@ import {
   type CreateTranscriptDto,
   type TranscriptListQueryDto,
   type TranscriptWordsQueryDto,
+  type UpdateTranscriptDto,
 } from './dto/transcript.dto';
 import { parseSpeakerIdentities } from './editing/speaker-identity';
 import { TRANSCRIPTS_MANAGED_BY } from './job-types';
@@ -120,6 +121,8 @@ export interface TranscriptListItem {
   /** The owner's display name (#29), falling back to their address. */
   ownerName: string;
   createdAt: string;
+  /** When the recording was made (#352); defaults to the upload instant. */
+  recordedAt: string;
   updatedAt: string;
 }
 
@@ -204,9 +207,15 @@ export class TranscriptsService {
       },
     );
 
+    // #352: ONE `Date` instance for both columns, so a new row's recording
+    // date equals its upload instant exactly rather than two `now()`s a few
+    // microseconds apart — "defaults to the upload time" should be literal.
+    const now = new Date();
     const transcript = await this.prisma.transcript.create({
       data: {
         ownerId: user.id,
+        createdAt: now,
+        recordedAt: now,
         title: dto.title?.trim() || defaultTitle(dto.source.name),
         language: dto.language ?? null,
         status: 'uploading',
@@ -587,8 +596,24 @@ export class TranscriptsService {
   // Write and lifecycle
   // ===========================================================================
 
-  /** `PATCH /api/transcripts/:id` — the title, and nothing else. */
-  async updateTitle(id: string, title: string, user: RequestUser) {
+  /**
+   * `PATCH /api/transcripts/:id` — the title and/or the recording date (#352),
+   * applying only the fields provided. Neither is versioned: both are metadata
+   * about the recording, not content of it.
+   *
+   * ⚠ A CHANGED `recordedAt` IS AUDITED, A RENAME IS NOT. The recording date is
+   * the meeting date connected knowledge dates every extracted decision and
+   * claim against (docs/specs/ontology.md §5.4), so "who re-dated this
+   * meeting?" needs an answer; a title drives nothing downstream.
+   *
+   * The bounds are checked HERE rather than in the schema because "the
+   * future" is relative to the server's clock at request time, which a
+   * statically-built Zod schema cannot see.
+   */
+  async update(id: string, dto: UpdateTranscriptDto, user: RequestUser) {
+    const recordedAt =
+      dto.recordedAt !== undefined ? parseRecordedAt(dto.recordedAt, new Date()) : undefined;
+
     const { transcript, role } = await this.access.require(
       user.id,
       id,
@@ -596,10 +621,28 @@ export class TranscriptsService {
       user.permissions,
     );
 
+    const data: Prisma.TranscriptUpdateInput = {};
+    if (dto.title !== undefined) {
+      data.title = dto.title.trim();
+    }
+    if (recordedAt !== undefined) {
+      data.recordedAt = recordedAt;
+    }
+
     const updated = await this.prisma.transcript.update({
       where: { id: transcript.id },
-      data: { title: title.trim() },
+      data,
     });
+
+    if (
+      recordedAt !== undefined &&
+      transcript.recordedAt.getTime() !== updated.recordedAt.getTime()
+    ) {
+      await this.audit(user.id, 'transcript.recorded_at_changed', transcript.id, {
+        previous: transcript.recordedAt.toISOString(),
+        next: updated.recordedAt.toISOString(),
+      });
+    }
 
     return this.detailShape(updated, role);
   }
@@ -876,6 +919,7 @@ export class TranscriptsService {
       access,
       ownerName,
       createdAt: transcript.createdAt.toISOString(),
+      recordedAt: transcript.recordedAt.toISOString(),
       updatedAt: transcript.updatedAt.toISOString(),
     };
   }
@@ -1014,6 +1058,36 @@ export class TranscriptsService {
       },
     });
   }
+}
+
+/** The earliest recording date `PATCH` accepts (#352): the Unix epoch. */
+const MIN_RECORDED_AT_MS = Date.UTC(1970, 0, 1);
+
+/**
+ * How far past the server's clock a recording date may sit (#352): 24 hours,
+ * so a client whose clock or time zone is a little ahead is never refused for
+ * dating a recording "now", while a date that is plainly in the future is.
+ */
+const RECORDED_AT_FUTURE_TOLERANCE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Parse and bound a `recordedAt` the schema has already checked is an ISO
+ * 8601 datetime with an offset. Throws a 400 for pre-1970 or more than 24 h
+ * after `now`.
+ */
+export function parseRecordedAt(value: string, now: Date): Date {
+  const date = new Date(value);
+  const ms = date.getTime();
+  if (Number.isNaN(ms)) {
+    throw new BadRequestException('`recordedAt` is not a valid date.');
+  }
+  if (ms < MIN_RECORDED_AT_MS) {
+    throw new BadRequestException('A recording cannot be dated before 1970-01-01T00:00:00Z.');
+  }
+  if (ms > now.getTime() + RECORDED_AT_FUTURE_TOLERANCE_MS) {
+    throw new BadRequestException('A recording cannot be dated in the future.');
+  }
+  return date;
 }
 
 /**

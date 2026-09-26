@@ -306,6 +306,24 @@ export const handlers = [
     });
   }),
 
+  // `PATCH /api/transcripts/:id` (#352) — title and/or `recordedAt`. Echoes
+  // what it was sent, with `recordedAt` normalised to the server's own
+  // `toISOString()` form, so a suite exercising the real service sees the same
+  // round trip the API performs (an offset in, a `Z` instant out). A suite that
+  // needs a whole detail or an error overrides it with `server.use(...)`.
+  http.patch(`${API_BASE}/transcripts/:id`, async ({ params, request }) => {
+    const body = (await request.json()) as { title?: string; recordedAt?: string };
+    return HttpResponse.json({
+      data: {
+        id: params.id,
+        ...(body.title !== undefined ? { title: body.title.trim() } : {}),
+        ...(body.recordedAt !== undefined
+          ? { recordedAt: new Date(body.recordedAt).toISOString() }
+          : {}),
+      },
+    });
+  }),
+
   http.get(`${API_BASE}/transcription/config`, () => {
     return HttpResponse.json({
       data: {

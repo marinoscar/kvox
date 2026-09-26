@@ -114,6 +114,7 @@ function transcriptRow(id: string, title: string) {
     failureReason: null,
     access: 'owner',
     ownerName: 'Test User',
+    recordedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
