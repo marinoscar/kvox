@@ -33,6 +33,7 @@ import { NotesModule } from './notes/notes.module';
 import { GraphModule } from './graph/graph.module';
 import { GraphExtractionModule } from './graph/extraction/extraction.module';
 import { GraphResolutionModule } from './graph/resolution/resolution.module';
+import { GraphDedupModule } from './graph/dedup/dedup.module';
 import { SearchIndexingModule } from './search/indexing/search-indexing.module';
 import { UserDataModule } from './user-data/user-data.module';
 import { SearchModule } from './search/search.module';
@@ -235,6 +236,9 @@ import configuration from './config/configuration';
     // Imports GraphExtractionModule (the stage registry) and SearchModule (the
     // embedder contract); imported by nothing here, one-way.
     GraphResolutionModule,
+    // Work-item dedup, temporal closing and rejection memory (#365): three
+    // proposal stages after resolution. Imports GraphResolutionModule; one-way.
+    GraphDedupModule,
 
     // Semantic search, indexing half (#188, epic #165): the `search.index` job
     // and the enqueue/forget surface its callers use. Listed explicitly even

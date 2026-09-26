@@ -16,6 +16,11 @@
 //     or a proposal entity that is itself `accept`, the kind is not
 //     `person_fact`, and no blocking flag is set.
 //   - `person_fact` and `closing`: never pre-checked.
+//   - #365: a relation/item flagged `known` (the graph already holds it; the
+//     commit only appends evidence) is accepted whenever its endpoints are —
+//     whatever other flag it carries, `person_fact` included — except a
+//     `sensitive` PersonFact (§5.6). A row flagged `previously_rejected` is
+//     defaulted to `reject` (visible, collapsed; the reviewer can flip it).
 // =============================================================================
 
 import type { GraphPreferences } from '../preferences/graph-preferences.defaults';
@@ -25,7 +30,7 @@ import type {
   ProposalResolution,
 } from '../proposals/proposal-payload.schema';
 
-export type PrecheckDecision = 'accept' | 'pending';
+export type PrecheckDecision = 'accept' | 'pending' | 'reject';
 
 /** The part of a proposal item the pre-check reads, and the one field it writes. */
 export interface PrecheckItem {
@@ -88,12 +93,21 @@ export function applyPrecheck(items: PrecheckItem[], prefs: GraphPreferences): v
       item.decision = 'pending';
       continue;
     }
+    const endpointsAccepted = endpoints(item).every((e) => ('entityId' in e ? true : acceptedRefs.has(e.ref)));
+    if (item.flags.includes('known')) {
+      const sensitive = item.kind === 'item' && item.payload.sensitivity === 'sensitive';
+      item.decision = !sensitive && endpointsAccepted ? 'accept' : 'pending';
+      continue;
+    }
+    if (item.flags.includes('previously_rejected')) {
+      item.decision = 'reject';
+      continue;
+    }
     if (item.kind === 'item' && item.payload.kind === 'person_fact') {
       item.decision = 'pending';
       continue;
     }
     const blocked = item.flags.some((f) => ROW_BLOCKING.includes(f));
-    const endpointsOk = endpoints(item).every((e) => ('entityId' in e ? true : acceptedRefs.has(e.ref)));
-    item.decision = !blocked && endpointsOk ? 'accept' : 'pending';
+    item.decision = !blocked && endpointsAccepted ? 'accept' : 'pending';
   }
 }

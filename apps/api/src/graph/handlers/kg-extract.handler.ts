@@ -295,7 +295,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     const finalized = await this.writer.finalize(
       proposalId,
       noteId,
-      precheck.map((p) => ({ id: p.id, decision: p.decision === 'accept' ? 'accept' : 'pending' })),
+      precheck.map((p) => ({ id: p.id, decision: p.decision === 'accept' || p.decision === 'reject' ? p.decision : 'pending' })),
       stats,
     );
     if (!finalized) {

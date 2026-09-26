@@ -30,7 +30,8 @@ import type { ProposedRow } from './validate';
 
 export interface ItemDecision {
   id: string;
-  decision: 'accept' | 'pending';
+  /** `reject` — #365's rejection memory (`previously_rejected`). */
+  decision: 'accept' | 'pending' | 'reject';
 }
 
 @Injectable()
@@ -126,7 +127,7 @@ export class ProposalWriter {
       const current = await tx.kgProposal.findUnique({ where: { id: proposalId }, select: { status: true } });
       if (current?.status !== 'extracting') return false;
 
-      for (const decision of ['accept', 'pending'] as const) {
+      for (const decision of ['accept', 'pending', 'reject'] as const) {
         const ids = decisions.filter((d) => d.decision === decision).map((d) => d.id);
         if (ids.length > 0) {
           await tx.kgProposalItem.updateMany({ where: { proposalId, id: { in: ids } }, data: { decision } });

@@ -14,6 +14,8 @@
 //             (it defers the whole `kg.extract` / `kg.resolve` job)
 //   answers   a verdict for an unknown pair id is ignored; a pair with no
 //             verdict is `uncertain` — never pre-checked downstream
+//   items     #365's `adjudicateItems` — work-item dedup (`same | supersedes |
+//             new`) over the same call path (`prepare`), batching and throttle
 //
 // Dossiers (`buildCandidateDossiers`) carry the owner's own entity, alias,
 // relation and entity-evidence rows only — never a `kg_items` statement, so a
@@ -48,6 +50,16 @@ import {
   type AdjudicationVerdict,
   type CandidateDossier,
 } from './adjudication-prompt';
+import type { ItemAdjudication } from '../dedup/dedup-core';
+import {
+  ITEM_ADJUDICATION_BATCH_SIZE,
+  ITEM_ADJUDICATION_SCHEMA_NAME,
+  buildItemAdjudicationOutputSchema,
+  buildItemAdjudicationSystemPrompt,
+  buildItemAdjudicationUserContent,
+  readItemVerdicts,
+  type ItemAdjudicationPair,
+} from '../dedup/item-adjudication-prompt';
 
 export const ADJUDICATION_MAX_OUTPUT_TOKENS = 4_000;
 
@@ -92,38 +104,20 @@ export class AdjudicationService {
     const out = new Map<string, AdjudicationResult>();
     if (pairs.length === 0) return out;
 
-    const resolution = await this.resolver.resolve(userId, 'graph.adjudicate');
-    const provider = resolution.provider;
-    if (typeof provider.generateStructured !== 'function') {
-      throw new AiInputError(
-        `The "${provider.id}" provider cannot return structured output, which adjudication needs.`,
-        undefined,
-        provider.id,
-      );
-    }
-    const settings = provider.settingsSchema.safeParse(
-      (resolution.policy.providers as Record<string, unknown>)[provider.id] ?? {},
-    );
-    if (!settings.success) {
-      throw new AiInputError(`This deployment's configuration for provider "${provider.id}" is invalid.`, undefined, provider.id);
-    }
-    const apiKey = await this.credentials.getSecret(userId, provider.id);
-    if (!apiKey) throw new AiAuthError(`No ${provider.label} API key is saved for your account.`, provider.id);
-
+    const { resolution, provider, context, maxOutputTokens } = await this.prepare(userId);
     const schema = await this.ontology.effectiveSchemaFor(userId);
     const typeKeys = [...new Set(pairs.map((p) => p.type))].sort();
     const types: AdjudicationTypeInfo[] = typeKeys.map((key) => {
       const t = schema.entityType(key);
       return { key, label: t?.label, description: t?.description ?? '', disambiguation: t?.disambiguation ?? [] };
     });
-    const maxOutputTokens = Math.min(ADJUDICATION_MAX_OUTPUT_TOKENS, extractionBudget(resolution).maxOutputTokens);
     const outputSchema = buildAdjudicationOutputSchema();
 
     for (let i = 0; i < pairs.length; i += ADJUDICATION_BATCH_SIZE) {
       const batch = pairs.slice(i, i + ADJUDICATION_BATCH_SIZE);
       const batchTypes = types.filter((t) => batch.some((p) => p.type === t.key));
       this.throttle.registerProviderKey(options.jobType, aiProviderThrottleKey(userId));
-      const result = await provider.generateStructured(createProviderContext(apiKey, settings.data as never), {
+      const result = await provider.generateStructured!(context, {
         model: resolution.model,
         systemPrompt: buildAdjudicationSystemPrompt(batchTypes),
         userContent: buildAdjudicationUserContent(batch),
@@ -144,6 +138,73 @@ export class AdjudicationService {
       }
     }
     return out;
+  }
+
+  /**
+   * #365 — work-item dedup: `same | supersedes | new` per (proposed item,
+   * existing item) pair, on the same `graph.adjudicate` model, batching,
+   * throttle key and failure contract as `adjudicate`. A pair the model did
+   * not answer is absent from the map (the caller treats it as `new`).
+   */
+  async adjudicateItems(
+    userId: string,
+    pairs: readonly ItemAdjudicationPair[],
+    options: AdjudicateOptions,
+  ): Promise<Map<string, ItemAdjudication & { model: string }>> {
+    const out = new Map<string, ItemAdjudication & { model: string }>();
+    if (pairs.length === 0) return out;
+
+    const { resolution, provider, context, maxOutputTokens } = await this.prepare(userId);
+    const outputSchema = buildItemAdjudicationOutputSchema();
+    for (let i = 0; i < pairs.length; i += ITEM_ADJUDICATION_BATCH_SIZE) {
+      const batch = pairs.slice(i, i + ITEM_ADJUDICATION_BATCH_SIZE);
+      this.throttle.registerProviderKey(options.jobType, aiProviderThrottleKey(userId));
+      const result = await provider.generateStructured!(context, {
+        model: resolution.model,
+        systemPrompt: buildItemAdjudicationSystemPrompt(batch),
+        userContent: buildItemAdjudicationUserContent(batch),
+        schema: outputSchema,
+        schemaName: ITEM_ADJUDICATION_SCHEMA_NAME,
+        maxOutputTokens,
+        timeoutMs: resolution.policy.requestTimeoutMs,
+        reasoningEffort: resolution.reasoningEffort,
+      });
+      for (const [pairId, v] of readItemVerdicts(result.value, new Set(batch.map((p) => p.pairId)))) {
+        out.set(pairId, { ...v, model: resolution.model });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * The shared call path: resolve `graph.adjudicate`, check structured-output
+   * support and the deployment's provider settings, and read the caller's own
+   * key at the moment of use (never stored on a field, never logged).
+   */
+  private async prepare(userId: string) {
+    const resolution = await this.resolver.resolve(userId, 'graph.adjudicate');
+    const provider = resolution.provider;
+    if (typeof provider.generateStructured !== 'function') {
+      throw new AiInputError(
+        `The "${provider.id}" provider cannot return structured output, which adjudication needs.`,
+        undefined,
+        provider.id,
+      );
+    }
+    const settings = provider.settingsSchema.safeParse(
+      (resolution.policy.providers as Record<string, unknown>)[provider.id] ?? {},
+    );
+    if (!settings.success) {
+      throw new AiInputError(`This deployment's configuration for provider "${provider.id}" is invalid.`, undefined, provider.id);
+    }
+    const apiKey = await this.credentials.getSecret(userId, provider.id);
+    if (!apiKey) throw new AiAuthError(`No ${provider.label} API key is saved for your account.`, provider.id);
+    return {
+      resolution,
+      provider,
+      context: createProviderContext(apiKey, settings.data as never),
+      maxOutputTokens: Math.min(ADJUDICATION_MAX_OUTPUT_TOKENS, extractionBudget(resolution).maxOutputTokens),
+    };
   }
 
   /**

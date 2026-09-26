@@ -1044,6 +1044,32 @@ surfaced in the panel, never a rejection — §5.4's overlap tolerance is
 enforced here, at the one place a conflicting pair would otherwise commit
 unremarked.
 
+**As built (issue #365).** `apps/api/src/graph/dedup/` (`GraphDedupModule`)
+registers three proposal stages after `resolution`: **`work-item-dedup`**
+(order 200) writes an item's `payload.dedup` — `known` when a live item has the
+same kind, subject and statement hash (flag `known`, pre-accepted, collapsed);
+otherwise live candidates with the same kind and subject (and owner, for a
+commitment) are ranked by cosine against the proposed text, embedded in one
+batched call per proposal (≥ 0.80, top five), or by token-set Jaccard ≥ 0.5 when
+no embedding is available (`stats["work-item-dedup"].fallback: "lexical"`), and
+adjudicated by `graph.adjudicate` (`AdjudicationService.adjudicateItems`) into
+`same` (flagged `possible_duplicate` below cosine 0.92; status/due-date
+`changes` honoured for a commitment only), `supersedes` (flag `supersedes`) or
+`new`; with adjudication off or unavailable the row stays `new`, pointing at its
+best candidate, flagged `possible_duplicate`. A `sensitive` PersonFact is never
+sent to a model on either side. A relation is `known` when #353's planner
+attaches it to a live edge (restated, or a point inside a known period — the
+out-of-order rule). **`temporal-closing`** (300) plans every proposed relation of
+a type the effective schema declares `temporal` + `exclusive: 'soft'` and emits
+one `kind: 'closing'` row per closed edge (never pre-checked, citing copies of
+the new fact's evidence; a `WORKS_FOR` closing lists the person's open
+commitments, flag `closing_affects_commitments`), copies `overlaps`/`unordered`
+onto the relation, and records rule 5's self-close as `dedup.candidateTo`.
+**`rejection-memory`** (400) removes a PersonFact whose statement hash the owner
+rejected in any **committed** proposal, and flags any other row rejected in a
+committed proposal for the same note `previously_rejected` (defaulted to
+`reject`). What the commit does with each verdict is `dedup/commit-contract.ts`.
+
 ## 8. The proposal and "Send to graph"
 
 **`kg_proposals`** (§10) records one row per extraction run: `note_id`,

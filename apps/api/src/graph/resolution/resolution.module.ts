@@ -34,7 +34,8 @@ import { ResolutionStage } from './resolution.stage';
 // (the stage registry) and on `SearchModule` (the embedder contract) — neither
 // of which `GraphModule` may import without a cycle. The dependency runs one
 // way: GraphResolution → GraphExtraction → Graph. #366's commit imports this
-// module for `MergeService`, `DistinctPairService` and `AliasLearningService`.
+// module for `MergeService`, `DistinctPairService` and `AliasLearningService`;
+// #365's `GraphDedupModule` for `ResolutionService` and `AdjudicationService`.
 // =============================================================================
 
 @Module({
@@ -55,6 +56,6 @@ import { ResolutionStage } from './resolution.stage';
     KgResolveHandler,
     KgEmbedHandler,
   ],
-  exports: [ResolutionService, MergeService, DistinctPairService, AliasLearningService, GraphEmbedder],
+  exports: [ResolutionService, MergeService, DistinctPairService, AliasLearningService, GraphEmbedder, AdjudicationService],
 })
 export class GraphResolutionModule {}
