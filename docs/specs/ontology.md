@@ -592,6 +592,18 @@ required to write `unknown` rather than guess a plausible-looking range when
 the source text does not state one, because a guessed precision is a
 fabricated fact carrying the same authority in the UI as a real one.
 
+Three conventions follow from the half-open range and are fixed by the
+temporal engine (`apps/api/src/graph/temporal/`, issue #353). A **start-only
+statement** is one of two different facts, and the extractor must say which:
+a *point* ("in March 2026") spans its one precision unit, `[2026-03-01,
+2026-04-01)`, while a *continuing state* ("has worked there since 2019") is
+open, `[2019-01-01, )`. A stated **end** is inclusive in speech and exclusive
+in the column: "2019 to 2025" is `[2019-01-01, 2026-01-01)`. And the UI
+renders an upper bound as the **last unit included**, so that range reads
+"2019 → 2025", and a year-precision edge closed at `2026-03-01` reads
+"2019 → Feb 2026" — the bound is shown at the finest unit it needs, never
+rounded to the edge's own precision.
+
 **State is derived from dated facts, not edited in place.** A `Claim` is the
 record — a dated, evidenced statement. A relation edge (`WORKS_FOR`,
 `HAS_ROLE`, `REPORTS_TO`, and every other temporal relationship in §5.2) is
@@ -610,7 +622,7 @@ accepting a new fact with a `valid` start date closes that person's
 still-open edge of the same type at the new fact's start: the open edge's
 `valid` upper bound is set, and the new edge records `SUPERSEDES` against it
 (§3.4). The closing is never applied silently — it surfaces in the review
-panel as its own proposal row ("Closes: Joe works for Acme, 2019 → Mar
+panel as its own proposal row ("Closes: Joe works for Acme, 2019 → Feb
 2026") and is accepted, edited, or rejected exactly like any other proposed
 item (§8); a reviewer who rejects the close leaves both edges open, which
 the overlap tolerance below then treats as a legitimate (if unusual)
@@ -626,7 +638,14 @@ every known interval for that person and relationship type is a new edge,
 proposed as such; it is flagged `overlaps` in the review panel specifically
 when its valid range overlaps an already-accepted edge of the same type, so
 a reviewer sees the conflict rather than two silently coexisting edges with
-no signal that anything needs a look.
+no signal that anything needs a look. That includes a new period of the
+**same** fact that straddles a known one (Acme `[2023, 2025)` against an
+accepted Acme `[2019, 2024)`): it is not contained, so it is a new edge —
+ranges are never merged automatically — and it is flagged against the period
+it overlaps. An accepted edge whose `valid` is `unknown` cannot be ordered
+against a dated fact at all, so it is never closed by one; the proposal is
+flagged `unordered` instead and a reviewer decides, exactly as for a new fact
+whose own start is unknown.
 
 **Overlap tolerance is soft, not enforced.** "Normally exclusive" describes
 the common case, not a database constraint: a consultant or a board member
@@ -981,7 +1000,7 @@ two unrelated rows that silently disagree.
 **Closing a temporal edge is a proposal row, not a side effect.** When
 §5.4's closing rule fires — a new fact with a `valid` start closing an
 existing exclusive edge — the close is itself a `kg_proposal_items` row
-("Closes: Joe works for Acme, 2019 → Mar 2026") that goes through the same
+("Closes: Joe works for Acme, 2019 → Feb 2026") that goes through the same
 `pending | accept | edit | reject | merge_into` decision as everything else
 in §8; nothing closes an edge outside a proposal a reviewer acts on. An
 overlap between two edges of the same normally-exclusive type is a warning
