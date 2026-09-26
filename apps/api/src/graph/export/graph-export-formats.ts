@@ -13,3 +13,12 @@ export const GRAPH_EXPORT_FORMAT_INFO: Readonly<Record<GraphExportFormat, { exte
   turtle: { extension: 'ttl', mimeType: 'text/turtle' },
   nquads: { extension: 'nq', mimeType: 'application/n-quads' },
 };
+
+/**
+ * `<app-slug>-graph-<YYYY-MM-DD>.<ext>` — the download's filename, dated by
+ * when the export was requested (UTC). Signed into the download URL's
+ * `Content-Disposition`, never added by a client.
+ */
+export function graphExportFilename(appSlug: string, createdAt: Date, format: GraphExportFormat): string {
+  return `${appSlug}-graph-${createdAt.toISOString().slice(0, 10)}.${GRAPH_EXPORT_FORMAT_INFO[format].extension}`;
+}

@@ -163,6 +163,8 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // #372 — the rolling per-entity summary the entity brief shows; spends the
   // owner's own AI key, like `note.generate`.
   'kg.entity_digest': 'Knowledge graph entity digest',
+  // #386, epic #349 — an RDF export of one owner's graph (and its daily expiry sweep).
+  'kg.export': 'Knowledge graph export',
   // #378, epic #348 — one read-only graph-agent answer, on the asker's own AI key.
   'ask.respond': 'Ask answer',
 };
