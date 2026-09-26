@@ -69,13 +69,13 @@ anywhere else in the module; the two are separated by a queue and by
 minutes, and nothing would report a disagreement between two copies of the
 same rule if one existed.
 
-| Scope | Transcripts | Notes | Note Templates | Files | Credentials |
-|---|:---:|:---:|:---:|:---:|:---:|
-| `transcripts` | ✓ | | | | |
-| `notes` | | ✓ | | | |
-| `files` | | | | ✓ | |
-| `content` | ✓ | ✓ | ✓ | ✓ | |
-| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Scope | Transcripts | Notes | Note Templates | Files | Graph | Credentials |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| `transcripts` | ✓ | | | | | |
+| `notes` | | ✓ | | | | |
+| `files` | | | | ✓ | | |
+| `content` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| `everything` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 The rule the table encodes: **every narrow scope maps to exactly one
 category; only the two composites fan out.** `content` is everything the
@@ -120,6 +120,25 @@ it than it has clearing the caller's UI theme. Only **account deletion**
 `users`) removes every `user_hidden_note_templates` row naming that caller,
 via the same `user_id` `Cascade` every other per-user preference in this
 schema already gets.
+
+The knowledge graph (`kg_*` tables, issue #357, epic #344) sits on the same
+line as note templates rather than beside credentials: it is `content`/
+`everything` only, and for the same "everything you made" reasoning — a graph
+is derived content, built by reviewing and committing extraction proposals,
+not operational state like an onboarding flag or an access token. No narrow
+scope reaches it: deleting `transcripts` does not silently empty a graph the
+user curated by hand, and a graph row whose cited transcript or note is gone
+keeps its `quote` (every `kg_evidence` anchor foreign key is `SetNull`, by
+design — see `docs/specs/ontology.md` §5.3). Unlike every other category in
+this table, the graph is not deleted inline: the handler enqueues `kg.purge
+{ scope: 'all' }` and lets that job's own handler own the plan, the same
+fan-out-to-existing-handlers pattern already used for `transcript.purge` and
+`note.purge` below — a second, independent implementation of "delete the
+graph" here is exactly how the two would come to disagree about what the
+graph is. It also runs **first**, before any other step, so that graph rows
+citing a transcript or note this same request is about to delete go away
+alongside them (though correctness never depends on that order, since every
+evidence anchor is `SetNull` rather than `Restrict`).
 
 Credentials sit at the opposite end of the same argument: they are
 `everything`-only because revoking a user's API tokens is not implied by
@@ -183,7 +202,12 @@ it does not disable a constraint. Every blocking column involved is
 `Restrict`, so the handler clears the reference **first**, and the delete
 that follows is then an ordinary one the database was always going to allow.
 The order the five steps run in is a direct consequence of which columns
-point at which tables, not a preference:
+point at which tables, not a preference. The knowledge graph (`content`/
+`everything` only) is not one of the five: it participates in no `Restrict`
+foreign key from this handler's own tables, so its `kg.purge` enqueue is not
+ordered against them by necessity either — it simply runs before all five,
+so that graph rows citing a transcript or note about to be deleted below go
+with them.
 
 1. **Credentials** (`everything` only) — `user_ai_credentials` and
    `personal_access_tokens` both cascade from `users` and from nothing else,
