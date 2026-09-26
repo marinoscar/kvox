@@ -8,7 +8,7 @@
 // fails when the committed output is stale.
 // =============================================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ONTOLOGY = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
+exports.ONTOLOGY = exports.extractableRelationTypes = exports.extractableEntityTypes = exports.buildPropsJsonSchema = exports.validateProps = exports.buildPropsSchema = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
 exports.computeEffectiveSchema = computeEffectiveSchema;
 var constants_js_1 = require("./constants.js");
 Object.defineProperty(exports, "ATTRIBUTE_KINDS", { enumerable: true, get: function () { return constants_js_1.ATTRIBUTE_KINDS; } });
@@ -33,6 +33,13 @@ var registry_js_1 = require("./registry.js");
 Object.defineProperty(exports, "buildOntologyRegistry", { enumerable: true, get: function () { return registry_js_1.buildOntologyRegistry; } });
 var effective_schema_js_1 = require("./effective-schema.js");
 Object.defineProperty(exports, "toEffectiveSchemaPayload", { enumerable: true, get: function () { return effective_schema_js_1.toEffectiveSchemaPayload; } });
+var props_schema_js_1 = require("./props-schema.js");
+Object.defineProperty(exports, "buildPropsSchema", { enumerable: true, get: function () { return props_schema_js_1.buildPropsSchema; } });
+Object.defineProperty(exports, "validateProps", { enumerable: true, get: function () { return props_schema_js_1.validateProps; } });
+var json_schema_js_1 = require("./json-schema.js");
+Object.defineProperty(exports, "buildPropsJsonSchema", { enumerable: true, get: function () { return json_schema_js_1.buildPropsJsonSchema; } });
+Object.defineProperty(exports, "extractableEntityTypes", { enumerable: true, get: function () { return json_schema_js_1.extractableEntityTypes; } });
+Object.defineProperty(exports, "extractableRelationTypes", { enumerable: true, get: function () { return json_schema_js_1.extractableRelationTypes; } });
 // -----------------------------------------------------------------------------
 // The domain modules, listed EXPLICITLY — never self-registered by import side
 // effect (registration order under Vite pre-bundling vs Jest `require` is not

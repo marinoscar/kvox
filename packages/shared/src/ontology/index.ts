@@ -45,6 +45,9 @@ export { SHIPPED_KEYS } from './shipped-keys.js';
 export { buildOntologyRegistry } from './registry.js';
 export type { OntologyRegistry } from './registry.js';
 export { toEffectiveSchemaPayload } from './effective-schema.js';
+export { buildPropsSchema, validateProps } from './props-schema.js';
+export type { BuildPropsSchemaOptions, PropsIssue, PropsPurpose, ValidatePropsResult } from './props-schema.js';
+export { buildPropsJsonSchema, extractableEntityTypes, extractableRelationTypes } from './json-schema.js';
 export type {
   ComputeEffectiveSchemaInput,
   EffectiveAttribute,
