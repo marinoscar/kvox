@@ -21,6 +21,10 @@
 > once split into cards. §1 and §3's table are kept as **history**: the
 > tab-vs-card reasoning they explain is still the rule, even though none of
 > those three specific cards exists any more.
+>
+> Update, issue #361: the AI settings card (`/admin/settings/ai`) gained two
+> new sections, "Connected knowledge" and "Task models" — sections within
+> that existing card, not a new card, route or tab.
 
 The admin console and the per-user `/settings` surface both used to be
 tab-strip pages — `SystemSettingsPage` with three tabs, `UserManagementPage`
