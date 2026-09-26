@@ -238,7 +238,7 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
     ],
   },
   {
-    // #354, epic #344. #376 later appends an `Ask` tag to this group.
+    // #354, epic #344; `Ask` appended by #376 (epic #348).
     name: 'Knowledge',
     tags: [
       {
@@ -247,6 +247,11 @@ export const TAG_GROUPS: OpenApiTagGroup[] = [
           'Your own connected knowledge: the effective ontology, entities, relations, facts ' +
           'with evidence, extraction proposals and their review. Owner-only; no access is ' +
           'always 404, never 403.',
+      },
+      {
+        // #376, epic #348.
+        name: 'Ask',
+        description: 'Questions answered from your own knowledge graph, with citations. Read-only.',
       },
     ],
   },
