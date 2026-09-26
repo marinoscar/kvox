@@ -1,0 +1,342 @@
+{
+  "id": "m33",
+  "title": "One-on-one: Nina and Oliver",
+  "tags": [
+    "personal",
+    "note-only",
+    "internal",
+    "negative-project-milestone"
+  ],
+  "recordedAt": "2026-05-18T14:00:00Z",
+  "contextText": "Fortnightly one-on-one with Oliver.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# One-on-one: Nina and Oliver\n\n**Date:** May 18\n**Attendees:** Nina Castellanos, Oliver Brandt\n\n## Summary\n\nFortnightly one-on-one. We covered the Harbourline retest plan, Oliver's promotion packet, and how he wants to handle the next few weeks at home before his leave.\n\n## Work\n\n- The Harbourline beta milestone slipped a week because the account-linking screen is being reworked after the first round of testing. Oliver is comfortable with the new date and has told the client.\n- Oliver's promotion packet to senior designer is nearly ready. He wants one more case study in it, ideally the Harbourline onboarding work once the retest is done.\n- I agreed to review the draft packet before the next calibration round.\n\n## Action items\n\n- **Nina Castellanos** — review Oliver's promotion packet by May 29 and send written feedback.\n- **Oliver Brandt** — add the Harbourline onboarding case study to the packet after the retest.\n\n## Home and family\n\n- Oliver asked to keep Fridays short for the next month. Their son Leo has swimming lessons straight after school, and Oliver and Maya take turns collecting him.\n- Oliver and Maya's daughter Ivy is starting nursery in September; Maya is handling the settling-in sessions.\n- Ivy turns five on June 2 and they are having a small party at home that weekend. Oliver will be offline that Friday afternoon.\n- Oliver is the parent of both Leo and Ivy, and Maya is their mother; worth remembering for scheduling around school holidays.\n\n## Wellbeing\n\nOliver said the workload feels manageable now that the Harbourline scope is settled. He is looking forward to the Lisbon trip and has already started the handover notes for Sam.\n\n## Next one-on-one\n\nIn two weeks, after the Harbourline retest, so we can look at the results and the updated packet together.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-brambleway-studio",
+      "type": "Organization",
+      "label": "Brambleway Studio",
+      "aliases": [
+        "Brambleway"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-nina-castellanos",
+      "type": "Person",
+      "label": "Nina Castellanos",
+      "aliases": [
+        "Nina"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32"
+      ]
+    },
+    {
+      "id": "g-person-oliver-brandt",
+      "type": "Person",
+      "label": "Oliver Brandt",
+      "aliases": [
+        "Oliver"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32"
+      ]
+    },
+    {
+      "id": "g-person-maya-brandt",
+      "type": "Person",
+      "label": "Maya Brandt",
+      "aliases": [
+        "Maya"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-harbourline",
+      "type": "Organization",
+      "label": "Harbourline",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [
+    {
+      "id": "g-rel-oliver-spouse-maya",
+      "type": "SPOUSE_OF",
+      "from": "g-person-oliver-brandt",
+      "to": "g-person-maya-brandt",
+      "props": {},
+      "validFrom": null,
+      "validTo": null,
+      "precision": "unknown"
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "One-on-one: Nina and Oliver",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "One-on-one: Nina and Oliver"
+          }
+        ]
+      },
+      {
+        "key": "nina",
+        "type": "Person",
+        "label": "Nina Castellanos",
+        "aliases": [],
+        "existingId": "g-person-nina-castellanos",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+          }
+        ]
+      },
+      {
+        "key": "oliver",
+        "type": "Person",
+        "label": "Oliver Brandt",
+        "aliases": [],
+        "existingId": "g-person-oliver-brandt",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+          }
+        ]
+      },
+      {
+        "key": "maya",
+        "type": "Person",
+        "label": "Maya Brandt",
+        "aliases": [],
+        "existingId": "g-person-maya-brandt",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oliver and Maya take turns collecting him"
+          }
+        ]
+      },
+      {
+        "key": "leo",
+        "type": "Person",
+        "label": "Leo Brandt",
+        "aliases": [
+          "Leo"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Their son Leo has swimming lessons straight after school"
+          }
+        ]
+      },
+      {
+        "key": "ivy",
+        "type": "Person",
+        "label": "Ivy Brandt",
+        "aliases": [
+          "Ivy"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oliver and Maya's daughter Ivy is starting nursery in September"
+          }
+        ]
+      },
+      {
+        "key": "harbourline",
+        "type": "Organization",
+        "label": "Harbourline",
+        "aliases": [],
+        "existingId": "g-org-harbourline",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "The Harbourline beta milestone slipped a week"
+          }
+        ]
+      },
+      {
+        "key": "ivy-birthday",
+        "type": "Milestone",
+        "label": "Ivy's 5th birthday",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "date": "2026-06-02",
+          "kind": "birthday"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ivy turns five on June 2"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "nina",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "oliver",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt"
+          }
+        ]
+      },
+      {
+        "type": "PARENT_OF",
+        "from": "oliver",
+        "to": "leo",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oliver is the parent of both Leo and Ivy"
+          }
+        ]
+      },
+      {
+        "type": "PARENT_OF",
+        "from": "oliver",
+        "to": "ivy",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Oliver is the parent of both Leo and Ivy"
+          }
+        ]
+      },
+      {
+        "type": "PARENT_OF",
+        "from": "maya",
+        "to": "leo",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maya is their mother"
+          }
+        ]
+      },
+      {
+        "type": "PARENT_OF",
+        "from": "maya",
+        "to": "ivy",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Maya is their mother"
+          }
+        ]
+      },
+      {
+        "type": "HAS_MILESTONE",
+        "from": "ivy",
+        "to": "ivy-birthday",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ivy turns five on June 2"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "commitment",
+        "subject": "oliver",
+        "owner": "nina",
+        "counterparty": null,
+        "title": "Review Oliver's promotion packet",
+        "statement": "Nina will review Oliver's promotion packet by May 29 and send written feedback.",
+        "status": "open",
+        "occurredAt": "2026-05-18",
+        "dueAt": "2026-05-29",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "review Oliver's promotion packet by May 29 and send written feedback"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "The Harbourline beta milestone slipped a week",
+        "why": "A project milestone is work (a Project/Decision fact), never a personal Milestone (§17.2 Milestone disambiguation)."
+      }
+    ]
+  }
+}

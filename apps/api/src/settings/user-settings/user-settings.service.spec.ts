@@ -1677,6 +1677,39 @@ describe('UserSettingsService', () => {
       });
     });
 
+    it('merges domains.personal like work: true enables it, null restores the default (#383)', async () => {
+      stored({ graph: { domains: { work: false, personal: false } } });
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: { domains: { personal: true } },
+      } as any);
+
+      expect(captured.value.graph.domains).toEqual({ work: false, personal: true });
+      const [name, payload] = mockEvents.emit.mock.calls[0];
+      expect(name).toBe(GRAPH_PREFERENCES_CHANGED_EVENT);
+      expect(payload.changed).toEqual(['domains']);
+      expect(payload.next.domains).toEqual({ core: true, work: false, personal: true });
+
+      stored({ graph: { domains: { work: true, personal: true } } });
+      const again = captureStoredValue();
+      await service.patchSettings(mockUserId, {
+        graph: { domains: { personal: null } },
+      } as any);
+      expect(again.value.graph.domains).toEqual({ work: true, personal: false });
+    });
+
+    it('turning personal on from an absent namespace keeps work at its default', async () => {
+      stored({});
+      const captured = captureStoredValue();
+
+      await service.patchSettings(mockUserId, {
+        graph: { domains: { personal: true } },
+      } as any);
+
+      expect(captured.value.graph).toEqual({ domains: { work: true, personal: true } });
+    });
+
     it('does not emit when the effective values are unchanged (explicit default over absent)', async () => {
       stored({});
       captureStoredValue();

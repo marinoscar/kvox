@@ -31,7 +31,16 @@ export const ENTITY_MATCH_JACCARD = 0.8;
 export const ITEM_STATEMENT_F1 = 0.5;
 
 /** Report rows, fixed order. Relation rows (`relation:<TYPE>`) follow, sorted. */
-export const ENTITY_REPORT_TYPES = ['Person', 'Organization', 'Project', 'Meeting'] as const;
+export const ENTITY_REPORT_TYPES = [
+  'Person',
+  'Organization',
+  'Project',
+  'Meeting',
+  // #383: the `personal` domain's entity types (only `personal`-tagged fixtures label them).
+  'Interest',
+  'Trip',
+  'Milestone',
+] as const;
 export const ITEM_REPORT_TYPES: Record<ItemLabelKind, string> = {
   commitment: 'Commitment',
   decision: 'Decision',

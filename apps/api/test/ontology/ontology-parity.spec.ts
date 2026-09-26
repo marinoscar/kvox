@@ -360,6 +360,49 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
     expect(failures).toEqual([]);
   });
 
+  it('rule 12 (#383): a symmetric relation names the same single type as from and to, is an edge, and has no allowedPairs', () => {
+    const failures: string[] = [];
+
+    for (const r of relationTypes) {
+      if (r.symmetric !== true) continue;
+      if (r.from.length !== 1 || r.to.length !== 1 || r.from[0] !== r.to[0]) {
+        failures.push(`rule 12: symmetric relation '${r.key}' has from [${r.from.join(', ')}] and to [${r.to.join(', ')}], not one same type`);
+      }
+      if (r.representation.kind !== 'edge') {
+        failures.push(`rule 12: symmetric relation '${r.key}' is represented as '${r.representation.kind}', not 'edge'`);
+      }
+      if (r.allowedPairs !== undefined) {
+        failures.push(`rule 12: symmetric relation '${r.key}' declares allowedPairs`);
+      }
+    }
+    expect(relationTypes.filter((r) => r.symmetric === true).map((r) => r.key)).toEqual(['SPOUSE_OF', 'FRIEND_OF']);
+
+    expect(failures).toEqual([]);
+  });
+
+  it('rule 13 (#383, §17.2): every personal-domain type and relation defaults to "personal" sensitivity, and the domain is off by default', () => {
+    const failures: string[] = [];
+    const personal = ONTOLOGY.domains().find((d) => d.key === 'personal');
+
+    if (personal === undefined) failures.push("rule 13: the 'personal' domain is not registered");
+    if (personal?.defaultEnabled !== false) failures.push("rule 13: the 'personal' domain must be off by default");
+    for (const t of entityTypes.filter((x) => x.domain === 'personal')) {
+      if (t.sensitivityDefault !== 'personal') {
+        failures.push(`rule 13: personal type '${t.key}' has sensitivityDefault '${t.sensitivityDefault}', not 'personal'`);
+      }
+    }
+    for (const r of relationTypes.filter((x) => x.domain === 'personal')) {
+      if (r.sensitivityDefault !== 'personal') {
+        failures.push(`rule 13: personal relation '${r.key}' has sensitivityDefault '${String(r.sensitivityDefault)}', not 'personal'`);
+      }
+    }
+    if ((DEFAULT_ENABLED_DOMAINS as readonly string[]).includes('personal')) {
+      failures.push("rule 13: DEFAULT_ENABLED_DOMAINS must not include 'personal'");
+    }
+
+    expect(failures).toEqual([]);
+  });
+
   // ---------------------------------------------------------------------------
   // §5.6/§15: PersonFact must default to 'personal' sensitivity, never
   // 'business' — the one sensitivityDefault this parity guard pins by name,

@@ -11,7 +11,7 @@ import { join, resolve } from 'path';
 
 import { main } from '../../scripts/kg-eval';
 import { goldPrediction } from '../../scripts/kg-eval/gold-runner';
-import { GOLDEN_MEETINGS_DIR, listFixtureFiles } from '../../scripts/kg-eval/load';
+import { GOLDEN_MEETINGS_DIR, listFixtureFiles, loadGoldenSet } from '../../scripts/kg-eval/load';
 import { emptyPrediction } from '../../scripts/kg-eval/prediction-schema';
 import { assertOutsideRepo, RealDataPathError, REAL_DATA_REFUSAL, syntheticRunsDir } from '../../scripts/kg-eval/real-data';
 import { kgEvalReportSchema } from '../../scripts/kg-eval/report';
@@ -60,7 +60,12 @@ describe('kg:eval CLI (issue #362)', () => {
   it('--tag narrows to the tagged fixtures', () => {
     const res = cli(['--predictions', 'gold', '--tag', 'note-only']);
     expect(res.status).toBe(0);
-    expect(res.stdout).toMatch(/fixtures=2 /);
+    // Counted from the set, not hard-coded: adding a note-only fixture (#383
+    // added three) must not break this.
+    const noteOnly = loadGoldenSet().filter((f) => f.tags.includes('note-only')).length;
+    expect(noteOnly).toBeGreaterThanOrEqual(2);
+    expect(noteOnly).toBeLessThan(listFixtureFiles(GOLDEN_MEETINGS_DIR).length);
+    expect(res.stdout).toMatch(new RegExp(`fixtures=${noteOnly} `));
   });
 
   it('--run with an unregistered runner exits 2, naming the registered ones', () => {

@@ -392,6 +392,42 @@ describe('user settings parity across the places a namespace must be declared', 
     ]);
   });
 
+  it('accepts graph.domains.personal as a boolean in every zod source (#383)', () => {
+    // A field whose TYPE differs between sources passes the key-set checks
+    // above: `personal` was `z.literal(false)` until #383, and one source left
+    // behind would silently strip or 400 a user turning the domain on.
+    const full = { graph: { domains: { work: true, personal: true } } };
+    const fullSources = [
+      ['userSettingsSchema', userSettingsSchema],
+      ['updateUserSettingsSchema', updateUserSettingsSchema],
+      ['userSettingsResponseSchema', userSettingsResponseSchema],
+    ] as const;
+    const withBase = { ...DEFAULT_USER_SETTINGS, ...full };
+    for (const [name, schema] of fullSources) {
+      const parsed = (schema as z.ZodType).safeParse(
+        name === 'userSettingsResponseSchema'
+          ? { ...withBase, updatedAt: new Date().toISOString(), version: 1 }
+          : withBase,
+      );
+      expect({ name, ok: parsed.success }).toEqual({ name, ok: true });
+      if (parsed.success) {
+        expect((parsed.data as { graph?: { domains?: { personal?: boolean } } }).graph?.domains?.personal).toBe(true);
+      }
+    }
+    for (const [name, schema] of [
+      ['userSettingsPatchSchema', userSettingsPatchSchema],
+      ['patchUserSettingsSchema', patchUserSettingsSchema],
+    ] as const) {
+      const parsed = (schema as z.ZodType).safeParse({ graph: { domains: { personal: true } } });
+      expect({ name, ok: parsed.success }).toEqual({ name, ok: true });
+      if (parsed.success) {
+        expect((parsed.data as { graph?: { domains?: { personal?: boolean } } }).graph?.domains?.personal).toBe(true);
+      }
+    }
+    const typed: UserSettingsValue['graph'] = { domains: { work: false, personal: true } };
+    expect(typed?.domains?.personal).toBe(true);
+  });
+
   it('parses its own defaults, which is what a freshly created row relies on', () => {
     // `getSettings` inserts `DEFAULT_USER_SETTINGS` verbatim for a user who has
     // none, and every write then round-trips through `userSettingsSchema.parse`.

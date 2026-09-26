@@ -96,6 +96,41 @@ describe('computeEffectiveSchema', () => {
     });
   });
 
+  describe('personal (#383)', () => {
+    const off = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+    const on = computeEffectiveSchema({ enabledDomains: ['core', 'work', 'personal'], userAttributes: [] });
+
+    it('is registered but not in effect by default', () => {
+      expect(off.enabledDomains).toEqual(['core', 'work']);
+      expect(off.domains.find((d) => d.key === 'personal')).toEqual({
+        key: 'personal',
+        label: 'Personal life',
+        enabled: false,
+        alwaysOn: false,
+      });
+      expect(off.entityType('Interest')).toBeUndefined();
+      expect(off.relationType('SPOUSE_OF')).toBeUndefined();
+    });
+
+    it('prunes the personal types out of core endpoint and subject lists while off', () => {
+      expect(off.relationType('MENTIONS')!.to).not.toContain('Trip');
+      expect(off.entityType('Claim')!.subjectTypes).not.toContain('Milestone');
+    });
+
+    it('adds the personal types and relations when enabled, in registry order', () => {
+      expect(on.enabledDomains).toEqual(['core', 'work', 'personal']);
+      expect(on.entityTypes.slice(-3).map((t) => t.key)).toEqual(['Interest', 'Trip', 'Milestone']);
+      expect(on.relationType('SPOUSE_OF')).toEqual(
+        expect.objectContaining({ symmetric: true, sensitivityDefault: 'personal', temporal: true, exclusive: 'soft' }),
+      );
+      expect(on.relationType('PARENT_OF')?.symmetric).toBeUndefined();
+    });
+
+    it('defaults a personal relation\'s props to its own sensitivity, a core/work relation\'s to business', () => {
+      expect(on.relationType('HAS_ROLE')!.props.every((p) => p.sensitivity === 'business')).toBe(true);
+    });
+  });
+
   describe('user attributes', () => {
     const userAttr: UserAttributeDef = {
       id: 'attr-1',
