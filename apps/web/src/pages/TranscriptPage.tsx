@@ -142,6 +142,7 @@ import { NameSuggestionsPanel } from '../components/transcripts/NameSuggestionsP
 import { SaveIndicator } from '../components/transcripts/SaveIndicator';
 import { SegmentActions } from '../components/transcripts/SegmentActions';
 import { SegmentList } from '../components/transcripts/SegmentList';
+import { TranscriptGraphSelection } from '../components/graph/selection/TranscriptGraphSelection';
 import type { TextRange } from '../components/transcripts/SegmentList';
 import { SpeakerActions } from '../components/transcripts/SpeakerActions';
 import { SpeakerFilter, computeSpeakerStats } from '../components/transcripts/SpeakerFilter';
@@ -584,6 +585,8 @@ export function TranscriptPage() {
   // `beforeunload` at all.
   const flushRef = useRef(ops.flush);
   flushRef.current = ops.flush;
+  /** #368: the segment list's container, for "Add to graph" from a selection. */
+  const segmentsRef = useRef<HTMLDivElement | null>(null);
   useEffect(
     () => () => {
       void flushRef.current();
@@ -1061,66 +1064,82 @@ export function TranscriptPage() {
     ) : null;
 
   const segmentList = (
-    <SegmentList
-      segments={segments}
-      speakers={speakers}
-      currentSegmentIndex={engine.currentSegmentIndex}
-      positionMs={engine.positionMs}
-      wordsBySegment={wordsBySegment}
-      onPlayFrom={engine.playFromMs}
-      selectedSpeakerIds={selectedSpeakerIds}
-      // Per-line playback (#108). Unconditional, unlike the editing props
-      // below: hearing one line is a READ, so a viewer gets it too.
-      activeSegmentId={engine.activeSegmentId}
-      isPlaying={engine.isPlaying}
-      onPlaySegment={engine.playSegment}
-      onPause={engine.pause}
-      editable={canEdit}
-      editingSegmentId={editingSegmentId}
-      onStartEdit={setEditingSegmentId}
-      onCancelEdit={() => setEditingSegmentId(null)}
-      onChangeText={ops.updateText}
-      onCommitEdit={() => {
-        setEditingSegmentId(null);
-        void ops.flush();
-      }}
-      onCaretChange={setCaretOffset}
-      onOpenActions={(segmentId, anchor) => setSegmentMenu({ segmentId, anchor })}
-      // #220: the speaker name in a row header opens the SAME menu the chip
-      // rail opens, off the same state, so naming a voice from the line you are
-      // reading renames it everywhere. Passed only when `canEdit` — the prop's
-      // presence is what mounts the button at all.
-      onOpenSpeakerActions={
-        canEdit
-          ? (speakerId, anchor) => setSpeakerMenu({ speakerId, anchor })
-          : undefined
-      }
-      matchesBySegment={
-        findOpen
-          ? matchesBySegment
-          : nameHighlightsOn
-            ? nameMatchesBySegment
-            : deepLinkMatches
-      }
-      activeMatch={
-        findOpen
-          ? (activeMatch ?? null)
-          : nameHighlightsOn && nameJump
-            ? { segmentId: nameJump.segmentId, start: nameJump.start, end: nameJump.end }
-            : deepLinkSegment
-              ? { segmentId: deepLinkSegment.id, start: 0, end: deepLinkSegment.text.length }
-              : null
-      }
-      highlightSegmentId={deepLinkSegmentId}
-      scrollToSegmentId={
-        findOpen
-          ? (activeMatch?.segmentId ?? null)
-          : nameHighlightsOn
-            ? (nameJump?.segmentId ?? null)
-            : deepLinkSegmentId
-      }
-    />
+    <Box ref={segmentsRef}>
+      <SegmentList
+        segments={segments}
+        speakers={speakers}
+        currentSegmentIndex={engine.currentSegmentIndex}
+        positionMs={engine.positionMs}
+        wordsBySegment={wordsBySegment}
+        onPlayFrom={engine.playFromMs}
+        selectedSpeakerIds={selectedSpeakerIds}
+        // Per-line playback (#108). Unconditional, unlike the editing props
+        // below: hearing one line is a READ, so a viewer gets it too.
+        activeSegmentId={engine.activeSegmentId}
+        isPlaying={engine.isPlaying}
+        onPlaySegment={engine.playSegment}
+        onPause={engine.pause}
+        editable={canEdit}
+        editingSegmentId={editingSegmentId}
+        onStartEdit={setEditingSegmentId}
+        onCancelEdit={() => setEditingSegmentId(null)}
+        onChangeText={ops.updateText}
+        onCommitEdit={() => {
+          setEditingSegmentId(null);
+          void ops.flush();
+        }}
+        onCaretChange={setCaretOffset}
+        onOpenActions={(segmentId, anchor) => setSegmentMenu({ segmentId, anchor })}
+        // #220: the speaker name in a row header opens the SAME menu the chip
+        // rail opens, off the same state, so naming a voice from the line you are
+        // reading renames it everywhere. Passed only when `canEdit` — the prop's
+        // presence is what mounts the button at all.
+        onOpenSpeakerActions={
+          canEdit
+            ? (speakerId, anchor) => setSpeakerMenu({ speakerId, anchor })
+            : undefined
+        }
+        matchesBySegment={
+          findOpen
+            ? matchesBySegment
+            : nameHighlightsOn
+              ? nameMatchesBySegment
+              : deepLinkMatches
+        }
+        activeMatch={
+          findOpen
+            ? (activeMatch ?? null)
+            : nameHighlightsOn && nameJump
+              ? { segmentId: nameJump.segmentId, start: nameJump.start, end: nameJump.end }
+              : deepLinkSegment
+                ? { segmentId: deepLinkSegment.id, start: 0, end: deepLinkSegment.text.length }
+                : null
+        }
+        highlightSegmentId={deepLinkSegmentId}
+        scrollToSegmentId={
+          findOpen
+            ? (activeMatch?.segmentId ?? null)
+            : nameHighlightsOn
+              ? (nameJump?.segmentId ?? null)
+              : deepLinkSegmentId
+        }
+      />
+    </Box>
   );
+
+  /**
+   * #368: "Add to graph" from a selection within one line. `graph:write`
+   * gates the mount; the component itself asks whether the graph is on.
+   */
+  const graphSelection =
+    hasPermission('graph:write') && id && isReady ? (
+      <TranscriptGraphSelection
+        containerRef={segmentsRef}
+        transcriptId={id}
+        segments={segments}
+        enabled={editingSegmentId === null}
+      />
+    ) : null;
 
   const findPanel = (
     <FindReplacePanel
@@ -1401,6 +1420,7 @@ export function TranscriptPage() {
           </Grid>
         </Grid>
         {corrections}
+        {graphSelection}
         {confirmDialog}
       </Box>
     );
@@ -1449,6 +1469,7 @@ export function TranscriptPage() {
         </>
       )}
       {corrections}
+      {graphSelection}
       {confirmDialog}
     </Box>
   );

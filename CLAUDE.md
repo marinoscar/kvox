@@ -995,6 +995,34 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   **202** `{jobId, deduplicated}`; at most one layout job per owner — a request while one is
   pending/running returns it with `deduplicated: true` and pulls a delayed automatic run forward
   to start immediately. Never 409 (`graph:write`)
+- `GET /api/graph/proposals?status&kind&noteId&transcriptId&cursor&limit` - Your proposals,
+  newest first, opaque keyset cursor (a bad one is 400); `status` defaults to `draft` (issue #366,
+  `graph:read`)
+- `GET /api/graph/proposals/{id}?include=context` - Summary, counts (every group key present) and
+  every row with server-rendered `display`, `groupKey`, `prechecked` and per-citation `stale`
+  (`graph:read`)
+- `GET /api/graph/notes/{noteId}/proposal` - The newest non-`discarded` proposal for the note, or
+  `{ proposal: null }` (`graph:read`)
+- `PATCH /api/graph/proposals/{id}/items/{itemId}` - One row's decision
+  (`accept`/`edit`/`reject`/`pending`/`merge_into`) plus `relinkTo`, `distinctFrom`,
+  `evidence.add/remove`. 400 `details.issues` (closed props), `span_mismatch`,
+  `span_outside_source`, `would_orphan`; 409 `proposal_not_draft`/`stale_note_version`/
+  `stale_segment_rev`. Not audited — the commit is (`graph:write`)
+- `POST /api/graph/proposals/{id}/items/bulk` - Up to 500 rows; a sensitive `PersonFact` and a
+  `closing` are **never** bulk-accepted (`skipped[].reason`) (`graph:write`)
+- `POST /api/graph/proposals/{id}/items` - Add a missed row from 1–10 validated spans; **201**,
+  server-assigned ref `u<n>`, `origin: user` (`graph:write`)
+- `POST /api/graph/proposals/{id}/commit` - "Send to graph": ONE Serializable transaction that
+  validates every decided row first (400 `details.items[{itemId, issues}]`, nothing written),
+  then entities → relations → items (#365's known/same/supersedes) → closings, then asserts
+  in-transaction that every created/linked row has evidence (**500** + full rollback otherwise),
+  writes the internal `commit_log`; `kg.embed`/`kg.entity_digest` enqueued afterwards only while
+  registered. Audited `graph.proposal_committed`. 409 `proposal_not_draft` (`graph:write`)
+- `POST /api/graph/proposals/{id}/discard` - `draft`/`failed` → `discarded`; audited
+  `graph.proposal_discarded` (`graph:write`)
+- `POST /api/graph/proposals/{id}/revert` - Reverts only what is untouched since the commit; 409
+  `revert_conflict` `{ conflicts, revertible }` unless `confirmPartial: true`, 409
+  `proposal_not_committed`; audited `graph.proposal_reverted` (`graph:write`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -2200,9 +2228,11 @@ still only a constant. Extraction lives in
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
 `graph/proposals/proposal-payload.schema.ts` and the `ProposalStageRegistry` that
-#364/#365 plug their stages into. Resolution routes (merge, reverse, distinct
-pairs, #364), the read layer (#370), the whole-graph overview (#371) and the
-entity brief (#372) are built; there are still no review/commit routes.
+#364/#365 plug their stages into (#365's `GraphDedupModule`, `apps/api/src/graph/dedup/`:
+`work-item-dedup` 200, `temporal-closing` 300, `rejection-memory` 400 — see spec §7).
+Resolution routes (merge, reverse, distinct pairs, #364), the read layer (#370), the
+whole-graph overview (#371), the entity brief (#372) and the proposal review/commit/revert
+routes (#366, `GraphProposalsModule`, `apps/api/src/graph/proposals/`) are built.
 **The web side is built** (issue #373, epic #347): `/graph` (index) and
 `/graph/entities/:id` (entity page — header, edit through #367's schema-driven
 `SchemaForm`, cited brief, connections, timeline, mentions), `EvidenceChip`,

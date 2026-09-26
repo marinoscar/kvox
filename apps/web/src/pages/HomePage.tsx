@@ -19,6 +19,13 @@
  *
  * The second and fourth are both epic #166's, and neither existed before it.
  *
+ * Issue #368 adds a fourth-and-a-half, "Waiting for review" (`GraphReviewCard`),
+ * directly under "Needs attention": connected-knowledge drafts nobody has
+ * reviewed. It is a separate CONTENT TYPE behind a separate permission
+ * (`graph:read`) and a deployment switch (`graphEnabled`), so it is the one
+ * section with requests of its own — and it makes none at all unless the
+ * caller holds `graph:read`.
+ *
  * The second is issue #170 ("Home at Scale"), and it is the question this page
  * could not answer once an account had more than a screenful of anything: the
  * lists below are the newest few, and a user with four hundred transcripts had
@@ -127,6 +134,7 @@ import Container from '@mui/material/Container';
 import { useEffect, useState } from 'react';
 
 import { CountsStrip } from '../components/home/CountsStrip';
+import { GraphReviewCard } from '../components/home/GraphReviewCard';
 import { HomeHero } from '../components/home/HomeHero';
 import { HomeSkeleton } from '../components/home/HomeSkeleton';
 import { InProgressSection } from '../components/home/InProgressSection';
@@ -341,6 +349,10 @@ export default function HomePage() {
               onTranscriptRetried={() => void refresh()}
               onNoteRetried={() => void notes.refresh()}
             />
+            {/* #368 — graph drafts waiting for review. Mounted only for
+                `graph:read`; renders nothing unless the graph is on and a
+                draft exists. */}
+            {hasPermission('graph:read') && <GraphReviewCard />}
             <RecentTranscripts items={recent} />
             {/* ⚠ `notes.summary !== null || notes.isLoading` IS THE LOAD-BEARING
                 CLAUSE, and it is the same one `isNewUser` needs above. A notes

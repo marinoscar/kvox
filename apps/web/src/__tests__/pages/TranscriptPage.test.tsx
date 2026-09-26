@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
-import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import 'vitest-axe/extend-expect';
@@ -22,9 +23,16 @@ vi.mock('../../services/transcripts', () => ({
 vi.mock('../../contexts/NotificationContext', () => ({ useNotifications: () => null }));
 
 import { useLocation } from 'react-router-dom';
-import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server';
 import { render, mockAdminUser } from '../utils/test-utils';
+import {
+  PROPOSAL_ID,
+  mockGraphAiConfig,
+  mockProposalDetail,
+  proposalMock,
+  proposalSummaryRow,
+} from '../mocks/graphData';
+import { invalidateGraphOntology } from '../../hooks/useGraphOntology';
 import { setViewportWidth } from '../setup';
 import TranscriptPage, { formatRecordedAt, isTypingTarget } from '../../pages/TranscriptPage';
 import {
@@ -866,5 +874,73 @@ describe('TranscriptPage — speaker person links (#373)', () => {
     await screen.findByText('Weekly standup');
     expect(screen.queryByRole('button', { name: /Open .*'s page/ })).not.toBeInTheDocument();
     expect(seen).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// #368 — "Add to graph" from a selection within one line
+// =============================================================================
+
+describe('TranscriptPage — add to graph from a selection (issue #368)', () => {
+  const graphUser = {
+    ...mockAdminUser,
+    permissions: [...mockAdminUser.permissions, 'graph:read', 'graph:write'],
+  };
+
+  beforeEach(() => {
+    invalidateGraphOntology();
+    proposalMock.reset(mockProposalDetail('draft'));
+    server.use(
+      http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig() })),
+      http.get('*/api/graph/proposals', () =>
+        HttpResponse.json({ data: { items: [proposalSummaryRow(PROPOSAL_ID)], nextCursor: null } }),
+      ),
+    );
+  });
+
+  function selectInLine(text: string, from: number, to: number) {
+    const line = screen.getByText(text);
+    const node = line.firstChild!;
+    const range = document.createRange();
+    range.setStart(node, from);
+    range.setEnd(node, to);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.pointerUp(document);
+    return line;
+  }
+
+  it('adds the selected words of one line to the draft and opens the sheet here', async () => {
+    render(<TranscriptPage />, { wrapperOptions: { user: graphUser } });
+    await screen.findByText('Line number 3');
+    const line = selectInLine('Line number 3', 5, 11);
+    // A drag-select ends in a click on an editable line; it must not open the editor.
+    fireEvent.click(line);
+    expect(screen.getByRole('button', { name: 'Edit the line at 0:15' })).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to graph' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add to graph' });
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveValue('number');
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Add to draft' })).toBeEnabled());
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add to draft' }));
+
+    expect(await screen.findByRole('region', { name: 'Graph proposal' })).toBeInTheDocument();
+    const add = proposalMock.requests.find((request) => request.path.endsWith('/items'));
+    expect(add?.body).toMatchObject({
+      evidence: [{ source: 'segment', segmentId: 's3', segmentRev: 1, charStart: 5, charEnd: 11, quote: 'number' }],
+    });
+  });
+
+  it('offers nothing while the graph is off', async () => {
+    server.use(
+      http.get('*/api/ai/config', () => HttpResponse.json({ data: mockGraphAiConfig({ graphEnabled: false }) })),
+    );
+    render(<TranscriptPage />, { wrapperOptions: { user: graphUser } });
+    await screen.findByText('Line number 3');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    selectInLine('Line number 3', 5, 11);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: 'Add to graph' })).not.toBeInTheDocument();
   });
 });

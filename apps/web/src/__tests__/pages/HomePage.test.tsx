@@ -15,6 +15,7 @@ vi.mock('react-router-dom', async () => {
 vi.mock('../../hooks/useUploadManager', () => ({ useUploadManager: vi.fn() }));
 
 import { server } from '../mocks/server';
+import { mockGraphAiConfig, proposalSummaryRow } from '../mocks/graphData';
 import { render, mockAdminUser, mockUser, type MockUser } from '../utils/test-utils';
 import HomePage from '../../pages/HomePage';
 import { useUploadManager } from '../../hooks/useUploadManager';
@@ -1673,5 +1674,43 @@ describe('HomePage — the Knowledge section can never break the rest of Home', 
     );
     renderHome(graphHomeUser);
     await expectHomeIntact();
+  });
+});
+
+// =============================================================================
+// #368 — "Waiting for review" (graph drafts)
+// =============================================================================
+
+describe('HomePage — waiting for review (issue #368)', () => {
+  const graphReader: MockUser = { ...homeUser, permissions: [...homeUser.permissions, 'graph:read'] };
+
+  beforeEach(() => {
+    respondWith(summary({ recent: [transcript()] }));
+    server.use(
+      http.get(`${API_BASE}/ai/config`, () => HttpResponse.json({ data: mockGraphAiConfig() })),
+      http.get(`${API_BASE}/graph/proposals`, () =>
+        HttpResponse.json({
+          data: { items: [proposalSummaryRow('p-1', { noteTitle: 'Weekly sync — minutes' })], nextCursor: null },
+        }),
+      ),
+    );
+  });
+
+  it('shows the drafts to a graph reader when the graph is on', async () => {
+    renderHome(graphReader);
+    await waitForLoaded();
+    const section = await screen.findByRole('region', { name: 'Waiting for review' });
+    expect(within(section).getByRole('button', { name: 'Review Weekly sync — minutes' })).toBeInTheDocument();
+    await userEvent.setup().click(within(section).getByRole('button', { name: 'Review Weekly sync — minutes' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/notes/n1?review=1');
+  });
+
+  it('asks nothing of the graph without graph:read', async () => {
+    renderHome(homeUser);
+    await waitForLoaded();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByRole('region', { name: 'Waiting for review' })).not.toBeInTheDocument();
+    expect(observedRequests).not.toContain('/api/ai/config');
+    expect(observedRequests).not.toContain('/api/graph/proposals');
   });
 });

@@ -118,6 +118,11 @@ import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'rea
 
 import { AiKeyRequired } from '../components/ai/AiKeyRequired';
 import { GraphReviewButton } from '../components/graph/GraphReviewButton';
+import { ExtractDialog } from '../components/graph/guide/ExtractDialog';
+import { GuidanceSummary } from '../components/graph/guide/GuidanceSummary';
+import { userDecisionCount } from '../components/graph/guide/guidance';
+import { GraphSelectionAdd } from '../components/graph/selection/GraphSelectionAdd';
+import { resolveNoteSelection } from '../components/graph/selection/resolvers';
 import {
   ProposalReviewSheet,
   REVIEW_SHEET_WIDTH,
@@ -275,6 +280,11 @@ export function NotePage() {
     { enabled: graphVisible && Boolean(id) },
   );
   const [reviewOpen, setReviewOpen] = useState(false);
+  /** #368: the extract / re-extract dialog, mounted only while open. */
+  const [extractMode, setExtractMode] = useState<'extract' | 're-extract' | null>(null);
+  const canWriteGraph = hasPermission('graph:write');
+  /** #368: the row "Add to graph" just created, scrolled to in the sheet. */
+  const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const reviewRequested = searchParams.get('review') === '1';
 
@@ -1228,6 +1238,61 @@ export function NotePage() {
           proposal={graphProposal}
           noteBodyRef={renderedBodyRef}
           originTranscriptId={note.originTranscript?.id ?? null}
+          focusItemId={focusItemId}
+          onRequestExtract={canWriteGraph ? (mode) => setExtractMode(mode) : undefined}
+          headerSlot={
+            <GuidanceSummary
+              guidance={graphProposal.detail?.proposal.userGuidance}
+              items={graphProposal.detail?.items}
+              onEdit={canWriteGraph ? () => setExtractMode('re-extract') : undefined}
+            />
+          }
+        />
+      )}
+
+      {/* #368: "Add to graph" from a selection in the rendered body — never
+          while editing (the editor has its own selection semantics) or while
+          the body is still being written (it is not a version yet). */}
+      {graphVisible && canWriteGraph && id && (
+        <GraphSelectionAdd
+          containerRef={renderedBodyRef}
+          enabled={!isEditing && !inFlight && note.currentVersion > 0}
+          resolve={(range, container) =>
+            resolveNoteSelection(range, container, {
+              noteId: id,
+              noteVersion: note.currentVersion,
+              markdown: note.body,
+            })
+          }
+          target={{
+            kind: 'note',
+            detail: graphProposal.detail,
+            onExtract: () => setExtractMode(graphProposal.detail ? 're-extract' : 'extract'),
+          }}
+          onReload={() => void refresh()}
+          onAdded={(result) => {
+            setFocusItemId(result.item.id);
+            void graphProposal.refresh();
+            setReviewOpen(true);
+          }}
+        />
+      )}
+
+      {graphVisible && canWriteGraph && id && extractMode && (
+        <ExtractDialog
+          open
+          onClose={() => setExtractMode(null)}
+          noteId={id}
+          mode={extractMode}
+          initialGuidance={graphProposal.detail?.proposal.userGuidance ?? null}
+          pendingDecisions={
+            graphProposal.detail?.proposal.status === 'draft'
+              ? userDecisionCount(graphProposal.detail.items)
+              : 0
+          }
+          items={graphProposal.detail?.items}
+          submit={(_noteId, body) => graphProposal.requestExtract(body)}
+          onStarted={() => setReviewOpen(true)}
         />
       )}
 

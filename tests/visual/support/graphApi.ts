@@ -846,3 +846,156 @@ export async function installGraphReviewApi(
     return route.fallback();
   });
 }
+
+// -----------------------------------------------------------------------------
+// Guide the graph, add from a selection, Home "Waiting for review" (#368)
+// -----------------------------------------------------------------------------
+//
+// Registered AFTER `installNotesApi`/`installHomeApi` (and after
+// `installGraphReviewApi` when both are used): Playwright tries the most
+// recently registered route first, so these answers win and everything else
+// falls back. Adds the #360 `taskModels`, a capable and an incapable model,
+// the #363 estimate, guidance on the draft, and the drafts list Home reads.
+
+const GUIDE_AI_CONFIG = {
+  available: true,
+  provider: 'openai',
+  providerLabel: 'OpenAI',
+  models: [
+    { id: 'gpt-4o-mini', label: 'GPT-4o mini', contextWindowTokens: 128_000, maxOutputTokens: 16_000, source: 'catalogue', derivedFrom: null, structuredOutput: true, toolCalling: true },
+    { id: 'gpt-4.1', label: 'GPT-4.1', contextWindowTokens: 1_000_000, maxOutputTokens: 32_000, source: 'catalogue', derivedFrom: null, structuredOutput: true, toolCalling: true },
+    { id: 'legacy-text', label: 'Legacy text model', contextWindowTokens: 16_000, maxOutputTokens: 4_000, source: 'catalogue', derivedFrom: null, structuredOutput: false, toolCalling: false },
+  ],
+  defaultModel: 'gpt-4o-mini',
+  maxInputTokens: 100_000,
+  maxOutputTokens: 8_000,
+  keyConfigured: true,
+  graphEnabled: true,
+  taskModels: Object.fromEntries(
+    ['graph.extract', 'graph.adjudicate', 'graph.digest', 'graph.agent'].map((key) => [
+      key,
+      {
+        model: key === 'graph.extract' ? 'gpt-4.1' : 'gpt-4o-mini',
+        source: key === 'graph.extract' ? 'task' : 'default',
+        reasoningEffort: 'medium',
+        requires: ['structuredOutput'],
+        usable: true,
+        reason: null,
+      },
+    ]),
+  ),
+};
+
+const GUIDE_ESTIMATE = {
+  providerId: 'openai',
+  model: 'gpt-4.1',
+  inputTokens: 6_840,
+  maxOutputTokens: 16_000,
+  availableInputTokens: 900_000,
+  fits: true,
+  requests: 1,
+  keyConfigured: true,
+};
+
+function itemType(key: string, label: string, itemKind: string) {
+  return {
+    ...entityType(key, label, [], 'work'),
+    storage: 'item',
+    itemKind,
+    subjectTypes: ['Person', 'Organization', 'Project'],
+  };
+}
+
+function relationType(key: string, label: string, from: string[], to: string[], temporal: boolean) {
+  return {
+    key,
+    domain: 'work',
+    label,
+    description: label,
+    from,
+    to,
+    allowedPairs: null,
+    temporal,
+    exclusive: 'none',
+    exclusiveScope: 'from',
+    representation: 'relation',
+    extractable: true,
+    alignment: null,
+    deprecated: false,
+    props: [],
+  };
+}
+
+const GUIDE_ONTOLOGY = {
+  ...ONTOLOGY,
+  entityTypes: [
+    ...ONTOLOGY.entityTypes,
+    itemType('Decision', 'Decision', 'decision'),
+    itemType('Commitment', 'Commitment', 'commitment'),
+  ],
+  relationTypes: [
+    relationType('WORKS_FOR', 'Works for', ['Person'], ['Organization'], true),
+    relationType('REPORTS_TO', 'Reports to', ['Person'], ['Person'], true),
+    relationType('ATTENDED', 'Attended', ['Person'], ['Meeting'], false),
+  ],
+};
+
+const RESOLUTION_PROPOSAL_ID ='a0000000-0000-4000-8000-000000000009';
+
+function guidedDetail() {
+  const detail = reviewDetail('draft');
+  return {
+    ...detail,
+    proposal: {
+      ...detail.proposal,
+      userGuidance: {
+        // Ana Ruiz — named from the draft's own resolution (`refLabel`).
+        pinnedEntityIds: ['b0000000-0000-4000-8000-000000000001'],
+        entityTypes: ['Person', 'Organization', 'Project', 'Decision', 'Commitment'],
+        instructions: 'Only the storage migration; ignore the lunch plans. Ben is our SRE lead, not a vendor.',
+      },
+    },
+  };
+}
+
+function homeDrafts() {
+  const base = reviewDetail('draft').proposal;
+  return [
+    { ...base, id: PROPOSAL_ID, noteTitle: 'Weekly engineering standup — minutes' },
+    {
+      ...base,
+      id: 'a0000000-0000-4000-8000-000000000002',
+      noteId: 'n2',
+      noteTitle: 'Customer discovery — Northwind',
+      counts: { ...base.counts, pending: 7 },
+    },
+    {
+      ...base,
+      id: RESOLUTION_PROPOSAL_ID,
+      kind: 'resolution',
+      noteId: null,
+      noteTitle: null,
+      noteVersion: null,
+      noteCurrentVersion: null,
+      counts: { ...base.counts, pending: 2 },
+    },
+  ];
+}
+
+export async function installGraphGuideApi(page: Page): Promise<void> {
+  const detail = guidedDetail();
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname.replace(/^.*\/api/, '');
+
+    if (path === '/ai/config') return json(route, GUIDE_AI_CONFIG);
+    if (path === '/graph/ontology') return json(route, GUIDE_ONTOLOGY);
+    if (path === '/graph/extract/estimate') return json(route, GUIDE_ESTIMATE);
+    if (path === '/graph/notes/n1/proposal') return json(route, { proposal: detail });
+    if (path === `/graph/proposals/${PROPOSAL_ID}`) return json(route, detail);
+    if (path === '/graph/proposals') return json(route, { items: homeDrafts(), nextCursor: null });
+    if (path === '/graph/entities') return json(route, { items: [], nextCursor: null });
+
+    return route.fallback();
+  });
+}

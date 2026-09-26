@@ -55,17 +55,59 @@ export const entityPayloadSchema = z.object({
 });
 export type EntityPayload = z.infer<typeof entityPayloadSchema>;
 
+/**
+ * #365 — what `work-item-dedup` (and `temporal-closing`, for `candidateTo`)
+ * decided about a proposed relation. `known` = the same edge already exists
+ * (restated, or inside a known period — §5.4's out-of-order rule): the commit
+ * only appends evidence to `targetRelationId`.
+ */
+export const relationDedupSchema = z.object({
+  verdict: z.enum(['known', 'new']),
+  targetRelationId: z.guid().nullable(),
+  /**
+   * #353's rule 5: an OLDER, open candidate is committed already closed at this
+   * exclusive upper bound (the next known edge's start), `YYYY-MM-DD`. Null
+   * when the planner leaves the candidate's own range alone.
+   */
+  candidateTo: isoDate.nullable().default(null),
+});
+export type RelationDedup = z.infer<typeof relationDedupSchema>;
+
 export const relationPayloadSchema = temporalSchema.extend({
   ref: z.string(),
   type: z.string(),
   from: endpointRefSchema,
   to: endpointRefSchema,
   props: z.record(z.string(), z.unknown()).default({}),
+  /** #365 — absent/null until the `work-item-dedup` stage has run (optional so #363 rows need not name it). */
+  dedup: relationDedupSchema.nullable().optional(),
 });
 export type RelationPayload = z.infer<typeof relationPayloadSchema>;
 
 export const ITEM_PAYLOAD_KINDS = ['commitment', 'decision', 'claim', 'person_fact'] as const;
 export type ItemPayloadKind = (typeof ITEM_PAYLOAD_KINDS)[number];
+
+/**
+ * #365 — what `work-item-dedup` decided about a proposed item (§7 "Work-item
+ * dedup", §8 "Known, skipped"). The commit semantics per verdict are
+ * `graph/dedup/commit-contract.ts`'s `itemCommitAction`.
+ */
+export const itemDedupSchema = z.object({
+  verdict: z.enum(['same', 'new', 'supersedes', 'known']),
+  /** The existing `kg_items` row (same / supersedes / known), or a possible duplicate of a `new` one. */
+  targetItemId: z.guid().nullable(),
+  /** Only for verdict `same` on a commitment: what the restatement changed. */
+  changes: z
+    .object({
+      status: z.enum(['open', 'done', 'dropped']).optional(),
+      dueAt: isoDate.nullable().optional(),
+    })
+    .default({}),
+  rationale: z.string().max(500).nullable(),
+  /** Cosine of the best candidate; null when found lexically or by hash. */
+  score: z.number().min(0).max(1).nullable(),
+});
+export type ItemDedup = z.infer<typeof itemDedupSchema>;
 
 export const itemPayloadSchema = temporalSchema.extend({
   ref: z.string(),
@@ -89,11 +131,46 @@ export const itemPayloadSchema = temporalSchema.extend({
   /** `statementHash()` from `graph/write/normalize.ts` (#355) — never re-implemented. */
   statementHash: z.string(),
   props: z.record(z.string(), z.unknown()).default({}),
+  /** #365 — absent/null until the `work-item-dedup` stage has run (optional so #363 rows need not name it). */
+  dedup: itemDedupSchema.nullable().optional(),
 });
 export type ItemPayload = z.infer<typeof itemPayloadSchema>;
 
-/** Owned by #365, which replaces this placeholder with the real shape. */
-export const closingPayloadSchema = z.record(z.string(), z.unknown());
+/**
+ * #365 — a `kind: 'closing'` row: §5.4's closing rule as a reviewable proposal
+ * row ("Closes: Joe works for Acme, 2019 → Feb 2026"), never a side effect.
+ * Never pre-checked. UI copy (#367):
+ *   `Closes: {fromLabel} {relationType label} {toLabel}{, as roleTitle},
+ *    {previousValid.from at its precision} → {closeAt at its precision}`
+ * Commit (#366): the target's `valid` becomes `[lower(valid), closeAt)` and its
+ * `superseded_by_id` the committed id of `closedByRef`; skipped when that row
+ * is rejected.
+ */
+export const closingPayloadSchema = z.object({
+  /** The existing, still-open exclusive edge. */
+  relationId: z.guid(),
+  /** Any type the effective schema declares `temporal: true, exclusive: 'soft'`. */
+  relationType: z.string(),
+  fromLabel: z.string(),
+  toLabel: z.string(),
+  /** HAS_ROLE `props.title` of the edge being closed, when present. */
+  roleTitle: z.string().nullable(),
+  previousValid: z.object({
+    from: isoDate.nullable(),
+    to: isoDate.nullable(),
+    precision: z.enum(['day', 'month', 'year', 'unknown']),
+  }),
+  /** The new fact's start (first day of its unit) — the exclusive upper bound. */
+  closeAt: isoDate,
+  /** Of `closeAt`; a closing never has `unknown`. */
+  precision: z.enum(['day', 'month', 'year']),
+  /** Proposal `ref` of the new relation row that closes this edge. */
+  closedByRef: z.string(),
+  /** WORKS_FOR closings only: the person's open commitments (§5.4 company change). */
+  affectedCommitments: z
+    .array(z.object({ itemId: z.guid(), title: z.string(), role: z.enum(['owner', 'counterparty']) }))
+    .default([]),
+});
 export type ClosingPayload = z.infer<typeof closingPayloadSchema>;
 
 export const RESOLUTION_SOURCES = [
