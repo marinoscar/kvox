@@ -100,3 +100,7 @@ __pycache__/
 # kg:eval scratch output (issue #362): prediction files from runs over the
 # synthetic golden set. Real meeting data is refused inside the repo entirely.
 apps/api/.kg-eval/
+
+# ask:eval scratch output (issue #382): report.json/answers.md from runs over
+# the synthetic golden set's Ask questions.
+apps/api/.ask-eval/

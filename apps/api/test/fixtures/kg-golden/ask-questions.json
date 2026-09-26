@@ -1,0 +1,458 @@
+[
+  {
+    "id": "q01",
+    "category": "lookup",
+    "fixtures": ["m01"],
+    "question": "Who does Sarah Chen work for?",
+    "expected": {
+      "entities": ["Sarah Chen", "Northwind Robotics"],
+      "answerAll": [["Northwind Robotics"]],
+      "citeFrom": ["m01-s002"]
+    }
+  },
+  {
+    "id": "q02",
+    "category": "lookup",
+    "fixtures": ["m02"],
+    "question": "What is Marcus Webb's role at Halden Freight?",
+    "expected": {
+      "entities": ["Marcus Webb", "Halden Freight"],
+      "answerAll": [["CIO"]],
+      "citeFrom": ["m02-s002"]
+    }
+  },
+  {
+    "id": "q03",
+    "category": "lookup",
+    "fixtures": ["m04"],
+    "question": "What is Elif Kaya's role at Corvid Health?",
+    "expected": {
+      "entities": ["Elif Kaya", "Corvid Health"],
+      "answerAll": [["product owner"]],
+      "citeFrom": ["m04-s002"]
+    }
+  },
+  {
+    "id": "q04",
+    "category": "lookup",
+    "fixtures": ["m09"],
+    "question": "What is Owen Barker's role at Northwind Robotics?",
+    "expected": {
+      "entities": ["Owen Barker", "Northwind Robotics"],
+      "answerAll": [["Head of Platform"]],
+      "citeFrom": ["m09-s002"]
+    }
+  },
+  {
+    "id": "q05",
+    "category": "lookup",
+    "fixtures": ["m13"],
+    "question": "Who does Ravi Menon report to at Halden Freight?",
+    "expected": {
+      "entities": ["Ravi Menon", "Marcus Webb"],
+      "answerAll": [["Marcus"]],
+      "citeFrom": ["m13-s014"]
+    }
+  },
+  {
+    "id": "q06",
+    "category": "lookup",
+    "fixtures": ["m20"],
+    "question": "What is Chloé Dubois's role at Northwind Robotics?",
+    "expected": {
+      "entities": ["Chloé Dubois", "Northwind Robotics"],
+      "answerAll": [["floor supervisor"]],
+      "citeFrom": ["m20-s004"]
+    }
+  },
+  {
+    "id": "q07",
+    "category": "lookup",
+    "fixtures": ["m24"],
+    "question": "What is Mateo Rossi's role at Larkspur Labs?",
+    "expected": {
+      "entities": ["Mateo Rossi", "Larkspur Labs"],
+      "answerAll": [["solutions architect"]],
+      "citeFrom": ["m24-s003"]
+    }
+  },
+  {
+    "id": "q08",
+    "category": "lookup",
+    "fixtures": ["m03"],
+    "question": "Who does Nadia Brooks report to?",
+    "expected": {
+      "entities": ["Nadia Brooks", "Priya Raman"],
+      "answerAll": [["Priya"]],
+      "citeFrom": ["m03-s015"]
+    }
+  },
+  {
+    "id": "q09",
+    "category": "relationship",
+    "fixtures": ["m01"],
+    "question": "Which organization is the pick-path pilot part of?",
+    "expected": {
+      "entities": ["Pick-path pilot", "Northwind Robotics"],
+      "answerAll": [["Northwind Robotics"]],
+      "citeFrom": ["m01#note"]
+    }
+  },
+  {
+    "id": "q10",
+    "category": "relationship",
+    "fixtures": ["m02"],
+    "question": "Which organization is the route optimizer migration project part of?",
+    "expected": {
+      "entities": ["Route optimizer migration", "Halden Freight"],
+      "answerAll": [["Halden Freight"]],
+      "citeFrom": ["m02#note"]
+    }
+  },
+  {
+    "id": "q11",
+    "category": "relationship",
+    "fixtures": ["m29"],
+    "question": "Who does Aurelia Grant report to at Halden Freight?",
+    "expected": {
+      "entities": ["Aurelia Grant", "Marcus Webb"],
+      "answerAll": [["Marcus"]],
+      "citeFrom": ["m29-s003"]
+    }
+  },
+  {
+    "id": "q12",
+    "category": "relationship",
+    "fixtures": ["m04"],
+    "question": "Which organization is the patient intake redesign project part of?",
+    "expected": {
+      "entities": ["Patient intake redesign", "Corvid Health"],
+      "answerAll": [["Corvid Health"]],
+      "citeFrom": ["m04#note"]
+    }
+  },
+  {
+    "id": "q13",
+    "category": "relationship",
+    "fixtures": ["m30"],
+    "question": "Which organization is the claims portal rebuild project part of?",
+    "expected": {
+      "entities": ["Claims portal rebuild", "Varden Insurance"],
+      "answerAll": [["Varden Insurance"]],
+      "citeFrom": ["m30#note"]
+    }
+  },
+  {
+    "id": "q14",
+    "category": "relationship",
+    "fixtures": ["m13"],
+    "question": "Who attended the Halden northern depots cutover go/no-go meeting?",
+    "expected": {
+      "entities": ["Alex Rivera", "Marcus Webb", "Ravi Menon", "Sarah Okonkwo"],
+      "answerAll": [["Alex Rivera"], ["Marcus Webb"], ["Ravi Menon"], ["Sarah Okonkwo"]],
+      "citeFrom": ["m13#note"]
+    }
+  },
+  {
+    "id": "q15",
+    "category": "temporal",
+    "fixtures": ["m09"],
+    "question": "When was Tomás Aguilar promoted to Staff Engineer?",
+    "expected": {
+      "entities": ["Tomás Aguilar"],
+      "answerAll": [["March"]],
+      "citeFrom": ["m09-s004"]
+    }
+  },
+  {
+    "id": "q16",
+    "category": "temporal",
+    "fixtures": ["m09"],
+    "question": "Who did Tomás Aguilar report to before April 2026?",
+    "expected": {
+      "entities": ["Tomás Aguilar", "Lena Park"],
+      "answerAll": [["Lena"]],
+      "citeFrom": ["m09-s009"]
+    }
+  },
+  {
+    "id": "q17",
+    "category": "temporal",
+    "fixtures": ["m09"],
+    "question": "Who does Tomás Aguilar report to from April 2026 onward?",
+    "expected": {
+      "entities": ["Tomás Aguilar", "Owen Barker"],
+      "answerAll": [["Owen"]],
+      "citeFrom": ["m09-s009"]
+    }
+  },
+  {
+    "id": "q18",
+    "category": "temporal",
+    "fixtures": ["m15"],
+    "question": "When did Ravi Menon leave Halden Freight?",
+    "expected": {
+      "entities": ["Ravi Menon", "Halden Freight"],
+      "answerAll": [["April"]],
+      "citeFrom": ["m15-s002"]
+    }
+  },
+  {
+    "id": "q19",
+    "category": "temporal",
+    "fixtures": ["m15"],
+    "question": "Which company did Ravi Menon join after leaving Halden Freight?",
+    "expected": {
+      "entities": ["Ravi Menon", "Solvane Energy"],
+      "answerAll": [["Solvane Energy"]],
+      "citeFrom": ["m15-s004"]
+    }
+  },
+  {
+    "id": "q20",
+    "category": "temporal",
+    "fixtures": ["m22"],
+    "question": "Since when has Marcus Webb been Head of IT at Halden Freight?",
+    "expected": {
+      "entities": ["Marcus Webb", "Halden Freight"],
+      "answerAll": [["2018"]],
+      "citeFrom": ["m22-s002"]
+    }
+  },
+  {
+    "id": "q21",
+    "category": "decisions",
+    "fixtures": ["m01"],
+    "question": "What did the team decide about where to run the Northwind pick-path pilot?",
+    "expected": {
+      "entities": ["Pick-path pilot"],
+      "answerAll": [["Building 3"]],
+      "citeFrom": ["m01-s009"]
+    }
+  },
+  {
+    "id": "q22",
+    "category": "decisions",
+    "fixtures": ["m13"],
+    "question": "What was decided about the date for the northern depots cutover?",
+    "expected": {
+      "entities": ["Route optimizer migration"],
+      "answerAll": [["April 13"]],
+      "citeFrom": ["m13-s010"]
+    }
+  },
+  {
+    "id": "q23",
+    "category": "decisions",
+    "fixtures": ["m05", "m18"],
+    "question": "Where is the Northwind pick-path pilot hosted now?",
+    "expected": {
+      "entities": ["Pick-path pilot"],
+      "answerAll": [["on-prem"]],
+      "answerNone": ["Estuary Cloud"],
+      "citeFrom": ["m18-s009"]
+    }
+  },
+  {
+    "id": "q24",
+    "category": "decisions",
+    "fixtures": ["m24", "m30"],
+    "question": "What did Varden Insurance decide about the claims endpoints?",
+    "expected": {
+      "entities": ["Claims portal rebuild"],
+      "answerAll": [["new claims service"]],
+      "answerNone": ["existing policy API"],
+      "citeFrom": ["m30-s011"]
+    }
+  },
+  {
+    "id": "q25",
+    "category": "commitments",
+    "fixtures": ["m01"],
+    "question": "By when did the team commit to sending the floor plans and location export for the Northwind pilot?",
+    "expected": {
+      "answerAll": [["January 13"]],
+      "citeFrom": ["m01-s014"]
+    }
+  },
+  {
+    "id": "q26",
+    "category": "commitments",
+    "fixtures": ["m08"],
+    "question": "By when is legal approval of the Halden data processing addendum due?",
+    "expected": {
+      "answerAll": [["March 6"]],
+      "citeFrom": ["m08-s010"]
+    }
+  },
+  {
+    "id": "q27",
+    "category": "commitments",
+    "fixtures": ["m13"],
+    "question": "By when did the team commit to writing the rollback runbook for the Halden migration?",
+    "expected": {
+      "answerAll": [["April 9"]],
+      "citeFrom": ["m13-s008"]
+    }
+  },
+  {
+    "id": "q28",
+    "category": "commitments",
+    "fixtures": ["m15", "m29"],
+    "question": "By when did the team commit to closing out the Halden rollback runbook?",
+    "expected": {
+      "answerAll": [["August 7"]],
+      "citeFrom": ["m29-s011"]
+    }
+  },
+  {
+    "id": "q29",
+    "category": "commitments",
+    "fixtures": ["m20"],
+    "question": "By when did the team commit to collecting a picker feedback survey after the Northwind pilot went live?",
+    "expected": {
+      "answerAll": [["June 5"]],
+      "citeFrom": ["m20-s013"]
+    }
+  },
+  {
+    "id": "q30",
+    "category": "commitments",
+    "fixtures": ["m30"],
+    "question": "By when is the architecture decision record for the Varden claims portal due?",
+    "expected": {
+      "answerAll": [["August 11"]],
+      "citeFrom": ["m30-s014"]
+    }
+  },
+  {
+    "id": "q31",
+    "category": "multi_hop",
+    "fixtures": ["m20", "m28"],
+    "question": "Who does the floor supervisor in Building 3 at Northwind Robotics report to?",
+    "expected": {
+      "entities": ["Chloé Dubois", "Sarah Chen"],
+      "answerAll": [["Sarah"]],
+      "citeFrom": ["m28-s019"]
+    }
+  },
+  {
+    "id": "q32",
+    "category": "multi_hop",
+    "fixtures": ["m15"],
+    "question": "Which company did Halden Freight's former integration lead join, and who took over his depot integration work at Halden?",
+    "expected": {
+      "entities": ["Ravi Menon", "Solvane Energy"],
+      "answerAll": [["Solvane Energy"], ["JJ", "Jonah"]],
+      "citeFrom": ["m15-s004", "m15-s013"]
+    }
+  },
+  {
+    "id": "q33",
+    "category": "multi_hop",
+    "fixtures": ["m09"],
+    "question": "Who was Tomás Aguilar's manager before April 2026, and who manages him after that?",
+    "expected": {
+      "entities": ["Tomás Aguilar", "Lena Park", "Owen Barker"],
+      "answerAll": [["Lena"], ["Owen"]],
+      "citeFrom": ["m09-s009"]
+    }
+  },
+  {
+    "id": "q34",
+    "category": "as_of",
+    "fixtures": ["m09"],
+    "question": "As of March 15, 2026, who did Tomás Aguilar report to?",
+    "expected": {
+      "entities": ["Tomás Aguilar", "Lena Park"],
+      "answerAll": [["Lena"]],
+      "answerNone": ["Owen Barker"],
+      "citeFrom": ["m09-s009"]
+    }
+  },
+  {
+    "id": "q35",
+    "category": "as_of",
+    "fixtures": ["m09"],
+    "question": "As of April 15, 2026, who did Tomás Aguilar report to?",
+    "expected": {
+      "entities": ["Tomás Aguilar", "Owen Barker"],
+      "answerAll": [["Owen"]],
+      "citeFrom": ["m09-s009"]
+    }
+  },
+  {
+    "id": "q36",
+    "category": "as_of",
+    "fixtures": ["m15"],
+    "question": "As of April 20, 2026, which company did Ravi Menon work for?",
+    "expected": {
+      "entities": ["Ravi Menon", "Halden Freight"],
+      "answerAll": [["Halden Freight"]],
+      "answerNone": ["Solvane Energy"],
+      "citeFrom": ["m15-s002"]
+    }
+  },
+  {
+    "id": "q37",
+    "category": "as_of",
+    "fixtures": ["m15"],
+    "question": "As of May 10, 2026, which company did Ravi Menon work for?",
+    "expected": {
+      "entities": ["Ravi Menon", "Solvane Energy"],
+      "answerAll": [["Solvane Energy"]],
+      "citeFrom": ["m15-s004"]
+    }
+  },
+  {
+    "id": "q38",
+    "category": "as_of",
+    "fixtures": ["m22"],
+    "question": "As of the Halden Freight introductory call, since what year had Marcus Webb been Head of IT there?",
+    "expected": {
+      "entities": ["Marcus Webb", "Halden Freight"],
+      "answerAll": [["2018"]],
+      "citeFrom": ["m22-s002"]
+    }
+  },
+  {
+    "id": "q39",
+    "category": "negative",
+    "fixtures": ["m01"],
+    "question": "What is Sarah Chen's home address?",
+    "expected": {
+      "answerNone": ["home address"],
+      "notFound": true
+    }
+  },
+  {
+    "id": "q40",
+    "category": "negative",
+    "fixtures": ["m13"],
+    "question": "Does Marcus Webb have any serious allergies?",
+    "expected": {
+      "answerNone": ["shellfish", "allergy"],
+      "notFound": true
+    }
+  },
+  {
+    "id": "q41",
+    "category": "negative",
+    "fixtures": ["m04"],
+    "question": "Which of the attendees at the Corvid Health intake discovery workshop is recovering from surgery?",
+    "expected": {
+      "answerNone": ["knee surgery"],
+      "notFound": true
+    }
+  },
+  {
+    "id": "q42",
+    "category": "negative",
+    "fixtures": ["m08"],
+    "question": "What did Jamie Fontaine decide about the Meridian project?",
+    "expected": {
+      "answerNone": ["Jamie Fontaine"],
+      "notFound": true
+    }
+  }
+]
