@@ -43,7 +43,7 @@ describe('graph resolution routes (integration)', () => {
 
   beforeAll(async () => {
     context = await createTestApp({ useMockDatabase: true });
-  });
+  }, 120_000); // booting AppModule is slow on a loaded runner
 
   afterAll(async () => {
     await closeTestApp(context);
