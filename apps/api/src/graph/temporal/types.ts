@@ -24,7 +24,10 @@ export interface ValidRange {
  * The three ontology fields the engine reads from a relation type (#350).
  * `exclusiveScope` is optional in the ontology and defaults to `'from'`.
  */
-export type TemporalRelationRule = Pick<RelationTypeSpec, 'temporal' | 'exclusive' | 'exclusiveScope'>;
+export type TemporalRelationRule = Pick<
+  RelationTypeSpec,
+  'temporal' | 'exclusive' | 'exclusiveScope'
+>;
 
 /**
  * Everything the planner needs to know about a relation type. Build it from
@@ -38,7 +41,13 @@ export interface TemporalRule {
   identityProps: readonly string[];
 }
 
-export type TemporalReviewStatus = 'accepted' | 'edited' | 'merged' | 'superseded' | 'rejected' | 'unreviewed';
+export type TemporalReviewStatus =
+  | 'accepted'
+  | 'edited'
+  | 'merged'
+  | 'superseded'
+  | 'rejected'
+  | 'unreviewed';
 
 /** An existing edge, as the planner and `edgesAsOf` see it. */
 export interface TemporalEdge {

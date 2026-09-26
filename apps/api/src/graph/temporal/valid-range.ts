@@ -16,7 +16,20 @@ type Granularity = 'year' | 'month' | 'day';
 
 const GRANULARITIES: readonly Granularity[] = ['year', 'month', 'day'];
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
+const MONTH_NAMES = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
 
 const MS_PER_DAY = 86_400_000;
 
@@ -56,7 +69,10 @@ function addUnit(start: Date, unit: Granularity): Date {
 
 function isAligned(d: Date, unit: Granularity): boolean {
   const midnight =
-    d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0 &&
+    d.getUTCMilliseconds() === 0;
   switch (unit) {
     case 'year':
       return midnight && d.getUTCMonth() === 0 && d.getUTCDate() === 1;
@@ -78,7 +94,7 @@ function assertOrdered(range: ValidRange): void {
   if (range.to) assertValidDate(range.to, 'range.to');
   if (range.from && range.to && range.from.getTime() >= range.to.getTime()) {
     throw new TemporalInputError(
-      `empty range: from (${range.from.toISOString()}) must be before to (${range.to.toISOString()})`,
+      `empty range: from (${range.from.toISOString()}) must be before to (${range.to.toISOString()})`
     );
   }
 }
@@ -139,14 +155,16 @@ export function rangeFromPrecision(
   from: string | null,
   to: string | null,
   precision: ValidPrecision,
-  options: RangeFromPrecisionOptions = {},
+  options: RangeFromPrecisionOptions = {}
 ): { range: ValidRange | null; precision: ValidPrecision } {
   if (precision === 'unknown') return { range: null, precision: 'unknown' };
   if (!GRANULARITIES.includes(precision)) {
     throw new TemporalInputError(`unknown precision '${String(precision)}'`);
   }
   if (from === null && to === null) {
-    throw new TemporalInputError(`a '${precision}' range needs at least one bound; use precision 'unknown'`);
+    throw new TemporalInputError(
+      `a '${precision}' range needs at least one bound; use precision 'unknown'`
+    );
   }
   if (options.openEnded && to !== null) {
     throw new TemporalInputError('openEnded contradicts an explicit to');
@@ -199,7 +217,9 @@ function parsePgTimestamp(raw: string): Date {
   }
   const ms = Number(frac.padEnd(3, '0').slice(0, 3));
   let t =
-    utcDate(Number(y), month - 1, day).getTime() + ((Number(hh) * 60 + Number(mi)) * 60 + Number(ss)) * 1000 + ms;
+    utcDate(Number(y), month - 1, day).getTime() +
+    ((Number(hh) * 60 + Number(mi)) * 60 + Number(ss)) * 1000 +
+    ms;
   if (tz && tz.toUpperCase() !== 'Z') {
     const sign = tz.startsWith('-') ? -1 : 1;
     const digits = tz.slice(1).replace(/:/g, '');
@@ -212,7 +232,10 @@ function parsePgTimestamp(raw: string): Date {
 }
 
 function parseBound(raw: string): Date | null {
-  const unquoted = raw.trim().replace(/^"(.*)"$/, '$1').trim();
+  const unquoted = raw
+    .trim()
+    .replace(/^"(.*)"$/, '$1')
+    .trim();
   if (unquoted === '' || /^[+-]?infinity$/i.test(unquoted)) return null;
   return parsePgTimestamp(unquoted);
 }
@@ -320,7 +343,8 @@ export function rangesOverlap(a: ValidRange, b: ValidRange): boolean {
 export function rangeContainsRange(outer: ValidRange, inner: ValidRange): boolean {
   const lowerOk =
     outer.from === null || (inner.from !== null && outer.from.getTime() <= inner.from.getTime());
-  const upperOk = outer.to === null || (inner.to !== null && inner.to.getTime() <= outer.to.getTime());
+  const upperOk =
+    outer.to === null || (inner.to !== null && inner.to.getTime() <= outer.to.getTime());
   return lowerOk && upperOk;
 }
 
@@ -331,6 +355,7 @@ export function isOpen(range: ValidRange): boolean {
 
 /** Same bounds on both sides. */
 export function rangesEqual(a: ValidRange, b: ValidRange): boolean {
-  const same = (x: Date | null, y: Date | null) => (x === null ? y === null : y !== null && x.getTime() === y.getTime());
+  const same = (x: Date | null, y: Date | null) =>
+    x === null ? y === null : y !== null && x.getTime() === y.getTime();
   return same(a.from, b.from) && same(a.to, b.to);
 }
