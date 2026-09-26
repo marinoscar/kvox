@@ -144,6 +144,99 @@ describe('AiProviderRegistry', () => {
     ).not.toThrow();
   });
 
+  describe('structuredOutput boot check (#358)', () => {
+    const flagged = (structuredOutput: boolean) => [
+      {
+        id: 'stub-1',
+        label: 'Stub 1',
+        contextWindowTokens: 8000,
+        maxOutputTokens: 2000,
+        structuredOutput,
+      },
+    ];
+
+    it('REFUSES a provider flagging a model structuredOutput with no generateStructured()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+            },
+          }),
+        ),
+      ).toThrow(/"stub" declares structuredOutput .* implements no generateStructured/);
+    });
+
+    it('REFUSES a provider whose defaultModelFeatures floor claims it with no generateStructured()', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: true },
+            },
+          }),
+        ),
+      ).toThrow(/implements no generateStructured/);
+    });
+
+    it('accepts the flag when generateStructured() is implemented', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(true),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: true },
+            },
+            generateStructured: jest.fn(),
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('accepts a provider that claims nothing and implements nothing — presence is the declaration', () => {
+      expect(() =>
+        registry.register(
+          stubProvider({
+            capabilities: {
+              models: flagged(false),
+              streaming: true,
+              modelDiscovery: false,
+              defaultModelFeatures: { structuredOutput: false },
+            },
+          }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('publishes each model\'s flag and the floor through describeAll()', () => {
+      registry.register(
+        stubProvider({
+          capabilities: {
+            models: flagged(true),
+            streaming: true,
+            modelDiscovery: false,
+            defaultModelFeatures: { structuredOutput: false },
+          },
+          generateStructured: jest.fn(),
+        }),
+      );
+
+      const [described] = registry.describeAll();
+
+      expect(described.capabilities.models[0].structuredOutput).toBe(true);
+      expect(described.capabilities.defaultModelFeatures).toEqual({
+        structuredOutput: false,
+      });
+    });
+  });
+
   it('accepts a provider that declares modelDiscovery: false with no listModels', () => {
     // The default `stubProvider()` shape — registers fine, matching every test
     // above it in this file.

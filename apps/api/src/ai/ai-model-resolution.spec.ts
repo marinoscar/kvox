@@ -440,3 +440,104 @@ describe('missingModelNumbers', () => {
     expect(missingModelNumbers(derivable, FULL)).toEqual([]);
   });
 });
+
+describe('resolveAllowedModel — the structuredOutput flag, per rank (#358)', () => {
+  // The flag follows the same ranks as the numbers, MINUS rank 1: there is no
+  // administrator override of a capability in v1, so a typed number never
+  // promotes or demotes it. A false positive fails a paid structured call; a
+  // false negative is fixed by picking a catalogued model.
+
+  /** A catalogue with one model the vendor does NOT support strict mode for. */
+  const MIXED: AiModelDescriptor[] = [
+    ...CATALOGUE,
+    {
+      id: 'legacy-chat',
+      label: 'Legacy chat',
+      contextWindowTokens: 16_000,
+      maxOutputTokens: 4_000,
+      structuredOutput: false,
+    },
+  ];
+
+  const WITH_FEATURE_FLOOR = (structuredOutput: boolean): AiModelKnowledge => ({
+    catalogue: MIXED,
+    derive,
+    fallback: FULL.fallback,
+    fallbackFeatures: { structuredOutput },
+  });
+
+  it('takes an exact catalogue hit\'s own flag, true or false', () => {
+    expect(resolveAllowedModel(entry(), WITH_FEATURE_FLOOR(false))?.structuredOutput).toBe(true);
+    expect(
+      resolveAllowedModel(entry({ id: 'legacy-chat' }), WITH_FEATURE_FLOOR(true))
+        ?.structuredOutput,
+    ).toBe(false);
+  });
+
+  it('takes the derived FAMILY\'s flag for a dated snapshot', () => {
+    const resolved = resolveAllowedModel(
+      entry({ id: 'gpt-5.4-mini-2026-03-17' }),
+      WITH_FEATURE_FLOOR(false),
+    );
+
+    expect(resolved?.source).toBe('derived');
+    expect(resolved?.structuredOutput).toBe(true);
+  });
+
+  it('takes the provider\'s feature floor for an id nothing places', () => {
+    expect(
+      resolveAllowedModel(entry({ id: 'llama-4-titan' }), WITH_FEATURE_FLOOR(false))
+        ?.structuredOutput,
+    ).toBe(false);
+    expect(
+      resolveAllowedModel(entry({ id: 'llama-4-titan' }), WITH_FEATURE_FLOOR(true))
+        ?.structuredOutput,
+    ).toBe(true);
+  });
+
+  it('is false when the provider declares no feature floor at all', () => {
+    // `FULL` has a NUMBERS floor but no `fallbackFeatures`: the id resolves
+    // (numbers from the floor) and still claims no capability.
+    const resolved = resolveAllowedModel(entry({ id: 'llama-4-titan' }), FULL);
+
+    expect(resolved?.source).toBe('default');
+    expect(resolved?.structuredOutput).toBe(false);
+  });
+
+  it('is NOT affected by an entry\'s explicit numbers — no admin override of a flag', () => {
+    // Explicit numbers on a catalogued model keep the catalogue's flag...
+    expect(
+      resolveAllowedModel(
+        entry({ contextWindowTokens: 999_000, maxOutputTokens: 32_000 }),
+        WITH_FEATURE_FLOOR(false),
+      )?.structuredOutput,
+    ).toBe(true);
+    // ...and on an unplaceable one keep the floor's.
+    const typed = resolveAllowedModel(
+      entry({ id: 'llama-4-titan', contextWindowTokens: 64_000, maxOutputTokens: 4_000 }),
+      WITH_FEATURE_FLOOR(false),
+    );
+    expect(typed?.source).toBe('explicit');
+    expect(typed?.structuredOutput).toBe(false);
+  });
+
+  it('modelKnowledgeOf carries capabilities.defaultModelFeatures as fallbackFeatures', () => {
+    const provider = {
+      capabilities: {
+        models: CATALOGUE,
+        streaming: true as const,
+        modelDiscovery: false,
+        defaultModelFeatures: { structuredOutput: false },
+      },
+    } as unknown as AiProvider<unknown>;
+
+    expect(modelKnowledgeOf(provider).fallbackFeatures).toEqual({
+      structuredOutput: false,
+    });
+    expect(
+      modelKnowledgeOf({
+        capabilities: { models: CATALOGUE, streaming: true, modelDiscovery: false },
+      } as unknown as AiProvider<unknown>).fallbackFeatures,
+    ).toBeUndefined();
+  });
+});
