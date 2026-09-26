@@ -11,7 +11,7 @@
 
 import { segment, speaker, state } from './__fixtures__/state';
 import { applyOps } from './reducers';
-import { diffState } from './state-diff';
+import { diffState, speakerNameChanges, speakersWithChangedNames } from './state-diff';
 import { OP_TYPES } from './ops';
 
 const A = speaker('A', 'Speaker A');
@@ -123,5 +123,55 @@ describe('diffState', () => {
     ]).state;
 
     expect(diffState(before, after).speakersCreated.map((row) => row.id)).toEqual(['C']);
+  });
+});
+
+describe('speakersWithChangedNames (#405)', () => {
+  it('names a renamed speaker, including a rename back to the placeholder', () => {
+    const before = twoLines();
+    const renamed = applyOps(before, [
+      { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
+    ]).state;
+
+    expect(speakersWithChangedNames(diffState(before, renamed))).toEqual(['A']);
+
+    const cleared = applyOps(renamed, [
+      { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 2, displayName: 'Speaker A' },
+    ]).state;
+
+    expect(speakersWithChangedNames(diffState(renamed, cleared))).toEqual(['A']);
+  });
+
+  it('names a speaker merged away, and nothing for a text-only edit', () => {
+    const before = twoLines();
+    const merged = applyOps(before, [
+      { op: OP_TYPES.MERGE_SPEAKERS, sourceIds: ['B'], targetId: 'A' },
+    ]).state;
+
+    expect(speakersWithChangedNames(diffState(before, merged))).toEqual(['B']);
+
+    const edited = applyOps(before, [
+      { op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'one two THREE' },
+    ]).state;
+
+    expect(speakersWithChangedNames(diffState(before, edited))).toEqual([]);
+  });
+});
+
+describe('speakerNameChanges (#405)', () => {
+  it('reports renamed, added and removed speakers, and nothing for an identical set', () => {
+    const live = [
+      { id: 'A', displayName: 'Oscar' },
+      { id: 'B', displayName: 'Speaker B' },
+      { id: 'C', displayName: 'Dana' },
+    ];
+    const restored = [
+      { id: 'A', displayName: 'Speaker A' },
+      { id: 'B', displayName: 'Speaker B' },
+      { id: 'D', displayName: 'Eve' },
+    ];
+
+    expect(speakerNameChanges(live, restored).sort()).toEqual(['A', 'C', 'D']);
+    expect(speakerNameChanges(live, live)).toEqual([]);
   });
 });
