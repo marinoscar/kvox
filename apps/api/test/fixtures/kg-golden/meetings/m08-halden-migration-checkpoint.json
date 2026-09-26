@@ -1,0 +1,681 @@
+{
+  "id": "m08",
+  "title": "Halden migration checkpoint",
+  "tags": [
+    "client",
+    "resolution-trap",
+    "two-sarahs",
+    "sensitive"
+  ],
+  "recordedAt": "2026-02-26T14:00:00Z",
+  "contextText": "Checkpoint after the first dry run.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m08-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m08-spk-b",
+      "label": "B",
+      "displayName": "Sarah Okonkwo"
+    },
+    {
+      "id": "m08-spk-c",
+      "label": "C",
+      "displayName": "Ravi Menon"
+    },
+    {
+      "id": "m08-spk-d",
+      "label": "D",
+      "displayName": "Jonah Jiménez"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m08-s001",
+      "speakerId": "m08-spk-a",
+      "startMs": 0,
+      "endMs": 5540,
+      "rev": 1,
+      "text": "Okay, checkpoint on the migration. JJ, can you start with the dry run?"
+    },
+    {
+      "id": "m08-s002",
+      "speakerId": "m08-spk-d",
+      "startMs": 5790,
+      "endMs": 13990,
+      "rev": 1,
+      "text": "Sure. We ran the full dry run on Monday. 98 percent of carrier records migrated cleanly on the first pass."
+    },
+    {
+      "id": "m08-s003",
+      "speakerId": "m08-spk-c",
+      "startMs": 14240,
+      "endMs": 23200,
+      "rev": 1,
+      "text": "The two percent that failed are mostly carriers with duplicate depot codes. That's a data problem on our side, not the scripts."
+    },
+    {
+      "id": "m08-s004",
+      "speakerId": "m08-spk-a",
+      "startMs": 23450,
+      "endMs": 27090,
+      "rev": 1,
+      "text": "Can we clean those before the real cutover?"
+    },
+    {
+      "id": "m08-s005",
+      "speakerId": "m08-spk-c",
+      "startMs": 27340,
+      "endMs": 31740,
+      "rev": 1,
+      "text": "Yes, I'll get my team to deduplicate them next week."
+    },
+    {
+      "id": "m08-s006",
+      "speakerId": "m08-spk-d",
+      "startMs": 31990,
+      "endMs": 41330,
+      "rev": 1,
+      "text": "There's one bug on our side though. Delivery windows are shifting by an hour for the southern depots. It's a timezone conversion issue."
+    },
+    {
+      "id": "m08-s007",
+      "speakerId": "m08-spk-a",
+      "startMs": 41580,
+      "endMs": 43700,
+      "rev": 1,
+      "text": "How long to fix?"
+    },
+    {
+      "id": "m08-s008",
+      "speakerId": "m08-spk-d",
+      "startMs": 43950,
+      "endMs": 48730,
+      "rev": 1,
+      "text": "I'll fix the timezone bug by Wednesday and rerun that slice."
+    },
+    {
+      "id": "m08-s009",
+      "speakerId": "m08-spk-a",
+      "startMs": 48980,
+      "endMs": 53000,
+      "rev": 1,
+      "text": "Good. Sarah, where are we on the contract side?"
+    },
+    {
+      "id": "m08-s010",
+      "speakerId": "m08-spk-b",
+      "startMs": 53250,
+      "endMs": 61830,
+      "rev": 1,
+      "text": "The data processing addendum is with our legal team. I'll get legal to approve the data processing addendum by March 6."
+    },
+    {
+      "id": "m08-s011",
+      "speakerId": "m08-spk-a",
+      "startMs": 62080,
+      "endMs": 67240,
+      "rev": 1,
+      "text": "Is there anything in it you expect them to push back on?"
+    },
+    {
+      "id": "m08-s012",
+      "speakerId": "m08-spk-b",
+      "startMs": 67490,
+      "endMs": 71510,
+      "rev": 1,
+      "text": "Only the sub-processor list. Legal always asks about sub-processors."
+    },
+    {
+      "id": "m08-s013",
+      "speakerId": "m08-spk-a",
+      "startMs": 71760,
+      "endMs": 76160,
+      "rev": 1,
+      "text": "We'll send an updated list today so they have it."
+    },
+    {
+      "id": "m08-s014",
+      "speakerId": "m08-spk-c",
+      "startMs": 76410,
+      "endMs": 83470,
+      "rev": 1,
+      "text": "On sequencing, I'd like to propose we cut over region by region, starting with the northern depots."
+    },
+    {
+      "id": "m08-s015",
+      "speakerId": "m08-spk-b",
+      "startMs": 83720,
+      "endMs": 85460,
+      "rev": 1,
+      "text": "Why northern first?"
+    },
+    {
+      "id": "m08-s016",
+      "speakerId": "m08-spk-c",
+      "startMs": 85710,
+      "endMs": 91250,
+      "rev": 1,
+      "text": "Smallest volume, and the depot managers there are the most patient with us."
+    },
+    {
+      "id": "m08-s017",
+      "speakerId": "m08-spk-d",
+      "startMs": 91500,
+      "endMs": 96280,
+      "rev": 1,
+      "text": "From a technical side that's fine, the scripts are already region-aware."
+    },
+    {
+      "id": "m08-s018",
+      "speakerId": "m08-spk-a",
+      "startMs": 96530,
+      "endMs": 102450,
+      "rev": 1,
+      "text": "Any objection? Then we cut over region by region, starting with the northern depots."
+    },
+    {
+      "id": "m08-s019",
+      "speakerId": "m08-spk-b",
+      "startMs": 102700,
+      "endMs": 104060,
+      "rev": 1,
+      "text": "No objection."
+    },
+    {
+      "id": "m08-s020",
+      "speakerId": "m08-spk-c",
+      "startMs": 104310,
+      "endMs": 115550,
+      "rev": 1,
+      "text": "One personal thing, sorry. I've got a court hearing on my divorce next month, so I may be slow to reply for a couple of days around then."
+    },
+    {
+      "id": "m08-s021",
+      "speakerId": "m08-spk-a",
+      "startMs": 115800,
+      "endMs": 121340,
+      "rev": 1,
+      "text": "Of course, Ravi, thanks for the heads-up. We'll route anything urgent through JJ."
+    },
+    {
+      "id": "m08-s022",
+      "speakerId": "m08-spk-d",
+      "startMs": 121590,
+      "endMs": 123330,
+      "rev": 1,
+      "text": "Happy to cover."
+    },
+    {
+      "id": "m08-s023",
+      "speakerId": "m08-spk-b",
+      "startMs": 123580,
+      "endMs": 131400,
+      "rev": 1,
+      "text": "Also, when you send the sub-processor list, send it to me, not to Marcus. I'll forward it to legal."
+    },
+    {
+      "id": "m08-s024",
+      "speakerId": "m08-spk-a",
+      "startMs": 131650,
+      "endMs": 137570,
+      "rev": 1,
+      "text": "Will do. So: legal by March 6, timezone fix by Wednesday, northern depots first."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Halden migration checkpoint\n\n**Date:** February 26\n**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)\n\n## Summary\n\nCheckpoint on the Halden route optimizer migration after the first full dry run.\n\n## Dry run results\n\n- 98 percent of carrier records migrated cleanly on the first pass.\n- The 2 percent that failed are mostly carriers with duplicate depot codes, a data issue on Halden's side; Ravi's team will deduplicate them next week.\n- A timezone conversion bug shifts delivery windows by an hour for the southern depots.\n\n## Decisions\n\n- Cutover will happen **region by region, starting with the northern depots**, which have the smallest volume and the most patient depot managers. The scripts are already region-aware.\n\n## Contract\n\nThe data processing addendum is with Halden's legal team. Sarah expects questions only about the sub-processor list, which Larkspur will send today — to Sarah, not Marcus.\n\n## Action items\n\n- **Sarah (procurement)** — get legal to approve the data processing addendum by March 6.\n- **JJ** — fix the timezone bug by Wednesday and rerun the southern slice.\n- **Ravi Menon** — have his team deduplicate the carrier depot codes next week.\n- **Alex Rivera** — send the updated sub-processor list to Sarah today.\n\n## Notes\n\n- Ravi may be slow to reply for a couple of days next month for personal reasons; urgent items go through JJ.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-halden-freight",
+      "type": "Organization",
+      "label": "Halden Freight",
+      "aliases": [
+        "Halden"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07"
+      ]
+    },
+    {
+      "id": "g-person-jonah-jimenez",
+      "type": "Person",
+      "label": "Jonah Jiménez",
+      "aliases": [
+        "JJ",
+        "Jonah Jimenez"
+      ],
+      "props": {
+        "title": "Senior Engineer"
+      },
+      "attendedFixtureIds": [
+        "m02",
+        "m05",
+        "m06"
+      ]
+    },
+    {
+      "id": "g-person-marcus-webb",
+      "type": "Person",
+      "label": "Marcus Webb",
+      "aliases": [
+        "Marcus"
+      ],
+      "props": {
+        "title": "CIO"
+      },
+      "attendedFixtureIds": [
+        "m02"
+      ]
+    },
+    {
+      "id": "g-person-ravi-menon",
+      "type": "Person",
+      "label": "Ravi Menon",
+      "aliases": [
+        "Ravi"
+      ],
+      "props": {
+        "title": "Integration Lead"
+      },
+      "attendedFixtureIds": [
+        "m02"
+      ]
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06"
+      ]
+    },
+    {
+      "id": "g-person-sarah-okonkwo",
+      "type": "Person",
+      "label": "Sarah Okonkwo",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "Procurement Lead"
+      },
+      "attendedFixtureIds": [
+        "m02"
+      ]
+    },
+    {
+      "id": "g-project-route-optimizer-migration",
+      "type": "Project",
+      "label": "Route optimizer migration",
+      "aliases": [
+        "the migration"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Halden migration checkpoint",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Halden migration checkpoint"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "jj",
+        "type": "Person",
+        "label": "Jonah Jiménez",
+        "aliases": [
+          "JJ"
+        ],
+        "existingId": "g-person-jonah-jimenez",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "JJ (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarahO",
+        "type": "Person",
+        "label": "Sarah Okonkwo",
+        "aliases": [
+          "Sarah"
+        ],
+        "existingId": "g-person-sarah-okonkwo",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah (Halden Freight procurement)"
+          },
+          {
+            "source": "segment",
+            "segmentId": "m08-s009",
+            "quote": "Sarah, where are we on the contract side?"
+          }
+        ]
+      },
+      {
+        "key": "ravi",
+        "type": "Person",
+        "label": "Ravi Menon",
+        "aliases": [],
+        "existingId": "g-person-ravi-menon",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "key": "halden",
+        "type": "Organization",
+        "label": "Halden Freight",
+        "aliases": [],
+        "existingId": "g-org-halden-freight",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Checkpoint on the Halden route optimizer migration"
+          }
+        ]
+      },
+      {
+        "key": "migration",
+        "type": "Project",
+        "label": "Route optimizer migration",
+        "aliases": [],
+        "existingId": "g-project-route-optimizer-migration",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Checkpoint on the Halden route optimizer migration"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "jj",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarahO",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "ravi",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), JJ (Larkspur Labs), Sarah (Halden Freight procurement), Ravi Menon (Halden Freight)"
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "migration",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s001",
+            "quote": "Okay, checkpoint on the migration."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "98 percent of carrier records migrated cleanly",
+        "statement": "98 percent of carrier records migrated cleanly on the first dry run.",
+        "status": null,
+        "occurredAt": "2026-02-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s002",
+            "quote": "98 percent of carrier records migrated cleanly on the first pass."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "migration",
+        "owner": null,
+        "counterparty": null,
+        "title": "Cut over region by region, northern depots first",
+        "statement": "The cutover will happen region by region, starting with the northern depots.",
+        "status": null,
+        "occurredAt": "2026-02-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s018",
+            "quote": "Then we cut over region by region, starting with the northern depots."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "sarahO",
+        "counterparty": null,
+        "title": "Legal approval of the DPA",
+        "statement": "Sarah will get legal to approve the data processing addendum by March 6.",
+        "status": "open",
+        "occurredAt": "2026-02-26",
+        "dueAt": "2026-03-06",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s010",
+            "quote": "I'll get legal to approve the data processing addendum by March 6."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "jj",
+        "counterparty": null,
+        "title": "Fix the timezone bug",
+        "statement": "JJ will fix the timezone bug by Wednesday and rerun that slice.",
+        "status": "open",
+        "occurredAt": "2026-02-26",
+        "dueAt": "2026-03-04",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s008",
+            "quote": "I'll fix the timezone bug by Wednesday and rerun that slice."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "ravi",
+        "counterparty": null,
+        "title": "Deduplicate carrier depot codes",
+        "statement": "Ravi's team will deduplicate the carriers with duplicate depot codes next week.",
+        "status": "open",
+        "occurredAt": "2026-02-26",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s005",
+            "quote": "I'll get my team to deduplicate them next week."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "migration",
+        "owner": "alex",
+        "counterparty": "sarahO",
+        "title": "Send the sub-processor list",
+        "statement": "Alex will send an updated sub-processor list to Sarah today.",
+        "status": "open",
+        "occurredAt": "2026-02-26",
+        "dueAt": "2026-02-26",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s013",
+            "quote": "We'll send an updated list today so they have it."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "ravi",
+        "owner": null,
+        "counterparty": null,
+        "title": "Divorce court hearing next month",
+        "statement": "Ravi has a court hearing on his divorce next month and may be slow to reply.",
+        "status": null,
+        "occurredAt": "2026-02-26",
+        "dueAt": null,
+        "sensitivity": "sensitive",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m08-s020",
+            "quote": "I've got a court hearing on my divorce next month"
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

@@ -1,0 +1,718 @@
+{
+  "id": "m09",
+  "title": "Northwind platform org update",
+  "tags": [
+    "client",
+    "promotion",
+    "manager-change",
+    "negative-on-call"
+  ],
+  "recordedAt": "2026-03-05T15:00:00Z",
+  "contextText": "Sarah wants to walk us through changes in the Northwind engineering org.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m09-spk-a",
+      "label": "A",
+      "displayName": "Alex Rivera"
+    },
+    {
+      "id": "m09-spk-b",
+      "label": "B",
+      "displayName": "Sarah Chen"
+    },
+    {
+      "id": "m09-spk-c",
+      "label": "C",
+      "displayName": "Tomás Aguilar"
+    },
+    {
+      "id": "m09-spk-d",
+      "label": "D",
+      "displayName": "Owen Barker"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m09-s001",
+      "speakerId": "m09-spk-a",
+      "startMs": 0,
+      "endMs": 7060,
+      "rev": 1,
+      "text": "Thanks for setting this up, Sarah. You said there were some org changes we should know about."
+    },
+    {
+      "id": "m09-s002",
+      "speakerId": "m09-spk-b",
+      "startMs": 7310,
+      "endMs": 15130,
+      "rev": 1,
+      "text": "Yes, a few. First, I want to introduce Owen Barker. Owen joined us in February as Head of Platform."
+    },
+    {
+      "id": "m09-s003",
+      "speakerId": "m09-spk-d",
+      "startMs": 15380,
+      "endMs": 20540,
+      "rev": 1,
+      "text": "Hi everyone. I've been reading the pilot updates, nice work so far."
+    },
+    {
+      "id": "m09-s004",
+      "speakerId": "m09-spk-b",
+      "startMs": 20790,
+      "endMs": 25950,
+      "rev": 1,
+      "text": "Second, some good news. Tomás was promoted to Staff Engineer this month."
+    },
+    {
+      "id": "m09-s005",
+      "speakerId": "m09-spk-a",
+      "startMs": 26200,
+      "endMs": 28320,
+      "rev": 1,
+      "text": "Congratulations, Tomás, well deserved."
+    },
+    {
+      "id": "m09-s006",
+      "speakerId": "m09-spk-c",
+      "startMs": 28570,
+      "endMs": 35250,
+      "rev": 1,
+      "text": "Thank you. Not much changes day to day, but I'll have more say in the architecture."
+    },
+    {
+      "id": "m09-s007",
+      "speakerId": "m09-spk-b",
+      "startMs": 35500,
+      "endMs": 42560,
+      "rev": 1,
+      "text": "Third, and this affects you more directly: Lena Park is moving to lead our robotics research group."
+    },
+    {
+      "id": "m09-s008",
+      "speakerId": "m09-spk-a",
+      "startMs": 42810,
+      "endMs": 46070,
+      "rev": 1,
+      "text": "So who does Tomás report to now?"
+    },
+    {
+      "id": "m09-s009",
+      "speakerId": "m09-spk-b",
+      "startMs": 46320,
+      "endMs": 53000,
+      "rev": 1,
+      "text": "Tomás reported to Lena until the end of March. From April he reports to Owen instead."
+    },
+    {
+      "id": "m09-s010",
+      "speakerId": "m09-spk-d",
+      "startMs": 53250,
+      "endMs": 61450,
+      "rev": 1,
+      "text": "And the pilot's platform work moves under my team at the same time, so I'm your escalation point from April."
+    },
+    {
+      "id": "m09-s011",
+      "speakerId": "m09-spk-a",
+      "startMs": 61700,
+      "endMs": 67620,
+      "rev": 1,
+      "text": "That's helpful to know. Do we need to change anything in how we work?"
+    },
+    {
+      "id": "m09-s012",
+      "speakerId": "m09-spk-d",
+      "startMs": 67870,
+      "endMs": 75310,
+      "rev": 1,
+      "text": "One thing. I'd like a joint on-call rotation between Larkspur and my team once the pilot goes live."
+    },
+    {
+      "id": "m09-s013",
+      "speakerId": "m09-spk-a",
+      "startMs": 75560,
+      "endMs": 78440,
+      "rev": 1,
+      "text": "Makes sense. Who sets that up?"
+    },
+    {
+      "id": "m09-s014",
+      "speakerId": "m09-spk-d",
+      "startMs": 78690,
+      "endMs": 83850,
+      "rev": 1,
+      "text": "I'll set up the joint on-call rotation with Larkspur by April 1."
+    },
+    {
+      "id": "m09-s015",
+      "speakerId": "m09-spk-b",
+      "startMs": 84100,
+      "endMs": 89640,
+      "rev": 1,
+      "text": "Until then, whoever's on call on the platform team can handle anything urgent."
+    },
+    {
+      "id": "m09-s016",
+      "speakerId": "m09-spk-a",
+      "startMs": 89890,
+      "endMs": 94290,
+      "rev": 1,
+      "text": "Good. Owen, how do you like to work with vendors?"
+    },
+    {
+      "id": "m09-s017",
+      "speakerId": "m09-spk-d",
+      "startMs": 94540,
+      "endMs": 102360,
+      "rev": 1,
+      "text": "Honestly, I prefer a written proposal a day before any meeting. I'd rather read than be walked through slides."
+    },
+    {
+      "id": "m09-s018",
+      "speakerId": "m09-spk-a",
+      "startMs": 102610,
+      "endMs": 104730,
+      "rev": 1,
+      "text": "Easy. We'll send pre-reads."
+    },
+    {
+      "id": "m09-s019",
+      "speakerId": "m09-spk-c",
+      "startMs": 104980,
+      "endMs": 111660,
+      "rev": 1,
+      "text": "Lena will still be around, by the way. The research group is on the same floor."
+    },
+    {
+      "id": "m09-s020",
+      "speakerId": "m09-spk-b",
+      "startMs": 111910,
+      "endMs": 117830,
+      "rev": 1,
+      "text": "Right, and she'll want to hear how the pilot goes. It started under her."
+    },
+    {
+      "id": "m09-s021",
+      "speakerId": "m09-spk-a",
+      "startMs": 118080,
+      "endMs": 122100,
+      "rev": 1,
+      "text": "I'll make sure she gets the Friday updates too."
+    },
+    {
+      "id": "m09-s022",
+      "speakerId": "m09-spk-b",
+      "startMs": 122350,
+      "endMs": 129030,
+      "rev": 1,
+      "text": "Good. So to confirm: Owen is your escalation point from April, and Tomás stays technical lead."
+    },
+    {
+      "id": "m09-s023",
+      "speakerId": "m09-spk-c",
+      "startMs": 129280,
+      "endMs": 132540,
+      "rev": 1,
+      "text": "Yes, nothing changes on the technical side."
+    },
+    {
+      "id": "m09-s024",
+      "speakerId": "m09-spk-a",
+      "startMs": 132790,
+      "endMs": 135670,
+      "rev": 1,
+      "text": "Thanks Sarah, that's a clear picture."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Northwind platform org update\n\n**Date:** March 5\n**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)\n\n## Summary\n\nSarah Chen walked us through three changes in the Northwind Robotics engineering organisation and what they mean for the pick-path pilot.\n\n## Changes\n\n1. **Owen Barker** joined Northwind in February as **Head of Platform**.\n2. **Tomás Aguilar** was promoted to **Staff Engineer** this month. Day-to-day work is unchanged, but he will have more say in architecture.\n3. **Lena Park** is moving to lead the robotics research group. Tomás reported to Lena until the end of March; from April he reports to Owen.\n\n## Decisions\n\n- The pilot's platform work moves under Owen's team from April. Owen becomes Larkspur's escalation point; Tomás stays technical lead.\n\n## Action items\n\n- **Owen Barker** — set up a joint on-call rotation between Larkspur and the platform team by April 1.\n- **Alex Rivera** — add Lena Park to the Friday update distribution; send Owen written pre-reads before meetings.\n\n## Notes\n\n- Until the rotation exists, whoever's on call on the platform team handles anything urgent.\n- Owen prefers a written proposal a day before any meeting rather than being walked through slides.\n- Lena's research group is on the same floor, and she will want to hear how the pilot goes since it started under her.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-larkspur-labs",
+      "type": "Organization",
+      "label": "Larkspur Labs",
+      "aliases": [
+        "Larkspur"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-org-northwind-robotics",
+      "type": "Organization",
+      "label": "Northwind Robotics",
+      "aliases": [
+        "NWR",
+        "Northwind"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-alex-rivera",
+      "type": "Person",
+      "label": "Alex Rivera",
+      "aliases": [
+        "Alex"
+      ],
+      "props": {
+        "title": "Delivery Lead"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m02",
+        "m03",
+        "m04",
+        "m05",
+        "m06",
+        "m07",
+        "m08"
+      ]
+    },
+    {
+      "id": "g-person-lena-park",
+      "type": "Person",
+      "label": "Lena Park",
+      "aliases": [
+        "Lena"
+      ],
+      "props": {
+        "title": "Director of Engineering"
+      },
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-sarah-chen",
+      "type": "Person",
+      "label": "Sarah Chen",
+      "aliases": [
+        "Sarah"
+      ],
+      "props": {
+        "title": "VP of Operations"
+      },
+      "attendedFixtureIds": [
+        "m01",
+        "m06"
+      ]
+    },
+    {
+      "id": "g-person-tomas-aguilar",
+      "type": "Person",
+      "label": "Tomás Aguilar",
+      "aliases": [
+        "Tomas Aguilar",
+        "Tomás"
+      ],
+      "props": {
+        "title": "Engineer"
+      },
+      "attendedFixtureIds": [
+        "m06"
+      ]
+    },
+    {
+      "id": "g-project-pick-path-pilot",
+      "type": "Project",
+      "label": "Pick-path pilot",
+      "aliases": [
+        "the pilot",
+        "NWR pilot"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Northwind platform org update",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Northwind platform org update"
+          }
+        ]
+      },
+      {
+        "key": "alex",
+        "type": "Person",
+        "label": "Alex Rivera",
+        "aliases": [],
+        "existingId": "g-person-alex-rivera",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Alex Rivera (Larkspur Labs)"
+          }
+        ]
+      },
+      {
+        "key": "sarah",
+        "type": "Person",
+        "label": "Sarah Chen",
+        "aliases": [],
+        "existingId": "g-person-sarah-chen",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sarah Chen walked us through three changes"
+          }
+        ]
+      },
+      {
+        "key": "tomas",
+        "type": "Person",
+        "label": "Tomás Aguilar",
+        "aliases": [],
+        "existingId": "g-person-tomas-aguilar",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s004",
+            "quote": "Tomás was promoted to Staff Engineer this month."
+          }
+        ]
+      },
+      {
+        "key": "owen",
+        "type": "Person",
+        "label": "Owen Barker",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s002",
+            "quote": "I want to introduce Owen Barker."
+          }
+        ]
+      },
+      {
+        "key": "lena",
+        "type": "Person",
+        "label": "Lena Park",
+        "aliases": [],
+        "existingId": "g-person-lena-park",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s007",
+            "quote": "Lena Park is moving to lead our robotics research group."
+          }
+        ]
+      },
+      {
+        "key": "nwr",
+        "type": "Organization",
+        "label": "Northwind Robotics",
+        "aliases": [],
+        "existingId": "g-org-northwind-robotics",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "changes in the Northwind Robotics engineering organisation"
+          }
+        ]
+      },
+      {
+        "key": "pilot",
+        "type": "Project",
+        "label": "Pick-path pilot",
+        "aliases": [],
+        "existingId": "g-project-pick-path-pilot",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "what they mean for the pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "alex",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sarah",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "tomas",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "owen",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Alex Rivera (Larkspur Labs), Sarah Chen (Northwind Robotics), Tomás Aguilar (Northwind Robotics), Owen Barker (Northwind Robotics)"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "owen",
+        "to": "nwr",
+        "validFrom": "2026-02-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s002",
+            "quote": "Owen joined us in February as Head of Platform."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "owen",
+        "to": "nwr",
+        "validFrom": "2026-02-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {
+          "title": "Head of Platform"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s002",
+            "quote": "Owen joined us in February as Head of Platform."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "tomas",
+        "to": "nwr",
+        "validFrom": "2026-03-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {
+          "title": "Staff Engineer"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s004",
+            "quote": "Tomás was promoted to Staff Engineer this month."
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "tomas",
+        "to": "lena",
+        "validFrom": null,
+        "validTo": "2026-04-01",
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s009",
+            "quote": "Tomás reported to Lena until the end of March."
+          }
+        ]
+      },
+      {
+        "type": "REPORTS_TO",
+        "from": "tomas",
+        "to": "owen",
+        "validFrom": "2026-04-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s009",
+            "quote": "From April he reports to Owen instead."
+          }
+        ]
+      },
+      {
+        "type": "DISCUSSED",
+        "from": "meeting",
+        "to": "pilot",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "what they mean for the pick-path pilot"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "claim",
+        "subject": "lena",
+        "owner": null,
+        "counterparty": null,
+        "title": "Lena moving to robotics research",
+        "statement": "Lena Park is moving to lead the robotics research group.",
+        "status": null,
+        "occurredAt": "2026-03-05",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s007",
+            "quote": "Lena Park is moving to lead our robotics research group."
+          }
+        ]
+      },
+      {
+        "kind": "decision",
+        "subject": "pilot",
+        "owner": null,
+        "counterparty": null,
+        "title": "Platform work moves under Owen's team",
+        "statement": "The pilot's platform work moves under Owen's team from April, making Owen the escalation point.",
+        "status": null,
+        "occurredAt": "2026-03-05",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s010",
+            "quote": "the pilot's platform work moves under my team at the same time"
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "owen",
+        "counterparty": "g-org-larkspur-labs",
+        "title": "Set up joint on-call rotation",
+        "statement": "Owen will set up the joint on-call rotation with Larkspur by April 1.",
+        "status": "open",
+        "occurredAt": "2026-03-05",
+        "dueAt": "2026-04-01",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s014",
+            "quote": "I'll set up the joint on-call rotation with Larkspur by April 1."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "pilot",
+        "owner": "alex",
+        "counterparty": "lena",
+        "title": "Add Lena to Friday updates",
+        "statement": "Alex will make sure Lena gets the Friday updates too.",
+        "status": "open",
+        "occurredAt": "2026-03-05",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s021",
+            "quote": "I'll make sure she gets the Friday updates too."
+          }
+        ]
+      },
+      {
+        "kind": "person_fact",
+        "subject": "owen",
+        "owner": null,
+        "counterparty": null,
+        "title": "Prefers written pre-reads",
+        "statement": "Owen prefers a written proposal a day before any meeting rather than slides.",
+        "status": null,
+        "occurredAt": "2026-03-05",
+        "dueAt": null,
+        "sensitivity": "business",
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m09-s017",
+            "quote": "I prefer a written proposal a day before any meeting."
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "whoever's on call on the platform team can handle anything urgent",
+        "why": "No specific human is named: not a Person, not a Commitment owner."
+      }
+    ]
+  }
+}
