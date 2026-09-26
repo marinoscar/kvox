@@ -958,7 +958,7 @@ describe('User Settings Integration', () => {
 
     describe('rejections return 400, not 500', () => {
       it.each<[string, unknown]>([
-        ['personal: true (until #383)', { domains: { personal: true } }],
+        ['a non-boolean personal domain switch', { domains: { personal: 'yes' } }],
         [
           'thresholds closer than 0.05 in one patch',
           { resolution: { autoLinkThreshold: 0.85, newThreshold: 0.84 } },

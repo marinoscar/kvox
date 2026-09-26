@@ -16,12 +16,22 @@
 //     or a proposal entity that is itself `accept`, the kind is not
 //     `person_fact`, and no blocking flag is set.
 //   - `person_fact` and `closing`: never pre-checked.
+//   - #383: an entity or relation row whose TYPE carries a non-`business`
+//     sensitivity (every `personal`-domain type — Interest, Trip, Milestone,
+//     SPOUSE_OF, …) is never pre-checked either (§15: facts about people who
+//     never agreed to be profiled wait for an explicit accept). A `known`
+//     relation — a citation appended to an edge the reviewer already
+//     accepted — still follows the `known` rule, exactly as a known
+//     `personal` PersonFact does. The set comes from the caller's effective
+//     schema (`reviewOnlyTypes`), never a hand list.
 //   - #365: a relation/item flagged `known` (the graph already holds it; the
 //     commit only appends evidence) is accepted whenever its endpoints are —
 //     whatever other flag it carries, `person_fact` included — except a
 //     `sensitive` PersonFact (§5.6). A row flagged `previously_rejected` is
 //     defaulted to `reject` (visible, collapsed; the reviewer can flip it).
 // =============================================================================
+
+import type { EffectiveSchema } from '@app/shared/ontology';
 
 import type { GraphPreferences } from '../preferences/graph-preferences.defaults';
 import type {
@@ -71,8 +81,38 @@ function endpoints(item: PrecheckItem): EndpointRef[] {
     .filter((v): v is EndpointRef => typeof v === 'object' && v !== null);
 }
 
+/**
+ * The entity-storage and relation type keys whose rows are never pre-checked:
+ * those whose declared sensitivity is not `business` (§15). Item types are not
+ * listed — `person_fact` has its own rule above, and an item's payload names
+ * its `kind`, not a type key.
+ */
+export function reviewOnlyTypes(
+  schema: Pick<EffectiveSchema, 'entityTypes' | 'relationTypes'>,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const t of schema.entityTypes) {
+    if (t.storage === 'entity' && t.sensitivityDefault !== 'business') keys.add(t.key);
+  }
+  for (const r of schema.relationTypes) {
+    if ((r.sensitivityDefault ?? 'business') !== 'business') keys.add(r.key);
+  }
+  return keys;
+}
+
+export interface PrecheckOptions {
+  /** From `reviewOnlyTypes(schema)`. Absent = none (every type precheckable). */
+  reviewOnlyTypes?: ReadonlySet<string>;
+}
+
 /** Sets `decision` on every item, in place. Entities are decided first. */
-export function applyPrecheck(items: PrecheckItem[], prefs: GraphPreferences): void {
+export function applyPrecheck(items: PrecheckItem[], prefs: GraphPreferences, options: PrecheckOptions = {}): void {
+  const reviewOnly = options.reviewOnlyTypes ?? new Set<string>();
+  const reviewOnlyRow = (item: PrecheckItem): boolean =>
+    (item.kind === 'entity' || item.kind === 'relation') &&
+    typeof item.payload.type === 'string' &&
+    reviewOnly.has(item.payload.type);
+
   if (prefs.resolution.mode === 'review_all') {
     for (const item of items) item.decision = 'pending';
     return;
@@ -81,7 +121,7 @@ export function applyPrecheck(items: PrecheckItem[], prefs: GraphPreferences): v
   const acceptedRefs = new Set<string>();
   for (const item of items) {
     if (item.kind !== 'entity') continue;
-    const ok = entityAccepted(item, prefs);
+    const ok = !reviewOnlyRow(item) && entityAccepted(item, prefs);
     item.decision = ok ? 'accept' : 'pending';
     const ref = item.payload.ref;
     if (ok && typeof ref === 'string') acceptedRefs.add(ref);
@@ -101,6 +141,10 @@ export function applyPrecheck(items: PrecheckItem[], prefs: GraphPreferences): v
     }
     if (item.flags.includes('previously_rejected')) {
       item.decision = 'reject';
+      continue;
+    }
+    if (reviewOnlyRow(item)) {
+      item.decision = 'pending';
       continue;
     }
     if (item.kind === 'item' && item.payload.kind === 'person_fact') {
