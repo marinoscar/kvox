@@ -144,6 +144,10 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // the EMBEDDING pass, which costs a document owner money, from the
   // full-text one, which costs nothing and has no job.
   'search.index': 'Semantic indexing',
+  // Connected knowledge (#357, epic #344). One label for both scopes — a
+  // forgotten person and a Danger Zone graph wipe are the same operation
+  // (deleting graph rows) at two sizes, and the operator needs the noun.
+  'kg.purge': 'Knowledge graph deletion',
 };
 
 /**

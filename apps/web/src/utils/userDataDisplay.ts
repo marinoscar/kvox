@@ -46,11 +46,12 @@ export function formatDataSize(value: string | null | undefined): string {
 /**
  * One countable thing a scope destroys, singular and plural.
  *
- * TWO CATEGORIES ARE DELIBERATELY ABSENT, for two different reasons.
+ * THREE CATEGORIES ARE DELIBERATELY ABSENT.
  *
  * `credentials` is not one noun but two independent counts (`aiKeys`,
  * `accessTokens`), each worth naming in full, so it is handled separately
- * below rather than being forced into this shape.
+ * below rather than being forced into this shape. `graph` (issue #357) is the
+ * same shape — two counts, `entities` and `items` — and is handled beside it.
  *
  * `onboarding` has NO COUNT AT ALL — it is one namespace on the user's
  * settings row, not rows the summary endpoint can total. Excluding it here is
@@ -58,7 +59,7 @@ export function formatDataSize(value: string | null | undefined): string {
  * the dialog states that part of `everything`'s blast radius in prose instead.
  */
 const CATEGORY_NOUNS: Record<
-  Exclude<UserDataCategory, 'credentials' | 'onboarding'>,
+  Exclude<UserDataCategory, 'credentials' | 'onboarding' | 'graph'>,
   [singular: string, plural: string]
 > = {
   transcripts: ['recording', 'recordings'],
@@ -160,6 +161,19 @@ export function buildDeletionInventory(
         parts.push(
           countPhrase(accessTokens, ['personal access token', 'personal access tokens']),
         );
+      }
+      continue;
+    }
+
+    if (category === 'graph') {
+      // Row counts only — the graph has no storage object behind it, so it
+      // adds nothing to the byte total. Same nouns as the page's own line.
+      const { entities, items } = summary.graph;
+      if (entities > 0) {
+        parts.push(countPhrase(entities, ['knowledge graph entity', 'knowledge graph entities']));
+      }
+      if (items > 0) {
+        parts.push(countPhrase(items, ['knowledge graph fact', 'knowledge graph facts']));
       }
       continue;
     }

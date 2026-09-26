@@ -88,7 +88,8 @@ export function scopeIncludes(
     | 'noteTemplates'
     | 'files'
     | 'credentials'
-    | 'onboarding',
+    | 'onboarding'
+    | 'graph',
 ): boolean {
   switch (category) {
     // ⚠ EVERY NARROW SCOPE MAPS TO EXACTLY ONE CATEGORY. Only the composites
@@ -155,6 +156,22 @@ export function scopeIncludes(
     // `/settings/getting-started` is already that, without destroying anything.
     case 'onboarding':
       return scope === 'everything';
+    // ⚠ THE KNOWLEDGE GRAPH IS `content`/`everything` ONLY (#357, epic #344).
+    //
+    // The graph is derived content the user MADE, by reviewing and committing
+    // proposals — so it follows `content` ("everything you made"), the same
+    // line note templates sit on. None of the narrow scopes takes it: "Delete
+    // transcripts" does not silently empty a graph the user curated by hand,
+    // and a graph row whose cited transcript is gone keeps its `quote` (every
+    // evidence anchor FK is SetNull, by design).
+    //
+    // A CATEGORY, NOT A SCOPE — like `onboarding`, it is not a member of
+    // `USER_DATA_SCOPES`, whose strings are permanent. The handler enqueues
+    // `kg.purge { scope: 'all' }` for it rather than deleting inline. A deleted
+    // ACCOUNT loses its graph separately, by the `owner_id` Cascade on every
+    // `kg_*` table. (#376 adds `case 'ask'` beside this one — additive cases.)
+    case 'graph':
+      return scope === 'content' || scope === 'everything';
   }
 }
 

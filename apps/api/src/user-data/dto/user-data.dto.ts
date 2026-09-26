@@ -91,6 +91,30 @@ export const userDataCredentialsSchema = z.object({
 export class UserDataCredentialsDto extends createZodDto(userDataCredentialsSchema) {}
 
 /**
+ * The caller's knowledge graph (#357, epic #344) — removed by `content` and
+ * `everything` through a `kg.purge` job. Row counts only: a graph row has no
+ * storage object behind it, so there are no bytes to report.
+ */
+export const userDataGraphSchema = z.object({
+  entities: z
+    .number()
+    .int()
+    .describe(
+      "How many entities (people, organizations, projects, meetings) the caller's graph " +
+        'holds. Merge tombstones are excluded — a merged entity is the same thing as the ' +
+        'one it was merged into.',
+    ),
+  items: z
+    .number()
+    .int()
+    .describe(
+      "How many facts (commitments, decisions, claims, person facts) the caller's graph holds.",
+    ),
+});
+
+export class UserDataGraphDto extends createZodDto(userDataGraphSchema) {}
+
+/**
  * The deletion already in flight for this caller, if any.
  *
  * ⚠ ITS PRESENCE IS WHY `POST /api/user-data/deletions` WOULD 409. A client
@@ -132,6 +156,11 @@ export const userDataSummarySchema = z.object({
   credentials: userDataCredentialsSchema.describe(
     'What `scope: "everything"` additionally destroys.',
   ),
+  graph: userDataGraphSchema.describe(
+    "The caller's knowledge graph. Removed by `content` and `everything` only — no narrow " +
+      'scope touches it. Your recordings and notes are what the graph was derived from; ' +
+      'deleting the graph never changes them.',
+  ),
   activeDeletion: activeUserDataDeletionSchema
     .nullable()
     .describe('The deletion already queued or running for this caller, or `null`.'),
@@ -151,8 +180,8 @@ export const createUserDataDeletionSchema = z.object({
     .describe(
       'What to delete. Each narrow scope removes exactly the category it names — `notes` ' +
         'does **not** take your note templates with it. `content` is every recording, note, ' +
-        'uploaded file **and** your own custom note templates; `everything` is that plus ' +
-        'your AI provider keys and your personal access tokens.',
+        'uploaded file, your own custom note templates **and** your knowledge graph; ' +
+        '`everything` is that plus your AI provider keys and your personal access tokens.',
     ),
   confirmation: z
     .string()

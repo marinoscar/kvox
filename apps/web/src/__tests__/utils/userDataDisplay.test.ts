@@ -56,6 +56,7 @@ function emptySummary(overrides: Partial<UserDataSummary> = {}): UserDataSummary
     files: { count: 0, bytes: '0' },
     noteTemplates: { count: 0 },
     credentials: { aiKeys: 0, accessTokens: 0 },
+    graph: { entities: 0, items: 0 },
     activeDeletion: null,
     ...overrides,
   };
@@ -161,10 +162,11 @@ describe('buildDeletionInventory', () => {
   // Ordering, singular/plural, zero-omission
   // ==========================================================================
 
-  it('joins in the fixed order — recordings, notes, note templates, files, AI provider keys, personal access tokens', () => {
+  it('joins in the fixed order — recordings, notes, note templates, files, AI provider keys, personal access tokens, graph entities, graph facts', () => {
     // Populate in the REVERSE order to prove the sentence order is not simply
     // "the order the fields happened to be set in".
     const summary = emptySummary({
+      graph: { entities: 1, items: 1 },
       credentials: { aiKeys: 1, accessTokens: 1 },
       noteTemplates: { count: 1 },
       files: { count: 1, bytes: '0' },
@@ -173,7 +175,7 @@ describe('buildDeletionInventory', () => {
     });
 
     expect(buildDeletionInventory('everything', summary)).toBe(
-      'Right now that is 1 recording, 1 note, 1 note template, 1 file, 1 AI provider key and 1 personal access token.',
+      'Right now that is 1 recording, 1 note, 1 note template, 1 file, 1 AI provider key, 1 personal access token, 1 knowledge graph entity and 1 knowledge graph fact.',
     );
   });
 
@@ -184,9 +186,10 @@ describe('buildDeletionInventory', () => {
       files: { count: 1, bytes: '0' },
       noteTemplates: { count: 1 },
       credentials: { aiKeys: 1, accessTokens: 1 },
+      graph: { entities: 1, items: 1 },
     });
     expect(buildDeletionInventory('everything', singular)).toBe(
-      'Right now that is 1 recording, 1 note, 1 note template, 1 file, 1 AI provider key and 1 personal access token.',
+      'Right now that is 1 recording, 1 note, 1 note template, 1 file, 1 AI provider key, 1 personal access token, 1 knowledge graph entity and 1 knowledge graph fact.',
     );
 
     const plural = emptySummary({
@@ -195,9 +198,10 @@ describe('buildDeletionInventory', () => {
       files: { count: 2, bytes: '0' },
       noteTemplates: { count: 2 },
       credentials: { aiKeys: 2, accessTokens: 2 },
+      graph: { entities: 2, items: 2 },
     });
     expect(buildDeletionInventory('everything', plural)).toBe(
-      'Right now that is 2 recordings, 2 notes, 2 note templates, 2 files, 2 AI provider keys and 2 personal access tokens.',
+      'Right now that is 2 recordings, 2 notes, 2 note templates, 2 files, 2 AI provider keys, 2 personal access tokens, 2 knowledge graph entities and 2 knowledge graph facts.',
     );
   });
 
@@ -251,6 +255,28 @@ describe('buildDeletionInventory', () => {
 
     expect(buildDeletionInventory('content', summary)).toBe(
       'Right now that is 3 note templates.',
+    );
+  });
+
+  // #357: the graph is a category of `content`/`everything`, counted in rows.
+  it('names the knowledge graph for both compound scopes, with no byte weight, omitting a zero count', () => {
+    const summary = emptySummary({
+      transcripts: { count: 1, bytes: '1000000' },
+      graph: { entities: 4, items: 0 },
+    });
+
+    for (const scope of COMPOUND_SCOPES) {
+      expect(buildDeletionInventory(scope, summary)).toBe(
+        'Right now that is 1 recording and 4 knowledge graph entities (1.0 MB in total).',
+      );
+    }
+  });
+
+  it('a graph-only account is not reported as having nothing stored', () => {
+    const summary = emptySummary({ graph: { entities: 0, items: 2 } });
+
+    expect(buildDeletionInventory('content', summary)).toBe(
+      'Right now that is 2 knowledge graph facts.',
     );
   });
 });

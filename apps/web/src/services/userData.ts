@@ -89,6 +89,15 @@ export interface UserDataSummary {
   /** Templates have no meaningful byte weight, so this pair carries only a count. */
   noteTemplates: { count: number };
   credentials: { aiKeys: number; accessTokens: number };
+  /**
+   * The caller's knowledge graph (issue #357) — row counts only, no bytes: the
+   * graph is rows of structured text with no storage object behind them.
+   * `entities` excludes merged tombstones; `items` is every commitment,
+   * decision, claim and person fact. Deleted by `content` and `everything`
+   * only — never by a narrow scope, and there is deliberately no narrow
+   * `graph` scope.
+   */
+  graph: { entities: number; items: number };
   activeDeletion: UserDataDeletion | null;
 }
 
@@ -129,7 +138,7 @@ export const USER_DATA_CONFIRMATION: Record<UserDataScope, string> = {
 // =============================================================================
 
 /**
- * The six categories a scope may or may not cover.
+ * The seven categories a scope may or may not cover.
  *
  * Named exactly as `apps/api/src/user-data/job-types.ts` names them, and in the
  * same order, so the two functions can be read side by side.
@@ -140,7 +149,8 @@ export type UserDataCategory =
   | 'noteTemplates'
   | 'files'
   | 'credentials'
-  | 'onboarding';
+  | 'onboarding'
+  | 'graph';
 
 /** Every category, for callers that need to ask about all of them. */
 export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
@@ -150,6 +160,7 @@ export const USER_DATA_CATEGORIES: readonly UserDataCategory[] = [
   'files',
   'credentials',
   'onboarding',
+  'graph',
 ];
 
 /**
@@ -211,6 +222,12 @@ export function scopeIncludes(scope: UserDataScope, category: UserDataCategory):
     // the itemised inventory, since "1 onboarding" is not a sentence.
     case 'onboarding':
       return scope === 'everything';
+    // ⚠ THE KNOWLEDGE GRAPH IS `content`/`everything` ONLY (#357). It is
+    // content the user MADE, by reviewing and committing proposals, so it sits
+    // on the note-templates line; no narrow scope takes it, and there is
+    // deliberately no `graph` scope. A category, not a scope.
+    case 'graph':
+      return scope === 'content' || scope === 'everything';
   }
 }
 

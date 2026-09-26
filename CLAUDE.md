@@ -916,6 +916,12 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   added or relabelled, **never removed** (400 names them); `deprecated` toggles (`graph:write`)
 - `DELETE /api/graph/attribute-defs/{id}` - **Deprecates, never deletes**; idempotent, 200
   (`graph:write`)
+- `POST /api/graph/entities/{id}/forget` - "Forget this person" (issue #357). Body
+  `{"confirmation":"FORGET"}`; **202** enqueuing `kg.purge {scope:'person', entityId}`, ordinary
+  dedup so asking again returns the same job. Removes the Person plus its merged tombstones,
+  aliases, relations, items, mentions, evidence and draft proposal references; your transcripts
+  and notes are untouched. 400 wrong confirmation or non-Person; 404 no access or merged; 403
+  your own entity without `graph:write` (`graph:write`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -1998,12 +2004,16 @@ with nothing left in the database that knows they exist, the exact failure
 
 The scope matrix (`scopeIncludes` in `apps/api/src/user-data/job-types.ts`):
 `transcripts`/`notes`/`files` each remove exactly one category; `content` is
-transcripts + notes + the caller's own note templates + files; `everything`
-is `content` plus credentials (AI provider keys, personal access tokens). No
-scope deletes the account. Full design — the FK-clearing order and why it is
-mandatory, and the honest gaps (a template that finishes archived rather
-than deleted, a provenance link lost on a stranger's note) — is
-[`docs/specs/user-data-deletion.md`](docs/specs/user-data-deletion.md).
+transcripts + notes + the caller's own note templates + files + the caller's
+knowledge graph; `everything` is `content` plus credentials (AI provider
+keys, personal access tokens). No scope deletes the account. The graph
+(issue #357, epic #344) is not deleted inline like the others: `content`/
+`everything` enqueue `kg.purge {scope: 'all'}` and let that job's handler own
+the plan, the same fan-out-to-existing-handlers shape this module already
+uses for `transcript.purge`/`note.purge`. Full design — the FK-clearing
+order and why it is mandatory, and the honest gaps (a template that finishes
+archived rather than deleted, a provenance link lost on a stranger's note) —
+is [`docs/specs/user-data-deletion.md`](docs/specs/user-data-deletion.md).
 
 ### Onboarding
 
@@ -2044,16 +2054,19 @@ graph, and an explorer/whole-graph visualization (§19–§22).
 #351) and the graph module scaffold (issue #354: `GraphModule`,
 `GraphAccessService`, the `graph:*` permissions and `GET /api/graph/ontology`)
 are built, and so is the graph write layer (issue #355: `GraphWriteService`, the evidence
-invariant trigger, the manual entity edit and attribute definitions); the remaining services
-arrive with #356–#357.** The ontology's sources live
+invariant trigger, the manual entity edit and attribute definitions); "forget this person"
+(issue #357: `POST /api/graph/entities/:id/forget`, the `kg.purge` job type, and the Danger
+Zone's `graph` category) is also built; the remaining services arrive with #356 and later.**
+The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. There are still no `kg.*` job handlers (only the type constants in
-`apps/api/src/graph/job-types.ts`), no `/api/graph/*` routes beyond the
-ontology, the entity edit and attribute definitions, and no graph UI. Five rules a neighbouring file can
+above. There is still only one `kg.*` job handler (`kg.purge`; every other type
+in `apps/api/src/graph/job-types.ts` is still only a constant), no `/api/graph/*`
+routes beyond the ontology, the entity edit, attribute definitions and forget,
+and no graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
@@ -2073,6 +2086,16 @@ proposal commit, speaker naming, merges, imports and the manual edit alike — w
 type, closed props, endpoints, temporal fields and evidence inside the caller's transaction,
 with the deferred `kg_assert_has_evidence` trigger as the database's backstop at `COMMIT`; a
 `kg_entities`/`kg_relations`/`kg_items` row written any other way should be rejected in review.
+
+**`kg.purge` (#357) is server-only permanently and `profile: { maxAttempts: 1 }`** — the
+identical `user.data.purge`/`note.generate` reasoning: a destructive fan-out across a dozen
+`kg_*` tables that fails part-way must surface as a `failed` job a person looks at, never
+silently resume minutes later, and there is no credential narrow enough for a
+`nodeSecretBroker` to hand a worker node instead. It serves two callers: "Forget this person"
+(`scope: 'person'`, `apps/api/src/graph/graph-entities.controller.ts`) and the Danger Zone's
+`graph` category (`scope: 'all'`, `apps/api/src/user-data/handlers/user-data-purge.handler.ts`).
+The handler is re-entrant — every step selects what is still there and deletes it — which is
+what makes a person-initiated retry (asking again) safe without an automatic one.
 
 ## Specialized Subagents (MANDATORY)
 

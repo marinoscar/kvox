@@ -30,6 +30,7 @@ const RICH_SUMMARY: UserDataSummary = {
   files: { count: 2, bytes: '100000000' },
   noteTemplates: { count: 5 },
   credentials: { aiKeys: 1, accessTokens: 2 },
+  graph: { entities: 3, items: 5 },
   activeDeletion: null,
 };
 
@@ -143,6 +144,15 @@ describe('UserDataDeleteDialog', () => {
     renderDialog({ scope, summary: RICH_SUMMARY });
 
     expect(screen.getByText(/right now that is/i)).toBeInTheDocument();
+  });
+
+  // #357: a destructive confirmation must not understate what it deletes.
+  it.each(COMPOUND_SCOPES)('names the knowledge graph counts in the %s inventory line', (scope) => {
+    renderDialog({ scope, summary: RICH_SUMMARY });
+
+    expect(
+      screen.getByText(/3 knowledge graph entities and 5 knowledge graph facts/i),
+    ).toBeInTheDocument();
   });
 
   it.each(NARROW_SCOPES)('renders NO inventory line for the narrow %s scope', (scope) => {

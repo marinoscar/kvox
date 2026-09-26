@@ -3,8 +3,13 @@ import type { JobHandlerRegistry } from '../jobs/job-handler.registry';
 import type { JobsService } from '../jobs/jobs.service';
 import type { PrismaService } from '../prisma/prisma.service';
 import type { GraphAccessService } from './access/graph-access.service';
-import { GRAPH_ENTITY_EDITED_ACTION, GraphEntitiesService } from './graph-entities.service';
-import { KG_EMBED_JOB_TYPE, KG_ENTITY_DIGEST_JOB_TYPE } from './job-types';
+import { FORGET_CONFIRMATION_MESSAGE, FORGET_NOT_PERSON_MESSAGE } from './dto/graph-forget.dto';
+import {
+  GRAPH_ENTITY_EDITED_ACTION,
+  GRAPH_PERSON_FORGET_REQUESTED_ACTION,
+  GraphEntitiesService,
+} from './graph-entities.service';
+import { KG_EMBED_JOB_TYPE, KG_ENTITY_DIGEST_JOB_TYPE, KG_PURGE_JOB_TYPE } from './job-types';
 import type { GraphOntologyService } from './ontology/graph-ontology.service';
 import { GraphValidationError } from './write/graph-write.errors';
 import type { GraphWriteService } from './write/graph-write.service';
@@ -33,7 +38,7 @@ const entityRow = {
 function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: boolean } = {}) {
   const registered = new Set(opts.registered ?? []);
   const registry = { get: jest.fn((type: string) => (registered.has(type) ? { type } : undefined)) };
-  const jobs = { enqueue: jest.fn(async () => ({ id: 'job' })) };
+  const jobs = { enqueue: jest.fn(async (): Promise<{ id: string; status?: string }> => ({ id: 'job', status: 'pending' })) };
   const aiSettings = { get: jest.fn(async () => (opts.graphEnabled === undefined ? {} : { graphEnabled: opts.graphEnabled })) };
   const tx = { kgEntityAlias: { findMany: jest.fn(async () => []) } };
   const prisma = {
@@ -50,7 +55,7 @@ function setup(opts: { registered?: string[]; graphEnabled?: boolean; changed?: 
       aliasesRemoved: 0,
     })),
   };
-  const access = { require: jest.fn(async () => entityRow) };
+  const access = { require: jest.fn(async (): Promise<typeof entityRow> => entityRow) };
   const ontology = { effectiveSchemaFor: jest.fn(async () => ({})) };
   const service = new GraphEntitiesService(
     prisma as unknown as PrismaService,
@@ -142,5 +147,88 @@ describe('GraphEntitiesService', () => {
     const { service, write } = setup();
     write.updateEntityDetailed.mockRejectedValueOnce(new GraphValidationError('bad', { issues: [] }));
     await expect(service.patch(ENTITY, { label: 'Sarah' }, user)).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+describe('GraphEntitiesService.forget (#357)', () => {
+  const confirm = { confirmation: 'FORGET' };
+
+  it.each([
+    ['no body', undefined],
+    ['an empty body', {}],
+    ['a lowercase word', { confirmation: 'forget' }],
+    ['another scope word', { confirmation: 'EVERYTHING' }],
+  ])('refuses %s with the typed-confirmation 400, before any lookup', async (_label, body) => {
+    const { service, access, jobs } = setup();
+
+    await expect(service.forget(ENTITY, body, user)).rejects.toMatchObject({
+      status: 400,
+      message: FORGET_CONFIRMATION_MESSAGE,
+    });
+    expect(access.require).not.toHaveBeenCalled();
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('authorises at edit level with the caller permissions (404/403 come from GraphAccessService)', async () => {
+    const { service, access } = setup();
+
+    await service.forget(ENTITY, confirm, user);
+
+    expect(access.require).toHaveBeenCalledWith(OWNER, 'entity', ENTITY, 'edit', ['graph:write']);
+  });
+
+  it('refuses a non-Person with its own 400', async () => {
+    const { service, access, jobs } = setup();
+    access.require.mockResolvedValueOnce({ ...entityRow, type: 'Organization' });
+
+    await expect(service.forget(ENTITY, confirm, user)).rejects.toMatchObject({
+      status: 400,
+      message: FORGET_NOT_PERSON_MESSAGE,
+    });
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('enqueues kg.purge { scope: person } on the entity subject, with ordinary dedup', async () => {
+    const { service, jobs } = setup();
+
+    await expect(service.forget(ENTITY, confirm, user)).resolves.toEqual({
+      jobId: 'job',
+      entityId: ENTITY,
+      status: 'pending',
+    });
+    expect(jobs.enqueue).toHaveBeenCalledWith({
+      type: KG_PURGE_JOB_TYPE,
+      reason: 'rerun',
+      subjectType: 'kg_entity',
+      subjectId: ENTITY,
+      payload: { userId: OWNER, scope: 'person', entityId: ENTITY },
+    });
+  });
+
+  it('reports a deduplicated, already-running job as running', async () => {
+    const { service, jobs } = setup();
+    jobs.enqueue.mockResolvedValueOnce({ id: 'live', status: 'running' });
+
+    await expect(service.forget(ENTITY, confirm, user)).resolves.toEqual({
+      jobId: 'live',
+      entityId: ENTITY,
+      status: 'running',
+    });
+  });
+
+  it('audits the request with ids only', async () => {
+    const { service, prisma } = setup();
+
+    await service.forget(ENTITY, confirm, user);
+
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith({
+      data: {
+        actorUserId: OWNER,
+        action: GRAPH_PERSON_FORGET_REQUESTED_ACTION,
+        targetType: 'kg_entity',
+        targetId: ENTITY,
+        meta: { entityId: ENTITY, jobId: 'job' },
+      },
+    });
   });
 });
