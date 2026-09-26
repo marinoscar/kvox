@@ -22,6 +22,7 @@ import { GraphController } from './graph.controller';
 import { GraphExportController } from './export/graph-export.controller';
 import { GraphExportService } from './export/graph-export.service';
 import { GraphExportSource } from './export/graph-export.source';
+import { KgExportExpiryTask } from './export/kg-export-expiry.task';
 import { KgExportHandler } from './export/kg-export.handler';
 import { GraphObjectsService } from './graph-objects.service';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
@@ -116,6 +117,7 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphExportSource,
     GraphExportService,
     KgExportHandler,
+    KgExportExpiryTask,
   ],
   controllers: [
     GraphController,
