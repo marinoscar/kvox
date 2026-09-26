@@ -900,6 +900,22 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
   generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
   is not an AI call
+- `PATCH /api/graph/entities/{id}` - Manual entity edit (#355, §8's second named exception):
+  `label` (the old label is **kept as an alias**), `props` merge (`null` clears a key; the merged
+  result must validate), `addAliases`/`removeAliasIds`. `type` is a 400 — a type changes only
+  through a proposal. `accepted` → `edited` on any change; evidence untouched. Audited
+  `graph.entity_edited` with keys and counts only. 404 no access or merged, 403 own entity
+  without `graph:write`. Afterwards enqueues `kg.embed`/`kg.entity_digest` **only while their
+  handlers are registered** (the digest also behind `ai.graphEnabled`)
+- `GET /api/graph/attribute-defs?entityType&includeDeprecated` - The caller's own attribute
+  definitions (§17.3), live only by default (`graph:read`)
+- `POST /api/graph/attribute-defs` - Define one; **201**. The key is server-generated
+  (`u_` + ten `[a-z0-9]`) and permanent; kind-specific option rules; max 50 live per entity
+  type (`graph:write`)
+- `PATCH /api/graph/attribute-defs/{id}` - `kind`/`entityType`/`key` immutable; choices may be
+  added or relabelled, **never removed** (400 names them); `deprecated` toggles (`graph:write`)
+- `DELETE /api/graph/attribute-defs/{id}` - **Deprecates, never deletes**; idempotent, 200
+  (`graph:write`)
 
 ### Health
 - `GET /api/health/live` - Liveness check
@@ -1245,7 +1261,11 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   keeps it readable once every anchor has gone to NULL. There is deliberately **no CHECK**
   requiring any anchor to be present. `char_start`/`char_end` are offsets into the cited **note
   version body** when `note_id` is set, or into the cited **segment's text** when `segment_id` is
-  set — NULL means the whole segment; #363 relies on this exact convention.
+  set — NULL means the whole segment; #363 relies on this exact convention. A hand-written
+  **deferred constraint trigger** (#355, `kg_assert_has_evidence`, intentional schema drift)
+  refuses at `COMMIT`, with SQLSTATE `23514`, any `accepted`/`edited` entity, relation or item
+  left with no evidence row — so write the subject and its evidence in one transaction, and
+  delete evidence **after** (or together with) its subject, never before.
 - `kg_mentions` - The coarse `MENTIONS` shortcut (§5.2), distinct from `kg_evidence`'s precise
   per-claim citation — `entity_id`/`note_id`/`transcript_id` all **Cascade** (the opposite of
   `kg_evidence` above: a mention has no meaning once either side is gone). Exactly one source
@@ -2023,15 +2043,17 @@ graph, and an explorer/whole-graph visualization (§19–§22).
 **The ontology definition package (issue #350), the `kg_*` tables (issue
 #351) and the graph module scaffold (issue #354: `GraphModule`,
 `GraphAccessService`, the `graph:*` permissions and `GET /api/graph/ontology`)
-are built; the remaining services arrive with #355–#357.** The ontology's sources live
+are built, and so is the graph write layer (issue #355: `GraphWriteService`, the evidence
+invariant trigger, the manual entity edit and attribute definitions); the remaining services
+arrive with #356–#357.** The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
 above. There are still no `kg.*` job handlers (only the type constants in
-`apps/api/src/graph/job-types.ts`), no `/api/graph/*` route beyond
-`GET /api/graph/ontology`, and no graph UI. Five rules a neighbouring file can
+`apps/api/src/graph/job-types.ts`), no `/api/graph/*` routes beyond the
+ontology, the entity edit and attribute definitions, and no graph UI. Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
@@ -2045,6 +2067,12 @@ defined in one TypeScript + Zod file (planned: `packages/shared/ontology/`)
 that is the single source of truth for every type and attribute, and every
 graph row carries the `ontology_version` it was written against. Don't
 restate any of that here; extend the spec instead.
+
+**Every graph write goes through `GraphWriteService`** (`apps/api/src/graph/write/`, #355) — the
+proposal commit, speaker naming, merges, imports and the manual edit alike — which validates
+type, closed props, endpoints, temporal fields and evidence inside the caller's transaction,
+with the deferred `kg_assert_has_evidence` trigger as the database's backstop at `COMMIT`; a
+`kg_entities`/`kg_relations`/`kg_items` row written any other way should be rejected in review.
 
 ## Specialized Subagents (MANDATORY)
 
