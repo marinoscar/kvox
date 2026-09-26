@@ -133,6 +133,9 @@ const MIGRATIONS_AT_288 = [
   // and their supporting tables). A graph data model, and equally not about
   // notifications.
   '20260926012548_add_knowledge_graph',
+  // #352: `transcripts.recorded_at`, when the recording was made — the meeting
+  // date connected knowledge reads. Transcript metadata, not notifications.
+  '20260926020948_add_transcript_recorded_at',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
