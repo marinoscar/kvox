@@ -29,6 +29,7 @@ import type {
   EntityMention,
   EvidenceLink,
   GraphEntityDetail,
+  GraphEdge,
   GraphEntitySummary,
   GraphOntology,
   GraphSlice,
@@ -1109,4 +1110,142 @@ export function proposalSummaryRow(
   overrides: Partial<ProposalSummary> = {},
 ): ProposalSummary {
   return proposalSummary(draftItems(), { id, ...overrides });
+}
+
+// ---------------------------------------------------------------------------
+// Explorer (#374) — a small, fixed graph `POST /api/graph/explore/expand`
+// walks one hop over, honouring `types`, `relationTypes`, `as_of` and `cap`
+// the way #370's service does. Joe's manager CHANGES on 2026-09-01: Ben
+// before, Ana after — the `as_of` fixture the explorer tests read.
+// ---------------------------------------------------------------------------
+
+export const ATLAS_COMMITMENT_ID = gid(301);
+export const Q3_DECISION_ID = gid(302);
+export const EXPLORER_DEFAULT_AS_OF = '2026-09-26';
+/** The day Joe's REPORTS_TO moved from Ben to Ana. */
+export const MANAGER_CHANGE_DATE = '2026-09-01';
+
+interface ExplorerFixtureNode {
+  id: string;
+  nodeKind: 'entity' | 'item';
+  type: string;
+  label: string;
+  status: string | null;
+  occurredAt: string | null;
+}
+
+const explorerItems: ExplorerFixtureNode[] = [
+  { id: ATLAS_COMMITMENT_ID, nodeKind: 'item', type: 'commitment', label: 'Ship the Atlas beta', status: 'open', occurredAt: '2026-09-20T15:00:00.000Z' },
+  { id: Q3_DECISION_ID, nodeKind: 'item', type: 'decision', label: 'Move Atlas to the new cluster', status: null, occurredAt: '2026-09-20T15:00:00.000Z' },
+];
+
+export const explorerFixtureNodes: ExplorerFixtureNode[] = [
+  ...graphEntitySummaries.map((s) => ({
+    id: s.id,
+    nodeKind: 'entity' as const,
+    type: s.type,
+    label: s.label,
+    status: null,
+    occurredAt: s.type === 'Meeting' ? s.lastSeenAt : null,
+  })),
+  ...explorerItems,
+];
+
+const edge = (
+  n: number,
+  type: string,
+  source: string,
+  target: string,
+  valid: GraphEdge['valid'] = null,
+): GraphEdge => ({ id: gid(n), type, source, target, valid, confidence: 0.9, virtual: false });
+
+export const explorerFixtureEdges: GraphEdge[] = [
+  edge(410, 'WORKS_FOR', JOE_ID, ACME_ID),
+  edge(411, 'REPORTS_TO', JOE_ID, ANA_ID, { from: '2026-09-01T00:00:00.000Z', to: null, precision: 'month' }),
+  edge(414, 'REPORTS_TO', JOE_ID, BEN_ID, { from: '2026-03-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z', precision: 'month' }),
+  edge(412, 'ATTENDED', JOE_ID, Q3_MEETING_ID),
+  edge(413, 'ATTENDED', JOE_ID, SYNC_MEETING_ID),
+  { id: `virt:${ATLAS_COMMITMENT_ID}:ASSIGNED_TO`, type: 'ASSIGNED_TO', source: ATLAS_COMMITMENT_ID, target: JOE_ID, valid: null, confidence: null, virtual: true },
+  edge(415, 'WORKS_FOR', ANA_ID, ACME_ID),
+  edge(416, 'ATTENDED', ANA_ID, Q3_MEETING_ID),
+  edge(417, 'WORKS_FOR', BEN_ID, GLOBEX_ID),
+  edge(418, 'WORKS_FOR', CARLA_ID, INITECH_ID),
+  edge(419, 'ATTENDED', CARLA_ID, SYNC_MEETING_ID),
+  edge(420, 'WORKS_FOR', DANA_ID, ACME_ID),
+  edge(421, 'PART_OF', ATLAS_ID, ACME_ID),
+  edge(422, 'PART_OF', BEACON_ID, GLOBEX_ID),
+  { id: `virt:${Q3_DECISION_ID}:DECIDED_IN`, type: 'DECIDED_IN', source: Q3_DECISION_ID, target: Q3_MEETING_ID, valid: null, confidence: null, virtual: true },
+];
+
+function validAt(e: GraphEdge, asOf: string): boolean {
+  if (!e.valid) return true;
+  const at = Date.parse(asOf.length === 10 ? `${asOf}T00:00:00Z` : asOf);
+  if (e.valid.from && Date.parse(e.valid.from) > at) return false;
+  if (e.valid.to && Date.parse(e.valid.to) <= at) return false;
+  return true;
+}
+
+export interface ExpandFixtureRequest {
+  nodeIds: string[];
+  types?: string[];
+  relationTypes?: string[];
+  as_of?: string;
+  cap?: number;
+}
+
+/**
+ * One hop from every seed, as #370 answers it — or `null` when any seed is
+ * unknown (the handler turns that into the all-or-nothing 404).
+ */
+export function expandFixture(req: ExpandFixtureRequest): GraphSlice | null {
+  const asOf = req.as_of ?? EXPLORER_DEFAULT_AS_OF;
+  const cap = req.cap ?? 100;
+  const byId = new Map(explorerFixtureNodes.map((n) => [n.id, n]));
+  const seeds = [...new Set(req.nodeIds)];
+  if (seeds.some((id) => !byId.has(id))) return null;
+
+  const live = explorerFixtureEdges.filter((e) => validAt(e, asOf));
+  const degree = new Map<string, number>();
+  for (const e of live) {
+    degree.set(e.source, (degree.get(e.source) ?? 0) + 1);
+    degree.set(e.target, (degree.get(e.target) ?? 0) + 1);
+  }
+  const walkable = live.filter((e) => !req.relationTypes || req.relationTypes.includes(e.type));
+  const depth = new Map<string, number>(seeds.map((id) => [id, 0]));
+  for (const e of walkable) {
+    for (const [from, to] of [[e.source, e.target], [e.target, e.source]] as const) {
+      if (!seeds.includes(from) || depth.has(to)) continue;
+      const node = byId.get(to)!;
+      if (req.types && !req.types.includes(node.type)) continue;
+      depth.set(to, 1);
+    }
+  }
+  const ordered = [...depth.keys()].sort((a, b) => {
+    const da = depth.get(a)!;
+    const db = depth.get(b)!;
+    if (da !== db) return da - db;
+    return (degree.get(b) ?? 0) - (degree.get(a) ?? 0) || (a < b ? -1 : 1);
+  });
+  const kept = new Set(ordered.slice(0, cap));
+  return {
+    seedIds: seeds,
+    asOf: `${asOf.slice(0, 10)}T00:00:00.000Z`,
+    nodes: [...kept].map((id) => ({ ...byId.get(id)!, depth: depth.get(id)!, degree: degree.get(id) ?? 0 })),
+    edges: walkable.filter((e) => kept.has(e.source) && kept.has(e.target)),
+    truncated: ordered.length > cap,
+    cap,
+  };
+}
+
+/** A synthetic slice of `count` neighbours around `seedId` — for the 300-node cap. */
+export function manyNodesSlice(seedId: string, count: number, offset = 5000): GraphSlice {
+  const seed = explorerFixtureNodes.find((n) => n.id === seedId)!;
+  const nodes: GraphSlice['nodes'] = [{ ...seed, depth: 0, degree: count }];
+  const edges: GraphEdge[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const id = gid(offset + i);
+    nodes.push({ id, nodeKind: 'entity', type: 'Person', label: `Person ${i + 1}`, depth: 1, degree: 1 + (i % 7), status: null, occurredAt: null });
+    edges.push({ id: gid(offset + 100_000 + i), type: 'WORKS_FOR', source: id, target: seedId, valid: null, confidence: 0.8, virtual: false });
+  }
+  return { seedIds: [seedId], asOf: '2026-09-26T00:00:00.000Z', nodes, edges, truncated: false, cap: 300 };
 }
