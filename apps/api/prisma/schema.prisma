@@ -2364,6 +2364,12 @@ model Transcript {
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  // When the recording was made — defaults to the upload instant; the Meeting
+  // date the knowledge graph reads (docs/specs/ontology.md §5.4). Issue #352:
+  // backfilled from `created_at`, and `TranscriptsService.create` stamps it
+  // with the same `Date` instance as `createdAt`. Editable by the owner or an
+  // editor through `PATCH /api/transcripts/:id`; not versioned, like `title`.
+  recordedAt      DateTime  @default(now()) @map("recorded_at") @db.Timestamptz
 
   durationMs     Int?    @map("duration_ms")
   failureReason  String? @map("failure_reason")
@@ -2426,6 +2432,8 @@ model Transcript {
 
   // "This owner's transcripts, newest first" — the transcript list view.
   @@index([ownerId, updatedAt(sort: Desc)])
+  // "This owner's transcripts by when they were recorded" (issue #352).
+  @@index([ownerId, recordedAt(sort: Desc)])
   // "Every transcript in state X" — `transcripts.housekeeping`'s scans
   // (spec §1.5.8) and any future admin-adjacent health check.
   @@index([status])
