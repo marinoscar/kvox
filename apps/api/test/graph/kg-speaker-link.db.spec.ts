@@ -14,11 +14,18 @@
 // clears one; an editor-share user names one (nothing is written); a deleted
 // transcript and an owner without `graph:write` are no-ops; two concurrent
 // runs converge on one end state.
+//
+// #405 adds the same rename → re-point and clear → unlink story driven through
+// the REAL save path — `TranscriptEditingService.applyOperations`, whose
+// identification and versioned branches each emit
+// `transcript.speakers_identified` — rather than by writing
+// `speaker_identities` directly, which a versioned rename never touches.
 // =============================================================================
 
 import { randomUUID } from 'node:crypto';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import { GraphOntologyService } from '../../src/graph/ontology/graph-ontology.service';
@@ -29,6 +36,13 @@ import {
 } from '../../src/graph/speaker-link/speaker-link.reconciler';
 import { EvidenceValidator } from '../../src/graph/write/evidence-validator.service';
 import { GraphWriteService } from '../../src/graph/write/graph-write.service';
+import { OP_TYPES } from '../../src/transcripts/editing';
+import {
+  TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+  type TranscriptSpeakersIdentifiedEvent,
+} from '../../src/transcripts/events/transcript-speakers-identified.event';
+import { TranscriptEditingService } from '../../src/transcripts/transcript-editing.service';
+import { TranscriptMaterializeService } from '../../src/transcripts/transcript-materialize.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('kg-speaker-link.db.spec');
@@ -83,7 +97,10 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     const owner = { owner: { email: { startsWith: EMAIL_PREFIX } } };
     await prisma.auditEvent.deleteMany({
       where: {
-        action: { in: [SPEAKER_LINKED_ACTION, SPEAKER_UNLINKED_ACTION] },
+        OR: [
+          { action: { in: [SPEAKER_LINKED_ACTION, SPEAKER_UNLINKED_ACTION] } },
+          { action: { startsWith: 'transcript.' } },
+        ],
         actorUser: { email: { startsWith: EMAIL_PREFIX } },
       },
     });
@@ -248,6 +265,118 @@ describeWithDb('kg.speaker_link reconcile (real Postgres)', () => {
     for (const audit of audits) {
       expect(JSON.stringify(audit.meta)).not.toMatch(/Sarah|Marcus|Dana/i);
     }
+  });
+
+  // ===========================================================================
+  // #405: through the real save path
+  // ===========================================================================
+
+  /**
+   * The editing service on the real database, with the graph hand-off
+   * observed: every `transcript.speakers_identified` it emits is recorded, and
+   * `drain()` runs the reconcile each one would enqueue (what the listener +
+   * `kg.speaker_link` handler do in production).
+   */
+  function editingService() {
+    const events = new EventEmitter2();
+    const emitted: TranscriptSpeakersIdentifiedEvent[] = [];
+    events.on(TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT, (event: TranscriptSpeakersIdentifiedEvent) => {
+      emitted.push(event);
+    });
+    const access = {
+      require: async (_userId: string, id: string) => ({
+        transcript: await prisma.transcript.findUniqueOrThrow({ where: { id } }),
+        role: 'owner',
+      }),
+    };
+    const pipeline = {
+      enqueueSnapshot: async () => true,
+      enqueueSearchIndex: async () => undefined,
+    };
+    const service = new TranscriptEditingService(
+      prisma as never,
+      access as never,
+      new TranscriptMaterializeService(prisma as never, {} as never),
+      pipeline as never,
+      events,
+    );
+    const drain = async () => {
+      const batch = emitted.splice(0);
+      for (const event of batch) await run(event.transcriptId, event.actorUserId);
+      return batch;
+    };
+    return { service, drain };
+  }
+
+  async function rename(
+    service: TranscriptEditingService,
+    owner: { id: string },
+    transcriptId: string,
+    speakerId: string,
+    displayName: string,
+  ) {
+    const [transcript, speaker] = await Promise.all([
+      prisma.transcript.findUniqueOrThrow({ where: { id: transcriptId } }),
+      prisma.transcriptSpeaker.findUniqueOrThrow({ where: { id: speakerId } }),
+    ]);
+    return service.applyOperations(
+      transcriptId,
+      {
+        baseVersion: transcript.currentVersion,
+        clientBatchId: randomUUID(),
+        ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId, rev: speaker.rev, displayName }],
+      } as never,
+      {
+        id: owner.id,
+        email: 'owner@example.test',
+        roles: [],
+        permissions: ['transcripts:read', 'transcripts:write'],
+        isActive: true,
+      } as never,
+    );
+  }
+
+  it('re-points on a versioned rename and unlinks on a clear, through the real save path (#405)', async () => {
+    const owner = await createUser('save-path');
+    const t = await createTranscript(owner.id, ['A']);
+    await prisma.transcript.update({ where: { id: t.transcriptId }, data: { currentVersion: 1 } });
+    const { service, drain } = editingService();
+    const aEdge = () => prisma.kgRelation.findMany({ where: { fromSpeakerId: t.speakers.A } });
+
+    // --- Identify: Speaker A → "Sarah Chen" (unversioned, #323). --------------
+    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Sarah Chen')).resolves.toMatchObject({
+      version: 1,
+    });
+    expect((await drain()).map((e) => e.speakerIds)).toEqual([[t.speakers.A]]);
+    const sarah = (await persons(owner.id)).find((p) => p.label === 'Sarah Chen')!;
+    expect(sarah).toBeDefined();
+    expect((await aEdge()).map((e) => e.toId)).toEqual([sarah.id]);
+
+    // --- Rename: "Sarah Chen" → "Marcus Webb" is a VERSIONED correction. ------
+    // speaker_identities still says "Sarah Chen"; the live row says "Marcus
+    // Webb", and the live row is what the user sees.
+    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Marcus Webb')).resolves.toMatchObject({
+      version: 2,
+    });
+    const identities = (await prisma.transcript.findUniqueOrThrow({ where: { id: t.transcriptId } }))
+      .speakerIdentities;
+    expect(identities).toEqual({ [t.speakers.A]: 'Sarah Chen' });
+
+    expect((await drain()).map((e) => [e.actorUserId, e.speakerIds])).toEqual([[owner.id, [t.speakers.A]]]);
+    const marcus = (await persons(owner.id)).find((p) => p.label === 'Marcus Webb')!;
+    expect(marcus).toBeDefined();
+    expect((await aEdge()).map((e) => e.toId)).toEqual([marcus.id]);
+    // Sarah was a speaker-naming-only Person with no other ties: gone.
+    await expect(prisma.kgEntity.findUnique({ where: { id: sarah.id } })).resolves.toBeNull();
+
+    // --- Clear: back to the placeholder (versioned, retires the identity). ----
+    await expect(rename(service, owner, t.transcriptId, t.speakers.A, 'Speaker A')).resolves.toMatchObject({
+      version: 3,
+    });
+    expect((await drain()).map((e) => e.speakerIds)).toEqual([[t.speakers.A]]);
+    await expect(aEdge()).resolves.toEqual([]);
+    await expect(prisma.kgEntity.findUnique({ where: { id: marcus.id } })).resolves.toBeNull();
+    expect(await persons(owner.id)).toEqual([]);
   });
 
   it('writes nothing for an editor-share user naming a speaker (§12)', async () => {

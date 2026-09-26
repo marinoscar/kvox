@@ -477,6 +477,75 @@ describe('TranscriptEditingService', () => {
         { op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' },
       ]);
       expect(tx.transcriptSpeaker.updateMany).not.toHaveBeenCalled();
+
+      // #405: the graph is told, exactly as it is after an identification,
+      // and only after the commit's own follow-up work.
+      expect(events.emit).toHaveBeenCalledTimes(1);
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, ['A']),
+      );
+      expect(pipeline.enqueueSearchIndex.mock.invocationCallOrder[0]).toBeLessThan(
+        events.emit.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('still answers a versioned rename when the emit throws (#405)', async () => {
+      const identified = [
+        { id: 'A', label: 'A', displayName: 'Oscar', colorIndex: 0, rev: 1 },
+        speakerRows[1],
+      ];
+
+      (prisma.transcriptSpeaker as { findMany: jest.Mock }).findMany.mockResolvedValue(identified);
+      tx.transcriptSpeaker.findMany.mockResolvedValue(identified);
+      events.emit.mockImplementation(() => {
+        throw new Error('listener exploded');
+      });
+
+      const result = await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'oscar-to-joe-throws',
+          ops: [{ op: OP_TYPES.RENAME_SPEAKER, speakerId: 'A', rev: 1, displayName: 'Joe' }],
+        } as never,
+        USER,
+      );
+
+      expect(result.version).toBe(4);
+    });
+
+    it('emits for a speaker created in a versioned batch (#405)', async () => {
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'create-dana',
+          ops: [{ op: OP_TYPES.CREATE_SPEAKER, displayName: 'Dana' }],
+        } as never,
+        USER,
+      );
+
+      const newId = recordedOps()[0].speakerId as string;
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, [newId]),
+      );
+    });
+
+    it('does not emit for a versioned batch that changes no speaker name (#405)', async () => {
+      await service.applyOperations(
+        TRANSCRIPT_ID,
+        {
+          baseVersion: 3,
+          clientBatchId: 'text-only',
+          ops: [{ op: OP_TYPES.UPDATE_TEXT, segmentId: 's1', rev: 1, text: 'updated text' }],
+        } as never,
+        USER,
+      );
+
+      expect(versionCreate).toHaveBeenCalled();
+      expect(events.emit).not.toHaveBeenCalled();
     });
 
     it('retires the identity entry when a versioned rename puts the speaker back on its placeholder', async () => {
@@ -510,6 +579,11 @@ describe('TranscriptEditingService', () => {
         where: { id: TRANSCRIPT_ID },
         data: { speakerIdentities: {} },
       });
+      // #405: a clear is a name change too — the graph must unlink.
+      expect(events.emit).toHaveBeenCalledWith(
+        TRANSCRIPT_SPEAKERS_IDENTIFIED_EVENT,
+        new TranscriptSpeakersIdentifiedEvent(TRANSCRIPT_ID, USER.id, ['A']),
+      );
     });
   });
 

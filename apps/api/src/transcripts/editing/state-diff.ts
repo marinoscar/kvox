@@ -154,3 +154,45 @@ export function diffState(before: EditingState, after: EditingState): StateDiff 
 
   return diff;
 }
+
+/**
+ * The speakers whose shown name a diff changes: renamed (including a clear
+ * back to the placeholder), created, or deleted (merged away). Issue #405 —
+ * the versioned save path hands these to the graph's speaker-link
+ * reconcile, exactly as an identification does. Order: diff order, unique.
+ */
+export function speakersWithChangedNames(diff: StateDiff): string[] {
+  return [
+    ...new Set([
+      ...diff.speakersUpdated
+        .filter((update) => update.patch.displayName !== undefined)
+        .map((update) => update.id),
+      ...diff.speakersCreated.map((speaker) => speaker.id),
+      ...diff.speakersDeleted,
+    ]),
+  ];
+}
+
+/**
+ * The same question for a wholesale swap of the speaker rows (a restore):
+ * every speaker whose name differs between `before` and `after`, or that
+ * exists on only one side.
+ */
+export function speakerNameChanges(
+  before: Readonly<Array<Pick<EditableSpeaker, 'id' | 'displayName'>>>,
+  after: Readonly<Array<Pick<EditableSpeaker, 'id' | 'displayName'>>>,
+): string[] {
+  const beforeNames = new Map(before.map((speaker) => [speaker.id, speaker.displayName]));
+  const afterIds = new Set(after.map((speaker) => speaker.id));
+  const changed = new Set<string>();
+
+  for (const speaker of after) {
+    if (beforeNames.get(speaker.id) !== speaker.displayName) changed.add(speaker.id);
+  }
+
+  for (const speaker of before) {
+    if (!afterIds.has(speaker.id)) changed.add(speaker.id);
+  }
+
+  return [...changed];
+}
