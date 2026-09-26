@@ -1070,6 +1070,16 @@ an entity page**
 label after the fact, which is curation by construction and needs no
 proposal to wrap it.
 
+The speaker-naming write (#356) is **owner-only and a full reconcile**: it
+writes only into the transcript owner's graph, only when the owner performed
+the naming and holds `graph:write` (an editor-share's naming enqueues a job
+that writes nothing, §12), and each run re-derives every `IDENTIFIED_AS` edge
+for that transcript's speakers from the current `speaker_identities` under a
+per-transcript advisory lock — creating or linking the `Person`, re-pointing
+a renamed speaker, removing a cleared one, and deleting the old `Person` only
+when it existed solely through that transcript's speaker naming — so a
+repeated or concurrent run converges on the same state.
+
 ## 9. Retrieval
 
 ### 9.1 Entity brief

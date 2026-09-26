@@ -2097,6 +2097,12 @@ silently resume minutes later, and there is no credential narrow enough for a
 The handler is re-entrant — every step selects what is still there and deletes it — which is
 what makes a person-initiated retry (asking again) safe without an automatic one.
 
+**Speaker naming writes the graph only through `kg.speaker_link`** (#356): `TranscriptEditingService
+.identify()` emits `transcript.speakers_identified`, a listener only enqueues the job
+(`skipDedup: true`), and the server-only handler reconciles that transcript's current
+`speaker_identities` into the **owner's** `Person` + `IDENTIFIED_AS` rows — never an editor's, and
+only while the owner holds `graph:write`; see `docs/specs/ontology.md` §8.
+
 ## Specialized Subagents (MANDATORY)
 
 **CRITICAL REQUIREMENT**: This project uses specialized subagents for all development work. You MUST delegate tasks to the appropriate subagent. Do NOT attempt to perform development tasks directly without using the designated agent.
