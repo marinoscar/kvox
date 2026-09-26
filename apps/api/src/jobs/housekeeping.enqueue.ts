@@ -61,7 +61,7 @@
 // =============================================================================
 
 import { Logger } from '@nestjs/common';
-import type { Job } from '@prisma/client';
+import type { Job, Prisma } from '@prisma/client';
 
 import type { PrismaService } from '../prisma/prisma.service';
 import type { JobsService } from './jobs.service';
@@ -92,6 +92,16 @@ export interface HousekeepingEnqueueOptions {
   type: string;
   /** A human phrase for the log line ("device code cleanup"). Lower case. */
   what: string;
+  /**
+   * Optional: a subject TYPE that tells this sweep apart from other jobs of the
+   * same `type` (#386 — `kg.export` renders exports under `kg_export`/<id> and
+   * sweeps them under `kg_export_sweep` with no id). When set, the in-flight
+   * check and the dedup key are both scoped to it, so a pending render never
+   * suppresses the sweep. The subject id stays null: still one global sweep.
+   */
+  subjectType?: string;
+  /** Optional handler input (e.g. `{ mode: 'sweep' }`). Identifiers only. */
+  payload?: Prisma.InputJsonValue;
 }
 
 /**
@@ -107,11 +117,15 @@ export interface HousekeepingEnqueueOptions {
 export async function enqueueHousekeepingJob(
   options: HousekeepingEnqueueOptions
 ): Promise<Job | null> {
-  const { jobs, prisma, logger, type, what } = options;
+  const { jobs, prisma, logger, type, what, subjectType, payload } = options;
 
   try {
     const active = await prisma.job.findFirst({
-      where: { type, status: { in: ['pending', 'running'] } },
+      where: {
+        type,
+        status: { in: ['pending', 'running'] },
+        ...(subjectType !== undefined ? { subjectType, subjectId: null } : {}),
+      },
       select: { id: true, status: true },
     });
 
@@ -134,6 +148,8 @@ export async function enqueueHousekeepingJob(
       // for the type, which is what makes the index a real single-flight
       // guarantee rather than a hint.
       priority: HOUSEKEEPING_PRIORITY,
+      ...(subjectType !== undefined ? { subjectType, subjectId: null } : {}),
+      ...(payload !== undefined ? { payload } : {}),
     });
 
     logger.log(`Queued ${what} job ${job.id}`);

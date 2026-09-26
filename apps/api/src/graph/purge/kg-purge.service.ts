@@ -29,6 +29,12 @@
 // counts and texts are unchanged. Every anchor FK from `kg_evidence` into them
 // is SetNull, so deleting evidence never cascades the other way either.
 //
+// The ONE storage object it removes is the graph's own derived artefact: a
+// `kg.export` file (`managed_by: 'graph'`, #386), through `GraphObjectsService`
+// — never a user upload. Both plans end with `exports`: an export written
+// before "forget this person" still contains that person, so it goes too (the
+// next export is rendered from the graph as it now is).
+//
 // -----------------------------------------------------------------------------
 // ⚠ AN EXPLICIT PLAN, NOT FK CASCADES
 // -----------------------------------------------------------------------------
@@ -75,6 +81,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { GraphObjectsService } from '../graph-objects.service';
 
 /** Ids per statement, and per transaction. */
 export const KG_PURGE_BATCH = 500;
@@ -102,6 +109,8 @@ export const KG_PURGE_PERSON_PLAN = [
   'entityRows',
   'draftProposalItems',
   'entities',
+  // #386 — every export file of the owner's graph: each may name this person.
+  'exports',
 ] as const;
 
 /** `scope: 'all'`, in order. See the header for where evidence went. */
@@ -122,6 +131,8 @@ export const KG_PURGE_ALL_PLAN = [
   // #371 — the whole-graph layout snapshots. Ids and coordinates only (labels
   // are never stored), but they are still a map of the graph being wiped.
   'graphLayouts',
+  // #386 — the owner's RDF exports and their `managed_by: 'graph'` files.
+  'exports',
 ] as const;
 
 export type KgPurgePersonStep = (typeof KG_PURGE_PERSON_PLAN)[number];
@@ -143,6 +154,7 @@ export interface KgPurgeCounts {
   views: number;
   attributeDefs: number;
   graphLayouts: number;
+  exports: number;
 }
 
 /** What `purgePerson` reports: the counts, and the set of ids it forgot. */
@@ -168,6 +180,7 @@ export function emptyKgPurgeCounts(): KgPurgeCounts {
     views: 0,
     attributeDefs: 0,
     graphLayouts: 0,
+    exports: 0,
   };
 }
 
@@ -185,7 +198,10 @@ type Tx = Prisma.TransactionClient;
 export class KgPurgeService {
   private readonly logger = new Logger(KgPurgeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly objects: GraphObjectsService,
+  ) {}
 
   // ===========================================================================
   // scope: 'person'
@@ -313,6 +329,9 @@ export class KgPurgeService {
           await this.prisma.$transaction((tx) => this.deleteEntities(tx, userId, ids, counts));
         }
         return;
+
+      case 'exports':
+        return this.purgeExports(userId, counts);
     }
   }
 
@@ -499,7 +518,36 @@ export class KgPurgeService {
         // A handful of rows per owner (retention keeps two): one statement.
         counts.graphLayouts += (await this.prisma.kgGraphLayout.deleteMany({ where: owned })).count;
         return;
+
+      case 'exports':
+        return this.purgeExports(userId, counts);
     }
+  }
+
+  /**
+   * Every `kg_exports` row of the owner and its file (#386): the reference
+   * first (`object_id` is Restrict), then the bytes, then the row — the export
+   * sweep's order. Re-entrant: a row already gone is simply not selected.
+   */
+  private async purgeExports(userId: string, counts: KgPurgeCounts): Promise<void> {
+    for (let batch = 0; batch < KG_PURGE_MAX_BATCHES; batch += 1) {
+      const rows = await this.prisma.kgExport.findMany({
+        where: { ownerId: userId },
+        select: { id: true, objectId: true },
+        orderBy: { id: 'asc' },
+        take: KG_PURGE_BATCH,
+      });
+      if (rows.length === 0) return;
+      for (const row of rows) {
+        if (row.objectId) {
+          await this.prisma.kgExport.update({ where: { id: row.id }, data: { objectId: null } });
+          await this.objects.deleteIfPresent(row.objectId);
+        }
+        await this.prisma.kgExport.delete({ where: { id: row.id } });
+        counts.exports += 1;
+      }
+    }
+    throw this.nonConvergence('exports', userId);
   }
 
   // ===========================================================================
