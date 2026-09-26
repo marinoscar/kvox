@@ -54,6 +54,8 @@ function aiConfig(overrides: Record<string, unknown> = {}) {
         maxOutputTokens: 16_000,
         source: 'catalogue',
         derivedFrom: null,
+        structuredOutput: true,
+        toolCalling: true,
       },
       // #109: a second permitted model, so "the user changed it from the
       // default" is a state this suite can actually reach.
@@ -64,6 +66,8 @@ function aiConfig(overrides: Record<string, unknown> = {}) {
         maxOutputTokens: 16_000,
         source: 'catalogue',
         derivedFrom: null,
+        structuredOutput: true,
+        toolCalling: true,
       },
     ],
     defaultModel: 'gpt-4o-mini',

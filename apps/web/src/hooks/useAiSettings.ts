@@ -92,6 +92,13 @@ export interface UseAiSettingsReturn {
 
   isSaving: boolean;
   saveError: string | null;
+  /**
+   * The `details` of the ApiError behind `saveError`, when there was one
+   * (#361). A 400 from `PUT /api/ai-settings` names the offending task in
+   * `details.task` so the page can highlight that row; `saveError` stays the
+   * sentence, this is the machine-readable half. `null` when none.
+   */
+  saveErrorDetails: unknown;
   /** Resolves `true` when the save landed, `false` when it did not — never throws. */
   save: (input: UpdateAiSettingsInput) => Promise<boolean>;
   clearSaveError: () => void;
@@ -136,6 +143,7 @@ export function useAiSettings(): UseAiSettingsReturn {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveErrorDetails, setSaveErrorDetails] = useState<unknown>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<AiReachabilityTest | null>(null);
   const [isDiscovering, setIsDiscovering] = useState(false);
@@ -168,6 +176,7 @@ export function useAiSettings(): UseAiSettingsReturn {
       try {
         setIsSaving(true);
         setSaveError(null);
+        setSaveErrorDetails(null);
         // `?? 0` rather than "omit when we have none": 0 is the API's way of
         // asserting "I believe nothing is stored yet", so even a first save on
         // a fresh deployment is guarded rather than being the one unprotected
@@ -194,6 +203,7 @@ export function useAiSettings(): UseAiSettingsReturn {
         }
         if (isMounted()) {
           setSaveError(messageFor(err, 'Failed to save AI settings'));
+          setSaveErrorDetails(err instanceof ApiError ? (err.details ?? null) : null);
         }
         return false;
       } finally {
@@ -282,7 +292,10 @@ export function useAiSettings(): UseAiSettingsReturn {
     [isMounted],
   );
 
-  const clearSaveError = useCallback(() => setSaveError(null), []);
+  const clearSaveError = useCallback(() => {
+    setSaveError(null);
+    setSaveErrorDetails(null);
+  }, []);
   const clearTestResult = useCallback(() => setTestResult(null), []);
   const clearDiscoverResult = useCallback(() => {
     // BOTH, from one control: the page offers a single dismissal, and leaving
@@ -298,6 +311,7 @@ export function useAiSettings(): UseAiSettingsReturn {
     loadError,
     isSaving,
     saveError,
+    saveErrorDetails,
     save,
     clearSaveError,
     isTesting,

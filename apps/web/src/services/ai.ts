@@ -109,6 +109,10 @@ export interface AiConfigModel {
   source: AiModelLimitSource;
   /** The catalogue id the numbers were taken from when `source` is `'derived'`. */
   derivedFrom: string | null;
+  /** Whether the model can return schema-constrained JSON (#358/#359). */
+  structuredOutput: boolean;
+  /** Whether the model can call tools (#358/#359). */
+  toolCalling: boolean;
 }
 
 /**
@@ -207,6 +211,10 @@ export interface AiModelDescriptor {
   label: string;
   contextWindowTokens: number;
   maxOutputTokens: number;
+  /** Whether the model can return schema-constrained JSON (#358/#359). */
+  structuredOutput: boolean;
+  /** Whether the model can call tools (#358/#359). */
+  toolCalling: boolean;
 }
 
 export interface AiProviderCapabilities {
@@ -411,6 +419,72 @@ export interface AiSettings {
    * budget rather than a free quality dial.
    */
   reasoningEffort: AiReasoningEffort;
+  /**
+   * Per-task model choices for connected knowledge (#360). A task absent from
+   * this map runs on `defaultModel`. REPLACED WHOLESALE on write, like
+   * `allowedModels`, so dropping a key is how a task returns to Default.
+   */
+  taskModels: Partial<Record<AiTaskKey, AiTaskModel>>;
+  /** Whether connected knowledge (the graph) may run at all (#360). */
+  graphEnabled: boolean;
+}
+
+// =============================================================================
+// Task models and connected knowledge (#360, consumed by #361)
+// =============================================================================
+
+/**
+ * The connected-knowledge tasks a model can be chosen for.
+ *
+ * Mirrors the API's own union (#360); there is deliberately no `graph.brief`.
+ * The web app never hardcodes a label for these — `AiSettingsAdminView.tasks`
+ * publishes each task's label, description and requirements.
+ */
+export type AiTaskKey = 'graph.extract' | 'graph.adjudicate' | 'graph.digest' | 'graph.agent';
+
+/** A capability a task may require of its model. */
+export type AiModelCapability = 'structuredOutput' | 'toolCalling';
+
+/**
+ * Per-task reasoning effort. A narrower set than {@link AiReasoningEffort}:
+ * ABSENT is how "follow the page-wide setting" is spelled, so there is no
+ * `'none'` here to mean a second thing.
+ */
+export type AiTaskReasoningEffort = 'low' | 'medium' | 'high';
+
+/** One task's stored choice. Absent `reasoningEffort` follows the page-wide one. */
+export interface AiTaskModel {
+  model: string;
+  reasoningEffort?: AiTaskReasoningEffort;
+}
+
+/** One task as the API publishes it — the only source of its label and copy. */
+export interface AiTaskDefinition {
+  key: AiTaskKey;
+  label: string;
+  description: string;
+  requires: AiModelCapability[];
+}
+
+/** What the API knows about one model's capabilities, and how it knows. */
+export interface AiModelCapabilities {
+  id: string;
+  structuredOutput: boolean;
+  toolCalling: boolean;
+  source: 'explicit' | 'catalogue' | 'derived' | 'default';
+}
+
+/**
+ * How the SAVED policy resolves for one task — the server's view, which may
+ * differ from the page's unsaved draft.
+ */
+export interface AiTaskModelStatus {
+  task: AiTaskKey;
+  configuredModel: string | null;
+  effectiveModel: string | null;
+  source: 'task' | 'default' | 'none';
+  missing: AiModelCapability[];
+  problem: null | 'not_permitted' | 'lacks_capability' | 'no_model';
 }
 
 /** `GET /api/ai-settings`, and the body every write returns. */
@@ -438,6 +512,12 @@ export interface AiSettingsAdminView {
    * untrue, and sends them to look up numbers that would not help.
    */
   unknownModels: string[];
+  /** Every connected-knowledge task, in the order the API lists them (#360). */
+  tasks: AiTaskDefinition[];
+  /** Capability flags for every permitted model (#360). */
+  modelCapabilities: AiModelCapabilities[];
+  /** How the saved `taskModels` resolves, one entry per task (#360). */
+  taskModelStatus: AiTaskModelStatus[];
   /** Bumped on every write. Pass back as `If-Match` on the next PUT. */
   version: number;
   updatedAt: string | null;
@@ -478,6 +558,12 @@ export interface UpdateAiSettingsInput {
   requestTimeoutMs?: number;
   maxDocumentBytes?: number;
   reasoningEffort?: AiReasoningEffort;
+  /**
+   * REPLACES wholesale (#360) — send the full map, omitting tasks left on
+   * Default. A merging map could never express "put this task back on Default".
+   */
+  taskModels?: Partial<Record<AiTaskKey, AiTaskModel>>;
+  graphEnabled?: boolean;
 }
 
 /** `POST /api/ai-settings/test` — probe a base URL, with no credential. */

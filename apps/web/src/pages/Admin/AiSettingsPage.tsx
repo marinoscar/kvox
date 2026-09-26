@@ -171,9 +171,30 @@
  * `Extra high (slowest, most output tokens)`), so the dropdown is legible
  * without the vendor's documentation open beside it.
  *
+ * =============================================================================
+ * #361: CONNECTED KNOWLEDGE AND TASK MODELS ARE TWO MORE SECTIONS, NOT A CARD
+ * =============================================================================
+ *
+ * `ai.graphEnabled` and `ai.taskModels` (#360) are fields of this same `ai`
+ * namespace, gated by the same `system_settings:*` pair, so they are two more
+ * `Paper` sections between "Permitted models" and "Limits" — never a second card
+ * or a tab (Settings UI Pattern rules 1–3). `AiGraphSettings` is the switch and
+ * the plain statement of who pays; `AiTaskModels` picks a permitted model and a
+ * reasoning effort per task, with the task list, labels and requirements taken
+ * from the API's own `tasks[]`.
+ *
+ * `taskModels` REPLACES WHOLESALE on save, exactly like `allowedModels`: the
+ * page sends the full map and a task left on "Default" is OMITTED from it (as is
+ * a per-task reasoning effort left on Default), because an omitted key is the
+ * only way to say "put this task back on the default model". Only a task naming
+ * a model the draft no longer permits blocks the save; a capability warning does
+ * not, because the server enforces it (400 `model_lacks_capability`) and the
+ * administrator may be mid-change. Such a 400 names the task in `details.task`,
+ * which highlights that row beside the save-error alert.
+ *
  * Mobile-first like its siblings — every row stacks at `xs` and goes horizontal
  * at `sm`, and nothing here mounts, unmounts or re-gates on a breakpoint (there
- * is no `useMediaQuery` in this page or in the three components it renders), so
+ * is no `useMediaQuery` in this page or in the five components it renders), so
  * Settings UI Pattern rule 5's five coupled gates are untouched by construction.
  */
 
@@ -205,6 +226,14 @@ import { usePermissions } from '../../hooks/usePermissions';
 import { useAiSettings } from '../../hooks/useAiSettings';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { AiModelDiscoveryDialog } from '../../components/admin/AiModelDiscoveryDialog';
+import { AiGraphSettings } from '../../components/admin/AiGraphSettings';
+import {
+  AiTaskModels,
+  taskModelsHaveError,
+  toTaskModelsInput,
+  type ModelCapabilityFlags,
+  type TaskModelsDraft,
+} from '../../components/admin/AiTaskModels';
 import {
   AiPermittedModels,
   permittedModelsHaveError,
@@ -216,6 +245,7 @@ import { AI_ALLOWED_MODELS_MAX } from '../../services/ai';
 import type {
   AiProviderId,
   AiReasoningEffort,
+  AiTaskKey,
   UpdateAiSettingsInput,
 } from '../../services/ai';
 
@@ -278,6 +308,7 @@ export default function AiSettingsPage() {
     loadError,
     isSaving,
     saveError,
+    saveErrorDetails,
     save,
     clearSaveError,
     isTesting,
@@ -311,6 +342,10 @@ export default function AiSettingsPage() {
   // value meaning "omit the parameter", so there is no null to map at the
   // boundary and the `Select` holds the wire value directly.
   const [reasoningEffort, setReasoningEffort] = useState<AiReasoningEffort>('none');
+  // #361. Default is an ABSENT KEY in `taskModels`, never an empty string —
+  // the map is sent wholesale, so absence is how "use the default model" is said.
+  const [graphEnabled, setGraphEnabled] = useState(false);
+  const [taskModels, setTaskModels] = useState<TaskModelsDraft>({});
 
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -328,6 +363,8 @@ export default function AiSettingsPage() {
     setRequestTimeoutMs(String(s.requestTimeoutMs));
     setMaxDocumentBytes(String(s.maxDocumentBytes));
     setReasoningEffort(s.reasoningEffort);
+    setGraphEnabled(s.graphEnabled);
+    setTaskModels({ ...s.taskModels });
   }, [data]);
 
   // The permitted ids, as the default-model select and the discovery dialog
@@ -339,6 +376,40 @@ export default function AiSettingsPage() {
     [permittedModels],
   );
   const permittedIds = useMemo(() => new Set(modelIds), [modelIds]);
+
+  // #361. Capability flags per model id: the API's own resolution for stored
+  // models first, then every provider catalogue's flags for an id not stored
+  // yet — which is what lets a catalogue model just added to the draft list be
+  // judged before it is saved. An id in neither is left `undefined`, and the
+  // task row says the server will check it.
+  const capabilities = useMemo(() => {
+    const map: Record<string, ModelCapabilityFlags | undefined> = {};
+    if (!data) return map;
+    for (const provider of data.providers) {
+      for (const model of provider.capabilities.models) {
+        map[model.id] = {
+          structuredOutput: model.structuredOutput,
+          toolCalling: model.toolCalling,
+        };
+      }
+    }
+    for (const entry of data.modelCapabilities) {
+      map[entry.id] = {
+        structuredOutput: entry.structuredOutput,
+        toolCalling: entry.toolCalling,
+      };
+    }
+    return map;
+  }, [data]);
+
+  // The task a save 400 named in `details.task`, if it is one this page renders.
+  const serverErrorTask = useMemo((): AiTaskKey | null => {
+    if (!data || typeof saveErrorDetails !== 'object' || saveErrorDetails === null) return null;
+    const task = (saveErrorDetails as { task?: unknown }).task;
+    return typeof task === 'string' && data.tasks.some((entry) => entry.key === task)
+      ? (task as AiTaskKey)
+      : null;
+  }, [data, saveErrorDetails]);
 
   // Defence, not the gate — `App.tsx` wraps the route in `RequirePermission`
   // with this same string. This one catches the page mounted from anywhere
@@ -407,13 +478,17 @@ export default function AiSettingsPage() {
   // an empty allow-list is the state a fresh deployment starts in, and the fix
   // is a control on this page rather than something to be refused over.
   const noPermittedModels = modelIds.length === 0;
+  // #361. Only a task naming a model the draft no longer permits blocks; a
+  // capability warning never does — the server enforces that one on save.
+  const taskModelsError = taskModelsHaveError(taskModels, modelIds);
   const hasError =
     !!inputError ||
     !!outputError ||
     !!timeoutError ||
     !!documentError ||
     modelsError ||
-    !!defaultModelError;
+    !!defaultModelError ||
+    taskModelsError;
 
   // What a disabled `Save changes` is waiting on, named by the SECTION heading
   // it is under so the reader can go straight to it. Built here rather than
@@ -432,6 +507,9 @@ export default function AiSettingsPage() {
     );
   } else if (defaultModelError) {
     saveBlockers.push('the default model, under “Permitted models”');
+  }
+  if (taskModelsError) {
+    saveBlockers.push('a task using a model that is no longer permitted, under “Task models”');
   }
   if (inputError || outputError || timeoutError || documentError) {
     saveBlockers.push('a value that is out of range, under “Limits”');
@@ -463,6 +541,10 @@ export default function AiSettingsPage() {
       requestTimeoutMs: Number.parseInt(requestTimeoutMs, 10),
       maxDocumentBytes: Number.parseInt(maxDocumentBytes, 10),
       reasoningEffort,
+      graphEnabled,
+      // Wholesale, with Default rows and Default reasoning efforts OMITTED —
+      // see the `#361` section of the file header.
+      taskModels: toTaskModelsInput(taskModels),
     };
 
     const ok = await save(input);
@@ -764,6 +846,29 @@ export default function AiSettingsPage() {
               ))}
             </TextField>
           </Paper>
+
+          {/* ================================================================
+              CONNECTED KNOWLEDGE and TASK MODELS (#361) — the graph switch,
+              then which permitted model runs each graph task.
+              ============================================================= */}
+          <AiGraphSettings
+            value={graphEnabled}
+            onChange={setGraphEnabled}
+            aiEnabled={enabled}
+            disabled={!canWrite}
+          />
+
+          <AiTaskModels
+            tasks={data.tasks}
+            value={taskModels}
+            onChange={setTaskModels}
+            permittedModelIds={modelIds}
+            defaultModel={defaultModel.trim()}
+            capabilities={capabilities}
+            status={data.taskModelStatus}
+            serverErrorTask={serverErrorTask}
+            disabled={!canWrite}
+          />
 
           {/* ================================================================
               CEILINGS — the deployment's bound on somebody else's spend.

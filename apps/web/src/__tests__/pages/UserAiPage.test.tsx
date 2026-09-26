@@ -65,6 +65,8 @@ const baseConfig: AiConfig = {
       // shown, which would make a provenance assertion silently vacuous.
       source: 'catalogue',
       derivedFrom: null,
+      structuredOutput: true,
+      toolCalling: true,
     },
   ],
   defaultModel: 'gpt-4o',
