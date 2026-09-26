@@ -14,7 +14,13 @@ let cached: boolean | null = null;
 export function isWebGLAvailable(): boolean {
   if (cached !== null) return cached;
   try {
-    if (typeof window === 'undefined' || typeof document === 'undefined') {
+    // No WebGL constructor at all (jsdom, very old browsers): don't even ask a
+    // canvas, whose unimplemented `getContext` would only log noise.
+    if (
+      typeof window === 'undefined' ||
+      typeof document === 'undefined' ||
+      typeof window.WebGLRenderingContext === 'undefined'
+    ) {
       cached = false;
       return cached;
     }
