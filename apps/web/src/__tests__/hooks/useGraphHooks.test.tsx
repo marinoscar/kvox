@@ -7,7 +7,7 @@ import { JOE_ID, SPEAKER_A_ID, SPEAKER_B_ID, briefFixture } from '../mocks/graph
 import { useGraphBrief } from '../../hooks/useGraphBrief';
 import { useGraphEntities } from '../../hooks/useGraphEntities';
 import { speakerEntityMap, useGraphTranscriptPeople } from '../../hooks/useGraphTranscriptPeople';
-import { useGraphOntology, clearGraphOntologyCache } from '../../hooks/useGraphOntology';
+import { useGraphOntology } from '../../hooks/useGraphAttributeDefs';
 import { useGraphMentions } from '../../hooks/useGraphMentions';
 import { useGraphEntity } from '../../hooks/useGraphEntity';
 import { GRAPH_NOT_FOUND_MESSAGE, graphErrorMessage } from '../../hooks/graphHookUtils';
@@ -18,7 +18,6 @@ import { ApiError } from '../../services/api';
 let requests: URL[];
 
 beforeEach(() => {
-  clearGraphOntologyCache();
   requests = [];
   server.events.removeAllListeners();
   server.events.on('request:start', ({ request }) => {
@@ -110,19 +109,17 @@ describe('useGraphTranscriptPeople', () => {
   });
 });
 
-describe('useGraphOntology', () => {
-  it('fetches once per session', async () => {
-    const first = renderHook(() => useGraphOntology());
-    await waitFor(() => expect(first.result.current.ontology).not.toBeNull());
-    const second = renderHook(() => useGraphOntology());
-    expect(second.result.current.ontology).not.toBeNull();
+describe('useGraphOntology (#369, shared with the graph pages)', () => {
+  it('loads the effective ontology', async () => {
+    const { result } = renderHook(() => useGraphOntology());
+    await waitFor(() => expect(result.current.ontology).not.toBeNull());
     expect(requests.filter((url) => url.pathname.endsWith('/graph/ontology'))).toHaveLength(1);
   });
 
   it('reports a failure as a sentence', async () => {
     server.use(http.get('*/api/graph/ontology', () => HttpResponse.json({ message: 'nope' }, { status: 500 })));
     const { result } = renderHook(() => useGraphOntology());
-    await waitFor(() => expect(result.current.error).toBe('nope'));
+    await waitFor(() => expect(result.current.loadError).toBe('nope'));
   });
 });
 

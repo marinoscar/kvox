@@ -13,7 +13,6 @@ import { graphReader, noGraphUser } from '../utils/graphTestUsers';
 import { graphEntitySummaries } from '../mocks/graphData';
 import GraphIndexPage, { typesFromQuery } from '../../pages/GraphIndexPage';
 import { RequirePermission } from '../../components/common/RequirePermission';
-import { clearGraphOntologyCache } from '../../hooks/useGraphOntology';
 import type { MockUser } from '../utils/test-utils';
 
 /**
@@ -57,7 +56,6 @@ function renderIndex(route = '/graph', user: MockUser = graphReader) {
 let listRequests: URL[];
 
 beforeEach(() => {
-  clearGraphOntologyCache();
   listRequests = [];
   server.events.removeAllListeners();
   server.events.on('request:start', ({ request }) => {

@@ -24,7 +24,6 @@ import GraphEntityPage from '../../pages/GraphEntityPage';
 import GraphIndexPage from '../../pages/GraphIndexPage';
 import { BRIEF_SECTION_TITLES, DIGEST_UNAVAILABLE_COPY } from '../../components/graph/EntityBriefCard';
 import { buildEntityPatch, issuesToFieldErrors } from '../../components/graph/EntityEditDialog';
-import { clearGraphOntologyCache } from '../../hooks/useGraphOntology';
 import { clearEvidenceCache } from '../../hooks/useGraphEvidence';
 import type { DigestUnavailableReason, EntityBrief } from '../../services/graph';
 
@@ -39,7 +38,6 @@ const AXE_OPTIONS = { rules: { 'color-contrast': { enabled: false } } };
 let requests: { method: string; url: URL }[];
 
 beforeEach(() => {
-  clearGraphOntologyCache();
   clearEvidenceCache();
   requests = [];
   server.events.removeAllListeners();

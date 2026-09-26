@@ -43,7 +43,7 @@ import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'r
 import { EntityListRow } from '../components/graph/EntityListRow';
 import { EntityTypeFilter } from '../components/graph/EntityTypeFilter';
 import { useGraphEntities } from '../hooks/useGraphEntities';
-import { useGraphOntology } from '../hooks/useGraphOntology';
+import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import {
   DEFAULT_INDEX_TYPES,
   entityTypeLabel,

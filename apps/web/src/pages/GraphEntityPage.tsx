@@ -38,7 +38,7 @@ import { ForgetPersonDialog } from '../components/graph/ForgetPersonDialog';
 import { GRAPH_NOT_FOUND_MESSAGE } from '../hooks/graphHookUtils';
 import { useGraphBrief } from '../hooks/useGraphBrief';
 import { useGraphEntity } from '../hooks/useGraphEntity';
-import { useGraphOntology } from '../hooks/useGraphOntology';
+import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import { usePermissions } from '../hooks/usePermissions';
 import { entityTypeLabel } from '../utils/graphDisplay';
 import type { GraphIndexLocationState } from './GraphIndexPage';
