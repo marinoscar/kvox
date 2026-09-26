@@ -2229,6 +2229,9 @@ extraction/review/commit pipeline arrives later.**
 The extraction quality harness (issue #362: the synthetic golden set at
 `apps/api/test/fixtures/kg-golden/` and `npm run kg:eval --workspace=api`, spec §6) is
 built too — synthetic fixtures only, ever; real notes are evaluated locally, outside the repo.
+So is the Ask agent's read-only toolset (issue #377: `AskToolsModule`/`AskToolset` in
+`apps/api/src/ask/tools/` — seven owner-scoped tools returning `ent`/`itm`/`rel`/`ev`/`doc`
+handles, never uuids; spec §21.7).
 The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`
