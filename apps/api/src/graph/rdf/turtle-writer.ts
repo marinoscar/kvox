@@ -107,11 +107,20 @@ export function escapeLiteral(value: string): string {
   return out;
 }
 
-/** Characters an IRIREF may not contain literally; written as `\uXXXX`. */
-const IRI_FORBIDDEN = /[\u0000- <>"{}|^`\\]/g;
+/**
+ * Characters an IRI may not contain at all (controls, space, `<>"{}|^` and
+ * backtick, backslash). Turtle cannot carry them even as `\uXXXX` escapes — a
+ * conforming reader rejects that — and percent-encoding would silently name a
+ * DIFFERENT IRI, so the writer refuses instead. Every IRI the generators
+ * produce comes from `iris.ts`, which never builds one.
+ */
+const IRI_FORBIDDEN = /[\x00-\x20<>"{}|^`\\]/;
 
 function writeIriRef(value: string): string {
-  return `<${value.replace(IRI_FORBIDDEN, (c) => `\\u${hex(c.charCodeAt(0), 4)}`)}>`;
+  if (IRI_FORBIDDEN.test(value)) {
+    throw new Error(`turtle-writer: ${JSON.stringify(value)} contains a character no IRI may contain`);
+  }
+  return `<${value}>`;
 }
 
 /**
