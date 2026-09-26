@@ -161,6 +161,88 @@ Vitest's interop each handle the file unaided. **Only the dev server breaks.**
 `apps/web/vite.config.ts` and `apps/web/visual/vite.config.ts` both carry the
 line for this reason — see #164.
 
+## Ontology subpath
+
+`@app/shared/ontology` (issue #350) is the ontology-as-code declaration
+`docs/specs/ontology.md` §17 describes — entity types, relation types, and
+the domain modules built from them, shared between `apps/api` (to validate
+and extract against) and `apps/web` (to render a review form from).
+
+It is the one part of this package that is **compiled**, and deliberately
+the only one: the rest of `@app/shared` is hand-written CommonJS with no
+build step for the three reasons in [`index.js`](./index.js)'s header (three
+build systems that would each need teaching about a fourth workspace to
+compile, and CommonJS because it is the one format all three consumers
+resolve without configuration). The ontology sources don't fit that
+constraint — they're a real module graph of Zod schemas and TypeScript types
+across several files, not a handful of exported constants — so they are
+written as ordinary TypeScript under `packages/shared/src/ontology/` and
+compiled with:
+
+```bash
+npm run build:ontology --workspace=@app/shared
+```
+
+which runs `tsc -p tsconfig.ontology.json` and emits committed CommonJS +
+`.d.ts` output to `packages/shared/ontology/` — **not** `dist/`, because
+`.dockerignore` drops every `**/dist` and a container build would silently
+lose the compiled ontology. The compiled output is committed for the same
+reason the rest of the package's build artifacts are: no build step means no
+`prepare` script, no build-ordering problem for `apps/api`'s Jest transform
+or `apps/cli`'s ESM runtime, and no CI job that has to compile a workspace
+before it can typecheck.
+
+**Compiled output is committed in the same commit as the source change that
+produced it.** Editing a file under `src/ontology/` without rebuilding is an
+incomplete change — CI enforces this by rebuilding and running
+`git diff --exit-code -- packages/shared/ontology`; a stale committed copy
+fails the build, not silently drifts.
+
+Consumed via the `./ontology` subpath export
+(`packages/shared/package.json`'s `exports` map: `@app/shared/ontology` ⇒
+`packages/shared/ontology/index.js`/`.d.ts`), and listed alongside the root
+package in `optimizeDeps.include` in both `apps/web/vite.config.ts` and
+`apps/web/visual/vite.config.ts` — the same symlinked-workspace,
+CommonJS-under-Vite trap the [Vite section](#if-you-consume-this-from-a-vite-app)
+below describes, on a second subpath.
+
+**Web rule: import types and small constants only, never the registry as a
+form source.** `apps/web` may import this subpath's exported types
+(`EntityTypeSpec`, `DomainKey`, ...) and small constants
+(`DOMAIN_KEYS`, `SENSITIVITIES`, ...) for typing its own code, but it must
+never build a review or extraction form by walking `ONTOLOGY`/
+`buildOntologyRegistry` client-side. The form renders from whatever
+`GET /api/graph/ontology` returns — the caller's own effective schema
+(`core` plus their enabled domains, §17.2) — because the full registry
+includes domains a given user may not have enabled and attribute mixins
+only the server can merge correctly; the subpath exists to share
+*definitions*, not to let the browser recompute a policy the API already
+computes.
+
+**`SHIPPED_KEYS` is append-only, forever.** Every entity type, relation
+type, attribute and relation prop that ships gets one line appended to
+`SHIPPED_KEYS` (`packages/shared/src/ontology/shipped-keys.ts`) in the same
+change that declares it — never removed, even when the type is later
+deprecated (docs/specs/ontology.md §17.1, §17.4). A stored `type` string or
+`props` key names it permanently, the same discipline `Job.type` carries
+elsewhere in this codebase.
+
+**Every ontology change bumps `ONTOLOGY_VERSION` and appends a
+`CHANGELOG` entry** (`packages/shared/src/ontology/version.ts`) — semver on
+the *definition*: MAJOR when a type's meaning changes, MINOR when a type,
+relation or attribute is added, PATCH for description/extraction-hint-only
+edits. The parity test pins the last `CHANGELOG` entry's version to
+`ONTOLOGY_VERSION`.
+
+**Adding a domain is one line in `index.ts`.** Domain modules are listed
+explicitly — `import { workDomain } from './domains/work.js'` plus one entry
+in the array passed to `buildOntologyRegistry([coreDomain, workDomain, ...],
+ONTOLOGY_VERSION)` — never self-registered by import side effect. A CommonJS
+package pre-bundled by Vite and `require()`d by Jest makes registration
+order under an `onModuleInit`-style side effect bundler-dependent, so this
+package spells it out instead: add the new domain file under
+`domains/`, import it in `index.ts`, add it to that array.
+
 ## Why this package looks the way it does
 
 It ships committed JavaScript and a hand-written `.d.ts`, with **no build
