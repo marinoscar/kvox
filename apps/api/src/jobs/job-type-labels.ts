@@ -148,6 +148,9 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   // forgotten person and a Danger Zone graph wipe are the same operation
   // (deleting graph rows) at two sizes, and the operator needs the noun.
   'kg.purge': 'Knowledge graph deletion',
+  // Connected knowledge (epic #344). `kg.speaker_link` (#356) is the
+  // speaker-naming write into the owner's graph.
+  'kg.speaker_link': 'Link named speakers to people',
 };
 
 /**
