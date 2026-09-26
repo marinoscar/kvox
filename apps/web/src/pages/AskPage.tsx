@@ -75,12 +75,13 @@ const PAGE_HEIGHT = { xs: 'calc(100dvh - 160px)', sm: 'calc(100dvh - 112px)' } a
 
 export default function AskPage() {
   const ai = useAiConfig();
+  const config = ai.config;
 
   if (ai.isLoading) return <AskPageSkeleton />;
 
   // `undefined` means an older server that does not say — "unknown", never
   // "off" (services/ai.ts). Only an explicit `false` turns the page off.
-  if (ai.config?.graphEnabled === false) {
+  if (config?.graphEnabled === false) {
     return (
       <Box sx={{ maxWidth: 720 }}>
         <Typography variant="h4" component="h1" sx={{ fontWeight: 600, mb: 2 }}>
@@ -93,7 +94,7 @@ export default function AskPage() {
     );
   }
 
-  return <AskWorkspace config={ai.config} />;
+  return <AskWorkspace config={config} />;
 }
 
 function AskPageSkeleton() {

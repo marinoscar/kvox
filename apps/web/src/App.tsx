@@ -458,20 +458,13 @@ function AppRoutes() {
                       graph routes above — no bottom-bar tab — and gated on
                       `graph:read`, the exact string every `/api/ask/*` route
                       (#376, #378, #379) enforces. `graphEnabled` is checked
-                      inside the page, which shows an info state when it is off. */}
+                      inside the page, which shows an info state when it is off.
+                      ONE route with an optional segment, not two: `/ask` →
+                      `/ask/:id` after the first question must keep the page
+                      mounted, so the rows it just posted stay on screen instead
+                      of the page re-reading its configuration from scratch. */}
                   <Route
-                    path="/ask"
-                    element={
-                      <RequirePermission
-                        permission="graph:read"
-                        fallback={<Navigate to="/" replace />}
-                      >
-                        <AskPage />
-                      </RequirePermission>
-                    }
-                  />
-                  <Route
-                    path="/ask/:conversationId"
+                    path="/ask/:conversationId?"
                     element={
                       <RequirePermission
                         permission="graph:read"
