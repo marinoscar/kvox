@@ -146,6 +146,9 @@ const MIGRATIONS_AT_288 = [
   // #371 (epic #347): the per-owner whole-graph layout snapshot. A graph
   // cache, and equally not about notifications.
   '20260926040000_add_kg_graph_layouts',
+  // #376 (epic #348): saved Ask conversations and their messages. Not about
+  // notifications either.
+  '20260926050000_add_ask_conversations',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

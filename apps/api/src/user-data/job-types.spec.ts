@@ -27,6 +27,7 @@ const CATEGORIES = [
   'credentials',
   'onboarding',
   'graph',
+  'ask',
 ] as const;
 
 describe('user.data.purge job type strings', () => {
@@ -55,6 +56,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       credentials: false,
       onboarding: false,
       graph: false,
+      ask: false,
     },
     notes: {
       transcripts: false,
@@ -64,6 +66,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       credentials: false,
       onboarding: false,
       graph: false,
+      ask: false,
     },
     files: {
       transcripts: false,
@@ -73,6 +76,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       credentials: false,
       onboarding: false,
       graph: false,
+      ask: false,
     },
     content: {
       transcripts: true,
@@ -82,6 +86,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       credentials: false,
       onboarding: false,
       graph: true,
+      ask: true,
     },
     everything: {
       transcripts: true,
@@ -91,6 +96,7 @@ describe('scopeIncludes — the full scope x category matrix', () => {
       credentials: true,
       onboarding: true,
       graph: true,
+      ask: true,
     },
   };
 
@@ -124,6 +130,14 @@ describe('scopeIncludes — the full scope x category matrix', () => {
     expect(scopeIncludes('content', 'files')).toBe(true);
     expect(scopeIncludes('content', 'credentials')).toBe(false);
     expect(scopeIncludes('content', 'graph')).toBe(true);
+    expect(scopeIncludes('content', 'ask')).toBe(true);
+  });
+
+  it('takes Ask conversations (#376) with `content`/`everything` only — never a narrow scope, and no `ask` scope exists', () => {
+    for (const scope of USER_DATA_SCOPES) {
+      expect(scopeIncludes(scope, 'ask')).toBe(scope === 'content' || scope === 'everything');
+    }
+    expect(USER_DATA_SCOPES as readonly string[]).not.toContain('ask');
   });
 
   it('composes `everything` as `content` plus credentials AND onboarding, the only two lines the composites differ on', () => {

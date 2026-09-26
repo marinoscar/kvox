@@ -42,6 +42,7 @@ interface Harness {
     transcript: { findMany: jest.Mock; updateMany: jest.Mock };
     noteTemplate: { findMany: jest.Mock };
     storageObject: { findMany: jest.Mock };
+    askConversation: { deleteMany: jest.Mock };
     job: { findMany: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
@@ -69,6 +70,8 @@ function harness(): Harness {
     },
     noteTemplate: { findMany: jest.fn().mockResolvedValue([]) },
     storageObject: { findMany: jest.fn().mockResolvedValue([]) },
+    // #376: the `ask` category — one inline deleteMany, messages cascade.
+    askConversation: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     // The `enqueuePurges` live-job dedup check — "nothing already covers
     // this id" unless a test says otherwise.
     job: { findMany: jest.fn().mockResolvedValue([]) },
@@ -809,5 +812,73 @@ describe('UserDataPurgeHandler — the knowledge graph category', () => {
     await handler.process({ id: JOB_ID, payload: { scope: 'content' } } as never);
 
     expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// #376 — Ask conversations: a `content`/`everything` category, deleted inline
+// -----------------------------------------------------------------------------
+
+describe('UserDataPurgeHandler — the Ask conversations category', () => {
+  it.each(['content', 'everything'] as const)(
+    'scope "%s" deletes every one of the caller\'s conversations in one owner-scoped deleteMany',
+    async (scope) => {
+      const { handler, prisma } = harness();
+      prisma.askConversation.deleteMany.mockResolvedValue({ count: 3 });
+
+      await handler.process(job(scope));
+
+      expect(prisma.askConversation.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.askConversation.deleteMany).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
+      expect(prisma.auditEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: 'user_data:ask_conversations_deleted',
+            meta: { count: 3 },
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each(['transcripts', 'notes', 'files'] as const)(
+    'narrow scope "%s" keeps the conversations',
+    async (scope) => {
+      const { handler, prisma } = harness();
+
+      await handler.process(job(scope));
+
+      expect(prisma.askConversation.deleteMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('runs FIRST — before the graph purge, credentials, notes and transcripts', async () => {
+    const { handler, prisma, aiCredentials, jobs } = harness();
+
+    const order: string[] = [];
+    prisma.askConversation.deleteMany.mockImplementation(async () => {
+      order.push('ask');
+      return { count: 0 };
+    });
+    jobs.enqueue.mockImplementation(async () => {
+      order.push('graph');
+      return { id: 'kg-job-1', status: 'pending' };
+    });
+    aiCredentials.removeAll.mockImplementation(async () => {
+      order.push('credentials');
+      return 0;
+    });
+    prisma.note.findMany.mockImplementation(async () => {
+      order.push('notes');
+      return [];
+    });
+    prisma.transcript.findMany.mockImplementation(async () => {
+      order.push('transcripts');
+      return [];
+    });
+
+    await handler.process(job('everything'));
+
+    expect(order).toEqual(['ask', 'graph', 'credentials', 'notes', 'transcripts']);
   });
 });

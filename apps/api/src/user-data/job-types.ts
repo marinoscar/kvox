@@ -89,7 +89,8 @@ export function scopeIncludes(
     | 'files'
     | 'credentials'
     | 'onboarding'
-    | 'graph',
+    | 'graph'
+    | 'ask',
 ): boolean {
   switch (category) {
     // ⚠ EVERY NARROW SCOPE MAPS TO EXACTLY ONE CATEGORY. Only the composites
@@ -171,6 +172,19 @@ export function scopeIncludes(
     // ACCOUNT loses its graph separately, by the `owner_id` Cascade on every
     // `kg_*` table. (#376 adds `case 'ask'` beside this one — additive cases.)
     case 'graph':
+      return scope === 'content' || scope === 'everything';
+    // ⚠ ASK CONVERSATIONS ARE `content`/`everything` ONLY (#376, epic #348).
+    //
+    // A saved conversation is content the user MADE — their own questions and
+    // the answers they asked for — so it follows `content`, the line note
+    // templates and the graph sit on. No narrow scope takes it: "Delete notes"
+    // does not silently empty a different page the user did not open.
+    //
+    // A CATEGORY, NOT A SCOPE, like `graph`: `USER_DATA_SCOPES` is unchanged.
+    // Deleted INLINE by the handler (one indexed DELETE; messages cascade)
+    // rather than through a job of its own. A deleted ACCOUNT loses its
+    // conversations separately, by the `ask_conversations.owner_id` Cascade.
+    case 'ask':
       return scope === 'content' || scope === 'everything';
   }
 }

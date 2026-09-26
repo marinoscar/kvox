@@ -74,6 +74,7 @@ describe('UserDataService', () => {
     personalAccessToken: { count: jest.Mock };
     kgEntity: { count: jest.Mock };
     kgItem: { count: jest.Mock };
+    askConversation: { count: jest.Mock };
     job: { findFirst: jest.Mock };
     auditEvent: { create: jest.Mock };
   };
@@ -91,6 +92,7 @@ describe('UserDataService', () => {
       personalAccessToken: { count: jest.fn().mockResolvedValue(0) },
       kgEntity: { count: jest.fn().mockResolvedValue(0) },
       kgItem: { count: jest.fn().mockResolvedValue(0) },
+      askConversation: { count: jest.fn().mockResolvedValue(0) },
       job: { findFirst: jest.fn().mockResolvedValue(null) },
       auditEvent: { create: jest.fn().mockResolvedValue({}) },
     };
@@ -173,6 +175,15 @@ describe('UserDataService', () => {
         where: { ownerId: USER_ID, reviewStatus: { not: 'merged' } },
       });
       expect(prisma.kgItem.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
+    });
+
+    it('counts the caller\'s saved Ask conversations (#376)', async () => {
+      prisma.askConversation.count.mockResolvedValue(4);
+
+      const result = await service.summary(USER_ID);
+
+      expect(result.askConversations).toEqual({ count: 4 });
+      expect(prisma.askConversation.count).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
     });
 
     it('conforms to the published summary schema, graph field included', async () => {

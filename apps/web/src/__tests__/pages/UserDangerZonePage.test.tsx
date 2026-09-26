@@ -48,6 +48,7 @@ function emptySummary(overrides: Partial<UserDataSummary> = {}): UserDataSummary
     noteTemplates: { count: 0 },
     credentials: { aiKeys: 0, accessTokens: 0 },
     graph: { entities: 0, items: 0 },
+    askConversations: { count: 0 },
     activeDeletion: null,
     ...overrides,
   };
@@ -204,6 +205,41 @@ describe('UserDangerZonePage', () => {
       await renderPage();
 
       expect(screen.queryByRole('button', { name: /graph/i })).not.toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
+  // The Ask conversations line (issue #376) — like the graph, a category of
+  // `content` and `everything`, never a narrow row of its own
+  // ==========================================================================
+
+  describe('the Ask conversations line', () => {
+    it('shows the count in the compound section', async () => {
+      mockGetSummary.mockResolvedValue({ ...MIXED_SUMMARY, askConversations: { count: 4 } });
+
+      await renderPage();
+
+      expect(screen.getByText('Ask conversations: 4')).toBeInTheDocument();
+    });
+
+    it('says none are saved rather than printing a zero', async () => {
+      await renderPage();
+
+      expect(screen.getByText('Ask conversations: none saved')).toBeInTheDocument();
+    });
+
+    it('names them in the all-content description', async () => {
+      await renderPage();
+
+      expect(screen.getByText(/saved Ask conversation/i)).toBeInTheDocument();
+    });
+
+    it('adds no delete button of its own', async () => {
+      mockGetSummary.mockResolvedValue({ ...MIXED_SUMMARY, askConversations: { count: 4 } });
+
+      await renderPage();
+
+      expect(screen.queryByRole('button', { name: /ask/i })).not.toBeInTheDocument();
     });
   });
 

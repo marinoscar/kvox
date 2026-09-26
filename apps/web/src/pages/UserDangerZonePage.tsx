@@ -195,6 +195,15 @@ function describeGraph({ entities, items }: UserDataSummary['graph']): string {
   return `Knowledge graph: ${entities} ${entityNoun}, ${items} ${itemNoun}`;
 }
 
+/**
+ * "Ask conversations: 4" — the Ask history's line in the compound inventory
+ * (issue #376). Like the graph, a category `content` and `everything` delete,
+ * never a scope of its own, so it sits beside the graph's line in layer 2 only.
+ */
+function describeAskConversations({ count }: UserDataSummary['askConversations']): string {
+  return count > 0 ? `Ask conversations: ${count}` : 'Ask conversations: none saved';
+}
+
 export default function UserDangerZonePage() {
   const {
     summary,
@@ -347,8 +356,8 @@ export default function UserDangerZonePage() {
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           <strong>Delete all content</strong> removes every recording, transcript, note, note
-          template and uploaded file, and your knowledge graph. Your account, profile, settings
-          and access tokens are kept.
+          template, uploaded file and saved Ask conversation, and your knowledge graph. Your
+          account, profile, settings and access tokens are kept.
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           <strong>Delete everything</strong> removes all of that and also your stored AI
@@ -357,12 +366,18 @@ export default function UserDangerZonePage() {
           welcome and the setup checklist are offered again from the start. Your account is
           still <strong>not</strong> deleted, and you stay signed in.
         </Typography>
-        {/* Both compound scopes take the graph, so its numbers sit once, after
-            both descriptions, rather than being repeated under each. */}
+        {/* Both compound scopes take the graph and the Ask history, so their
+            numbers sit once, after both descriptions, rather than being
+            repeated under each. */}
         {summary && (
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {describeGraph(summary.graph)}
-          </Typography>
+          <>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+              {describeGraph(summary.graph)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {describeAskConversations(summary.askConversations)}
+            </Typography>
+          </>
         )}
 
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
