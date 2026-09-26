@@ -2063,10 +2063,11 @@ at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 and consumed as `@app/shared/ontology`. Edit sources, rebuild, and commit the
 compiled output in the same commit as the source change — CI rebuilds and
 fails on any diff. Each `kg_*` table's own rules are under "Database Tables"
-above. There is still only one `kg.*` job handler (`kg.purge`; every other type
-in `apps/api/src/graph/job-types.ts` is still only a constant), no `/api/graph/*`
-routes beyond the ontology, the entity edit, attribute definitions and forget,
-and no graph UI. Five rules a neighbouring file can
+above. The only `kg.*` job handlers so far are `kg.purge` (#357) and
+`kg.speaker_link` (#356); every other type in `apps/api/src/graph/job-types.ts`
+is still only a constant. There are no `/api/graph/*` routes beyond the
+ontology, the entity edit, attribute definitions and forget, and no graph UI.
+Five rules a neighbouring file can
 break once it is: no orphans — an accepted/edited graph row always carries
 evidence back to a transcript segment or note span; nothing enters the graph
 except through a reviewed proposal's commit, with two named exceptions (the
