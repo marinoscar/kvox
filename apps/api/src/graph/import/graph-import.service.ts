@@ -75,7 +75,6 @@ export const GRAPH_IMPORT_CREATED_ACTION = 'graph.import_created';
 export const KG_IMPORT_JOB_PRIORITY = -5;
 
 const MAX_FILENAME_LENGTH = 255;
-// eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
 
 export interface UploadedGraphFile {
