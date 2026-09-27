@@ -46,6 +46,56 @@ export function relationTypeLabel(key: string, ontology: GraphOntology | null): 
   return ontology?.relationTypes.find((rel) => rel.key === key)?.label ?? humanizeKey(key);
 }
 
+/** One displayable relation prop: its ontology label and its formatted value. */
+export interface RelationPropDisplay {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/**
+ * A graph edge's props as label/value pairs, for display (#442) — e.g.
+ * `HAS_ROLE {title, businessUnit}` → Role "Managing Director", Business unit
+ * "Consulting". Labels and kinds come from the ontology's relation-type
+ * `props`, in their declared order; a prop the ontology does not know keeps
+ * the API's order and its key humanized. Only primitive values render (an
+ * object or array is skipped); a `date` prop is written as a date, a `select`
+ * value as its choice label, a boolean as Yes/No. Empty or absent → `[]`.
+ */
+export function relationPropsDisplay(
+  relationType: string,
+  props: Record<string, unknown> | null | undefined,
+  ontology: GraphOntology | null,
+): RelationPropDisplay[] {
+  if (!props) return [];
+  const defs = ontology?.relationTypes.find((rel) => rel.key === relationType)?.props ?? [];
+  const order = new Map(defs.map((def, index) => [def.key, index]));
+  const keys = Object.keys(props).sort(
+    (a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER),
+  );
+  const out: RelationPropDisplay[] = [];
+  for (const key of keys) {
+    const raw = props[key];
+    if (raw === null || raw === undefined) continue;
+    if (typeof raw !== 'string' && typeof raw !== 'number' && typeof raw !== 'boolean') continue;
+    const def = defs.find((candidate) => candidate.key === key);
+    let value: string;
+    if (typeof raw === 'boolean') {
+      value = raw ? 'Yes' : 'No';
+    } else if (def?.kind === 'date' && typeof raw === 'string') {
+      value = formatPrecisionDate(raw, 'day');
+      if (value === 'Date unknown') value = raw;
+    } else if (def?.kind === 'select' && typeof raw === 'string') {
+      value = def.options?.choices?.find((choice) => choice.value === raw)?.label ?? raw;
+    } else {
+      value = String(raw);
+    }
+    if (value.trim() === '') continue;
+    out.push({ key, label: def?.label ?? humanizeKey(key), value });
+  }
+  return out;
+}
+
 /** An entity type's singular label from the effective schema, else the key. */
 export function entityTypeLabel(key: string, ontology: GraphOntology | null): string {
   return ontology?.entityTypes.find((type) => type.key === key)?.label ?? key;

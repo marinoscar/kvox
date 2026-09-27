@@ -329,6 +329,31 @@ describe('GraphExplorerPage — selection and the side panel', () => {
     );
   });
 
+  it("shows an edge's own props, labelled from the ontology (#442)", async () => {
+    useExpand((body) => {
+      const slice = expandFixture(body)!;
+      return HttpResponse.json({
+        data: {
+          ...slice,
+          edges: slice.edges.map((edge) =>
+            edge.id === gid(410)
+              ? { ...edge, type: 'HAS_ROLE', props: { title: 'Managing Director', businessUnit: 'Consulting' } }
+              : edge,
+          ),
+        },
+      });
+    });
+    const user = userEvent.setup();
+    renderExplorer();
+    const canvas = await canvasReady();
+    await user.click(within(canvas).getByRole('button', { name: `edge ${gid(410)}` }));
+    const panel = await screen.findByRole('complementary', { name: 'Has role' });
+    expect(within(panel).getByText('Role')).toBeInTheDocument();
+    expect(within(panel).getByText('Managing Director')).toBeInTheDocument();
+    expect(within(panel).getByText('Business unit')).toBeInTheDocument();
+    expect(within(panel).getByText('Consulting')).toBeInTheDocument();
+  });
+
   it('renders the panel as a bottom sheet on a phone', async () => {
     act(() => setViewportWidth(390));
     const user = userEvent.setup();
