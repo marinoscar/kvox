@@ -867,8 +867,9 @@ call returns, so a failed extraction still records what was asked, and a
 reviewer questioning why a particular item was (or wasn't) proposed can see
 the exact context the model reasoned from.
 
-**Job execution profile:** `{ maxRuntimeMs: 10 * 60_000, maxAttempts: 1 }`.
-One attempt, for the identical reason `note.generate` carries `maxAttempts:
+**Job execution profile:** `{ maxRuntimeMs: 20 * 60_000, maxAttempts: 1 }`
+(raised from 10 minutes by #435 to make room for the one truncation re-ask
+below). One attempt, for the identical reason `note.generate` carries `maxAttempts:
 1` (`docs/specs/notes.md` §1.3 decision 3, restated by
 `docs/specs/transcript-name-correction.md` §6 for `transcript.name_check`):
 the call spends the user's own AI provider credit, and a completion is
@@ -948,6 +949,66 @@ registered with `ProposalStageRegistry`, in order — #364's `resolution`,
 shapes every later issue imports are `graph/proposals/proposal-payload.schema.ts`.
 `npm run kg:eval -- --run extract --model <id>` runs this same pure pipeline
 against the golden set with `KG_EVAL_OPENAI_API_KEY` and no database.
+
+**Sizing the answer, and recovering from truncation (issue #435).** A note
+can hold more rows than one structured-output answer can carry, and before
+#435 that produced no recovery: the model's answer was cut off mid-object by
+the output ceiling, `AiStructuredOutputError`'s `'truncated'` reason was
+folded into the ordinary `'invalid_output'` failure class, and the failed
+call's token usage was recorded as zero even though it had been billed in
+full. #435 fixes all three:
+
+- **Row caps sized to the output ceiling this call will actually get.**
+  `extractionRowCaps(maxOutputTokens, effort)`
+  (`apps/api/src/graph/extraction/row-caps.ts`, pure) computes a usable share
+  of the ceiling — `max(0, maxOutputTokens − REASONING_HEADROOM_TOKENS[effort])
+  × 0.8` — divides it by a generous per-row cost estimate
+  (`EXTRACTION_TOKENS_PER_ROW = 160`), clamps the total to `[15, 400]` rows,
+  and splits it entities 35% / relations 35% / items 30%, each at least 5. The
+  `maxOutputTokens` passed in is `outputTokensForPrompt`'s answer for this
+  run's prompt (`docs/specs/notes.md` §3.3, issue #436) — the same
+  demand-driven ceiling every other call site uses, not a separate knob:
+  extraction gets no output-size setting of its own, since with #436 its
+  ceiling is already the model's maximum unless an administrator deliberately
+  typed a spend cap.
+- **The caps reach the model as prompt copy and schema `description`s only,
+  never `maxItems`.** The system prompt is told "at most N entities/relations/
+  items; if the source holds more, keep the most significant and omit the
+  rest," and each array's JSON-Schema `description` repeats its own cap.
+  Emitting `maxItems` in the schema itself is deliberately avoided — strict
+  decoding on some OpenAI-compatible gateways rejects the keyword outright,
+  and a refused request is worse than a cap the model occasionally overshoots,
+  which the retry below then catches anyway.
+- **One automatic re-ask, with every cap halved, on truncation only.** When
+  `generateStructured` throws `AiStructuredOutputError` with
+  `reason: 'truncated'`, the handler re-asks **once**, in the same job run,
+  with `halveRowCaps(caps)` (never below 1 per section) and the prompt
+  re-recorded on the proposal. A second truncation is terminal: the proposal
+  is marked `failed` with `errorClass: 'truncated'` and a message that never
+  contains model output — "The model's answer was cut off at its N-token
+  output ceiling, even after asking for a smaller answer. This note produces
+  more than one answer can carry: choose a model with a larger output
+  ceiling, clear or raise the deployment's Max output tokens, or lower the
+  reasoning effort." `stats.truncationRetry: true` records that the retry
+  happened, on both a recovered and a terminal outcome. `maxAttempts` stays 1
+  either way — the re-ask is part of *this* run, not a second queue attempt.
+- **`truncated` is its own `ExtractionFailureClass`**
+  (`graph/proposals/proposal-payload.schema.ts`), never folded into
+  `invalid_output`: `classifyExtractionError` maps
+  `AiStructuredOutputError` by `reason` (`'truncated'` → `'truncated'`,
+  `'invalid_json'` → `'invalid_output'`) rather than treating every
+  structured-output failure alike, because a reviewer's fix for a cut-off
+  answer (a bigger model, a cleared cap, lower reasoning effort) is different
+  from the fix for a malformed one (a different model, usually — a gateway
+  that ignored `response_format`).
+- **Token usage is recorded on failure, not just success.** `AiStructuredOutputError`
+  now carries an optional `usage: { promptTokens, completionTokens }` — the
+  vendor's own reported counts when available, otherwise the same estimate the
+  success path uses — and the OpenAI provider attaches it whenever it throws.
+  The handler sums usage across every call the run made, **failed calls
+  included**, into `stats.usage`: a truncated answer still spent the user's
+  tokens and is billed all the same, so recording it as zero (the pre-#435
+  behaviour) understated what the run actually cost.
 
 ## 7. Entity resolution (`kg.resolve`)
 
@@ -1594,7 +1655,7 @@ directory:
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
-| `kg.extract` | `{ maxRuntimeMs: 10m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it |
+| `kg.extract` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §6 — user's own AI key, `maxAttempts: 1` for the identical reason `note.generate` carries it; raised from 10 to 20 minutes by #435 to make room for the one truncation re-ask |
 | `kg.resolve` | `{ maxRuntimeMs: 20m, maxAttempts: 1 }` | **No** | §7 — same credential reasoning; a bulk re-scan spends the same per-user key |
 | `kg.entity_digest` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §9.2 — **built, issue #372** (`apps/api/src/graph/brief/entity-digest.handler.ts`, not `graph/handlers/` — the same "extraction lives beside its module" deviation `kg.extract` already takes); same credential reasoning; deduplicated per entity |
 | `kg.embed` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **No** | Uses the user's own embedding provider key via the existing `SearchQueryEmbedder`; retry-safe because it is content-hash keyed, so a retry re-embeds the identical input and produces the identical vector — unlike `kg.extract`/`kg.resolve`/`kg.entity_digest`, a retry here has no non-determinism to worry about, hence `maxAttempts: 3` rather than 1 |

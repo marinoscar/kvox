@@ -4787,8 +4787,8 @@ the admin page renders itself from.
       "enabled": true,
       "provider": "openai",
       "providers": { "openai": { "baseUrl": "https://api.openai.com/v1", "allowedModels": [ "gpt-4o", { "id": "gpt-4o-mini" }, { "id": "o5-preview", "label": "O5 Preview", "contextWindowTokens": 300000, "maxOutputTokens": 32768 } ], "defaultModel": "gpt-5.4-mini" } },
-      "maxInputTokens": 100000,
-      "maxOutputTokens": 16384,
+      "maxInputTokens": null,
+      "maxOutputTokens": null,
       "requestTimeoutMs": 600000,
       "reasoningEffort": "none",
       "maxDocumentBytes": 26214400,
@@ -4800,12 +4800,40 @@ the admin page renders itself from.
     "tasks": [ { "key": "graph.extract", "label": "Graph extraction", "description": "…", "requires": ["structuredOutput"] } ],
     "modelCapabilities": [ { "id": "gpt-5.4-mini", "structuredOutput": true, "toolCalling": true, "source": "catalogue" } ],
     "taskModelStatus": [ { "task": "graph.extract", "configuredModel": "gpt-5.4-mini", "effectiveModel": "gpt-5.4-mini", "source": "task", "missing": [], "problem": null } ],
+    "effectiveLimits": [
+      { "modelId": "gpt-5.4-mini", "label": "GPT-5.4 mini", "source": "catalogue", "derivedFrom": null, "modelContextWindowTokens": 400000, "modelMaxOutputTokens": 128000, "maxInputTokens": 366732, "maxOutputTokens": 128000, "inputSource": "model", "outputSource": "model" }
+    ],
     "version": 3,
     "updatedAt": "2024-01-01T00:00:00.000Z",
     "updatedBy": { "id": "…", "email": "admin@example.com" }
   }
 }
 ```
+
+**`maxInputTokens`/`maxOutputTokens` are `number | null` (issue #436).** `null`
+— the default for a fresh deployment, and the value migration
+`20260927050000_ai_token_limits_follow_model` moved every existing deployment
+to on upgrade if it still carried the two old shipped defaults (16,384 /
+100,000) verbatim — means "the selected model's own maximum governs"; a typed
+number is an administrator's deliberate spend cap under it, never a ceiling
+nobody chose. See [`docs/specs/notes.md`](specs/notes.md) §3.3 for the full
+demand-driven budget this feeds and why the fixed-reservation arithmetic it
+replaces was wrong for both a note (§3.3) and graph extraction (#435, below).
+
+**`effectiveLimits` (issue #436)** is what each resolvable permitted model of
+the active provider actually gets under the **saved** policy, computed with
+the identical `computeTokenBudget` every request runs (at the deployment's
+`reasoningEffort`) — the admin Limits card renders this rather than
+recomputing the arithmetic itself. Per entry: `modelContextWindowTokens`/
+`modelMaxOutputTokens` are the model's own numbers (`source`/`derivedFrom` as
+in `modelCapabilities`); `maxInputTokens`/`maxOutputTokens` are what a request
+against this model would actually get; `inputSource`/`outputSource` name
+which bound decided each (`'policy' | 'model'` for input, `'policy' | 'model'`
+for output here — `'task'` never appears, since no per-task clamp applies to
+the saved policy in the abstract). A `source: 'default'` entry is surfaced
+here rather than refused (#436): the provider's conservative floor is kept,
+never guessed upward, and the card is where an administrator is told to type
+the model's real numbers onto its `allowedModels` entry instead.
 
 **`taskModels`/`graphEnabled` (issue #360)** are the connected-knowledge
 policy: `taskModels` maps an `AiTaskKey` (`graph.extract`/`graph.adjudicate`/
@@ -5191,6 +5219,15 @@ request timeout, and nothing derived from anyone's key beyond the boolean
 fact that the caller has one. `models`/`defaultModel` are already narrowed by
 policy, so a client can offer them directly without re-checking.
 
+**`maxInputTokens`/`maxOutputTokens` are `number | null` (issue #436)** — this
+deployment's *optional* spend cap, or `null` (the default) when each model's
+own ceiling governs. Read each `models[]` entry's own `contextWindowTokens`/
+`maxOutputTokens` rather than these two top-level numbers when deciding what
+one call can actually use: those are already the per-model **effective**
+figures, computed by `computeTokenBudget` for the deployment's
+`reasoningEffort`, while these two remain the raw policy value (`null` or a
+number) with no per-model narrowing applied.
+
 **Each model carries `source`/`derivedFrom` (issue #97)**, resolved through
 the same five-rank chain `PUT /ai-settings` and `GET /ai-settings/models`
 use: `explicit` (an administrator typed the numbers), `catalogue` (an exact
@@ -5201,8 +5238,12 @@ numbers' sources, so a model whose window was derived but whose output
 ceiling fell back to the floor still reports `default`. All four are
 usable; a client showing an inference as a verified figure is the one thing
 this field exists to prevent. The `contextWindowTokens`/`maxOutputTokens`
-values here are already narrowed by deployment policy (`Math.min` against
-`maxInputTokens`/`maxOutputTokens`) — that narrowing never changes `source`.
+values here are already narrowed by deployment policy — since issue #436
+via the same demand-driven `computeTokenBudget` every request runs (never a
+flat `Math.min` against `maxInputTokens`/`maxOutputTokens`: `maxOutputTokens`
+here is the ceiling `outputTokensForPrompt` would shrink further once a
+concrete prompt is known, and `contextWindowTokens` already holds back only
+the reserve, not the whole ceiling) — that narrowing never changes `source`.
 
 **Each model also carries `structuredOutput: boolean` (issue #358)**: "Whether
 this model can return schema-constrained structured output (OpenAI strict
@@ -5245,8 +5286,8 @@ when `usable` is true).
       { "id": "gpt-5.4-mini-2026-03-17", "label": "gpt-5.4-mini-2026-03-17", "contextWindowTokens": 400000, "maxOutputTokens": 128000, "source": "derived", "derivedFrom": "gpt-5.4-mini", "structuredOutput": true, "toolCalling": true }
     ],
     "defaultModel": "gpt-5.4-mini",
-    "maxInputTokens": 100000,
-    "maxOutputTokens": 16384,
+    "maxInputTokens": null,
+    "maxOutputTokens": null,
     "keyConfigured": false,
     "graphEnabled": false,
     "taskModels": {
@@ -5971,18 +6012,33 @@ connected knowledge is on, you hold `graph:write` and your
 
 The proposal exists at once with `status: "extracting"`; it becomes `draft`
 when the job finishes (or `failed`, with `stats.failure.errorClass` one of
-`auth`, `refusal`, `rate_limit`, `budget`, `invalid_output`, `other` and a
-message). A newer draft for the same note **discards** the older one
-(`stats.discardReason: "superseded"`). The model, provider, exact system
-prompt and user content are recorded on the proposal **before** the provider
-is called, so a failed run still shows what was asked. Every proposed row
-cites at least one piece of evidence it was actually given; rows that do not —
-or that name a type outside your ontology, break its attribute rules, or
-point at a dropped row — are dropped and counted in `stats.dropped`
+`auth`, `refusal`, `rate_limit`, `budget`, `truncated`, `invalid_output`,
+`other` and a message). A newer draft for the same note **discards** the
+older one (`stats.discardReason: "superseded"`). The model, provider, exact
+system prompt and user content are recorded on the proposal **before** the
+provider is called, so a failed run still shows what was asked. Every
+proposed row cites at least one piece of evidence it was actually given; rows
+that do not — or that name a type outside your ontology, break its attribute
+rules, or point at a dropped row — are dropped and counted in `stats.dropped`
 (`uncited`, `invalid`, `unknownType`, `dangling`). The request is audited as
 `graph.extraction_requested` (`proposalId`, `model`, `reason`, and whether
 guidance was given — never its text). The job is `maxAttempts: 1`: a
 re-extraction is a person asking again, never an automatic retry on your key.
+
+**`truncated` (issue #435)** is its own failure class, distinct from
+`invalid_output`: the model's answer hit its output ceiling mid-object rather
+than coming back malformed. Before proposing, the run sizes how many
+entities/relations/items one answer may carry from the output ceiling it will
+actually be given (row caps, told to the model as prompt copy and schema
+`description`s, never a JSON Schema `maxItems`); if the answer is still
+truncated, the job re-asks **once**, in the same run, with every row cap
+halved and the prompt re-recorded (`stats.truncationRetry: true`) — a second
+truncation is terminal `truncated`. `stats.usage` (`inputTokens`/
+`outputTokens`) is **summed over every provider call the run made, failed
+calls included**: a truncated answer still burned tokens and is billed all
+the same, so it is recorded rather than left at zero. See
+[`docs/specs/ontology.md`](specs/ontology.md) §6 for the row-cap sizing and
+the retry.
 
 **Errors:**
 - `400` — a model this deployment does not permit; an unknown type key
