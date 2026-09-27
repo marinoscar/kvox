@@ -220,6 +220,21 @@ function defineRelationType(spec) {
     }
     if (spec.temporal && rep.kind !== 'edge')
         fail(where, "a temporal relation must be represented as an 'edge'");
+    if (spec.symmetric !== undefined) {
+        if (typeof spec.symmetric !== 'boolean')
+            fail(where, 'symmetric, when given, must be a boolean');
+        if (spec.symmetric && (spec.from.length !== 1 || spec.to.length !== 1 || spec.from[0] !== spec.to[0])) {
+            fail(where, 'a symmetric relation must have the same single type as from and to');
+        }
+        if (spec.symmetric && rep.kind !== 'edge')
+            fail(where, "a symmetric relation must be represented as an 'edge'");
+        if (spec.symmetric && spec.allowedPairs !== undefined) {
+            fail(where, 'a symmetric relation has one endpoint pair; do not declare allowedPairs');
+        }
+    }
+    if (spec.sensitivityDefault !== undefined && !includes(constants_js_1.SENSITIVITIES, spec.sensitivityDefault)) {
+        fail(where, `sensitivityDefault must be one of ${constants_js_1.SENSITIVITIES.join(', ')}`);
+    }
     if (typeof spec.extractable !== 'boolean')
         fail(where, 'extractable must be a boolean');
     if (spec.extractable && rep.kind !== 'edge')

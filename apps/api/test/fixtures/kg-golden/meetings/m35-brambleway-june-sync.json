@@ -1,0 +1,553 @@
+{
+  "id": "m35",
+  "title": "Brambleway studio weekly sync (June)",
+  "tags": [
+    "personal",
+    "internal"
+  ],
+  "recordedAt": "2026-06-01T09:00:00Z",
+  "contextText": "Weekly studio sync.",
+  "hasTranscript": true,
+  "speakers": [
+    {
+      "id": "m35-spk-a",
+      "label": "A",
+      "displayName": "Nina Castellanos"
+    },
+    {
+      "id": "m35-spk-b",
+      "label": "B",
+      "displayName": "Oliver Brandt"
+    },
+    {
+      "id": "m35-spk-c",
+      "label": "C",
+      "displayName": "Sam Kowalski"
+    }
+  ],
+  "segments": [
+    {
+      "id": "m35-s001",
+      "speakerId": "m35-spk-a",
+      "startMs": 0,
+      "endMs": 6955,
+      "rev": 1,
+      "text": "Morning. Harbourline retest first, then anything personal before the summer rush."
+    },
+    {
+      "id": "m35-s002",
+      "speakerId": "m35-spk-b",
+      "startMs": 7255,
+      "endMs": 14485,
+      "rev": 1,
+      "text": "The retest is booked for next Thursday. The new linking screen tested well internally."
+    },
+    {
+      "id": "m35-s003",
+      "speakerId": "m35-spk-a",
+      "startMs": 14785,
+      "endMs": 19815,
+      "rev": 1,
+      "text": "Good. Are we using the same five participants?"
+    },
+    {
+      "id": "m35-s004",
+      "speakerId": "m35-spk-b",
+      "startMs": 20115,
+      "endMs": 27015,
+      "rev": 1,
+      "text": "Three of the same and two new ones, so we can see if first-timers still skip it."
+    },
+    {
+      "id": "m35-s005",
+      "speakerId": "m35-spk-c",
+      "startMs": 27315,
+      "endMs": 34930,
+      "rev": 1,
+      "text": "Makes sense. Dana's vendor shortlist arrived, by the way. I'm halfway through the comparison."
+    },
+    {
+      "id": "m35-s006",
+      "speakerId": "m35-spk-a",
+      "startMs": 35230,
+      "endMs": 39655,
+      "rev": 1,
+      "text": "Can you have it finished by Friday?"
+    },
+    {
+      "id": "m35-s007",
+      "speakerId": "m35-spk-c",
+      "startMs": 39955,
+      "endMs": 45480,
+      "rev": 1,
+      "text": "Yes, I'll send the vendor comparison to Dana on Friday."
+    },
+    {
+      "id": "m35-s008",
+      "speakerId": "m35-spk-a",
+      "startMs": 45780,
+      "endMs": 50260,
+      "rev": 1,
+      "text": "Great. Anything else on Harbourline?"
+    },
+    {
+      "id": "m35-s009",
+      "speakerId": "m35-spk-b",
+      "startMs": 50560,
+      "endMs": 54270,
+      "rev": 1,
+      "text": "No, that's it from me."
+    },
+    {
+      "id": "m35-s010",
+      "speakerId": "m35-spk-a",
+      "startMs": 54570,
+      "endMs": 60040,
+      "rev": 1,
+      "text": "Okay. Personal bits. Sam, you asked for the ninth off?"
+    },
+    {
+      "id": "m35-s011",
+      "speakerId": "m35-spk-c",
+      "startMs": 60340,
+      "endMs": 67405,
+      "rev": 1,
+      "text": "Yes, June 9 is our tenth wedding anniversary. Tessa and I got married in June 2016."
+    },
+    {
+      "id": "m35-s012",
+      "speakerId": "m35-spk-a",
+      "startMs": 67705,
+      "endMs": 73010,
+      "rev": 1,
+      "text": "Ten years! Congratulations. Doing anything special?"
+    },
+    {
+      "id": "m35-s013",
+      "speakerId": "m35-spk-c",
+      "startMs": 73310,
+      "endMs": 80485,
+      "rev": 1,
+      "text": "Dinner at the place we had our reception, and my wife has banned laptops for the day."
+    },
+    {
+      "id": "m35-s014",
+      "speakerId": "m35-spk-b",
+      "startMs": 80785,
+      "endMs": 86475,
+      "rev": 1,
+      "text": "Quite right. Nina, you were telling me about your recital?"
+    },
+    {
+      "id": "m35-s015",
+      "speakerId": "m35-spk-a",
+      "startMs": 86775,
+      "endMs": 94720,
+      "rev": 1,
+      "text": "Oh, yes. I've been playing jazz piano for about fifteen years and my group has a small gig in July."
+    },
+    {
+      "id": "m35-s016",
+      "speakerId": "m35-spk-b",
+      "startMs": 95020,
+      "endMs": 99225,
+      "rev": 1,
+      "text": "I didn't know you still played."
+    },
+    {
+      "id": "m35-s017",
+      "speakerId": "m35-spk-a",
+      "startMs": 99525,
+      "endMs": 107250,
+      "rev": 1,
+      "text": "Every week. It's the thing that keeps me sane. My friend Ruth from choir set the gig up for us."
+    },
+    {
+      "id": "m35-s018",
+      "speakerId": "m35-spk-c",
+      "startMs": 107550,
+      "endMs": 112965,
+      "rev": 1,
+      "text": "Ruth Adeyemi? The one who came to the studio opening?"
+    },
+    {
+      "id": "m35-s019",
+      "speakerId": "m35-spk-a",
+      "startMs": 113265,
+      "endMs": 120220,
+      "rev": 1,
+      "text": "No, Ruth Moreno. We've been friends since we sang in the same choir back in 2018."
+    },
+    {
+      "id": "m35-s020",
+      "speakerId": "m35-spk-c",
+      "startMs": 120520,
+      "endMs": 125275,
+      "rev": 1,
+      "text": "Ah, got it. Send us the date, we'll come."
+    },
+    {
+      "id": "m35-s021",
+      "speakerId": "m35-spk-a",
+      "startMs": 125575,
+      "endMs": 131100,
+      "rev": 1,
+      "text": "I will. Okay, Sam is off on June 9, noted. Thanks both."
+    }
+  ],
+  "note": {
+    "version": 1,
+    "body": "# Brambleway studio weekly sync\n\n**Date:** June 1\n**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski\n\n## Summary\n\nInternal sync covering the Harbourline retest, the identity-verification vendor comparison, and a couple of personal updates ahead of the summer.\n\n## Harbourline\n\n- The retest of the reworked account-linking screen is booked for next Thursday. It tested well internally.\n- The panel is three returning participants and two new ones, to check whether first-time users still skip the linking step.\n- Dana's vendor shortlist has arrived and Sam is halfway through the comparison.\n\n## Action items\n\n- **Sam Kowalski** — send the vendor comparison to Dana on Friday.\n\n## Personal updates\n\n- Sam is off on June 9: it is his tenth wedding anniversary. He and Tessa got married in June 2016 and are having dinner where they held their reception.\n- Nina has played jazz piano for about fifteen years and her group has a small gig in July. She plays every week.\n- The gig was arranged by Nina's friend Ruth Moreno; they have been friends since they sang in the same choir in 2018.\n\n## Next steps\n\nOliver runs the retest next Thursday and shares the recordings the same day. The team reviews the results together at the next sync, alongside Sam's vendor comparison, before anything goes back to Harbourline.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-brambleway-studio",
+      "type": "Organization",
+      "label": "Brambleway Studio",
+      "aliases": [
+        "Brambleway"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-nina-castellanos",
+      "type": "Person",
+      "label": "Nina Castellanos",
+      "aliases": [
+        "Nina"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32",
+        "m33"
+      ]
+    },
+    {
+      "id": "g-person-oliver-brandt",
+      "type": "Person",
+      "label": "Oliver Brandt",
+      "aliases": [
+        "Oliver"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32",
+        "m33"
+      ]
+    },
+    {
+      "id": "g-person-sam-kowalski",
+      "type": "Person",
+      "label": "Sam Kowalski",
+      "aliases": [
+        "Sam"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32",
+        "m34"
+      ]
+    },
+    {
+      "id": "g-org-harbourline",
+      "type": "Organization",
+      "label": "Harbourline",
+      "aliases": [],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-dana-whitfield",
+      "type": "Person",
+      "label": "Dana Whitfield",
+      "aliases": [
+        "Dana"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m34"
+      ]
+    }
+  ],
+  "knownRelations": [],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Brambleway studio weekly sync (June)",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brambleway studio weekly sync"
+          }
+        ]
+      },
+      {
+        "key": "nina",
+        "type": "Person",
+        "label": "Nina Castellanos",
+        "aliases": [],
+        "existingId": "g-person-nina-castellanos",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "oliver",
+        "type": "Person",
+        "label": "Oliver Brandt",
+        "aliases": [],
+        "existingId": "g-person-oliver-brandt",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "sam",
+        "type": "Person",
+        "label": "Sam Kowalski",
+        "aliases": [],
+        "existingId": "g-person-sam-kowalski",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "dana",
+        "type": "Person",
+        "label": "Dana Whitfield",
+        "aliases": [],
+        "existingId": "g-person-dana-whitfield",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "send the vendor comparison to Dana on Friday"
+          }
+        ]
+      },
+      {
+        "key": "tessa",
+        "type": "Person",
+        "label": "Tessa Kowalski",
+        "aliases": [
+          "Tessa"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s011",
+            "quote": "Tessa and I got married in June 2016."
+          }
+        ]
+      },
+      {
+        "key": "ruth",
+        "type": "Person",
+        "label": "Ruth Moreno",
+        "aliases": [
+          "Ruth"
+        ],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s019",
+            "quote": "No, Ruth Moreno."
+          }
+        ]
+      },
+      {
+        "key": "anniversary",
+        "type": "Milestone",
+        "label": "Sam's tenth wedding anniversary",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "date": "2026-06-09",
+          "kind": "anniversary"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s011",
+            "quote": "June 9 is our tenth wedding anniversary."
+          }
+        ]
+      },
+      {
+        "key": "piano",
+        "type": "Interest",
+        "label": "Jazz piano",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "category": "music"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s015",
+            "quote": "I've been playing jazz piano for about fifteen years"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "nina",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "oliver",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sam",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Oliver Brandt, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "SPOUSE_OF",
+        "from": "sam",
+        "to": "tessa",
+        "validFrom": "2016-06-01",
+        "validTo": null,
+        "precision": "month",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s011",
+            "quote": "Tessa and I got married in June 2016."
+          },
+          {
+            "source": "note",
+            "quote": "He and Tessa got married in June 2016"
+          }
+        ]
+      },
+      {
+        "type": "HAS_MILESTONE",
+        "from": "sam",
+        "to": "anniversary",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam is off on June 9: it is his tenth wedding anniversary."
+          }
+        ]
+      },
+      {
+        "type": "INTERESTED_IN",
+        "from": "nina",
+        "to": "piano",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Nina has played jazz piano for about fifteen years"
+          }
+        ]
+      },
+      {
+        "type": "FRIEND_OF",
+        "from": "nina",
+        "to": "ruth",
+        "validFrom": "2018-01-01",
+        "validTo": null,
+        "precision": "year",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s019",
+            "quote": "We've been friends since we sang in the same choir back in 2018."
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "commitment",
+        "subject": "dana",
+        "owner": "sam",
+        "counterparty": null,
+        "title": "Send the vendor comparison to Dana",
+        "statement": "Sam will send the vendor comparison to Dana on Friday.",
+        "status": "open",
+        "occurredAt": "2026-06-01",
+        "dueAt": "2026-06-05",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m35-s007",
+            "quote": "I'll send the vendor comparison to Dana on Friday."
+          }
+        ]
+      }
+    ],
+    "negatives": []
+  }
+}

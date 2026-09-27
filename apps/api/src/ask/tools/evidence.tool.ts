@@ -39,7 +39,7 @@ import {
   type AskToolResult,
 } from './ask-tool';
 import type { HandleTarget } from './handle-registry';
-import { itemVisible } from './sensitivity';
+import { hiddenTypes, itemVisible } from './sensitivity';
 
 export const EVIDENCE_DEFAULT_LIMIT = 5;
 export const EVIDENCE_MAX_LIMIT = 10;
@@ -106,7 +106,13 @@ export class EvidenceTool implements AskTool<EvidenceToolInput> {
     if (target.kind === 'ent') {
       visible =
         (await this.prisma.kgEntity.count({
-          where: { id: target.id, ownerId, reviewStatus: { in: [...READABLE_ENTITY_STATUSES] }, mergedIntoId: null },
+          where: {
+            id: target.id,
+            ownerId,
+            reviewStatus: { in: [...READABLE_ENTITY_STATUSES] },
+            mergedIntoId: null,
+            type: { notIn: hiddenTypes(ctx.personalFactsAllowed) },
+          },
         })) > 0;
     } else if (target.kind === 'itm') {
       const item = await this.prisma.kgItem.findFirst({
@@ -117,7 +123,12 @@ export class EvidenceTool implements AskTool<EvidenceToolInput> {
     } else {
       visible =
         (await this.prisma.kgRelation.count({
-          where: { id: target.id, ownerId, reviewStatus: { in: [...AS_OF_RELATION_STATUSES] } },
+          where: {
+            id: target.id,
+            ownerId,
+            reviewStatus: { in: [...AS_OF_RELATION_STATUSES] },
+            type: { notIn: hiddenTypes(ctx.personalFactsAllowed) },
+          },
         })) > 0;
     }
     if (!visible) {

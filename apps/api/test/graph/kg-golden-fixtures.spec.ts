@@ -19,10 +19,14 @@ import {
   type GoldenFixture,
   type ItemLabelKind,
 } from '../../scripts/kg-eval/fixture-schema';
+import { fixtureDomains, PERSONAL_FIXTURE_TAG } from '../../scripts/kg-eval/domains';
 import { GOLDEN_MEETINGS_DIR, listFixtureFiles, loadGoldenSet } from '../../scripts/kg-eval/load';
 import { collapseWhitespace, quoteFoundIn } from '../../scripts/kg-eval/text';
 
+/** `core ∪ work` — what every fixture not tagged `personal` is read against, and what coverage counts. */
 const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+/** Every domain, for questions asked across the whole set (#383's personal fixtures included). */
+const FULL_SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work', 'personal'], userAttributes: [] });
 const fixtures = loadGoldenSet();
 const byId = new Map(fixtures.map((f) => [f.id, f]));
 
@@ -94,6 +98,12 @@ describe('kg golden set (issue #362)', () => {
   });
 
   describe.each(fixtures.map((f) => [f.id, f] as const))('%s', (_id, f) => {
+    // #383: a `personal`-tagged fixture is read against `core ∪ work ∪ personal`;
+    // every other fixture stays on `core ∪ work`. These shadow the set-wide ones.
+    const schema = computeEffectiveSchema({ enabledDomains: fixtureDomains(f), userAttributes: [] });
+    const ENTITY_STORAGE_TYPES = schema.entityTypes.filter((t) => t.storage === 'entity').map((t) => t.key);
+    const LABELLED_RELATION_TYPES = schema.relationTypes.filter((r) => r.extractable).map((r) => r.key);
+
     it('has sorted, non-overlapping segments from declared speakers', () => {
       const speakerIds = new Set(f.speakers.map((s) => s.id));
       let prevEnd = -1;
@@ -304,7 +314,7 @@ describe('kg golden set (issue #362)', () => {
     });
 
     it('has ≥ 3 unknown-precision temporal facts and an "in 2026" year-precision fact', () => {
-      const temporal = relations.filter(({ r }) => schema.relationType(r.type)!.temporal);
+      const temporal = relations.filter(({ r }) => FULL_SCHEMA.relationType(r.type)!.temporal);
       expect(temporal.filter(({ r }) => r.precision === 'unknown').length).toBeGreaterThanOrEqual(3);
       expect(
         temporal.some(({ r }) => r.precision === 'year' && r.validFrom === '2026-01-01'),
@@ -446,6 +456,57 @@ describe('kg golden set (issue #362)', () => {
 
     it('has ≥ 2 note-only meetings', () => {
       expect(fixtures.filter((f) => !f.hasTranscript).length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('personal domain coverage (#383)', () => {
+    const personal = fixtures.filter((f) => f.tags.includes(PERSONAL_FIXTURE_TAG));
+    const others = fixtures.filter((f) => !f.tags.includes(PERSONAL_FIXTURE_TAG));
+    const personalTypes = FULL_SCHEMA.entityTypes.filter((t) => t.domain === 'personal').map((t) => t.key);
+    const personalRelations = FULL_SCHEMA.relationTypes.filter((r) => r.domain === 'personal').map((r) => r.key);
+
+    it('has ≥ 5 personal fixtures, and no personal type outside them', () => {
+      expect(personal.length).toBeGreaterThanOrEqual(5);
+      expect(personalTypes.sort()).toEqual(['Interest', 'Milestone', 'Trip']);
+      for (const f of others) {
+        for (const e of f.labels.entities) expect({ f: f.id, type: e.type, personal: personalTypes.includes(e.type) }).toEqual({ f: f.id, type: e.type, personal: false });
+        for (const r of f.labels.relations) expect({ f: f.id, type: r.type, personal: personalRelations.includes(r.type) }).toEqual({ f: f.id, type: r.type, personal: false });
+      }
+    });
+
+    it('labels every personal type and relation at least once', () => {
+      const entities = personal.flatMap((f) => f.labels.entities.map((e) => e.type));
+      const relations = personal.flatMap((f) => f.labels.relations.map((r) => r.type));
+      for (const t of personalTypes) expect({ t, labelled: entities.includes(t) }).toEqual({ t, labelled: true });
+      for (const t of personalRelations) expect({ t, labelled: relations.includes(t) }).toEqual({ t, labelled: true });
+    });
+
+    it('covers the issue\'s scenarios: a spouse, parents/children, a friendship, a dated trip, a birthday', () => {
+      const relations = personal.flatMap((f) => f.labels.relations);
+      const entities = personal.flatMap((f) => f.labels.entities);
+      expect(relations.some((r) => r.type === 'SPOUSE_OF')).toBe(true);
+      expect(relations.filter((r) => r.type === 'PARENT_OF').length).toBeGreaterThanOrEqual(2);
+      expect(relations.some((r) => r.type === 'FRIEND_OF')).toBe(true);
+      expect(entities.some((e) => e.type === 'Trip' && typeof e.props.startDate === 'string' && typeof e.props.endDate === 'string')).toBe(true);
+      expect(entities.some((e) => e.type === 'Milestone' && e.props.kind === 'birthday' && typeof e.props.date === 'string')).toBe(true);
+    });
+
+    it('carries a work trip that must NOT become a Trip (negative-work-trip)', () => {
+      const f = personal.filter((x) => x.tags.includes('negative-work-trip'));
+      expect(f.length).toBeGreaterThanOrEqual(1);
+      for (const x of f) expect(x.labels.negatives.some((n) => /trip|work/i.test(n.why))).toBe(true);
+    });
+
+    it('restates a known symmetric relation the other way round at least once (dedup to one edge)', () => {
+      const reversed = personal.filter((f) =>
+        f.labels.relations.some((r) => {
+          if (FULL_SCHEMA.relationType(r.type)?.symmetric !== true) return false;
+          const from = identity(f, r.from);
+          const to = identity(f, r.to);
+          return f.knownRelations.some((k) => k.type === r.type && k.from === to && k.to === from);
+        }),
+      );
+      expect(reversed.length).toBeGreaterThanOrEqual(1);
     });
   });
 

@@ -53,9 +53,13 @@ fixture `id` (`m01`…). The contract is `goldenFixtureSchema` in
 Every label carries `evidence`: `{ source: "segment", segmentId, quote }` or
 `{ source: "note", quote }`. A quote must appear **verbatim** (after whitespace
 collapse) in that segment or in the note body. Every type key must exist in the
-ontology registry's `core ∪ work` schema, and every endpoint must satisfy its
-relation's `from`/`to` lists — both are read from `@app/shared/ontology`,
-never from a list in the test.
+ontology registry's `core ∪ work` schema — or, for a fixture tagged
+`personal`, `core ∪ work ∪ personal` (#383: the story of a user who turned the
+`personal` domain on; `scripts/kg-eval/domains.ts`) — and every endpoint must
+satisfy its relation's `from`/`to` lists — both are read from
+`@app/shared/ontology`, never from a list in the test. A personal type in an
+untagged fixture fails the test: the untagged set is what proves a user who
+never enables `personal` is offered none of it.
 
 ## Adding a fixture
 
@@ -95,6 +99,12 @@ never from a list in the test.
 - Supersedes chains: a decision reversed in a later fixture, and "the pilot
   moved to Q2" after "the pilot is scheduled for Q1".
 - ≥ 2 note-only meetings (`note-only`).
+- Personal domain (#383), in fixtures tagged `personal` (≥ 5): every
+  `personal` type and relation labelled at least once — a spouse, parents and
+  children, a friendship, a trip with dates, a birthday `Milestone` — a known
+  symmetric relation restated the other way round (it must dedup to the one
+  stored edge), and a work trip that must not become a `Trip`
+  (`negative-work-trip`, in `labels.negatives`).
 
 ## The Ask evaluation's question file (issue #382, epic #348)
 

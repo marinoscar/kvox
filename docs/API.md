@@ -999,7 +999,7 @@ carries all of its fields.
 | `graph.resolution.newThreshold` | 0.30–0.94, and at least 0.05 below `autoLinkThreshold` | `0.55` |
 | `graph.resolution.adjudication` | `llm` \| `off` — ask the AI (on the caller's own key) about uncertain matches | `llm` |
 | `graph.domains.work` | boolean — `core` is always on and never stored | `true` |
-| `graph.domains.personal` | `false` only, until #383 ships that domain | `false` |
+| `graph.domains.personal` | boolean — the `personal` ontology domain (family, friends, interests, trips, life events; #383). Enabling it is not consent to show personal facts to a model | `false` |
 
 PATCH merges it **per sub-object**: send only what changed
 (`{ "graph": { "resolution": { "autoLinkThreshold": 0.93 } } }` — the other
@@ -1007,12 +1007,15 @@ resolution fields are filled from the stored value or the defaults). `null`
 on a field restores its default, `null` on a sub-object
 (`{ "graph": { "resolution": null } }`) resets that sub-object, and
 `{ "graph": null }` resets everything. **400** for an out-of-range value,
-an unknown key, `personal: true`, or a threshold pair out of order — including
+an unknown key, a non-boolean domain switch, or a threshold pair out of order — including
 one only the merge with the stored value reveals. A write whose resolved
 preferences actually change emits the in-process `graph.preferences_changed`
 event (no audit event, consistent with every other user-settings namespace).
 The `Knowledge graph` settings card (`/settings/knowledge-graph`, gated
-`graph:write`) is the UI over this namespace and #355's attribute definitions.
+`graph:write`) is the UI over this namespace and #355's attribute definitions;
+its *Personal life* switch asks for confirmation before turning the domain on
+(third-party consent, spec §15) and saves at once when turning it off — rows
+already accepted stay in the graph either way.
 
 ---
 
@@ -5402,7 +5405,7 @@ bad row in `details.invalidEvidence`, never a 404.
 Your **effective ontology**: the schema your graph is made of, and the one
 response every graph form is generated from. It is the `core` domain, plus
 every domain you have enabled (your `graph.domains` user-settings
-preference, issue #369 — `work` by default), plus the attributes those domains mix into each
+preference, issue #369 — `work` by default; `personal`, #383, off by default), plus the attributes those domains mix into each
 other's types (`work` adds a `title` to `Person`), plus your own attribute
 definitions — **deprecated ones included**, flagged `deprecated: true`, so
 values already stored under them stay readable. Relation endpoints and item
@@ -5416,10 +5419,11 @@ an already-curated graph unreadable.
 ```json
 {
   "data": {
-    "version": "1.0.0",
+    "version": "1.1.0",
     "domains": [
       { "key": "core", "label": "Core", "enabled": true, "alwaysOn": true },
-      { "key": "work", "label": "Work", "enabled": true, "alwaysOn": false }
+      { "key": "work", "label": "Work", "enabled": true, "alwaysOn": false },
+      { "key": "personal", "label": "Personal life", "enabled": false, "alwaysOn": false }
     ],
     "entityTypes": [
       {
@@ -5488,6 +5492,16 @@ another enabled domain; `domain` names it) or `user` (one of your own
 definitions; `domain` is `null` and `attributeDefId` is its id). The example
 is abridged; the published OpenAPI schema (`GraphOntologyDto`) is the full
 contract.
+
+Two relation fields appear **only when set** (#383), so neither changes the
+entry of a `core`/`work` relation: `symmetric: true` on a relation where
+`(a, b)` and `(b, a)` are the same fact, stored once (`SPOUSE_OF`,
+`FRIEND_OF`; absent = directed), and `sensitivityDefault` on a relation that
+declares one (every `personal`-domain relation: `"personal"`; absent =
+`business`). With `personal` enabled the response adds `Interest`, `Trip` and
+`Milestone` and the relations `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`,
+`INTERESTED_IN`, `TRAVELED_ON` and `HAS_MILESTONE`, every one
+`sensitivityDefault: "personal"` — never pre-checked in review.
 
 **Errors:** `401` unauthenticated · `403` without `graph:read`.
 

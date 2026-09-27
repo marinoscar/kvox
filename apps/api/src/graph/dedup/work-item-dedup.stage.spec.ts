@@ -64,6 +64,7 @@ function build(options: {
   edges?: TemporalEdge[];
   embedded?: 'ok' | 'skipped:ai_key_missing';
   adjudicateThrows?: unknown;
+  schema?: typeof SCHEMA;
 } = {}) {
   const db = new FakeProposalDb();
   db.add('entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(JOE) });
@@ -93,7 +94,7 @@ function build(options: {
   const registry = new ProposalStageRegistry();
   const stage = new WorkItemDedupStage(
     registry,
-    { effectiveSchemaFor: async () => SCHEMA } as never,
+    { effectiveSchemaFor: async () => options.schema ?? SCHEMA } as never,
     graph as never,
     resolution as never,
     adjudication as never,
@@ -286,6 +287,30 @@ describe('work-item-dedup stage', () => {
       await stage.run(db.ctx());
       expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'known' });
       expect(db.byRef('r2').payload.dedup).toMatchObject({ verdict: 'new', targetRelationId: null });
+    });
+
+    describe('symmetric relations (#383)', () => {
+      const PERSONAL = computeEffectiveSchema({ enabledDomains: ['core', 'work', 'personal'], userAttributes: [] });
+      const BEN = 'aaaaaaaa-0000-4000-8000-0000000000b2';
+      // Stored the other way round: (Ben, Joe).
+      const reversed = (type: string): TemporalEdge => ({ ...edge(null, type), fromId: BEN, toId: JOE });
+
+      it('loads edges from both ends and finds (B SPOUSE_OF A) known for a proposed (A SPOUSE_OF B)', async () => {
+        const { db, stage, graph } = build({ schema: PERSONAL, edges: [reversed('SPOUSE_OF')] });
+        db.add('relation', rel({ type: 'SPOUSE_OF', to: { entityId: BEN }, validFrom: null, precision: 'unknown' }));
+        await stage.run(db.ctx());
+        expect(graph.liveEdges).toHaveBeenCalledWith(OWNER, 'SPOUSE_OF', JOE, true);
+        expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'known', targetRelationId: 'cccccccc-0000-4000-8000-000000000001' });
+        expect(db.byRef('r1').flags).toEqual(['known']);
+      });
+
+      it('keeps PARENT_OF directed: a reversed edge is not the same fact', async () => {
+        const { db, stage, graph } = build({ schema: PERSONAL, edges: [reversed('PARENT_OF')] });
+        db.add('relation', rel({ type: 'PARENT_OF', to: { entityId: BEN }, validFrom: null, precision: 'unknown' }));
+        await stage.run(db.ctx());
+        expect(graph.liveEdges).toHaveBeenCalledWith(OWNER, 'PARENT_OF', JOE, false);
+        expect(db.byRef('r1').payload.dedup).toMatchObject({ verdict: 'new', targetRelationId: null });
+      });
     });
 
     it('a relation with a proposal-new endpoint is new without a lookup', async () => {

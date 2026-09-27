@@ -95,6 +95,18 @@ describe('SearchTool', () => {
     expectNoUuid(res.data);
   });
 
+  it('never returns a personal-domain entity without the opt-in (#383)', async () => {
+    const { tool } = build({ entities: [entity(uid(30), 'Acme'), entity(uid(31), 'Lisbon trip', 'Trip')] });
+    const ctx = makeCtx();
+    const res = await tool.run(ctx, tool.input.parse({ query: 'Acme' }));
+    const entities = (res.data as { entities: Array<{ label: string }> }).entities;
+    expect(entities.map((e) => e.label)).toEqual(['Acme']);
+
+    const allowed = makeCtx({ personalFactsAllowed: true });
+    const withOptIn = await tool.run(allowed, tool.input.parse({ query: 'Acme' }));
+    expect((withOptIn.data as { entities: Array<{ label: string }> }).entities.map((e) => e.label)).toEqual(['Acme', 'Lisbon trip']);
+  });
+
   it('with zero entities still returns documents', async () => {
     const { tool } = build({ results: [noteHit] });
     const res = await tool.run(makeCtx(), tool.input.parse({ query: 'renewal' }));

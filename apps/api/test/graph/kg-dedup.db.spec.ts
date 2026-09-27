@@ -35,7 +35,9 @@ const { describeWithDb, dbReachable } = resolveDbSuite('kg-dedup.db.spec');
 const EMAIL_PREFIX = 'kg-dedup-test';
 const V = 'test';
 const MODEL = 'test-embedding-model';
-const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+// `personal` on (#383) so the symmetric SPOUSE_OF / directed PARENT_OF cases
+// below have their types; no other case names a personal type.
+const SCHEMA = computeEffectiveSchema({ enabledDomains: ['core', 'work', 'personal'], userAttributes: [] });
 
 type Tx = Prisma.TransactionClient;
 
@@ -320,6 +322,30 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     expect(rel.flags).toEqual(['known']);
     expect(items.some((i) => i.kind === 'closing')).toBe(false);
     expect(precheck(items)[items.indexOf(rel)]).toBe('accept');
+  });
+
+  it('symmetric (#383): a stored (Ana SPOUSE_OF Ben) makes a proposed (Ben SPOUSE_OF Ana) known; PARENT_OF stays directed', async () => {
+    const user = await createUser();
+    const note = await createNote(user.id);
+    const ana = await entity(user.id, 'Person', 'Ana');
+    const ben = await entity(user.id, 'Person', 'Ben');
+    const spouse = await relation(user.id, 'SPOUSE_OF', ana, ben, '[2015-01-01,)', 'year');
+    await relation(user.id, 'PARENT_OF', ana, ben, 'empty', 'unknown');
+
+    const p = await proposal(user.id, note.id);
+    await row(p.id, user.id, 'entity', entityPayload('e1', 'Person', 'Ben'), { resolution: linked(ben) });
+    await row(p.id, user.id, 'entity', entityPayload('e2', 'Person', 'Ana'), { resolution: linked(ana) });
+    await row(p.id, user.id, 'relation', relPayload({ ref: 'r1', type: 'SPOUSE_OF' }));
+    await row(p.id, user.id, 'relation', relPayload({ ref: 'r2', type: 'PARENT_OF' }));
+
+    await runAll(ctx(p.id, user.id, note.id));
+    const items = await rows(p.id);
+    const byRef = (ref: string) => items.find((i) => (i.payload as { ref?: string }).ref === ref)!;
+    expect(byRef('r1').payload).toMatchObject({ dedup: { verdict: 'known', targetRelationId: spouse } });
+    expect(byRef('r1').flags).toEqual(['known']);
+    expect(byRef('r2').payload).toMatchObject({ dedup: { verdict: 'new', targetRelationId: null } });
+    // The spouse edge is not "closed" by its own restatement either.
+    expect(items.some((i) => i.kind === 'closing')).toBe(false);
   });
 
   it('an overlapping new WORKS_FOR is flagged overlaps and still proposed', async () => {

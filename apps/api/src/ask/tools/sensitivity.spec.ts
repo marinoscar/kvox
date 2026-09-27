@@ -1,5 +1,13 @@
 import { GRAPH_PREFERENCE_DEFAULTS } from '../../graph/preferences/graph-preferences.service';
-import { itemVisible, personalFactsAllowedFor, sensitivityVisible, visiblePersonFactIds } from './sensitivity';
+import {
+  hiddenTypes,
+  itemVisible,
+  PERSONAL_SENSITIVITY_TYPES,
+  personalFactsAllowedFor,
+  sensitivityVisible,
+  typeVisible,
+  visiblePersonFactIds,
+} from './sensitivity';
 
 // =============================================================================
 // Sensitivity rules (#377; spec §5.6/§14/§15): `sensitive` never, `personal`
@@ -17,6 +25,19 @@ describe('sensitivity rules', () => {
     ['business', false, true],
   ])('%s with opt-in=%s → %s', (s, allowed, expected) => {
     expect(sensitivityVisible(s, allowed)).toBe(expected);
+  });
+
+  it('treats every personal-domain entity and relation type as personal (#383)', () => {
+    expect([...PERSONAL_SENSITIVITY_TYPES].sort()).toEqual(
+      ['FRIEND_OF', 'HAS_MILESTONE', 'INTERESTED_IN', 'Interest', 'Milestone', 'PARENT_OF', 'SPOUSE_OF', 'TRAVELED_ON', 'Trip'].sort(),
+    );
+    expect(typeVisible('SPOUSE_OF', false)).toBe(false);
+    expect(typeVisible('Trip', false)).toBe(false);
+    expect(typeVisible('SPOUSE_OF', true)).toBe(true);
+    expect(typeVisible('Person', false)).toBe(true);
+    expect(typeVisible('WORKS_FOR', false)).toBe(true);
+    expect(hiddenTypes(true)).toEqual([]);
+    expect(hiddenTypes(false).sort()).toEqual([...PERSONAL_SENSITIVITY_TYPES].sort());
   });
 
   it('applies only to PersonFacts among items', () => {
