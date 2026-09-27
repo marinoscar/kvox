@@ -13,6 +13,10 @@ import { z } from 'zod';
 // `charStart`/`charEnd` are offsets into the cited NOTE VERSION BODY when
 // `noteId` is set, or into the cited SEGMENT'S TEXT when `segmentId` is set
 // (NULL = the whole segment) — the `kg_evidence` convention #351 documents.
+// A NOTE citation with both offsets NULL means "the note's Context field"
+// (#440): `kg.extract` offers the Context as a citable source (`C`), and it
+// has no body offsets — the quote alone carries the span. The two offsets are
+// therefore both set or both NULL on a note citation, never one of each.
 // =============================================================================
 
 export const evidenceInputSchema = z
@@ -33,10 +37,10 @@ export const evidenceInputSchema = z
   .refine(
     (e) =>
       (e.segmentId && e.transcriptId) ||
-      (e.noteId && e.noteVersion && e.charStart !== null && e.charEnd !== null) ||
+      (e.noteId && e.noteVersion && (e.charStart === null) === (e.charEnd === null)) ||
       e.importObjectId ||
       e.sourceIri,
-    { message: 'Evidence needs a segment, a note span, or an import source.' },
+    { message: 'Evidence needs a segment, a note span (or the note Context), or an import source.' },
   );
 
 export type EvidenceInput = z.infer<typeof evidenceInputSchema>;
