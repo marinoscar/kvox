@@ -1,11 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Quad } from 'n3';
 import { ONTOLOGY } from '@app/shared/ontology';
 
 import { generateShacl } from '../../../src/graph/rdf/shacl-generator';
-import { FIXTURE_NS as NS, PROV, SH, esmImport, parseTurtle, userDef } from './rdf-fixtures';
+import { FIXTURE_NS as NS, PROV, SH, parseTurtle, userDef, validateShacl, type ShaclReport } from './rdf-fixtures';
 
 // =============================================================================
 // The generated SHACL shapes, run through a real SHACL engine (#385)
@@ -19,24 +18,12 @@ import { FIXTURE_NS as NS, PROV, SH, esmImport, parseTurtle, userDef } from './r
 // and an endpoint class — no more (a shape too strict for real data) and no
 // fewer (a rule the shapes fail to express).
 //
-// Both libraries are ESM-only and test-only in this issue (§18.4: RDF
-// libraries never enter the request path), so they are loaded through
-// `esmImport`.
+// Both libraries are ESM-only and test-only (§18.4: RDF libraries never enter
+// the request path), so they run in a child `node` process — `validateShacl`,
+// deterministic under any Jest launcher (see `shacl-runner.mjs`).
 // =============================================================================
 
-interface ValidationResult {
-  focusNode: { value: string } | null;
-  path: { value: string } | null;
-  sourceConstraintComponent: { value: string } | null;
-}
-interface ValidationReport {
-  conforms: boolean;
-  results: ValidationResult[];
-}
-type Validator = new (shapes: unknown) => { validate(data: unknown): Promise<ValidationReport> };
-interface RdfExt {
-  dataset(quads?: Iterable<Quad>): unknown;
-}
+type ValidationReport = ShaclReport;
 
 const TIER_ID = '11111111-1111-4111-8111-111111111111';
 const SENSITIVE_ID = '33333333-3333-4333-8333-333333333333';
@@ -68,11 +55,9 @@ const PREFIXES = `
 describe('generated SHACL shapes validate hand-written graph data (rdf-validate-shacl)', () => {
   let validate: (turtle: string) => Promise<ValidationReport>;
 
-  beforeAll(async () => {
-    const { default: SHACLValidator } = await esmImport<{ default: Validator }>('rdf-validate-shacl');
-    const { default: rdf } = await esmImport<{ default: RdfExt }>('rdf-ext');
-    const shapes = rdf.dataset(parseTurtle(generateShacl(ONTOLOGY, defs, NS)));
-    validate = async (turtle: string) => new SHACLValidator(shapes).validate(rdf.dataset(parseTurtle(turtle)));
+  beforeAll(() => {
+    const shapes = parseTurtle(generateShacl(ONTOLOGY, defs, NS));
+    validate = (turtle: string) => validateShacl(shapes, parseTurtle(turtle));
   });
 
   const summarize = (report: ValidationReport) =>
@@ -137,11 +122,11 @@ describe('generated SHACL shapes validate hand-written graph data (rdf-validate-
     ]);
   });
 
-  it('rejects an assertion with a bad precision, a non-dateTime start or a non-temporal predicate', async () => {
+  it('rejects an assertion with a bad precision, a non-dateTime start or a predicate that is not an edge', async () => {
     const report = await validate(`${PREFIXES}
       rel:d0000000-0000-4000-8000-000000000003 a kv:Assertion ;
         rdf:subject ent:a0000000-0000-4000-8000-000000000001 ;
-        rdf:predicate kv:ATTENDED ;
+        rdf:predicate kv:ABOUT ;
         rdf:object ent:a0000000-0000-4000-8000-000000000002 ;
         prov:startedAtTime "2019" ;
         kv:validPrecision "week" ;

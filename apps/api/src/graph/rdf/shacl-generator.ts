@@ -21,12 +21,19 @@
 //     several (narrowed by allowedPairs and an item's subjectTypes); an item
 //     column (one value by construction) adds sh:maxCount 1, and a required
 //     subject sh:minCount 1;
-//   per item type  — kv:status sh:in its declared statuses;
+//   per item type  — kv:status sh:in its declared statuses, exactly one
+//     kv:<ItemType>.statement, at most one kv:dueAt, and the item's own
+//     validity range as prov:startedAtTime/prov:endedAtTime + kv:validPrecision
+//     (the representation a reified assertion uses — #386);
+//   per entity type — skos:altLabel for its aliases (#386);
+//   every type     — at most one kv:occurredAt (a meeting's date, an item's);
 //   NO ORPHANS     — prov:wasDerivedFrom sh:minCount 1 on every node shape (§3.3);
 //   the caller's own attribute definitions on their type, sensitive ones
 //     omitted (never exported, §18.1).
 //
-// Plus `kv:AssertionShape` for reified temporal edges.
+// Plus `kv:AssertionShape` for reified edges — every `kg_relations` edge an
+// export writes, not only temporal ones (#386: the reified node is where an
+// edge's citations, confidence and props live).
 //
 // ⚠ PURE. No Nest, no I/O, and no RDF library (§18.4).
 // =============================================================================
@@ -46,6 +53,7 @@ import {
   RDF,
   RDFS,
   SH,
+  SKOS,
   XSD,
   alignmentIri,
   annotationIri,
@@ -53,7 +61,10 @@ import {
   assertionShapeIri,
   attributeIri,
   classIri,
+  dueAtIri,
+  itemStatementIri,
   itemStatusIri,
+  occurredAtIri,
   relationIri,
   relationPropIri,
   shapeIri,
@@ -122,6 +133,26 @@ interface ValueRules {
   name: string;
 }
 
+/** A property shape for a single optional `xsd:dateTime`. */
+function dateTimeShape(path: string, name: string): TurtleTerm {
+  return bnode([
+    po(`${SH}path`, iri(path)),
+    po(`${SH}name`, literal(name)),
+    po(`${SH}datatype`, iri(`${XSD}dateTime`)),
+    po(`${SH}maxCount`, int(1)),
+  ]);
+}
+
+/** `kv:validPrecision`: at most one, one of the four precisions. */
+function validPrecisionShape(ns: string): TurtleTerm {
+  return bnode([
+    po(`${SH}path`, iri(annotationIri(ns, 'validPrecision'))),
+    po(`${SH}datatype`, iri(`${XSD}string`)),
+    po(`${SH}maxCount`, int(1)),
+    po(`${SH}in`, list(VALID_PRECISIONS.map((p) => literal(p)))),
+  ]);
+}
+
 /** A property shape for one attribute value. */
 function attributeShape(ns: string, path: string, rules: ValueRules): TurtleTerm {
   const props: TurtlePredicate[] = [po(`${SH}path`, iri(path)), po(`${SH}name`, literal(rules.name))];
@@ -170,8 +201,30 @@ function nodeShape(
   relations: readonly Readonly<RelationTypeSpec>[],
   userAttributes: readonly UserAttributeDef[],
 ): TurtleSubject {
-  const properties: TurtleTerm[] = [derivedFromShape()];
+  const properties: TurtleTerm[] = [derivedFromShape(), dateTimeShape(occurredAtIri(ns), 'Occurred at')];
   const alignedRelationIris = new Set<string>();
+
+  if (type.itemKind !== undefined) {
+    // The item's own columns (#386): its statement, due date and validity range.
+    properties.push(
+      bnode([
+        po(`${SH}path`, iri(itemStatementIri(ns, type.key))),
+        po(`${SH}name`, literal('Statement')),
+        po(`${SH}datatype`, iri(`${XSD}string`)),
+        po(`${SH}minCount`, int(1)),
+        po(`${SH}maxCount`, int(1)),
+      ]),
+      dateTimeShape(dueAtIri(ns), 'Due at'),
+      dateTimeShape(`${PROV}startedAtTime`, 'Valid from'),
+      dateTimeShape(`${PROV}endedAtTime`, 'Valid until'),
+      validPrecisionShape(ns),
+    );
+  } else {
+    // An entity's aliases (#386).
+    properties.push(
+      bnode([po(`${SH}path`, iri(`${SKOS}altLabel`)), po(`${SH}name`, literal('Alias')), po(`${SH}datatype`, iri(`${XSD}string`))]),
+    );
+  }
 
   for (const { key, spec } of typeAttributes(registry, type)) {
     properties.push(
@@ -232,13 +285,13 @@ function nodeShape(
 }
 
 /**
- * `kv:AssertionShape`: a reified temporal edge names exactly one subject,
+ * `kv:AssertionShape`: a reified edge (any `kg_relations` edge, #386) names exactly one subject,
  * predicate and object, carries at most one start and end instant and one
  * precision, cites a source, and — for a relation with a required prop, like
  * HAS_ROLE's title — carries that prop whenever its predicate is that relation.
  */
 function assertionShape(ns: string, relations: readonly Readonly<RelationTypeSpec>[]): TurtleSubject {
-  const reified = relations.filter((r) => r.temporal || Object.keys(r.props).length > 0);
+  const reified = relations.filter((r) => r.representation.kind === 'edge');
   const properties: TurtleTerm[] = [
     bnode([po(`${SH}path`, iri(`${RDF}subject`)), po(`${SH}minCount`, int(1)), po(`${SH}maxCount`, int(1)), po(`${SH}nodeKind`, shIri)]),
     bnode([
@@ -250,12 +303,7 @@ function assertionShape(ns: string, relations: readonly Readonly<RelationTypeSpe
     bnode([po(`${SH}path`, iri(`${RDF}object`)), po(`${SH}minCount`, int(1)), po(`${SH}maxCount`, int(1)), po(`${SH}nodeKind`, shIri)]),
     bnode([po(`${SH}path`, iri(`${PROV}startedAtTime`)), po(`${SH}datatype`, iri(`${XSD}dateTime`)), po(`${SH}maxCount`, int(1))]),
     bnode([po(`${SH}path`, iri(`${PROV}endedAtTime`)), po(`${SH}datatype`, iri(`${XSD}dateTime`)), po(`${SH}maxCount`, int(1))]),
-    bnode([
-      po(`${SH}path`, iri(annotationIri(ns, 'validPrecision'))),
-      po(`${SH}datatype`, iri(`${XSD}string`)),
-      po(`${SH}maxCount`, int(1)),
-      po(`${SH}in`, list(VALID_PRECISIONS.map((p) => literal(p)))),
-    ]),
+    validPrecisionShape(ns),
     derivedFromShape(),
   ];
 

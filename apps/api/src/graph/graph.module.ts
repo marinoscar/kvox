@@ -5,6 +5,8 @@ import { JobsModule } from '../jobs/jobs.module';
 import { NoteAccessService } from '../notes/access/note-access.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SearchModule } from '../search/search.module';
+import { StorageModule } from '../storage/storage.module';
+import { StorageProvidersModule } from '../storage/providers/storage-providers.module';
 import { TranscriptsModule } from '../transcripts/transcripts.module';
 import { GraphAccessService } from './access/graph-access.service';
 import { EntityBriefController } from './brief/entity-brief.controller';
@@ -17,6 +19,12 @@ import { GraphAttributeDefsService } from './attribute-defs/graph-attribute-defs
 import { GraphEntitiesController } from './graph-entities.controller';
 import { GraphEntitiesService } from './graph-entities.service';
 import { GraphController } from './graph.controller';
+import { GraphExportController } from './export/graph-export.controller';
+import { GraphExportService } from './export/graph-export.service';
+import { GraphExportSource } from './export/graph-export.source';
+import { KgExportExpiryTask } from './export/kg-export-expiry.task';
+import { KgExportHandler } from './export/kg-export.handler';
+import { GraphObjectsService } from './graph-objects.service';
 import { KgPurgeHandler } from './handlers/kg-purge.handler';
 import { GraphLayoutEnqueuer } from './layout/graph-layout.enqueuer';
 import { KgGraphLayoutHandler } from './layout/graph-layout.handler';
@@ -65,8 +73,11 @@ import { GraphWriteService } from './write/graph-write.service';
 //
 // `SearchModule` (#372) supplies `SearchService`, the entity brief's text
 // arm (spec §9.4: a brief is never graph-only). One way as well.
+//
+// `StorageModule` + `StorageProvidersModule` (#386) back `GraphObjectsService`,
+// the `managed_by: 'graph'` storage the export files live in. One way too.
 @Module({
-  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, SearchModule],
+  imports: [PrismaModule, JobsModule, TranscriptsModule, AiModule, SearchModule, StorageModule, StorageProvidersModule],
   providers: [
     GraphAccessService,
     NoteAccessService,
@@ -101,6 +112,12 @@ import { GraphWriteService } from './write/graph-write.service';
     EntityBriefService,
     // #385 — the generated OWL/RDFS and SHACL artefacts (ETag + LRU).
     GraphRdfService,
+    // #386 — `kg.export`: RDF data export (JSON-LD/Turtle/N-Quads) and its sweep.
+    GraphObjectsService,
+    GraphExportSource,
+    GraphExportService,
+    KgExportHandler,
+    KgExportExpiryTask,
   ],
   controllers: [
     GraphController,
@@ -110,6 +127,7 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphOverviewController,
     EntityBriefController,
     GraphRdfController,
+    GraphExportController,
   ],
   // `GraphWriteService` is the ONLY sanctioned write path for kg_entities,
   // kg_relations and kg_items (#355) — every later writer imports it from here.

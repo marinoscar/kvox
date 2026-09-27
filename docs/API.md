@@ -5354,8 +5354,9 @@ neighbourhood, timeline, mentions and citations, plus the explorer's expand
 (issue #370) — an entity's **brief**, "what's the latest on …?" in one
 call (issue #372) — the whole-graph overview, read from a precomputed
 snapshot, plus its manual refresh (issue #371) — reviewing, committing and
-reverting proposals (issue #366) — and the ontology itself as OWL/RDFS and
-SHACL Turtle (issue #385); all follow the access posture below.
+reverting proposals (issue #366) — the ontology itself as OWL/RDFS and
+SHACL Turtle (issue #385) — and your graph's **data** as JSON-LD, Turtle or
+N-Quads (issue #386); all follow the access posture below.
 
 **Permissions.** `graph:read` gates every read; `graph:write` gates every
 curation (committing proposals, editing, merging and forgetting entities,
@@ -5526,7 +5527,11 @@ attribute definition appears in neither (it is never exported).
   property is a violation), `required` → `sh:minCount 1`, selects → `sh:in`,
   relation endpoints → `sh:class`, URLs → `sh:pattern`, at least one
   `prov:wasDerivedFrom` on every node, and `kv:AssertionShape` for reified
-  temporal edges.
+  edges (every exported edge, temporal or not — #386). It also declares the
+  row columns a data export writes (#386): exactly one
+  `kv:<ItemType>.statement` per item, `kv:occurredAt`, an item's `kv:dueAt`
+  and validity range (`prov:startedAtTime`/`prov:endedAtTime` +
+  `kv:validPrecision`), and an entity's aliases (`skos:altLabel`).
 
 **Requires:** `graph:read`.
 
@@ -5559,6 +5564,99 @@ answered **`304` with no body**. `Cache-Control: private, max-age=0,
 must-revalidate`.
 
 **Errors:** `401` unauthenticated · `403` without `graph:read`.
+
+#### POST /graph/exports, GET /graph/exports/{id}, GET /graph/exports
+
+Your graph's **data** as standard RDF (issue #386,
+[`docs/specs/ontology.md`](specs/ontology.md) §18.2 item 3) — JSON-LD, Turtle
+or N-Quads — rendered by the **`kg.export`** queue job into a file you
+download through a short-lived signed URL, exactly the way a note export works.
+Realized as this POST + GET pair rather than a single `GET /graph/export?format=`,
+because a GET that enqueues work is unsafe to prefetch.
+
+**What is in it.** Your reviewed (`accepted`/`edited`) entities, relations and
+facts; **superseded** facts too (history is part of the graph), linked from
+their replacement by `kv:SUPERSEDES` and `prov:wasRevisionOf`; and every
+citation behind them as an `oa:Annotation` (quote in `oa:hasBody`, source
+`kv:segment/<id>` or `kv:note/<id>/v<n>`, a `oa:FragmentSelector`
+`t=<start>,<end>` for a timed segment and/or a `oa:TextPositionSelector`).
+Every node cites its evidence with `prov:wasDerivedFrom`. Every edge is written
+both as a direct triple (`kv:entity/<a> kv:WORKS_FOR kv:entity/<b>`, plus its
+aligned property, e.g. `schema:worksFor`) and as a reified `kv:Assertion`
+carrying its validity range (`prov:startedAtTime`/`prov:endedAtTime`, finite
+bounds only), `kv:validPrecision`, props, `kv:confidence` and citations.
+Every IRI follows the rules in §18.1 (`kv:entity/<uuid>`, `kv:item/<uuid>`, …),
+and the file **validates against `GET /graph/ontology.shacl.ttl`** by
+construction (CI checks it). JSON-LD is compacted with a generated `@context`
+(`kv:` plus every standard vocabulary prefix). Output is deterministic: an
+identical graph produces an identical file.
+
+**What is never in it.** Merged tombstones, unreviewed and rejected rows,
+speaker links, and — under any setting — `sensitive` person facts, their
+evidence quotes, and attribute values whose definition is `sensitive`; those
+are counted in `stats.excludedSensitive`. Nothing about you as the account
+holder (no `dcterms:creator`).
+
+**Requires:** `graph:read` on all three — taking your own graph out is a read.
+Owner-scoped: another user's export id is a `404`, never a `403`; there is no
+`graph:read_any`.
+
+##### POST /graph/exports
+
+**Request:** `{ "format": "jsonld" | "turtle" | "nquads" }`
+
+**Response:** **`202`** `{ export, reused: false }` when a render was queued —
+poll `GET /graph/exports/{id}`. **`200`** `{ export, reused: true }` when an
+unexpired, non-failed export of the same format already exists for an
+**unchanged** graph: exports are content-addressed on a fingerprint of the
+ontology version, the format and your graph's rows (max `updated_at` and row
+counts), so any committed change produces a new export and a failed one is
+never reused.
+
+```json
+{
+  "data": {
+    "export": {
+      "id": "8b2f…",
+      "format": "turtle",
+      "status": "pending",
+      "ontologyVersion": "1.2.0",
+      "stats": {},
+      "errorMessage": null,
+      "createdAt": "2026-09-01T12:00:00.000Z",
+      "expiresAt": "2026-09-08T12:00:00.000Z",
+      "downloadUrl": null,
+      "filename": "<app slug>-graph-2026-09-01.ttl"
+    },
+    "reused": false
+  }
+}
+```
+
+**Errors:** `400` unknown format · `409` `details.reason: "graph_empty"` when
+your graph has nothing readable to export.
+
+##### GET /graph/exports/{id}
+
+The export above. `status` is `pending`/`running` while the job works, then
+`ready` or `failed` (`errorMessage` says why, never with row data). Once
+`ready`, `stats` is `{ entities, relations, items, evidence,
+excludedSensitive, bytes }` and `downloadUrl` is a **15-minute signed URL**
+serving the file as an attachment named `filename`
+(`<app slug>-graph-<YYYY-MM-DD>.<jsonld|ttl|nq>`) — the `Content-Disposition`
+is signed into the URL.
+
+**Errors:** `400` non-UUID id · `404` not yours, missing, or expired.
+
+##### GET /graph/exports
+
+Your unexpired exports, newest first, at most 20: `{ exports: [ … ] }`.
+
+**Expiry.** An export and its file (`managed_by: "graph"` — hidden from
+`GET /storage/objects`, `409` on its generic `DELETE`) are deleted **7 days**
+after the request by a daily sweep (the same `kg.export` job type, in sweep
+mode). "Forget this person" and the Danger Zone's `content`/`everything` also
+delete every export — a file written before still names the forgotten data.
 
 #### PATCH /graph/entities/{id}
 
