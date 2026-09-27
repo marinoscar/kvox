@@ -342,6 +342,43 @@ describe('GraphRdfDatasetBuilder — relations', () => {
   });
 });
 
+describe('GraphRdfDatasetBuilder — the personal domain (#383)', () => {
+  it('exports personal entities and edges: personal is not sensitive', () => {
+    const b = builder();
+    const trip = b.entity(
+      entityRow({ id: id(5), type: 'Trip', label: 'Lisbon', aliases: [], props: { destination: 'Lisbon', startDate: '2026-05-01' } }),
+    )!;
+    expect(objects(trip, `${RDF}type`)).toContain(`${NS}Trip`);
+    expect(objects(trip, `${NS}Trip.destination`)).toEqual(['Lisbon']);
+    const person = b.entity(
+      entityRow({
+        outgoing: [
+          relationRow({ id: id(23), type: 'TRAVELED_ON', toId: id(5), toType: 'Trip', validFrom: null, validPrecision: null }),
+          relationRow({ id: id(24), type: 'SPOUSE_OF', toId: id(6), toType: 'Person' }),
+        ],
+      }),
+    )!;
+    expect(objects(person, `${NS}TRAVELED_ON`)).toEqual([`${NS}entity/${id(5)}`]);
+    expect(objects(person, `${NS}SPOUSE_OF`)).toEqual([`${NS}entity/${id(6)}`]);
+    expect(b.relation(relationRow({ id: id(24), type: 'SPOUSE_OF', toId: id(6), toType: 'Person' }))).not.toBeNull();
+    expect(b.stats.excludedSensitive).toBe(0);
+  });
+
+  it('writes a symmetric edge exactly as stored, once — never a mirrored inverse', () => {
+    const b = builder();
+    const spouse = relationRow({ id: id(24), type: 'SPOUSE_OF', toId: id(6), toType: 'Person' });
+    const from = b.entity(entityRow({ outgoing: [spouse] }))!;
+    // The other endpoint's block carries no SPOUSE_OF back: its outgoing list is its own rows only.
+    const to = b.entity(entityRow({ id: id(6), label: 'Alex', aliases: [], outgoing: [spouse] }))!;
+    const all = [...from.triples, ...to.triples].filter((t) => t.predicate.value === `${NS}SPOUSE_OF`);
+    expect(all).toHaveLength(1);
+    expect(all[0].subject.value).toBe(`${NS}entity/${PERSON}`);
+    const reified = b.relation(spouse)!;
+    expect(objects(reified, `${RDF}subject`)).toEqual([`${NS}entity/${PERSON}`]);
+    expect(objects(reified, `${RDF}object`)).toEqual([`${NS}entity/${id(6)}`]);
+  });
+});
+
 describe('GraphRdfDatasetBuilder — evidence', () => {
   function evidenceRow(overrides: Partial<ExportEvidenceRow> = {}): ExportEvidenceRow {
     return {

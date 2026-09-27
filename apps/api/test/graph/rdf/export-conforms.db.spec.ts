@@ -209,6 +209,18 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     });
     const project = await g.entity('Project', 'Q2 pilot', { props: { status: 'active', startDate: '2026-04-01' } });
     const tombstone = await g.entity('Person', 'Sarah C.', { reviewStatus: 'merged', mergedIntoId: sarah });
+    // #383's personal domain — exported (personal is not sensitive), and even
+    // though this owner has switched the domain OFF: rows that exist are exported.
+    await prisma.userSettings.create({ data: { userId: user.id, value: { graph: { domains: { personal: false } } } } });
+    const trip = await g.entity('Trip', 'Lisbon trip', { props: { destination: 'Lisbon', startDate: '2026-05-01' } });
+    const interest = await g.entity('Interest', 'Sailing');
+    const milestone = await g.entity('Milestone', 'Wedding anniversary', { props: { kind: 'anniversary' } });
+    const spouseOf = await g.relation('SPOUSE_OF', sarah, people[4], { valid: '[2015-06-01,)', precision: 'month' });
+    await g.relation('FRIEND_OF', people[5], sarah);
+    await g.relation('PARENT_OF', sarah, people[6]);
+    await g.relation('TRAVELED_ON', sarah, trip);
+    await g.relation('INTERESTED_IN', sarah, interest);
+    await g.relation('HAS_MILESTONE', sarah, milestone);
     const unreviewed = await g.entity('Person', 'Maybe Person', { reviewStatus: 'unreviewed' });
     const rejected = await g.entity('Organization', 'Rejected Org', { reviewStatus: 'rejected' });
 
@@ -257,7 +269,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
 
     return {
       user,
-      ids: { sarah, acme, meeting, tombstone, unreviewed, rejected, worksFor, toUnreviewed, rejectedRel, speakerLink, commitment, newDecision, oldDecision, personal, sensitive, unreviewedItem },
+      ids: { trip, interest, milestone, spouseOf, sarah, acme, meeting, tombstone, unreviewed, rejected, worksFor, toUnreviewed, rejectedRel, speakerLink, commitment, newDecision, oldDecision, personal, sensitive, unreviewedItem },
       defs: { tier, medical },
     };
   }
@@ -288,7 +300,18 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       for (const secret of ['SECRET-FACT-STATEMENT', 'SECRET-FACT-QUOTE', 'SECRET-ATTRIBUTE-VALUE', ids.sensitive]) {
         expect(text).not.toContain(secret);
       }
-      expect(row.stats).toMatchObject({ excludedSensitive: 2, entities: 14, items: 5 });
+      expect(row.stats).toMatchObject({ excludedSensitive: 2, entities: 17, items: 5 });
+
+      // The personal domain is exported although this owner switched it off.
+      for (const personal of [ids.trip, ids.interest, ids.milestone]) {
+        expect(quads.some((q) => q.subject.value === `${NS}entity/${personal}`)).toBe(true);
+      }
+      // A symmetric edge: exactly one direct triple, as stored, and one assertion.
+      const spouse = quads.filter((q) => q.predicate.value === `${NS}SPOUSE_OF`);
+      expect(spouse).toHaveLength(1);
+      expect(spouse[0].subject.value).toBe(`${NS}entity/${ids.sarah}`);
+      expect(quads.filter((q) => q.predicate.value === 'http://www.w3.org/1999/02/22-rdf-syntax-ns#predicate' && q.object.value === `${NS}SPOUSE_OF`)).toHaveLength(1);
+      expect(quads.some((q) => q.subject.value === `${NS}relation/${ids.spouseOf}`)).toBe(true);
 
       // Absent: a merge tombstone, unreviewed and rejected rows, a speaker link.
       for (const absent of [ids.tombstone, ids.unreviewed, ids.rejected, ids.toUnreviewed, ids.rejectedRel, ids.speakerLink, ids.unreviewedItem]) {

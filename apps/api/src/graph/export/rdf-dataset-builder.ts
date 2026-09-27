@@ -38,7 +38,12 @@
 //             finite prov:startedAtTime/endedAtTime; kv:validPrecision; props;
 //             kv:confidence; kv:reviewStatus; prov:wasDerivedFrom … — EVERY
 //             exported edge is reified, because the reified node is the only
-//             place an edge's citations can live (RDF-star is not emitted)
+//             place an edge's citations can live (RDF-star is not emitted).
+//             A symmetric relation (#383: SPOUSE_OF, FRIEND_OF) is stored once,
+//             in whichever direction it was written, and exported exactly as
+//             stored — one direct triple, one assertion, never a mirrored
+//             inverse: `owl:SymmetricProperty` in the vocabulary says (b, a)
+//             follows, so writing it too would state one fact twice
 //   evidence  kv:evidence/<id> a oa:Annotation; oa:hasBody [ rdf:value quote ];
 //             oa:hasTarget [ oa:hasSource kv:segment/<id> | kv:note/<id>/v<n>;
 //             oa:hasSelector FragmentSelector "t=<s>,<e>" and/or
@@ -378,6 +383,12 @@ export class GraphRdfDatasetBuilder {
   entity(row: ExportEntityRow): RdfSubjectBlock | null {
     const type = this.registry.entityType(row.type);
     if (type === undefined || type.itemKind !== undefined) return null;
+    // A type whose default is `sensitive` never leaves (none ships today; the
+    // personal domain is `personal`, which IS exported).
+    if (type.sensitivityDefault === 'sensitive') {
+      this.stats.excludedSensitive += 1;
+      return null;
+    }
     if (row.evidenceIds.length === 0) return null;
 
     const subject = entityIri(this.ns, row.id);
@@ -415,7 +426,7 @@ export class GraphRdfDatasetBuilder {
     if (type === undefined) return null;
 
     // ⚠ §5.6/§15/§18.1: a sensitive fact never leaves the deployment.
-    if (row.sensitivity === 'sensitive') {
+    if (row.sensitivity === 'sensitive' || (row.sensitivity === null && type.sensitivityDefault === 'sensitive')) {
       this.stats.excludedSensitive += 1;
       return null;
     }
@@ -494,7 +505,8 @@ export class GraphRdfDatasetBuilder {
     const props = asRecord(row.props);
     for (const [key, spec] of Object.entries(relation.props)) {
       if (!(key in props)) continue;
-      if (this.isSensitive(spec.sensitivity, 'business')) {
+      // A relation prop defaults to its relation type's sensitivity (#383).
+      if (this.isSensitive(spec.sensitivity, relation.sensitivityDefault ?? 'business')) {
         this.stats.excludedSensitive += 1;
         continue;
       }

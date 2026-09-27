@@ -2531,6 +2531,14 @@ artefacts, not a design that could disagree with itself by intent.
 - **Sensitive** is decided in the builder — a `sensitive` PersonFact, its
   evidence quote, and any attribute value whose definition resolves to
   `sensitive` are left out and counted in `stats.excludedSensitive`.
+- **The personal domain (#383) is exported** — `personal` is not `sensitive` —
+  and so is every row of a domain its owner has since switched off: the export
+  reads every domain in the registry, like the artefacts. A relation prop
+  defaults to its relation type's `sensitivityDefault`, and a type or relation
+  type declaring `sensitive` is never exported (none does today). A
+  **symmetric** relation (SPOUSE_OF, FRIEND_OF) is stored once and exported
+  exactly as stored — one direct triple, one `kv:Assertion`, never a mirrored
+  inverse, since `owl:SymmetricProperty` already implies it.
 - **Validates by construction**: anything the shapes would reject (a select
   value outside its choices, a non-http URL, an edge between types the
   relation does not allow, HAS_ROLE without its title) is dropped rather than
