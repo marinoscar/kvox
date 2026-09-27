@@ -402,8 +402,10 @@ function AppRoutes() {
                     }
                   />
                   {/* Knowledge graph (#373, epic #347; spec §13). OWNED BY
-                      `home` in `config/destinations.ts` — no bottom-bar tab of
-                      its own — and gated on `graph:read`, the exact string
+                      `knowledge` in `config/destinations.ts` since #438 — a
+                      bottom-bar tab of its own while connected knowledge is on
+                      (it was owned by `home`, with no tab, before that) — and
+                      gated on `graph:read`, the exact string
                       `graph-read.controller.ts` (#370) enforces. Seeded to all
                       three roles, so the gate is here for the deployment that
                       revokes it. */}
@@ -456,8 +458,8 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* One RDF import (#387, spec §18.3). Same owner (`home`,
-                      via the `/graph` prefix); gated on `graph:write`, the
+                  {/* One RDF import (#387, spec §18.3). Same owner
+                      (`knowledge` since #438, via the `/graph` prefix); gated on `graph:write`, the
                       exact string `POST /api/graph/imports` and the review
                       writes enforce — importing is curating the graph. */}
                   <Route
@@ -471,8 +473,9 @@ function AppRoutes() {
                       </RequirePermission>
                     }
                   />
-                  {/* Ask (#380, epic #348; spec §21.5). OWNED BY `home` like the
-                      graph routes above — no bottom-bar tab — and gated on
+                  {/* Ask (#380, epic #348; spec §21.5). OWNED BY `knowledge`
+                      like the graph routes above (#438; `home` before that) —
+                      and gated on
                       `graph:read`, the exact string every `/api/ask/*` route
                       (#376, #378, #379) enforces. `graphEnabled` is checked
                       inside the page, which shows an info state when it is off.
