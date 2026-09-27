@@ -45,6 +45,18 @@ vi.mock('../../../hooks/usePermissions', () => ({
   usePermissions: vi.fn(),
 }));
 
+// The context's `refresh` re-reads `GET /api/ai/config` after a save that
+// flips `graphEnabled` (#438), so the `knowledge` nav tab follows without a
+// reload. Mocked so a save's effect on it can be asserted directly, rather
+// than through a second full config round trip this page does not itself own.
+const mockRefreshNavigationFeatures = vi.fn();
+vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
+  useNavigationFeatures: () => ({
+    features: { graph: false },
+    refresh: mockRefreshNavigationFeatures,
+  }),
+}));
+
 import { render, mockAdminUser } from '../../utils/test-utils';
 import AiSettingsPage from '../../../pages/Admin/AiSettingsPage';
 import { usePermissions } from '../../../hooks/usePermissions';
@@ -986,6 +998,34 @@ describe('AiSettingsPage', () => {
         expect(modelSelect(task.label)).toHaveAttribute('aria-disabled', 'true');
         expect(reasoningSelect(task.label)).toHaveAttribute('aria-disabled', 'true');
       }
+    });
+  });
+
+  // ==========================================================================
+  // #438: a successful save re-reads the runtime nav feature (`ai.graphEnabled`)
+  // so the Knowledge tab follows without a reload
+  // ==========================================================================
+
+  describe('#438: refreshes navigation features after save', () => {
+    it('calls refresh once a save succeeds', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(mockRefreshNavigationFeatures).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call refresh when the save fails', async () => {
+      const user = userEvent.setup();
+      mockUpdate.mockRejectedValue(new ApiError('Save failed', 500, 'INTERNAL_ERROR'));
+      await renderPage();
+
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(mockRefreshNavigationFeatures).not.toHaveBeenCalled();
     });
   });
 
