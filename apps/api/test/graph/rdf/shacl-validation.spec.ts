@@ -171,6 +171,40 @@ describe('generated SHACL shapes validate hand-written graph data (rdf-validate-
     ]);
   });
 
+  it('accepts personal-domain data (#383): a Trip, a symmetric SPOUSE_OF assertion, a PARENT_OF edge; rejects a bad Milestone kind', async () => {
+    const P1 = 'ent:a0000000-0000-4000-8000-000000000011';
+    const P2 = 'ent:a0000000-0000-4000-8000-000000000012';
+    const P3 = 'ent:a0000000-0000-4000-8000-000000000013';
+    const SEG = 'seg:b0000000-0000-4000-8000-000000000001';
+    const valid = await validate(`${PREFIXES}
+      ${P1} a kv:Person ; kv:PARENT_OF ${P3} ; kv:TRAVELED_ON ent:a0000000-0000-4000-8000-000000000014 ; prov:wasDerivedFrom ${SEG} .
+      ${P2} a kv:Person ; prov:wasDerivedFrom ${SEG} .
+      ${P3} a kv:Person ; prov:wasDerivedFrom ${SEG} .
+      ent:a0000000-0000-4000-8000-000000000014 a kv:Trip ;
+        kv:Trip.destination "Lisbon" ;
+        kv:Trip.startDate "2026-06-12"^^xsd:date ;
+        kv:Trip.endDate "2026-06-20"^^xsd:date ;
+        prov:wasDerivedFrom ${SEG} .
+      rel:d0000000-0000-4000-8000-000000000011 a kv:Assertion ;
+        rdf:subject ${P1} ;
+        rdf:predicate kv:SPOUSE_OF ;
+        rdf:object ${P2} ;
+        prov:startedAtTime "2016-06-01T00:00:00Z"^^xsd:dateTime ;
+        kv:validPrecision "month" ;
+        prov:wasDerivedFrom ${SEG} .
+    `);
+    expect(summarize(valid)).toEqual([]);
+
+    const invalid = await validate(`${PREFIXES}
+      ent:a0000000-0000-4000-8000-000000000015 a kv:Milestone ;
+        kv:Milestone.kind "promotion" ;
+        prov:wasDerivedFrom ${SEG} .
+    `);
+    expect(summarize(invalid)).toEqual([
+      { focus: `${NS}entity/a0000000-0000-4000-8000-000000000015`, path: `${NS}Milestone.kind`, component: 'sh:InConstraintComponent' },
+    ]);
+  });
+
   it('rejects a URL that is not http(s), and a caller-defined select value outside its choices', async () => {
     const report = await validate(`${PREFIXES}
       ent:a0000000-0000-4000-8000-000000000002 a kv:Organization ;

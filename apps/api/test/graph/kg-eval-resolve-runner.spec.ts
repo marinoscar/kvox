@@ -88,6 +88,22 @@ describe('kg:eval extract+resolve runner (#364)', () => {
       expect(moved.stats).toMatchObject({ known: 0, closings: 1, overlaps: 0 });
     });
 
+    it('reads a personal fixture with personal enabled: a reversed known SPOUSE_OF is known (#383)', () => {
+      const f = loadGoldenSet().find((x) => x.tags.includes('personal') && x.knownRelations.some((k) => k.type === 'SPOUSE_OF'))!;
+      const k = f.knownRelations.find((r) => r.type === 'SPOUSE_OF')!;
+      const spouse = (from: string, to: string): ProposedRow => ({
+        kind: 'relation',
+        payload: { ref: 'r1', type: 'SPOUSE_OF', from: { ref: from }, to: { ref: to }, props: {}, validFrom: null, validTo: null, precision: 'unknown' },
+        resolution: null,
+        flags: [],
+        evidence: [],
+      });
+      // Proposed the other way round from how the graph stores it.
+      const out = applyDedupStagesInMemory(f, [linkedEntity('e1', 'Person', k.to), linkedEntity('e2', 'Person', k.from), spouse('e1', 'e2')]);
+      expect(out.rows[2].flags).toEqual(['known']);
+      expect(out.stats).toMatchObject({ known: 1, closings: 0 });
+    });
+
     it('does nothing without prior edges (every golden fixture today)', () => {
       const out = applyDedupStagesInMemory(m01, [linkedEntity('e1', 'Person', 'g-joe'), linkedEntity('e2', 'Organization', 'g-acme'), worksFor('2020-01-01')]);
       expect(out.stats).toEqual({ known: 0, closings: 0, overlaps: 0, unordered: 0 });

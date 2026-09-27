@@ -52,6 +52,7 @@ import { GRAPH_PREFERENCE_DEFAULTS, type GraphPreferences } from '../../../src/g
 import { decide } from '../../../src/graph/resolution/resolution.service';
 import { bandFor, rankCandidates, scoreCandidate } from '../../../src/graph/resolution/score';
 import { normalizeAlias } from '../../../src/graph/write/normalize';
+import { fixtureDomains } from '../domains';
 import type { GoldenFixture } from '../fixture-schema';
 import type { KgEvalPrediction } from '../prediction-schema';
 import type { KgEvalRunner, KgEvalRunOptions } from '../runner';
@@ -159,7 +160,7 @@ export function applyDedupStagesInMemory(
   fixture: GoldenFixture,
   rows: readonly ProposedRow[],
 ): { rows: ProposedRow[]; stats: { known: number; closings: number; overlaps: number; unordered: number } } {
-  const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+  const schema = computeEffectiveSchema({ enabledDomains: fixtureDomains(fixture), userAttributes: [] });
   const prior: TemporalEdge[] = fixture.knownRelations.map((r) => {
     const { range, precision } = proposedRelationRange(r, 'state');
     return { id: r.id, type: r.type, fromId: r.from, toId: r.to, props: r.props, valid: range, precision, reviewStatus: 'accepted' };

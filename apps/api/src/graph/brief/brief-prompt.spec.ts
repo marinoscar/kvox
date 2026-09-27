@@ -1,5 +1,5 @@
 import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
-import { buildDigestFactList, itemAllowedInPrompt, type DigestItemFact } from './brief-facts';
+import { buildDigestFactList, itemAllowedInPrompt, relationAllowedInPrompt, type DigestItemFact } from './brief-facts';
 import { buildDigestPrompt, DIGEST_RESPONSE_SCHEMA, DIGEST_SYSTEM_PROMPT } from './brief-prompt';
 
 const E = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -20,6 +20,14 @@ function fact(over: Partial<DigestItemFact>): DigestItemFact {
 }
 
 describe('itemAllowedInPrompt', () => {
+  it('treats a personal-sensitivity relation type like a personal fact (#383)', () => {
+    expect(relationAllowedInPrompt({}, false)).toBe(true);
+    expect(relationAllowedInPrompt({ sensitivityDefault: 'business' }, false)).toBe(true);
+    expect(relationAllowedInPrompt({ sensitivityDefault: 'personal' }, false)).toBe(false);
+    expect(relationAllowedInPrompt({ sensitivityDefault: 'personal' }, true)).toBe(true);
+    expect(relationAllowedInPrompt({ sensitivityDefault: 'sensitive' }, true)).toBe(false);
+  });
+
   it('never allows a sensitive fact, allows personal only with the opt-in', () => {
     expect(itemAllowedInPrompt({ kind: 'person_fact', sensitivity: 'sensitive' }, true)).toBe(false);
     expect(itemAllowedInPrompt({ kind: 'person_fact', sensitivity: 'personal' }, false)).toBe(false);

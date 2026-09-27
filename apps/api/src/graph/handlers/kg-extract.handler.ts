@@ -61,7 +61,7 @@ import {
   measurePrompt,
 } from '../extraction/graph-extraction.service';
 import { EXTRACTION_SCHEMA_NAME, buildExtractionOutputSchema } from '../extraction/output-schema';
-import { applyPrecheck, type PrecheckItem } from '../extraction/precheck';
+import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../extraction/precheck';
 import { ProposalStageRegistry } from '../extraction/proposal-stage';
 import { ProposalWriter } from '../extraction/proposal-writer.service';
 import { assembleExtractionPrompt } from '../extraction/prompt';
@@ -289,7 +289,7 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
       flags: item.flags,
       decision: item.decision,
     }));
-    applyPrecheck(precheck, preferences);
+    applyPrecheck(precheck, preferences, { reviewOnlyTypes: reviewOnlyTypes(ctx.effectiveSchema) });
 
     stats.phase = 'ready';
     const finalized = await this.writer.finalize(

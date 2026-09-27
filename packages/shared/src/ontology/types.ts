@@ -125,6 +125,19 @@ export interface RelationTypeSpec {
   props: Record<string, AttributeSpec>;
   representation: RelationRepresentation;
   extractable: boolean;
+  /**
+   * Default false. True means `(a, b)` and `(b, a)` are the SAME fact
+   * (SPOUSE_OF, FRIEND_OF): only one row is ever stored (§5.2), and dedup and
+   * the "known, skipped" check compare both directions. Requires `from` and
+   * `to` to be the same single type.
+   */
+  symmetric?: boolean;
+  /**
+   * Default `business`. The sensitivity an instance of this relation carries,
+   * and the default for its props. Every `personal`-domain relation is
+   * `personal`, so §15 applies to it (never pre-checked in review).
+   */
+  sensitivityDefault?: Sensitivity;
   alignment?: string;
   deprecated?: Deprecation;
 }

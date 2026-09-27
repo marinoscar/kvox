@@ -168,4 +168,36 @@ describe('GraphOntologyService', () => {
     expect(payload.domains.find((d) => d.key === 'core')?.enabled).toBe(true);
     expect(payload.domains.find((d) => d.key === 'work')?.enabled).toBe(false);
   });
+
+  it('includes the personal domain once `graph.domains.personal` is true, and reads it fresh on every call (#383)', async () => {
+    const personalOn = {
+      value: {
+        theme: 'system',
+        profile: { imageSource: 'provider', imageObjectId: null },
+        graph: { domains: { work: true, personal: true } },
+      },
+    };
+    prisma.userSettings.findUnique.mockResolvedValueOnce(null).mockResolvedValue(personalOn);
+
+    // First call: no row, the default — personal registered but disabled.
+    const before = await service.payloadFor(OWNER);
+    expect(before.domains.find((d) => d.key === 'personal')).toEqual({
+      key: 'personal',
+      label: 'Personal life',
+      enabled: false,
+      alwaysOn: false,
+    });
+    expect(before.entityTypes.some((t) => t.domain === 'personal')).toBe(false);
+
+    // Nothing is cached across calls: the preference change shows at once.
+    const schema = await service.effectiveSchemaFor(OWNER);
+    expect(schema.enabledDomains).toEqual(['core', 'work', 'personal']);
+    const after = await service.payloadFor(OWNER);
+    expect(after.entityTypes.filter((t) => t.domain === 'personal').map((t) => t.key)).toEqual([
+      'Interest',
+      'Trip',
+      'Milestone',
+    ]);
+    expect(graphOntologyResponseSchema.safeParse(after).success).toBe(true);
+  });
 });

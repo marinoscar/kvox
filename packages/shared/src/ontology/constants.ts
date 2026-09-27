@@ -29,8 +29,8 @@ export const VALID_PRECISIONS = ['day', 'month', 'year', 'unknown'] as const;
 export const ITEM_KINDS = ['commitment', 'decision', 'claim', 'person_fact'] as const;
 
 /**
- * Every domain key (§17.2). `personal` is declared so settings and payloads can
- * name it, but no module ships for it yet.
+ * Every domain key (§17.2). `personal` ships off by default (#383): a user
+ * enables it through the `graph.domains.personal` preference.
  */
 export const DOMAIN_KEYS = ['core', 'work', 'personal'] as const;
 

@@ -35,11 +35,12 @@ import {
   type KnownEntityRow,
 } from '../../../src/graph/extraction/extraction-context';
 import { EXTRACTION_SCHEMA_NAME, buildExtractionOutputSchema } from '../../../src/graph/extraction/output-schema';
-import { applyPrecheck, type PrecheckItem } from '../../../src/graph/extraction/precheck';
+import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../../../src/graph/extraction/precheck';
 import { assembleExtractionPrompt } from '../../../src/graph/extraction/prompt';
 import { addDeterministicRows, validateExtraction, type EvidenceDraft, type ProposedRow } from '../../../src/graph/extraction/validate';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../../../src/graph/preferences/graph-preferences.defaults';
 import type { EndpointRef } from '../../../src/graph/proposals/proposal-payload.schema';
+import { fixtureDomains } from '../domains';
 import type { GoldenFixture } from '../fixture-schema';
 import type { KgEvalPrediction, PredictedEvidence } from '../prediction-schema';
 import type { KgEvalRunner, KgEvalRunOptions } from '../runner';
@@ -87,7 +88,7 @@ export function fixtureToInput(fixture: GoldenFixture): ExtractionInput {
       ? fixture.segments.map((s) => ({ id: s.id, rev: s.rev, startMs: s.startMs, endMs: s.endMs, speakerId: s.speakerId, text: s.text }))
       : [],
     speakers,
-    effectiveSchema: computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] }),
+    effectiveSchema: computeEffectiveSchema({ enabledDomains: fixtureDomains(fixture), userAttributes: [] }),
     guidance: null,
     knownEntityCandidates: {
       pinned: [],
@@ -202,6 +203,10 @@ export async function runExtraction(
   return { rows: final.rows, stats: { ...final.stats.dropped, quoteNotLocated: final.stats.quoteNotLocated } };
 }
 
+const ALL_DOMAINS_REVIEW_ONLY = reviewOnlyTypes(
+  computeEffectiveSchema({ enabledDomains: ['core', 'work', 'personal'], userAttributes: [] }),
+);
+
 /** Pre-check the rows with default preferences and turn them into a prediction. */
 export function precheckToPrediction(fixtureId: string, model: string, rows: ProposedRow[], stats: Record<string, number>): KgEvalPrediction {
   const precheck: PrecheckItem[] = rows.map((row) => ({
@@ -211,7 +216,9 @@ export function precheckToPrediction(fixtureId: string, model: string, rows: Pro
     flags: row.flags,
     decision: 'pending',
   }));
-  applyPrecheck(precheck, GRAPH_PREFERENCE_DEFAULTS);
+  // Every domain's review-only types: a type a fixture's domains do not
+  // include can never have been proposed, so listing it changes nothing.
+  applyPrecheck(precheck, GRAPH_PREFERENCE_DEFAULTS, { reviewOnlyTypes: ALL_DOMAINS_REVIEW_ONLY });
   return rowsToPrediction(fixtureId, model, rows, precheck.map((p) => p.decision), stats);
 }
 

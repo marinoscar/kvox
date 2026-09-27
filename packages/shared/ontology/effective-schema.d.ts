@@ -55,6 +55,18 @@ export interface EffectiveRelationTypePayload {
     exclusiveScope: 'from' | 'from_to';
     representation: RelationRepresentation;
     extractable: boolean;
+    /**
+     * Present (and `true`) only on a symmetric relation — `(a, b)` and `(b, a)`
+     * are one fact. Absent means directed. Omitted rather than `false` so the
+     * payload of every directed relation is unchanged by the flag's existence.
+     */
+    symmetric?: true;
+    /**
+     * Present only when the relation type declares one (every `personal`-domain
+     * relation: `personal`). Absent means `business`. Omitted rather than
+     * defaulted so the entries of `core`/`work` relations are unchanged.
+     */
+    sensitivityDefault?: Sensitivity;
     alignment: string | null;
     deprecated: boolean;
     props: EffectiveAttributePayload[];

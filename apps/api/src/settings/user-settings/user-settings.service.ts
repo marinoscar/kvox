@@ -463,13 +463,15 @@ export class UserSettingsService {
     } else if (patch.domains !== undefined) {
       const base = merged.domains ?? {
         work: defaults.domains.work,
-        personal: false as const,
+        personal: defaults.domains.personal,
       };
       merged.domains = {
         work: pick(patch.domains.work, base.work, defaults.domains.work),
-        // `personal` is `z.literal(false)` until #383; the patch schema has
-        // already refused `true`.
-        personal: false,
+        personal: pick(
+          patch.domains.personal,
+          base.personal,
+          defaults.domains.personal,
+        ),
       };
     }
 

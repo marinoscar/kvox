@@ -32,6 +32,7 @@ import {
   type AskToolContext,
   type AskToolResult,
 } from './ask-tool';
+import { typeVisible } from './sensitivity';
 
 export const SEARCH_SCOPES = ['all', 'entities', 'documents'] as const;
 export const SEARCH_DEFAULT_LIMIT = 5;
@@ -91,7 +92,7 @@ export class SearchTool implements AskTool<SearchToolInput> {
       this.searchDocuments(ctx, args.query, documentLimit),
     ]);
 
-    const entities = entityPage.items.map((e) => ({
+    const entities = entityPage.items.filter((e) => typeVisible(e.type, ctx.personalFactsAllowed)).map((e) => ({
       ref: ctx.handles.register({ kind: 'ent', id: e.id, label: e.label }),
       type: e.type,
       label: e.label,

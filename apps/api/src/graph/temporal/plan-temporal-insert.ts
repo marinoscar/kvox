@@ -26,6 +26,8 @@
 //  7. Soft overlap: after 4 and 5, every in-scope edge whose range still
 //     overlaps the candidate's is listed and the plan flagged `overlaps`.
 //  8. `closes` and `overlapsWith` are sorted by edge id.
+//  9. Symmetric (#383): an existing edge `(b, a)` is read as `(a, b)` before
+//     any rule above, so a symmetric fact is the same fact either way round.
 //
 // PURE: no Prisma, no Nest, no clock read.
 // =============================================================================
@@ -116,7 +118,15 @@ export function planTemporalInsert(
   candidate: CandidateEdge,
   rule: TemporalRule
 ): TemporalPlan {
-  const live = existing.filter(
+  // Rule 9 — orient a symmetric relation's reversed edges around the candidate.
+  const oriented = rule.symmetric
+    ? existing.map((e) =>
+        e.fromId !== candidate.fromId && e.toId === candidate.fromId
+          ? { ...e, fromId: e.toId, toId: e.fromId }
+          : e
+      )
+    : existing;
+  const live = oriented.filter(
     (e) =>
       LIVE_STATUSES.has(e.reviewStatus) &&
       e.type === candidate.type &&

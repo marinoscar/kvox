@@ -2,6 +2,7 @@
  * Settings → Knowledge graph (`/settings/knowledge-graph`).
  *
  * Issue #369, epic #346, docs/specs/ontology.md §6, §7, §13, §17.2, §17.3.
+ * The Personal life domain switch (with its enable confirmation) is #383.
  * A registry destination (`config/userSettingsSections.tsx`, CLAUDE.md
  * Settings UI Pattern rule 1) gated on `graph:write` — the exact string the
  * attribute-definition write routes enforce (rule 3) — and reached through
@@ -70,8 +71,17 @@ const percent = (value: number) => `${Math.round(value * 100)} %`;
 const DOMAIN_COPY: Record<DomainKey, { label: string; description: string }> = {
   core: { label: 'Core', description: 'People, organizations, meetings, facts' },
   work: { label: 'Work', description: 'Projects, commitments, decisions, roles' },
-  personal: { label: 'Personal', description: 'Family, friends and personal life' },
+  personal: {
+    label: 'Personal life',
+    description: 'Family, friends, interests, trips and life events',
+  },
 };
+
+/** Shown on the Personal life row while it is off (#383). */
+const PERSONAL_OFF_HELPER =
+  "New notes won't propose personal-life facts. Facts you already accepted stay in your graph.";
+/** Shown on the Personal life row while it is on. */
+const PERSONAL_ON_HELPER = 'Marked Personal, and never pre-selected for you in review.';
 const FALLBACK_DOMAINS: DomainKey[] = ['core', 'work', 'personal'];
 
 function saveLabel(state: GraphSaveState): string {
@@ -113,6 +123,7 @@ export default function UserKnowledgeGraphPage() {
   const [autoLink, setAutoLink] = useState(preferences.resolution.autoLinkThreshold);
   const [newBelow, setNewBelow] = useState(preferences.resolution.newThreshold);
   const [confirmWorkOff, setConfirmWorkOff] = useState(false);
+  const [confirmPersonalOn, setConfirmPersonalOn] = useState(false);
 
   useEffect(() => {
     setAutoLink(preferences.resolution.autoLinkThreshold);
@@ -136,14 +147,15 @@ export default function UserKnowledgeGraphPage() {
     });
   }
 
-  async function setDomain(work: boolean) {
-    const ok = await update({ domains: { work } });
+  async function setDomain(domain: 'work' | 'personal', enabled: boolean) {
+    const ok = await update({
+      domains: domain === 'work' ? { work: enabled } : { personal: enabled },
+    });
     if (ok) void refreshOntology();
   }
 
-  // The ontology's registered domains, plus any of the three known ones it
-  // does not register yet — `personal` ships with #383, but its switch is
-  // shown (disabled) now so the choice is visibly coming.
+  // The ontology's registered domains, plus any of the three known ones a
+  // stale or failed ontology read did not list, so every switch always shows.
   const domainKeys: DomainKey[] = [
     ...(ontology?.domains.map((d) => d.key) ?? []),
     ...FALLBACK_DOMAINS,
@@ -335,6 +347,12 @@ export default function UserKnowledgeGraphPage() {
             } else if (key === 'work') {
               checked = preferences.domains.work;
               disabled = false;
+            } else if (key === 'personal') {
+              // #383: off by default. Turning it on asks first (third-party
+              // consent, spec §15); turning it off does not.
+              checked = preferences.domains.personal;
+              disabled = false;
+              caption = `${copy.description}. ${checked ? PERSONAL_ON_HELPER : PERSONAL_OFF_HELPER}`;
             } else {
               checked = false;
               disabled = true;
@@ -356,9 +374,13 @@ export default function UserKnowledgeGraphPage() {
                       },
                     }}
                     onChange={(event) => {
-                      if (key !== 'work') return;
-                      if (!event.target.checked) setConfirmWorkOff(true);
-                      else void setDomain(true);
+                      if (key === 'work') {
+                        if (!event.target.checked) setConfirmWorkOff(true);
+                        else void setDomain('work', true);
+                      } else if (key === 'personal') {
+                        if (event.target.checked) setConfirmPersonalOn(true);
+                        else void setDomain('personal', false);
+                      }
                     }}
                   />
                 }
@@ -400,10 +422,38 @@ export default function UserKnowledgeGraphPage() {
             variant="contained"
             onClick={() => {
               setConfirmWorkOff(false);
-              void setDomain(false);
+              void setDomain('work', false);
             }}
           >
             Turn off
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={confirmPersonalOn}
+        onClose={() => setConfirmPersonalOn(false)}
+        aria-labelledby="kg-personal-on-title"
+        aria-describedby="kg-personal-on-description"
+      >
+        <DialogTitle id="kg-personal-on-title">Turn on Personal life?</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="kg-personal-on-description">
+            Personal-life facts are about other people who haven&apos;t agreed to be profiled.
+            They&apos;re marked Personal, are never pre-selected for you in review, and aren&apos;t
+            used to write notes unless you opt in. Turn on?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmPersonalOn(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConfirmPersonalOn(false);
+              void setDomain('personal', true);
+            }}
+          >
+            Turn on
           </Button>
         </DialogActions>
       </Dialog>

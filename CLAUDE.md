@@ -896,7 +896,8 @@ to all three roles; owner-only, and **404, never 403**, for any graph row the ca
 transcript share never grants graph access. See [`docs/API.md`](docs/API.md#graph) and
 [`docs/specs/ontology.md`](docs/specs/ontology.md).
 - `GET /api/graph/ontology` - The caller's **effective ontology**: `core` + enabled domains
-  (the caller's `graph.domains` preference, #369; `core`,`work` by default) + mixins + their own
+  (the caller's `graph.domains` preference, #369; `core`,`work` by default, `personal` off until the
+  user turns it on, #383) + mixins + their own
   `kg_attribute_defs` (deprecated included, flagged) — the payload every graph form is
   generated from (`graph:read`). **Not** gated on `ai.graphEnabled`: reading one's own schema
   is not an AI call
@@ -1168,7 +1169,7 @@ is the contract #378–#382 use unchanged. See [`docs/API.md`](docs/API.md#ask) 
   `apps/api/src/common/schemas/user-settings-parity.spec.ts`, the six-file parity check user
   settings never had before this namespace. Also `graph` (issue #369): per-user connected-knowledge
   preferences — `extraction.autoExtract`, `resolution.{mode,autoLinkThreshold,newThreshold,
-  adjudication}`, `domains.work` — absent means every default, resolved by
+  adjudication}`, `domains.{work,personal}` (`personal` default `false`, #383) — absent means every default, resolved by
   `GraphPreferencesService`; see `docs/specs/ontology.md` §10
 - `audit_events` - Action audit log
 - `refresh_tokens` - JWT refresh tokens (hashed)
@@ -2283,6 +2284,17 @@ handles, never uuids; spec §21.7). So is its evaluation harness (issue #382:
 and the deterministic replay test `apps/api/test/ask/ask-eval.replay.db.spec.ts` that runs
 in CI with a scripted fake provider — synthetic fixtures only, ever; a real-model run is
 local and report-only, mirroring `kg:eval`'s own posture; spec §21.8).
+**The `personal` domain is built too, off by default** (issue #383, ontology 1.1.0:
+`packages/shared/src/ontology/domains/personal.ts` — `Interest`, `Trip`, `Milestone`,
+`SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, `INTERESTED_IN`, `TRAVELED_ON`, `HAS_MILESTONE`, every
+one `sensitivityDefault: 'personal'`; switched on by `graph.domains.personal` from the
+Knowledge graph settings page, with a confirmation). ⚠ Enabling it decides which types
+extraction offers — it is **not** the §14 consent to show personal facts to a model: the
+pre-check never ticks a personal-type row, and the Ask tools and the entity digest drop
+personal-type entities and relations exactly as they drop `personal` PersonFacts. A relation
+may declare `symmetric: true` (`SPOUSE_OF`, `FRIEND_OF`): one stored row, compared in both
+directions by the temporal planner and #365's dedup/closing stages — never store the reverse
+row. See `docs/specs/ontology.md` §17.2.
 The ontology's sources live
 at `packages/shared/src/ontology/`, compiled with `npm run build:ontology
 --workspace=@app/shared` into committed output at `packages/shared/ontology/`

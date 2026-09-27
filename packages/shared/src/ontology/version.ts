@@ -28,6 +28,14 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
       'attribute alignment metadata: Person.title -> schema:jobTitle, Organization.website -> schema:url (#385)',
     ]) as string[],
   }),
+  Object.freeze({
+    version: '1.1.0',
+    date: '2026-09-26',
+    changes: Object.freeze([
+      'personal domain: Interest, Trip, Milestone, SPOUSE_OF, PARENT_OF, FRIEND_OF, INTERESTED_IN, TRAVELED_ON, HAS_MILESTONE; relation `symmetric` flag',
+      'relation `sensitivityDefault` (personal-domain relations are `personal`)',
+    ]) as string[],
+  }),
 ]);
 
-export const ONTOLOGY_VERSION: string = '1.0.1';
+export const ONTOLOGY_VERSION: string = '1.1.0';
