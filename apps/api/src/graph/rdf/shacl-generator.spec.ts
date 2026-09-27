@@ -204,15 +204,21 @@ describe('generateShacl', () => {
     expect(shacl).not.toContain('Medical note');
   });
 
-  it('describes a reified temporal edge with kv:AssertionShape', () => {
+  it('describes a reified edge with kv:AssertionShape', () => {
     const shape = `${NS}AssertionShape`;
     expect(values(shape, `${SH}targetClass`)).toEqual([`${NS}Assertion`]);
     for (const path of [`${RDF}subject`, `${RDF}object`]) {
       expect(values(propertyShape(quads, shape, path)!, `${SH}minCount`)).toEqual(['1']);
     }
     const predicate = propertyShape(quads, shape, `${RDF}predicate`)!;
-    const temporal = ONTOLOGY.relationTypes().filter((r) => r.temporal).map((r) => relationIri(NS, r.key)).sort();
-    expect(listOf(predicate, `${SH}in`).sort()).toEqual(temporal);
+    // Every exported `kg_relations` edge (#386), temporal or not — never an item column or SUPERSEDES.
+    const edges = exportedRelations(ONTOLOGY)
+      .filter((r) => r.representation.kind === 'edge')
+      .map((r) => relationIri(NS, r.key))
+      .sort();
+    expect(edges).toEqual(expect.arrayContaining([relationIri(NS, 'WORKS_FOR'), relationIri(NS, 'ATTENDED')]));
+    expect(edges).not.toContain(relationIri(NS, 'ABOUT'));
+    expect(listOf(predicate, `${SH}in`).sort()).toEqual(edges);
 
     const started = propertyShape(quads, shape, `${PROV}startedAtTime`)!;
     expect(values(started, `${SH}datatype`)).toEqual([`${XSD}dateTime`]);
@@ -229,5 +235,28 @@ describe('generateShacl', () => {
     const worksFor = ONTOLOGY.relationType('WORKS_FOR')!;
     expect(shapePaths(quads, shapeIri(NS, 'Person'))).toContain(relationIri(NS, 'WORKS_FOR'));
     expect(shapePaths(quads, shapeIri(NS, 'Person'))).not.toContain(alignmentIri(worksFor.alignment!));
+  });
+
+  it('declares the row columns an export writes (#386): statement, dates, an item’s validity range, aliases', () => {
+    for (const type of ONTOLOGY.entityTypes()) {
+      const shape = shapeIri(NS, type.key);
+      const occurred = propertyShape(quads, shape, `${NS}occurredAt`)!;
+      expect(values(occurred, `${SH}datatype`)).toEqual([`${XSD}dateTime`]);
+      expect(values(occurred, `${SH}maxCount`)).toEqual(['1']);
+      if (type.itemKind !== undefined) {
+        const statement = propertyShape(quads, shape, `${NS}${type.key}.statement`)!;
+        expect(values(statement, `${SH}minCount`)).toEqual(['1']);
+        expect(values(statement, `${SH}maxCount`)).toEqual(['1']);
+        for (const path of [`${NS}dueAt`, `${PROV}startedAtTime`, `${PROV}endedAtTime`]) {
+          expect(values(propertyShape(quads, shape, path)!, `${SH}datatype`)).toEqual([`${XSD}dateTime`]);
+        }
+        expect(listOf(propertyShape(quads, shape, `${NS}validPrecision`)!, `${SH}in`)).toEqual([...VALID_PRECISIONS]);
+        expect(propertyShape(quads, shape, 'http://www.w3.org/2004/02/skos/core#altLabel')).toBeUndefined();
+      } else {
+        expect(propertyShape(quads, shape, 'http://www.w3.org/2004/02/skos/core#altLabel')).toBeDefined();
+        expect(propertyShape(quads, shape, `${NS}dueAt`)).toBeUndefined();
+        expect(propertyShape(quads, shape, `${PROV}startedAtTime`)).toBeUndefined();
+      }
+    }
   });
 });

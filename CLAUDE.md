@@ -1005,6 +1005,17 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
   **202** `{jobId, deduplicated}`; at most one layout job per owner — a request while one is
   pending/running returns it with `deduplicated: true` and pulls a delayed automatic run forward
   to start immediately. Never 409 (`graph:write`)
+- `POST /api/graph/exports` - Export your graph as RDF (issue #386): `{ format: jsonld|turtle|nquads }`
+  → **202** `{ export, reused: false }` queuing `kg.export`, or **200** `reused: true` for an unexpired,
+  non-failed export of the same format and an **unchanged** graph (content-addressed on
+  `graph_fingerprint`); 409 `graph_empty`. Accepted/edited rows + superseded items, every citation as an
+  `oa:Annotation`, every edge also reified as `kv:Assertion`; **`sensitive` facts/attribute values never
+  exported** (counted in `stats.excludedSensitive`); validates against the generated SHACL by construction.
+  POST + GET rather than the spec's `GET /api/graph/export?format=` — a GET that enqueues is unsafe to
+  prefetch (`graph:read`)
+- `GET /api/graph/exports/{id}` - One export; once `ready`, a 15-minute signed `downloadUrl` named
+  `<app>-graph-<date>.<jsonld|ttl|nq>` (disposition signed in). 404 foreign/missing/expired (`graph:read`)
+- `GET /api/graph/exports` - Your unexpired exports, newest first, ≤ 20 (`graph:read`)
 - `GET /api/graph/proposals?status&kind&noteId&transcriptId&cursor&limit` - Your proposals,
   newest first, opaque keyset cursor (a bad one is 400); `status` defaults to `draft` (issue #366,
   `graph:read`)
@@ -1466,6 +1477,14 @@ is the contract #378–#382 use unchanged. See [`docs/API.md`](docs/API.md#ask) 
   `max(updated_at)` over the owner's `kg_entities`/`kg_relations` at the moment the snapshot was
   computed, stamped **before** the read starts; `GET /api/graph/overview` compares it against a
   fresh count to report `stale: true` without ever recomputing itself.
+- `kg_exports` - One row per requested RDF export of an owner's graph (issue #386), mirroring
+  `note_exports`: `format` (`jsonld`/`turtle`/`nquads`), `status`
+  (`pending`/`running`/`ready`/`failed`), **content-addressed** on `graph_fingerprint` (sha256 over the
+  ontology version, the format, the namespace and the owner's `kg_*` max `updated_at` + row counts — a
+  plain non-unique `(owner_id, format, graph_fingerprint)` index, like `note_exports_lookup_idx`),
+  `stats` (counts only), a short `error_message`, `expires_at` = request + 7 days. `owner_id` Cascade;
+  `object_id` **Restrict** into a `managed_by: 'graph'` storage object (the sweep and `kg.purge` clear it
+  first); `job_id` `@unique`/SetNull. No hand-written SQL.
 - `ask_conversations` - One saved Ask conversation (issue #376, epic #348). `owner_id`
   **Cascade**; `scope_entity_id` **SetNull** into `kg_entities` — forgetting or merging the
   scoped entity drops the link, never the conversation; `title` null until the first message.
@@ -2298,8 +2317,8 @@ citing a numbered fact-handle list rather than uuids, dropping any statement
 citing nothing or an unknown handle; server-only, `maxAttempts: 1`, throttled
 per owner, enqueued by the brief GET when stale and, once a caller enqueues it,
 by #366's commit/revert and #355's manual edit/#364's merge, each guarded on
-`ai.graphEnabled`); every other type in `apps/api/src/graph/job-types.ts` is
-still only a constant. Extraction lives in
+`ai.graphEnabled`) and `kg.export` (#386 — see below); every other type in
+`apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
 `apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
@@ -2390,6 +2409,21 @@ person's name un-resurrectable through this cache. Its Danger Zone/"forget" reac
 `kg_graph_layouts` rows as its last step, since even an id-and-coordinate-only cache is still a map
 of the graph being wiped; `scope: 'person'` ("Forget this person") does not touch it — the next
 scheduled or requested layout simply drops the forgotten entity through the live join.
+
+**`kg.export` (#386) renders an owner's graph as JSON-LD/Turtle/N-Quads, and is server-only** —
+`note.export`'s reason (the serializers live in the API; a second copy could render a content-addressed
+export differently), and its input is the private graph read across five tables mid-computation.
+`profile: { maxRuntimeMs: 10 min, maxAttempts: 3 }` (retry-safe: deterministic bytes over a key that is a
+pure function of the row), priority −10. It reads in pages of 1,000 in **IRI order** and streams through
+`GraphRdfDatasetBuilder` (`apps/api/src/graph/export/`) and `serializers.ts` into the upload —
+`pipeline()` and the upload both awaited, never buffered. Three rules: **every IRI comes from
+`graph/rdf/iris.ts`**, and anything the generated shapes would reject is dropped, so an export validates
+against its own SHACL by construction (`test/graph/rdf/export-conforms.db.spec.ts` is the CI drift
+check); **the sensitive filter lives in the builder**, not a serializer (a sensitive fact, its evidence
+quote, a sensitive attribute value); and **`n3`/`jsonld` are imported by `serializers.ts` alone**, which
+only job handlers may import (`test/graph/rdf/rdf-imports.spec.ts`). The same type in `payload.mode:
+'sweep'` (subject `kg_export_sweep`, enqueued daily by the enqueue-only `KgExportExpiryTask`) deletes
+expired exports and their files; `kg.purge` (both scopes) ends with an `exports` step.
 
 **`ask.respond` (#378, epic #348) is one Ask turn, and server-only permanently** —
 `note.generate`'s reason exactly: every call spends the asker's own long-lived AI key and no

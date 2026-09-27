@@ -26,6 +26,7 @@ import { ProposalRevertService } from '../../src/graph/proposals/proposal-revert
 import { ProposalsService } from '../../src/graph/proposals/proposals.service';
 import { SpanValidator } from '../../src/graph/proposals/span-validator';
 import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
+import { NO_EXPORT_FILES } from './graph-read.fixtures';
 import { AliasLearningService } from '../../src/graph/resolution/alias-learning.service';
 import { DistinctPairService } from '../../src/graph/resolution/distinct-pair.service';
 import { MergeService } from '../../src/graph/resolution/merge.service';
@@ -68,7 +69,7 @@ export function buildServices(prisma: PrismaClient) {
     proposals,
   );
   const reverts = new ProposalRevertService(db, access, merges, commits, proposals);
-  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db) };
+  return { db, write, proposals, commits, reverts, purge: new KgPurgeService(db, NO_EXPORT_FILES) };
 }
 
 export async function cleanup(prisma: PrismaClient, prefix: string, purge: KgPurgeService): Promise<void> {

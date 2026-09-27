@@ -16,6 +16,9 @@
  * `LibraryPageFrame` makes. It decides where this page puts its own controls,
  * never whether app chrome mounts, so it is not a sixth coupled breakpoint gate
  * (CLAUDE.md, Settings UI Pattern rule 5).
+ *
+ * The header's overflow menu (phone and desktop alike) carries "Export
+ * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph.
  */
 
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -41,6 +44,7 @@ import type { ReactNode } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { EntityListRow } from '../components/graph/EntityListRow';
+import { ExportGraphDialog } from '../components/graph/ExportGraphDialog';
 import { EntityTypeFilter } from '../components/graph/EntityTypeFilter';
 import { useGraphEntities } from '../hooks/useGraphEntities';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
@@ -83,6 +87,12 @@ export default function GraphIndexPage() {
   const searching = q.trim().length > 0;
 
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  const openExport = () => {
+    setMenuAnchor(null);
+    setExportOpen(true);
+  };
   const [snackbar, setSnackbar] = useState<string | null>(
     () => (location.state as GraphIndexLocationState | null)?.snackbar ?? null,
   );
@@ -138,16 +148,27 @@ export default function GraphIndexPage() {
             <MenuItem component={RouterLink} to="/graph/overview" onClick={() => setMenuAnchor(null)}>
               Overview
             </MenuItem>
+            <MenuItem onClick={openExport}>Export graph…</MenuItem>
           </Menu>
         </>
       ) : (
-        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignItems: 'center' }}>
           <Button component={RouterLink} to="/graph/explore" variant="outlined">
             Explore
           </Button>
           <Button component={RouterLink} to="/graph/overview" variant="outlined">
             Overview
           </Button>
+          <IconButton
+            aria-label="More knowledge actions"
+            aria-haspopup="menu"
+            onClick={(event) => setMenuAnchor(event.currentTarget)}
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
+            <MenuItem onClick={openExport}>Export graph…</MenuItem>
+          </Menu>
         </Stack>
       )}
     </Stack>
@@ -265,6 +286,8 @@ export default function GraphIndexPage() {
       </Stack>
 
       {body}
+
+      <ExportGraphDialog open={exportOpen} onClose={() => setExportOpen(false)} />
 
       <Snackbar
         open={Boolean(snackbar)}

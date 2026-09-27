@@ -1476,6 +1476,20 @@ summary, kept in sync with that schema by issue #351's own "definition of done")
   cheaply" economy `kg_entity_digests` already gives the entity brief.
   `owner_id` Cascade. Added in its own migration (§16, P4/P5), after the
   tables above.
+- **`kg_exports`** (#386) — one row per requested RDF export of an owner's
+  graph (§18.2 item 3), mirroring `note_exports`: `format`
+  (`jsonld | turtle | nquads`), `status` (`pending | running | ready |
+  failed`), `ontology_version`, `stats` (counts only), `error_message`,
+  `expires_at` (the request + 7 days). **Content-addressed on
+  `graph_fingerprint`** — a SHA-256 over the ontology version, the format,
+  the namespace and the owner's `kg_*` signature (max `updated_at` plus row
+  counts of entities, aliases, relations, items, evidence and attribute
+  definitions) — through a plain, non-unique `(owner_id, format,
+  graph_fingerprint)` index, so asking twice for an unchanged graph renders
+  once. `object_id` is **Restrict** into a `managed_by: 'graph'` storage
+  object (hidden from the generic storage list, 409 on its generic DELETE);
+  the daily sweep and `kg.purge` clear the reference before deleting the
+  file. `owner_id` Cascade; `job_id` `@unique`/SetNull. Its own migration.
 - **`ask_conversations`** / **`ask_messages`** — §21's own tables, added in
   their own migration because Ask is a separate module from the core `kg_*`
   set, not a graph table itself: a saved back-and-forth with the read-only
@@ -1624,9 +1638,13 @@ app's default role is Viewer.
 
 - **`graph:read`** — entity list/search/get/brief/neighbourhood/timeline,
   proposal get, mentions, `GET /api/graph/ontology` (§17.4 — the caller's own
-  effective schema), and the two export routes `GET /api/graph/ontology.ttl`
-  /`.shacl.ttl` and `GET /api/graph/export` (§18.2 — reading one's own graph
-  or its shapes out in a standard format is a read, not a write).
+  effective schema), and the export routes `GET /api/graph/ontology.ttl`
+  /`.shacl.ttl` and the data export — realized (#386) as `POST
+  /api/graph/exports` + `GET /api/graph/exports/:id` (+ the list `GET
+  /api/graph/exports`) rather than the `GET /api/graph/export?format=` first
+  sketched here, because a GET that enqueues work is unsafe to prefetch
+  (§18.2 — reading one's own graph or its shapes out in a standard format is
+  a read, not a write).
 - **`graph:write`** — proposal commit/discard, re-extract, entity
   create/edit/merge/reverse-merge/forget-a-person, relation edit, resolution
   settings, `kg_attribute_defs` CRUD (§17.3 — adding, editing, and
@@ -2392,7 +2410,10 @@ schema the way three independently maintained documents could.
    no-orphans rule (§3.3), expressed as a SHACL constraint an external
    validator can check without knowing anything about kvox's own
    `kg_evidence` table.
-3. **The data** — `GET /api/graph/export?format=jsonld|turtle|nquads`:
+3. **The data** — requested with `POST /api/graph/exports { format:
+   jsonld|turtle|nquads }` and polled with `GET /api/graph/exports/:id`
+   (first sketched as `GET /api/graph/export?format=`; a GET that enqueues
+   work is unsafe to prefetch, so #386 realized it as this pair):
    owner-scoped, `accepted`/`edited` rows only (an `unreviewed` or `rejected`
    row is not knowledge kvox stands behind, and §5.5 already keeps it out of
    every other read path this document defines), `sensitive` excluded
@@ -2473,6 +2494,68 @@ the SHACL engine (§18.4) over a fixture export on every change specifically
 to catch that one remaining failure mode: generator drift between the two
 artefacts, not a design that could disagree with itself by intent.
 
+**As built (#386) — the data export.** `apps/api/src/graph/export/`:
+`GraphRdfDatasetBuilder` (pure) turns rows into triples through `iris.ts`,
+`serializers.ts` writes them, and the `kg.export` job streams the result into a
+`managed_by: 'graph'` object with a 7-day signed download.
+
+- **Rows.** Entities and relations `accepted | edited`; items `accepted |
+  edited | superseded` (history is part of the graph, and a superseded item is
+  linked from its replacement by `kv:SUPERSEDES` + `prov:wasRevisionOf`). Merge
+  tombstones, speaker links, `unreviewed`/`rejected` rows, and proposal-item or
+  import citations never leave. An item whose required subject is not exported
+  is skipped rather than written invalid.
+- **Every edge is reified**, not only temporal ones: `kv:relation/<id> a
+  kv:Assertion` carries the range (finite bounds only), precision, props,
+  confidence and — the reason — the edge's `prov:wasDerivedFrom` citations,
+  which a bare direct triple has nowhere to hold. The direct triple (plus its
+  aligned property) is still written on the source entity. RDF-star is not
+  emitted in v1; it is derivable from the reification.
+- **Row columns that are not attributes** get IRIs of their own in `iris.ts`
+  and shapes in `generateShacl`: `kv:<ItemType>.statement` (exactly one per
+  item), `kv:occurredAt`, `kv:dueAt`, an item's own validity range as
+  `prov:startedAtTime`/`prov:endedAtTime` + `kv:validPrecision` (the
+  representation `kv:Assertion` already uses), and aliases as
+  `skos:altLabel`. `kv:AssertionShape`'s `rdf:predicate` admits every exported
+  edge relation.
+- **Evidence** is `kv:evidence/<id> a oa:Annotation` with the quote in
+  `oa:hasBody [ rdf:value ]` and `oa:hasTarget [ oa:hasSource kv:segment/<id> |
+  kv:note/<id>/v<n>; oa:hasSelector … ]` — a `oa:FragmentSelector` `t=<s>,<e>`
+  for a timed segment and/or a `oa:TextPositionSelector` for character
+  offsets. A cited segment or note span carries `rdfs:label` (the transcript's
+  or note's title) only while the owner can still read it. Blank nodes are
+  labelled from the evidence id.
+- **Header.** `<ns> owl:versionInfo`, and `kv:export/<id> a prov:Entity;
+  prov:generatedAtTime` (the export's own request time, so a retry rewrites
+  identical bytes); no `dcterms:creator`.
+- **Sensitive** is decided in the builder — a `sensitive` PersonFact, its
+  evidence quote, and any attribute value whose definition resolves to
+  `sensitive` are left out and counted in `stats.excludedSensitive`.
+- **The personal domain (#383) is exported** — `personal` is not `sensitive` —
+  and so is every row of a domain its owner has since switched off: the export
+  reads every domain in the registry, like the artefacts. A relation prop
+  defaults to its relation type's `sensitivityDefault`, and a type or relation
+  type declaring `sensitive` is never exported (none does today). A
+  **symmetric** relation (SPOUSE_OF, FRIEND_OF) is stored once and exported
+  exactly as stored — one direct triple, one `kv:Assertion`, never a mirrored
+  inverse, since `owl:SymmetricProperty` already implies it.
+- **Validates by construction**: anything the shapes would reject (a select
+  value outside its choices, a non-http URL, an edge between types the
+  relation does not allow, HAS_ROLE without its title) is dropped rather than
+  written. `test/graph/rdf/export-conforms.db.spec.ts` runs `rdf-validate-shacl`
+  over the real handler's Turtle and JSON-LD for a fixture owner in CI.
+- **Deterministic and streamed.** Rows are read in pages of 1,000 in IRI order
+  (attribute definitions, entities, evidence, the export node, items, note
+  labels, relations, segment labels), each subject's triples sorted; Turtle and
+  N-Quads through `n3`'s `Writer`, JSON-LD through `jsonld.fromRDF` +
+  `compact` per page into one `{"@context", "@graph"}` document (the context
+  is `kv:` plus every `RDF_PREFIXES` prefix, never a remapping of `kv:` terms).
+- **Reuse, expiry, purge.** `POST` reuses an unexpired, non-failed export
+  with the same `graph_fingerprint` (§10); a daily enqueue-only cron queues
+  `kg.export` in sweep mode to delete expired exports and their files; and
+  `kg.purge` — "forget this person" and the Danger Zone alike — deletes every
+  export, since a file written before still names what was forgotten.
+
 ### 18.3 Import — where SHACL earns its keep
 
 Importing is the one direction where an external file cannot be trusted the
@@ -2538,7 +2621,10 @@ the request path would be the first step toward exactly that.
 The two ontology routes (§18.2) are not an exception to this: they write
 Turtle with the hand-written `apps/api/src/graph/rdf/turtle-writer.ts`, and in
 #385 the four libraries are test-only `devDependencies`. #386/#387 move what
-their handlers need to `dependencies`.
+their handlers need to `dependencies`: #386 made `n3` and `jsonld` runtime
+dependencies, imported by exactly one file, `graph/export/serializers.ts`,
+which only a job handler may import (`test/graph/rdf/rdf-imports.spec.ts`
+pins both); `rdf-validate-shacl` and `rdf-ext` stay test-only.
 
 ## 19. Review UI and overrides
 

@@ -129,6 +129,9 @@ model User {
   kgEntityDigests KgEntityDigest[]
   kgEntityViews   KgEntityView[]
   kgGraphLayouts  KgGraphLayout[]
+  // #386 — RDF exports of the owner's graph. CASCADES: a disposable,
+  // reproducible artefact with its own 7-day expiry, like `note_exports`.
+  kgExports       KgExport[]
 
   // Ask conversations (issue #376, epic #348). CASCADES — a saved question
   // and its answers are the user's own content, derived from their private
@@ -463,6 +466,10 @@ model StorageObject {
   // the object the same way a transcript/note evidence pointer does. See
   // the block comment above `KgEvidence`.
   kgEvidenceImports          KgEvidence[]
+  // #386 — a rendered graph export (`managed_by: 'graph'`). Restrict, the
+  // `noteExportFiles` reasoning: only the export sweep / `kg.purge`, clearing
+  // the `kg_exports` reference first, may remove the file.
+  kgExportFiles              KgExport[]
 
   @@index([uploadedById])
   @@index([status])
@@ -1433,6 +1440,12 @@ model Job {
   // `AskMessage.jobId` is `@unique`/nullable/`SetNull` because a saved
   // conversation outlives `job.history.purge`'s schedule for this row.
   askMessage AskMessage?
+
+  // The `kg_exports` row this job rendered, when `type` is `'kg.export'`
+  // (issue #386). The `noteExport` shape exactly: `KgExport.jobId` is
+  // `@unique`/nullable/`SetNull` because an export's own 7-day retention is
+  // independent of `job.history.purge`'s schedule for this row.
+  kgExport KgExport?
 
   // See the block comment above ("Prisma-expressible indexes...") for why
   // these eight are declared here and three more exist only in
@@ -4917,6 +4930,70 @@ model KgEntityView {
 
   @@unique([userId, entityId])
   @@map("kg_entity_views")
+}
+
+// =============================================================================
+// `kg_exports` — RDF exports of one owner's graph (issue #386, epic #349;
+// docs/specs/ontology.md §18.2)
+// =============================================================================
+//
+// Mirrors `note_exports`: one row per requested render, produced by the
+// `kg.export` job into a `managed_by: 'graph'` storage object, expiring 7 days
+// after it was requested (the daily sweep deletes the row and the file).
+//
+// CONTENT-ADDRESSED on `graph_fingerprint` — a SHA-256 over the ontology
+// version, the format, and the owner's graph "shape" (max updated_at plus row
+// counts of the kg_* tables). `POST /api/graph/exports` reuses an unexpired,
+// non-failed row with the same `(owner, format, fingerprint)`, so asking twice
+// for an unchanged graph renders once. A plain, NON-unique index — an expired
+// or failed row may briefly coexist with a fresh one sharing the key, exactly
+// as `note_exports_lookup_idx` allows.
+//
+// `owner_id` Cascade; `object_id` Restrict (the file goes only after the row
+// lets go of it); `job_id` `@unique`/SetNull (the `NoteExport.jobId` shape).
+// No hand-written SQL: every constraint here is Prisma-expressible.
+// =============================================================================
+
+enum KgExportFormat {
+  jsonld
+  turtle
+  nquads
+
+  @@map("kg_export_format")
+}
+
+enum KgExportStatus {
+  pending
+  running
+  ready
+  failed
+
+  @@map("kg_export_status")
+}
+
+model KgExport {
+  id               String         @id @default(uuid()) @db.Uuid
+  ownerId          String         @map("owner_id") @db.Uuid
+  format           KgExportFormat
+  status           KgExportStatus @default(pending)
+  graphFingerprint String         @map("graph_fingerprint")
+  ontologyVersion  String         @map("ontology_version")
+  objectId         String?        @map("object_id") @db.Uuid
+  // `{ entities, relations, items, evidence, excludedSensitive, bytes }` — counts only.
+  stats            Json           @default("{}") @db.JsonB
+  // Short and generic; never row data.
+  errorMessage     String?        @map("error_message")
+  jobId            String?        @unique @map("job_id") @db.Uuid
+  expiresAt        DateTime       @map("expires_at") @db.Timestamptz(6)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  owner  User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  object StorageObject? @relation(fields: [objectId], references: [id], onDelete: Restrict)
+  job    Job?           @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, format, graphFingerprint])
+  @@index([expiresAt])
+  @@map("kg_exports")
 }
 
 /// Latest whole-graph layout per owner (spec §22, issue #371). A cache of derived data — never

@@ -203,4 +203,25 @@ describe('GraphIndexPage', () => {
     expect(await screen.findByRole('menuitem', { name: 'Explore' })).toHaveAttribute('href', '/graph/explore');
     expect(screen.getByRole('menuitem', { name: 'Overview' })).toBeInTheDocument();
   });
+
+  it('opens "Export graph…" from the header overflow menu (#386)', async () => {
+    const user = userEvent.setup();
+    server.use(http.get('*/api/graph/exports', () => HttpResponse.json({ data: { exports: [] } })));
+    renderIndex();
+    await screen.findByRole('link', { name: /Joe Rivera/ });
+
+    await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Export graph…' }));
+    expect(await screen.findByRole('dialog', { name: 'Export graph' })).toBeInTheDocument();
+    expect(screen.getByText('Sensitive personal facts are never exported.')).toBeInTheDocument();
+  });
+
+  it('offers "Export graph…" in the phone menu too', async () => {
+    const user = userEvent.setup();
+    setViewportWidth(390);
+    renderIndex();
+    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await user.click(screen.getByRole('button', { name: 'More knowledge views' }));
+    expect(await screen.findByRole('menuitem', { name: 'Export graph…' })).toBeInTheDocument();
+  });
 });
