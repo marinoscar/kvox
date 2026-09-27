@@ -49,7 +49,7 @@ describe('kg:eval extract runner (#363)', () => {
     const answer = {
       meeting: { topics: [] },
       entities: [
-        { ref: 'e1', type: 'Person', label: 'Tomás Aguilar', aliases: [], props: { title: null }, evidence: [{ source: alias, quote: "I'm Tomás Aguilar" }] },
+        { ref: 'e1', type: 'Person', label: 'Tomás Aguilar', aliases: [], props: {}, evidence: [{ source: alias, quote: "I'm Tomás Aguilar" }] },
       ],
       relations: [],
       items: [],

@@ -86,9 +86,9 @@ describe('AttributeDefsBrowser', () => {
 
     const person = section('Person');
     const builtins = within(person).getByRole('list', { name: 'Built-in Person attributes' });
-    expect(within(builtins).getByText('Role')).toBeInTheDocument();
+    expect(within(builtins).getByText('Job title')).toBeInTheDocument();
     // Read-only: no action on a built-in.
-    expect(within(person).queryByRole('button', { name: /edit role/i })).not.toBeInTheDocument();
+    expect(within(person).queryByRole('button', { name: /edit job title/i })).not.toBeInTheDocument();
 
     const own = within(person).getByRole('list', { name: 'Your Person attributes' });
     expect(within(own).getByText('Nickname')).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('AttributeDefsBrowser', () => {
 
     expect(await screen.findByText('No attributes of your own yet.')).toBeInTheDocument();
     // Built-ins still listed, so the user sees what exists before adding.
-    expect(screen.getByText('Role')).toBeInTheDocument();
+    expect(screen.getByText('Job title')).toBeInTheDocument();
   });
 
   it('shows an error with Retry, and retries', async () => {

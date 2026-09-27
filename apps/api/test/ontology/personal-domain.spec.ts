@@ -136,23 +136,38 @@ describe('the personal domain (#383)', () => {
       expect(now.version).toBe(ONTOLOGY_VERSION);
       expect(now.domains).toEqual([...PAYLOAD_1_0_0.domains, { key: 'personal', label: 'Personal life', enabled: false, alwaysOn: false }]);
 
-      // 1.2.0 (#440) changed Person's work mixin — company/businessUnit added,
-      // title relabelled "Role" — and nothing else. Undo exactly that change on
-      // the current payload, then require byte identity with the committed
-      // 1.0.0 copy, so any OTHER drift still fails here.
+      // 1.2.0 (#440) retired Person.title (deprecated, no longer extractable),
+      // gave HAS_ROLE an optional businessUnit and relabelled its title "Role",
+      // and reworded the WORKS_FOR and HAS_ROLE descriptions — and nothing
+      // else. Undo exactly those changes on the current payload, then require
+      // byte identity with the committed 1.0.0 copy, so any OTHER drift still
+      // fails here.
       const person100 = PAYLOAD_1_0_0.entityTypes.find((t) => t.key === 'Person')!;
       const personNow = now.entityTypes.find((t) => t.key === 'Person')!;
-      expect(personNow.attributes.map((a) => a.key)).toEqual(['company', 'businessUnit', 'title']);
-      const titleNow = personNow.attributes.find((a) => a.key === 'title')!;
-      const title100 = person100.attributes.find((a) => a.key === 'title')!;
-      expect({ ...titleNow, label: title100.label, description: title100.description, sortOrder: title100.sortOrder }).toEqual(title100);
+      expect(personNow.attributes.map((a) => a.key)).toEqual(['title']);
+      expect(personNow.attributes[0]).toEqual({ ...person100.attributes[0], extractable: false, deprecated: true });
       const entityTypes = now.entityTypes.map((t) => (t.key === 'Person' ? { ...t, attributes: person100.attributes } : t));
+
+      const hasRole100 = PAYLOAD_1_0_0.relationTypes.find((r) => r.key === 'HAS_ROLE')!;
+      const hasRoleNow = now.relationTypes.find((r) => r.key === 'HAS_ROLE')!;
+      expect(hasRoleNow.props.map((p) => p.key)).toEqual(['title', 'businessUnit']);
+      expect(hasRoleNow.props[0]).toEqual({ ...hasRole100.props[0], label: 'Role' });
+      expect(hasRoleNow.props[1]).toMatchObject({ key: 'businessUnit', required: false, extractable: true, sensitivity: 'business' });
+      const worksFor100 = PAYLOAD_1_0_0.relationTypes.find((r) => r.key === 'WORKS_FOR')!;
+      const relationTypes = now.relationTypes.map((r) =>
+        r.key === 'WORKS_FOR'
+          ? { ...r, description: worksFor100.description }
+          : r.key === 'HAS_ROLE'
+            ? { ...r, description: hasRole100.description, props: hasRole100.props }
+            : r,
+      );
 
       const comparable = {
         ...now,
         version: PAYLOAD_1_0_0.version,
         domains: now.domains.filter((d) => d.key !== 'personal'),
         entityTypes,
+        relationTypes,
       };
       expect(JSON.stringify(comparable)).toBe(JSON.stringify(PAYLOAD_1_0_0));
     });

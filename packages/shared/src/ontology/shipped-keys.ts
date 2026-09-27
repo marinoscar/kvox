@@ -67,6 +67,5 @@ export const SHIPPED_KEYS: readonly string[] = Object.freeze([
   'TRAVELED_ON',
   'HAS_MILESTONE',
   // 1.2.0 — work
-  'Person.company',
-  'Person.businessUnit',
+  'HAS_ROLE.businessUnit',
 ]);

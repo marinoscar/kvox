@@ -69,6 +69,5 @@ exports.SHIPPED_KEYS = Object.freeze([
     'TRAVELED_ON',
     'HAS_MILESTONE',
     // 1.2.0 — work
-    'Person.company',
-    'Person.businessUnit',
+    'HAS_ROLE.businessUnit',
 ]);
