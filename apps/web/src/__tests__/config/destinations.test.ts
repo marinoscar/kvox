@@ -157,6 +157,28 @@ describe('destinations — the knowledge graph (#373, #438)', () => {
     expect(DESTINATION_ROUTES.home).toEqual(['/']);
     expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).toContain('/graph');
   });
+
+  it('gates `knowledge` on graph:read AND the runtime graph feature — either alone hides it', () => {
+    const byKey = Object.fromEntries(DESTINATIONS.map((d) => [d.key, d]));
+    const holding = (granted: string[]) => (permission: string) => granted.includes(permission);
+
+    // Both on: visible.
+    expect(
+      isDestinationVisible(byKey.knowledge, holding(['graph:read']), { graph: true }),
+    ).toBe(true);
+    // The feature off hides it even though the permission is held.
+    expect(
+      isDestinationVisible(byKey.knowledge, holding(['graph:read']), { graph: false }),
+    ).toBe(false);
+    // The permission missing hides it even though the feature is on.
+    expect(isDestinationVisible(byKey.knowledge, holding([]), { graph: true })).toBe(false);
+    // Neither.
+    expect(isDestinationVisible(byKey.knowledge, holding([]), { graph: false })).toBe(false);
+  });
+
+  // `BOTTOM_BAR_DESTINATIONS` keys are already asserted as exactly
+  // home/transcripts/notes/knowledge in the "the table itself" describe block
+  // below ('excludes every pinned destination from the bottom bar (#106)').
 });
 
 describe('destinations — segment-boundary matching', () => {
