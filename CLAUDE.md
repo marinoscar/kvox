@@ -1636,6 +1636,9 @@ the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments
 **Database Backup:**
 - `DB_BACKUP_SCHEDULE_ENABLED` - Whether this process runs the backup scheduler: a ten-minute cron that enqueues the housekeeping sweep, starts a backup (by enqueuing `db.backup.run`) when the configured schedule has come due, and enqueues the retained-database drop. Defaults to on; only the literal `false` turns it off, and it is deliberately independent of `JOBS_WORKER_MODE` — the *tick* is not itself queue work (it only decides whether to enqueue), so an API running as a pure control plane must still queue its own backups even though `JOBS_WORKER_MODE=off` means nothing on this process will execute them. Everything about the schedule itself (enabled, frequency, time of day, timezone, retention count, stale window) is a `databaseBackup` system setting, not an environment variable — as is `nodeOffloadEnabled` (default **false**), which decides whether a worker node may take the dump at all. See `docs/specs/database-backup.md`.
 
+**Knowledge graph:**
+- `KG_MIGRATE_SCHEDULE_ENABLED` - Whether this process runs the hourly (minute 17) tick that enqueues `kg.migrate` for owners whose graph rows a declared ontology migration still has to reshape (#384). The tick only enqueues, and returns at once while `ONTOLOGY_MIGRATIONS` is empty. Only the literal `false` turns it off (default: on), the `DB_BACKUP_SCHEDULE_ENABLED` convention; an admin can still re-run one owner's migration with Retry in the job list. See `docs/runbooks/ontology-migration.md`
+
 **Observability:**
 - `OTEL_ENABLED` - Enable OpenTelemetry (default: true)
 - `OTEL_EXPORTER_OTLP_ENDPOINT` - OTEL Collector endpoint
@@ -2298,8 +2301,8 @@ citing a numbered fact-handle list rather than uuids, dropping any statement
 citing nothing or an unknown handle; server-only, `maxAttempts: 1`, throttled
 per owner, enqueued by the brief GET when stale and, once a caller enqueues it,
 by #366's commit/revert and #355's manual edit/#364's merge, each guarded on
-`ai.graphEnabled`); every other type in `apps/api/src/graph/job-types.ts` is
-still only a constant. Extraction lives in
+`ai.graphEnabled`) and `kg.migrate` (#384 — see below); every other type in
+`apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
 `apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
 `NotesModule` for the hook — one-way: it provides the two note services it needs
 itself), with the proposal payload contract later issues import in
@@ -2343,7 +2346,25 @@ restate any of that here; extend the spec instead.
 proposal commit, speaker naming, merges, imports and the manual edit alike — which validates
 type, closed props, endpoints, temporal fields and evidence inside the caller's transaction,
 with the deferred `kg_assert_has_evidence` trigger as the database's backstop at `COMMIT`; a
-`kg_entities`/`kg_relations`/`kg_items` row written any other way should be rejected in review.
+`kg_entities`/`kg_relations`/`kg_items` row written any other way should be rejected in review —
+the one named exception being `kg.migrate`'s ontology reshape (below).
+
+**`kg.migrate` (#384) reshapes one user's graph rows after an ontology bump, and is the one
+sanctioned writer of `kg_*` rows outside `GraphWriteService`.** Renames and retags are declared
+as steps in `packages/shared/src/ontology/migrations.ts` (`ONTOLOGY_MIGRATIONS`, **empty** at
+1.x; parity rules 14–17 in `ontology-parity.spec.ts`), never as a Prisma migration — §17.4:
+`props` is JSONB and the tables never change shape. The handler
+(`apps/api/src/graph/migrate/`) walks entities → relations → items in keyset batches of 500,
+applies the pure `applyMigrationSteps`, validates against the **all-domains** effective schema
+plus the owner's attribute defs, and writes `type`/`props`/`status`/`ontology_version` only —
+never evidence or `review_status` — in one guarded `UPDATE … FROM (VALUES …)` per batch. A row
+no step touches keeps its version as provenance; one failing validation is left alone and
+counted `needsAttention`. Server-only (it writes as it goes, under `kg.purge`'s authority), no
+AI key, `profile: { maxRuntimeMs: 60 min, maxAttempts: 3 }` — a retry re-selects only what is
+still pending, so it cannot double-apply. `KgMigrateSchedulerTask` (`@Cron('17 * * * *')`)
+only enqueues, one job per owner (subject `user`, ordinary dedup) through
+`enqueueHousekeepingJob`, which now takes an optional subject/payload for exactly this. See
+`docs/specs/ontology.md` §17.4 and [`docs/runbooks/ontology-migration.md`](docs/runbooks/ontology-migration.md).
 
 **`kg.purge` (#357) is server-only permanently and `profile: { maxAttempts: 1 }`** — the
 identical `user.data.purge`/`note.generate` reasoning: a destructive fan-out across a dozen
