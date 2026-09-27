@@ -194,15 +194,17 @@ const aiSettingsSchema = z.object({
       defaultModel: z.string().trim().min(1).max(128),
     }),
   }),
-  maxInputTokens: z.number().int().min(256).max(2_000_000),
-  maxOutputTokens: z.number().int().min(64).max(200_000),
+  // #436: `null` = "the selected model's own maximum"; a number is an
+  // administrator's spend cap. Nullable here too, or a full PUT could never
+  // clear one.
+  maxInputTokens: z.number().int().min(256).max(2_000_000).nullable(),
+  maxOutputTokens: z.number().int().min(64).max(200_000).nullable(),
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000),
   // How hard a reasoning model may think before it answers (#87). Restated
   // from `ai-settings.schema.ts`, like every field around it. `'none'` is the
   // vendor's default and means the parameter is not sent at all; every other
-  // value spends part of the SAME `maxOutputTokens` ceiling above on thinking
-  // rather than on prose, because reasoning tokens are billed and counted as
-  // output tokens.
+  // value spends output tokens on thinking, and since #436 the budget adds
+  // that effort's headroom on top of any typed `maxOutputTokens` cap above.
   reasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']),
   // Ceiling on one uploaded note source document, in bytes (#51). See
   // `ai-settings.schema.ts` for why an AI policy and not a storage one.
@@ -372,8 +374,16 @@ export const patchSystemSettingsSchema = z.object({
             .optional(),
         })
         .optional(),
-      maxInputTokens: z.number().int().min(256).max(2_000_000).optional(),
-      maxOutputTokens: z.number().int().min(64).max(200_000).optional(),
+      // #436. `.nullable().optional()`: absent = leave alone, `null` = clear
+      // the cap back to the model's own maximum.
+      maxInputTokens: z
+        .number()
+        .int()
+        .min(256)
+        .max(2_000_000)
+        .nullable()
+        .optional(),
+      maxOutputTokens: z.number().int().min(64).max(200_000).nullable().optional(),
       requestTimeoutMs: z.number().int().min(1_000).max(3_600_000).optional(),
       // #87. Missing this line is the silent no-op this file's header warns
       // about: `PATCH { "ai": { "reasoningEffort": "medium" } }` would parse to

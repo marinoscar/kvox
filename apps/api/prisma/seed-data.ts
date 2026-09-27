@@ -395,15 +395,16 @@ export const DEFAULT_SYSTEM_SETTINGS = {
         defaultModel: 'gpt-5.4-mini',
       },
     },
-    maxInputTokens: 100000,
-    maxOutputTokens: 16384,
+    // `null` = "the selected model's own maximum" (#436); a number is an
+    // administrator's deliberate spend cap, never a seeded default.
+    maxInputTokens: null,
+    maxOutputTokens: null,
     requestTimeoutMs: 600000,
     // The vendor's own default (#87). Sent as `reasoning_effort` on Chat
     // Completions and omitted entirely at `'none'`, so the wire format is
     // unchanged for anyone who has not opted in. Reasoning tokens are billed
-    // and counted as output tokens against the same `maxOutputTokens` ceiling
-    // as the answer — which is why the conservative default is the right one
-    // to seed.
+    // and counted as output tokens — which is why the conservative default is
+    // the right one to seed.
     reasoningEffort: 'none' as const,
     // 25 MB (#51) — the ceiling on one uploaded note source document.
     maxDocumentBytes: 26214400,

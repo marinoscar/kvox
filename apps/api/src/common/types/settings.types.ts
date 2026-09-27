@@ -357,13 +357,15 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
         defaultModel: 'gpt-5.4-mini',
       },
     },
-    // Comfortably inside every model in the OpenAI catalogue, so the model's
-    // own context window is the binding constraint on a fresh deployment
-    // rather than a ceiling nobody chose.
-    maxInputTokens: 100_000,
-    // Roughly 12,000 words — long enough for any note this epic generates, and
-    // short enough that a runaway completion is bounded on somebody's own bill.
-    maxOutputTokens: 16_384,
+    // `null` — "the selected model's own context window" (#436). A number
+    // here is an administrator's deliberate spend cap, never a default: the
+    // old 100,000 governed every request with a ceiling nobody chose.
+    maxInputTokens: null,
+    // `null` — "the selected model's own output ceiling" (#436). The old
+    // 16,384 was sized for prose notes and cut structured graph extraction
+    // off mid-answer (#435); an administrator who wants to bound a runaway
+    // completion on somebody's own bill types a number deliberately.
+    maxOutputTokens: null,
     // Ten minutes. A streamed completion legitimately runs for minutes; this is
     // the backstop for a wedged connection, not an ordinary HTTP timeout.
     requestTimeoutMs: 600_000,
@@ -371,12 +373,12 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // The provider omits the parameter entirely at this value, so an upgrade
     // changes neither the bytes on the wire nor anybody's bill, and a gateway
     // that has never heard of `reasoning_effort` keeps working untouched.
-    // Raising it spends the SAME `maxOutputTokens` budget below on thinking
-    // instead of on prose — see `ai-settings.schema.ts` for why that is an
-    // administrator's decision and not a default.
+    // Raising it spends output tokens on thinking; since #436 the budget adds
+    // that effort's headroom on top of any typed `maxOutputTokens` cap — see
+    // `ai-settings.schema.ts` and `notes/generation/token-budget.ts`.
     reasoningEffort: 'none',
     // 25 MB (#51). Comfortably above any ordinary proposal, contract or brief,
-    // and far below anything whose extracted text `maxInputTokens` would let
+    // and far below anything whose extracted text a token budget would let
     // through anyway — a document is bounded here because every byte of it
     // becomes input tokens on the uploading user's own vendor account, and
     // because `note.source.extract` has to hold a whole PDF in memory to read
