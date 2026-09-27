@@ -2326,7 +2326,7 @@ vocabulary counterpart, and §18.2's generators read that field directly.
 |---|---|---|
 | Entity type | `rdfs:Class`, aligned via `alignment` | `schema:Person`, `schema:Organization` |
 | Built-in attribute | `owl:DatatypeProperty`, with `rdfs:domain`/`rdfs:range` | Aligned where a standard property exists — `schema:jobTitle`, `schema:email` — and left as a `kv:`-namespaced property (§18.2) where none does |
-| Relation type | `owl:ObjectProperty` | `schema:worksFor` for `WORKS_FOR`, and so on |
+| Relation type | `owl:ObjectProperty`, also `owl:SymmetricProperty` when the type declares `symmetric` (#383 — `SPOUSE_OF`, `FRIEND_OF`) | `schema:worksFor` for `WORKS_FOR`, `schema:spouse` for `SPOUSE_OF`, `foaf:knows` for `FRIEND_OF`, and so on |
 | A temporal edge (§5.4) | A per-edge reified node carrying `prov:startedAtTime`/`prov:endedAtTime`, or RDF-star (`<< :joe :worksFor :acme >> :validFrom "2019"`) where the consumer supports it | The choice is the consumer's, not the exporter's — both forms are emitted from the identical `valid`/`valid_precision` pair (§5.4, §10), never two separately maintained representations |
 | Evidence (§5.3) | `prov:wasDerivedFrom` a segment or note-span IRI, plus an `oa:Annotation` carrying an `oa:TextPositionSelector` (the `char_start`/`char_end` range) and an `oa:FragmentSelector` (`t=102,118`, the `start_ms`/`end_ms` range) | The no-orphans invariant (§3.3) restated as two standard selector shapes rather than kvox-specific columns |
 | Review status, confidence, `ontology_version` | `kv:` annotation properties | No standard vocabulary states an opinion about review workflow or a source ontology's version, so these stay in kvox's own namespace rather than being force-fit onto a property that means something narrower |
@@ -2416,7 +2416,9 @@ later switched off.
   `xsd:boolean`, `url` → `xsd:anyURI`, `entity_ref` → its target classes,
   `owl:unionOf` for several) and `owl:deprecated true` when deprecated; each
   exported relation an `owl:ObjectProperty` (`SUPERSEDES` ⊑
-  `prov:wasRevisionOf`); the caller's attribute definitions as
+  `prov:wasRevisionOf`; a `symmetric` relation — #383's `SPOUSE_OF`,
+  `FRIEND_OF` — is also an `owl:SymmetricProperty`, which is exactly the
+  "stored once, true both ways" meaning §17.2 gives the flag); the caller's attribute definitions as
   `kv:attr/<id>`. `IDENTIFIED_AS`, `MENTIONS` and `SUPPORTED_BY` are **not**
   properties — speakers are not exported, mentions are coarse, and evidence is
   `prov:wasDerivedFrom` + `oa:Annotation` (the rule keys on the relation's
@@ -2437,7 +2439,16 @@ later switched off.
   `title` enforced only when the predicate is HAS_ROLE, through `sh:or`/`sh:not`).
 - **`sensitive` attribute definitions appear in neither artefact** — not as a
   shape and not as a vocabulary label: they are never exported (§18.1), so a
-  closed shape rejects their property outright.
+  closed shape rejects their property outright. The same holds for a relation
+  type declaring `sensitivityDefault: 'sensitive'` (#383; none does today):
+  `isExportedRelation` leaves it out of both artefacts.
+- **The `personal` domain (#383) is described like any other** — both
+  artefacts cover every domain in the registry, enabled or not, because they
+  describe every row that can exist. `personal` is not `sensitive`: `Interest`,
+  `Trip` and `Milestone` get classes and closed shapes, and the six personal
+  relations are properties (`SPOUSE_OF`/`FRIEND_OF` reified through
+  `kv:AssertionShape`, being temporal). The SHACL needs nothing symmetric of its
+  own: both endpoints are `kv:Person`, and the edge is stated once.
 - **Served** as `GET /api/graph/ontology.ttl` and `GET
   /api/graph/ontology.shacl.ttl` (`graph:read`, raw `text/turtle;
   charset=utf-8`), with `ETag: W/"sha256(ONTOLOGY_VERSION + ':' +

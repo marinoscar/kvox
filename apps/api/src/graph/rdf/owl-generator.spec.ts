@@ -16,7 +16,7 @@ import {
   userDef,
 } from '../../../test/graph/rdf/rdf-fixtures';
 import { alignmentIri, attributeIri, classIri, relationIri, relationPropIri, userAttributeIri } from './iris';
-import { exportedRelations, typeAttributes } from './ontology-rdf-model';
+import { exportedRelations, isExportedRelation, typeAttributes } from './ontology-rdf-model';
 import { generateOwl } from './owl-generator';
 
 // =============================================================================
@@ -120,7 +120,8 @@ describe('generateOwl', () => {
   it('declares every exported relation as an owl:ObjectProperty with domain, range and alignment', () => {
     for (const relation of exportedRelations(ONTOLOGY)) {
       const prop = relationIri(NS, relation.key);
-      expect(objectsOf(quads, prop, `${RDF}type`).map((o) => o.value)).toEqual([`${OWL}ObjectProperty`]);
+      const expectedTypes = relation.symmetric === true ? [`${OWL}ObjectProperty`, `${OWL}SymmetricProperty`] : [`${OWL}ObjectProperty`];
+      expect(objectsOf(quads, prop, `${RDF}type`).map((o) => o.value).sort()).toEqual(expectedTypes.sort());
       expect(objectsOf(quads, prop, `${RDFS}label`).map((o) => o.value)).toEqual([relation.label]);
       expect(objectsOf(quads, prop, `${RDFS}domain`)).toHaveLength(1);
       expect(objectsOf(quads, prop, `${RDFS}range`)).toHaveLength(1);
@@ -132,6 +133,34 @@ describe('generateOwl', () => {
         expect(objectsOf(quads, propIri, `${RDFS}domain`).map((o) => o.value)).toEqual([`${NS}Assertion`]);
       }
     }
+  });
+
+  it('describes the personal domain (#383): its classes, relations and a symmetric SPOUSE_OF/FRIEND_OF', () => {
+    for (const key of ['Interest', 'Trip', 'Milestone']) {
+      expect(objectsOf(quads, classIri(NS, key), `${RDF}type`).map((o) => o.value)).toEqual([`${OWL}Class`]);
+      expect(objectsOf(quads, classIri(NS, key), `${RDFS}subClassOf`).map((o) => o.value)).toEqual([
+        alignmentIri(ONTOLOGY.entityType(key)!.alignment!),
+      ]);
+    }
+    for (const key of ['SPOUSE_OF', 'FRIEND_OF']) {
+      expect(objectsOf(quads, relationIri(NS, key), `${RDF}type`).map((o) => o.value)).toContain(`${OWL}SymmetricProperty`);
+    }
+    for (const key of ['PARENT_OF', 'INTERESTED_IN', 'TRAVELED_ON', 'HAS_MILESTONE']) {
+      expect(objectsOf(quads, relationIri(NS, key), `${RDF}type`).map((o) => o.value)).toEqual([`${OWL}ObjectProperty`]);
+    }
+    expect(objectsOf(quads, relationIri(NS, 'SPOUSE_OF'), `${RDFS}subPropertyOf`).map((o) => o.value)).toEqual([
+      'https://schema.org/spouse',
+    ]);
+    expect(objectsOf(quads, relationIri(NS, 'INTERESTED_IN'), `${RDFS}subPropertyOf`).map((o) => o.value)).toEqual([
+      'http://xmlns.com/foaf/0.1/topic_interest',
+    ]);
+    expect(objectsOf(quads, relationIri(NS, 'INTERESTED_IN'), `${RDFS}range`).map((o) => o.value)).toEqual([classIri(NS, 'Interest')]);
+  });
+
+  it('never describes a relation type declared sensitive (§18.1), while personal ones are described', () => {
+    const personal = ONTOLOGY.relationType('SPOUSE_OF')!;
+    expect(isExportedRelation(personal)).toBe(true);
+    expect(isExportedRelation({ ...personal, key: 'SECRET_OF', sensitivityDefault: 'sensitive' })).toBe(false);
   });
 
   it('writes a relation with several endpoint types as an owl:unionOf class', () => {

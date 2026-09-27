@@ -37,7 +37,7 @@ kv:AssertionShape
         sh:name "Title" ;
         sh:path kv:HAS_ROLE.title
     ], [
-        sh:in ( kv:HAS_ROLE kv:REPORTS_TO kv:WORKS_FOR ) ;
+        sh:in ( kv:FRIEND_OF kv:HAS_ROLE kv:REPORTS_TO kv:SPOUSE_OF kv:WORKS_FOR ) ;
         sh:maxCount 1 ;
         sh:minCount 1 ;
         sh:path rdf:predicate
@@ -78,7 +78,7 @@ kv:ClaimShape
         sh:minCount 1 ;
         sh:name "About" ;
         sh:nodeKind sh:IRI ;
-        sh:or ( [ sh:class kv:Meeting ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] ) ;
+        sh:or ( [ sh:class kv:Interest ] [ sh:class kv:Meeting ] [ sh:class kv:Milestone ] [ sh:class kv:Organization ] [ sh:class kv:Person ] [ sh:class kv:Project ] [ sh:class kv:Trip ] ) ;
         sh:path kv:ABOUT
     ], [
         sh:minCount 1 ;
@@ -172,6 +172,23 @@ kv:DecisionShape
     ] ;
     sh:targetClass kv:Decision .
 
+kv:InterestShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:datatype xsd:string ;
+        sh:in ( "hobby" "sport" "music" "food" "travel" "cause" "other" ) ;
+        sh:maxCount 1 ;
+        sh:name "Category" ;
+        sh:path kv:Interest.category
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Interest .
+
 kv:MeetingShape
     a sh:NodeShape ;
     sh:closed true ;
@@ -212,6 +229,28 @@ kv:MeetingShape
         sh:path prov:wasDerivedFrom
     ] ;
     sh:targetClass kv:Meeting .
+
+kv:MilestoneShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "Date" ;
+        sh:path kv:Milestone.date
+    ], [
+        sh:datatype xsd:string ;
+        sh:in ( "birthday" "anniversary" "wedding" "birth" "graduation" "move" "retirement" "other" ) ;
+        sh:maxCount 1 ;
+        sh:name "Kind" ;
+        sh:path kv:Milestone.kind
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Milestone .
 
 kv:OrganizationShape
     a sh:NodeShape ;
@@ -263,12 +302,22 @@ kv:PersonFactShape
 kv:PersonShape
     a sh:NodeShape ;
     sh:closed true ;
-    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom schema:attendee schema:hasOccupation schema:worksFor ) ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom foaf:knows foaf:topic_interest schema:attendee schema:children schema:hasOccupation schema:spouse schema:worksFor ) ;
     sh:property [
+        sh:class kv:Interest ;
+        sh:name "Interested in" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:INTERESTED_IN
+    ], [
         sh:class kv:Meeting ;
         sh:name "Attended" ;
         sh:nodeKind sh:IRI ;
         sh:path kv:ATTENDED
+    ], [
+        sh:class kv:Milestone ;
+        sh:name "Has milestone" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:HAS_MILESTONE
     ], [
         sh:class kv:Organization ;
         sh:name "Has role" ;
@@ -281,9 +330,29 @@ kv:PersonShape
         sh:path kv:WORKS_FOR
     ], [
         sh:class kv:Person ;
+        sh:name "Friend of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:FRIEND_OF
+    ], [
+        sh:class kv:Person ;
+        sh:name "Parent of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:PARENT_OF
+    ], [
+        sh:class kv:Person ;
         sh:name "Reports to" ;
         sh:nodeKind sh:IRI ;
         sh:path kv:REPORTS_TO
+    ], [
+        sh:class kv:Person ;
+        sh:name "Spouse of" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:SPOUSE_OF
+    ], [
+        sh:class kv:Trip ;
+        sh:name "Traveled on" ;
+        sh:nodeKind sh:IRI ;
+        sh:path kv:TRAVELED_ON
     ], [
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
@@ -333,5 +402,31 @@ kv:ProjectShape
         sh:path prov:wasDerivedFrom
     ] ;
     sh:targetClass kv:Project .
+
+kv:TripShape
+    a sh:NodeShape ;
+    sh:closed true ;
+    sh:ignoredProperties ( rdf:type rdfs:label kv:reviewStatus kv:confidence kv:ontologyVersion prov:wasDerivedFrom ) ;
+    sh:property [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "End date" ;
+        sh:path kv:Trip.endDate
+    ], [
+        sh:datatype xsd:date ;
+        sh:maxCount 1 ;
+        sh:name "Start date" ;
+        sh:path kv:Trip.startDate
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Destination" ;
+        sh:path kv:Trip.destination
+    ], [
+        sh:minCount 1 ;
+        sh:nodeKind sh:IRI ;
+        sh:path prov:wasDerivedFrom
+    ] ;
+    sh:targetClass kv:Trip .
 "
 `;
