@@ -46,7 +46,8 @@ describeWithDb('KgPurgeService (real Postgres)', () => {
     const { DATABASE_URL: _ignored, ...envWithoutDatabaseUrl } = process.env;
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(envWithoutDatabaseUrl)) });
     await prisma.$connect();
-    purge = new KgPurgeService(prisma as unknown as PrismaService);
+    // No export files in these fixtures (#386's step finds nothing to delete).
+    purge = new KgPurgeService(prisma as unknown as PrismaService, { deleteIfPresent: async () => false } as never);
   });
 
   afterAll(async () => {

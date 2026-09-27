@@ -333,3 +333,15 @@ export async function bulkRandomGraph(
     SELECT id::text AS id FROM kg_entities WHERE owner_id = ${ownerId}::uuid AND label = 'Perf 4242'`;
   return row.id;
 }
+
+/**
+ * `KgPurgeService`'s storage dependency (#386) for specs whose fixtures never
+ * create a graph export: its `exports` step finds no row, so no file is ever
+ * asked for. Throws if one is, so a fixture that does export must say so.
+ */
+export const NO_EXPORT_FILES = {
+  deleteIfPresent: async (id: string | null | undefined) => {
+    if (id) throw new Error(`unexpected export file deletion: ${id}`);
+    return false;
+  },
+} as unknown as import('../../src/graph/graph-objects.service').GraphObjectsService;

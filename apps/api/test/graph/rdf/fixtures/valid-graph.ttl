@@ -5,7 +5,8 @@
 # It exercises every node shape the ontology ships: entity types, item types,
 # an aligned mixin attribute, a URL, a select, a list, dates, item-column
 # relations, a relation narrowed by allowedPairs, a caller-defined attribute,
-# and reified temporal edges (kv:Assertion) including HAS_ROLE's required title.
+# reified edges (kv:Assertion) including HAS_ROLE's required title, and the row
+# columns #386 exports: item statements, dates, an item's validity range, aliases.
 #
 # Every node cites at least one source (prov:wasDerivedFrom) — the no-orphans rule.
 
@@ -21,6 +22,7 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix schema: <https://schema.org/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # --- Entities ----------------------------------------------------------------
@@ -28,6 +30,7 @@
 ent:a0000000-0000-4000-8000-000000000001
     a kv:Person, schema:Person ;
     rdfs:label "Sarah Chen" ;
+    skos:altLabel "Sarah" ;
     schema:jobTitle "Staff Engineer" ;
     kv:WORKS_FOR ent:a0000000-0000-4000-8000-000000000002 ;
     schema:worksFor ent:a0000000-0000-4000-8000-000000000002 ;
@@ -54,6 +57,7 @@ ent:a0000000-0000-4000-8000-000000000002
 ent:a0000000-0000-4000-8000-000000000003
     a kv:Meeting ;
     rdfs:label "Pilot sync" ;
+    kv:occurredAt "2026-04-02T15:00:00Z"^^xsd:dateTime ;
     kv:Meeting.dateSource "stated" ;
     kv:Meeting.topics "budget", "hiring" ;
     kv:DISCUSSED ent:a0000000-0000-4000-8000-000000000004 ;
@@ -73,7 +77,9 @@ ent:a0000000-0000-4000-8000-000000000004
 itm:c0000000-0000-4000-8000-000000000001
     a kv:Commitment ;
     rdfs:label "Send the updated proposal by Friday" ;
+    kv:Commitment.statement "Sarah will send the updated proposal by Friday." ;
     kv:status "open" ;
+    kv:dueAt "2026-04-10T17:00:00Z"^^xsd:dateTime ;
     kv:ASSIGNED_TO ent:a0000000-0000-4000-8000-000000000001 ;
     kv:OWED_TO ent:a0000000-0000-4000-8000-000000000002 ;
     kv:CREATED_IN ent:a0000000-0000-4000-8000-000000000003 ;
@@ -83,7 +89,9 @@ itm:c0000000-0000-4000-8000-000000000001
 itm:c0000000-0000-4000-8000-000000000002
     a kv:Decision ;
     rdfs:label "Run the pilot in-house" ;
+    kv:Decision.statement "The team decided to run the pilot in-house." ;
     kv:status "active" ;
+    kv:occurredAt "2026-04-02T15:00:00Z"^^xsd:dateTime ;
     kv:Decision.rejectedOption "Outsource it" ;
     kv:DECIDED_IN ent:a0000000-0000-4000-8000-000000000003 ;
     kv:SUPERSEDES itm:c0000000-0000-4000-8000-000000000005 ;
@@ -93,19 +101,24 @@ itm:c0000000-0000-4000-8000-000000000002
 itm:c0000000-0000-4000-8000-000000000005
     a kv:Decision ;
     rdfs:label "Outsource the pilot" ;
+    kv:Decision.statement "The pilot would be outsourced." ;
     kv:status "superseded" ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .
 
 itm:c0000000-0000-4000-8000-000000000003
     a kv:Claim ;
     rdfs:label "The pilot budget was cut 20%" ;
+    kv:Claim.statement "The pilot budget was cut by 20%." ;
     kv:status "active" ;
+    prov:startedAtTime "2026-03-01T00:00:00Z"^^xsd:dateTime ;
+    kv:validPrecision "month" ;
     kv:ABOUT ent:a0000000-0000-4000-8000-000000000004 ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000002 .
 
 itm:c0000000-0000-4000-8000-000000000004
     a kv:PersonFact ;
     rdfs:label "Prefers written updates" ;
+    kv:PersonFact.statement "Sarah prefers written updates." ;
     kv:status "active" ;
     kv:ABOUT ent:a0000000-0000-4000-8000-000000000001 ;
     prov:wasDerivedFrom seg:b0000000-0000-4000-8000-000000000001 .

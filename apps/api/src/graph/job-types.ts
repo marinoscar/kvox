@@ -31,3 +31,11 @@ export const KG_EMBED_JOB_TYPE = 'kg.embed';
 export const KG_ENTITY_DIGEST_JOB_TYPE = 'kg.entity_digest';
 export const KG_GRAPH_LAYOUT_JOB_TYPE = 'kg.graph_layout';
 export const KG_MIGRATE_JOB_TYPE = 'kg.migrate';
+// #386 — RDF export of one owner's graph (render), and the daily expiry sweep
+// (same type, `payload.mode: 'sweep'` — no new job type for housekeeping).
+export const KG_EXPORT_JOB_TYPE = 'kg.export';
+export const KG_SUBJECT_EXPORT = 'kg_export';
+export const KG_SUBJECT_EXPORT_SWEEP = 'kg_export_sweep';
+
+/** `storage_objects.managed_by` for every file the graph module writes (#386). */
+export const GRAPH_MANAGED_BY = 'graph';

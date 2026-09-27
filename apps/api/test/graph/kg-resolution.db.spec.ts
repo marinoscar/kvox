@@ -17,6 +17,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { buildDatabaseUrl } from '../../src/common/database-url';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
+import { NO_EXPORT_FILES } from './graph-read.fixtures';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../../src/graph/preferences/graph-preferences.defaults';
 import { CandidateService } from '../../src/graph/resolution/candidate.service';
 import { ContextFeatureService, emptyContext } from '../../src/graph/resolution/context-features.service';
@@ -77,7 +78,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
       followUps as never,
     );
     distinct = new DistinctPairService();
-    purge = new KgPurgeService(db);
+    purge = new KgPurgeService(db, NO_EXPORT_FILES);
   });
 
   afterAll(async () => {

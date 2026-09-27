@@ -97,13 +97,20 @@ export interface HousekeepingEnqueueOptions {
   /** A human phrase for the log line ("device code cleanup"). Lower case. */
   what: string;
   /**
-   * A subject makes the job per-subject: the "already in flight?" lookup and
-   * the dedup key both include it, so one active job per (type, subject) —
-   * never one per type. Omit both for a global job (the original shape).
+   * Optional subject. Two callers, one rule — the in-flight check and the
+   * dedup key are both scoped to exactly (type, subjectType, subjectId):
+   *   - subject TYPE only (#386): tells a global sweep apart from other jobs
+   *     of the same `type` — `kg.export` renders under `kg_export`/<id> and
+   *     sweeps under `kg_export_sweep` with a null id, so a pending render
+   *     never suppresses the sweep. Still one global sweep.
+   *   - subject TYPE + ID (#384): a per-subject job — `kg.migrate` queues one
+   *     per owner (`user`/<ownerId>), one active job per owner.
+   * Omit both for a plain global job (the original shape). `subjectId`
+   * without `subjectType` is ignored.
    */
   subjectType?: string;
   subjectId?: string;
-  /** Handler input; identifiers only. */
+  /** Optional handler input (e.g. `{ mode: 'sweep' }`). Identifiers only. */
   payload?: Prisma.InputJsonValue;
 }
 
@@ -121,7 +128,7 @@ export async function enqueueHousekeepingJob(
   options: HousekeepingEnqueueOptions
 ): Promise<Job | null> {
   const { jobs, prisma, logger, type, what, subjectType, subjectId, payload } = options;
-  const subject = subjectType !== undefined && subjectId !== undefined ? { subjectType, subjectId } : null;
+  const subject = subjectType !== undefined ? { subjectType, subjectId: subjectId ?? null } : null;
 
   try {
     const active = await prisma.job.findFirst({
