@@ -29,9 +29,10 @@
 // counts and texts are unchanged. Every anchor FK from `kg_evidence` into them
 // is SetNull, so deleting evidence never cascades the other way either.
 //
-// The ONE storage object it removes is the graph's own derived artefact: a
-// `kg.export` file (`managed_by: 'graph'`, #386), through `GraphObjectsService`
-// — never a user upload. Both plans end with `exports`: an export written
+// The storage objects it removes are the graph module's own: a `kg.export`
+// file (`managed_by: 'graph'`, #386) and an uploaded `kg.import` file (#387,
+// `graph/<owner>/imports/`), both through `GraphObjectsService` — never any
+// other user upload. Both plans end with `exports`: an export written
 // before "forget this person" still contains that person, so it goes too (the
 // next export is rendered from the graph as it now is).
 //
@@ -82,6 +83,8 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { GraphObjectsService } from '../graph-objects.service';
+import { graphImportStoragePrefix } from '../import/graph-import.constants';
+import { GRAPH_MANAGED_BY } from '../job-types';
 
 /** Ids per statement, and per transaction. */
 export const KG_PURGE_BATCH = 500;
@@ -111,6 +114,8 @@ export const KG_PURGE_PERSON_PLAN = [
   'entities',
   // #386 — every export file of the owner's graph: each may name this person.
   'exports',
+  // #387 — every uploaded import file: it may name this person too.
+  'imports',
 ] as const;
 
 /** `scope: 'all'`, in order. See the header for where evidence went. */
@@ -133,6 +138,8 @@ export const KG_PURGE_ALL_PLAN = [
   'graphLayouts',
   // #386 — the owner's RDF exports and their `managed_by: 'graph'` files.
   'exports',
+  // #387 — the owner's uploaded import files (`graph/<owner>/imports/`).
+  'imports',
 ] as const;
 
 export type KgPurgePersonStep = (typeof KG_PURGE_PERSON_PLAN)[number];
@@ -155,6 +162,7 @@ export interface KgPurgeCounts {
   attributeDefs: number;
   graphLayouts: number;
   exports: number;
+  imports: number;
 }
 
 /** What `purgePerson` reports: the counts, and the set of ids it forgot. */
@@ -181,6 +189,7 @@ export function emptyKgPurgeCounts(): KgPurgeCounts {
     attributeDefs: 0,
     graphLayouts: 0,
     exports: 0,
+    imports: 0,
   };
 }
 
@@ -332,6 +341,9 @@ export class KgPurgeService {
 
       case 'exports':
         return this.purgeExports(userId, counts);
+
+      case 'imports':
+        return this.purgeImports(userId, counts);
     }
   }
 
@@ -521,6 +533,9 @@ export class KgPurgeService {
 
       case 'exports':
         return this.purgeExports(userId, counts);
+
+      case 'imports':
+        return this.purgeImports(userId, counts);
     }
   }
 
@@ -548,6 +563,31 @@ export class KgPurgeService {
       }
     }
     throw this.nonConvergence('exports', userId);
+  }
+
+  /**
+   * Every uploaded import file of the owner (#387): the bytes and the row. A
+   * citation that named one keeps its quote (`import_object_id` is SetNull).
+   * Re-entrant: a file already gone is simply not selected.
+   */
+  private async purgeImports(userId: string, counts: KgPurgeCounts): Promise<void> {
+    for (let batch = 0; batch < KG_PURGE_MAX_BATCHES; batch += 1) {
+      const rows = await this.prisma.storageObject.findMany({
+        where: { uploadedById: userId, managedBy: GRAPH_MANAGED_BY, storageKey: { startsWith: graphImportStoragePrefix(userId) } },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: KG_PURGE_BATCH,
+      });
+      if (rows.length === 0) return;
+      let deleted = 0;
+      for (const row of rows) {
+        if (await this.objects.deleteIfPresent(row.id)) deleted += 1;
+      }
+      counts.imports += deleted;
+      // Nothing could be deleted this round: stop rather than spin on the same rows.
+      if (deleted === 0) return;
+    }
+    throw this.nonConvergence('imports', userId);
   }
 
   // ===========================================================================

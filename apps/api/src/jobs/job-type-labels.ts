@@ -168,6 +168,9 @@ export const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   'kg.migrate': 'Knowledge graph migration',
   // #386, epic #349 — an RDF export of one owner's graph (and its daily expiry sweep).
   'kg.export': 'Knowledge graph export',
+  // #387, epic #349 — an uploaded RDF file validated against SHACL and turned
+  // into a reviewable proposal; resolution may use the owner's own AI key.
+  'kg.import': 'Knowledge graph import',
   // #378, epic #348 — one read-only graph-agent answer, on the asker's own AI key.
   'ask.respond': 'Ask answer',
 };

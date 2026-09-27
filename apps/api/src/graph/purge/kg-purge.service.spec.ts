@@ -160,7 +160,7 @@ describe('KgPurgeService.collectPersonSet — the merged-set closure', () => {
 
 describe('KgPurgeService.purgePerson', () => {
   it('declares its plan in the order the issue fixes', () => {
-    expect(KG_PURGE_PERSON_PLAN).toEqual(['items', 'relations', 'entityRows', 'draftProposalItems', 'entities', 'exports']);
+    expect(KG_PURGE_PERSON_PLAN).toEqual(['items', 'relations', 'entityRows', 'draftProposalItems', 'entities', 'exports', 'imports']);
   });
 
   it('runs items → relations → rows about the entities → draft proposal items → entities, evidence with its subject', async () => {
@@ -317,7 +317,24 @@ describe('KgPurgeService.purgeAll', () => {
       'attributeDefs',
       'graphLayouts',
       'exports',
+      'imports',
     ]);
+  });
+
+  it('deletes the owner’s uploaded import files after the exports (#387)', async () => {
+    const deleted: string[] = [];
+    const { prisma, log, calls } = fakePrisma({
+      'storageObject.findMany': queue([[{ id: 'imp1' }, { id: 'imp2' }]]),
+    });
+
+    const counts = await new KgPurgeService(prisma, fakeObjects(deleted)).purgeAll(USER);
+
+    expect(calls.find((c) => c.key === 'storageObject.findMany')?.args).toMatchObject({
+      where: { uploadedById: USER, managedBy: 'graph', storageKey: { startsWith: `graph/${USER}/imports/` } },
+    });
+    expect(deleted).toEqual(['imp1', 'imp2']);
+    expect(counts.imports).toBe(2);
+    expect(log.indexOf('kgExport.findMany')).toBeLessThan(log.indexOf('storageObject.findMany'));
   });
 
   it('deletes the owner’s exports last: reference, then file, then row (#386)', async () => {
