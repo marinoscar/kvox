@@ -68,16 +68,65 @@
  *    inside Library, and a destination beside it), and the bar would be at five
  *    labelled actions — which does not fit at 360px, the constraint that started
  *    all of this.
+ *
+ * KNOWLEDGE IS A DESTINATION; SETTINGS IS A MODE (issue #438)
+ * -----------------------------------------------------------
+ * `/graph` and `/ask` used to be OWNED BY `home` (#373, #380; ontology spec
+ * §13): the bar was at its four-tab ceiling, so the knowledge graph was reached
+ * from Home's "Knowledge" section, a named speaker's chip and library search
+ * hits — never from a tab. That made the product's third primary noun one tap
+ * below a row named after something else, which is exactly the debt #106 paid
+ * back for Notes. #438 reverses §13's decision: `knowledge` is its own
+ * destination, owning `/graph` (index, entity pages, explorer, overview,
+ * imports) and `/ask`.
+ *
+ * The ceiling did not move, so the slot came from `settings`, on the precedent
+ * #106 set for Console: a user's own settings are a place you SWITCH INTO to
+ * change how the app behaves, not a body of content you page between, and they
+ * already had better homes than a bar tab — the rail's foot at `sm` and up and
+ * the avatar menu at every width. Marking `settings` `pinned` keeps exactly
+ * four NON-PINNED destinations — Home · Transcripts · Notes · Knowledge.
+ *
+ * Knowledge is also the first destination gated on a RUNTIME FEATURE as well as
+ * a permission (`requiresFeature`): a deployment with connected knowledge
+ * switched off (`ai.graphEnabled`, read from `GET /api/ai/config`) has no tab
+ * for it, and the bar falls back to three. The routes stay reachable and stay
+ * owned by `knowledge` either way — ownership answers "what lights up", not
+ * "what is drawn".
  */
 
 import type { SvgIconComponent } from '@mui/icons-material';
 import HomeIcon from '@mui/icons-material/Home';
 import GraphicEqIcon from '@mui/icons-material/GraphicEq';
 import DescriptionIcon from '@mui/icons-material/Description';
+import HubIcon from '@mui/icons-material/Hub';
 import SettingsIcon from '@mui/icons-material/Settings';
 import AdminIcon from '@mui/icons-material/AdminPanelSettings';
 
-export type DestinationKey = 'home' | 'transcripts' | 'notes' | 'settings' | 'console';
+export type DestinationKey =
+  | 'home'
+  | 'transcripts'
+  | 'notes'
+  | 'knowledge'
+  | 'settings'
+  | 'console';
+
+/**
+ * A deployment-level runtime feature a destination can additionally require
+ * (#438). One real distinction today — connected knowledge — so this is a
+ * union of one, not a generic flag bag; a second feature is a second member.
+ */
+export type DestinationFeature = 'graph';
+
+/**
+ * Which runtime features are ON for this viewer right now. `false` for
+ * "unknown" and "still loading" too, so a gated destination never flashes in
+ * and then out — see `useNavigationFeatures`.
+ */
+export type DestinationFeatures = Readonly<Record<DestinationFeature, boolean>>;
+
+/** Every feature off — the safe answer before anything has been read. */
+export const NO_DESTINATION_FEATURES: DestinationFeatures = { graph: false };
 
 /**
  * Does `prefix` own `path`? True when the path equals the prefix or continues
@@ -103,12 +152,9 @@ export function owns(prefix: string, path: string): boolean {
  * would fail it as "neither owned nor deliberately unowned".
  */
 export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
-  // `/graph` (#373, spec §13) — the knowledge graph's index and entity pages
-  // (and later `/graph/explore`, `/graph/overview`) are reached FROM Home, not
-  // from a tab of their own: the bottom bar is at its four-tab ceiling by
-  // design. `/ask` and `/ask/:conversationId` (#380, spec §21.5) — Ask, the
-  // read-only agent over that graph — are owned here for the same reason.
-  home: ['/', '/graph', '/ask'],
+  // Just the root since #438. `/graph` and `/ask` were owned here between
+  // #373/#380 and #438 — see the file header.
+  home: ['/'],
   // ONE PREFIX EACH SINCE #106. Each owns its whole subtree — `/transcripts`
   // covers the library, `/transcripts/new`, `/transcripts/:id` and
   // `/transcripts/:id/history` (#30, #31, epic #19); `/notes` covers `/notes`,
@@ -122,6 +168,12 @@ export const DESTINATION_ROUTES: Record<DestinationKey, readonly string[]> = {
   // for both halves of the app.
   transcripts: ['/transcripts'],
   notes: ['/notes'],
+  // `/graph` covers the index, `/graph/entities/:id`, `/graph/explore`,
+  // `/graph/overview` and `/graph/imports/:id` (#373–#375, #387); `/ask` covers
+  // `/ask` and `/ask/:conversationId` (#380). Owned here whether or not the
+  // tab is DRAWN: with connected knowledge off the row is hidden, and a user
+  // who reaches one of these pages anyway simply sees no highlighted row.
+  knowledge: ['/graph', '/ask'],
   settings: ['/settings'],
   console: ['/admin'],
 };
@@ -199,10 +251,11 @@ export interface Destination {
    *   - **The bottom bar OMITS it entirely** (`BOTTOM_BAR_DESTINATIONS`). A bar
    *     has no foot either — it IS the foot — so there is nowhere to put a
    *     pinned row that would not read as a fifth peer destination. Console
-   *     stays reachable below `sm` through the avatar menu, which is where a
-   *     phone user reaches every other non-destination control.
+   *     and Settings stay reachable below `sm` through the avatar menu, which
+   *     is where a phone user reaches every other non-destination control.
    *
-   * `console` is the only one today, and the flag exists so no surface has to
+   * `console` was the only one until #438 made `settings` the second, and the
+   * flag exists so no surface has to
    * spell `key === 'console'` in its render. A magic key there would be a
    * second, invisible answer to "what is the admin surface" — the exact
    * split-brain this file's header describes — and it would silently stop
@@ -214,6 +267,13 @@ export interface Destination {
    * bar filters them out; neither reorders what is left.
    */
   pinned?: boolean;
+  /**
+   * A runtime feature that must ALSO be on for this destination to be drawn
+   * (#438). Checked AFTER the permission gate, never instead of it: a
+   * permission is what the API enforces, a feature is whether the deployment
+   * has the surface switched on at all. `knowledge` is the one user today.
+   */
+  requiresFeature?: DestinationFeature;
 }
 
 /**
@@ -229,21 +289,25 @@ export interface Destination {
 export function isDestinationVisible(
   destination: Destination,
   hasPermission: (permission: string) => boolean,
+  features: DestinationFeatures,
 ): boolean {
   if (destination.permission && !hasPermission(destination.permission)) return false;
   if (destination.anyPermission && !destination.anyPermission.some(hasPermission)) return false;
+  // Required, not optional, so no call site can forget it and quietly draw a
+  // feature-gated row for everyone — the `anyPermission` failure above, again.
+  if (destination.requiresFeature && !features[destination.requiresFeature]) return false;
   return true;
 }
 
 /**
- * The five destinations, in navigation order: Home, Transcripts, Notes,
- * Settings, Console.
+ * The six destinations, in navigation order: Home, Transcripts, Notes,
+ * Knowledge, Settings, Console.
  *
  * FOUR NON-PINNED DESTINATIONS IS THE BOTTOM BAR'S CEILING, and since #106 the
  * app sits exactly at it BY DESIGN rather than by coincidence. Five labelled
- * tabs do not fit at 360px; four do. Console is the fifth entry here and the
- * fifth row in the user menu, but it is `pinned` — a mode — so it never enters
- * `BOTTOM_BAR_DESTINATIONS` at all. A fifth NON-PINNED destination is therefore
+ * tabs do not fit at 360px; four do. Settings and Console are the last two
+ * entries here, and both are `pinned` — modes (#106 for Console, #438 for
+ * Settings) — so neither enters `BOTTOM_BAR_DESTINATIONS` at all. A fifth NON-PINNED destination is therefore
  * not an addition but a redesign of the bar (an overflow tab, or labels off);
  * a second pinned one costs nothing here.
  *
@@ -268,6 +332,7 @@ export function isDestinationVisible(
  *   - `system-settings.controller.ts` → `system_settings:read`
  *   - `transcripts.controller.ts`     → `transcripts:read`
  *   - `notes.controller.ts`           → `notes:read`
+ *   - `graph-read.controller.ts`      → `graph:read`
  *
  * `console` is the only destination reachable on EITHER of two permissions (see
  * `anyPermission`), because it is the only one that fronts pages from two
@@ -340,11 +405,31 @@ export const DESTINATIONS: readonly Destination[] = [
     permission: 'notes:read',
   },
   {
+    // Issue #438 — see the file header. ONE PERMISSION, the one every
+    // `/api/graph/*` read and every `/api/ask/*` route enforces, seeded to all
+    // three roles; PLUS the `graph` runtime feature (`ai.graphEnabled`), so a
+    // deployment that has connected knowledge switched off shows no tab.
+    key: 'knowledge',
+    label: 'Knowledge',
+    compactLabel: 'Knowledge',
+    // The same hub glyph the graph surfaces already use (`GraphReviewButton`,
+    // the Organization entity icon), filled to match its sibling rows.
+    Icon: HubIcon,
+    path: '/graph',
+    permission: 'graph:read',
+    requiresFeature: 'graph',
+  },
+  {
     key: 'settings',
     label: 'User Settings',
     compactLabel: 'Settings',
     Icon: SettingsIcon,
     path: '/settings',
+    // A MODE since #438, on #106's Console precedent — see the file header.
+    // Declared BEFORE `console`, so the rail's foot reads Settings then Console:
+    // every user's own settings first, the operator surface only some users
+    // have last, and a non-admin's foot is just Settings under its divider.
+    pinned: true,
   },
   {
     key: 'console',
@@ -370,8 +455,9 @@ export const DESTINATIONS: readonly Destination[] = [
  * statements the same statement. A hand-maintained copy would let a fifth tab
  * appear silently the day someone adds a destination and forgets this file.
  *
- * `BottomNav` still filters this by permission on top — a user sees at most
- * four tabs and possibly fewer.
+ * `BottomNav` still filters this by permission and runtime feature on top — a
+ * user sees at most four tabs and possibly fewer (three with connected
+ * knowledge off).
  */
 export const BOTTOM_BAR_DESTINATIONS: readonly Destination[] = DESTINATIONS.filter(
   (d) => !d.pinned,

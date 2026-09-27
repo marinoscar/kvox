@@ -618,15 +618,16 @@ describe('NavigationRail', () => {
       expect(links).not.toContain('/admin/settings');
     });
 
-    it('adds no orphan divider for a user holding neither system_settings:read nor users:read', () => {
+    it('pins only Settings, under one divider, for a user holding neither system_settings:read nor users:read (#438)', () => {
       setPermissions([], false);
       render(<NavigationRail />);
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      // Only the collapse toggle's own divider remains — no pinned foot
-      // section, so no divider hanging above an empty list. This is the edge
-      // the `pinnedDestinations.length > 0` guard exists for.
-      expect(within(nav).getAllByRole('separator')).toHaveLength(1);
+      // Settings is pinned since #438, so a non-admin's foot is Settings alone:
+      // its divider plus the collapse toggle's. Console is absent, and no
+      // second divider is drawn for it.
+      expect(within(nav).getAllByRole('separator')).toHaveLength(2);
+      expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument();
     });
 

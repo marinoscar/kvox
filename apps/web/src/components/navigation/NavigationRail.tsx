@@ -15,7 +15,7 @@
  *   expanded (≥ lg)  →  expanded, 220px, labelled rows + a collapse toggle
  *
  * Both treatments share one FOOT: the destinations the model marks `pinned`
- * (Console today) sit below a divider at the bottom of the rail, above the
+ * (Settings and Console since #438, in that order) sit below a divider at the bottom of the rail, above the
  * collapse toggle, rather than inline with the content destinations — see the
  * render and `config/destinations.ts` (#105).
  *
@@ -79,6 +79,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useNavigationPrefs } from '../../hooks/useNavigationPrefs';
+import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import {
   DESTINATIONS,
   isDestinationVisible,
@@ -275,6 +276,7 @@ export function NavigationRail() {
   const theme = useTheme();
   const { pathname } = useLocation();
   const { hasPermission } = usePermissions();
+  const { features } = useNavigationFeatures();
   const { railCollapsed, toggleRailCollapsed } = useNavigationPrefs();
 
   // The rail is MOUNTED by `Layout` only at `sm` and up, so this distinguishes
@@ -302,7 +304,7 @@ export function NavigationRail() {
   // `console` is gated on EITHER `system_settings:read` OR `users:read` (#92),
   // and an inline check would have shown that row to everyone.
   const visibleDestinations = DESTINATIONS.filter((destination) =>
-    isDestinationVisible(destination, hasPermission),
+    isDestinationVisible(destination, hasPermission, features),
   );
 
   // TWO GROUPS, ONE MODEL (#105). Console is a MODE, not a peer of the content
