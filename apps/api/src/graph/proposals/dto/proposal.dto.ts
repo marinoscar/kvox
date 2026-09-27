@@ -78,7 +78,7 @@ export type ProposalSummary = z.infer<typeof proposalSummarySchema>;
 
 export const evidenceViewSchema = z.object({
   id: z.guid(),
-  source: z.enum(['segment', 'note']),
+  source: z.enum(['segment', 'note', 'import']).describe('`import` (#387): the row came from an uploaded RDF file — cited to the file itself.'),
   transcriptId: z.guid().nullable(),
   segmentId: z.guid().nullable(),
   segmentRev: z.number().int().nullable(),
@@ -89,6 +89,8 @@ export const evidenceViewSchema = z.object({
   charStart: z.number().int().nullable(),
   charEnd: z.number().int().nullable(),
   quote: z.string(),
+  importObjectId: z.guid().nullable().describe('Import evidence: the stored file the row was imported from.'),
+  sourceIri: z.string().nullable().describe('Import evidence: the node’s IRI in that file.'),
   speakerName: z.string().nullable().describe('Segment evidence: the speaker\'s display name at read time.'),
   stale: z.boolean().describe('The cited text changed since (segment rev or note version moved on), or its source is gone.'),
 });

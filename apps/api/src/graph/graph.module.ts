@@ -153,6 +153,11 @@ import { GraphWriteService } from './write/graph-write.service';
     GraphEvidenceService,
     EntityBriefService,
     EntityDigestEnqueuer,
+    // #387 — `kg.import`: stores the upload, offers attribute definitions,
+    // and refuses an import while the owner's rows await `kg.migrate`.
+    GraphObjectsService,
+    GraphAttributeDefsService,
+    KgMigrateRepository,
   ],
 })
 export class GraphModule {}

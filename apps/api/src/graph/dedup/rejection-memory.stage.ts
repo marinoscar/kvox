@@ -82,7 +82,8 @@ export class RejectionMemoryStage implements ProposalStage, OnModuleInit {
       ...rows.relations.map((r) => ({ ...r, kind: 'relation' as const })),
       ...rows.items.map((r) => ({ ...r, kind: 'item' as const })),
     ].filter((r) => !suppressed.has(r.id) && !r.flags.includes('known'));
-    if (remaining.length > 0) {
+    // An import (#387) has no note, so there is no "rejected before for this note".
+    if (remaining.length > 0 && noteId !== null) {
       const rejectedKeys = await this.rejectedKeysForNote(ctx, noteId);
       for (const row of remaining) {
         if (!rejectedKeys.has(rejectionKey(row.kind, row.payload, rows.entities))) continue;
