@@ -254,9 +254,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -297,9 +295,7 @@
       "aliases": [
         "Felix"
       ],
-      "props": {
-        "title": "CFO"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m14",
         "m23"
@@ -312,9 +308,7 @@
       "aliases": [
         "Hana"
       ],
-      "props": {
-        "title": "Account Director"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m03",
         "m16",
@@ -329,9 +323,7 @@
       "aliases": [
         "Wen"
       ],
-      "props": {
-        "title": "Risk Analyst"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m14",
         "m23"

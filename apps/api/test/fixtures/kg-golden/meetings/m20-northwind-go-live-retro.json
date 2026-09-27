@@ -236,9 +236,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -269,9 +267,7 @@
       "aliases": [
         "Owen"
       ],
-      "props": {
-        "title": "Head of Platform"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m12",
         "m18"
@@ -284,9 +280,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "VP of Operations"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m06",
@@ -302,9 +296,7 @@
         "Tomas Aguilar",
         "Tomás"
       ],
-      "props": {
-        "title": "Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m06",
         "m09",

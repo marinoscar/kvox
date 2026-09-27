@@ -244,9 +244,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -283,9 +281,7 @@
       "aliases": [
         "Grace"
       ],
-      "props": {
-        "title": "COO"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m19"
       ]
@@ -309,9 +305,7 @@
       "aliases": [
         "Kwame"
       ],
-      "props": {
-        "title": "Data Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m11",
         "m14",
@@ -327,9 +321,7 @@
       "aliases": [
         "Ravi"
       ],
-      "props": {
-        "title": "Integration Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m08",

@@ -256,9 +256,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -285,9 +283,7 @@
         "JJ",
         "Jonah Jimenez"
       ],
-      "props": {
-        "title": "Senior Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m05",
@@ -303,9 +299,7 @@
       "aliases": [
         "Marcus"
       ],
-      "props": {
-        "title": "CIO"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m13",
@@ -319,9 +313,7 @@
       "aliases": [
         "Ravi"
       ],
-      "props": {
-        "title": "Integration Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m08",

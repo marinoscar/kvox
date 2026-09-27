@@ -283,9 +283,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m22"
       ]
@@ -297,9 +295,7 @@
       "aliases": [
         "Priya"
       ],
-      "props": {
-        "title": "Engineering Manager"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -309,9 +305,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "VP of Operations"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -573,6 +567,40 @@
             "source": "segment",
             "segmentId": "m01-s003",
             "quote": "I'm an engineer on the warehouse systems team"
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "priya",
+        "to": "larkspur",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s004",
+            "quote": "Priya Raman, engineering manager at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "priya",
+        "to": "larkspur",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Engineering Manager"
+        },
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m01-s004",
+            "quote": "Priya Raman, engineering manager at Larkspur."
           }
         ]
       },

@@ -236,9 +236,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -248,9 +246,7 @@
       "aliases": [
         "Marcus"
       ],
-      "props": {
-        "title": "CIO"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -260,9 +256,7 @@
       "aliases": [
         "Ravi"
       ],
-      "props": {
-        "title": "Integration Lead"
-      },
+      "props": {},
       "attendedFixtureIds": []
     }
   ],

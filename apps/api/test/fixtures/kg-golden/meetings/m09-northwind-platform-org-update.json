@@ -259,9 +259,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -281,9 +279,7 @@
       "aliases": [
         "Lena"
       ],
-      "props": {
-        "title": "Director of Engineering"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -293,9 +289,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "VP of Operations"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m06"
@@ -309,9 +303,7 @@
         "Tomas Aguilar",
         "Tomás"
       ],
-      "props": {
-        "title": "Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m06"
       ]

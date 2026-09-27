@@ -265,9 +265,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -281,9 +279,7 @@
       "aliases": [
         "Elif"
       ],
-      "props": {
-        "title": "Product Owner"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -293,9 +289,7 @@
       "aliases": [
         "Hana"
       ],
-      "props": {
-        "title": "Account Director"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -305,9 +299,7 @@
       "aliases": [
         "Nadia"
       ],
-      "props": {
-        "title": "Product Designer"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -317,9 +309,7 @@
       "aliases": [
         "Priya"
       ],
-      "props": {
-        "title": "Engineering Manager"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01"
       ]
