@@ -171,6 +171,13 @@ export interface GraphEdge {
   valid: GraphValidRange | null;
   confidence: number | null;
   virtual: boolean;
+  /**
+   * The relation's own attribute values, keyed by prop key — e.g. `HAS_ROLE`
+   * `{ title, businessUnit }` (#440/#442). Only declared, non-deprecated,
+   * non-sensitive, non-null props, in declaration order; `{}` otherwise.
+   * Optional here because an older API omits it — read it as `{}` when absent.
+   */
+  props?: Record<string, unknown>;
 }
 
 export interface GraphSlice {
