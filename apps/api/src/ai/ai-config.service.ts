@@ -6,6 +6,7 @@ import { AiSettingsService } from './ai-settings.service';
 import { UserAiCredentialsService } from './user-ai-credentials.service';
 import { AI_TASK_KEYS, type SystemAiValue } from './ai-settings.schema';
 import { chooseTaskModel, taskDefinition } from './ai-task-models';
+import { computeTokenBudget } from '../notes/generation/token-budget';
 import type {
   AiConfigResponse,
   AiConfigModel,
@@ -106,9 +107,9 @@ import type {
 //      mean this fact fails only when the policy names a provider this build
 //      does not implement — and each published model carries a `source` saying
 //      which rank answered, so a client can show an inference as one;
-//   4. the token ceilings are coherent (a `maxOutputTokens` at or above the
-//      smallest permitted model's whole context window leaves no room for
-//      input, so every generation would refuse).
+//   4. the token budget leaves room for input (`computeTokenBudget`'s
+//      `availableInputTokens > 0` — since #436 the same function every request
+//      runs, so a model offered here is one a request would accept).
 //
 // Reporting anything less than all four as "available" moves the failure from a
 // disabled control to a failed generation minutes later — which, here, is a
@@ -228,42 +229,56 @@ export class AiConfigService {
     // implement. `source` below is what tells the picker how much of each
     // number is knowledge and how much is a floor, which is the honest way to
     // publish an inference rather than suppressing it.
-    const models: AiConfigModel[] = policy.providers[providerId].allowedModels
+    const usable: AiConfigModel[] = policy.providers[providerId].allowedModels
       .map((entry) => resolveAllowedModel(entry, modelKnowledgeOf(provider)))
       .filter((model): model is NonNullable<typeof model> => model !== null)
-      .map((model) => ({
+      .map((model) => {
+        // The EFFECTIVE ceilings, computed by the SAME `computeTokenBudget`
+        // every request runs (#436), at the deployment-wide reasoning effort —
+        // so a client never recomputes them and never shows a number the
+        // server would then refuse. `null` policy ceilings mean the model's
+        // own capacity governs.
+        const budget = computeTokenBudget({
+          contextWindowTokens: model.contextWindowTokens,
+          modelMaxOutputTokens: model.maxOutputTokens,
+          policyMaxInputTokens: policy.maxInputTokens,
+          policyMaxOutputTokens: policy.maxOutputTokens,
+          reasoningEffort: policy.reasoningEffort,
+        });
+        return { model, budget };
+      })
+      // Fact 4: a model whose budget leaves no room for input is one every
+      // generation would refuse at the budget check, so it is not offered.
+      .filter(({ budget }) => budget.availableInputTokens > 0)
+      .map(({ model, budget }) => ({
         id: model.id,
         label: model.label,
-        // The EFFECTIVE ceilings, already narrowed by deployment policy, so a
-        // client never has to compute the minimum itself and never shows a
-        // number the server would then refuse.
-        contextWindowTokens: Math.min(
-          model.contextWindowTokens,
-          policy.maxInputTokens + policy.maxOutputTokens,
-        ),
-        maxOutputTokens: Math.min(model.maxOutputTokens, policy.maxOutputTokens),
+        // The model's own window unless a typed input cap binds, in which
+        // case what a request can actually fill: the capped prompt plus the
+        // answer's ceiling.
+        contextWindowTokens:
+          budget.inputSource === 'model'
+            ? model.contextWindowTokens
+            : Math.min(
+                model.contextWindowTokens,
+                budget.availableInputTokens + budget.maxOutputTokens,
+              ),
+        maxOutputTokens: budget.maxOutputTokens,
         // #358: which rank of the catalogue/derivation/floor answered, never
         // an administrator override — see `resolveFeatures`.
         structuredOutput: model.structuredOutput,
         // #359: same ranks, same "never an administrator override".
         toolCalling: model.toolCalling,
-        // ⚠ THE SOURCE DESCRIBES THE MODEL'S OWN NUMBERS, NOT THE NARROWED ONES
+        // ⚠ THE SOURCE DESCRIBES THE MODEL'S OWN NUMBERS, NOT THE BUDGETED ONES
         // ABOVE (#97). Deployment policy always narrows, and it narrows a
         // verified window and an inferred one identically — so re-labelling a
         // capped `catalogue` model as something weaker would tell a user this
         // build is unsure about a number it verified. What this field answers is
-        // "how did we learn this model's size", which the `Math.min` does not
+        // "how did we learn this model's size", which the budget does not
         // change.
         source: model.source,
         derivedFrom: model.derivedFrom,
       }));
-
-    // Fact 4: a model whose effective output ceiling leaves no room for input
-    // is one every generation would refuse at the budget check, so it is not
-    // offered at all.
-    const usable = models.filter(
-      (model) => model.contextWindowTokens > model.maxOutputTokens,
-    );
 
     // The configured default when it survived the intersection, otherwise the
     // first usable model — never a model that is not on the list, which is the

@@ -33,7 +33,11 @@ import {
 import { NoteSourceService } from '../generation/note-source.service';
 import { assemblePrompt, parseTemplateStructure } from '../generation/prompt';
 import { StreamFlusher } from '../generation/stream-flusher';
-import { assertWithinBudget, computeTokenBudget } from '../generation/token-budget';
+import {
+  assertWithinBudget,
+  computeTokenBudget,
+  outputTokensForPrompt,
+} from '../generation/token-budget';
 
 // =============================================================================
 // `note.generate` (issue #49, epic #45) — the heart of the epic
@@ -366,6 +370,9 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       modelMaxOutputTokens: descriptor.maxOutputTokens,
       policyMaxOutputTokens: policy.maxOutputTokens,
       policyMaxInputTokens: policy.maxInputTokens,
+      // #436: the effort THIS call sends, so a typed output cap gets its
+      // reasoning headroom on top.
+      reasoningEffort: policy.reasoningEffort,
     });
 
     const promptTokens = provider.countTokens(
@@ -420,13 +427,16 @@ export class NoteGenerateHandler implements JobHandler, OnModuleInit {
       model: generation.model,
       systemPrompt: prompt.systemPrompt,
       userContent: prompt.userContent,
-      maxOutputTokens: budget.maxOutputTokens,
+      // #436: what the window has left for THIS prompt, never more than the
+      // budget's ceiling — a large source shrinks the answer's allowance
+      // rather than being refused to pay for an unused output reservation.
+      maxOutputTokens: outputTokensForPrompt(budget, promptTokens),
       timeoutMs: policy.requestTimeoutMs,
       // #87. DEPLOYMENT POLICY, passed through unchanged — not a per-note or
-      // per-template choice. ⚠ It does NOT widen `maxOutputTokens` above:
-      // reasoning tokens are billed and counted as output and are drawn from
-      // that same budget, so a higher effort buys thinking out of the note's
-      // own room rather than out of thin air. See `ai.reasoningEffort`.
+      // per-template choice. Reasoning tokens are billed and counted as output;
+      // since #436 the budget above adds this effort's headroom on top of a
+      // typed `maxOutputTokens` cap (bounded by the model's own maximum). See
+      // `ai.reasoningEffort`.
       reasoningEffort: policy.reasoningEffort,
     })) {
       if (event.kind === 'delta') {

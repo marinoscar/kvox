@@ -1178,10 +1178,17 @@ export class SystemSettingsService {
               currentValue.ai.providers.openai.defaultModel,
           },
         },
+        // #436. `!== undefined`, NOT `??`: `null` is a VALUE ("the model's
+        // own maximum"), and a `??` merge would make clearing a cap a silent
+        // no-op — the same trap `provider` above documents.
         maxInputTokens:
-          dto.ai?.maxInputTokens ?? currentValue.ai.maxInputTokens,
+          dto.ai?.maxInputTokens !== undefined
+            ? dto.ai.maxInputTokens
+            : currentValue.ai.maxInputTokens,
         maxOutputTokens:
-          dto.ai?.maxOutputTokens ?? currentValue.ai.maxOutputTokens,
+          dto.ai?.maxOutputTokens !== undefined
+            ? dto.ai.maxOutputTokens
+            : currentValue.ai.maxOutputTokens,
         requestTimeoutMs:
           dto.ai?.requestTimeoutMs ?? currentValue.ai.requestTimeoutMs,
         // #87. A plain `??`: every value of this enum is meaningful and none of

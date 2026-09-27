@@ -34,7 +34,12 @@ import type { RequestUser } from '../../auth/interfaces/authenticated-user.inter
 import { PERMISSIONS } from '../../common/constants/roles.constants';
 import { JobsService } from '../../jobs/jobs.service';
 import { NOTE_NOT_FOUND_MESSAGE, NoteAccessService } from '../../notes/access/note-access.service';
-import { budgetRefusalMessage, computeTokenBudget } from '../../notes/generation/token-budget';
+import {
+  budgetRefusalMessage,
+  computeTokenBudget,
+  outputTokensForPrompt,
+  type TokenBudget,
+} from '../../notes/generation/token-budget';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
 import { KG_EXTRACT_JOB_TYPE, KG_SUBJECT_NOTE } from '../job-types';
@@ -47,10 +52,11 @@ import type {
   RequestExtractionResponse,
   UserGuidance,
 } from './dto/extraction.dto';
-import { buildExtractionContext } from './extraction-context';
+import { buildExtractionContext, type ExtractionContext } from './extraction-context';
 import { ExtractionInputLoader } from './extraction-input.loader';
 import { buildExtractionOutputSchema } from './output-schema';
-import { assembleExtractionPrompt } from './prompt';
+import { assembleExtractionPrompt, type ExtractionPrompt } from './prompt';
+import { extractionRowCaps, type ExtractionRowCaps } from './row-caps';
 
 /** Queue priority (§11): ahead of housekeeping, behind a watched export. */
 export const KG_EXTRACT_PRIORITY = -5;
@@ -93,14 +99,78 @@ export function measurePrompt(
   return resolution.countTokens(`${prompt.systemPrompt}\n${prompt.userContent}\n${JSON.stringify(schema)}`);
 }
 
-/** The budget for one resolution, from the model descriptor and the policy. */
-export function extractionBudget(resolution: Pick<AiModelResolution, 'descriptor' | 'policy'>) {
+/**
+ * The budget for one resolution (#436): the model's OWN limits
+ * (`modelLimits`, falling back to the published descriptor), the deployment's
+ * optional spend caps, an optional per-task answer clamp, and the reasoning
+ * effort this resolution will actually send. A call whose prompt can be large
+ * requests `outputTokensForPrompt(budget, promptTokens)`, not
+ * `budget.maxOutputTokens`.
+ */
+export function extractionBudget(
+  resolution: Pick<AiModelResolution, 'descriptor' | 'policy'> &
+    Partial<Pick<AiModelResolution, 'modelLimits' | 'reasoningEffort'>>,
+  taskMaxOutputTokens?: number,
+): TokenBudget {
+  const limits = resolution.modelLimits ?? resolution.descriptor;
   return computeTokenBudget({
-    contextWindowTokens: resolution.descriptor.contextWindowTokens,
-    modelMaxOutputTokens: resolution.descriptor.maxOutputTokens,
+    contextWindowTokens: limits.contextWindowTokens,
+    modelMaxOutputTokens: limits.maxOutputTokens,
     policyMaxOutputTokens: resolution.policy.maxOutputTokens,
     policyMaxInputTokens: resolution.policy.maxInputTokens,
+    taskMaxOutputTokens,
+    reasoningEffort: resolution.reasoningEffort ?? resolution.policy.reasoningEffort,
   });
+}
+
+/** Everything one extraction call sends, sized together (#435/#436). */
+export interface ExtractionPlan {
+  prompt: ExtractionPrompt;
+  schema: Record<string, unknown>;
+  caps: ExtractionRowCaps;
+  budget: TokenBudget;
+  /** `measurePrompt` over `prompt` + `schema`. */
+  promptTokens: number;
+  /** What the call requests: `outputTokensForPrompt(budget, promptTokens)`. */
+  maxOutputTokens: number;
+}
+
+/**
+ * Plan one extraction call: the budget, the row caps sized from the output
+ * the call will ACTUALLY be given (#435 — the ceiling shrunk to what the
+ * window leaves for this prompt, #436), and the prompt and schema carrying
+ * those caps. The estimate and the job both call this, so what a user is told
+ * a run costs is what it sends. `capsOverride` is the truncation re-ask's
+ * halved caps.
+ */
+export function planExtraction(
+  resolution: Pick<AiModelResolution, 'descriptor' | 'policy' | 'countTokens'> &
+    Partial<Pick<AiModelResolution, 'modelLimits' | 'reasoningEffort'>>,
+  ctx: ExtractionContext,
+  capsOverride?: ExtractionRowCaps,
+): ExtractionPlan {
+  const budget = extractionBudget(resolution);
+  const effort = resolution.reasoningEffort ?? resolution.policy.reasoningEffort;
+
+  const assemble = (caps: ExtractionRowCaps) => {
+    const prompt = assembleExtractionPrompt(ctx, caps);
+    const schema = buildExtractionOutputSchema(ctx, caps);
+    return { caps, prompt, schema, promptTokens: measurePrompt(resolution, prompt, schema) };
+  };
+
+  let planned = assemble(capsOverride ?? extractionRowCaps(budget.maxOutputTokens, effort));
+  const room = outputTokensForPrompt(budget, planned.promptTokens);
+  if (!capsOverride && room < budget.maxOutputTokens) {
+    // A large prompt leaves less than the ceiling: size the rows for what the
+    // call will really get. Only the numbers in the prompt change.
+    planned = assemble(extractionRowCaps(room, effort));
+  }
+
+  return {
+    ...planned,
+    budget,
+    maxOutputTokens: outputTokensForPrompt(budget, planned.promptTokens),
+  };
 }
 
 @Injectable()
@@ -292,17 +362,16 @@ export class GraphExtractionService {
     guidance: UserGuidance | null,
   ): Promise<ExtractionEstimate> {
     const input = await this.loader.load({ userId, noteId: note.id, noteVersion: note.currentVersion, guidance });
-    const ctx = buildExtractionContext(input);
-    const prompt = assembleExtractionPrompt(ctx);
-    const inputTokens = measurePrompt(resolution, prompt, buildExtractionOutputSchema(ctx));
-    const budget = extractionBudget(resolution);
+    const plan = planExtraction(resolution, buildExtractionContext(input));
+    const inputTokens = plan.promptTokens;
     return {
       providerId: resolution.providerId,
       model: resolution.model,
       inputTokens,
-      maxOutputTokens: budget.maxOutputTokens,
-      availableInputTokens: budget.availableInputTokens,
-      fits: inputTokens <= budget.availableInputTokens,
+      // What the run would actually request for THIS prompt (#436).
+      maxOutputTokens: plan.maxOutputTokens,
+      availableInputTokens: plan.budget.availableInputTokens,
+      fits: inputTokens <= plan.budget.availableInputTokens,
       requests: 1,
       keyConfigured: resolution.keyConfigured,
     };

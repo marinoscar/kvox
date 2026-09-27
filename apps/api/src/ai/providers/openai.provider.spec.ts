@@ -1465,6 +1465,31 @@ describe('OpenAiProvider.generateStructured (#358)', () => {
       expect(isTerminalAiError(err)).toBe(true);
     });
 
+    it('#435: a truncated answer carries the STREAM-REPORTED usage — a failed call is still billed', async () => {
+      const { provider } = capturing('structured-length');
+
+      const err = (await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e)) as AiStructuredOutputError;
+
+      expect(err).toBeInstanceOf(AiStructuredOutputError);
+      // The exact usage frame in structured-length.txt.
+      expect(err.usage).toEqual({ promptTokens: 812, completionTokens: 64 });
+    });
+
+    it('#435: a truncated answer with NO usage frame still carries a non-zero ESTIMATE', async () => {
+      const withoutUsage = fixture('structured-length')
+        .split('\n\n')
+        .filter((frame) => !frame.includes('"usage"'))
+        .join('\n\n');
+      const provider = providerWith(async () => streamResponse(oneChunk(withoutUsage)));
+
+      const err = (await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e)) as AiStructuredOutputError;
+
+      expect(err).toBeInstanceOf(AiStructuredOutputError);
+      expect(err.usage).toBeDefined();
+      expect(err.usage!.promptTokens).toBeGreaterThan(0);
+      expect(err.usage!.completionTokens).toBeGreaterThan(0);
+    });
+
     it("a length cut-off is 'truncated' EVEN WHEN the partial text happens to parse", async () => {
       const provider = providerWith(async () =>
         streamResponse(
@@ -1501,6 +1526,16 @@ describe('OpenAiProvider.generateStructured (#358)', () => {
       expect(line).toContain('gpt-4o');
       expect(line).toContain('43 characters');
       expect(line).not.toContain('Ana');
+    });
+
+    it('#435: an invalid_json failure also carries usage — billed the same as any other failed call', async () => {
+      const { provider } = capturing('structured-invalid-json');
+      jest.spyOn((provider as unknown as { logger: { warn: (m: string) => void } }).logger, 'warn').mockImplementation(() => undefined);
+
+      const err = (await provider.generateStructured(ctx(), STRUCTURED).catch((e: unknown) => e)) as AiStructuredOutputError;
+
+      // The exact usage frame in structured-invalid-json.txt.
+      expect(err.usage).toEqual({ promptTokens: 812, completionTokens: 12 });
     });
 
     it('a mid-stream error frame maps to the same class generate() maps it to', async () => {

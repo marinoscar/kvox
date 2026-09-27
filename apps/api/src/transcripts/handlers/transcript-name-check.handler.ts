@@ -24,7 +24,12 @@ import { JobHandlerRegistry } from '../../jobs/job-handler.registry';
 import { ProviderThrottleService } from '../../jobs/provider-throttle.service';
 import { RateLimitError } from '../../jobs/rate-limit.error';
 import { readAllowedModelEntries } from '../../notes/generation/allowed-models';
-import { assertWithinBudget, computeTokenBudget } from '../../notes/generation/token-budget';
+import {
+  assertWithinBudget,
+  computeTokenBudget,
+  outputTokensForPrompt,
+  type TokenBudget,
+} from '../../notes/generation/token-budget';
 import { aiProviderThrottleKey } from '../../notes/job-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TRANSCRIPT_NAME_CHECK_JOB_TYPE } from '../job-types';
@@ -144,7 +149,12 @@ interface CallContext {
   policy: SystemAiValue;
   userId: string;
   availableInputTokens: number;
-  maxOutputTokens: number;
+  /**
+   * The run's budget (#436). Each call requests
+   * `outputTokensForPrompt(budget, promptTokens)` — what the window has left
+   * for THAT prompt — rather than the ceiling as it stands.
+   */
+  budget: TokenBudget;
 }
 
 /** Running totals for one run. */
@@ -412,6 +422,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
       modelMaxOutputTokens: descriptor.maxOutputTokens,
       policyMaxOutputTokens: policy.maxOutputTokens,
       policyMaxInputTokens: policy.maxInputTokens,
+      reasoningEffort: policy.reasoningEffort,
     });
 
     return {
@@ -421,7 +432,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
       policy,
       userId,
       availableInputTokens: budget.availableInputTokens,
-      maxOutputTokens: budget.maxOutputTokens,
+      budget,
     };
   }
 
@@ -550,7 +561,7 @@ export class TranscriptNameCheckHandler implements JobHandler, OnModuleInit {
       model: call.model,
       systemPrompt: prompt.systemPrompt,
       userContent: prompt.userContent,
-      maxOutputTokens: call.maxOutputTokens,
+      maxOutputTokens: outputTokensForPrompt(call.budget, promptCount),
       timeoutMs: call.policy.requestTimeoutMs,
       reasoningEffort: call.policy.reasoningEffort,
       responseFormat: 'json',

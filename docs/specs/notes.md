@@ -952,7 +952,10 @@ and `GET /api/ai/config`'s per-caller `taskModels`. Its rank order:
    nothing to run on;
 5. the task's own `reasoningEffort` applies only when the chosen model *is*
    the administrator's configured task model; every other rank uses the
-   deployment's `ai.reasoningEffort`.
+   deployment's `ai.reasoningEffort`. Whichever effort applies is the one the
+   caller passes into §3.3's `computeTokenBudget` as `reasoningEffort`, so its
+   headroom is added on top of whatever finite output ceiling is in play for
+   that call, never a separate figure.
 
 **Capability requirement**, checked at both save time and run time:
 
@@ -1086,34 +1089,102 @@ that fixed order**:
 
 ### 3.3 The token budget, and refusing early with a number
 
-`apps/api/src/notes/prompt/token-budget.ts`. The input budget for a given
-model is `model.contextWindowTokens - requestedMaxOutputTokens - safetyMarginTokens`
-(a fixed 500-token margin, covering the few tokens OpenAI's own message
-framing adds beyond the literal text). `countTokens` (§2.1) measures the
-assembled `systemPrompt + userContent`. `model` here is `resolveAllowedModel`'s
-output (§2.5), not a direct build-catalogue lookup — since #78 a permitted
-model may carry its own `contextWindowTokens`/`maxOutputTokens` on its
-`allowedModels` entry, and every caller of this budget (the request-time
-check below, the job's re-check, and the config probe) resolves through the
-same function so none of them can disagree about a given model's window.
+`apps/api/src/notes/generation/token-budget.ts`. `computeTokenBudget` is pure
+and takes the model's own `contextWindowTokens`/`maxOutputTokens`
+(`resolveAllowedModel`'s output, §2.5 — since #78 a permitted model may carry
+its own numbers on its `allowedModels` entry, and every caller resolves
+through that one function so none of them can disagree about a given model's
+window) plus the deployment's policy (`ai.maxInputTokens`/`maxOutputTokens`),
+an optional per-task clamp, and the reasoning effort the call will actually
+send. `countTokens` (§2.1) measures the assembled `systemPrompt +
+userContent`.
 
-**On a reasoning model, `requestedMaxOutputTokens` bounds thinking and the
-answer together, never the answer alone (#87).** `ai.reasoningEffort`
-(§2.5's sibling field in `ai-settings.schema.ts`) tells OpenAI how many
-tokens to spend deliberating before it writes anything the user sees — drawn
-from the *same* `maxOutputTokens` ceiling this budget already subtracts
-above for input purposes, never a separate allowance. At `'high'` or
-`'xhigh'` against the shipping `maxOutputTokens` of 16,384, a generation can
-spend most of that ceiling thinking and return a short or truncated note.
-This is not a case the "refuse early with a number" discipline below can
-catch: the provider reports no intended reasoning-token spend in advance, so
-there is nothing to check before the request is sent — the failure surfaces
-only after the fact, as an ordinary `length` finish reason indistinguishable
-from any other truncation. The fix is an administrator lowering
-`reasoningEffort` or raising `maxOutputTokens` deliberately — the schema
-field's own comment on `reasoningEffort` is explicit that raising the effort
-must never do this automatically — not a request-time refusal, because there
-is no number here to refuse with.
+**Decided in #436 — nullable policy caps, a demand-driven split, and
+reasoning headroom added on top:**
+
+- **`ai.maxInputTokens`/`ai.maxOutputTokens` are `number | null`, default
+  `null`.** `null` means "the selected model's own maximum governs"; a typed
+  number is an administrator's deliberate *spend cap* on one request, never a
+  default nobody chose. Before #436 both fields always carried a number (the
+  shipped defaults were 100,000 / 16,384), so every request was governed by a
+  ceiling an administrator never actually set — and a fixed 16,384-token
+  output reservation cut a note's available input by exactly that much even
+  though most answers use a tenth of it, while also being the ceiling that cut
+  structured graph extraction off mid-answer (#435, §6 of `ontology.md`).
+- **Unknown model capacity keeps the conservative floor, and says so.** A
+  model whose numbers resolve with `source: 'default'` (§2.5's five-rank
+  chain found nothing better) is never guessed upward — the floor is kept,
+  budgeted against exactly like any other number, and surfaced: `GET
+  /api/ai-settings`'s `effectiveLimits` and `GET /api/ai/config`'s per-model
+  `source` both name it, and the fix is an administrator typing the model's
+  real numbers onto its `allowedModels` entry, not a rejection.
+- **The split is demand-driven, not a fixed reservation.** Sizing the input
+  budget no longer subtracts the *whole* output ceiling up front (which, with
+  a typed cap gone, could be a model's entire 128,000-token maximum). It holds
+  back only a reserve — `OUTPUT_RESERVE_TOKENS` (32,768), or the output
+  ceiling itself when smaller — and the completion actually **requested** for
+  one call is computed afterward, from the real prompt, by
+  `outputTokensForPrompt(budget, promptTokens)`: the ceiling, shrunk to
+  whatever the context window has left once that prompt is in it. Every call
+  site whose prompt can be large — note generation, graph extraction, the
+  transcript name-check's per-call budget — sends
+  `outputTokensForPrompt(budget, promptTokens)` rather than
+  `budget.maxOutputTokens` directly; a task with a small, fixed answer (Ask,
+  adjudication, the entity digest, retitling) keeps its own task clamp
+  (`taskMaxOutputTokens` on `BudgetInput`) instead.
+- **Reasoning headroom is coupled to the output cap, added on top of it,
+  automatically.** `REASONING_HEADROOM_TOKENS` (`none: 0, low: 4_096,
+  medium: 16_384, high: 32_768, xhigh: 65_536`) names, per effort, how many
+  extra output tokens a call at that effort may spend thinking beyond a
+  *finite* answer ceiling — a typed `ai.maxOutputTokens` or a task clamp —
+  bounded above by the model's own maximum, so raising the effort can no
+  longer silently eat the answer's own share the way it could before #436 —
+  before this change an effort's thinking tokens were drawn from the *same*
+  fixed `maxOutputTokens` ceiling the answer needed, with no separate
+  allowance, so `'high'`/`'xhigh'` against the old shipped default of 16,384
+  could spend most of it thinking and return a short or truncated note, with
+  no way to check for it before the request was sent (the provider reports no
+  intended reasoning spend in advance). With **no** finite ceiling in play (both the policy cap and
+  any task clamp are `null`/absent) the model's own maximum already covers
+  reasoning, so no headroom is added on top of it. Every call site passes the
+  effort it will actually send — the deployment's `ai.reasoningEffort`, or a
+  task's own override when one applies (§2.8) — as `BudgetInput.reasoningEffort`.
+- **The cost of removing the ceiling is stated plainly, not hidden.** With
+  `ai.maxOutputTokens` at the new default of `null`, a single runaway
+  completion can now bill up to the selected model's own maximum rather than
+  a fixed 16,384 — this is the direct, intended trade of "the model's own
+  capacity governs by default." An administrator who wants a hard spend cap
+  on the answer types a number into `ai.maxOutputTokens` deliberately; there
+  is no other lever.
+
+**Migration `20260927050000_ai_token_limits_follow_model`** clears exactly the
+two old shipped defaults on upgrade: a `global` row whose stored
+`ai.maxOutputTokens` is exactly `16384` or `ai.maxInputTokens` is exactly
+`100000` has that field set to `null`, since a value equal to the shipped
+default was never a deliberate choice — the admin settings form re-sends the
+whole `ai` object on every save, so the default ends up persisted even when
+nobody touched it. Any other number is left untouched: it is evidence of a
+deliberate cap and the migration must never silently widen or narrow it.
+
+`computeTokenBudget`'s exact arithmetic:
+
+```
+answerCeiling = min(policyMaxOutputTokens ?? ∞, taskMaxOutputTokens ?? ∞)
+outputCeiling = finite(answerCeiling)
+                  ? min(modelMaxOutputTokens, answerCeiling + REASONING_HEADROOM_TOKENS[effort])
+                  : modelMaxOutputTokens
+outputReserve = min(outputCeiling, OUTPUT_RESERVE_TOKENS)
+availableInputTokens = max(0, min(contextWindowTokens − outputReserve − SAFETY_MARGIN_TOKENS,
+                                   policyMaxInputTokens ?? ∞))
+maxOutputTokens = max(0, outputCeiling)
+```
+
+`SAFETY_MARGIN_TOKENS` (500) is unchanged from before #436: the fixed margin
+for the framing a provider adds beyond the literal text. `outputSource`/
+`inputSource` on the returned `TokenBudget` name which bound decided each
+number (`'policy' | 'task' | 'model'` and `'policy' | 'model'`
+respectively) — the admin `effectiveLimits` view and `GET /api/ai/config`
+both read these rather than recomputing the comparison themselves.
 
 **If the assembled prompt exceeds the budget, the request is refused before
 anything is created — no note, no draft row, no job.** `POST /api/notes` and
