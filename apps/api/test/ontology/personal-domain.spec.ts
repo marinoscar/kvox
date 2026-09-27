@@ -120,8 +120,10 @@ describe('the personal domain (#383)', () => {
     });
 
     it('is a minor bump with a CHANGELOG entry and every new key shipped', () => {
-      expect(ONTOLOGY_VERSION).toBe('1.1.0');
-      expect(CHANGELOG[CHANGELOG.length - 1].changes.join(' ')).toMatch(/personal domain/);
+      // 1.1.0 introduced it; later bumps (1.2.0, #440) must not have removed its entry.
+      const entry = CHANGELOG.find((e) => e.version === '1.1.0');
+      expect(entry?.changes.join(' ')).toMatch(/personal domain/);
+      expect(ONTOLOGY_VERSION.localeCompare('1.1.0', undefined, { numeric: true })).toBeGreaterThanOrEqual(0);
       for (const key of [...PERSONAL_TYPES, ...PERSONAL_RELATIONS, 'Interest.category', 'Trip.destination', 'Milestone.kind']) {
         expect(SHIPPED_KEYS).toContain(key);
       }
@@ -134,7 +136,24 @@ describe('the personal domain (#383)', () => {
       expect(now.version).toBe(ONTOLOGY_VERSION);
       expect(now.domains).toEqual([...PAYLOAD_1_0_0.domains, { key: 'personal', label: 'Personal life', enabled: false, alwaysOn: false }]);
 
-      const comparable = { ...now, version: PAYLOAD_1_0_0.version, domains: now.domains.filter((d) => d.key !== 'personal') };
+      // 1.2.0 (#440) changed Person's work mixin — company/businessUnit added,
+      // title relabelled "Role" — and nothing else. Undo exactly that change on
+      // the current payload, then require byte identity with the committed
+      // 1.0.0 copy, so any OTHER drift still fails here.
+      const person100 = PAYLOAD_1_0_0.entityTypes.find((t) => t.key === 'Person')!;
+      const personNow = now.entityTypes.find((t) => t.key === 'Person')!;
+      expect(personNow.attributes.map((a) => a.key)).toEqual(['company', 'businessUnit', 'title']);
+      const titleNow = personNow.attributes.find((a) => a.key === 'title')!;
+      const title100 = person100.attributes.find((a) => a.key === 'title')!;
+      expect({ ...titleNow, label: title100.label, description: title100.description, sortOrder: title100.sortOrder }).toEqual(title100);
+      const entityTypes = now.entityTypes.map((t) => (t.key === 'Person' ? { ...t, attributes: person100.attributes } : t));
+
+      const comparable = {
+        ...now,
+        version: PAYLOAD_1_0_0.version,
+        domains: now.domains.filter((d) => d.key !== 'personal'),
+        entityTypes,
+      };
       expect(JSON.stringify(comparable)).toBe(JSON.stringify(PAYLOAD_1_0_0));
     });
 

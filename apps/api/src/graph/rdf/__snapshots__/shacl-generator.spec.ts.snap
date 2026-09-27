@@ -521,7 +521,17 @@ kv:PersonShape
     ], [
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        sh:name "Job title" ;
+        sh:name "Business unit" ;
+        sh:path kv:Person.businessUnit
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Company" ;
+        sh:path kv:Person.company
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Role" ;
         sh:path schema:jobTitle
     ], [
         sh:datatype xsd:string ;

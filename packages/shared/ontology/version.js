@@ -31,5 +31,12 @@ exports.CHANGELOG = Object.freeze([
             'relation `sensitivityDefault` (personal-domain relations are `personal`)',
         ]),
     }),
+    Object.freeze({
+        version: '1.2.0',
+        date: '2026-09-27',
+        changes: Object.freeze([
+            'work: Person.company and Person.businessUnit attributes; Person.title relabelled "Role" (#440)',
+        ]),
+    }),
 ]);
-exports.ONTOLOGY_VERSION = '1.1.0';
+exports.ONTOLOGY_VERSION = '1.2.0';

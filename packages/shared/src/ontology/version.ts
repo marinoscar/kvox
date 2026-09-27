@@ -36,6 +36,13 @@ export const CHANGELOG: readonly OntologyChangelogEntry[] = Object.freeze([
       'relation `sensitivityDefault` (personal-domain relations are `personal`)',
     ]) as string[],
   }),
+  Object.freeze({
+    version: '1.2.0',
+    date: '2026-09-27',
+    changes: Object.freeze([
+      'work: Person.company and Person.businessUnit attributes; Person.title relabelled "Role" (#440)',
+    ]) as string[],
+  }),
 ]);
 
-export const ONTOLOGY_VERSION: string = '1.1.0';
+export const ONTOLOGY_VERSION: string = '1.2.0';
