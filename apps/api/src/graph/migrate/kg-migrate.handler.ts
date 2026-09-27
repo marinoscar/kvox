@@ -22,7 +22,10 @@
 //      applied migration's `to` — in ONE `UPDATE … FROM (VALUES …)` per batch,
 //      in a transaction. A row failing validation is left untouched and counted
 //      `needsAttention` (its id logged, never its props). A row no step changes
-//      is not touched at all: its version is provenance (§17.4).
+//      is not touched at all: its version is provenance (§17.4). (A row the
+//      predicate DID select but whose steps turned out to be no-ops — a coerce
+//      of a value already in the target shape — is re-versioned, props
+//      untouched, so it stops being a candidate.)
 //
 // Then any `draft` proposal older than the newest MAJOR migration gets
 // `stale_ontology` on each item (a #363 `PROPOSAL_ITEM_FLAGS` value; commit
@@ -240,7 +243,14 @@ export class KgMigrateHandler implements JobHandler, OnModuleInit {
     const type = table === 'item' ? itemTypeKey(this.definition.registry, row.kind ?? '') : row.type;
     if (type === undefined || type === null) return 'invalid';
 
-    const pending = migrationsBetween(row.ontologyVersion, targetVersion, this.definition.migrations);
+    let pending;
+    try {
+      pending = migrationsBetween(row.ontologyVersion, targetVersion, this.definition.migrations);
+    } catch {
+      // A malformed stored version (the SQL predicate already excludes one;
+      // this is the belt to its braces) is a row for a person to look at.
+      return 'invalid';
+    }
     if (pending.length === 0) return 'unchanged';
 
     const input: MigratableRow = {
@@ -251,9 +261,14 @@ export class KgMigrateHandler implements JobHandler, OnModuleInit {
       ontologyVersion: row.ontologyVersion,
     };
     const applied = applyMigrationSteps(input, pending);
-    if (!applied.changed) return 'unchanged';
-
     if (!this.valid(table, applied.row, row.status, schema)) return 'invalid';
+
+    // A row the candidate predicate selected IS one a pending step touches. If
+    // the steps left it as it was (a `coerce_attribute` whose value was already
+    // in the target shape), it has still been through those migrations: its
+    // version moves on, props untouched. Leaving it would make it a candidate
+    // forever — rescanned on every run and re-enqueued by every hourly tick.
+    const ontologyVersion = applied.changed ? applied.row.ontologyVersion : pending[pending.length - 1].to;
 
     return {
       update: {
@@ -263,7 +278,7 @@ export class KgMigrateHandler implements JobHandler, OnModuleInit {
           type: table === 'item' ? null : applied.row.type,
           status: table === 'item' ? (applied.row.status ?? null) : null,
           props: applied.row.props,
-          ontologyVersion: applied.row.ontologyVersion,
+          ontologyVersion,
         },
       },
       dropped: applied.dropped.length,

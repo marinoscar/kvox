@@ -124,9 +124,17 @@ function itemKindOf(registry: OntologyRegistry, typeKey: string): KgItemKind | u
 // SQL candidate predicates
 // -----------------------------------------------------------------------------
 
+/**
+ * `ontology_version < version`, semver as `int[]`. A malformed stored version
+ * is never a candidate: the CASE keeps the cast from ever seeing it (a plain
+ * `AND` would not — PostgreSQL does not promise to evaluate the regex first),
+ * so one bad row can never fail an owner's whole job on every attempt.
+ */
 function versionBelow(version: string): Prisma.Sql {
   const [a, b, c] = parseOntologyVersion(version);
-  return Prisma.sql`string_to_array(ontology_version, '.')::int[] < ARRAY[${a}::int, ${b}::int, ${c}::int]`;
+  return Prisma.sql`(CASE WHEN ontology_version ~ '^[0-9]+[.][0-9]+[.][0-9]+$'
+    THEN string_to_array(ontology_version, '.')::int[] < ARRAY[${a}::int, ${b}::int, ${c}::int]
+    ELSE false END)`;
 }
 
 function hasProp(key: string): Prisma.Sql {
