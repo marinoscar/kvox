@@ -197,30 +197,42 @@ describe('assembleExtractionPrompt (#363)', () => {
     expect(CONTEXT_RULE).toContain("prefer the Context's spelling of a name over the transcript's");
   });
 
-  it('asks for company, business unit and role, and WORKS_FOR, when the offered Person carries them', () => {
+  it('records the employer as WORKS_FOR and the role and unit as HAS_ROLE — never as Person attributes', () => {
     const { systemPrompt } = assembleExtractionPrompt(makeContext());
     expect(systemPrompt).toContain(
-      "11. For each person, fill `company`, `businessUnit` and `title` (role) whenever the Context, note or transcript states them, and propose WORKS_FOR from the person to that company's Organization.",
+      "11. Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with `title` and `businessUnit` whenever the Context, note or transcript states them — " +
+        'e.g. "Joe, VP of Supply Chain at Microsoft" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft {title: "VP", businessUnit: "Supply Chain"}.',
     );
+    // A company, unit or role is never a Person attribute (#440): the retired
+    // Person.title is not offered, and nothing asks for a `company`.
+    expect(systemPrompt).not.toContain('`company`');
     // Without a Context the rule stays (and takes number 10), naming only the note and transcript.
     expect(assembleExtractionPrompt(noContext()).systemPrompt).toContain(
-      "10. For each person, fill `company`, `businessUnit` and `title` (role) whenever the note or transcript states them, and propose WORKS_FOR from the person to that company's Organization.",
+      '10. Record each person\'s employer as WORKS_FOR from the person to that company\'s Organization (create the Organization if it is not a known entity), and their role and business unit there as HAS_ROLE to the same Organization with `title` and `businessUnit` whenever the note or transcript states them — ',
     );
   });
 
-  it('derives the affiliation rule from the offered schema, never a hardcoded list', () => {
-    // `core` alone: Person carries none of the three, so there is no rule.
+  it('derives the affiliation rule from the offered relations, never a hardcoded list', () => {
+    const only = (relationTypes: string[]) =>
+      affiliationRule(makeContext({ guidance: { pinnedEntityIds: [], relationTypes, instructions: '' } }));
+    // `core` alone offers neither relation: no rule.
     expect(affiliationRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
-    // Person excluded by guidance: no rule.
+    // Neither relation offered by guidance: no rule.
+    expect(only(['ATTENDED'])).toBeNull();
+    // Person excluded by guidance: neither relation keeps a Person endpoint, so no rule.
     expect(
       affiliationRule(makeContext({ guidance: { pinnedEntityIds: [], entityTypes: ['Organization'], instructions: '' } })),
     ).toBeNull();
-    // WORKS_FOR excluded by guidance: the attributes are still asked for, the relation is not.
-    const rule = affiliationRule(
-      makeContext({ guidance: { pinnedEntityIds: [], relationTypes: ['ATTENDED'], instructions: '' } }),
+    // WORKS_FOR alone: the employer only.
+    expect(only(['WORKS_FOR'])).toBe(
+      "Record each person's employer as WORKS_FOR from the person to that company's Organization (create the Organization if it is not a known entity) whenever the Context, note or transcript states it — e.g. \"Joe works for Microsoft\" is Joe WORKS_FOR Microsoft.",
     );
-    expect(rule).toContain('`company`, `businessUnit` and `title` (role)');
-    expect(rule).not.toContain('WORKS_FOR');
+    // HAS_ROLE alone: the role and unit only.
+    expect(only(['HAS_ROLE'])).toBe(
+      "Record each person's role and business unit at a company as HAS_ROLE from the person to that company's Organization (create the Organization if it is not a known entity), with `title` and `businessUnit` whenever the Context, note or transcript states them — " +
+        'e.g. "Joe, VP of Supply Chain at Microsoft" is Joe HAS_ROLE Microsoft {title: "VP", businessUnit: "Supply Chain"}.',
+    );
+    expect(only(['WORKS_FOR', 'HAS_ROLE'])).toContain('Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft');
   });
 
   it('keeps the rule numbers sequential whichever optional rules are present', () => {
@@ -233,7 +245,7 @@ describe('assembleExtractionPrompt (#363)', () => {
         .map(Number);
       expect(rules).toEqual(rules.map((_, i) => i + 1));
     }
-    // With no Context and no affiliation attributes, the row cap keeps its #435 number.
+    // With no Context and no affiliation relations, the row cap keeps its #435 number.
     expect(assembleExtractionPrompt(noContext(schemaFor(['core'])), caps).systemPrompt).toContain('\n10. Propose at most');
   });
 

@@ -100,7 +100,8 @@ describe('validateExtraction (#363)', () => {
         type: 'Person',
         label: 'Oscar',
         aliases: [],
-        props: { company: 'EY', businessUnit: 'Consulting', title: 'Managing Director' },
+        // A company, unit and role are relations (#440), never Person props.
+        props: {},
         evidence: [{ source: 'C', quote: 'oscar – ey,  consulting, Managing Director' }],
       });
       const withContext = (contextText: string | null) => {
@@ -115,9 +116,7 @@ describe('validateExtraction (#363)', () => {
         const result = ok(validateExtraction(answer, withContext(`  ${CONTEXT}\n`)));
         const row = byRef(result.rows, 'e2')!;
         expect(row).toBeDefined();
-        expect(row.payload).toEqual(
-          expect.objectContaining({ props: { company: 'EY', businessUnit: 'Consulting', title: 'Managing Director' } }),
-        );
+        expect(row.payload).toEqual(expect.objectContaining({ props: {} }));
         expect(row.evidence).toEqual([
           {
             source: 'note',
@@ -223,9 +222,21 @@ describe('validateExtraction (#363)', () => {
     });
 
     it('keeps only stated props (null means "not stated")', () => {
-      const result = ok(validateExtraction(goodAnswer(), makeContext()));
+      const answer = goodAnswer();
+      // A role is a HAS_ROLE prop (#440), never a Person attribute.
+      answer.relations[0] = { ...answer.relations[0], type: 'HAS_ROLE', props: { title: 'VP of Operations', businessUnit: null } };
+      const result = ok(validateExtraction(answer, makeContext()));
       expect(byRef(result.rows, 'e1')!.payload).toEqual(expect.objectContaining({ props: {} }));
-      expect(byRef(result.rows, 'k1')!.payload).toEqual(expect.objectContaining({ props: { title: 'VP of Operations' } }));
+      const role = result.rows.find((r) => r.kind === 'relation')!;
+      expect(role.payload).toEqual(expect.objectContaining({ type: 'HAS_ROLE', props: { title: 'VP of Operations' } }));
+    });
+
+    it('a retired Person attribute (title, deprecated in 1.2.0) is not extractable, so it is invalid', () => {
+      const answer = goodAnswer();
+      (answer.entities[0].props as Record<string, unknown>).title = 'VP of Operations';
+      const result = ok(validateExtraction(answer, makeContext()));
+      expect(result.stats.dropped.invalid).toBeGreaterThanOrEqual(1);
+      expect(byRef(result.rows, 'k1')).toBeUndefined();
     });
 
     it('an endpoint of the wrong type is invalid', () => {
@@ -352,7 +363,7 @@ describe('addDeterministicRows (#363)', () => {
     const input = { speakers: [{ id: IDS.spkA, label: 'A', displayName: 'Tomás Aguilar', personEntityId: null }] };
     const ctx = makeContext(input);
     const answer = goodAnswer();
-    answer.entities.push({ ref: 'e2', type: 'Person', label: 'Tomás Aguilar', aliases: [], props: { title: null }, evidence: [{ source: 's1', quote: 'Hi everyone' }] });
+    answer.entities.push({ ref: 'e2', type: 'Person', label: 'Tomás Aguilar', aliases: [], props: {}, evidence: [{ source: 's1', quote: 'Hi everyone' }] });
     const result = addDeterministicRows(ctx, ok(validateExtraction(answer, ctx)));
     const attended = result.rows.filter((r) => r.kind === 'relation' && r.payload.type === 'ATTENDED');
     expect(attended.map((r) => (r.payload as { from: unknown }).from)).toEqual([{ ref: 'e2' }]);

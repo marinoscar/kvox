@@ -90,29 +90,40 @@ export function rowCapsRule(ctx: ExtractionContext, caps: ExtractionRowCaps): st
   return `Propose at most ${list}. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.`;
 }
 
-/** Person attributes the affiliation rule (#440) asks for, in this order. */
-const AFFILIATION_ATTRIBUTES = ['company', 'businessUnit', 'title'] as const;
-
 /**
- * The affiliation rule (#440): which of Person's `company`/`businessUnit`/
- * `title` the offered schema carries, and WORKS_FOR when it is offered from a
- * Person to an Organization. Null when Person offers none of the three.
+ * The affiliation rule (#440): a person's employer is recorded ONLY as
+ * WORKS_FOR from the Person to an Organization, and their role and business
+ * unit there ONLY as HAS_ROLE to the same Organization (`title`, plus
+ * `businessUnit` when HAS_ROLE carries it) — never as Person attributes.
+ * Names only what the offered schema carries (Person→Organization for either
+ * relation); null when neither relation is offered.
  */
 export function affiliationRule(ctx: ExtractionContext): string | null {
-  const person = ctx.offered.entityTypes.find((t) => t.key === 'Person');
-  if (!person) return null;
-  const offered = new Set(offeredAttributes(person.attributes).map((a) => a.key));
-  const keys = AFFILIATION_ATTRIBUTES.filter((k) => offered.has(k));
-  if (keys.length === 0) return null;
-  const named = keys.map((k) => (k === 'title' ? '`title` (role)' : `\`${k}\``));
-  const list = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}` : named[0];
+  const personToOrg = (key: string) =>
+    ctx.offered.relationTypes.find((r) => r.type.key === key && r.from.includes('Person') && r.to.includes('Organization'));
+  const worksFor = personToOrg('WORKS_FOR');
+  const hasRole = personToOrg('HAS_ROLE');
+  if (!worksFor && !hasRole) return null;
   const sources = offeredContextText(ctx.note.contextText) !== null ? 'the Context, note or transcript' : 'the note or transcript';
-  const worksFor = ctx.offered.relationTypes.find(
-    (r) => r.type.key === 'WORKS_FOR' && r.from.includes('Person') && r.to.includes('Organization'),
+  const unit = hasRole !== undefined && offeredAttributes(hasRole.type.props).some((a) => a.key === 'businessUnit');
+  const quoted = unit ? 'Joe, VP of Supply Chain at Microsoft' : 'Joe, VP at Microsoft';
+  const roleProps = unit ? '{title: "VP", businessUnit: "Supply Chain"}' : '{title: "VP"}';
+  const create = '(create the Organization if it is not a known entity)';
+  const roleWhat = unit ? 'role and business unit' : 'role';
+  const roleHow = unit ? '`title` and `businessUnit`' : '`title`';
+  if (worksFor && hasRole) {
+    return (
+      `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create}, and their ${roleWhat} there as HAS_ROLE to the same Organization with ${roleHow} whenever ${sources} states them — ` +
+      `e.g. "${quoted}" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft ${roleProps}.`
+    );
+  }
+  if (worksFor) {
+    return `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create} whenever ${sources} states it — e.g. "Joe works for Microsoft" is Joe WORKS_FOR Microsoft.`;
+  }
+  return (
+    `Record each person's ${roleWhat} at a company as HAS_ROLE from the person to that company's Organization ${create}, with ${roleHow} whenever ${sources} states them — ` +
+    `e.g. "${quoted}" is Joe HAS_ROLE Microsoft ${roleProps}.`
   );
-  const relation =
-    worksFor && offered.has('company') ? ", and propose WORKS_FOR from the person to that company's Organization" : '';
-  return `For each person, fill ${list} whenever ${sources} states them${relation}.`;
 }
 
 function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {

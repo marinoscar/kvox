@@ -101,6 +101,24 @@ describe('proposal view mapper', () => {
       expect(d).toEqual({ title: 'Sarah Chen → works for → Northwind Robotics', subtitle: 'Works for · since 2019' });
     });
 
+    it('relation: a HAS_ROLE subtitle carries the role and, when stated, the business unit (#440)', () => {
+      const d = displayOf(
+        'relation',
+        {
+          type: 'HAS_ROLE',
+          from: { entityId: SARAH },
+          to: { ref: 'e2' },
+          props: { title: 'VP', businessUnit: 'Supply Chain' },
+          validFrom: null,
+          validTo: null,
+          precision: 'unknown',
+        },
+        refs,
+        lookups(),
+      );
+      expect(d.subtitle?.split(' · ').slice(1, 3)).toEqual(['VP', 'Supply Chain']);
+    });
+
     it('commitment: owner and due date', () => {
       const d = displayOf(
         'item',
