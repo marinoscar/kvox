@@ -5,6 +5,13 @@ export interface EffectiveAttributePayload {
     label: string;
     kind: AttributeKind;
     required: boolean;
+    /**
+     * Present (and `true`) only on a relation prop declared `identity: true`
+     * (#440): it takes part in the relation's identity, a null/absent value
+     * matching anything. Omitted rather than `false` so every other attribute's
+     * payload is unchanged by the flag's existence.
+     */
+    identity?: true;
     list: boolean;
     options: AttributeOptions | null;
     extractable: boolean;

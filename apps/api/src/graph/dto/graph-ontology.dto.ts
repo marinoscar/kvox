@@ -61,6 +61,12 @@ export const graphOntologyAttributeSchema = z
     label: z.string().describe('Human label for a form field.'),
     kind: z.enum(ATTRIBUTE_KINDS).describe('The value kind; drives the form control and validation.'),
     required: z.boolean().describe('Whether a value is required. Always false for a user attribute.'),
+    identity: z
+      .literal(true)
+      .optional()
+      .describe(
+        "Present (always `true`) only on a relation prop that takes part in the relation's identity alongside its required props, with a null/absent value matching anything — `HAS_ROLE.businessUnit`: a unit change is a new role, an omitted unit restates the known one. Absent otherwise.",
+      ),
     list: z.boolean().describe('Whether the value is a list of `kind`. Always false for a user attribute.'),
     options: attributeOptionsSchema.nullable().describe('Kind-specific options, or null when the kind has none.'),
     extractable: z.boolean().describe('Whether extraction may propose a value for this attribute.'),

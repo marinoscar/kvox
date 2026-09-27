@@ -250,7 +250,7 @@ export function displayOf(
       return { title: str(effective.title) ?? str(effective.statement) ?? '(untitled)', subtitle: joinParts(parts) };
     }
     case 'closing': {
-      // #365's copy contract: `Closes: {fromLabel} {relation label} {toLabel}{, as roleTitle},
+      // #365's copy contract: `Closes: {fromLabel} {relation label} {toLabel}{, as roleTitle}{, roleBusinessUnit},
       // {previousValid.from at its precision} → {closeAt at its precision}`.
       const relationType = String(effective.relationType ?? '');
       const label = relationLabel(lookups, relationType).toLowerCase();
@@ -259,7 +259,9 @@ export function displayOf(
       const prevPrecision = typeof previous.precision === 'string' ? previous.precision : 'unknown';
       const closeAt = str(effective.closeAt);
       const closePrecision = typeof effective.precision === 'string' ? effective.precision : 'day';
-      const role = str(effective.roleTitle);
+      const title = str(effective.roleTitle);
+      const unit = str(effective.roleBusinessUnit);
+      const role = title && unit ? `${title}, ${unit}` : title;
       const fromText = prevFrom && prevPrecision !== 'unknown' ? formatDateAtPrecision(prevFrom, prevPrecision) : '…';
       const toText = closeAt ? formatDateAtPrecision(closeAt, closePrecision) : '…';
       const affected = Array.isArray(effective.affectedCommitments) ? effective.affectedCommitments.length : 0;

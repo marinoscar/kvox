@@ -90,6 +90,16 @@ describe('computeEffectiveSchema', () => {
       ]);
     });
 
+    it('carries identity: true on HAS_ROLE.businessUnit only, omitting the key elsewhere (#440)', () => {
+      const props = schema.relationType('HAS_ROLE')!.props;
+      expect(props.find((p) => p.key === 'businessUnit')?.identity).toBe(true);
+      expect('identity' in props.find((p) => p.key === 'title')!).toBe(false);
+      const payload = toEffectiveSchemaPayload(schema);
+      const withFlag = payload.relationTypes.flatMap((r) => r.props.filter((p) => 'identity' in p).map((p) => `${r.key}.${p.key}`));
+      expect(withFlag).toEqual(['HAS_ROLE.businessUnit']);
+      expect(payload.entityTypes.some((t) => t.attributes.some((a) => 'identity' in a))).toBe(false);
+    });
+
     it('restores SUPERSEDES to its full three pairs', () => {
       const supersedes = schema.relationType('SUPERSEDES');
       expect(supersedes?.allowedPairs?.length).toBe(3);

@@ -44,6 +44,7 @@ function builtinAttributes(attributes, source, domain, sensitivityDefault, start
         label: spec.label,
         kind: spec.kind,
         required: spec.required ?? false,
+        ...(spec.identity === true ? { identity: true } : {}),
         list: spec.list ?? false,
         options: copyOptions(spec.options),
         extractable: spec.extractable ?? false,

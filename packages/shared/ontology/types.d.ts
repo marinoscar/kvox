@@ -25,8 +25,21 @@ export interface AttributeSpec {
     label: string;
     /** Used verbatim in the extraction prompt. */
     description: string;
-    /** Default false. A required attribute may never be null on write. */
+    /**
+     * Default false. A required attribute may never be null on write. On a
+     * relation prop, `required` also makes the prop part of the relation's
+     * identity (two edges with different values are different facts).
+     */
     required?: boolean;
+    /**
+     * Relation props only; default false (#440). The prop participates in the
+     * relation's identity like a `required` one, except that a null/absent value
+     * matches anything: `{VP, "Supply Chain"}` and `{VP, "Finance"}` are two
+     * facts, `{VP, null}` and `{VP, "Supply Chain"}` one (the first simply omits
+     * the unit). Never on a `required` prop (already strict identity), a list,
+     * or a `multi_select`.
+     */
+    identity?: boolean;
     /** Default false. When true the value is an array of `kind`. */
     list?: boolean;
     /** Default false. Only extractable attributes are ever asked of the model. */
