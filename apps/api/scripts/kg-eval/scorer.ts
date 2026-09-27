@@ -31,7 +31,16 @@ export const ENTITY_MATCH_JACCARD = 0.8;
 export const ITEM_STATEMENT_F1 = 0.5;
 
 /** Report rows, fixed order. Relation rows (`relation:<TYPE>`) follow, sorted. */
-export const ENTITY_REPORT_TYPES = ['Person', 'Organization', 'Project', 'Meeting'] as const;
+export const ENTITY_REPORT_TYPES = [
+  'Person',
+  'Organization',
+  'Project',
+  'Meeting',
+  // #383: the `personal` domain's entity types (only `personal`-tagged fixtures label them).
+  'Interest',
+  'Trip',
+  'Milestone',
+] as const;
 export const ITEM_REPORT_TYPES: Record<ItemLabelKind, string> = {
   commitment: 'Commitment',
   decision: 'Decision',
@@ -213,8 +222,14 @@ export function scoreFixture(fixture: GoldenFixture, prediction: KgEvalPredictio
   for (const p of prediction.relations) {
     const pf = canonPred(p.from);
     const pt = canonPred(p.to);
+    // #383: a symmetric relation (SPOUSE_OF, FRIEND_OF) matches either way round.
+    const symmetric = ONTOLOGY.relationType(p.type)?.symmetric === true;
     const gi = goldRels.findIndex(
-      (g, i) => !usedGoldRel.has(i) && g.type === p.type && canonGold(g.from) === pf && canonGold(g.to) === pt,
+      (g, i) =>
+        !usedGoldRel.has(i) &&
+        g.type === p.type &&
+        ((canonGold(g.from) === pf && canonGold(g.to) === pt) ||
+          (symmetric && canonGold(g.from) === pt && canonGold(g.to) === pf)),
     );
     const row = `relation:${p.type}`;
     if (gi === -1) {

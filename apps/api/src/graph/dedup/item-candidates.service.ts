@@ -146,8 +146,12 @@ export class ItemCandidateService {
     });
   }
 
-  /** Live edges of one type from one entity, as #353's planner reads them. */
-  async liveEdges(ownerId: string, type: string, fromId: string): Promise<TemporalEdge[]> {
+  /**
+   * Live edges of one type from one entity, as #353's planner reads them. For
+   * a symmetric type (#383) also the edges that END at the entity: the planner
+   * reads `(b, a)` as `(a, b)` under a symmetric rule.
+   */
+  async liveEdges(ownerId: string, type: string, fromId: string, symmetric = false): Promise<TemporalEdge[]> {
     const rows = await this.prisma.$queryRaw<
       Array<{
         id: string;
@@ -166,7 +170,7 @@ export class ItemCandidateService {
         FROM kg_relations r
        WHERE r.owner_id = ${ownerId}::uuid
          AND r.type = ${type}
-         AND r.from_id = ${fromId}::uuid
+         AND (r.from_id = ${fromId}::uuid OR (${symmetric}::boolean AND r.to_id = ${fromId}::uuid))
          AND r.review_status IN ('accepted', 'edited')
        ORDER BY r.id`;
     return rows.map((r) => {

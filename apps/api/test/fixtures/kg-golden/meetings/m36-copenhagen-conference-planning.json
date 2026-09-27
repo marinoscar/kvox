@@ -1,0 +1,296 @@
+{
+  "id": "m36",
+  "title": "Planning the Copenhagen design conference",
+  "tags": [
+    "personal",
+    "note-only",
+    "internal",
+    "negative-work-trip"
+  ],
+  "recordedAt": "2026-06-08T15:00:00Z",
+  "contextText": "Conference planning; notes only.",
+  "hasTranscript": false,
+  "speakers": [],
+  "segments": [],
+  "note": {
+    "version": 1,
+    "body": "# Planning the Copenhagen design conference\n\n**Date:** June 8\n**Attendees:** Nina Castellanos, Sam Kowalski\n\n## Summary\n\nPlanning session for the studio's attendance at the DesignOps Summit in Copenhagen, including the talk proposal, budget and travel.\n\n## The conference\n\n- Nina and Sam will attend the DesignOps Summit in Copenhagen from September 14 to September 16, on behalf of the studio. This is a work trip, paid from the studio's events budget.\n- The studio's talk proposal on the Harbourline onboarding research was accepted. Nina presents; Sam runs the live demo.\n- Booth space was considered and rejected: too expensive for a studio of our size.\n\n## Decisions\n\n- Brambleway will not take a booth at the summit this year and will put the money into the talk and a small client dinner instead.\n\n## Action items\n\n- **Sam Kowalski** — book flights and the hotel for the summit by June 19.\n- **Nina Castellanos** — send the final talk outline to the summit organisers.\n\n## Personal\n\n- Sam is staying on after the summit for a week of cycling through Denmark with Tessa, his wife, from September 17 to September 24. That part is personal leave, and he will book it separately from the studio travel.\n- Tessa is flying in on the last day of the summit to meet him.\n\n## Next steps\n\nWe rehearse the talk internally in the last week of August, and Nina confirms the client dinner guest list with Harbourline by the end of July.\n"
+  },
+  "knownEntities": [
+    {
+      "id": "g-org-brambleway-studio",
+      "type": "Organization",
+      "label": "Brambleway Studio",
+      "aliases": [
+        "Brambleway"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    },
+    {
+      "id": "g-person-nina-castellanos",
+      "type": "Person",
+      "label": "Nina Castellanos",
+      "aliases": [
+        "Nina"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32",
+        "m33",
+        "m35"
+      ]
+    },
+    {
+      "id": "g-person-sam-kowalski",
+      "type": "Person",
+      "label": "Sam Kowalski",
+      "aliases": [
+        "Sam"
+      ],
+      "props": {},
+      "attendedFixtureIds": [
+        "m32",
+        "m34",
+        "m35"
+      ]
+    },
+    {
+      "id": "g-person-tessa-kowalski",
+      "type": "Person",
+      "label": "Tessa Kowalski",
+      "aliases": [
+        "Tessa"
+      ],
+      "props": {},
+      "attendedFixtureIds": []
+    }
+  ],
+  "knownRelations": [
+    {
+      "id": "g-rel-sam-spouse-tessa",
+      "type": "SPOUSE_OF",
+      "from": "g-person-sam-kowalski",
+      "to": "g-person-tessa-kowalski",
+      "props": {},
+      "validFrom": "2016-06-01",
+      "validTo": null,
+      "precision": "month"
+    }
+  ],
+  "labels": {
+    "entities": [
+      {
+        "key": "meeting",
+        "type": "Meeting",
+        "label": "Planning the Copenhagen design conference",
+        "aliases": [],
+        "existingId": null,
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Planning the Copenhagen design conference"
+          }
+        ]
+      },
+      {
+        "key": "nina",
+        "type": "Person",
+        "label": "Nina Castellanos",
+        "aliases": [],
+        "existingId": "g-person-nina-castellanos",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "sam",
+        "type": "Person",
+        "label": "Sam Kowalski",
+        "aliases": [],
+        "existingId": "g-person-sam-kowalski",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "key": "tessa",
+        "type": "Person",
+        "label": "Tessa Kowalski",
+        "aliases": [],
+        "existingId": "g-person-tessa-kowalski",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "with Tessa, his wife"
+          }
+        ]
+      },
+      {
+        "key": "brambleway",
+        "type": "Organization",
+        "label": "Brambleway Studio",
+        "aliases": [],
+        "existingId": "g-org-brambleway-studio",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brambleway will not take a booth at the summit this year"
+          }
+        ]
+      },
+      {
+        "key": "denmark",
+        "type": "Trip",
+        "label": "Cycling trip through Denmark",
+        "aliases": [],
+        "existingId": null,
+        "props": {
+          "destination": "Denmark",
+          "startDate": "2026-09-17",
+          "endDate": "2026-09-24"
+        },
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a week of cycling through Denmark with Tessa, his wife, from September 17 to September 24"
+          }
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "type": "ATTENDED",
+        "from": "nina",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "ATTENDED",
+        "from": "sam",
+        "to": "meeting",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "**Attendees:** Nina Castellanos, Sam Kowalski"
+          }
+        ]
+      },
+      {
+        "type": "SPOUSE_OF",
+        "from": "tessa",
+        "to": "sam",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "with Tessa, his wife"
+          }
+        ]
+      },
+      {
+        "type": "TRAVELED_ON",
+        "from": "sam",
+        "to": "denmark",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Sam is staying on after the summit for a week of cycling through Denmark"
+          }
+        ]
+      },
+      {
+        "type": "TRAVELED_ON",
+        "from": "tessa",
+        "to": "denmark",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "a week of cycling through Denmark with Tessa, his wife"
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "kind": "decision",
+        "subject": "brambleway",
+        "owner": null,
+        "counterparty": null,
+        "title": "No booth at the summit",
+        "statement": "Brambleway will not take a booth at the summit and will spend the money on the talk and a client dinner instead.",
+        "status": null,
+        "occurredAt": "2026-06-08",
+        "dueAt": null,
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "Brambleway will not take a booth at the summit this year and will put the money into the talk and a small client dinner instead."
+          }
+        ]
+      },
+      {
+        "kind": "commitment",
+        "subject": "brambleway",
+        "owner": "sam",
+        "counterparty": null,
+        "title": "Book summit flights and hotel",
+        "statement": "Sam will book flights and the hotel for the summit by June 19.",
+        "status": "open",
+        "occurredAt": "2026-06-08",
+        "dueAt": "2026-06-19",
+        "sensitivity": null,
+        "supersedesLabel": null,
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "book flights and the hotel for the summit by June 19"
+          }
+        ]
+      }
+    ],
+    "negatives": [
+      {
+        "quote": "Nina and Sam will attend the DesignOps Summit in Copenhagen from September 14 to September 16, on behalf of the studio.",
+        "why": "Attending a conference for the studio is a work trip, never a personal Trip (§17.2 Trip disambiguation)."
+      }
+    ]
+  }
+}

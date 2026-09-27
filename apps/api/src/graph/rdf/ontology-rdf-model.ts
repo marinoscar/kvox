@@ -59,12 +59,18 @@ export function typeAttributes(registry: OntologyRegistry, type: Readonly<Entity
  * Representations that are never exported as RDF properties (§18.1): a
  * speaker link (speakers are not exported), a mention (coarse, not a claim),
  * and evidence (exported as `prov:wasDerivedFrom` + `oa:Annotation` instead).
- * Today that is IDENTIFIED_AS, MENTIONS and SUPPORTED_BY.
+ * Today that is IDENTIFIED_AS, MENTIONS and SUPPORTED_BY. A relation type
+ * declaring `sensitivityDefault: 'sensitive'` is never exported either (none
+ * does today).
  */
 const UNEXPORTED_REPRESENTATIONS: ReadonlySet<string> = new Set(['speaker_link', 'mention', 'evidence']);
 
 export function isExportedRelation(relation: Readonly<RelationTypeSpec>): boolean {
-  return !UNEXPORTED_REPRESENTATIONS.has(relation.representation.kind);
+  if (UNEXPORTED_REPRESENTATIONS.has(relation.representation.kind)) return false;
+  // §5.6/§18.1: `sensitive` data never leaves the deployment, so a relation
+  // type declaring it (#383's `sensitivityDefault`) is never described either.
+  // `personal` is not `sensitive`: the personal domain's relations ARE exported.
+  return relation.sensitivityDefault !== 'sensitive';
 }
 
 export function exportedRelations(registry: OntologyRegistry): Readonly<RelationTypeSpec>[] {

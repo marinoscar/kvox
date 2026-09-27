@@ -17,6 +17,7 @@ import { GraphReadService } from '../../graph/read/graph-read.service';
 import { READABLE_ENTITY_STATUSES } from '../../graph/read/readable';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  AskToolError,
   isoDate,
   jsonString,
   objectParameters,
@@ -26,7 +27,7 @@ import {
   type AskToolContext,
   type AskToolResult,
 } from './ask-tool';
-import { sensitivityVisible } from './sensitivity';
+import { hiddenTypes, sensitivityVisible, typeVisible } from './sensitivity';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -54,6 +55,10 @@ export class GetEntityTool implements AskTool<GetEntityToolInput> {
       this.graphRead.getEntity(ctx.user, target.id),
       this.ontology.effectiveSchemaFor(ctx.user.id),
     ]);
+    if (!typeVisible(detail.type, ctx.personalFactsAllowed)) {
+      // #383: a personal-domain entity is not shown to the agent without the §14 opt-in.
+      throw new AskToolError(`${args.entity.trim()} is not available to Ask (it is marked Personal).`);
+    }
     const ref = ctx.handles.register({ kind: 'ent', id: detail.id, label: detail.label });
 
     const definitions = schema.entityType(detail.type)?.attributes ?? [];
@@ -73,6 +78,7 @@ export class GetEntityTool implements AskTool<GetEntityToolInput> {
             id: { in: [...new Set(refIds)] },
             reviewStatus: { in: [...READABLE_ENTITY_STATUSES] },
             mergedIntoId: null,
+            type: { notIn: hiddenTypes(ctx.personalFactsAllowed) },
           },
           select: { id: true, label: true, type: true },
         })

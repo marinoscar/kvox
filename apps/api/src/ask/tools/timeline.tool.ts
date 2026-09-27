@@ -35,7 +35,7 @@ import {
   type AskToolContext,
   type AskToolResult,
 } from './ask-tool';
-import { itemVisible } from './sensitivity';
+import { itemVisible, typeVisible } from './sensitivity';
 import { evidenceRefsWithQuotes, INLINE_EVIDENCE_PER_ENTRY } from './tool-queries';
 
 export const TIMELINE_DEFAULT_LIMIT = 15;
@@ -77,7 +77,10 @@ export class TimelineTool implements AskTool<TimelineToolInput> {
     });
 
     const events = page.items.filter(
-      (e) => !e.item || itemVisible({ kind: e.item.kind, sensitivity: e.item.sensitivity }, ctx.personalFactsAllowed),
+      (e) =>
+        (!e.item || itemVisible({ kind: e.item.kind, sensitivity: e.item.sensitivity }, ctx.personalFactsAllowed)) &&
+        (!e.relation ||
+          (typeVisible(e.relation.type, ctx.personalFactsAllowed) && typeVisible(e.relation.other.type, ctx.personalFactsAllowed))),
     );
     const quotes = await evidenceRefsWithQuotes(
       this.prisma,

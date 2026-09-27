@@ -933,6 +933,25 @@ describe('User Settings Integration', () => {
       });
     });
 
+    it('persists domains.personal: true and false through PATCH and reads each back (#383)', async () => {
+      const user = await createMockTestUser(context);
+      setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
+
+      await patchSettings(user.accessToken, {
+        graph: { domains: { personal: true } },
+      }).expect(200);
+      expect((await getSettings(user.accessToken)).body.data.graph).toEqual({
+        domains: { work: true, personal: true },
+      });
+
+      await patchSettings(user.accessToken, {
+        graph: { domains: { personal: false } },
+      }).expect(200);
+      expect((await getSettings(user.accessToken)).body.data.graph).toEqual({
+        domains: { work: true, personal: false },
+      });
+    });
+
     it('`resolution: null` resets it, leaving no graph key at all', async () => {
       const user = await createMockTestUser(context);
       setupMockUserSettings(user.id, DEFAULT_USER_SETTINGS);
@@ -958,7 +977,7 @@ describe('User Settings Integration', () => {
 
     describe('rejections return 400, not 500', () => {
       it.each<[string, unknown]>([
-        ['personal: true (until #383)', { domains: { personal: true } }],
+        ['a non-boolean personal domain switch', { domains: { personal: 'yes' } }],
         [
           'thresholds closer than 0.05 in one patch',
           { resolution: { autoLinkThreshold: 0.85, newThreshold: 0.84 } },

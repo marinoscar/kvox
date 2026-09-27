@@ -625,8 +625,8 @@ const graphResolutionSchema = z
 const graphDomainsSchema = z
   .object({
     work: z.boolean(),
-    // Until #383 ships the `personal` domain; widened to `z.boolean()` there.
-    personal: z.literal(false),
+    // Off by default (GRAPH_PREFERENCE_DEFAULTS); #383 ships the domain.
+    personal: z.boolean(),
   })
   .strict();
 
@@ -677,7 +677,7 @@ export const graphPreferencesPatchSchema = z
     domains: z
       .object({
         work: z.boolean().nullable().optional(),
-        personal: z.literal(false).nullable().optional(),
+        personal: z.boolean().nullable().optional(),
       })
       .strict()
       .nullable()

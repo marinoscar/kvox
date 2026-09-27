@@ -151,6 +151,20 @@ describe('EntityDigestHandler', () => {
     },
   );
 
+  it('never asks for a personal-sensitivity relation (SPOUSE_OF) — digest input or staleness (#383)', async () => {
+    const { handler } = setup();
+    (handler as unknown as { ontology: { effectiveSchemaFor: jest.Mock } }).ontology.effectiveSchemaFor.mockResolvedValue({
+      relationTypes: [
+        { key: 'HAS_ROLE', exclusive: 'soft', label: 'Has role' },
+        { key: 'SPOUSE_OF', exclusive: 'soft', label: 'Spouse of', sensitivityDefault: 'personal' },
+      ],
+      relationType: (k: string) => ({ label: k }),
+    });
+    await handler.process(makeJob());
+    expect(q.digestRelations.mock.calls[0][3]).toEqual(['HAS_ROLE']);
+    expect(q.newestChange.mock.calls[0][3]).toEqual(['HAS_ROLE']);
+  });
+
   it('rethrows a RateLimitError so the queue defers it', async () => {
     const generateStructured = jest.fn().mockRejectedValue(new RateLimitError('slow down'));
     const { handler, prisma } = setup({ generateStructured });
