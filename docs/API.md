@@ -5448,7 +5448,7 @@ Your **effective ontology**: the schema your graph is made of, and the one
 response every graph form is generated from. It is the `core` domain, plus
 every domain you have enabled (your `graph.domains` user-settings
 preference, issue #369 — `work` by default; `personal`, #383, off by default), plus the attributes those domains mix into each
-other's types (`work` adds a `title` to `Person`), plus your own attribute
+other's types (`work` adds a `title` to `Person` — retired since ontology 1.2.0, #440: a person's employer is a `WORKS_FOR` relation and their role and business unit a `HAS_ROLE` relation to that Organization, so `title` is `deprecated: true` and no longer extracted), plus your own attribute
 definitions — **deprecated ones included**, flagged `deprecated: true`, so
 values already stored under them stay readable. Relation endpoints and item
 subjects are pruned to the types present.
@@ -5461,7 +5461,7 @@ an already-curated graph unreadable.
 ```json
 {
   "data": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "domains": [
       { "key": "core", "label": "Core", "enabled": true, "alwaysOn": true },
       { "key": "work", "label": "Work", "enabled": true, "alwaysOn": false },
@@ -5492,13 +5492,13 @@ an already-curated graph unreadable.
             "required": false,
             "list": false,
             "options": null,
-            "extractable": true,
+            "extractable": false,
             "description": "The person's job title, only if the source states it.",
             "sensitivity": "business",
             "source": "mixin",
             "domain": "work",
             "attributeDefId": null,
-            "deprecated": false,
+            "deprecated": true,
             "sortOrder": 0
           }
         ]

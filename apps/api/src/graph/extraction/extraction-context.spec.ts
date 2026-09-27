@@ -6,9 +6,12 @@ import {
   schemaFor,
 } from '../../../test/graph/extraction-fixtures';
 import {
+  CONTEXT_ALIAS,
   MAX_KNOWN_ENTITIES,
+  NOTE_ALIAS,
   buildExtractionContext,
   namesADate,
+  offeredContextText,
   selectKnownEntities,
 } from './extraction-context';
 
@@ -169,6 +172,24 @@ describe('buildExtractionContext (#363)', () => {
       const input = makeInput({ guidance: { pinnedEntityIds: [IDS.pilot], instructions: '  Focus on the pilot. ' } });
       input.knownEntityCandidates.pinned = [known(IDS.pilot, 'Project', 'Pick-path pilot')];
       expect(buildExtractionContext(input).guidance).toEqual({ pinnedAliases: ['k1'], instructions: 'Focus on the pilot.' });
+    });
+  });
+
+  describe('the Context as a citable source (#440)', () => {
+    it('is aliased `C`, distinct from the note', () => {
+      expect(CONTEXT_ALIAS).toBe('C');
+      expect(CONTEXT_ALIAS).not.toBe(NOTE_ALIAS);
+    });
+
+    it('is offered trimmed, and only when it is not blank', () => {
+      expect(offeredContextText('  Oscar – EY, Consulting \n')).toBe('Oscar – EY, Consulting');
+      expect(offeredContextText(null)).toBeNull();
+      expect(offeredContextText(undefined)).toBeNull();
+      expect(offeredContextText(' \n\t ')).toBeNull();
+    });
+
+    it('carries the raw Context on the context the prompt and validator read', () => {
+      expect(makeContext().note.contextText).toBe('Kickoff with Northwind about the pilot.');
     });
   });
 });

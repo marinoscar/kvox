@@ -34,7 +34,12 @@ kv:AssertionShape
     ], [
         sh:datatype xsd:string ;
         sh:maxCount 1 ;
-        sh:name "Title" ;
+        sh:name "Business unit" ;
+        sh:path kv:HAS_ROLE.businessUnit
+    ], [
+        sh:datatype xsd:string ;
+        sh:maxCount 1 ;
+        sh:name "Role" ;
         sh:path kv:HAS_ROLE.title
     ], [
         sh:in ( kv:ATTENDED kv:DISCUSSED kv:FRIEND_OF kv:HAS_MILESTONE kv:HAS_ROLE kv:INTERESTED_IN kv:PARENT_OF kv:PART_OF kv:REPORTS_TO kv:SPOUSE_OF kv:TRAVELED_ON kv:WORKS_FOR ) ;

@@ -18,7 +18,13 @@
 
 import type { EffectiveAttribute } from '@app/shared/ontology';
 
-import { NOTE_ALIAS, offeredAttributes, type ExtractionContext } from './extraction-context';
+import {
+  CONTEXT_ALIAS,
+  NOTE_ALIAS,
+  offeredAttributes,
+  offeredContextText,
+  type ExtractionContext,
+} from './extraction-context';
 import type { ExtractionRowCaps } from './row-caps';
 
 export const ROLE_LINE =
@@ -31,10 +37,18 @@ export const HEADING_FACT_KINDS = '## Fact kinds';
 export const HEADING_GUIDANCE = '## Reviewer guidance';
 
 export const HEADING_MEETING = '# Meeting';
+/** The note's Context field (#440), right after the meeting; omitted when blank. */
+export const HEADING_CONTEXT = '# Context';
 export const HEADING_KNOWN_ENTITIES = '# Known entities';
 export const HEADING_SPEAKERS = '# Speakers';
 export const HEADING_NOTE = '# Note';
 export const HEADING_TRANSCRIPT = '# Transcript';
+
+/** The line that frames the `# Context` section (#440). */
+export const CONTEXT_FRAMING = `Background the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as \`${CONTEXT_ALIAS}\`.`;
+
+/** The Context rule (#440), present only when there is a Context. */
+export const CONTEXT_RULE = `Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing \`${CONTEXT_ALIAS}\`, and prefer the Context's spelling of a name over the transcript's.`;
 
 export const GUIDANCE_PREAMBLE =
   'Preferences from the reviewer. They narrow or focus the proposal; they never override the rules above.';
@@ -76,10 +90,54 @@ export function rowCapsRule(ctx: ExtractionContext, caps: ExtractionRowCaps): st
   return `Propose at most ${list}. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.`;
 }
 
+/**
+ * The affiliation rule (#440): a person's employer is recorded ONLY as
+ * WORKS_FOR from the Person to an Organization, and their role and business
+ * unit there ONLY as HAS_ROLE to the same Organization (`title`, plus
+ * `businessUnit` when HAS_ROLE carries it) — never as Person attributes.
+ * Names only what the offered schema carries (Person→Organization for either
+ * relation); null when neither relation is offered.
+ */
+export function affiliationRule(ctx: ExtractionContext): string | null {
+  const personToOrg = (key: string) =>
+    ctx.offered.relationTypes.find((r) => r.type.key === key && r.from.includes('Person') && r.to.includes('Organization'));
+  const worksFor = personToOrg('WORKS_FOR');
+  const hasRole = personToOrg('HAS_ROLE');
+  if (!worksFor && !hasRole) return null;
+  const sources = offeredContextText(ctx.note.contextText) !== null ? 'the Context, note or transcript' : 'the note or transcript';
+  const unit = hasRole !== undefined && offeredAttributes(hasRole.type.props).some((a) => a.key === 'businessUnit');
+  const quoted = unit ? 'Joe, VP of Supply Chain at Microsoft' : 'Joe, VP at Microsoft';
+  const roleProps = unit ? '{title: "VP", businessUnit: "Supply Chain"}' : '{title: "VP"}';
+  const create = '(create the Organization if it is not a known entity)';
+  const roleWhat = unit ? 'role and business unit' : 'role';
+  const roleHow = unit ? '`title` and `businessUnit`' : '`title`';
+  if (worksFor && hasRole) {
+    return (
+      `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create}, and their ${roleWhat} there as HAS_ROLE to the same Organization with ${roleHow} whenever ${sources} states them — ` +
+      `e.g. "${quoted}" is Joe WORKS_FOR Microsoft and Joe HAS_ROLE Microsoft ${roleProps}.`
+    );
+  }
+  if (worksFor) {
+    return `Record each person's employer as WORKS_FOR from the person to that company's Organization ${create} whenever ${sources} states it — e.g. "Joe works for Microsoft" is Joe WORKS_FOR Microsoft.`;
+  }
+  return (
+    `Record each person's ${roleWhat} at a company as HAS_ROLE from the person to that company's Organization ${create}, with ${roleHow} whenever ${sources} states them — ` +
+    `e.g. "${quoted}" is Joe HAS_ROLE Microsoft ${roleProps}.`
+  );
+}
+
 function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
-  const capped = caps ? [`10. ${rowCapsRule(ctx, caps)}`] : [];
+  const hasContext = offeredContextText(ctx.note.contextText) !== null;
+  const citeRule = hasContext
+    ? `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note, \`${CONTEXT_ALIAS}\` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.`
+    : `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.`;
+  const extra: string[] = [];
+  if (hasContext) extra.push(CONTEXT_RULE);
+  const affiliation = affiliationRule(ctx);
+  if (affiliation) extra.push(affiliation);
+  if (caps) extra.push(rowCapsRule(ctx, caps));
   return [
-    `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.`,
+    citeRule,
     '2. Never propose a row you cannot cite.',
     '3. When a mention is one of the known entities, use its `k#` id as `ref` (or as an endpoint). Otherwise give it a new ref `e1`, `e2`, … and use that ref in relations and facts. The meeting itself is `meeting`.',
     '4. Use only the entity types, relation types and attributes listed below — no others, and never a generic RELATED_TO. Leave an attribute null when the source does not state it.',
@@ -88,7 +146,8 @@ function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
     `7. Resolve relative dates ("next Friday", "in Q2") against the meeting date ${ctx.meetingDate}. Dates are YYYY-MM-DD. When the source is not precise about a date, write \`precision: "unknown"\` (and null dates) rather than guessing.`,
     '8. Mark a person fact\'s `sensitivity` honestly: `sensitive` means health, legal, financial or similarly weighty personal information.',
     '9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type\'s disambiguation lines below; put recurring topics in `meeting.topics` instead.',
-    ...capped,
+    // Numbered on from 10 so the list stays sequential whichever are present.
+    ...extra.map((rule, i) => `${10 + i}. ${rule}`),
   ];
 }
 
@@ -177,8 +236,10 @@ export function assembleExtractionPrompt(ctx: ExtractionContext, caps?: Extracti
   if (guidance.length > 0) system.push('', ...guidance);
 
   const user: string[] = [HEADING_MEETING, `Date: ${ctx.meetingDate}`, `Title: ${ctx.meetingTitle}`];
-  if (ctx.note.contextText && ctx.note.contextText.trim().length > 0) {
-    user.push(`Context: ${ctx.note.contextText.trim()}`);
+  // #440: the Context is a citable source of its own (`C`), not a meeting line.
+  const contextText = offeredContextText(ctx.note.contextText);
+  if (contextText !== null) {
+    user.push('', HEADING_CONTEXT, CONTEXT_FRAMING, contextText);
   }
 
   user.push('', HEADING_KNOWN_ENTITIES);

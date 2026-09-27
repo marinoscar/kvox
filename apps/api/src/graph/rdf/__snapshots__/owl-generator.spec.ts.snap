@@ -16,7 +16,7 @@ exports[`generateOwl parses with n3 and matches the snapshot 1`] = `
 kv:
     a owl:Ontology ;
     rdfs:label "<APP_NAME> ontology" ;
-    owl:versionInfo "1.1.0" .
+    owl:versionInfo "1.2.0" .
 
 kv:ABOUT
     a owl:ObjectProperty ;
@@ -134,17 +134,24 @@ kv:HAS_MILESTONE
 
 kv:HAS_ROLE
     a owl:ObjectProperty ;
-    rdfs:comment "A person holds a titled role at an organization for a period of time." ;
+    rdfs:comment "A person holds a titled role, optionally within a business unit, at an organization for a period of time: \\"Joe, VP of Supply Chain at Microsoft\\" is Joe HAS_ROLE Microsoft {title: \\"VP\\", businessUnit: \\"Supply Chain\\"}." ;
     rdfs:domain kv:Person ;
     rdfs:label "Has role" ;
     rdfs:range kv:Organization ;
     rdfs:subPropertyOf schema:hasOccupation .
 
+kv:HAS_ROLE.businessUnit
+    a owl:DatatypeProperty ;
+    rdfs:comment "The business unit, division, practice or department within the organization this role sits in, e.g. \\"Supply Chain\\", only if the source states it." ;
+    rdfs:domain kv:Assertion ;
+    rdfs:label "Business unit" ;
+    rdfs:range xsd:string .
+
 kv:HAS_ROLE.title
     a owl:DatatypeProperty ;
     rdfs:comment "The job title the person holds in this role, e.g. \\"Staff Engineer\\"." ;
     rdfs:domain kv:Assertion ;
-    rdfs:label "Title" ;
+    rdfs:label "Role" ;
     rdfs:range xsd:string .
 
 kv:INTERESTED_IN
@@ -370,7 +377,7 @@ kv:Trip.startDate
 
 kv:WORKS_FOR
     a owl:ObjectProperty ;
-    rdfs:comment "A person is employed by, or works on behalf of, an organization." ;
+    rdfs:comment "A person is employed by, or works on behalf of, an organization — the one way a person's employer is recorded: \\"Joe works for Microsoft\\" is Joe WORKS_FOR Microsoft (an Organization); his role and business unit there are a HAS_ROLE to the same Organization." ;
     rdfs:domain kv:Person ;
     rdfs:label "Works for" ;
     rdfs:range kv:Organization ;
@@ -439,6 +446,7 @@ schema:jobTitle
     a owl:DatatypeProperty ;
     rdfs:comment "The person's job title, only if the source states it." ;
     rdfs:label "Job title" ;
+    owl:deprecated true ;
     schema:domainIncludes kv:Person ;
     schema:rangeIncludes xsd:string .
 

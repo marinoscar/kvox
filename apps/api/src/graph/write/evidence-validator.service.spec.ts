@@ -84,6 +84,16 @@ describe('EvidenceValidator', () => {
     await expect(invalidIndexes([noteEv(NOTE, 9)])).resolves.toEqual([0]);
   });
 
+  it("accepts a note Context citation (#440): both offsets null on a readable note version", async () => {
+    const ctxEv = { noteId: NOTE, noteVersion: 1, charStart: null, charEnd: null, quote: 'EY, Consulting' } as EvidenceInput;
+    await expect(invalidIndexes([ctxEv])).resolves.toBeNull();
+  });
+
+  it('refuses a note citation with only one offset set', async () => {
+    const half = { noteId: NOTE, noteVersion: 1, charStart: 0, charEnd: null, quote: 'Hello' } as EvidenceInput;
+    await expect(invalidIndexes([noteEv(NOTE), half])).resolves.toEqual([1]);
+  });
+
   it('accepts a segment of a transcript shared with the owner', async () => {
     const tx = fakeTx();
     await expect(invalidIndexes([segEv(TRANSCRIPT, SEGMENT)], tx)).resolves.toBeNull();
