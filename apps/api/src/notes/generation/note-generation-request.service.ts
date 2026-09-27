@@ -264,6 +264,8 @@ export class NoteGenerationRequestService {
       modelMaxOutputTokens: descriptor.maxOutputTokens,
       policyMaxOutputTokens: input.policy.maxOutputTokens,
       policyMaxInputTokens: input.policy.maxInputTokens,
+      // #436: the same effort `note.generate` sends, so both reach one number.
+      reasoningEffort: input.policy.reasoningEffort,
     });
 
     try {
