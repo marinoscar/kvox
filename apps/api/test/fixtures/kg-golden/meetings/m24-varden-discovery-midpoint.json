@@ -249,9 +249,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -305,9 +303,7 @@
       "aliases": [
         "Rosa"
       ],
-      "props": {
-        "title": "Claims Director"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {

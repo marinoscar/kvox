@@ -278,9 +278,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -317,9 +315,7 @@
         "JJ",
         "Jonah Jimenez"
       ],
-      "props": {
-        "title": "Senior Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m05",
@@ -337,9 +333,7 @@
       "aliases": [
         "Kwame"
       ],
-      "props": {
-        "title": "Data Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m11",
         "m14",
@@ -354,9 +348,7 @@
       "aliases": [
         "Nadia"
       ],
-      "props": {
-        "title": "Product Designer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m03",
         "m04",
@@ -372,9 +364,7 @@
       "aliases": [
         "Priya"
       ],
-      "props": {
-        "title": "Engineering Manager"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m03",

@@ -243,9 +243,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -275,9 +273,7 @@
         "JJ",
         "Jonah Jimenez"
       ],
-      "props": {
-        "title": "Senior Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m05",
@@ -294,9 +290,7 @@
       "aliases": [
         "Owen"
       ],
-      "props": {
-        "title": "Head of Platform"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m12"
       ]
@@ -308,9 +302,7 @@
       "aliases": [
         "Priya"
       ],
-      "props": {
-        "title": "Engineering Manager"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m03",
