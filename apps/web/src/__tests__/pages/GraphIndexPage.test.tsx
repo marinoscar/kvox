@@ -9,7 +9,8 @@ import 'vitest-axe/extend-expect';
 import { server } from '../mocks/server';
 import { render } from '../utils/test-utils';
 import { setViewportWidth } from '../setup';
-import { graphReader, noGraphUser } from '../utils/graphTestUsers';
+import { graphReader, graphWriter, noGraphUser } from '../utils/graphTestUsers';
+import { proposalSummaryRow } from '../mocks/graphData';
 import { graphEntitySummaries } from '../mocks/graphData';
 import GraphIndexPage, { typesFromQuery } from '../../pages/GraphIndexPage';
 import { RequirePermission } from '../../components/common/RequirePermission';
@@ -214,6 +215,43 @@ describe('GraphIndexPage', () => {
     await user.click(await screen.findByRole('menuitem', { name: 'Export graph…' }));
     expect(await screen.findByRole('dialog', { name: 'Export graph' })).toBeInTheDocument();
     expect(screen.getByText('Sensitive personal facts are never exported.')).toBeInTheDocument();
+  });
+
+  it('offers "Import graph…" only with graph:write, and lists recent imports (#387)', async () => {
+    const user = userEvent.setup();
+    const imported = proposalSummaryRow('a0000000-0000-4000-8000-0000000000ab', {
+      kind: 'import',
+      noteId: null,
+      status: 'draft',
+      stats: { filename: 'contacts.ttl', format: 'turtle', bytes: 10 },
+    });
+    server.use(
+      http.get('*/api/graph/proposals', ({ request }) => {
+        const status = new URL(request.url).searchParams.get('status');
+        return HttpResponse.json({ data: { items: status === 'draft' ? [imported] : [], nextCursor: null } });
+      }),
+    );
+    renderIndex('/graph', graphWriter);
+    await screen.findByRole('link', { name: /Joe Rivera/ });
+
+    const imports = await screen.findByRole('list', { name: 'Recent imports' });
+    const row = within(imports).getByRole('link', { name: /contacts\.ttl/ });
+    expect(row).toHaveAttribute('href', '/graph/imports/a0000000-0000-4000-8000-0000000000ab');
+    expect(within(row).getByText('To review')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Import graph…' }));
+    expect(await screen.findByRole('dialog', { name: 'Import graph' })).toBeInTheDocument();
+  });
+
+  it('has no "Import graph…" and no imports section for a reader', async () => {
+    const user = userEvent.setup();
+    renderIndex();
+    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await user.click(screen.getByRole('button', { name: 'More knowledge actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Export graph…' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Import graph…' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Recent imports' })).not.toBeInTheDocument();
   });
 
   it('offers "Export graph…" in the phone menu too', async () => {

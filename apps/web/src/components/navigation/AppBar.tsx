@@ -167,6 +167,12 @@ const DRILL_DOWN_ROUTES: {
     title: 'Overview',
     upPath: () => '/graph',
   },
+  // One RDF import (#387). Up is the index its dialog is opened from.
+  {
+    pattern: /^\/graph\/imports\/([^/]+)\/?$/,
+    title: 'Import',
+    upPath: () => '/graph',
+  },
   {
     pattern: /^\/graph\/?$/,
     title: 'Knowledge',

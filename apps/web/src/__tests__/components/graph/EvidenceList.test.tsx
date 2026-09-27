@@ -91,6 +91,27 @@ describe('EvidenceList', () => {
     expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('cites an imported row to the file, with nothing to play or open (#387)', () => {
+    const onPlay = vi.fn();
+    const imported = {
+      ...noteEvidence({ quote: 'Imported from contacts.ttl' }),
+      source: 'import' as const,
+      noteId: null,
+      noteVersion: null,
+      charStart: null,
+      charEnd: null,
+      importObjectId: 'f0000000-0000-4000-8000-000000000001',
+      sourceIri: 'https://source.example/joe',
+    };
+    render(<EvidenceList evidence={[imported]} onPlay={onPlay} onShowInNote={vi.fn()} />);
+    expect(screen.getByText('“Imported from contacts.ttl”')).toBeInTheDocument();
+    expect(screen.getByText('From the imported file')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Play/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show in note' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open in transcript' })).not.toBeInTheDocument();
+    expect(transcriptHref(imported)).toBeNull();
+  });
+
   it('builds no transcript link for note evidence', () => {
     expect(transcriptHref(noteEvidence())).toBeNull();
     expect(transcriptHref(segmentEvidence({ segmentId: null }))).toBe('/transcripts/t1');

@@ -86,7 +86,9 @@ export function ProposalReviewContent({
   const state = reviewState(detail, loadError);
   const items = useMemo(() => detail?.items ?? [], [detail?.items]);
   const groups = useMemo(() => groupProposalItems(items), [items]);
-  const reextract = canWrite ? (
+  // An import (#387) has no note to extract again: it is re-uploaded instead.
+  const fromNote = Boolean(detail?.proposal.noteId) && detail?.proposal.kind !== 'import';
+  const reextract = canWrite && fromNote ? (
     <Button size="small" onClick={() => onRequestExtract('re-extract')}>
       Re-extract
     </Button>
@@ -95,7 +97,7 @@ export function ProposalReviewContent({
   const renderGroups = (readOnly: boolean) =>
     groups.length === 0 ? (
       <Typography variant="body2" color="text.secondary">
-        The AI found nothing to add from this note.
+        {detail?.proposal.kind === 'import' ? 'Nothing in this file to add.' : 'The AI found nothing to add from this note.'}
       </Typography>
     ) : (
       groups.map((group) => (
@@ -164,7 +166,7 @@ export function ProposalReviewContent({
           <Alert severity="error" sx={{ width: '100%' }}>
             {detail?.proposal.failure?.message ?? 'The extraction did not finish.'}
           </Alert>
-          {canWrite && (
+          {canWrite && fromNote && (
             <Button size="small" onClick={() => onRequestExtract('re-extract')}>
               Try again
             </Button>

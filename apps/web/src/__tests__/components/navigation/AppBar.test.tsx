@@ -466,6 +466,16 @@ describe('AppBar', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/graph');
     });
 
+    it('shows Back + "Import" on an import page, going up to the graph index (#387)', async () => {
+      const user = userEvent.setup();
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/graph/imports/abc-123' } });
+
+      expect(screen.getByText('Import')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/graph');
+    });
+
     it('shows Back + "Knowledge" on the graph index, going up to Home (#373)', async () => {
       const user = userEvent.setup();
       setViewportWidth(375);
