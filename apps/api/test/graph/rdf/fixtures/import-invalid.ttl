@@ -1,0 +1,27 @@
+# An import that must FAIL SHACL validation (#387), three ways at once:
+#   - src:nobody cites no source (no prov:wasDerivedFrom — the no-orphans rule);
+#   - src:kickoff's dateSource is not one of the select's choices;
+#   - src:ana WORKS_FOR a Person, not an Organization (wrong endpoint class).
+# Nothing from it may ever be imported — validation is all or nothing.
+
+@prefix kv: <https://fixture.app/ns#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix src: <https://source.example/> .
+
+src:nobody a kv:Person ;
+    rdfs:label "Nobody Cited" .
+
+src:kickoff a kv:Meeting ;
+    rdfs:label "Kickoff" ;
+    kv:Meeting.dateSource "guessed" ;
+    prov:wasDerivedFrom src:crm-1 .
+
+src:ana a kv:Person ;
+    rdfs:label "Ana Ruiz" ;
+    kv:WORKS_FOR src:bob ;
+    prov:wasDerivedFrom src:crm-2 .
+
+src:bob a kv:Person ;
+    rdfs:label "Bob Stone" ;
+    prov:wasDerivedFrom src:crm-3 .

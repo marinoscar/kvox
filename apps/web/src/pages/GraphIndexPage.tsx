@@ -18,7 +18,11 @@
  * (CLAUDE.md, Settings UI Pattern rule 5).
  *
  * The header's overflow menu (phone and desktop alike) carries "Export
- * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph.
+ * graph…" — `ExportGraphDialog` (#386), an RDF export of the caller's graph —
+ * and, for a caller holding `graph:write`, "Import graph…" —
+ * `ImportGraphDialog` (#387), which uploads an RDF file as a proposal to
+ * review. The caller's last five imports are listed in a small "Imports"
+ * section below the entities, shown only when there is one.
  */
 
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -28,7 +32,10 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
+import Chip from '@mui/material/Chip';
 import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
@@ -45,9 +52,15 @@ import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'r
 
 import { EntityListRow } from '../components/graph/EntityListRow';
 import { ExportGraphDialog } from '../components/graph/ExportGraphDialog';
+import { ImportGraphDialog } from '../components/graph/ImportGraphDialog';
 import { EntityTypeFilter } from '../components/graph/EntityTypeFilter';
 import { useGraphEntities } from '../hooks/useGraphEntities';
+import { useRecentGraphImports } from '../hooks/useGraphImport';
+import { usePermissions } from '../hooks/usePermissions';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
+import { PROPOSAL_STATUS_LABELS } from '../components/graph/review/ProposalHeader';
+import type { ProposalStatus, ProposalSummary } from '../services/graph';
+import { importStatsOf } from '../services/graph';
 import {
   DEFAULT_INDEX_TYPES,
   entityTypeLabel,
@@ -60,6 +73,48 @@ export interface GraphIndexLocationState {
 }
 
 const SKELETON_ROWS = 6;
+
+/** An import's status, as the "Imports" section's chip names it. */
+const IMPORT_STATUS_LABELS: Record<ProposalStatus, string> = {
+  ...PROPOSAL_STATUS_LABELS,
+  extracting: 'Checking',
+  draft: 'To review',
+};
+
+const IMPORT_STATUS_COLORS: Record<ProposalStatus, 'default' | 'info' | 'success' | 'error' | 'warning'> = {
+  extracting: 'info',
+  draft: 'warning',
+  committed: 'success',
+  discarded: 'default',
+  failed: 'error',
+  reverted: 'default',
+};
+
+function RecentImports({ imports }: { imports: readonly ProposalSummary[] }) {
+  if (imports.length === 0) return null;
+  return (
+    <Box component="section" aria-labelledby="graph-imports-heading" sx={{ mt: 3 }}>
+      <Typography id="graph-imports-heading" variant="subtitle1" component="h2" sx={{ fontWeight: 600, mb: 0.5 }}>
+        Imports
+      </Typography>
+      <List dense disablePadding aria-label="Recent imports">
+        {imports.map((proposal) => {
+          const stats = importStatsOf(proposal);
+          return (
+            <ListItemButton key={proposal.id} component={RouterLink} to={`/graph/imports/${encodeURIComponent(proposal.id)}`}>
+              <ListItemText
+                primary={stats.filename ?? 'Import'}
+                secondary={new Date(proposal.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                slotProps={{ primary: { noWrap: true } }}
+              />
+              <Chip size="small" label={IMPORT_STATUS_LABELS[proposal.status]} color={IMPORT_STATUS_COLORS[proposal.status]} sx={{ ml: 1 }} />
+            </ListItemButton>
+          );
+        })}
+      </List>
+    </Box>
+  );
+}
 
 /** `?type=` → the selection. Absent → the default; present-but-empty → everything. */
 export function typesFromQuery(value: string | null): string[] {
@@ -88,10 +143,18 @@ export default function GraphIndexPage() {
 
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  const canImport = hasPermission('graph:write');
+  const recentImports = useRecentGraphImports(canImport);
 
   const openExport = () => {
     setMenuAnchor(null);
     setExportOpen(true);
+  };
+  const openImport = () => {
+    setMenuAnchor(null);
+    setImportOpen(true);
   };
   const [snackbar, setSnackbar] = useState<string | null>(
     () => (location.state as GraphIndexLocationState | null)?.snackbar ?? null,
@@ -149,6 +212,7 @@ export default function GraphIndexPage() {
               Overview
             </MenuItem>
             <MenuItem onClick={openExport}>Export graph…</MenuItem>
+            {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
           </Menu>
         </>
       ) : (
@@ -168,6 +232,7 @@ export default function GraphIndexPage() {
           </IconButton>
           <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
             <MenuItem onClick={openExport}>Export graph…</MenuItem>
+            {canImport && <MenuItem onClick={openImport}>Import graph…</MenuItem>}
           </Menu>
         </Stack>
       )}
@@ -287,7 +352,10 @@ export default function GraphIndexPage() {
 
       {body}
 
+      <RecentImports imports={recentImports.imports} />
+
       <ExportGraphDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      {canImport && <ImportGraphDialog open={importOpen} onClose={() => setImportOpen(false)} />}
 
       <Snackbar
         open={Boolean(snackbar)}

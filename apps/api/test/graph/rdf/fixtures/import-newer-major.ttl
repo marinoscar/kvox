@@ -1,0 +1,15 @@
+# An import written by a NEWER MAJOR ontology version than any deployment runs
+# (#387). A major bump means a type's meaning changed, so it is refused with
+# `ontology_version_newer` rather than read under the wrong definition.
+
+@prefix kv: <https://fixture.app/ns#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix src: <https://source.example/> .
+
+kv: a owl:Ontology ; owl:versionInfo "99.0.0" .
+
+src:joe a kv:Person ;
+    rdfs:label "Joe Smith" ;
+    prov:wasDerivedFrom src:crm-1 .

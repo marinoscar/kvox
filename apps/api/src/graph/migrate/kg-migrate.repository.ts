@@ -182,6 +182,25 @@ export class KgMigrateRepository {
   }
 
   /**
+   * Whether `ownerId` has at least one row a declared migration still touches
+   * (#387: an import is refused until `kg.migrate` has reshaped them).
+   */
+  async ownerHasPendingMigration(
+    ownerId: string,
+    predicates: Partial<Record<KgMigrateTable, Prisma.Sql>>,
+    targetVersion: string,
+  ): Promise<boolean> {
+    for (const [table, predicate] of Object.entries(predicates) as [KgMigrateTable, Prisma.Sql][]) {
+      const rows = await this.prisma.$queryRaw<Array<{ one: number }>>`
+        SELECT 1 AS one FROM ${TABLE_SQL[table]}
+         WHERE owner_id = ${ownerId}::uuid AND ontology_version <> ${targetVersion} AND ${predicate}
+         LIMIT 1`;
+      if (rows.length > 0) return true;
+    }
+    return false;
+  }
+
+  /**
    * Up to `limit` distinct owners with at least one candidate row in any of the
    * three tables. Read-only; the scheduler enqueues one job per owner.
    */

@@ -1,0 +1,59 @@
+# A small, conforming import (#387): two people, an organization, a reified
+# employment with a validity range, and a commitment — every node citing its
+# source with prov:wasDerivedFrom, one of them through an oa:Annotation whose
+# body text becomes the imported row's evidence quote.
+#
+# Written against the fixture namespace `https://fixture.app/ns#`; the specs
+# substitute this deployment's own namespace when they load it.
+
+@prefix kv: <https://fixture.app/ns#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix src: <https://source.example/> .
+
+kv: a owl:Ontology ; owl:versionInfo "1.0.0" .
+
+src:joe a kv:Person ;
+    rdfs:label "Joe Smith" ;
+    skos:altLabel "Joseph Smith" ;
+    schema:jobTitle "Head of Sales" ;
+    kv:WORKS_FOR src:acme ;
+    prov:wasDerivedFrom src:note-1 .
+
+src:ana a kv:Person ;
+    rdfs:label "Ana Ruiz" ;
+    kv:REPORTS_TO src:joe ;
+    prov:wasDerivedFrom src:crm-2 .
+
+src:acme a kv:Organization ;
+    rdfs:label "Acme Robotics" ;
+    schema:url "https://acme.example"^^xsd:anyURI ;
+    prov:wasDerivedFrom src:crm-3 .
+
+src:joe-at-acme a kv:Assertion ;
+    rdf:subject src:joe ;
+    rdf:predicate kv:WORKS_FOR ;
+    rdf:object src:acme ;
+    prov:startedAtTime "2019-03-01T00:00:00.000Z"^^xsd:dateTime ;
+    prov:endedAtTime "2024-07-01T00:00:00.000Z"^^xsd:dateTime ;
+    kv:validPrecision "month" ;
+    kv:confidence "0.8"^^xsd:decimal ;
+    prov:wasDerivedFrom src:note-1 .
+
+src:deck a kv:Commitment ;
+    rdfs:label "Send the deck" ;
+    kv:Commitment.statement "Joe will send the deck to Acme by Friday." ;
+    kv:ASSIGNED_TO src:joe ;
+    kv:OWED_TO src:acme ;
+    kv:status "open" ;
+    kv:dueAt "2026-04-10T00:00:00.000Z"^^xsd:dateTime ;
+    prov:wasDerivedFrom src:note-1 .
+
+src:note-1 a oa:Annotation ;
+    oa:hasBody [ rdf:value "Joe joined Acme in March 2019 and owes them the deck." ] .

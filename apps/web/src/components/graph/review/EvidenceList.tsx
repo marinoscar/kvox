@@ -7,6 +7,8 @@
  *   Show in note       note evidence — highlights the span in the rendered body;
  *   Open in transcript segment evidence — `/transcripts/:id?segment=:segmentId`.
  * `stale` evidence says so: the cited text has changed since extraction.
+ * Import evidence (#387) cites the uploaded file itself — its quote is the
+ * file's own annotation, or "Imported from <filename>" — with nothing to play.
  */
 
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -53,7 +55,9 @@ function EvidenceEntry({
   const origin =
     evidence.source === 'segment'
       ? [evidence.speakerName ?? 'Speaker', at].filter(Boolean).join(' · ')
-      : 'From the note';
+      : evidence.source === 'import'
+        ? 'From the imported file'
+        : 'From the note';
 
   return (
     <Box component="li" sx={{ listStyle: 'none', py: 0.75 }}>

@@ -6,7 +6,7 @@
  * ever extracted) or a proposal opened directly (#368's Home card).
  *
  * - `detail` is `undefined` until the first answer, `null` for "no proposal".
- * - While the proposal is `extracting`, it is re-read every 2 s through
+ * - While the proposal is `extracting`, it is re-read every 2 s (`pollMs`) through
  *   `useVisiblePolling` (paused in a hidden tab) and polling stops the moment
  *   it settles.
  * - `decide` is OPTIMISTIC: the row's checkbox moves at once and moves back if
@@ -79,9 +79,10 @@ function optimistic(item: ProposalItem, body: PatchProposalItemInput): ProposalI
 
 export function useGraphProposal(
   source: GraphProposalSource,
-  options: { enabled?: boolean } = {},
+  options: { enabled?: boolean; pollMs?: number } = {},
 ): UseGraphProposalReturn {
   const enabled = options.enabled ?? true;
+  const pollMs = options.pollMs ?? PROPOSAL_POLL_MS;
   const key = sourceKey(source);
   const [detail, setDetail] = useState<ProposalDetail | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +117,7 @@ export function useGraphProposal(
   }, [enabled, key, refresh]);
 
   const extracting = detail?.proposal.status === 'extracting';
-  useVisiblePolling(() => void refresh(), enabled && extracting ? PROPOSAL_POLL_MS : 0);
+  useVisiblePolling(() => void refresh(), enabled && extracting ? pollMs : 0);
 
   const proposalId = useCallback((): string => {
     const id = detailRef.current?.proposal.id;

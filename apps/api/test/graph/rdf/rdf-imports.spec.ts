@@ -7,12 +7,13 @@ import { join, relative } from 'node:path';
 //
 // §18.4 confines `n3`, `jsonld` and `rdf-validate-shacl` to the export/import
 // JOB handlers. The ontology artefacts (#385) are written by the hand-written
-// `graph/rdf/turtle-writer.ts`; the data export (#386) is the one runtime user,
-// and it keeps both libraries inside ONE file — `graph/export/serializers.ts` —
-// which only the `kg.export` handler reaches. So: `n3` and `jsonld` may be
-// imported by that file and no other non-test file under `apps/api/src/`, and
-// `rdf-validate-shacl`/`rdf-ext` by none (they stay test-only). #387 widens the
-// allowlist by exactly the file its import handler needs.
+// `graph/rdf/turtle-writer.ts`. The data export (#386) keeps `n3`/`jsonld`
+// inside ONE file — `graph/export/serializers.ts` — which only the `kg.export`
+// handler reaches. The import (#387) widens the allowlist by exactly the two
+// files its handler needs: `graph/import/rdf-parse.ts` (`n3`, `jsonld`) and
+// `graph/import/shacl-engine.ts` (`rdf-validate-shacl`, resolved by path and
+// run in a child process). `rdf-ext` stays test-only; and each of those three
+// files is imported by job handlers only, never a controller or service.
 //
 // A text scan rather than a module graph walk: an import is a string in a file,
 // and a grep is the check a reviewer would run by hand.
@@ -21,10 +22,11 @@ import { join, relative } from 'node:path';
 const SRC = join(__dirname, '..', '..', '..', 'src');
 const FORBIDDEN = ['n3', 'jsonld', 'rdf-validate-shacl', 'rdf-ext'];
 
-/** The only files allowed to import a given library — the export job's serializer (#386). */
+/** The only files allowed to import a given library: the export serializer (#386), the import parser and SHACL runner (#387). */
 const ALLOWED: Readonly<Record<string, readonly string[]>> = {
-  n3: [join('graph', 'export', 'serializers.ts')],
-  jsonld: [join('graph', 'export', 'serializers.ts')],
+  n3: [join('graph', 'export', 'serializers.ts'), join('graph', 'import', 'rdf-parse.ts')],
+  jsonld: [join('graph', 'export', 'serializers.ts'), join('graph', 'import', 'rdf-parse.ts')],
+  'rdf-validate-shacl': [join('graph', 'import', 'shacl-engine.ts')],
 };
 
 function sourceFiles(dir: string): string[] {
@@ -35,10 +37,12 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** `from 'x'`, `import 'x'`, `require('x')`, `import('x')` — and any subpath `x/…`. */
+/** `from 'x'`, `import 'x'`, `require('x')`, `require.resolve('x')`, `import('x')` — and any subpath `x/…`. */
 function importsOf(pkg: string): RegExp {
   const name = pkg.replace(/[-/]/g, (c) => `\\${c}`);
-  return new RegExp(`(?:\\bfrom\\s+|\\bimport\\s+|\\brequire\\s*\\(\\s*|\\bimport\\s*\\(\\s*)['"\`]${name}(?:/[^'"\`]*)?['"\`]`);
+  return new RegExp(
+    `(?:\\bfrom\\s+|\\bimport\\s+|\\brequire(?:\\.resolve)?\\s*\\(\\s*|\\bimport\\s*\\(\\s*)['"\`]${name}(?:/[^'"\`]*)?['"\`]`,
+  );
 }
 
 describe('RDF libraries stay out of apps/api/src (§18.4)', () => {
@@ -49,7 +53,7 @@ describe('RDF libraries stay out of apps/api/src (§18.4)', () => {
     expect(files.some((f) => f.endsWith(join('graph', 'rdf', 'turtle-writer.ts')))).toBe(true);
   });
 
-  it.each(FORBIDDEN)('no non-test file outside the export serializer imports %s', (pkg) => {
+  it.each(FORBIDDEN)('no non-test file outside its allowlist imports %s', (pkg) => {
     const pattern = importsOf(pkg);
     const offenders = files
       .filter((f) => pattern.test(readFileSync(f, 'utf8')))
@@ -65,6 +69,13 @@ describe('RDF libraries stay out of apps/api/src (§18.4)', () => {
     for (const importer of importers) expect(importer).toMatch(/\.handler\.ts$/);
   });
 
+  it.each(['rdf-parse', 'shacl-engine'])('the import job’s %s is imported only by job handlers', (module) => {
+    const pattern = new RegExp(`from\\s+['"][./]*(?:import\\/)?${module}['"]`);
+    const importers = files.filter((f) => pattern.test(readFileSync(f, 'utf8'))).map((f) => relative(SRC, f));
+    expect(importers.length).toBeGreaterThan(0);
+    for (const importer of importers) expect(importer).toMatch(/\.handler\.ts$/);
+  });
+
   it('recognises every import form it is meant to catch', () => {
     const pattern = importsOf('n3');
     for (const line of [
@@ -74,6 +85,7 @@ describe('RDF libraries stay out of apps/api/src (§18.4)', () => {
       "const n3 = require('n3');",
       "await import('n3')",
       "import { Writer } from 'n3/lib/N3Writer';",
+      "require.resolve('n3')",
     ]) {
       expect(pattern.test(line)).toBe(true);
     }

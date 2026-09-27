@@ -74,6 +74,9 @@ export interface EvidenceRowInput {
   charStart: number | null;
   charEnd: number | null;
   quote: string;
+  /** #387 — an import citation's stored file and the node's source IRI. */
+  importObjectId?: string | null;
+  sourceIri?: string | null;
 }
 
 /** What the mapper looks up; the service fills it with bounded queries. */
@@ -274,9 +277,13 @@ export function displayOf(
 
 export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): EvidenceView {
   const isSegment = e.segmentId !== null || e.transcriptId !== null || e.segmentRev !== null || e.startMs !== null;
+  // #387: an import citation names the uploaded file, never a segment or a note.
+  const isImport = !isSegment && e.noteId === null && (Boolean(e.importObjectId) || Boolean(e.sourceIri));
   let stale: boolean;
   let speakerName: string | null = null;
-  if (isSegment) {
+  if (isImport) {
+    stale = false;
+  } else if (isSegment) {
     const current = e.segmentId ? lookups.segments.get(e.segmentId) : undefined;
     speakerName = current?.speakerName ?? null;
     stale = !current || e.segmentRev === null || current.rev !== e.segmentRev;
@@ -286,7 +293,7 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
   }
   return {
     id: e.id,
-    source: isSegment ? 'segment' : 'note',
+    source: isImport ? 'import' : isSegment ? 'segment' : 'note',
     transcriptId: e.transcriptId,
     segmentId: e.segmentId,
     segmentRev: e.segmentRev,
@@ -297,6 +304,8 @@ export function evidenceViewOf(e: EvidenceRowInput, lookups: ViewLookups): Evide
     charStart: e.charStart,
     charEnd: e.charEnd,
     quote: e.quote,
+    importObjectId: e.importObjectId ?? null,
+    sourceIri: e.sourceIri ?? null,
     speakerName,
     stale,
   };
@@ -403,7 +412,8 @@ export function precheckedOf(stats: unknown): Set<string> {
 }
 
 /** Internal bookkeeping in `stats` that is not display data. */
-const INTERNAL_STATS_KEYS = new Set(['prechecked']);
+// `importPending` (#387): an import's offered-property values, held until an offer is decided.
+const INTERNAL_STATS_KEYS = new Set(['prechecked', 'importPending']);
 
 export function summaryOf(
   proposal: ProposalRowInput,
