@@ -1,6 +1,6 @@
-import { ONTOLOGY } from '@app/shared/ontology';
+import { ONTOLOGY, computeEffectiveSchema } from '@app/shared/ontology';
 
-import { edgeValid, itemLabel, mergeEdgeRows, type EdgeRow } from './graph-neighborhood.service';
+import { edgeValid, itemLabel, mergeEdgeRows, visibleRelationProps, type EdgeRow } from './graph-neighborhood.service';
 import { GRAPH_QUERY_TIMEOUT_REASON, isStatementTimeout, withGraphStatementTimeout } from './graph-query-timeout';
 import { ITEM_COLUMN_EDGES, itemColumnEdges } from './virtual-edges';
 
@@ -30,7 +30,7 @@ describe('mergeEdgeRows', () => {
     const stored = row({ id: 'r-1', virtual: false, confidence: 0.9 });
     const derived = row({ id: `virt:${I}:ABOUT` });
     expect(mergeEdgeRows([derived, stored])).toEqual([
-      { id: 'r-1', type: 'ABOUT', source: I, target: A, valid: null, confidence: 0.9, virtual: false },
+      { id: 'r-1', type: 'ABOUT', source: I, target: A, valid: null, confidence: 0.9, virtual: false, props: {} },
     ]);
   });
 
@@ -42,6 +42,53 @@ describe('mergeEdgeRows', () => {
     ]);
     expect(edges.map((e) => e.id)).toEqual([`virt:${I}:ASSIGNED_TO`, `virt:${I}:OWED_TO`]);
     expect(edges.every((e) => e.virtual)).toBe(true);
+  });
+});
+
+describe('edge props (#440)', () => {
+  const schema = computeEffectiveSchema({ enabledDomains: ['core', 'work'], userAttributes: [] });
+  const hasRole = schema.relationType('HAS_ROLE')!;
+
+  it("carries a stored relation's declared props, in declaration order, dropping undeclared keys and nulls", () => {
+    const edges = mergeEdgeRows(
+      [
+        row({
+          id: 'r-1',
+          type: 'HAS_ROLE',
+          source: A,
+          target: B,
+          virtual: false,
+          props: { stray: 'x', businessUnit: 'Consulting', title: 'Managing Director' },
+        }),
+        row({ id: 'r-2', type: 'HAS_ROLE', source: A, target: B, virtual: false, props: { title: 'Partner', businessUnit: null } }),
+      ],
+      (type) => schema.relationType(type),
+    );
+    expect(edges.map((e) => e.props)).toEqual([
+      { title: 'Managing Director', businessUnit: 'Consulting' },
+      { title: 'Partner' },
+    ]);
+    expect(Object.keys(edges[0].props)).toEqual(['title', 'businessUnit']);
+  });
+
+  it('is {} for a derived edge, an unknown type, or no resolver', () => {
+    expect(mergeEdgeRows([row({ props: { title: 'x' } })], (t) => schema.relationType(t))[0].props).toEqual({});
+    expect(mergeEdgeRows([row({ id: 'r', type: 'NOPE', virtual: false, props: { title: 'x' } })], (t) => schema.relationType(t))[0].props).toEqual({});
+    expect(mergeEdgeRows([row({ id: 'r', type: 'HAS_ROLE', virtual: false, props: { title: 'x' } })])[0].props).toEqual({});
+  });
+
+  it('never shows a sensitive or deprecated prop, and tolerates a non-object props column', () => {
+    const fake = {
+      ...hasRole,
+      props: [
+        { ...hasRole.props[0], key: 'shown' },
+        { ...hasRole.props[0], key: 'secret', sensitivity: 'sensitive' as const },
+        { ...hasRole.props[0], key: 'old', deprecated: true },
+      ],
+    };
+    expect(visibleRelationProps({ shown: 1, secret: 2, old: 3 }, fake)).toEqual({ shown: 1 });
+    expect(visibleRelationProps(null, hasRole)).toEqual({});
+    expect(visibleRelationProps(['title'], hasRole)).toEqual({});
   });
 });
 

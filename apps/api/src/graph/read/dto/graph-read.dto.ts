@@ -134,6 +134,11 @@ export const graphEdgeSchema = z.object({
   valid: validSchema,
   confidence: z.number().nullable(),
   virtual: z.boolean(),
+  props: z
+    .record(z.string(), z.unknown())
+    .describe(
+      "The relation's own attribute values, keyed by prop key — e.g. HAS_ROLE `{ title: 'Managing Director', businessUnit: 'Consulting' }` (#440). Only props the relation type declares in your effective schema, never a deprecated or `sensitive` one, never a null value. `{}` for a derived (`virtual`) edge or a relation with none. Read labels from `GET /api/graph/ontology`'s relation-type `props`.",
+    ),
 });
 export type GraphEdge = z.infer<typeof graphEdgeSchema>;
 
