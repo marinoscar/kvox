@@ -16,7 +16,7 @@ exports[`generateOwl parses with n3 and matches the snapshot 1`] = `
 kv:
     a owl:Ontology ;
     rdfs:label "<APP_NAME> ontology" ;
-    owl:versionInfo "1.0.1" .
+    owl:versionInfo "1.1.0" .
 
 kv:ABOUT
     a owl:ObjectProperty ;
@@ -28,7 +28,7 @@ kv:ABOUT
     rdfs:label "About" ;
     rdfs:range [
         a owl:Class ;
-        owl:unionOf ( kv:Meeting kv:Organization kv:Person kv:Project )
+        owl:unionOf ( kv:Interest kv:Meeting kv:Milestone kv:Organization kv:Person kv:Project kv:Trip )
     ] .
 
 kv:ASSIGNED_TO
@@ -95,6 +95,22 @@ kv:Decision.rejectedOption
     rdfs:label "Rejected option" ;
     rdfs:range xsd:string .
 
+kv:FRIEND_OF
+    a owl:ObjectProperty,
+        owl:SymmetricProperty ;
+    rdfs:comment "Two people are personal friends, beyond working together. Direction does not matter: record it once." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Friend of" ;
+    rdfs:range kv:Person ;
+    rdfs:subPropertyOf foaf:knows .
+
+kv:HAS_MILESTONE
+    a owl:ObjectProperty ;
+    rdfs:comment "A life event belongs to this person: it is their birthday, wedding, graduation or move." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Has milestone" ;
+    rdfs:range kv:Milestone .
+
 kv:HAS_ROLE
     a owl:ObjectProperty ;
     rdfs:comment "A person holds a titled role at an organization for a period of time." ;
@@ -108,6 +124,27 @@ kv:HAS_ROLE.title
     rdfs:comment "The job title the person holds in this role, e.g. \\"Staff Engineer\\"." ;
     rdfs:domain kv:Assertion ;
     rdfs:label "Title" ;
+    rdfs:range xsd:string .
+
+kv:INTERESTED_IN
+    a owl:ObjectProperty ;
+    rdfs:comment "A person has a lasting personal interest." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Interested in" ;
+    rdfs:range kv:Interest ;
+    rdfs:subPropertyOf foaf:topic_interest .
+
+kv:Interest
+    a owl:Class ;
+    rdfs:comment "A lasting personal interest a person has outside work — a hobby, a sport, music, food, travel or a cause — e.g. \\"trail running\\", \\"jazz piano\\" or \\"the local food bank\\"." ;
+    rdfs:label "Interest" ;
+    rdfs:subClassOf schema:Thing .
+
+kv:Interest.category
+    a owl:DatatypeProperty ;
+    rdfs:comment "What kind of interest this is, only if it is clear from the source." ;
+    rdfs:domain kv:Interest ;
+    rdfs:label "Category" ;
     rdfs:range xsd:string .
 
 kv:Meeting
@@ -144,6 +181,26 @@ kv:Meeting.transcriptId
     rdfs:label "Transcript" ;
     rdfs:range xsd:string .
 
+kv:Milestone
+    a owl:Class ;
+    rdfs:comment "A dated life event of one person — a birthday, an anniversary, a wedding, a birth, a graduation, a move or a retirement." ;
+    rdfs:label "Milestone" ;
+    rdfs:subClassOf schema:Event .
+
+kv:Milestone.date
+    a owl:DatatypeProperty ;
+    rdfs:comment "The date of the event, if stated." ;
+    rdfs:domain kv:Milestone ;
+    rdfs:label "Date" ;
+    rdfs:range xsd:date .
+
+kv:Milestone.kind
+    a owl:DatatypeProperty ;
+    rdfs:comment "What kind of life event this is." ;
+    rdfs:domain kv:Milestone ;
+    rdfs:label "Kind" ;
+    rdfs:range xsd:string .
+
 kv:OWED_TO
     a owl:ObjectProperty ;
     rdfs:comment "The person or organization a commitment is owed to, when one is stated." ;
@@ -159,6 +216,14 @@ kv:Organization
     rdfs:comment "A company, client, vendor or institution, or an internal team specifically when that team acts as a party to a commitment or decision." ;
     rdfs:label "Organization" ;
     rdfs:subClassOf schema:Organization .
+
+kv:PARENT_OF
+    a owl:ObjectProperty ;
+    rdfs:comment "A person is the parent of another person: from is the parent, to is the child." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Parent of" ;
+    rdfs:range kv:Person ;
+    rdfs:subPropertyOf schema:children .
 
 kv:PART_OF
     a owl:ObjectProperty ;
@@ -218,6 +283,15 @@ kv:REPORTS_TO
     rdfs:label "Reports to" ;
     rdfs:range kv:Person .
 
+kv:SPOUSE_OF
+    a owl:ObjectProperty,
+        owl:SymmetricProperty ;
+    rdfs:comment "Two people are married to, or the life partners of, each other. Direction does not matter: record it once." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Spouse of" ;
+    rdfs:range kv:Person ;
+    rdfs:subPropertyOf schema:spouse .
+
 kv:SUPERSEDES
     a owl:ObjectProperty ;
     rdfs:comment "A newer decision, claim or commitment that replaces an older one of the same type." ;
@@ -231,6 +305,40 @@ kv:SUPERSEDES
         owl:unionOf ( kv:Claim kv:Commitment kv:Decision )
     ] ;
     rdfs:subPropertyOf prov:wasRevisionOf .
+
+kv:TRAVELED_ON
+    a owl:ObjectProperty ;
+    rdfs:comment "A person went, or is going, on a personal trip." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Traveled on" ;
+    rdfs:range kv:Trip .
+
+kv:Trip
+    a owl:Class ;
+    rdfs:comment "A specific personal journey with a destination and rough dates, e.g. \\"the family trip to Lisbon in June\\"." ;
+    rdfs:label "Trip" ;
+    rdfs:subClassOf schema:Trip .
+
+kv:Trip.destination
+    a owl:DatatypeProperty ;
+    rdfs:comment "Where the trip goes, as the source names it." ;
+    rdfs:domain kv:Trip ;
+    rdfs:label "Destination" ;
+    rdfs:range xsd:string .
+
+kv:Trip.endDate
+    a owl:DatatypeProperty ;
+    rdfs:comment "The date the trip ends or ended, if stated." ;
+    rdfs:domain kv:Trip ;
+    rdfs:label "End date" ;
+    rdfs:range xsd:date .
+
+kv:Trip.startDate
+    a owl:DatatypeProperty ;
+    rdfs:comment "The date the trip starts or started, if stated." ;
+    rdfs:domain kv:Trip ;
+    rdfs:label "Start date" ;
+    rdfs:range xsd:date .
 
 kv:WORKS_FOR
     a owl:ObjectProperty ;
