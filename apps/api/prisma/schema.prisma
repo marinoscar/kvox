@@ -4599,6 +4599,8 @@ model KgItem {
 // anchor has gone to NULL. `char_start`/`char_end` are offsets into the
 // cited NOTE VERSION BODY when `note_id` is set, or into the cited
 // SEGMENT'S TEXT when `segment_id` is set — NULL means the whole segment.
+// On a NOTE citation, both NULL means "the note's Context field" (#440): the
+// Context has no body offsets, so the quote alone carries the span.
 // #363 relies on this exact convention; do not reinterpret it per-caller.
 // -----------------------------------------------------------------------------
 model KgEvidence {
@@ -4622,7 +4624,8 @@ model KgEvidence {
 
   // Offsets into the cited NOTE VERSION BODY when `noteId` is set, or into
   // the cited SEGMENT'S TEXT when `segmentId` is set. NULL means the whole
-  // segment. See the block comment above the model — #363 reads this
+  // segment; on a note citation, both NULL means the note's Context field
+  // (#440). See the block comment above the model — #363 reads this
   // convention directly.
   charStart Int? @map("char_start")
   charEnd   Int? @map("char_end")
