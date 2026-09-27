@@ -49,6 +49,23 @@ export type { OntologyRegistry } from './registry.js';
 export { toEffectiveSchemaPayload } from './effective-schema.js';
 export { buildPropsSchema, validateProps } from './props-schema.js';
 export type { BuildPropsSchemaOptions, PropsIssue, PropsPurpose, ValidatePropsResult } from './props-schema.js';
+export {
+  ONTOLOGY_MIGRATIONS,
+  applyMigrationSteps,
+  checkOntologyMigrations,
+  compareOntologyVersions,
+  isMajorOntologyVersion,
+  isOntologyVersion,
+  migrationsBetween,
+  parseOntologyVersion,
+} from './migrations.js';
+export type {
+  ApplyMigrationStepsResult,
+  CheckOntologyMigrationsInput,
+  MigratableRow,
+  OntologyMigration,
+  OntologyMigrationStep,
+} from './migrations.js';
 export { buildPropsJsonSchema, extractableEntityTypes, extractableRelationTypes } from './json-schema.js';
 export type {
   ComputeEffectiveSchemaInput,

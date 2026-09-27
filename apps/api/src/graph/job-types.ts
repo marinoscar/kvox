@@ -30,6 +30,7 @@ export const KG_RESOLVE_JOB_TYPE = 'kg.resolve';
 export const KG_EMBED_JOB_TYPE = 'kg.embed';
 export const KG_ENTITY_DIGEST_JOB_TYPE = 'kg.entity_digest';
 export const KG_GRAPH_LAYOUT_JOB_TYPE = 'kg.graph_layout';
+export const KG_MIGRATE_JOB_TYPE = 'kg.migrate';
 // #386 — RDF export of one owner's graph (render), and the daily expiry sweep
 // (same type, `payload.mode: 'sweep'` — no new job type for housekeeping).
 export const KG_EXPORT_JOB_TYPE = 'kg.export';

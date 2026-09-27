@@ -82,7 +82,11 @@ import type { JobsService } from './jobs.service';
  */
 export const HOUSEKEEPING_PRIORITY = 100;
 
-/** What one enqueue attempt needs. All four are required. */
+/**
+ * What one enqueue attempt needs. `jobs`, `prisma`, `logger`, `type` and `what`
+ * are required; the subject and payload are for a PER-SUBJECT housekeeping job
+ * (#384's `kg.migrate`, one per owner) and default to a global one.
+ */
 export interface HousekeepingEnqueueOptions {
   jobs: JobsService;
   prisma: PrismaService;
@@ -93,13 +97,19 @@ export interface HousekeepingEnqueueOptions {
   /** A human phrase for the log line ("device code cleanup"). Lower case. */
   what: string;
   /**
-   * Optional: a subject TYPE that tells this sweep apart from other jobs of the
-   * same `type` (#386 — `kg.export` renders exports under `kg_export`/<id> and
-   * sweeps them under `kg_export_sweep` with no id). When set, the in-flight
-   * check and the dedup key are both scoped to it, so a pending render never
-   * suppresses the sweep. The subject id stays null: still one global sweep.
+   * Optional subject. Two callers, one rule — the in-flight check and the
+   * dedup key are both scoped to exactly (type, subjectType, subjectId):
+   *   - subject TYPE only (#386): tells a global sweep apart from other jobs
+   *     of the same `type` — `kg.export` renders under `kg_export`/<id> and
+   *     sweeps under `kg_export_sweep` with a null id, so a pending render
+   *     never suppresses the sweep. Still one global sweep.
+   *   - subject TYPE + ID (#384): a per-subject job — `kg.migrate` queues one
+   *     per owner (`user`/<ownerId>), one active job per owner.
+   * Omit both for a plain global job (the original shape). `subjectId`
+   * without `subjectType` is ignored.
    */
   subjectType?: string;
+  subjectId?: string;
   /** Optional handler input (e.g. `{ mode: 'sweep' }`). Identifiers only. */
   payload?: Prisma.InputJsonValue;
 }
@@ -117,15 +127,12 @@ export interface HousekeepingEnqueueOptions {
 export async function enqueueHousekeepingJob(
   options: HousekeepingEnqueueOptions
 ): Promise<Job | null> {
-  const { jobs, prisma, logger, type, what, subjectType, payload } = options;
+  const { jobs, prisma, logger, type, what, subjectType, subjectId, payload } = options;
+  const subject = subjectType !== undefined ? { subjectType, subjectId: subjectId ?? null } : null;
 
   try {
     const active = await prisma.job.findFirst({
-      where: {
-        type,
-        status: { in: ['pending', 'running'] },
-        ...(subjectType !== undefined ? { subjectType, subjectId: null } : {}),
-      },
+      where: { type, status: { in: ['pending', 'running'] }, ...(subject ?? {}) },
       select: { id: true, status: true },
     });
 
@@ -144,12 +151,13 @@ export async function enqueueHousekeepingJob(
       // over existing rows, not a response to an upload and not a human asking
       // for something to be run again.
       reason: 'backfill',
-      // GLOBAL — no subject. Both nulls are what makes the dedup key constant
-      // for the type, which is what makes the index a real single-flight
-      // guarantee rather than a hint.
-      priority: HOUSEKEEPING_PRIORITY,
-      ...(subjectType !== undefined ? { subjectType, subjectId: null } : {}),
+      // GLOBAL unless a subject was given. Both nulls are what makes the
+      // dedup key constant for the type, which is what makes the index a real
+      // single-flight guarantee rather than a hint; with a subject, the same
+      // guarantee holds per (type, subject).
+      ...(subject ?? {}),
       ...(payload !== undefined ? { payload } : {}),
+      priority: HOUSEKEEPING_PRIORITY,
     });
 
     logger.log(`Queued ${what} job ${job.id}`);
