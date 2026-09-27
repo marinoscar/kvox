@@ -40,9 +40,11 @@ describe('ProposalItemEditor', () => {
     const user = userEvent.setup();
     const { onSave, baseElement } = renderEditor(item(ITEM.sarah));
     const dialog = screen.getByRole('dialog', { name: 'Edit Sarah Chen' });
-    // `Job title` is the `work` domain's mixin on Person — never hand-coded.
+    // `Job title` (key `title`) is the `work` domain's mixin on Person — never hand-coded.
+    // Retired in 1.2.0 (#440): a stored value is still shown, read-only, and kept on save.
     const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
     expect(jobTitle).toHaveValue('Head of Platform');
+    expect(jobTitle).toBeDisabled();
     expect(await axe(baseElement, AXE_OPTIONS)).toHaveNoViolations();
 
     const name = within(dialog).getByRole('textbox', { name: 'Name' });
@@ -68,9 +70,10 @@ describe('ProposalItemEditor', () => {
       label: 'Vessel',
       pluralLabel: 'Vessels',
       attributes: [
-        { ...person.attributes[0], key: 'hullNumber', label: 'Hull number', kind: 'text' },
+        { ...person.attributes[0], deprecated: false, key: 'hullNumber', label: 'Hull number', kind: 'text' },
         {
           ...person.attributes[0],
+          deprecated: false,
           key: 'flag',
           label: 'Flag state',
           kind: 'select',

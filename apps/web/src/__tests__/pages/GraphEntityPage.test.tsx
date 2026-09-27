@@ -144,9 +144,12 @@ describe('GraphEntityPage — edit', () => {
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog', { name: /Edit Joe Rivera/ });
 
-    // "Job title" is Person's attribute in the shipped ontology — no per-type code.
+    // Person's `title` is retired in the shipped ontology (1.2.0, #440 — a role is a
+    // HAS_ROLE prop now): a stored value is still shown, read-only — no per-type code.
     const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
     expect(jobTitle).toHaveValue('VP Engineering');
+    expect(jobTitle).toBeDisabled();
+    expect(within(dialog).getByText('Retired field — shown because it has a value')).toBeInTheDocument();
 
     const name = within(dialog).getByRole('textbox', { name: /Name/ });
     await user.clear(name);
@@ -181,8 +184,7 @@ describe('GraphEntityPage — edit', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
-    await user.type(jobTitle, '!');
+    await user.type(within(dialog).getByRole('textbox', { name: /Name/ }), '!');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     expect(await within(dialog).findByText('Some attributes are not valid for this type.')).toBeInTheDocument();

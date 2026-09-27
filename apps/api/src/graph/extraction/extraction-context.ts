@@ -8,7 +8,8 @@
 // prompt, the output schema and the validator all read:
 //
 //   - SHORT ALIASES. Segments become `s1…sN` in ordinal order, known entities
-//     `k1…kM`, the note is `N`. The model cites ids it was handed; an id it
+//     `k1…kM`, the note is `N`, and the note's Context field — when it is not
+//     blank — is `C` (#440). The model cites ids it was handed; an id it
 //     invents is structurally detectable (not in the map) rather than a
 //     plausible-looking UUID.
 //   - THE OFFERED SCHEMA. The caller's effective schema, narrowed to what
@@ -44,6 +45,23 @@ export const MAX_KNOWN_ENTITIES = 60;
 
 /** The alias of the note itself in a citation. */
 export const NOTE_ALIAS = 'N';
+
+/**
+ * The alias of the note's Context field in a citation (#440). Offered only
+ * when the Context is non-blank (`offeredContextText`). A `C` citation is
+ * stored as a note citation with NULL `charStart`/`charEnd` — the
+ * `kg_evidence` convention for "the note's Context field".
+ */
+export const CONTEXT_ALIAS = 'C';
+
+/**
+ * The Context text the model is shown and may cite as `C`, trimmed; null when
+ * there is none or it is blank (the section and the alias are then omitted).
+ */
+export function offeredContextText(contextText: string | null | undefined): string | null {
+  const trimmed = contextText?.trim() ?? '';
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 /** The ref of the deterministic Meeting row, and the endpoint the model uses for it. */
 export const MEETING_REF = 'meeting';

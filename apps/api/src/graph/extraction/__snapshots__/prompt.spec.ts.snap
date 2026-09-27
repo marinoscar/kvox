@@ -5,7 +5,7 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of a small context
   "systemPrompt": "You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.
 
 ## Rules
-1. Cite only ids you were given: \`s#\` for a transcript line, \`N\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.
+1. Cite only ids you were given: \`s#\` for a transcript line, \`N\` for the note, \`C\` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.
 2. Never propose a row you cannot cite.
 3. When a mention is one of the known entities, use its \`k#\` id as \`ref\` (or as an endpoint). Otherwise give it a new ref \`e1\`, \`e2\`, … and use that ref in relations and facts. The meeting itself is \`meeting\`.
 4. Use only the entity types, relation types and attributes listed below — no others, and never a generic RELATED_TO. Leave an attribute null when the source does not state it.
@@ -14,6 +14,7 @@ exports[`assembleExtractionPrompt (#363) matches the snapshot of a small context
 7. Resolve relative dates ("next Friday", "in Q2") against the meeting date 2026-03-02. Dates are YYYY-MM-DD. When the source is not precise about a date, write \`precision: "unknown"\` (and null dates) rather than guessing.
 8. Mark a person fact's \`sensitivity\` honestly: \`sensitive\` means health, legal, financial or similarly weighty personal information.
 9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type's disambiguation lines below; put recurring topics in \`meeting.topics\` instead.
+10. Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing \`C\`, and prefer the Context's spelling of a name over the transcript's.
 
 ## Entity types
 
@@ -52,7 +53,10 @@ A statement about a Person as an individual rather than about their work: an int
   "userContent": "# Meeting
 Date: 2026-03-02
 Title: Pilot kickoff call
-Context: Kickoff with Northwind about the pilot.
+
+# Context
+Background the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as \`C\`.
+Kickoff with Northwind about the pilot.
 
 # Known entities
 k1 | Person | Sarah Chen | aka: Sarah, S. Chen | Northwind Robotics

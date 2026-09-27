@@ -31,5 +31,12 @@ exports.CHANGELOG = Object.freeze([
             'relation `sensitivityDefault` (personal-domain relations are `personal`)',
         ]),
     }),
+    Object.freeze({
+        version: '1.2.0',
+        date: '2026-09-27',
+        changes: Object.freeze([
+            'work: HAS_ROLE gains optional businessUnit; WORKS_FOR is the employer, HAS_ROLE the role/unit; Person.title deprecated in their favour (#440)',
+        ]),
+    }),
 ]);
-exports.ONTOLOGY_VERSION = '1.1.0';
+exports.ONTOLOGY_VERSION = '1.2.0';
