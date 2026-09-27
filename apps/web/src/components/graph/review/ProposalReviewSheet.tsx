@@ -16,6 +16,10 @@
  *     as on a phone. (That width check happens at click time — it is not a
  *     media-query subscription.)
  *
+ * `variant="inline"` (#387) renders the same header, rows and commit bar in the
+ * page flow instead of a drawer — the import page (`/graph/imports/:id`) is a
+ * page of its own, with no note to sit beside and nothing to close.
+ *
  * Everything the reviewer does is one #366 call through `useGraphProposal`;
  * the sheet only turns answers into snackbars, a polite live region and
  * dialogs. It never re-derives what the server computed (`display`,
@@ -36,6 +40,7 @@ import Drawer from '@mui/material/Drawer';
 import GlobalStyles from '@mui/material/GlobalStyles';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
+import Paper from '@mui/material/Paper';
 import Snackbar from '@mui/material/Snackbar';
 import Typography from '@mui/material/Typography';
 import useMediaQuery from '@mui/material/useMediaQuery';
@@ -74,7 +79,14 @@ import { RevertDialog } from './RevertDialog';
 
 export interface ProposalReviewSheetProps {
   open: boolean;
-  onClose: () => void;
+  /** Absent for `variant="inline"`, which has no close. */
+  onClose?: () => void;
+  /**
+   * `sheet` (default): the drawer over a note. `inline` (#387's import page):
+   * the same header, rows and commit bar rendered in the page flow — a page of
+   * its own has no note to sit beside.
+   */
+  variant?: 'sheet' | 'inline';
   source: { noteId: string } | { proposalId: string };
   /** The rendered note body, for jump-to-span highlighting. Absent off the note page. */
   noteBodyRef?: RefObject<HTMLElement | null>;
@@ -173,7 +185,9 @@ export function ProposalReviewSheet({
   headerSlot,
   proposal: external,
   focusItemId = null,
+  variant = 'sheet',
 }: ProposalReviewSheetProps) {
+  const inline = variant === 'inline';
   const theme = useTheme();
   const isCompactWindow = useMediaQuery(theme.breakpoints.down('sm'));
   const { hasPermission } = usePermissions();
@@ -212,10 +226,10 @@ export function ProposalReviewSheet({
   // here, onto the heading, so a keyboard user lands in the sheet they opened.
   // (The phone's bottom sheet is a Modal, which focuses itself.)
   useEffect(() => {
-    if (!open || isCompactWindow) return;
+    if (!open || isCompactWindow || inline) return;
     const timer = window.setTimeout(() => document.getElementById(headingId)?.focus(), 0);
     return () => window.clearTimeout(timer);
-  }, [headingId, isCompactWindow, open]);
+  }, [headingId, inline, isCompactWindow, open]);
 
   // #368: bring a just-added row into view, once, as soon as it is drawn.
   const focusedRef = useRef<string | null>(null);
@@ -379,7 +393,7 @@ export function ProposalReviewSheet({
         headerSlot={headerSlot}
       />
       {audioBar}
-      <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', px: 2, py: 1.5 }}>
+      <Box sx={inline ? { px: 2, py: 1.5 } : { flex: 1, minHeight: 0, overflowY: 'auto', px: 2, py: 1.5 }}>
         <ProposalReviewContent
           detail={detail}
           loadError={ctl.error}
@@ -415,7 +429,13 @@ export function ProposalReviewSheet({
           },
         }}
       />
-      {isCompactWindow ? (
+      {inline ? (
+        open && (
+          <Paper variant="outlined" component="section" aria-labelledby={headingId} sx={{ overflow: 'hidden' }}>
+            {body}
+          </Paper>
+        )
+      ) : isCompactWindow ? (
         <Drawer
           anchor="bottom"
           open={open && !suspended}
@@ -540,7 +560,9 @@ export function ProposalReviewSheet({
         <DialogTitle id="proposal-discard-title">Discard this proposal?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Nothing from it will be sent to your graph. You can extract the note again later.
+            {summary?.kind === 'import'
+              ? 'Nothing from it will be sent to your graph. You can upload the file again later.'
+              : 'Nothing from it will be sent to your graph. You can extract the note again later.'}
           </DialogContentText>
         </DialogContent>
         <DialogActions>

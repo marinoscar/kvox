@@ -61,6 +61,8 @@ const GraphExplorerPage = lazy(() => import('./pages/GraphExplorerPage'));
 // The whole-graph overview (#375) — draws #371's stored snapshot with the
 // explorer's own `GraphCanvas`, so sigma stays behind these lazy imports too.
 const GraphOverviewPage = lazy(() => import('./pages/GraphOverviewPage'));
+// One RDF import, checked and reviewed (#387) — reuses the proposal review sheet.
+const GraphImportPage = lazy(() => import('./pages/GraphImportPage'));
 // Ask — the read-only graph agent (#380, epic #348). One page for both routes.
 const AskPage = lazy(() => import('./pages/AskPage'));
 const UserSettingsHubPage = lazy(() => import('./pages/UserSettingsHubPage'));
@@ -451,6 +453,21 @@ function AppRoutes() {
                         fallback={<Navigate to="/" replace />}
                       >
                         <GraphOverviewPage />
+                      </RequirePermission>
+                    }
+                  />
+                  {/* One RDF import (#387, spec §18.3). Same owner (`home`,
+                      via the `/graph` prefix); gated on `graph:write`, the
+                      exact string `POST /api/graph/imports` and the review
+                      writes enforce — importing is curating the graph. */}
+                  <Route
+                    path="/graph/imports/:proposalId"
+                    element={
+                      <RequirePermission
+                        permission="graph:write"
+                        fallback={<Navigate to="/graph" replace />}
+                      >
+                        <GraphImportPage />
                       </RequirePermission>
                     }
                   />

@@ -883,7 +883,8 @@ export interface ProposalSummary {
 
 export interface ProposalEvidence {
   id: string;
-  source: 'segment' | 'note';
+  /** `import` (#387): cited to the uploaded RDF file itself — nothing to play or highlight. */
+  source: 'segment' | 'note' | 'import';
   transcriptId: string | null;
   segmentId: string | null;
   segmentRev: number | null;
@@ -894,6 +895,9 @@ export interface ProposalEvidence {
   charStart: number | null;
   charEnd: number | null;
   quote: string;
+  /** Import evidence (#387): the stored file and the node's IRI in it. */
+  importObjectId?: string | null;
+  sourceIri?: string | null;
   speakerName: string | null;
   stale: boolean;
 }
@@ -1182,7 +1186,8 @@ export type GraphConflictReason =
   | 'note_not_ready'
   | 'proposal_not_committed'
   | 'stale_segment_rev'
-  | 'graph_empty';
+  | 'graph_empty'
+  | 'offer_decided';
 
 /** `details.reason` of a graph 409, like `noteConflictReason`. */
 export function graphConflictReason(err: unknown): GraphConflictReason | null {
@@ -1412,4 +1417,94 @@ export function getGraphExport(id: string, signal?: AbortSignal): Promise<GraphE
 export async function listGraphExports(signal?: AbortSignal): Promise<GraphExport[]> {
   const response = await api.get<{ exports: GraphExport[] }>('/graph/exports', { signal });
   return response.exports;
+}
+
+// -----------------------------------------------------------------------------
+// Graph import (#387, epic #349; spec §18.3)
+// -----------------------------------------------------------------------------
+
+export type GraphImportFormat = 'turtle' | 'jsonld' | 'nquads';
+
+export type GraphImportFailureReason =
+  | 'parse_error'
+  | 'too_large'
+  | 'ontology_version_newer'
+  | 'migration_pending'
+  | 'shacl_violations'
+  | 'empty';
+
+/** What the file picker accepts — the extensions `POST /api/graph/imports` reads. */
+export const GRAPH_IMPORT_ACCEPT = '.ttl,.jsonld,.json,.nq';
+
+/** The largest file an import accepts (20 MiB), checked client-side before the upload too. */
+export const GRAPH_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
+
+export interface GraphImportViolation {
+  focusNode: string;
+  path: string | null;
+  message: string;
+  severity: 'Violation' | 'Warning';
+}
+
+export interface GraphImportOffer {
+  offerId: string;
+  iri: string;
+  label: string | null;
+  count: number;
+  /** Entity/item type keys; `Assertion` when it sat on a relation (never acceptable). */
+  subjectTypes: string[];
+  sampleValues: string[];
+  suggestedKind: string;
+  status: 'offered' | 'accepted' | 'rejected';
+}
+
+/** `proposal.stats` of a `kind: import` proposal. Only filename/format/bytes exist while extracting. */
+export interface GraphImportStats {
+  filename?: string;
+  format?: GraphImportFormat;
+  bytes?: number;
+  triples?: number;
+  sourceOntologyVersion?: string | null;
+  migratedFrom?: string | null;
+  validation?: { conforms: boolean; violations: GraphImportViolation[]; violationCount: number };
+  unknownProperties?: GraphImportOffer[];
+  counts?: { entities: number; relations: number; items: number; skippedSensitive: number };
+  failureReason?: GraphImportFailureReason | null;
+}
+
+/** The import facts of a proposal summary (never throws; absent fields stay absent). */
+export function importStatsOf(summary: ProposalSummary | null | undefined): GraphImportStats {
+  return (summary?.stats ?? {}) as GraphImportStats;
+}
+
+export interface CreateGraphImportResponse {
+  proposalId: string;
+  jobId: string;
+}
+
+/** `POST /api/graph/imports` (`graph:write`, multipart) — 202; 400/409/413 as `ApiError`. */
+export function uploadGraphImport(file: File): Promise<CreateGraphImportResponse> {
+  const form = new FormData();
+  form.append('file', file);
+  return api.postFormData<CreateGraphImportResponse>('/graph/imports', form);
+}
+
+export interface AttributeOfferResult {
+  offer: GraphImportOffer;
+  attributeDefs: AttributeDef[];
+  rowsUpdated: number;
+  valuesDropped: number;
+}
+
+const offerPath = (proposalId: string, offerId: string, action: 'accept' | 'reject') =>
+  `${proposalPath(proposalId)}/attribute-offers/${encodeURIComponent(offerId)}/${action}`;
+
+/** `POST /api/graph/proposals/:id/attribute-offers/:offerId/accept` (`graph:write`). */
+export function acceptAttributeOffer(proposalId: string, offerId: string, label?: string): Promise<AttributeOfferResult> {
+  return api.post<AttributeOfferResult>(offerPath(proposalId, offerId, 'accept'), label ? { label } : {});
+}
+
+/** `POST /api/graph/proposals/:id/attribute-offers/:offerId/reject` (`graph:write`). */
+export function rejectAttributeOffer(proposalId: string, offerId: string): Promise<AttributeOfferResult> {
+  return api.post<AttributeOfferResult>(offerPath(proposalId, offerId, 'reject'));
 }

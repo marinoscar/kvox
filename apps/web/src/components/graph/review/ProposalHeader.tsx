@@ -41,7 +41,8 @@ export interface ProposalHeaderProps {
   summary: ProposalSummary | null;
   modelLabel: string | null;
   canWrite: boolean;
-  onClose: () => void;
+  /** Absent when the sheet is inline on a page of its own (#387's import page): no close button. */
+  onClose?: () => void;
   onReextract: () => void;
   onDiscard: () => void;
   onShowContext: () => void;
@@ -63,6 +64,8 @@ export function ProposalHeader({
   const counts = summary?.counts;
   const canDiscard = canWrite && (summary?.status === 'draft' || summary?.status === 'failed');
   const canReextract = canWrite && summary !== null && summary.status !== 'extracting' && summary.noteId !== null;
+  // An import (#387) had no prompt: there is nothing "the AI saw".
+  const hasContext = summary !== null && summary.kind !== 'import';
 
   return (
     <Box sx={{ px: 2, pt: 1.5, pb: 1, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}>
@@ -79,7 +82,7 @@ export function ProposalHeader({
         {summary && (
           <Chip size="small" label={PROPOSAL_STATUS_LABELS[summary.status]} color={STATUS_COLORS[summary.status]} />
         )}
-        {summary && (canReextract || canDiscard || summary.status !== 'extracting') && (
+        {summary && (canReextract || canDiscard || (hasContext && summary.status !== 'extracting')) && (
           <IconButton
             size="small"
             aria-label="Proposal actions"
@@ -89,9 +92,11 @@ export function ProposalHeader({
             <MoreVertIcon fontSize="small" />
           </IconButton>
         )}
-        <IconButton size="small" aria-label="Close graph proposal" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
+        {onClose && (
+          <IconButton size="small" aria-label="Close graph proposal" onClick={onClose}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        )}
       </Box>
       {summary?.model && (
         <Typography variant="caption" color="text.secondary" component="div">
@@ -125,14 +130,16 @@ export function ProposalHeader({
             Discard draft
           </MenuItem>
         )}
-        <MenuItem
-          onClick={() => {
-            setAnchor(null);
-            onShowContext();
-          }}
-        >
-          Show what the AI saw
-        </MenuItem>
+        {hasContext && (
+          <MenuItem
+            onClick={() => {
+              setAnchor(null);
+              onShowContext();
+            }}
+          >
+            Show what the AI saw
+          </MenuItem>
+        )}
       </Menu>
     </Box>
   );
