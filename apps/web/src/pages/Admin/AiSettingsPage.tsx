@@ -43,7 +43,8 @@
  * and how large an attached source document may be. That is exactly the field
  * set below, and every one of them is a ceiling on somebody else's money —
  * which is why they are worth an administrator's attention even though no
- * credential is.
+ * credential is. (Since #436 the two token ceilings are OPTIONAL spend caps:
+ * blank means the model's own maximum — see the `#436` section below.)
  *
  * `allowedModels` REPLACES WHOLESALE on save, matching the API's RFC 7396 array
  * rule: a merging list could never express "stop permitting this model", so
@@ -151,21 +152,31 @@
  *
  * `reasoningEffort` is sent to the provider as `reasoning_effort`, and it looks
  * like a provider knob — so it would land naturally in the Provider section
- * above, next to the vendor and the API root. It is in `Limits` instead, and the
- * reason is the only thing about this field an administrator has to know:
+ * above, next to the vendor and the API root. It is in `Limits` instead, because
+ * REASONING TOKENS ARE BILLED AND COUNTED AS OUTPUT TOKENS, drawn from the same
+ * completion ceiling the visible answer is drawn from — it is a bound on
+ * somebody else's spend, exactly like the two token fields beside it.
  *
- *   REASONING TOKENS ARE BILLED AND COUNTED AS OUTPUT TOKENS. They come out of
- *   the SAME `Max output tokens` ceiling the visible answer comes out of. At
- *   `high` or `xhigh` against the shipping 16,384 default, a generation can
- *   spend most of its budget thinking and return little or nothing — and it
- *   arrives as a TRUNCATED COMPLETION, not as an error anybody would connect to
- *   this control.
+ * Until #436 that ceiling was a fixed 16,384 default, so `high`/`xhigh` could
+ * spend most of it thinking and return a truncated answer, and the helper text
+ * told the administrator to raise `Max output tokens` by hand. That advice is
+ * gone because the API now sizes for it: with no typed output cap the model's
+ * own ceiling already covers the thinking, and with a typed cap this effort's
+ * reasoning headroom is added ON TOP of it automatically, bounded by the model's
+ * maximum. The helper text says that, at the control rather than in a tooltip.
  *
- * So it is a bound on somebody else's spend, exactly like `maxInputTokens` and
- * `maxOutputTokens`, and it belongs beside the one field it can silently
- * exhaust. The helper text names that field, in this page's own voice, at the
- * point of the control — not in a tooltip: a consequence somebody only
- * discovers by hovering is a consequence they discover from a support ticket.
+ * =============================================================================
+ * #436: THE TOKEN CEILINGS ARE OPTIONAL SPEND CAPS, AND THE PAGE SHOWS THE RESULT
+ * =============================================================================
+ *
+ * `maxInputTokens`/`maxOutputTokens` are `number | null`, default `null`. A
+ * blank field is saved as `null`, meaning "the selected model's own maximum";
+ * a typed number is a spend cap and is range-checked only then. Because what a
+ * request actually gets is now a function of the cap, the model's resolved
+ * limits and the reasoning effort together, the section renders the API's own
+ * `effectiveLimits` per permitted model (`AiEffectiveLimits`) — computed by the
+ * server for the SAVED policy, never recomputed here, and flagged as such when
+ * the draft differs.
  *
  * The option labels carry the trade-off too (`None (fastest, no reasoning)` …
  * `Extra high (slowest, most output tokens)`), so the dropdown is legible
@@ -241,6 +252,7 @@ import {
   toPermittedDrafts,
   type PermittedModelDraft,
 } from '../../components/admin/AiPermittedModels';
+import { AiEffectiveLimits } from '../../components/admin/AiEffectiveLimits';
 import { AI_ALLOWED_MODELS_MAX } from '../../services/ai';
 import type {
   AiProviderId,
@@ -287,6 +299,23 @@ const REASONING_EFFORT_OPTIONS: ReadonlyArray<{
   { value: 'high', label: 'High (slower, many more output tokens)' },
   { value: 'xhigh', label: 'Extra high (slowest, most output tokens)' },
 ];
+
+/**
+ * An OPTIONAL numeric field (#436): blank is valid and means "no cap", so only
+ * a value somebody typed is range-checked.
+ */
+function optionalNumericError(
+  raw: string,
+  bound: { min: number; max: number },
+  unit: string,
+): string | null {
+  return raw.trim().length === 0 ? null : numericError(raw, bound, unit);
+}
+
+/** A blank optional cap is `null` on the wire — the model's own maximum governs. */
+function parseOptionalCap(raw: string): number | null {
+  return raw.trim().length === 0 ? null : Number.parseInt(raw, 10);
+}
 
 function numericError(
   raw: string,
@@ -358,8 +387,9 @@ export default function AiSettingsPage() {
     setBaseUrl(s.providers.openai.baseUrl);
     setPermittedModels(toPermittedDrafts(s.providers.openai.allowedModels));
     setDefaultModel(s.providers.openai.defaultModel);
-    setMaxInputTokens(String(s.maxInputTokens));
-    setMaxOutputTokens(String(s.maxOutputTokens));
+    // `null` (no cap — the model's own maximum) is a blank field.
+    setMaxInputTokens(s.maxInputTokens === null ? '' : String(s.maxInputTokens));
+    setMaxOutputTokens(s.maxOutputTokens === null ? '' : String(s.maxOutputTokens));
     setRequestTimeoutMs(String(s.requestTimeoutMs));
     setMaxDocumentBytes(String(s.maxDocumentBytes));
     setReasoningEffort(s.reasoningEffort);
@@ -449,8 +479,16 @@ export default function AiSettingsPage() {
   // first-class control on this page.
   const canDiscover = modelPolicyProvider?.capabilities.modelDiscovery === true;
 
-  const inputError = numericError(maxInputTokens, BOUNDS.maxInputTokens, 'tokens');
-  const outputError = numericError(maxOutputTokens, BOUNDS.maxOutputTokens, 'tokens');
+  const inputError = optionalNumericError(maxInputTokens, BOUNDS.maxInputTokens, 'tokens');
+  const outputError = optionalNumericError(maxOutputTokens, BOUNDS.maxOutputTokens, 'tokens');
+  // `effectiveLimits` describes the SAVED policy; say so when the draft of the
+  // three fields that feed it has moved on.
+  const effectiveLimitsStale =
+    !inputError &&
+    !outputError &&
+    (parseOptionalCap(maxInputTokens) !== data.settings.maxInputTokens ||
+      parseOptionalCap(maxOutputTokens) !== data.settings.maxOutputTokens ||
+      reasoningEffort !== data.settings.reasoningEffort);
   const timeoutError = numericError(
     requestTimeoutMs,
     BOUNDS.requestTimeoutMs,
@@ -536,8 +574,10 @@ export default function AiSettingsPage() {
           defaultModel: defaultModel.trim(),
         },
       },
-      maxInputTokens: Number.parseInt(maxInputTokens, 10),
-      maxOutputTokens: Number.parseInt(maxOutputTokens, 10),
+      // Blank is `null` — "no cap, the model's own maximum" (#436) — never
+      // `undefined`, which the API's merge would read as "leave unchanged".
+      maxInputTokens: parseOptionalCap(maxInputTokens),
+      maxOutputTokens: parseOptionalCap(maxOutputTokens),
       requestTimeoutMs: Number.parseInt(requestTimeoutMs, 10),
       maxDocumentBytes: Number.parseInt(maxDocumentBytes, 10),
       reasoningEffort,
@@ -878,36 +918,49 @@ export default function AiSettingsPage() {
               Limits
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Every token here is spent on the requesting user&apos;s own provider account,
-              so these ceilings are the deployment&apos;s way of bounding a surprise on
-              somebody else&apos;s bill.
+              Every token is spent on the requesting user&apos;s own provider account. By
+              default each request may use the selected model&apos;s full capacity; the two
+              token fields are optional spend caps for bounding a surprise on somebody
+              else&apos;s bill. Leave them blank to use each model&apos;s maximum.
             </Typography>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
               <TextField
                 fullWidth
                 type="number"
-                label="Max input tokens"
+                label="Max input tokens (optional)"
+                placeholder="Model maximum"
                 value={maxInputTokens}
                 onChange={(event) => setMaxInputTokens(event.target.value)}
                 disabled={!canWrite}
                 error={!!inputError}
+                slotProps={{ inputLabel: { shrink: true } }}
                 helperText={
                   inputError ??
-                  'Ceiling on the assembled prompt. Sits under the model’s own context window, never over it.'
+                  'Optional cap on the assembled prompt. Blank means the model’s own context window; a cap never raises it.'
                 }
               />
               <TextField
                 fullWidth
                 type="number"
-                label="Max output tokens"
+                label="Max output tokens (optional)"
+                placeholder="Model maximum"
                 value={maxOutputTokens}
                 onChange={(event) => setMaxOutputTokens(event.target.value)}
                 disabled={!canWrite}
                 error={!!outputError}
-                helperText={outputError ?? 'Ceiling on what one generation may produce.'}
+                slotProps={{ inputLabel: { shrink: true } }}
+                helperText={
+                  outputError ??
+                  'Optional cap on one answer. Blank means the model’s own output ceiling; a cap never raises it.'
+                }
               />
             </Stack>
+
+            <AiEffectiveLimits
+              limits={data.effectiveLimits ?? []}
+              stale={effectiveLimitsStale}
+            />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3 }}>
               <TextField
@@ -940,11 +993,10 @@ export default function AiSettingsPage() {
 
             {/* ⚠ A CEILING FIELD, NOT A PROVIDER KNOB — see the `#87` section of
                 the file header. It is here, beside `Max output tokens`, because
-                it is spent out of that ceiling; the helper text says so at the
-                control rather than in a tooltip, because the failure it causes
-                (a truncated answer, no error) is one nobody would otherwise
-                trace back to this select. Same `Stack` shape as its siblings so
-                the section still stacks cleanly at ~400px. */}
+                reasoning is spent out of that ceiling; since #436 the API adds
+                its headroom on top of a typed cap automatically, and the helper
+                text says so at the control. Same `Stack` shape as its siblings
+                so the section still stacks cleanly at ~400px. */}
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 select
@@ -958,12 +1010,12 @@ export default function AiSettingsPage() {
                 helperText={
                   <>
                     How hard the model is asked to think before it answers. Reasoning is
-                    billed and counted as <strong>output</strong> tokens, drawn from the
-                    same <strong>Max output tokens</strong> ceiling above as the answer
-                    itself — so at <strong>High</strong> or <strong>Extra high</strong> a
-                    generation can spend most of that ceiling thinking and return a short
-                    or empty answer, which arrives as a truncated completion rather than
-                    an error. Raise <strong>Max output tokens</strong> alongside this.{' '}
+                    billed and counted as <strong>output</strong> tokens. You do not need
+                    to adjust <strong>Max output tokens</strong> for it: with no cap, the
+                    model&apos;s own maximum already covers the thinking, and with a typed
+                    cap, room for this effort&apos;s reasoning is added on top of it
+                    automatically, up to the model&apos;s maximum. Higher effort is slower
+                    and costs more.{' '}
                     <strong>None</strong> sends no reasoning setting at all, leaving the
                     vendor&apos;s own default — and it is what this deployment ships with.
                   </>
