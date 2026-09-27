@@ -862,6 +862,24 @@ export interface ProposalUserGuidance {
   instructions: string;
 }
 
+/**
+ * Why an extraction proposal failed — `kg_proposals.stats.failure.errorClass`.
+ *
+ * `'truncated'` (#435): the model's answer hit its output ceiling even after
+ * the run re-asked once for a smaller answer (`stats.truncationRetry`).
+ * Distinct from `'invalid_output'`, a malformed answer. Open-ended: a class a
+ * later API adds still arrives as a string and renders its server message.
+ */
+export type ExtractionFailureClass =
+  | 'auth'
+  | 'refusal'
+  | 'rate_limit'
+  | 'budget'
+  | 'truncated'
+  | 'invalid_output'
+  | 'other'
+  | (string & {});
+
 export interface ProposalSummary {
   id: string;
   kind: ProposalKind;
@@ -874,8 +892,13 @@ export interface ProposalSummary {
   providerId: string | null;
   userGuidance: ProposalUserGuidance | null;
   counts: ProposalCounts;
-  stats: Record<string, unknown>;
-  failure: { errorClass: string; message: string } | null;
+  /**
+   * Stage stats, loosely typed. Known keys include `usage`, `proposed`, and
+   * (#435) the optional `truncationRetry: boolean` — the first answer was cut
+   * off and the run re-asked once with halved row caps.
+   */
+  stats: Record<string, unknown> & { truncationRetry?: boolean };
+  failure: { errorClass: ExtractionFailureClass; message: string } | null;
   createdAt: string;
   committedAt: string | null;
   revertedAt: string | null;
