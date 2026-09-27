@@ -327,25 +327,35 @@ export const systemAiSchema = z.object({
   providers: aiProvidersSchema,
 
   /**
-   * Ceiling on the assembled prompt, in tokens (docs/specs/notes.md §3.3).
+   * An optional spend cap on the assembled prompt, in tokens
+   * (docs/specs/notes.md §3.3), or `null` — THE DEFAULT since issue #436 —
+   * for "the selected model's own context window".
    *
-   * A DEPLOYMENT ceiling that sits UNDER the model's own context window, never
-   * over it: the budget check takes the smaller of the two. It exists because
-   * the user pays for input tokens on their own account, and a 200,000-token
-   * transcript silently costing them several dollars per regeneration is
-   * exactly the surprise an operator should be able to bound.
+   * A number is a DEPLOYMENT ceiling that sits UNDER the model's own context
+   * window, never over it: the budget check takes the smaller of the two. It
+   * exists because the user pays for input tokens on their own account, and a
+   * 200,000-token transcript silently costing them several dollars per
+   * regeneration is exactly the surprise an operator may want to bound. It is
+   * no longer something every request is governed by unless an administrator
+   * deliberately typed it.
+   *
+   * ⚠ NULLABLE, so the merge in `system-settings.service.ts` must use
+   * `!== undefined` rather than `??` — otherwise clearing the cap is a no-op.
    */
-  maxInputTokens: z.number().int().min(256).max(2_000_000),
+  maxInputTokens: z.number().int().min(256).max(2_000_000).nullable(),
 
   /**
-   * Ceiling on what one generation may produce, in tokens.
+   * An optional spend cap on what one answer may produce, in tokens, or
+   * `null` — THE DEFAULT since issue #436 — for "the selected model's own
+   * output ceiling" (resolved through #97's chain; a model of unknown
+   * capacity keeps the provider's conservative floor, never a guess upward).
    *
-   * Also what §3.3's budget subtracts from the context window to compute the
-   * input allowance, which is why it is a policy value rather than a per-request
-   * one: the same number has to be knowable at request time, before any job
-   * exists.
+   * A typed cap bounds the ANSWER: the headroom the call's reasoning effort
+   * needs is added on top of it, bounded by the model's own maximum (see
+   * `notes/generation/token-budget.ts`). Same nullable-merge caveat as
+   * `maxInputTokens` above.
    */
-  maxOutputTokens: z.number().int().min(64).max(200_000),
+  maxOutputTokens: z.number().int().min(64).max(200_000).nullable(),
 
   /**
    * How long one provider request may take before it is abandoned, in
@@ -372,23 +382,19 @@ export const systemAiSchema = z.object({
    *
    * ⚠ REASONING TOKENS ARE OUTPUT TOKENS. They are billed as output, counted as
    * output, and drawn from the SAME `max_completion_tokens` ceiling the visible
-   * answer is drawn from — which, for this application, is
-   * `min(maxOutputTokens, the model's own ceiling)` (see
-   * `notes/generation/token-budget.ts`). So raising this field does not buy
-   * better answers for free; it spends a fixed budget on thinking instead of on
-   * prose. At `'high'`, against the default `maxOutputTokens` of 16,384, a
-   * generation can legitimately spend most of that budget deliberating and
-   * return a truncated note — or almost nothing at all. THAT ARRIVES AS A
-   * `length` FINISH REASON, NOT AS AN ERROR: the provider did what it was
-   * asked, and this application has no way to tell "the model thought for
-   * 15,000 tokens" apart from "the answer was long" after the fact.
+   * answer is drawn from. Since issue #436 the budget accounts for that
+   * (`notes/generation/token-budget.ts`): with no typed `maxOutputTokens` the
+   * ceiling is the model's own maximum, which already covers the thinking; with
+   * a typed cap, `REASONING_HEADROOM_TOKENS[effort]` is added ON TOP of it,
+   * bounded by the model's own maximum — so raising this field can no longer
+   * silently eat the answer's share and return a truncated note. The typed cap
+   * remains a bound on the ANSWER an administrator chose to pay for on
+   * SOMEBODY ELSE'S BILL (docs/specs/notes.md §9); the headroom is the thinking
+   * the administrator asked for by raising this field.
    *
-   * The fix, when it happens, is to raise `maxOutputTokens` deliberately — this
-   * field does not raise it, and must not: that ceiling is a separate policy
-   * decision about what one generation may cost on SOMEBODY ELSE'S BILL
-   * (docs/specs/notes.md §9), and quietly widening it because a reasoning
-   * effort was turned up would be this application spending a user's money on
-   * a decision an administrator did not take.
+   * A model that still spends everything thinking arrives as a `length` FINISH
+   * REASON, NOT AS AN ERROR: this application cannot tell "the model thought
+   * for 15,000 tokens" apart from "the answer was long" after the fact.
    *
    * IGNORED BY A PROVIDER THAT DOES NOT REASON, and by a model that does not:
    * `AiGenerateRequest.reasoningEffort` is optional, and a non-reasoning model
@@ -477,8 +483,10 @@ export const systemAiPatchSchema = z.object({
         .optional(),
     })
     .optional(),
-  maxInputTokens: z.number().int().min(256).max(2_000_000).optional(),
-  maxOutputTokens: z.number().int().min(64).max(200_000).optional(),
+  // #436. `.nullable().optional()`: `null` means "the model's own maximum"
+  // and must be settable, so the merge uses `!== undefined`, never `??`.
+  maxInputTokens: z.number().int().min(256).max(2_000_000).nullable().optional(),
+  maxOutputTokens: z.number().int().min(64).max(200_000).nullable().optional(),
   requestTimeoutMs: z.number().int().min(1_000).max(3_600_000).optional(),
   // #87. A plain optional enum: absent means "leave it alone", and unlike
   // `provider` above there is no meaningful `null` — "do not reason" is a
