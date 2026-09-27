@@ -1652,7 +1652,11 @@ app's default role is Viewer.
   deprecating a user-defined attribute is authoring the schema one proposes
   against, gated the same as every other write to it), and import (§18.3 —
   an import ultimately writes rows to the graph, exactly like a proposal
-  commit, and is gated identically).
+  commit, and is gated identically). Realized by #387 as `POST
+  /api/graph/imports` plus two additive routes deciding an import's
+  attribute offers, `POST /api/graph/proposals/:id/attribute-offers/
+  :offerId/accept|reject`; reading an import reuses #366's proposal routes
+  (`GET /api/graph/proposals?kind=import`, `GET /api/graph/proposals/:id`).
 
 `GraphAccessService` (planned) mirrors `NoteAccessService`
 (`apps/api/src/notes/access/note-access.service.ts`, verified above) exactly:
@@ -1759,7 +1763,10 @@ against a note version that has since changed), `revert_conflict` (§19.4 —
 one or more of the proposal's committed rows has been touched since commit),
 and `model_lacks_capability` (§20.2 — the requested model does not report
 `structuredOutput` for an extraction/adjudication/digest task or
-`toolCalling` for the agent).
+`toolCalling` for the agent). #386 added `graph_empty` (an export of a graph
+with nothing readable) and #387 `offer_decided` (an import's attribute offer
+already accepted or rejected); an import also answers `graph_disabled`, and
+`extraction_running` when another import of the owner is still being checked.
 
 ## 13. Web surfaces
 
@@ -1814,7 +1821,8 @@ widget's own library unstated without also leaving the overview's unstated.
 but every route this epic adds is still a route, and `apps/web/src/config/
 destinations.ts`'s own route-ownership test (verified above) fails an
 unowned one — so `/graph`, `/graph/entities/:id`, `/graph/explore`,
-`/graph/overview`, `/ask`, and `/ask/:conversationId` (§21.5, §22) are all
+`/graph/overview`, `/graph/imports/:proposalId` (#387, §18.3), `/ask`, and
+`/ask/:conversationId` (§21.5, §22) are all
 declared under the **`home`** destination's `DESTINATION_ROUTES` prefix: none
 of them is a natural extension of `transcripts`, `notes`, or `settings`, and
 `home` is already where a user arrives from before reaching any of the entry
@@ -2008,6 +2016,13 @@ Turtle that validates against the ontology's own generated SHACL shapes, and
 that same export re-imported into a second fixture account produces a
 proposal that, once accepted, reproduces the original graph's entities and
 relations (not necessarily its ids).
+**Built — epic #349 is complete** (issues #383–#387): the `personal` domain
+(#383), `kg.migrate` and declarative ontology migrations (#384), the OWL/RDFS
+and SHACL generators (#385), `kg.export` (#386) and `kg.import` (#387). The
+acceptance above is `apps/api/test/graph/rdf/import-roundtrip.db.spec.ts`,
+run in CI's Smoke job: owner A's export, imported into an empty owner B and
+committed in full, reproduces A's entities (type, label, props, aliases) and
+relations (type, endpoints by label, valid range, precision) with new ids.
 
 Each phase is expected to break into 4–8 child issues at filing time, one
 line each with its own acceptance criterion, following the existing
@@ -2641,6 +2656,97 @@ major version means a type's *meaning* changed and importing straight past
 that would silently misinterpret the incoming data under the wrong
 definition.
 
+**As built (#387).** `POST /api/graph/imports` (`graph:write`, multipart,
+≤ 20 MiB; format from the extension, then the declared type) stores the file
+`managed_by: 'graph'` under `graph/<owner>/imports/`, creates a
+`kg_proposals { kind: 'import', status: 'extracting' }` row and queues
+**`kg.import`** in one transaction — 409 `graph_disabled` while connected
+knowledge is off, 409 `extraction_running` while another import of the owner
+is `extracting` (#351's `kg_proposals_owner_import_extracting_uniq_idx`
+decides it at insert). The handler (`apps/api/src/graph/import/`,
+server-only, `{ 30 min, 1 attempt }`):
+
+- **Parses** (`rdf-parse.ts`, the one import file that touches `n3`/`jsonld`):
+  Turtle and N-Quads streamed through `n3`'s `StreamParser`, JSON-LD through
+  `jsonld.toRDF` with a `documentLoader` that serves only this application's
+  own bundled `@context` and refuses every other URL — no remote context is
+  ever fetched and no IRI dereferenced. Caps: 200,000 triples (`too_large`);
+  a syntax error is `parse_error` with a line number and no content; no node
+  typed with an ontology class is `empty`.
+- **Negotiates the version** (`version-negotiation.ts`): `owl:versionInfo` on
+  an `owl:Ontology` subject — or on the namespace IRI itself, which is where
+  #386's export states it — else the most common `kv:ontologyVersion`, else
+  "current". A newer **major** is `ontology_version_newer`; an owner whose rows
+  still await `kg.migrate` gets `migration_pending` and the migration queued;
+  an **older** file is reshaped **in memory**, before validation, by rewriting
+  IRIs exactly as #384's `applyMigrationSteps` rewrites rows (a retag renames
+  the class and its attribute IRIs, or the relation IRI and every
+  `rdf:predicate` naming it; renames, drops and status retags likewise, an
+  aligned attribute under its standard IRI; a coercion goes through
+  `applyMigrationSteps` itself) — `stats.migratedFrom`.
+- **The unknown-property pre-pass** (`unknown-properties.ts`, over
+  `import-vocabulary.ts` — the predicates each generated shape admits, its
+  `sh:property` paths ∪ `sh:ignoredProperties`, pinned equal to the shapes by
+  `test/graph/rdf/import-vocabulary.spec.ts`): every other predicate on a
+  shape-targeted node is **removed before validation** and becomes an offer in
+  `stats.unknownProperties` (`suggestedKind` from the values' datatypes; the
+  file's own `rdfs:label` for the property when it states one — #386 labels
+  every `kv:attr/<id>`, so another owner's attribute arrives named). One on a
+  `kv:Assertion` can never become an attribute (attributes live on entity and
+  item types) and is recorded already `rejected`. The values are held in an
+  internal `stats.importPending` (never serialized) until the offer is
+  decided: accepting creates one `kg_attribute_defs` row per carrying type
+  through #355's service and moves the values into the rows' `props` under the
+  new definition's **key** (props are keyed by `key`, not by definition id);
+  rejecting drops them. `kv:sensitivity` on an item is lifted out here too,
+  never offered.
+- **Validates** the rest against `generateShacl` for this owner with
+  `rdf-validate-shacl` — in a **child `node` process** started with an inline
+  ES module (`shacl-engine.ts`): the engine is ESM-only while the API is
+  CommonJS, a child loads it the same way under the compiled build and under
+  Jest, the engine's synchronous `validateAll` never blocks the worker's event
+  loop (lease renewal keeps running), and a pathological file costs one killed
+  child (memory ceiling, 20-minute timeout). Any `sh:Violation` is
+  `shacl_violations`: the first 200 results and the true count are stored,
+  **nothing is imported**. Warnings are stored and never fail.
+- **Maps** (`rdf-to-proposal.ts`) onto exactly #363's payloads, `origin:
+  'user'` (an import is the user's own assertion) and flag `imported`: a
+  reified `kv:Assertion`'s range, precision and props win over the direct
+  triple it restates, an exclusive upper bound becomes the inclusive `validTo`
+  the commit adds a unit back to, `kv:confidence` goes to `resolution.score`;
+  refs are `e`/`r`/`i` + 12 hex of the node key's sha256. **Skipped:** a
+  `sensitive` person fact (counted in `stats.counts.skippedSensitive` — never
+  ingested in bulk; a user can add one by hand), a value of a `sensitive`
+  attribute definition, a `superseded` item (history, not a live fact), a
+  Meeting's `transcriptId`/`noteId` (another deployment's ids) and
+  `entity_ref` values. Every row gets **one** `kg_evidence { subject_kind:
+  'proposal_item', import_object_id, source_iri, quote }` — the file's own
+  `oa:Annotation` body text for that node (joined, ≤ 400 chars), else
+  `"Imported from <filename>"`; #366's commit copies it onto the committed
+  graph row. So the fourth `subject_kind` value `'import'` this section first
+  sketched is **not** used as a subject: the import is the citation's
+  *anchor* (`import_object_id` + `source_iri`), exactly as a segment or a note
+  span is, and the no-orphans trigger sees an ordinary cited row.
+- **Resolves** by running every registered proposal stage with `noteId:
+  null` — #364's resolution first (an imported "Joe Smith" is scored against
+  the owner's Joe exactly like a mention; adjudication, when the owner's
+  preferences ask for it, spends their key under `aiProviderThrottleKey`, and
+  without a key the match stays a flagged, un-ticked candidate), then #365's
+  dedup/closing stages (rejection memory skips its per-note half). Then the
+  pre-check and `extracting → draft`. Every failure above is `failed` with
+  `stats.failureReason` and writes no proposal row and no graph row.
+
+The web side is `ImportGraphDialog` ("Import graph…" in `/graph`'s overflow
+menu, `graph:write` only) and `/graph/imports/:proposalId`
+(`GraphImportPage`, owned by `home`, gated `graph:write`): "Checking your
+file…" while `extracting`, the failure copy (and for `shacl_violations` a
+table of the first 200 problems), and for a draft the **Unknown properties**
+panel above #367's `ProposalReviewSheet` rendered **inline**
+(`variant="inline"`, `source={{ proposalId }}`), import evidence reading
+"From the imported file" with nothing to play. `/graph` lists the last five
+imports. The uploaded file is deleted by `kg.purge` (both scopes, an
+`imports` step after `exports`), like an export.
+
 **Use cases**, stated concretely because "interoperability" alone
 undersells what this unlocks: moving a graph between two of a user's own
 kvox deployments; a backup of one's connected knowledge that is not a
@@ -2667,7 +2773,12 @@ Turtle with the hand-written `apps/api/src/graph/rdf/turtle-writer.ts`, and in
 their handlers need to `dependencies`: #386 made `n3` and `jsonld` runtime
 dependencies, imported by exactly one file, `graph/export/serializers.ts`,
 which only a job handler may import (`test/graph/rdf/rdf-imports.spec.ts`
-pins both); `rdf-validate-shacl` and `rdf-ext` stay test-only.
+pins both). #387 adds exactly two files to that allowlist, each imported only
+by the `kg.import` handler: `graph/import/rdf-parse.ts` (`n3`, `jsonld`) and
+`graph/import/shacl-engine.ts`, which resolves `rdf-validate-shacl` — now a
+runtime dependency — by path and runs it in a child process (§18.3). The guard
+also catches `require.resolve('…')`. `rdf-ext` stays test-only: the engine's
+own default factory builds the datasets.
 
 ## 19. Review UI and overrides
 
@@ -3771,7 +3882,7 @@ serve for their own epics.
 | `kg.purge` scope `person` removes the entity, aliases, relations, items where subject/owner/counterparty, mentions and evidence, and leaves the source transcript/note text completely untouched | `apps/api/src/graph/handlers/kg-purge.handler.spec.ts` |
 | The Danger Zone's `content`/`everything` scopes include graph rows after this epic ships | `apps/api/test/user-data/user-data-deletion.e2e.spec.ts`, extended |
 | `pg_trgm` is enabled by the P1 migration and `kg_entity_aliases`'s trigram index is present and used by `EXPLAIN` for a fuzzy-alias query | A migration test plus a query-plan assertion, mirroring the existing HNSW-index verification discipline `SearchEmbedding`'s own migration takes |
-| An export round-trips through import losslessly on a fixture graph — the same entity UUIDs, the same relations, and the same evidence citations come back after `kg.export` then `kg.import` into a second fixture account and accepting the resulting proposal in full | An integration test exporting a seeded fixture graph, importing it into a second account, accepting every proposed item, and asserting the two accounts' graphs are identical on entity id, relation set, and evidence set |
+| An export round-trips through import on a fixture graph — after `kg.export` then `kg.import` into a second fixture account and accepting the resulting proposal in full, the second account holds the same entities (type, label, props, aliases) and relations (type, endpoints by label, valid range, precision); ids differ (new rows, the source IRI kept on each citation), and every committed row cites the import | `apps/api/test/graph/rdf/import-roundtrip.db.spec.ts` (#387), in CI's Smoke job |
 | A `sensitive` `PersonFact` never appears in any export format (JSON-LD, Turtle, or n-quads), under any setting | A test seeding a `sensitive` fixture fact alongside `business`/`personal` ones, running `kg.export` in each format, and asserting the sensitive fact's IRI and statement text appear in none of the three outputs |
 | CI runs the SHACL engine over a fixture export against the generated shapes and fails the build on a violation | A CI job invoking `rdf-validate-shacl` against a fixture account's `kg.export` output and the same run's generated `ontology.shacl.ttl`, with a companion test asserting a deliberately-broken fixture (a missing `prov:wasDerivedFrom`) is reported as a violation rather than passing silently |
 | A revert (`POST .../proposals/:id/revert`) removes every row untouched since its commit and leaves every touched row exactly as-is, naming which is which in its response | An integration test committing a proposal, editing one of its committed rows independently, then reverting, asserting the edited row survives untouched and named in the response while the rest are gone |

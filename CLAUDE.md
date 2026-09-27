@@ -1016,6 +1016,21 @@ transcript share never grants graph access. See [`docs/API.md`](docs/API.md#grap
 - `GET /api/graph/exports/{id}` - One export; once `ready`, a 15-minute signed `downloadUrl` named
   `<app>-graph-<date>.<jsonld|ttl|nq>` (disposition signed in). 404 foreign/missing/expired (`graph:read`)
 - `GET /api/graph/exports` - Your unexpired exports, newest first, ≤ 20 (`graph:read`)
+- `POST /api/graph/imports` - Import an RDF file (issue #387): multipart `file` (Turtle `.ttl`, JSON-LD
+  `.jsonld`/`.json`, N-Quads `.nq`; ≤ 20 MiB, else 413) → **202** `{ proposalId, jobId }`, storing the file
+  `managed_by: 'graph'`, creating a `kind: import` proposal in `extracting` and queuing `kg.import` in one
+  transaction. It becomes an ordinary **draft proposal** reviewed and committed through the routes below —
+  never a third way in: the whole file must pass **your** SHACL shapes first (one violation imports nothing),
+  undeclared properties are **offered** as attribute definitions rather than kept, `sensitive` person facts are
+  never imported in bulk, and every row cites the file (`import_object_id` + `source_iri`). 400 unreadable
+  format/empty file; 409 `graph_disabled`, `extraction_running` (one import per owner at a time). Read it with
+  `GET /api/graph/proposals?kind=import` / `GET /api/graph/proposals/{id}` — `stats` carries the validation
+  report, the offers and the counts (`graph:write`)
+- `POST /api/graph/proposals/{id}/attribute-offers/{offerId}/accept` - Create the offered attribute definition
+  (one per carrying type, via the attribute-def service) and move the property's values into the rows' `props`
+  (issue #387). 404 not yours/not an import/no such offer; 409 `proposal_not_draft`, `offer_decided`
+  (`graph:write`)
+- `POST /api/graph/proposals/{id}/attribute-offers/{offerId}/reject` - Drop that property's values (`graph:write`)
 - `GET /api/graph/proposals?status&kind&noteId&transcriptId&cursor&limit` - Your proposals,
   newest first, opaque keyset cursor (a bad one is 400); `status` defaults to `draft` (issue #366,
   `graph:read`)
@@ -1523,6 +1538,8 @@ the graph — are owned by `home` too**: `DESTINATION_ROUTES.home` is
 `['/', '/graph', '/ask']`, the page is one optional-segment route
 (`/ask/:conversationId?`) gated on `graph:read`, reached from Home's Knowledge
 section, and hidden behind `ai.graphEnabled`. See `docs/specs/ontology.md` §21.5.
+`/graph/imports/:proposalId` (issue #387 — one RDF import, reviewed with the proposal sheet
+rendered inline) is owned by `home` through the same `/graph` prefix, gated on `graph:write`.
 
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
@@ -2320,8 +2337,8 @@ citing a numbered fact-handle list rather than uuids, dropping any statement
 citing nothing or an unknown handle; server-only, `maxAttempts: 1`, throttled
 per owner, enqueued by the brief GET when stale and, once a caller enqueues it,
 by #366's commit/revert and #355's manual edit/#364's merge, each guarded on
-`ai.graphEnabled`), `kg.migrate` (#384 — see below) and `kg.export` (#386 — see below); every
-other type in
+`ai.graphEnabled`), `kg.migrate` (#384 — see below), `kg.export` (#386 — see below) and
+`kg.import` (#387 — see below); every other type in
 `apps/api/src/graph/job-types.ts` is still only a constant. Extraction lives in
 `apps/api/src/graph/extraction/` (`GraphExtractionModule`, imported by
 `NotesModule` for the hook — one-way: it provides the two note services it needs
@@ -2447,6 +2464,26 @@ quote, a sensitive attribute value); and **`n3`/`jsonld` are imported by `serial
 only job handlers may import (`test/graph/rdf/rdf-imports.spec.ts`). The same type in `payload.mode:
 'sweep'` (subject `kg_export_sweep`, enqueued daily by the enqueue-only `KgExportExpiryTask`) deletes
 expired exports and their files; `kg.purge` (both scopes) ends with an `exports` step.
+
+**`kg.import` (#387) turns an uploaded RDF file into a draft `import` proposal, and is server-only** —
+it reads and writes several tables, the parsers and the shapes generator live in the API, and resolution may
+spend the owner's own AI key (rule 2's exemptions); `profile: { maxRuntimeMs: 30 min, maxAttempts: 1 }` — a
+half-applied import must surface as failed, never resume. `apps/api/src/graph/import/`: parse (`rdf-parse.ts`,
+streamed `n3`; JSON-LD with a loader that refuses every remote context) → version negotiation with #384's
+helpers (a newer major is refused; rows awaiting `kg.migrate` refuse it and queue the migration; an older file is
+migrated in memory) → **the unknown-property pre-pass** (`unknown-properties.ts` over `import-vocabulary.ts`,
+which `test/graph/rdf/import-vocabulary.spec.ts` pins equal to the generated shapes: undeclared predicates are
+removed and offered, never silently kept) → **SHACL, all or nothing** (`shacl-engine.ts`: `rdf-validate-shacl`
+in a **child `node` process** — it is ESM-only, and a child also keeps its synchronous validation off the
+worker's event loop) → `rdf-to-proposal.ts` onto exactly #363's payloads (`origin: 'user'`, flag `imported`, one
+citation of the file per row) → every proposal stage, resolution first (`noteId: null`) → pre-check → draft. Any
+failure sets `stats.failureReason` and writes no proposal row and no graph row. Three rules: **nothing lands
+without validation and a reviewed commit** (#366's commit copies the import citation onto the graph row, so
+no-orphans holds); **`n3`/`jsonld`/`rdf-validate-shacl` stay in `rdf-parse.ts`/`shacl-engine.ts`**, imported by
+the handler alone (`test/graph/rdf/rdf-imports.spec.ts`); and **a `sensitive` fact is never imported in bulk**.
+`kg.purge` (both scopes) deletes uploaded import files in an `imports` step after `exports`. The round trip —
+export owner A, import into owner B, commit — is `test/graph/rdf/import-roundtrip.db.spec.ts`. With it, **every
+issue of epic #349 (#383–#387) is built**; see `docs/specs/ontology.md` §16 P7 and §18.3.
 
 **`ask.respond` (#378, epic #348) is one Ask turn, and server-only permanently** —
 `note.generate`'s reason exactly: every call spends the asker's own long-lived AI key and no

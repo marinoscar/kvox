@@ -5658,6 +5658,135 @@ after the request by a daily sweep (the same `kg.export` job type, in sweep
 mode). "Forget this person" and the Danger Zone's `content`/`everything` also
 delete every export — a file written before still names the forgotten data.
 
+#### POST /graph/imports — import an RDF file as a proposal
+
+The other direction of the export above (issue #387,
+[`docs/specs/ontology.md`](specs/ontology.md) §18.3): an RDF file — another
+deployment's export, an RDF backup, a CRM/contacts export converted to RDF —
+becomes an ordinary **`kind: import` proposal** you review and commit exactly
+like an extraction. An import is **not** a third way into the graph: nothing
+lands until you send it with `POST /graph/proposals/{id}/commit`, and nothing
+lands at all unless the whole file first passes **your** SHACL shapes
+(`GET /graph/ontology.shacl.ttl`).
+
+**Request:** `multipart/form-data` with a single `file` part, at most **20 MiB**.
+The format comes from the extension, then the declared type: `.ttl` /
+`text/turtle` → Turtle, `.jsonld` / `.json` / `application/ld+json` → JSON-LD,
+`.nq` / `application/n-quads` → N-Quads; anything else is a `400`.
+
+**Response:** **`202`** `{ proposalId, jobId }`. The file is stored
+`managed_by: "graph"` (hidden from `GET /storage/objects`), a proposal is
+created in `extracting` and the **`kg.import`** job is queued, in one
+transaction. Audited `graph.import_created` `{ proposalId, format, bytes }`.
+
+**Errors:** `400` no/empty file, invalid multipart body, or an unreadable
+format · `409` `details.reason: "graph_disabled"` (connected knowledge is off;
+imports feed the same review pipeline) · `409` `"extraction_running"` — another
+import of yours is still `extracting` (one at a time, decided by a partial
+unique index at insert; the losing request's file is deleted again) · `413`
+over 20 MiB.
+
+**Requires:** `graph:write` — importing curates your graph (§12).
+
+**What `kg.import` does** (server-only, `maxRuntimeMs` 30 min, **one**
+attempt — a half-applied import must surface as failed, never resume):
+
+1. **Parse** from storage — Turtle/N-Quads streamed through `n3`, JSON-LD
+   through `jsonld.toRDF` with a loader that **refuses every remote context**
+   (only this application's own bundled `@context` resolves; no IRI is ever
+   dereferenced). More than **200,000** triples is `too_large`; a syntax error
+   is `parse_error` (the message names a line, never content); no node typed
+   with one of the ontology's classes is `empty`.
+2. **Version negotiation** — `owl:versionInfo` on any `owl:Ontology` subject
+   (or on the namespace IRI, where an export states it), else the most common
+   `kv:ontologyVersion`, else "current". A **newer major** than this
+   deployment is `ontology_version_newer` (upgrade first); your own rows still
+   awaiting `kg.migrate` is `migration_pending` (the migration is queued); an
+   **older** file is reshaped in memory with the declared migrations
+   (`stats.migratedFrom`).
+3. **Unknown properties** — every predicate a node's shape does not admit is
+   **removed and offered** (`stats.unknownProperties`) rather than failing the
+   file or being kept silently. One on a relation (`kv:Assertion`) can never
+   become an attribute and is recorded already `rejected`.
+4. **Validate** what remains against your shapes, in a child process. Any
+   `sh:Violation` is `shacl_violations`: the report is stored and **nothing is
+   imported** — all or nothing. Warnings are stored and never fail.
+5. **Map** to proposal rows with exactly the extraction payloads (`origin:
+   "user"`, flag `imported`): entities, relations (a reified `kv:Assertion`'s
+   range, precision and props win over the bare triple; `kv:confidence` goes to
+   `resolution.score`), items. **`sensitive` person facts are skipped**
+   (counted — never ingested in bulk), and so are superseded items, a Meeting's
+   `transcriptId`/`noteId` (another deployment's ids) and `entity_ref` values.
+   Every row gets one citation of the file itself: `import_object_id`,
+   `source_iri` (the node's IRI) and the file's own `oa:Annotation` body text
+   for that node, else `"Imported from <filename>"`. Committing copies it onto
+   the graph row, so the no-orphans rule holds for imported rows too.
+6. **Resolve** — every proposal stage runs, resolution first: an imported
+   "Joe Smith" links to your existing Joe exactly like an extracted mention.
+   Adjudication spends your own AI key when your preferences ask for it; with
+   no key the match stays a candidate, flagged, not pre-checked.
+7. Pre-check, then `draft`. Any failure above sets `status: "failed"` and
+   `stats.failureReason`; no proposal row and no graph row is written.
+
+**Reading an import** reuses the proposal routes unchanged:
+`GET /graph/proposals?kind=import&status=…` and `GET /graph/proposals/{id}`.
+An import's evidence entries carry `source: "import"` with `importObjectId`
+and `sourceIri`. Its `stats`:
+
+```json
+{
+  "filename": "contacts.ttl",
+  "format": "turtle",
+  "bytes": 20481,
+  "triples": 812,
+  "sourceOntologyVersion": "1.1.0",
+  "migratedFrom": null,
+  "validation": { "conforms": true, "violations": [], "violationCount": 0 },
+  "unknownProperties": [
+    {
+      "offerId": "o3f1c0a9b2d4e",
+      "iri": "https://crm.example/ns#nickname",
+      "label": "Nickname",
+      "count": 12,
+      "subjectTypes": ["Person"],
+      "sampleValues": ["Joey", "Mo", "Sam"],
+      "suggestedKind": "text",
+      "status": "offered"
+    }
+  ],
+  "counts": { "entities": 40, "relations": 55, "items": 3, "skippedSensitive": 1 },
+  "failureReason": null
+}
+```
+
+`violations` holds the first 200 (`{ focusNode, path, message, severity }`,
+blank nodes as `_:label`); `violationCount` is the true total. `failureReason`
+is one of `parse_error`, `too_large`, `ontology_version_newer`,
+`migration_pending`, `shacl_violations`, `empty`, or `null`. While
+`extracting`, only `filename`/`format`/`bytes` exist. The stored file is
+deleted by the Danger Zone and "Forget this person" (`kg.purge`), like an
+export.
+
+##### POST /graph/proposals/{id}/attribute-offers/{offerId}/accept
+
+Body `{}` or `{ "label": "Nickname" }`. Creates the offered attribute
+definition — one per entity type the property appeared on, through the same
+rules as `POST /graph/attribute-defs`, kind from `suggestedKind`, label from
+the body, else the file's own label, else the IRI's last segment — and moves
+the property's values into the affected rows' `props` (and `editedPayload`
+where you already edited the row), keyed by the new definition's `key`. An
+`entity_ref` value keeps only when the row it names is linked to an existing
+entity. **Response:** `200` `{ offer, attributeDefs, rowsUpdated,
+valuesDropped }`. **Errors:** `400` the property sits only on relations, or no
+carrying type is in your graph · `404` not yours / not an import / no such
+offer · `409` `proposal_not_draft`, or `offer_decided` (already accepted or
+rejected). Requires `graph:write`.
+
+##### POST /graph/proposals/{id}/attribute-offers/{offerId}/reject
+
+Body `{}`. Drops the property's values. **Response:** `200` `{ offer,
+attributeDefs: [], rowsUpdated: 0, valuesDropped }`. Same errors as accept.
+
 #### PATCH /graph/entities/{id}
 
 Edit one of your entities by hand — one of the two ways anything changes in
@@ -6002,8 +6131,10 @@ flags, prechecked, evidence[], committedRefId }`. `display` is rendered by the
 server — `"Sarah Chen → works for → Northwind Robotics"`, `"Commitment · Sarah
 Chen · due Mar 10, 2026"`, `"Closes: Sarah Chen works for OldCo, 2019 → Mar
 2026"` — so a client never re-derives it. Each `evidence` entry is `{ id,
-source: segment|note, transcriptId, segmentId, segmentRev, startMs, endMs,
-noteId, noteVersion, charStart, charEnd, quote, speakerName, stale }`;
+source: segment|note|import, transcriptId, segmentId, segmentRev, startMs, endMs,
+noteId, noteVersion, charStart, charEnd, quote, importObjectId, sourceIri,
+speakerName, stale }` (`import` — issue #387 — cites the uploaded file: never
+stale);
 `stale` is true once the segment's `rev` or the note's version has moved on,
 or its source is gone. `prechecked` is what the extraction pre-check ticked,
 kept even after you change the row.
