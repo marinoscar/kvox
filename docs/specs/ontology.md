@@ -521,7 +521,10 @@ scheme for the same underlying stability guarantee.
 specific `note_versions` row (`docs/specs/notes.md` §4.5) — a note's body is
 immutable once a version is written, so an offset pair into a fixed version
 is exactly as durable as a segment id + rev pair into a fixed transcript
-state.
+state. Both offsets `NULL` on a note citation means the note's **Context**
+field (#440, §6) rather than a span of the body — it has no body offsets, so
+the `quote` alone carries what was cited; the two offsets are always both set
+or both `NULL`, never one of each.
 
 **`quote` is the exact text at anchoring time, kept even though the source
 it points to might move or be corrected later.** A citation is only useful if
@@ -806,7 +809,13 @@ about that specific pattern does not apply to this job type at all).
 - `Transcript.speakerIdentities` (verified above) — who was actually
   identified as whom, read directly rather than re-derived.
 - The meeting context the user typed (`docs/specs/notes.md` §3.1's Context
-  field).
+  field) — offered as its own `# Context` prompt section, framed as the
+  note author's authoritative background, and citable as `C` (#440) when
+  non-blank; a `C` citation is stored as note evidence with `char_start`/
+  `char_end` both `NULL` (§5.3). The model is instructed to read it first and
+  to fill a Person's `company`/`businessUnit`/`title` (labelled "Role") and
+  propose `WORKS_FOR` to the Organization whenever the Context, note or
+  transcript states them.
 - **The caller's effective schema** — core plus their enabled domains plus
   their own attribute definitions (§17) — which entity types, relation
   types, and attributes this run is allowed to propose at all. A type or
@@ -2226,7 +2235,10 @@ without the runtime self-registration mechanism those use:
   plus the evidence/review/temporal machinery (§5.3–§5.5) every other domain
   depends on. **Always on**, for every user, unconditionally.
 - **`work.ts`** — `Project`, `Commitment`, `Decision`, and the relation types
-  `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
+  `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.** Its
+  `Person` mixin also carries `company` and `businessUnit` (text, business
+  sensitivity) ahead of `title` (permanent key, labelled "Role"); `#440`,
+  ontology 1.2.0.
 - **`personal.ts`** (label *Personal life*) — `Interest`, `Trip`,
   `Milestone`, and `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, plus
   `INTERESTED_IN` (Person → Interest), `TRAVELED_ON` (Person → Trip) and
