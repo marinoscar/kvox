@@ -14,7 +14,10 @@
 //      quote found in the segment (exact, then case/whitespace-normalized) →
 //      offsets WITHIN THE SEGMENT TEXT; a real segment whose quote is not found
 //      → whole-segment evidence (first 300 chars) + flag `quote_not_located`;
-//      a note cite whose quote is not in the body → dropped.
+//      a note cite whose quote is not in the body → dropped; a Context cite
+//      (`C`, #440, only when the note has a non-blank Context) whose quote is
+//      in the Context → a NOTE citation with NULL offsets (the `kg_evidence`
+//      convention for "the note's Context field"), else dropped.
 //   4. A row with no surviving cite → dropped (`uncited`); then every relation
 //      or item whose endpoint entity was dropped → dropped (`dangling`).
 //      Entities are the only endpoints, so one pass after the entity pass is
@@ -41,9 +44,11 @@ import {
 } from '../proposals/proposal-payload.schema';
 import { statementHash } from '../write/normalize';
 import {
+  CONTEXT_ALIAS,
   MEETING_REF,
   NOTE_ALIAS,
   normalizeForMatch,
+  offeredContextText,
   type ExtractionContext,
   type SegmentAliasEntry,
 } from './extraction-context';
@@ -77,8 +82,12 @@ export type EvidenceDraft =
       source: 'note';
       noteId: string;
       noteVersion: number;
-      charStart: number;
-      charEnd: number;
+      /**
+       * Offsets within the note version's body; both null = a quote from the
+       * note's Context field (#440), which has no stable offsets of its own.
+       */
+      charStart: number | null;
+      charEnd: number | null;
       quote: string;
     };
 
@@ -175,11 +184,26 @@ interface CiteOutcome {
 function resolveCites(ctx: ExtractionContext, cites: RawCite[]): CiteOutcome {
   const evidence: EvidenceDraft[] = [];
   const seen = new Set<string>();
+  const contextText = offeredContextText(ctx.note.contextText);
   let quoteNotLocated = false;
   for (const cite of cites) {
     const source = cite.source.trim();
-    let draft: EvidenceDraft | null = null;
-    if (source === NOTE_ALIAS) {
+    let draft: EvidenceDraft;
+    let key: string;
+    if (source === CONTEXT_ALIAS) {
+      if (contextText === null) continue; // `C` was never offered.
+      const located = locateQuote(contextText, cite.quote);
+      if (!located) continue; // A Context quote we cannot find is not evidence.
+      draft = {
+        source: 'note',
+        noteId: ctx.note.id,
+        noteVersion: ctx.note.version,
+        charStart: null,
+        charEnd: null,
+        quote: contextText.slice(located.start, located.end).slice(0, MAX_QUOTE_CHARS),
+      };
+      key = `C:${located.start}:${located.end}`;
+    } else if (source === NOTE_ALIAS) {
       const located = locateQuote(ctx.note.body, cite.quote);
       if (!located) continue; // A note quote we cannot find is not evidence.
       draft = {
@@ -190,17 +214,15 @@ function resolveCites(ctx: ExtractionContext, cites: RawCite[]): CiteOutcome {
         charEnd: located.end,
         quote: ctx.note.body.slice(located.start, located.end).slice(0, MAX_QUOTE_CHARS),
       };
+      key = `N:${located.start}:${located.end}`;
     } else {
       const seg = ctx.transcript ? ctx.segmentAlias.get(source) : undefined;
       if (!seg) continue; // An id the model was never handed.
       const located = locateQuote(seg.text, cite.quote);
       if (!located) quoteNotLocated = true;
       draft = segmentEvidence(ctx, seg, located);
+      key = `S:${seg.segmentId}:${draft.charStart}:${draft.charEnd}`;
     }
-    const key =
-      draft.source === 'note'
-        ? `N:${draft.charStart}:${draft.charEnd}`
-        : `S:${draft.segmentId}:${draft.charStart}:${draft.charEnd}`;
     if (seen.has(key)) continue;
     seen.add(key);
     evidence.push(draft);

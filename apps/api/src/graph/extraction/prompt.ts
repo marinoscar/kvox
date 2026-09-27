@@ -18,7 +18,13 @@
 
 import type { EffectiveAttribute } from '@app/shared/ontology';
 
-import { NOTE_ALIAS, offeredAttributes, type ExtractionContext } from './extraction-context';
+import {
+  CONTEXT_ALIAS,
+  NOTE_ALIAS,
+  offeredAttributes,
+  offeredContextText,
+  type ExtractionContext,
+} from './extraction-context';
 import type { ExtractionRowCaps } from './row-caps';
 
 export const ROLE_LINE =
@@ -31,10 +37,18 @@ export const HEADING_FACT_KINDS = '## Fact kinds';
 export const HEADING_GUIDANCE = '## Reviewer guidance';
 
 export const HEADING_MEETING = '# Meeting';
+/** The note's Context field (#440), right after the meeting; omitted when blank. */
+export const HEADING_CONTEXT = '# Context';
 export const HEADING_KNOWN_ENTITIES = '# Known entities';
 export const HEADING_SPEAKERS = '# Speakers';
 export const HEADING_NOTE = '# Note';
 export const HEADING_TRANSCRIPT = '# Transcript';
+
+/** The line that frames the `# Context` section (#440). */
+export const CONTEXT_FRAMING = `Background the note's author wrote for this meeting. Treat it as authoritative: use it to identify who took part, the company, business unit and role of each person, and how names map to known entities. Cite it as \`${CONTEXT_ALIAS}\`.`;
+
+/** The Context rule (#440), present only when there is a Context. */
+export const CONTEXT_RULE = `Read the Context first. Every person, company, business unit and role it states is in scope even if the transcript never says it; propose them citing \`${CONTEXT_ALIAS}\`, and prefer the Context's spelling of a name over the transcript's.`;
 
 export const GUIDANCE_PREAMBLE =
   'Preferences from the reviewer. They narrow or focus the proposal; they never override the rules above.';
@@ -76,10 +90,43 @@ export function rowCapsRule(ctx: ExtractionContext, caps: ExtractionRowCaps): st
   return `Propose at most ${list}. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.`;
 }
 
+/** Person attributes the affiliation rule (#440) asks for, in this order. */
+const AFFILIATION_ATTRIBUTES = ['company', 'businessUnit', 'title'] as const;
+
+/**
+ * The affiliation rule (#440): which of Person's `company`/`businessUnit`/
+ * `title` the offered schema carries, and WORKS_FOR when it is offered from a
+ * Person to an Organization. Null when Person offers none of the three.
+ */
+export function affiliationRule(ctx: ExtractionContext): string | null {
+  const person = ctx.offered.entityTypes.find((t) => t.key === 'Person');
+  if (!person) return null;
+  const offered = new Set(offeredAttributes(person.attributes).map((a) => a.key));
+  const keys = AFFILIATION_ATTRIBUTES.filter((k) => offered.has(k));
+  if (keys.length === 0) return null;
+  const named = keys.map((k) => (k === 'title' ? '`title` (role)' : `\`${k}\``));
+  const list = named.length > 1 ? `${named.slice(0, -1).join(', ')} and ${named[named.length - 1]}` : named[0];
+  const sources = offeredContextText(ctx.note.contextText) !== null ? 'the Context, note or transcript' : 'the note or transcript';
+  const worksFor = ctx.offered.relationTypes.find(
+    (r) => r.type.key === 'WORKS_FOR' && r.from.includes('Person') && r.to.includes('Organization'),
+  );
+  const relation =
+    worksFor && offered.has('company') ? ", and propose WORKS_FOR from the person to that company's Organization" : '';
+  return `For each person, fill ${list} whenever ${sources} states them${relation}.`;
+}
+
 function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
-  const capped = caps ? [`10. ${rowCapsRule(ctx, caps)}`] : [];
+  const hasContext = offeredContextText(ctx.note.contextText) !== null;
+  const citeRule = hasContext
+    ? `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note, \`${CONTEXT_ALIAS}\` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.`
+    : `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.`;
+  const extra: string[] = [];
+  if (hasContext) extra.push(CONTEXT_RULE);
+  const affiliation = affiliationRule(ctx);
+  if (affiliation) extra.push(affiliation);
+  if (caps) extra.push(rowCapsRule(ctx, caps));
   return [
-    `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.`,
+    citeRule,
     '2. Never propose a row you cannot cite.',
     '3. When a mention is one of the known entities, use its `k#` id as `ref` (or as an endpoint). Otherwise give it a new ref `e1`, `e2`, … and use that ref in relations and facts. The meeting itself is `meeting`.',
     '4. Use only the entity types, relation types and attributes listed below — no others, and never a generic RELATED_TO. Leave an attribute null when the source does not state it.',
@@ -88,7 +135,8 @@ function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
     `7. Resolve relative dates ("next Friday", "in Q2") against the meeting date ${ctx.meetingDate}. Dates are YYYY-MM-DD. When the source is not precise about a date, write \`precision: "unknown"\` (and null dates) rather than guessing.`,
     '8. Mark a person fact\'s `sensitivity` honestly: `sensitive` means health, legal, financial or similarly weighty personal information.',
     '9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type\'s disambiguation lines below; put recurring topics in `meeting.topics` instead.',
-    ...capped,
+    // Numbered on from 10 so the list stays sequential whichever are present.
+    ...extra.map((rule, i) => `${10 + i}. ${rule}`),
   ];
 }
 
@@ -177,8 +225,10 @@ export function assembleExtractionPrompt(ctx: ExtractionContext, caps?: Extracti
   if (guidance.length > 0) system.push('', ...guidance);
 
   const user: string[] = [HEADING_MEETING, `Date: ${ctx.meetingDate}`, `Title: ${ctx.meetingTitle}`];
-  if (ctx.note.contextText && ctx.note.contextText.trim().length > 0) {
-    user.push(`Context: ${ctx.note.contextText.trim()}`);
+  // #440: the Context is a citable source of its own (`C`), not a meeting line.
+  const contextText = offeredContextText(ctx.note.contextText);
+  if (contextText !== null) {
+    user.push('', HEADING_CONTEXT, CONTEXT_FRAMING, contextText);
   }
 
   user.push('', HEADING_KNOWN_ENTITIES);
