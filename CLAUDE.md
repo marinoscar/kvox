@@ -1435,7 +1435,8 @@ is the contract #378–#382 use unchanged. See [`docs/API.md`](docs/API.md#ask) 
   keeps it readable once every anchor has gone to NULL. There is deliberately **no CHECK**
   requiring any anchor to be present. `char_start`/`char_end` are offsets into the cited **note
   version body** when `note_id` is set, or into the cited **segment's text** when `segment_id` is
-  set — NULL means the whole segment; #363 relies on this exact convention. A hand-written
+  set — NULL means the whole segment, and on a **note** citation both NULL means the note's
+  Context field (#440, no body offsets to give); #363 relies on this exact convention. A hand-written
   **deferred constraint trigger** (#355, `kg_assert_has_evidence`, intentional schema drift)
   refuses at `COMMIT`, with SQLSTATE `23514`, any `accepted`/`edited` entity, relation or item
   left with no evidence row — so write the subject and its evidence in one transaction, and
