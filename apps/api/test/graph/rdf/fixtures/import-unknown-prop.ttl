@@ -1,0 +1,24 @@
+# A conforming import carrying two properties the ontology does not declare
+# (#387): a CRM "nickname" on a Person and an "employees" count on an
+# Organization. Closed by default — each becomes an attribute OFFER and is
+# removed before validation, rather than failing the file or being kept.
+
+@prefix kv: <https://fixture.app/ns#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix crm: <https://crm.example/ns#> .
+@prefix src: <https://source.example/> .
+
+crm:nickname rdfs:label "Nickname" .
+
+src:joe a kv:Person ;
+    rdfs:label "Joe Smith" ;
+    crm:nickname "Joey" ;
+    kv:WORKS_FOR src:acme ;
+    prov:wasDerivedFrom src:crm-1 .
+
+src:acme a kv:Organization ;
+    rdfs:label "Acme Robotics" ;
+    crm:employees "42"^^xsd:integer ;
+    prov:wasDerivedFrom src:crm-2 .
