@@ -165,9 +165,11 @@ export function isoDay(d: Date): string {
  * same derivation as #353's `temporalRuleFor` (HAS_ROLE → `['title']`).
  */
 export function ruleForEffectiveRelation(
-  relation: Pick<EffectiveRelationType, 'temporal' | 'exclusive' | 'exclusiveScope' | 'props'>,
+  relation: Pick<EffectiveRelationType, 'temporal' | 'exclusive' | 'exclusiveScope' | 'props' | 'symmetric'>,
 ): TemporalRule {
   return {
+    // #383: the planner compares a symmetric relation in both directions.
+    ...(relation.symmetric === true ? { symmetric: true } : {}),
     temporal: relation.temporal,
     exclusive: relation.exclusive,
     exclusiveScope: relation.exclusiveScope,

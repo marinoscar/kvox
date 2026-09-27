@@ -89,6 +89,21 @@ export function itemAllowedInPrompt(
   return includePersonalFacts;
 }
 
+/**
+ * Whether a relation TYPE's instances may be put into a prompt (§15, #383):
+ * a type declaring a non-`business` sensitivity (every `personal`-domain
+ * relation, e.g. SPOUSE_OF) follows the personal-fact rule.
+ */
+export function relationAllowedInPrompt(
+  relation: { sensitivityDefault?: string },
+  includePersonalFacts: boolean,
+): boolean {
+  const sensitivity = relation.sensitivityDefault ?? 'business';
+  if (sensitivity === 'business') return true;
+  if (sensitivity === 'sensitive') return false;
+  return includePersonalFacts;
+}
+
 function oneLine(s: string): string {
   return s.replace(/\s+/g, ' ').trim();
 }

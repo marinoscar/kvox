@@ -197,8 +197,8 @@ export const USER_SETTINGS_SECTIONS: SettingsSectionDef[] = [
     // Issue #369, epic #346 (docs/specs/ontology.md §13 — "the only registry
     // entry this feature adds"). A GROUP OF ITS OWN, after `Account`: the
     // connected-knowledge graph is the user's curated knowledge, not a fact
-    // about the account, and later knowledge surfaces (#383's personal domain,
-    // imports) will join it here. One card under its own heading reads as a
+    // about the account, and later knowledge surfaces (imports) will join it
+    // here. (#383's personal domain is a switch on this same page, not a card.) One card under its own heading reads as a
     // section rather than as orphaned — the same shape `Security` and
     // `Danger Zone` already have with one card each.
     //

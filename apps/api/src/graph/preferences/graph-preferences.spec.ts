@@ -83,12 +83,18 @@ describe('graphPreferencesSchema', () => {
     ).toBe(true);
   });
 
-  it('refuses personal: true until #383', () => {
+  it('accepts personal: true (#383) and refuses a non-boolean', () => {
     expect(
       graphPreferencesSchema.safeParse({ domains: { work: true, personal: true } }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       graphPreferencesPatchSchema.safeParse({ domains: { personal: true } }).success,
+    ).toBe(true);
+    expect(
+      graphPreferencesSchema.safeParse({ domains: { work: true, personal: 'yes' } }).success,
+    ).toBe(false);
+    expect(
+      graphPreferencesPatchSchema.safeParse({ domains: { personal: 1 } }).success,
     ).toBe(false);
   });
 

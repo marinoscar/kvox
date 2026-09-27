@@ -110,7 +110,8 @@ export class WorkItemDedupStage implements ProposalStage, OnModuleInit {
       const type = schema.relationType(p.type);
       let dedup: RelationDedup = { verdict: 'new', targetRelationId: null, candidateTo: null };
       if (fromId && toId && type) {
-        const known = relationKnown(await this.candidates.liveEdges(userId, p.type, fromId), p, fromId, toId, ruleForEffectiveRelation(type));
+        const edges = await this.candidates.liveEdges(userId, p.type, fromId, type.symmetric === true);
+        const known = relationKnown(edges, p, fromId, toId, ruleForEffectiveRelation(type));
         if (known.known) dedup = { verdict: 'known', targetRelationId: known.edgeId, candidateTo: null };
       }
       if (dedup.verdict === 'known') stats.known += 1;

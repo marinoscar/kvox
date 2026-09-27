@@ -12,7 +12,14 @@
 //     Unclassified (`null`) is treated as personal — the §5.6 default, the same
 //     rule `itemAllowedInPrompt` (brief-facts.ts) applies to the digest.
 //   - `business`: always.
+//   - #383: an entity or relation of a TYPE whose declared sensitivity is not
+//     `business` (every `personal`-domain type — Interest, Trip, Milestone,
+//     SPOUSE_OF, …) follows the same `personal` rule: returned only when
+//     `ctx.personalFactsAllowed`. Enabling the `personal` domain decides which
+//     types extraction offers; it is not consent to show them to a model.
 // =============================================================================
+
+import { ONTOLOGY } from '@app/shared/ontology';
 
 import type { GraphPreferences } from '../../graph/preferences/graph-preferences.service';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -31,6 +38,30 @@ export function itemVisible(
 ): boolean {
   if (item.kind !== 'person_fact') return true;
   return sensitivityVisible(item.sensitivity ?? null, personalFactsAllowed);
+}
+
+/**
+ * Entity and relation type keys whose rows are personal by declaration (#383),
+ * from the whole registry — not the caller's effective schema: rows written
+ * while `personal` was enabled stay personal after it is turned off.
+ */
+export const PERSONAL_SENSITIVITY_TYPES: ReadonlySet<string> = new Set([
+  ...ONTOLOGY.entityTypes()
+    .filter((t) => t.itemKind === undefined && t.sensitivityDefault !== 'business')
+    .map((t) => t.key),
+  ...ONTOLOGY.relationTypes()
+    .filter((r) => (r.sensitivityDefault ?? 'business') !== 'business')
+    .map((r) => r.key),
+]);
+
+/** Whether an entity or relation of this type may be returned to the agent. */
+export function typeVisible(type: string, personalFactsAllowed: boolean): boolean {
+  return personalFactsAllowed || !PERSONAL_SENSITIVITY_TYPES.has(type);
+}
+
+/** The type keys a query must exclude (empty when personal facts are allowed). */
+export function hiddenTypes(personalFactsAllowed: boolean): string[] {
+  return personalFactsAllowed ? [] : [...PERSONAL_SENSITIVITY_TYPES];
 }
 
 /**

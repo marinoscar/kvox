@@ -95,7 +95,7 @@ export class TemporalClosingStage implements ProposalStage, OnModuleInit {
 
       stats.planned += 1;
       const key = `${p.type}|${fromId}`;
-      if (!edgeCache.has(key)) edgeCache.set(key, await this.graph.liveEdges(userId, p.type, fromId));
+      if (!edgeCache.has(key)) edgeCache.set(key, await this.graph.liveEdges(userId, p.type, fromId, rule.symmetric === true));
       const edges = edgeCache.get(key)!;
       const candidate = candidateEdge(p, fromId, placeholderId(resolveEndpoint(p.to, rows.entities)), rule);
       const plan = planTemporalInsert(edges, candidate, rule);

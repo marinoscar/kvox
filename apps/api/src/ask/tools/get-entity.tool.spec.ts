@@ -126,6 +126,13 @@ describe('GetEntityTool', () => {
     expect(attributes.Diagnosis).toBeUndefined();
   });
 
+  it('refuses a personal-domain entity without the opt-in (#383)', async () => {
+    const { tool, graphRead } = build({});
+    graphRead.getEntity.mockResolvedValueOnce({ ...detail({}), type: 'Milestone', label: "Ivy's 5th birthday" });
+    const ctx = makeCtx();
+    await expect(tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'x') }))).rejects.toThrow(AskToolError);
+  });
+
   it('refuses a handle this turn did not issue', async () => {
     const { tool, graphRead } = build(PROPS);
     await expect(tool.run(makeCtx(), tool.input.parse({ entity: 'ent4' }))).rejects.toThrow(AskToolError);

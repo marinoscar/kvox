@@ -11,9 +11,10 @@ import type { TemporalRule } from './types';
  * `required` props, sorted — HAS_ROLE → `['title']`, WORKS_FOR → `[]`.
  */
 export function temporalRuleFor(
-  relationType: Pick<RelationTypeSpec, 'temporal' | 'exclusive' | 'exclusiveScope' | 'props'>
+  relationType: Pick<RelationTypeSpec, 'temporal' | 'exclusive' | 'exclusiveScope' | 'props' | 'symmetric'>
 ): TemporalRule {
   return {
+    ...(relationType.symmetric === true ? { symmetric: true } : {}),
     temporal: relationType.temporal,
     exclusive: relationType.exclusive,
     exclusiveScope: relationType.exclusiveScope ?? 'from',

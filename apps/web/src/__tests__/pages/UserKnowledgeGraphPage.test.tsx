@@ -244,17 +244,17 @@ describe('UserKnowledgeGraphPage', () => {
     const domainSwitch = (name: string) =>
       within(screen.getByRole('region', { name: 'Domains' })).getByRole('switch', { name });
 
-    it('Core is always on, Personal is disabled for a later release', async () => {
+    it('Core is always on; Personal life is off by default and can be switched (#383)', async () => {
       await renderPage();
-      await waitFor(() => expect(domainSwitch('Personal')).toBeInTheDocument());
+      await waitFor(() => expect(domainSwitch('Personal life')).toBeInTheDocument());
 
       expect(domainSwitch('Core')).toBeChecked();
       expect(domainSwitch('Core')).toBeDisabled();
       expect(domainSwitch('Work')).toBeChecked();
       expect(domainSwitch('Work')).toBeEnabled();
-      expect(domainSwitch('Personal')).not.toBeChecked();
-      expect(domainSwitch('Personal')).toBeDisabled();
-      expect(screen.getByText('Coming in a later release')).toBeInTheDocument();
+      expect(domainSwitch('Personal life')).not.toBeChecked();
+      expect(domainSwitch('Personal life')).toBeEnabled();
+      expect(screen.queryByText('Coming in a later release')).not.toBeInTheDocument();
     });
 
     it('turning Work off asks first, and cancel sends nothing', async () => {
@@ -297,6 +297,70 @@ describe('UserKnowledgeGraphPage', () => {
       await waitFor(() => expect(patches).toEqual([{ graph: { domains: { work: false } } }]));
       await waitFor(() => expect(ontologyReads).toBeGreaterThan(before));
       await waitFor(() => expect(domainSwitch('Work')).not.toBeChecked());
+    });
+
+    it('turning Personal life on asks first, with the consent copy, and cancel sends nothing (#383)', async () => {
+      const user = userEvent.setup();
+      await renderPage();
+      await waitFor(() => expect(domainSwitch('Personal life')).toBeInTheDocument());
+
+      await user.click(domainSwitch('Personal life'));
+      const dialog = await screen.findByRole('dialog', { name: /turn on personal life/i });
+      expect(
+        within(dialog).getByText(
+          /personal-life facts are about other people who haven.t agreed to be profiled\. they.re marked personal, are never pre-selected for you in review, and aren.t used to write notes unless you opt in\. turn on\?/i,
+        ),
+      ).toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(patches).toEqual([]);
+      expect(domainSwitch('Personal life')).not.toBeChecked();
+    });
+
+    it('confirming Personal life on PATCHes domains.personal and reloads the ontology', async () => {
+      const user = userEvent.setup();
+      let ontologyReads = 0;
+      useHandlers();
+      server.use(
+        http.get(`${API_BASE}/graph/ontology`, () => {
+          ontologyReads += 1;
+          return HttpResponse.json({
+            data: mockGraphOntology(
+              stored.graph?.domains?.personal === true ? ['core', 'work', 'personal'] : ['core', 'work'],
+            ),
+          });
+        }),
+      );
+      render(<UserKnowledgeGraphPage />);
+      await waitFor(() => expect(domainSwitch('Personal life')).toBeInTheDocument());
+      const before = ontologyReads;
+
+      await user.click(domainSwitch('Personal life'));
+      const dialog = await screen.findByRole('dialog', { name: /turn on personal life/i });
+      await user.click(within(dialog).getByRole('button', { name: 'Turn on' }));
+
+      await waitFor(() => expect(patches).toEqual([{ graph: { domains: { personal: true } } }]));
+      await waitFor(() => expect(ontologyReads).toBeGreaterThan(before));
+      await waitFor(() => expect(domainSwitch('Personal life')).toBeChecked());
+      expect(screen.getByText(/never pre-selected for you in review/i)).toBeInTheDocument();
+    });
+
+    it('turning Personal life off needs no confirmation and says accepted facts stay', async () => {
+      const user = userEvent.setup();
+      await renderPage({ domains: { work: true, personal: true } });
+      await waitFor(() => expect(domainSwitch('Personal life')).toBeChecked());
+
+      await user.click(domainSwitch('Personal life'));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await waitFor(() => expect(patches).toEqual([{ graph: { domains: { personal: false } } }]));
+      await waitFor(() => expect(domainSwitch('Personal life')).not.toBeChecked());
+      expect(
+        screen.getByText(
+          /new notes won.t propose personal-life facts\. facts you already accepted stay in your graph\./i,
+        ),
+      ).toBeInTheDocument();
     });
 
     it('turning Work back on needs no confirmation', async () => {

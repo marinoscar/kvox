@@ -118,6 +118,43 @@ describe('NeighborsTool', () => {
     expectNoUuid(res.data);
   });
 
+  it('drops personal-domain entities and relations (#383) without the opt-in, keeps them with it', async () => {
+    const MAYA = uid(20);
+    const RUNNING = uid(21);
+    const personalSlice = {
+      ...slice,
+      seedIds: [SARAH],
+      nodes: [
+        node(SARAH, 'entity', 'Person', 'Sarah', 0),
+        node(MAYA, 'entity', 'Person', 'Maya', 1),
+        node(RUNNING, 'entity', 'Interest', 'Marathon running', 1),
+        node(ACME, 'entity', 'Organization', 'Acme', 1),
+      ],
+      edges: [
+        { id: uid(22), type: 'SPOUSE_OF', source: SARAH, target: MAYA, valid: null, confidence: null, virtual: false },
+        { id: uid(23), type: 'INTERESTED_IN', source: SARAH, target: RUNNING, valid: null, confidence: null, virtual: false },
+        { id: REL, type: 'WORKS_FOR', source: SARAH, target: ACME, valid: null, confidence: null, virtual: false },
+      ],
+    };
+    const neighborhood = { neighborhood: jest.fn(async () => personalSlice) };
+    const prisma = { kgItem: { findMany: jest.fn(async () => []) } };
+    const tool = new NeighborsTool(neighborhood as never, prisma as never);
+
+    const ctx = makeCtx();
+    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'Sarah') }));
+    const text = JSON.stringify(res.data);
+    expect(text).not.toContain('Marathon running');
+    expect(text).not.toContain('SPOUSE_OF');
+    expect(text).not.toContain('INTERESTED_IN');
+    // Maya is a core Person: still a node, but the spouse edge that linked her is gone.
+    expect((res.data as { edges: Array<{ type: string }> }).edges.map((e) => e.type)).toEqual(['WORKS_FOR']);
+
+    const allowed = makeCtx({ personalFactsAllowed: true });
+    const withOptIn = await tool.run(allowed, tool.input.parse({ entity: seedEntity(allowed, SARAH, 'Sarah') }));
+    expect(JSON.stringify(withOptIn.data)).toContain('SPOUSE_OF');
+    expect(JSON.stringify(withOptIn.data)).toContain('Marathon running');
+  });
+
   it('keeps personal PersonFacts with the opt-in', async () => {
     const { tool } = build();
     const ctx = makeCtx({ personalFactsAllowed: true });

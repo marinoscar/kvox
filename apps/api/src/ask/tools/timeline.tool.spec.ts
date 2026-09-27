@@ -80,6 +80,43 @@ function build(nextCursor: string | null = 'next') {
 }
 
 describe('TimelineTool', () => {
+  it('drops personal-domain relation events (#383) without the opt-in', async () => {
+    const TRIP = uid(40);
+    const personal = [
+      {
+        id: `rel:${uid(41)}:start`,
+        eventKind: 'relation_started',
+        at: '2016-06-01T00:00:00.000Z',
+        precision: 'month',
+        relation: { id: uid(41), type: 'SPOUSE_OF', direction: 'out', other: ref(uid(42), 'Tessa', 'Person'), valid: null },
+        evidenceIds: [],
+        evidenceCount: 0,
+      },
+      {
+        id: `rel:${uid(43)}:start`,
+        eventKind: 'relation_started',
+        at: '2026-06-12T00:00:00.000Z',
+        precision: 'day',
+        relation: { id: uid(43), type: 'WORKS_AT', direction: 'out', other: ref(TRIP, 'Lisbon trip', 'Trip'), valid: null },
+        evidenceIds: [],
+        evidenceCount: 0,
+      },
+    ];
+    const graphRead = { timeline: jest.fn(async () => ({ items: [...events, ...personal], nextCursor: null, asOf: '2026-09-26T12:00:00.000Z' })) };
+    const prisma = { kgEvidence: { findMany: jest.fn(async () => []) } };
+    const tool = new TimelineTool(graphRead as never, prisma as never);
+    const ctx = makeCtx();
+    const res = await tool.run(ctx, tool.input.parse({ entity: seedEntity(ctx, SARAH, 'Sarah') }));
+    const text = JSON.stringify(res.data);
+    expect(text).not.toContain('SPOUSE_OF');
+    expect(text).not.toContain('Lisbon trip');
+    expect(text).toContain('WORKS_AT');
+
+    const allowed = makeCtx({ personalFactsAllowed: true });
+    const withOptIn = await tool.run(allowed, tool.input.parse({ entity: seedEntity(allowed, SARAH, 'Sarah') }));
+    expect(JSON.stringify(withOptIn.data)).toContain('SPOUSE_OF');
+  });
+
   it('never asks for sensitive facts and maps null to defaults', async () => {
     const { tool, graphRead } = build();
     const ctx = makeCtx();

@@ -71,13 +71,17 @@ export type {
 
 import { coreDomain } from './domains/core.js';
 import { workDomain } from './domains/work.js';
+import { personalDomain } from './domains/personal.js';
 import { buildOntologyRegistry } from './registry.js';
 import type { OntologyRegistry } from './registry.js';
 import { ONTOLOGY_VERSION } from './version.js';
 import { computeEffectiveSchemaFor } from './effective-schema.js';
 import type { ComputeEffectiveSchemaInput, EffectiveSchema } from './effective-schema.js';
 
-export const ONTOLOGY: OntologyRegistry = buildOntologyRegistry([coreDomain, workDomain], ONTOLOGY_VERSION);
+export const ONTOLOGY: OntologyRegistry = buildOntologyRegistry(
+  [coreDomain, workDomain, personalDomain],
+  ONTOLOGY_VERSION,
+);
 
 /**
  * One user's effective schema: `core` plus their enabled domains, mixins and

@@ -170,6 +170,24 @@ describe('scoreFixture / scoreRun', () => {
     expect(run.types.Commitment).toEqual({ tp: n - 1, fp: 0, fn: 1 });
   });
 
+  it('matches a symmetric relation either way round, a directed one only as labelled (#383)', () => {
+    const fixtures = loadGoldenSet();
+    const f = fixtures.find((x) => x.labels.relations.some((r) => r.type === 'SPOUSE_OF'))!;
+    const reverse = (type: string) => {
+      const pred = goldPrediction(f);
+      for (const r of pred.relations) if (r.type === type) [r.from, r.to] = [r.to, r.from];
+      return scoreFixture(f, pred);
+    };
+    const spouses = f.labels.relations.filter((r) => r.type === 'SPOUSE_OF').length;
+    expect(reverse('SPOUSE_OF').types['relation:SPOUSE_OF']).toEqual({ tp: spouses, fp: 0, fn: 0 });
+
+    const withParents = fixtures.find((x) => x.labels.relations.some((r) => r.type === 'PARENT_OF'))!;
+    const pred = goldPrediction(withParents);
+    for (const r of pred.relations) if (r.type === 'PARENT_OF') [r.from, r.to] = [r.to, r.from];
+    const parents = withParents.labels.relations.filter((r) => r.type === 'PARENT_OF').length;
+    expect(scoreFixture(withParents, pred).types['relation:PARENT_OF']).toEqual({ tp: 0, fp: parents, fn: parents });
+  });
+
   it('counts a wrong type as one FP (predicted type) and one FN (gold type)', () => {
     const f = tinyFixture();
     const pred = goldPrediction(f);

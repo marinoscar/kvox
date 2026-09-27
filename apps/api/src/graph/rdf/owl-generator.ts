@@ -9,7 +9,8 @@
 //   <ns>           a owl:Ontology; owl:versionInfo <registry version>
 //   kv:<Type>      a owl:Class; rdfs:subClassOf <alignment>
 //   kv:<Type>.<a>  a owl:DatatypeProperty | owl:ObjectProperty (entity_ref)
-//   kv:<REL>       a owl:ObjectProperty; rdfs:subPropertyOf <alignment>
+//   kv:<REL>       a owl:ObjectProperty (+ owl:SymmetricProperty when the
+//                  relation declares `symmetric`, #383); rdfs:subPropertyOf <alignment>
 //   kv:attr/<id>   the caller's own attribute definitions
 //   kv:<Item>.statement, kv:occurredAt, kv:dueAt — the row columns an export
 //                  writes that are not attributes (#386)
@@ -149,7 +150,11 @@ function domainAndRange(
 
 function relationSubject(ns: string, relation: Readonly<RelationTypeSpec>): TurtleSubject {
   const props: TurtlePredicate[] = [
-    po(RDF_TYPE, iri(`${OWL}ObjectProperty`)),
+    // #383: a symmetric relation (SPOUSE_OF, FRIEND_OF) is stored once, and
+    // `(a, b)` states `(b, a)` too — exactly OWL's owl:SymmetricProperty.
+    relation.symmetric === true
+      ? po(RDF_TYPE, iri(`${OWL}ObjectProperty`), iri(`${OWL}SymmetricProperty`))
+      : po(RDF_TYPE, iri(`${OWL}ObjectProperty`)),
     po(`${RDFS}label`, literal(relation.label)),
     po(`${RDFS}comment`, literal(relation.description)),
   ];
