@@ -2,7 +2,10 @@ import { IDS, known, makeContext, makeInput, schemaFor } from '../../../test/gra
 import { buildExtractionContext } from './extraction-context';
 import { extractionRowCaps } from './row-caps';
 import {
+  CONTEXT_FRAMING,
+  CONTEXT_RULE,
   GUIDANCE_PREAMBLE,
+  HEADING_CONTEXT,
   HEADING_ENTITY_TYPES,
   HEADING_FACT_KINDS,
   HEADING_GUIDANCE,
@@ -14,6 +17,7 @@ import {
   HEADING_SPEAKERS,
   HEADING_TRANSCRIPT,
   ROLE_LINE,
+  affiliationRule,
   assembleExtractionPrompt,
   formatTimestamp,
   rowCapsRule,
@@ -29,6 +33,7 @@ describe('assembleExtractionPrompt (#363)', () => {
       HEADING_FACT_KINDS,
       HEADING_GUIDANCE,
       HEADING_MEETING,
+      HEADING_CONTEXT,
       HEADING_KNOWN_ENTITIES,
       HEADING_SPEAKERS,
       HEADING_NOTE,
@@ -41,6 +46,7 @@ describe('assembleExtractionPrompt (#363)', () => {
       '## Fact kinds',
       '## Reviewer guidance',
       '# Meeting',
+      '# Context',
       '# Known entities',
       '# Speakers',
       '# Note',
@@ -52,7 +58,7 @@ describe('assembleExtractionPrompt (#363)', () => {
     const sys = order(systemPrompt, [ROLE_LINE, HEADING_RULES, HEADING_ENTITY_TYPES, HEADING_RELATION_TYPES, HEADING_FACT_KINDS]);
     expect(sys.every((i) => i >= 0)).toBe(true);
     expect([...sys].sort((a, b) => a - b)).toEqual(sys);
-    const usr = order(userContent, [HEADING_MEETING, HEADING_KNOWN_ENTITIES, HEADING_SPEAKERS, HEADING_NOTE, HEADING_TRANSCRIPT]);
+    const usr = order(userContent, [HEADING_MEETING, HEADING_CONTEXT, HEADING_KNOWN_ENTITIES, HEADING_SPEAKERS, HEADING_NOTE, HEADING_TRANSCRIPT]);
     expect(usr.every((i) => i >= 0)).toBe(true);
     expect([...usr].sort((a, b) => a - b)).toEqual(usr);
   });
@@ -148,17 +154,101 @@ describe('assembleExtractionPrompt (#363)', () => {
   // The row-cap rule (#435)
   // ===========================================================================
 
-  it('with no caps argument, the rule 10 line is entirely absent', () => {
+  // ===========================================================================
+  // The Context as a citable source (#440)
+  // ===========================================================================
+
+  const noContext = (effectiveSchema = schemaFor()) => {
+    const input = makeInput({ effectiveSchema });
+    input.note.contextText = '  \n ';
+    return buildExtractionContext(input);
+  };
+
+  it('puts the Context in its own section after # Meeting, framed and verbatim, citable as C', () => {
+    const input = makeInput();
+    input.note.contextText = '  Oscar – EY, Consulting, Managing Director\nSarah is our sponsor.  ';
+    const { userContent } = assembleExtractionPrompt(buildExtractionContext(input));
+    expect(CONTEXT_FRAMING).toContain('Cite it as `C`.');
+    expect(userContent).toContain(
+      `# Meeting\nDate: 2026-03-02\nTitle: Pilot kickoff call\n\n${HEADING_CONTEXT}\n${CONTEXT_FRAMING}\n` +
+        'Oscar – EY, Consulting, Managing Director\nSarah is our sponsor.\n\n# Known entities',
+    );
+    // No longer a one-line meeting field.
+    expect(userContent).not.toContain('Context: ');
+  });
+
+  it('omits the Context section, the C citation and the Context rule when the Context is blank', () => {
+    const { systemPrompt, userContent } = assembleExtractionPrompt(noContext());
+    expect(userContent).not.toContain(HEADING_CONTEXT);
+    expect(userContent).not.toContain(CONTEXT_FRAMING);
+    expect(systemPrompt).not.toContain(CONTEXT_RULE);
+    expect(systemPrompt).toContain(
+      '1. Cite only ids you were given: `s#` for a transcript line, `N` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.',
+    );
+  });
+
+  it('with a Context, rule 1 offers `C` and rule 10 tells the model to read it first', () => {
+    const { systemPrompt } = assembleExtractionPrompt(makeContext());
+    expect(systemPrompt).toContain(
+      '1. Cite only ids you were given: `s#` for a transcript line, `N` for the note, `C` for the Context. Each citation copies an exact quote of at most 200 characters from that line, from the note or from the Context.',
+    );
+    expect(systemPrompt).toContain(`10. ${CONTEXT_RULE}`);
+    expect(CONTEXT_RULE).toContain('citing `C`');
+    expect(CONTEXT_RULE).toContain("prefer the Context's spelling of a name over the transcript's");
+  });
+
+  it('asks for company, business unit and role, and WORKS_FOR, when the offered Person carries them', () => {
+    const { systemPrompt } = assembleExtractionPrompt(makeContext());
+    expect(systemPrompt).toContain(
+      "11. For each person, fill `company`, `businessUnit` and `title` (role) whenever the Context, note or transcript states them, and propose WORKS_FOR from the person to that company's Organization.",
+    );
+    // Without a Context the rule stays (and takes number 10), naming only the note and transcript.
+    expect(assembleExtractionPrompt(noContext()).systemPrompt).toContain(
+      "10. For each person, fill `company`, `businessUnit` and `title` (role) whenever the note or transcript states them, and propose WORKS_FOR from the person to that company's Organization.",
+    );
+  });
+
+  it('derives the affiliation rule from the offered schema, never a hardcoded list', () => {
+    // `core` alone: Person carries none of the three, so there is no rule.
+    expect(affiliationRule(makeContext({ effectiveSchema: schemaFor(['core']) }))).toBeNull();
+    // Person excluded by guidance: no rule.
+    expect(
+      affiliationRule(makeContext({ guidance: { pinnedEntityIds: [], entityTypes: ['Organization'], instructions: '' } })),
+    ).toBeNull();
+    // WORKS_FOR excluded by guidance: the attributes are still asked for, the relation is not.
+    const rule = affiliationRule(
+      makeContext({ guidance: { pinnedEntityIds: [], relationTypes: ['ATTENDED'], instructions: '' } }),
+    );
+    expect(rule).toContain('`company`, `businessUnit` and `title` (role)');
+    expect(rule).not.toContain('WORKS_FOR');
+  });
+
+  it('keeps the rule numbers sequential whichever optional rules are present', () => {
+    const caps = { entities: 10, relations: 7, items: 5 };
+    for (const ctx of [makeContext(), noContext(), noContext(schemaFor(['core'])), makeContext({ effectiveSchema: schemaFor(['core']) })]) {
+      const rules = assembleExtractionPrompt(ctx, caps)
+        .systemPrompt.split('\n')
+        .map((line) => /^(\d+)\. /.exec(line)?.[1])
+        .filter((n): n is string => n !== undefined)
+        .map(Number);
+      expect(rules).toEqual(rules.map((_, i) => i + 1));
+    }
+    // With no Context and no affiliation attributes, the row cap keeps its #435 number.
+    expect(assembleExtractionPrompt(noContext(schemaFor(['core'])), caps).systemPrompt).toContain('\n10. Propose at most');
+  });
+
+  it('with no caps argument, the row-cap rule is entirely absent', () => {
     const { systemPrompt } = assembleExtractionPrompt(makeContext());
     expect(systemPrompt).not.toContain('Propose at most');
   });
 
-  it('with caps, the rule 10 line names each offered section\'s cap and tells the model what to do when it holds more', () => {
+  it('with caps, the last rule names each offered section\'s cap and tells the model what to do when it holds more', () => {
     const caps = extractionRowCaps(16_000, 'none');
     const { systemPrompt } = assembleExtractionPrompt(makeContext(), caps);
 
+    // Rule 10 is the Context rule and 11 the affiliation rule (#440), so the cap is 12.
     expect(systemPrompt).toContain(
-      `10. Propose at most ${caps.entities} entities, ${caps.relations} relations and ${caps.items} facts. ` +
+      `12. Propose at most ${caps.entities} entities, ${caps.relations} relations and ${caps.items} facts. ` +
         'If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.',
     );
   });

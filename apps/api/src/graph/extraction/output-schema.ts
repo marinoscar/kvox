@@ -24,7 +24,7 @@ import { buildPropsJsonSchema, type EffectiveEntityType } from '@app/shared/onto
 import { z } from 'zod';
 
 import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
-import type { ExtractionContext } from './extraction-context';
+import { CONTEXT_ALIAS, offeredContextText, type ExtractionContext } from './extraction-context';
 import type { ExtractionRowCaps } from './row-caps';
 
 export const EXTRACTION_SCHEMA_NAME = 'kg_extraction';
@@ -35,15 +35,31 @@ const ALWAYS_NULL: JsonSchema = { type: 'null', description: 'Always null for th
 
 const nullableString = (description: string): JsonSchema => ({ type: ['string', 'null'], description });
 
-function citeSchema(): JsonSchema {
+/**
+ * `source` is a free string (never an enum — the ids differ per run and the
+ * validator drops any it did not hand out); only its description names `C`,
+ * and only when this run offers a Context (#440).
+ */
+function citeSchema(ctx: ExtractionContext): JsonSchema {
+  const hasContext = offeredContextText(ctx.note.contextText) !== null;
   return {
     type: 'array',
     description: 'Where this row is stated. At least one.',
     items: {
       type: 'object',
       properties: {
-        source: { type: 'string', description: 'An `s#` transcript line id or `N` for the note — only ids you were given.' },
-        quote: { type: 'string', description: 'An exact quote of at most 200 characters from that line or the note.' },
+        source: {
+          type: 'string',
+          description: hasContext
+            ? `An \`s#\` transcript line id, \`N\` for the note or \`${CONTEXT_ALIAS}\` for the Context — only ids you were given.`
+            : 'An `s#` transcript line id or `N` for the note — only ids you were given.',
+        },
+        quote: {
+          type: 'string',
+          description: hasContext
+            ? 'An exact quote of at most 200 characters from that line, the note or the Context.'
+            : 'An exact quote of at most 200 characters from that line or the note.',
+        },
       },
       required: ['source', 'quote'],
       additionalProperties: false,
@@ -73,7 +89,7 @@ function entitySchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchem
       label: { type: 'string', description: 'The name as the source gives it.' },
       aliases: { type: 'array', items: { type: 'string' }, description: 'Other names used for it in the source.' },
       props: buildPropsJsonSchema(ctx.effectiveSchema, t.key),
-      evidence: citeSchema(),
+      evidence: citeSchema(ctx),
     },
     `${t.label}: ${t.description}`,
   );
@@ -95,7 +111,7 @@ function relationSchema(ctx: ExtractionContext, r: ExtractionContext['offered'][
       to: endpoint(`A ${r.to.join('|')}: a \`k#\`, an \`e#\`${r.to.includes('Meeting') ? ', or `meeting`' : ''}.`),
       props: buildPropsJsonSchema(ctx.effectiveSchema, r.type.key, { relation: true }),
       ...temporalProps(),
-      evidence: citeSchema(),
+      evidence: citeSchema(ctx),
     },
     `${r.type.key}: ${r.type.description}`,
   );
@@ -130,7 +146,7 @@ function itemSchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchema 
           ? { type: ['string', 'null'], enum: ['business', 'personal', 'sensitive', null], description: 'How sensitive this fact is.' }
           : ALWAYS_NULL,
       props: buildPropsJsonSchema(ctx.effectiveSchema, t.key),
-      evidence: citeSchema(),
+      evidence: citeSchema(ctx),
     },
     `${t.label}: ${t.description}`,
   );

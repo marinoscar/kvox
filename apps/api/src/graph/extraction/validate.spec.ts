@@ -1,5 +1,6 @@
 import { statementHash } from '../write/normalize';
-import { IDS, NOTE_BODY, SEGMENT_TEXT, goodAnswer, makeContext } from '../../../test/graph/extraction-fixtures';
+import { IDS, NOTE_BODY, SEGMENT_TEXT, goodAnswer, makeContext, makeInput } from '../../../test/graph/extraction-fixtures';
+import { buildExtractionContext } from './extraction-context';
 import {
   WHOLE_SEGMENT_QUOTE_CHARS,
   addDeterministicRows,
@@ -89,7 +90,82 @@ describe('validateExtraction (#363)', () => {
       const ev = byRef(result.rows, 'e1')!.evidence[0];
       if (ev.source !== 'note') throw new Error('note evidence expected');
       expect(ev).toEqual(expect.objectContaining({ noteId: IDS.note, noteVersion: 2 }));
-      expect(NOTE_BODY.slice(ev.charStart, ev.charEnd)).toBe('Decision: use Postgres.');
+      expect(NOTE_BODY.slice(ev.charStart!, ev.charEnd!)).toBe('Decision: use Postgres.');
+    });
+
+    describe('the Context (`C`, #440)', () => {
+      const CONTEXT = 'Oscar – EY, Consulting, Managing Director. Sarah is our exec sponsor.';
+      const oscar = () => ({
+        ref: 'e2',
+        type: 'Person',
+        label: 'Oscar',
+        aliases: [],
+        props: { company: 'EY', businessUnit: 'Consulting', title: 'Managing Director' },
+        evidence: [{ source: 'C', quote: 'oscar – ey,  consulting, Managing Director' }],
+      });
+      const withContext = (contextText: string | null) => {
+        const input = makeInput();
+        input.note.contextText = contextText;
+        return buildExtractionContext(input);
+      };
+
+      it('a located Context quote becomes a note citation with NULL offsets, quoting the Context itself', () => {
+        const answer = goodAnswer();
+        answer.entities.push(oscar());
+        const result = ok(validateExtraction(answer, withContext(`  ${CONTEXT}\n`)));
+        const row = byRef(result.rows, 'e2')!;
+        expect(row).toBeDefined();
+        expect(row.payload).toEqual(
+          expect.objectContaining({ props: { company: 'EY', businessUnit: 'Consulting', title: 'Managing Director' } }),
+        );
+        expect(row.evidence).toEqual([
+          {
+            source: 'note',
+            noteId: IDS.note,
+            noteVersion: 2,
+            charStart: null,
+            charEnd: null,
+            quote: 'Oscar – EY, Consulting, Managing Director',
+          },
+        ]);
+        expect(row.flags).not.toContain('quote_not_located');
+      });
+
+      it('deduplicates the same Context span cited twice, but keeps a body cite beside it', () => {
+        const answer = goodAnswer();
+        const e = oscar();
+        e.evidence = [
+          { source: 'C', quote: 'EY, Consulting' },
+          { source: ' C ', quote: 'EY, Consulting' },
+          { source: 'C', quote: 'Sarah is our exec sponsor' },
+        ];
+        answer.entities.push(e);
+        const result = ok(validateExtraction(answer, withContext(CONTEXT)));
+        expect(byRef(result.rows, 'e2')!.evidence.map((ev) => ev.quote)).toEqual([
+          'EY, Consulting',
+          'Sarah is our exec sponsor',
+        ]);
+      });
+
+      it('drops a Context quote that is not in the Context (even when it is in the note body)', () => {
+        const answer = goodAnswer();
+        const e = oscar();
+        e.evidence = [{ source: 'C', quote: 'Decision: use Postgres.' }];
+        answer.entities.push(e);
+        const result = ok(validateExtraction(answer, withContext(CONTEXT)));
+        expect(byRef(result.rows, 'e2')).toBeUndefined();
+        expect(result.stats.dropped.uncited).toBe(1);
+      });
+
+      it('drops a `C` cite when the note has no Context, or only a blank one', () => {
+        for (const contextText of [null, '   \n ']) {
+          const answer = goodAnswer();
+          answer.entities.push(oscar());
+          const result = ok(validateExtraction(answer, withContext(contextText)));
+          expect(byRef(result.rows, 'e2')).toBeUndefined();
+          expect(result.stats.dropped.uncited).toBe(1);
+        }
+      });
     });
 
     it('s# cites are refused for a note-only meeting', () => {
@@ -287,7 +363,7 @@ describe('addDeterministicRows (#363)', () => {
     const result = addDeterministicRows(ctx, ok(validateExtraction(goodAnswer(), ctx)));
     const ev = result.rows[0].evidence[0];
     if (ev.source !== 'note') throw new Error('note evidence expected');
-    expect(NOTE_BODY.slice(ev.charStart, ev.charEnd)).toBe('Pilot kickoff');
+    expect(NOTE_BODY.slice(ev.charStart!, ev.charEnd!)).toBe('Pilot kickoff');
     expect(result.rows[0].payload).toEqual(expect.objectContaining({ props: expect.not.objectContaining({ transcriptId: expect.anything() }) }));
     expect(result.rows.some((r) => r.kind === 'relation' && r.payload.type === 'ATTENDED')).toBe(false);
   });

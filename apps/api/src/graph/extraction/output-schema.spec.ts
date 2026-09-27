@@ -1,5 +1,6 @@
 import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
-import { goodAnswer, makeContext, schemaFor } from '../../../test/graph/extraction-fixtures';
+import { goodAnswer, makeContext, makeInput, schemaFor } from '../../../test/graph/extraction-fixtures';
+import { buildExtractionContext } from './extraction-context';
 import { extractionRowCaps } from './row-caps';
 import { buildExtractionOutputSchema, rawExtractionSchema } from './output-schema';
 
@@ -127,5 +128,23 @@ describe('buildExtractionOutputSchema (#363)', () => {
   it('a capped schema still passes the strict-mode pre-flight (no maxItems slipping past it)', () => {
     const caps = extractionRowCaps(16_000, 'none');
     expect(() => assertStrictJsonSchema(buildExtractionOutputSchema(makeContext(), caps))).not.toThrow();
+  });
+
+  it('names the Context (`C`) as a citation source only when the note has one (#440)', () => {
+    const sourceDescriptions = (schema: unknown): string[] =>
+      objects(schema)
+        .map((o) => ((o.properties as Node).source as Node | undefined)?.description)
+        .filter((d): d is string => typeof d === 'string');
+
+    const withContext = sourceDescriptions(buildExtractionOutputSchema(makeContext()));
+    expect(withContext.length).toBeGreaterThan(0);
+    for (const d of withContext) expect(d).toContain('`C` for the Context');
+
+    const input = makeInput();
+    input.note.contextText = '   ';
+    const without = sourceDescriptions(buildExtractionOutputSchema(buildExtractionContext(input)));
+    expect(without.length).toBeGreaterThan(0);
+    for (const d of without) expect(d).not.toContain('`C`');
+    expect(() => assertStrictJsonSchema(buildExtractionOutputSchema(buildExtractionContext(input)))).not.toThrow();
   });
 });

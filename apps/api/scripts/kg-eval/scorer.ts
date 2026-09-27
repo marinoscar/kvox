@@ -153,7 +153,10 @@ export function temporalEqual(
 const day = (d: string | null | undefined) => (d ? d.slice(0, 10) : null);
 
 function evidenceValid(fixture: GoldenFixture, ev: PredictedEvidence): boolean {
-  if (ev.source === 'note') return quoteFoundIn(ev.quote, fixture.note.body);
+  // A note citation may quote the body (`N`) or the note's Context (`C`, #440).
+  if (ev.source === 'note') {
+    return quoteFoundIn(ev.quote, fixture.note.body) || (fixture.contextText !== null && quoteFoundIn(ev.quote, fixture.contextText));
+  }
   const seg = fixture.segments.find((s) => s.id === ev.segmentId);
   return seg !== undefined && quoteFoundIn(ev.quote, seg.text);
 }
