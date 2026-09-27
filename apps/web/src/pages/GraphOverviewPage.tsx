@@ -1,6 +1,6 @@
 /**
  * `/graph/overview` — the shape of the caller's whole graph (#375, epic #347;
- * spec §5.7, §22.3). Owned by `home` through the `/graph` prefix
+ * spec §5.7, §22.3). Owned by `knowledge` (#438) through the `/graph` prefix
  * (`config/destinations.ts`), gated on `graph:read`, lazy.
  *
  * DRAWN FROM A STORED SNAPSHOT, NEVER LAID OUT HERE. `GET /api/graph/overview`

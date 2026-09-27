@@ -2,8 +2,9 @@
  * `KnowledgeSection` — Home's entry point to the knowledge graph (#373, spec
  * §13: "a new Knowledge section on HomePage.tsx surfacing recent entities").
  *
- * The graph has no bottom-bar tab (the bar is at its four-tab ceiling by
- * design), so this is where most people will find it.
+ * Written when the graph had no bottom-bar tab; since #438 it has one
+ * (`knowledge`, while connected knowledge is on), and this section stays as
+ * Home's shortcut to the entities the user saw most recently.
  *
  * HIDDEN ENTIRELY unless it has something to show: no `graph:read`, an empty
  * graph, a slow first answer or a failed one all render NOTHING — no skeleton,
