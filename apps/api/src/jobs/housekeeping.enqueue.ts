@@ -61,7 +61,7 @@
 // =============================================================================
 
 import { Logger } from '@nestjs/common';
-import type { Job } from '@prisma/client';
+import type { Job, Prisma } from '@prisma/client';
 
 import type { PrismaService } from '../prisma/prisma.service';
 import type { JobsService } from './jobs.service';
@@ -82,7 +82,11 @@ import type { JobsService } from './jobs.service';
  */
 export const HOUSEKEEPING_PRIORITY = 100;
 
-/** What one enqueue attempt needs. All four are required. */
+/**
+ * What one enqueue attempt needs. `jobs`, `prisma`, `logger`, `type` and `what`
+ * are required; the subject and payload are for a PER-SUBJECT housekeeping job
+ * (#384's `kg.migrate`, one per owner) and default to a global one.
+ */
 export interface HousekeepingEnqueueOptions {
   jobs: JobsService;
   prisma: PrismaService;
@@ -92,6 +96,15 @@ export interface HousekeepingEnqueueOptions {
   type: string;
   /** A human phrase for the log line ("device code cleanup"). Lower case. */
   what: string;
+  /**
+   * A subject makes the job per-subject: the "already in flight?" lookup and
+   * the dedup key both include it, so one active job per (type, subject) —
+   * never one per type. Omit both for a global job (the original shape).
+   */
+  subjectType?: string;
+  subjectId?: string;
+  /** Handler input; identifiers only. */
+  payload?: Prisma.InputJsonValue;
 }
 
 /**
@@ -107,11 +120,12 @@ export interface HousekeepingEnqueueOptions {
 export async function enqueueHousekeepingJob(
   options: HousekeepingEnqueueOptions
 ): Promise<Job | null> {
-  const { jobs, prisma, logger, type, what } = options;
+  const { jobs, prisma, logger, type, what, subjectType, subjectId, payload } = options;
+  const subject = subjectType !== undefined && subjectId !== undefined ? { subjectType, subjectId } : null;
 
   try {
     const active = await prisma.job.findFirst({
-      where: { type, status: { in: ['pending', 'running'] } },
+      where: { type, status: { in: ['pending', 'running'] }, ...(subject ?? {}) },
       select: { id: true, status: true },
     });
 
@@ -130,9 +144,12 @@ export async function enqueueHousekeepingJob(
       // over existing rows, not a response to an upload and not a human asking
       // for something to be run again.
       reason: 'backfill',
-      // GLOBAL — no subject. Both nulls are what makes the dedup key constant
-      // for the type, which is what makes the index a real single-flight
-      // guarantee rather than a hint.
+      // GLOBAL unless a subject was given. Both nulls are what makes the
+      // dedup key constant for the type, which is what makes the index a real
+      // single-flight guarantee rather than a hint; with a subject, the same
+      // guarantee holds per (type, subject).
+      ...(subject ?? {}),
+      ...(payload !== undefined ? { payload } : {}),
       priority: HOUSEKEEPING_PRIORITY,
     });
 
