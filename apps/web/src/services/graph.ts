@@ -1181,7 +1181,8 @@ export type GraphConflictReason =
   | 'model_lacks_capability'
   | 'note_not_ready'
   | 'proposal_not_committed'
-  | 'stale_segment_rev';
+  | 'stale_segment_rev'
+  | 'graph_empty';
 
 /** `details.reason` of a graph 409, like `noteConflictReason`. */
 export function graphConflictReason(err: unknown): GraphConflictReason | null {
@@ -1357,4 +1358,58 @@ export function getGraphOverview(signal?: AbortSignal): Promise<GraphOverview> {
 /** `POST /api/graph/overview/refresh` (`graph:write`) — 202, deduplicated. */
 export function refreshGraphOverview(): Promise<GraphOverviewRefreshResponse> {
   return api.post<GraphOverviewRefreshResponse>('/graph/overview/refresh', {});
+}
+
+// =============================================================================
+// Export (#386) — mirrors `apps/api/src/graph/export/dto/graph-export.dto.ts`
+// =============================================================================
+
+export type GraphExportFormat = 'jsonld' | 'turtle' | 'nquads';
+export type GraphExportStatus = 'pending' | 'running' | 'ready' | 'failed';
+
+export interface GraphExportStats {
+  entities?: number;
+  relations?: number;
+  items?: number;
+  evidence?: number;
+  /** Sensitive person facts and attribute values left out — they never leave the deployment. */
+  excludedSensitive?: number;
+  bytes?: number;
+}
+
+export interface GraphExport {
+  id: string;
+  format: GraphExportFormat;
+  status: GraphExportStatus;
+  ontologyVersion: string;
+  stats: GraphExportStats;
+  errorMessage: string | null;
+  createdAt: string;
+  /** When the export and its file are deleted (7 days after the request). */
+  expiresAt: string;
+  /** A short-lived signed URL (the filename is signed in). Null unless ready. */
+  downloadUrl: string | null;
+  filename: string;
+}
+
+export interface CreateGraphExportResponse {
+  export: GraphExport;
+  /** True when an unexpired export of the same, unchanged graph was returned (a 200). */
+  reused: boolean;
+}
+
+/** `POST /api/graph/exports` (`graph:read`) — 202 queued, 200 reused, 409 `graph_empty`. */
+export function exportGraph(format: GraphExportFormat): Promise<CreateGraphExportResponse> {
+  return api.post<CreateGraphExportResponse>('/graph/exports', { format });
+}
+
+/** `GET /api/graph/exports/:id` (`graph:read`) — 404 for a foreign or expired export. */
+export function getGraphExport(id: string, signal?: AbortSignal): Promise<GraphExport> {
+  return api.get<GraphExport>(`/graph/exports/${encodeURIComponent(id)}`, { signal });
+}
+
+/** `GET /api/graph/exports` (`graph:read`) — the caller's unexpired exports, newest first. */
+export async function listGraphExports(signal?: AbortSignal): Promise<GraphExport[]> {
+  const response = await api.get<{ exports: GraphExport[] }>('/graph/exports', { signal });
+  return response.exports;
 }

@@ -1,3 +1,4 @@
+import type { GraphObjectsService } from '../graph-objects.service';
 import type { PrismaService } from '../../prisma/prisma.service';
 import {
   chunk,
@@ -87,6 +88,16 @@ function fakePrisma(responses: Record<string, Responder> = {}) {
 
 const person = { id: P, ownerId: USER, type: 'Person' };
 
+/** The graph's managed storage (#386): records which export files were deleted. */
+function fakeObjects(deleted: string[] = []): GraphObjectsService {
+  return {
+    deleteIfPresent: async (id: string | null | undefined) => {
+      if (id) deleted.push(id);
+      return true;
+    },
+  } as unknown as GraphObjectsService;
+}
+
 /** Only writes and transaction boundaries — the part of the log the trigger cares about. */
 const writes = (log: string[]) =>
   log.filter((l) => l === 'BEGIN' || l === 'COMMIT' || /deleteMany|updateMany|\$executeRaw/.test(l));
@@ -111,7 +122,7 @@ describe('KgPurgeService.collectPersonSet — the merged-set closure', () => {
       // P ← P′ ← P″ (a tombstone of a tombstone), then nothing.
       'kgEntity.findMany': queue([[{ id: P_PRIME }], [{ id: 'p-double-prime' }], []]),
     });
-    const service = new KgPurgeService(prisma);
+    const service = new KgPurgeService(prisma, fakeObjects());
 
     const set = await service.collectPersonSet(USER, P);
 
@@ -133,7 +144,7 @@ describe('KgPurgeService.collectPersonSet — the merged-set closure', () => {
       'kgEntity.findMany': queue([[{ id: P_PRIME }], [{ id: P }]]),
     });
 
-    await expect(new KgPurgeService(prisma).collectPersonSet(USER, P)).resolves.toEqual([P, P_PRIME]);
+    await expect(new KgPurgeService(prisma, fakeObjects()).collectPersonSet(USER, P)).resolves.toEqual([P, P_PRIME]);
   });
 
   it.each([
@@ -143,13 +154,13 @@ describe('KgPurgeService.collectPersonSet — the merged-set closure', () => {
   ])('is null for a %s entity', async (_label, row) => {
     const { prisma } = fakePrisma({ 'kgEntity.findUnique': () => row });
 
-    await expect(new KgPurgeService(prisma).collectPersonSet(USER, P)).resolves.toBeNull();
+    await expect(new KgPurgeService(prisma, fakeObjects()).collectPersonSet(USER, P)).resolves.toBeNull();
   });
 });
 
 describe('KgPurgeService.purgePerson', () => {
   it('declares its plan in the order the issue fixes', () => {
-    expect(KG_PURGE_PERSON_PLAN).toEqual(['items', 'relations', 'entityRows', 'draftProposalItems', 'entities']);
+    expect(KG_PURGE_PERSON_PLAN).toEqual(['items', 'relations', 'entityRows', 'draftProposalItems', 'entities', 'exports']);
   });
 
   it('runs items → relations → rows about the entities → draft proposal items → entities, evidence with its subject', async () => {
@@ -161,7 +172,7 @@ describe('KgPurgeService.purgePerson', () => {
       $queryRaw: queue([[{ id: 'draft-item-1' }]]),
     });
 
-    const result = await new KgPurgeService(prisma).purgePerson(USER, P);
+    const result = await new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P);
 
     expect(result?.entityIds).toEqual([P, P_PRIME]);
     expect(writes(log)).toEqual([
@@ -211,7 +222,7 @@ describe('KgPurgeService.purgePerson', () => {
       'kgEntity.findMany': queue([[{ id: P_PRIME }], []]),
     });
 
-    await new KgPurgeService(prisma).purgePerson(USER, P);
+    await new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P);
 
     const set = [P, P_PRIME];
     expect(calls.find((c) => c.key === 'kgItem.findMany')?.args).toEqual({
@@ -232,7 +243,7 @@ describe('KgPurgeService.purgePerson', () => {
   it('only touches OPEN proposals, by every reference shape — merge_into_id, resolution, payload at any depth', async () => {
     const { prisma, calls } = fakePrisma({ 'kgEntity.findUnique': () => person });
 
-    await new KgPurgeService(prisma).purgePerson(USER, P);
+    await new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P);
 
     const select = calls.find((c) => c.key === '$queryRaw')!.args as { sql: string; values: unknown[] };
     expect(select.sql).toContain('merge_into_id');
@@ -250,7 +261,7 @@ describe('KgPurgeService.purgePerson', () => {
       'kgEntity.findMany': queue([tombstones, []]),
     });
 
-    await new KgPurgeService(prisma).purgePerson(USER, P);
+    await new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P);
 
     const sizes = calls
       .filter((c) => c.key === 'tx.kgEntity.deleteMany')
@@ -264,7 +275,7 @@ describe('KgPurgeService.purgePerson', () => {
       'kgItem.findMany': queue([[{ id: 'a' }], [{ id: 'b' }], []]),
     });
 
-    await new KgPurgeService(prisma).purgePerson(USER, P);
+    await new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P);
 
     expect(calls.filter((c) => c.key === 'tx.kgItem.deleteMany')).toHaveLength(2);
   });
@@ -272,7 +283,7 @@ describe('KgPurgeService.purgePerson', () => {
   it('is a no-op for a non-Person — no transaction, no delete', async () => {
     const { prisma, log } = fakePrisma({ 'kgEntity.findUnique': () => ({ ...person, type: 'Organization' }) });
 
-    await expect(new KgPurgeService(prisma).purgePerson(USER, P)).resolves.toBeNull();
+    await expect(new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P)).resolves.toBeNull();
     expect(writes(log)).toEqual([]);
   });
 
@@ -282,7 +293,7 @@ describe('KgPurgeService.purgePerson', () => {
       'kgItem.findMany': () => [{ id: 'stuck' }],
     });
 
-    await expect(new KgPurgeService(prisma).purgePerson(USER, P)).rejects.toThrow(
+    await expect(new KgPurgeService(prisma, fakeObjects()).purgePerson(USER, P)).rejects.toThrow(
       `kg.purge step "items" did not converge after ${KG_PURGE_MAX_BATCHES} batches`,
     );
   });
@@ -305,7 +316,27 @@ describe('KgPurgeService.purgeAll', () => {
       'evidence',
       'attributeDefs',
       'graphLayouts',
+      'exports',
     ]);
+  });
+
+  it('deletes the owner’s exports last: reference, then file, then row (#386)', async () => {
+    const deleted: string[] = [];
+    const { prisma, log, calls } = fakePrisma({
+      'kgExport.findMany': queue([[{ id: 'x1', objectId: 'o1' }, { id: 'x2', objectId: null }]]),
+    });
+
+    const counts = await new KgPurgeService(prisma, fakeObjects(deleted)).purgeAll(USER);
+
+    expect(calls.find((c) => c.key === 'kgExport.findMany')?.args).toMatchObject({ where: { ownerId: USER } });
+    expect(log.filter((l) => l.startsWith('kgExport.') && l !== 'kgExport.findMany')).toEqual([
+      'kgExport.update',
+      'kgExport.delete',
+      'kgExport.delete',
+    ]);
+    expect(deleted).toEqual(['o1']);
+    expect(counts.exports).toBe(2);
+    expect(log.lastIndexOf('kgGraphLayout.deleteMany')).toBeLessThan(log.indexOf('kgExport.findMany'));
   });
 
   it('deletes every table in plan order, evidence in the same transaction as its subject', async () => {
@@ -326,7 +357,7 @@ describe('KgPurgeService.purgeAll', () => {
       'kgAttributeDef.findMany': once({ id: 'ad' }),
     });
 
-    await new KgPurgeService(prisma).purgeAll(USER);
+    await new KgPurgeService(prisma, fakeObjects()).purgeAll(USER);
 
     const deletes = writes(log).filter((l) => l !== 'BEGIN' && l !== 'COMMIT');
     expect(deletes).toEqual([
@@ -373,7 +404,7 @@ describe('KgPurgeService.purgeAll', () => {
       'kgEvidence.deleteMany': () => ({ count: 3 }),
     });
 
-    const counts = await new KgPurgeService(prisma).purgeAll(USER);
+    const counts = await new KgPurgeService(prisma, fakeObjects()).purgeAll(USER);
 
     expect(counts.entities).toBe(2);
     expect(counts.evidence).toBe(3);

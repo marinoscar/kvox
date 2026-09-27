@@ -44,6 +44,8 @@ export const GRAPH_CONFLICT_REASONS = {
   PROPOSAL_NOT_COMMITTED: 'proposal_not_committed',
   /** An evidence span names a segment `rev` that has moved on since — #366. */
   STALE_SEGMENT_REV: 'stale_segment_rev',
+  /** An export of a graph with nothing readable in it — #386. */
+  GRAPH_EMPTY: 'graph_empty',
 } as const;
 
 export type GraphConflictReason =

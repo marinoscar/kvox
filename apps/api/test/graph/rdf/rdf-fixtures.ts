@@ -77,5 +77,5 @@ export function userDef(overrides: Partial<UserAttributeDef> & Pick<UserAttribut
   };
 }
 
-/** Loads an ESM-only package from a CommonJS test — see `esm-import.js`. */
-export { esmImport } from './esm-import';
+/** Runs rdf-validate-shacl in a child process — see `shacl.ts`. */
+export { validateShacl, type ShaclReport } from './shacl';

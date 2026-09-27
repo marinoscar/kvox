@@ -149,6 +149,8 @@ const MIGRATIONS_AT_288 = [
   // #376 (epic #348): saved Ask conversations and their messages. Not about
   // notifications either.
   '20260926050000_add_ask_conversations',
+  // #386 (epic #349): RDF exports of an owner's graph. Not about notifications.
+  '20260926231512_add_kg_exports',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');
