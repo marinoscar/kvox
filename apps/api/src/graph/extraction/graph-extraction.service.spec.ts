@@ -119,7 +119,8 @@ describe('GraphExtractionService.request (#363)', () => {
     expect(out.proposal).toEqual(
       expect.objectContaining({ id: 'proposal-1', noteId: IDS.note, noteVersion: 2, status: 'extracting', model: 'gpt-4o', providerId: 'openai' }),
     );
-    expect(out.estimate).toEqual(expect.objectContaining({ requests: 1, fits: true, keyConfigured: true, maxOutputTokens: 8_000 }));
+    // #436: the 8,000 cap plus 'medium' effort's 16,384 reasoning headroom exceeds the model's own 16,000.
+    expect(out.estimate).toEqual(expect.objectContaining({ requests: 1, fits: true, keyConfigured: true, maxOutputTokens: 16_000 }));
     expect(loader.load).toHaveBeenCalledWith({ userId: IDS.owner, noteId: IDS.note, noteVersion: 2, guidance: null });
   });
 

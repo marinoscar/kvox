@@ -1557,11 +1557,24 @@ export class OpenAiProvider
       );
     }
 
+    // Never zero — see `generate`. The schema travels with the prompt, so it
+    // is counted as prompt. Computed lazily: used on success AND attached to a
+    // truncated/invalid answer, which is billed all the same (#435).
+    const reportedUsage = (): AiUsage =>
+      usage ?? {
+        promptTokens: this.countTokens(
+          `${request.systemPrompt}\n${request.userContent}\n${JSON.stringify(request.schema)}`,
+          request.model,
+        ),
+        completionTokens: this.countTokens(content, request.model),
+      };
+
     if (finishReason === 'length') {
       throw new AiStructuredOutputError(
         `The structured answer from model "${request.model}" was cut off at the ${request.maxOutputTokens}-token output ceiling before the JSON object was complete.`,
         'truncated',
         this.id,
+        reportedUsage(),
       );
     }
 
@@ -1576,21 +1589,13 @@ export class OpenAiProvider
         `The provider finished normally but the structured answer from model "${request.model}" is not valid JSON. Something between this application and the model (usually a gateway) ignored the requested response format.`,
         'invalid_json',
         this.id,
+        reportedUsage(),
       );
     }
 
     return {
       value,
-      usage:
-        usage ?? {
-          // Never zero — see `generate`. The schema travels with the prompt,
-          // so it is counted as prompt.
-          promptTokens: this.countTokens(
-            `${request.systemPrompt}\n${request.userContent}\n${JSON.stringify(request.schema)}`,
-            request.model,
-          ),
-          completionTokens: this.countTokens(content, request.model),
-        },
+      usage: reportedUsage(),
       finishReason: 'stop',
     };
   }

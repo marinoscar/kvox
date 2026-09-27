@@ -25,6 +25,7 @@ import { z } from 'zod';
 
 import type { JsonSchema } from '../../ai/providers/ai-provider.interface';
 import type { ExtractionContext } from './extraction-context';
+import type { ExtractionRowCaps } from './row-caps';
 
 export const EXTRACTION_SCHEMA_NAME = 'kg_extraction';
 
@@ -135,8 +136,16 @@ function itemSchema(ctx: ExtractionContext, t: EffectiveEntityType): JsonSchema 
   );
 }
 
-function arrayOf(variants: JsonSchema[]): JsonSchema {
-  return { type: 'array', items: variants.length === 1 ? variants[0] : { anyOf: variants } };
+// ⚠ A cap is a `description`, NEVER `maxItems` (#435): strict decoding on some
+// OpenAI-compatible gateways rejects the keyword. See `row-caps.ts`.
+function arrayOf(variants: JsonSchema[], cap?: number): JsonSchema {
+  return {
+    type: 'array',
+    ...(cap !== undefined
+      ? { description: `At most ${cap}. If the source holds more, keep the most significant and omit the rest.` }
+      : {}),
+    items: variants.length === 1 ? variants[0] : { anyOf: variants },
+  };
 }
 
 /**
@@ -144,7 +153,7 @@ function arrayOf(variants: JsonSchema[]): JsonSchema {
  * relation type excluded by guidance, say) is left out entirely rather than
  * sent as an array of nothing; the envelope parser defaults it to `[]`.
  */
-export function buildExtractionOutputSchema(ctx: ExtractionContext): JsonSchema {
+export function buildExtractionOutputSchema(ctx: ExtractionContext, caps?: ExtractionRowCaps): JsonSchema {
   const properties: Record<string, JsonSchema> = {
     meeting: object(
       { topics: { type: 'array', items: { type: 'string' }, description: 'Recurring subjects discussed that are not entities.' } },
@@ -152,13 +161,13 @@ export function buildExtractionOutputSchema(ctx: ExtractionContext): JsonSchema 
     ),
   };
   if (ctx.offered.entityTypes.length > 0) {
-    properties.entities = arrayOf(ctx.offered.entityTypes.map((t) => entitySchema(ctx, t)));
+    properties.entities = arrayOf(ctx.offered.entityTypes.map((t) => entitySchema(ctx, t)), caps?.entities);
   }
   if (ctx.offered.relationTypes.length > 0) {
-    properties.relations = arrayOf(ctx.offered.relationTypes.map((r) => relationSchema(ctx, r)));
+    properties.relations = arrayOf(ctx.offered.relationTypes.map((r) => relationSchema(ctx, r)), caps?.relations);
   }
   if (ctx.offered.itemTypes.length > 0) {
-    properties.items = arrayOf(ctx.offered.itemTypes.map((t) => itemSchema(ctx, t)));
+    properties.items = arrayOf(ctx.offered.itemTypes.map((t) => itemSchema(ctx, t)), caps?.items);
   }
   return object(properties);
 }

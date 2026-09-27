@@ -188,11 +188,13 @@ export class AiBudgetError extends Error implements DomainErrorMarker {
  * without a usable JSON value.
  *
  *   • `'truncated'` — the model hit `maxOutputTokens` (finish reason
- *     `length`) mid-object. TERMINAL, because `maxOutputTokens` is policy:
- *     re-sending the same prompt to the same model under the same ceiling is
- *     not expected to change the answer. Treating it as success would hand a
- *     caller a truncated object that might happen to parse — silently dropped
+ *     `length`) mid-object. TERMINAL for this request: re-sending the same
+ *     prompt to the same model under the same ceiling is not expected to
+ *     change the answer. Treating it as success would hand a caller a
+ *     truncated object that might happen to parse — silently dropped
  *     entities, the unearned-confidence failure `generate` already refuses.
+ *     A caller MAY re-ask with a DIFFERENT, smaller request (graph extraction
+ *     halves its row caps once, #435) — that is a new question, not a retry.
  *   • `'invalid_json'` — the vendor said `stop` but the content is not JSON.
  *     Under strict decoding that means something in the path (usually a
  *     gateway) ignored `response_format`; retrying through the same path
@@ -213,6 +215,12 @@ export class AiStructuredOutputError extends Error implements DomainErrorMarker 
     /** Why no usable value came back. See the class comment. */
     public readonly reason: 'truncated' | 'invalid_json',
     public readonly providerId?: string,
+    /**
+     * What the failed call consumed (#435) — the vendor's own counts when it
+     * reported them, otherwise the same estimate the success path uses. A
+     * failed call is still billed, so a caller records this rather than zero.
+     */
+    public readonly usage?: { promptTokens: number; completionTokens: number },
   ) {
     super(message);
     this.name = 'AiStructuredOutputError';

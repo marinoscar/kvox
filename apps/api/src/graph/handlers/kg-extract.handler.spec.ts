@@ -112,7 +112,7 @@ describe('KgExtractHandler (#363)', () => {
   it('declares its profile, and is server-only', () => {
     const { handler } = harness();
     expect(handler.type).toBe('kg.extract');
-    expect(handler.profile).toEqual({ maxRuntimeMs: 600_000, maxAttempts: 1 });
+    expect(handler.profile).toEqual({ maxRuntimeMs: 1_200_000, maxAttempts: 1 });
     expect((handler as unknown as Record<string, unknown>).nodeResultSchema).toBeUndefined();
     expect((handler as unknown as Record<string, unknown>).persistNodeResult).toBeUndefined();
   });
@@ -170,7 +170,8 @@ describe('KgExtractHandler (#363)', () => {
     );
     expect(generateStructured).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ model: 'gpt-4o', schemaName: 'kg_extraction', maxOutputTokens: 8_000, timeoutMs: 60_000 }),
+      // #436: the 8,000 cap plus 'medium' effort's 16,384 reasoning headroom exceeds the model's own 16,000.
+      expect.objectContaining({ model: 'gpt-4o', schemaName: 'kg_extraction', maxOutputTokens: 16_000, timeoutMs: 60_000 }),
     );
   });
 
@@ -191,12 +192,26 @@ describe('KgExtractHandler (#363)', () => {
   it.each([
     ['auth', new AiAuthError('Your key was refused.', 'openai')],
     ['refusal', new AiRefusedError('Declined.', undefined, 'openai')],
-    ['invalid_output', new AiStructuredOutputError('Cut off.', 'truncated', 'openai')],
+    ['invalid_output', new AiStructuredOutputError('Not JSON.', 'invalid_json', 'openai')],
   ])('a terminal %s failure marks the proposal failed and returns', async (errorClass, error) => {
     const { handler, writer, generateStructured } = harness();
     generateStructured.mockRejectedValueOnce(error);
     await expect(handler.process(job())).resolves.toBeUndefined();
     expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), { errorClass, message: error.message });
+  });
+
+  it('a truncated answer is re-asked once; a second truncation is a terminal truncated failure (#435)', async () => {
+    const { handler, writer, generateStructured } = harness();
+    generateStructured
+      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'))
+      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
+    await expect(handler.process(job())).resolves.toBeUndefined();
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+    expect(writer.markFailed).toHaveBeenCalledWith(
+      PROPOSAL,
+      expect.objectContaining({ truncationRetry: true }),
+      expect.objectContaining({ errorClass: 'truncated' }),
+    );
   });
 
   it('a malformed answer is invalid_output, returns, and writes no items', async () => {

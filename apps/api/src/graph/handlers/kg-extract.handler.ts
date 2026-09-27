@@ -6,12 +6,15 @@
 // commits it (#366).
 //
 //   load → resolve the model (the payload's model, RE-VALIDATED against today's
-//   policy) → budget → record the prompt on the proposal BEFORE the call →
-//   register the per-user throttle key → ONE `generateStructured` call →
-//   validate → persist items + evidence → run the registered stages in order →
-//   pre-check → `extracting → draft`, superseding an older draft.
+//   policy) → plan (budget + row caps sized from the output this call will
+//   get, #435/#436) → record the prompt on the proposal BEFORE the call →
+//   register the per-user throttle key → ONE `generateStructured` call (plus,
+//   only when that answer was TRUNCATED, one re-ask with every row cap halved
+//   and the prompt re-recorded) → validate → persist items + evidence → run
+//   the registered stages in order → pre-check → `extracting → draft`,
+//   superseding an older draft.
 //
-//   profile       { maxRuntimeMs: 10 min, maxAttempts: 1 } — a retry would
+//   profile       { maxRuntimeMs: 20 min, maxAttempts: 1 } — a retry would
 //                 re-spend the user's own key for a DIFFERENT, non-deterministic
 //                 answer; re-extracting is a person pressing a button
 //   node-eligible NO — no `nodeResultSchema`/`persistNodeResult`: the credential
@@ -23,9 +26,11 @@
 //
 // Failure mapping: `RateLimitError` is rethrown (the queue defers without
 // charging an attempt; the proposal stays `extracting`); an auth / refusal /
-// budget / invalid-output failure — or a configuration refusal from the
-// resolver — marks the proposal `failed` with `stats.failure` and the job
-// RETURNS; anything else marks it `failed` and rethrows.
+// budget / truncated / invalid-output failure — or a configuration refusal
+// from the resolver — marks the proposal `failed` with `stats.failure` and the
+// job RETURNS; anything else marks it `failed` and rethrows. Token usage is
+// summed over every call, failed ones included (`stats.usage`, #435): a
+// truncated answer is billed all the same.
 //
 // ⚠ Logs carry ids, counts and the model id only — never note text, quotes,
 // names or prompts.
@@ -56,15 +61,15 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { buildExtractionContext } from '../extraction/extraction-context';
 import { ExtractionInputLoader } from '../extraction/extraction-input.loader';
 import {
-  extractionBudget,
   initialExtractionStats,
-  measurePrompt,
+  planExtraction,
+  type ExtractionPlan,
 } from '../extraction/graph-extraction.service';
-import { EXTRACTION_SCHEMA_NAME, buildExtractionOutputSchema } from '../extraction/output-schema';
+import { EXTRACTION_SCHEMA_NAME } from '../extraction/output-schema';
 import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../extraction/precheck';
 import { ProposalStageRegistry } from '../extraction/proposal-stage';
 import { ProposalWriter } from '../extraction/proposal-writer.service';
-import { assembleExtractionPrompt } from '../extraction/prompt';
+import { halveRowCaps } from '../extraction/row-caps';
 import { addDeterministicRows, validateExtraction } from '../extraction/validate';
 import { KG_EXTRACT_JOB_TYPE } from '../job-types';
 import { GraphPreferencesService } from '../preferences/graph-preferences.service';
@@ -74,7 +79,9 @@ import type {
   ProposalResolution,
 } from '../proposals/proposal-payload.schema';
 
-export const KG_EXTRACT_MAX_RUNTIME_MS = 10 * 60_000;
+// 20 minutes (#435): room for the one truncation re-ask after a full-length
+// first answer.
+export const KG_EXTRACT_MAX_RUNTIME_MS = 20 * 60_000;
 
 const payloadSchema = z.object({
   proposalId: z.guid(),
@@ -117,7 +124,7 @@ export function classifyExtractionError(error: unknown): ExtractionFailureClass 
   if (error instanceof TerminalExtractionError) return error.errorClass;
   if (error instanceof AiAuthError) return 'auth';
   if (error instanceof AiBudgetError) return 'budget';
-  if (error instanceof AiStructuredOutputError) return 'invalid_output';
+  if (error instanceof AiStructuredOutputError) return error.reason === 'truncated' ? 'truncated' : 'invalid_output';
   if (error instanceof AiRefusedError || error instanceof AiInputError) return 'refusal';
   return 'other';
 }
@@ -225,33 +232,26 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
 
     const input = await this.loader.load({ userId, noteId, noteVersion: payload.noteVersion, guidance });
     const ctx = buildExtractionContext(input);
-    const prompt = assembleExtractionPrompt(ctx);
-    const schema = buildExtractionOutputSchema(ctx);
 
-    // Recorded BEFORE anything can fail on the provider side.
-    await this.writer.recordPrompt(proposalId, {
-      model: resolution.model,
-      provider: resolution.providerId,
-      systemPrompt: prompt.systemPrompt,
-      userContent: prompt.userContent,
-    });
-
-    const budget = extractionBudget(resolution);
-    const promptTokens = measurePrompt(resolution, prompt, schema);
-    assertWithinBudget({
-      promptTokens,
-      availableInputTokens: budget.availableInputTokens,
-      model: resolution.model,
-      providerId: resolution.providerId,
-    });
-
-    const result = await this.callProvider(resolution, userId, {
-      systemPrompt: prompt.systemPrompt,
-      userContent: prompt.userContent,
-      schema,
-      maxOutputTokens: budget.maxOutputTokens,
-    });
-    stats.usage = { inputTokens: result.usage.promptTokens, outputTokens: result.usage.completionTokens };
+    let plan = planExtraction(resolution, ctx);
+    let result;
+    try {
+      result = await this.callPlanned(resolution, userId, proposalId, plan, stats);
+    } catch (error) {
+      if (!isTruncation(error)) throw error;
+      // #435: ONE re-ask in the same job, every row cap halved and the prompt
+      // re-recorded — a smaller question, not a retry of the same one.
+      stats.truncationRetry = true;
+      plan = planExtraction(resolution, ctx, halveRowCaps(plan.caps));
+      try {
+        result = await this.callPlanned(resolution, userId, proposalId, plan, stats);
+      } catch (retryError) {
+        if (isTruncation(retryError)) {
+          throw new TerminalExtractionError('truncated', truncatedMessage(plan.maxOutputTokens));
+        }
+        throw retryError;
+      }
+    }
 
     const validated = validateExtraction(result.value, ctx);
     if (!validated.ok) throw new TerminalExtractionError('invalid_output', validated.message);
@@ -310,6 +310,47 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
     );
   }
 
+  /**
+   * Record the plan's prompt (BEFORE anything can fail on the provider side),
+   * check it fits, call, and add what the call consumed to `stats.usage` —
+   * on success and on a structured-output failure alike (#435).
+   */
+  private async callPlanned(
+    resolution: AiModelResolution,
+    userId: string,
+    proposalId: string,
+    plan: ExtractionPlan,
+    stats: ExtractionStats,
+  ) {
+    await this.writer.recordPrompt(proposalId, {
+      model: resolution.model,
+      provider: resolution.providerId,
+      systemPrompt: plan.prompt.systemPrompt,
+      userContent: plan.prompt.userContent,
+    });
+
+    assertWithinBudget({
+      promptTokens: plan.promptTokens,
+      availableInputTokens: plan.budget.availableInputTokens,
+      model: resolution.model,
+      providerId: resolution.providerId,
+    });
+
+    try {
+      const result = await this.callProvider(resolution, userId, {
+        systemPrompt: plan.prompt.systemPrompt,
+        userContent: plan.prompt.userContent,
+        schema: plan.schema,
+        maxOutputTokens: plan.maxOutputTokens,
+      });
+      addUsage(stats, result.usage);
+      return result;
+    } catch (error) {
+      if (error instanceof AiStructuredOutputError && error.usage) addUsage(stats, error.usage);
+      throw error;
+    }
+  }
+
   private async callProvider(
     resolution: AiModelResolution,
     userId: string,
@@ -357,6 +398,30 @@ export class KgExtractHandler implements JobHandler, OnModuleInit {
 }
 
 type KgExtractGuidance = Parameters<ExtractionInputLoader['load']>[0]['guidance'];
+
+function isTruncation(error: unknown): error is AiStructuredOutputError {
+  return error instanceof AiStructuredOutputError && error.reason === 'truncated';
+}
+
+function addUsage(stats: ExtractionStats, usage: { promptTokens: number; completionTokens: number }): void {
+  stats.usage = {
+    inputTokens: stats.usage.inputTokens + usage.promptTokens,
+    outputTokens: stats.usage.outputTokens + usage.completionTokens,
+  };
+}
+
+/**
+ * The `truncated` failure sentence (#435). Numbers and advice only — never
+ * the model's output, which is derived from a private conversation.
+ */
+export function truncatedMessage(maxOutputTokens: number): string {
+  return (
+    `The model's answer was cut off at its ${maxOutputTokens.toLocaleString('en-US')}-token output ceiling, ` +
+    'even after asking for a smaller answer. This note produces more than one answer can carry: ' +
+    "choose a model with a larger output ceiling, clear or raise the deployment's Max output tokens, " +
+    'or lower the reasoning effort.'
+  );
+}
 
 function isKeyMissing(error: HttpException): boolean {
   const body = error.getResponse() as { details?: { reason?: string } } | string;
