@@ -37,5 +37,10 @@ export const KG_EXPORT_JOB_TYPE = 'kg.export';
 export const KG_SUBJECT_EXPORT = 'kg_export';
 export const KG_SUBJECT_EXPORT_SWEEP = 'kg_export_sweep';
 
+// #387 — validate an uploaded RDF file against the SHACL shapes and turn it
+// into an `import` proposal. Subject: the proposal it fills.
+export const KG_IMPORT_JOB_TYPE = 'kg.import';
+export const KG_SUBJECT_PROPOSAL = 'kg_proposal';
+
 /** `storage_objects.managed_by` for every file the graph module writes (#386). */
 export const GRAPH_MANAGED_BY = 'graph';

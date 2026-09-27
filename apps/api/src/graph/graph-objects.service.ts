@@ -11,6 +11,8 @@
 //
 //   putStream       — stream bytes into storage, metering the size, and record
 //                     the row once the upload lands (idempotent on the key)
+//   putBuffer       — the same, for bytes already in memory (an upload, #387)
+//   openStream      — read a managed object back as a stream (`kg.import`, #387)
 //   signedUrlFor    — a short-lived signed GET with a signed Content-Disposition
 //   deleteIfPresent — bytes and row, through `deleteManagedObject`, never
 //                     throwing for an object already gone (purges re-run)
@@ -18,7 +20,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { StorageObject } from '@prisma/client';
-import { PassThrough, Transform } from 'node:stream';
+import { PassThrough, Transform, type Readable } from 'node:stream';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ObjectsService } from '../storage/objects/objects.service';
@@ -98,6 +100,21 @@ export class GraphObjectsService {
     });
 
     return { body, done };
+  }
+
+  /** Store bytes already in memory (an upload the request bounded). Resolves once both sides land. */
+  async putBuffer(input: PutGraphObjectInput & { body: Buffer }): Promise<StorageObject> {
+    const { body: bytes, ...rest } = input;
+    const { body, done } = this.putStream(rest);
+    body.end(bytes);
+    return done;
+  }
+
+  /** The object's bytes as a stream, or null when the row (or its upload) is gone. */
+  async openStream(objectId: string): Promise<{ stream: Readable; object: StorageObject } | null> {
+    const object = await this.prisma.storageObject.findUnique({ where: { id: objectId } });
+    if (!object || object.status !== 'ready' || object.managedBy !== GRAPH_MANAGED_BY) return null;
+    return { stream: await this.storage.download(object.storageKey), object };
   }
 
   /** A short-lived signed GET, or null if the object is gone. The disposition is signed in. */
