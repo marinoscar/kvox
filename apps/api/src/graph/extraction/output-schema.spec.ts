@@ -1,5 +1,6 @@
 import { assertStrictJsonSchema } from '../../ai/structured/strict-json-schema';
 import { goodAnswer, makeContext, schemaFor } from '../../../test/graph/extraction-fixtures';
+import { extractionRowCaps } from './row-caps';
 import { buildExtractionOutputSchema, rawExtractionSchema } from './output-schema';
 
 type Node = Record<string, unknown>;
@@ -72,5 +73,59 @@ describe('buildExtractionOutputSchema (#363)', () => {
     const parsed = rawExtractionSchema.parse({ meeting: { topics: [] }, entities: [] });
     expect(parsed.relations).toEqual([]);
     expect(parsed.items).toEqual([]);
+  });
+
+  // ===========================================================================
+  // Row caps (#435): communicated as prompt copy and `description`s only, and
+  // NEVER as `maxItems` — strict decoding on some OpenAI-compatible gateways
+  // rejects that keyword outright.
+  // ===========================================================================
+
+  /** Every key anywhere in the schema tree, walked without assuming shape. */
+  function everyKey(node: unknown, out: string[] = []): string[] {
+    if (Array.isArray(node)) {
+      for (const n of node) everyKey(n, out);
+      return out;
+    }
+    if (typeof node !== 'object' || node === null) return out;
+    for (const [key, value] of Object.entries(node as Node)) {
+      out.push(key);
+      everyKey(value, out);
+    }
+    return out;
+  }
+
+  it('NEVER emits maxItems anywhere in the schema, with or without caps', () => {
+    expect(everyKey(buildExtractionOutputSchema(makeContext()))).not.toContain('maxItems');
+
+    const caps = extractionRowCaps(16_000, 'none');
+    expect(everyKey(buildExtractionOutputSchema(makeContext(), caps))).not.toContain('maxItems');
+  });
+
+  it('with caps, each offered array carries its own cap in its description; with no caps, arrays carry none', () => {
+    const caps = { entities: 12, relations: 9, items: 6 };
+    const schema = buildExtractionOutputSchema(makeContext(), caps);
+    const props = schema.properties as Node;
+
+    expect((props.entities as Node).description).toBe(
+      'At most 12. If the source holds more, keep the most significant and omit the rest.',
+    );
+    expect((props.relations as Node).description).toBe(
+      'At most 9. If the source holds more, keep the most significant and omit the rest.',
+    );
+    expect((props.items as Node).description).toBe(
+      'At most 6. If the source holds more, keep the most significant and omit the rest.',
+    );
+
+    const uncapped = buildExtractionOutputSchema(makeContext());
+    const uncappedProps = uncapped.properties as Node;
+    expect((uncappedProps.entities as Node).description).toBeUndefined();
+    expect((uncappedProps.relations as Node).description).toBeUndefined();
+    expect((uncappedProps.items as Node).description).toBeUndefined();
+  });
+
+  it('a capped schema still passes the strict-mode pre-flight (no maxItems slipping past it)', () => {
+    const caps = extractionRowCaps(16_000, 'none');
+    expect(() => assertStrictJsonSchema(buildExtractionOutputSchema(makeContext(), caps))).not.toThrow();
   });
 });

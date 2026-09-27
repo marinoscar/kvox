@@ -151,6 +151,8 @@ const MIGRATIONS_AT_288 = [
   '20260926050000_add_ask_conversations',
   // #386 (epic #349): RDF exports of an owner's graph. Not about notifications.
   '20260926231512_add_kg_exports',
+  // #436: clears the two old default AI token ceilings so limits follow the model. Not about notifications.
+  '20260927050000_ai_token_limits_follow_model',
 ];
 
 const MIGRATIONS_DIR = join(__dirname, '..', '..', 'prisma', 'migrations');

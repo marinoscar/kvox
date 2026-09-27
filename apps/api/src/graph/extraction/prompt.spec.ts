@@ -1,5 +1,6 @@
 import { IDS, known, makeContext, makeInput, schemaFor } from '../../../test/graph/extraction-fixtures';
 import { buildExtractionContext } from './extraction-context';
+import { extractionRowCaps } from './row-caps';
 import {
   GUIDANCE_PREAMBLE,
   HEADING_ENTITY_TYPES,
@@ -15,6 +16,7 @@ import {
   ROLE_LINE,
   assembleExtractionPrompt,
   formatTimestamp,
+  rowCapsRule,
 } from './prompt';
 
 describe('assembleExtractionPrompt (#363)', () => {
@@ -140,5 +142,44 @@ describe('assembleExtractionPrompt (#363)', () => {
     input.segments = input.segments.slice(0, 1);
     input.knownEntityCandidates = { pinned: [], speakerPersons: input.knownEntityCandidates.speakerPersons, organizations: [], contextPool: [], recentlyMentioned: [] };
     expect(assembleExtractionPrompt(buildExtractionContext(input))).toMatchSnapshot();
+  });
+
+  // ===========================================================================
+  // The row-cap rule (#435)
+  // ===========================================================================
+
+  it('with no caps argument, the rule 10 line is entirely absent', () => {
+    const { systemPrompt } = assembleExtractionPrompt(makeContext());
+    expect(systemPrompt).not.toContain('Propose at most');
+  });
+
+  it('with caps, the rule 10 line names each offered section\'s cap and tells the model what to do when it holds more', () => {
+    const caps = extractionRowCaps(16_000, 'none');
+    const { systemPrompt } = assembleExtractionPrompt(makeContext(), caps);
+
+    expect(systemPrompt).toContain(
+      `10. Propose at most ${caps.entities} entities, ${caps.relations} relations and ${caps.items} facts. ` +
+        'If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.',
+    );
+  });
+
+  it('rowCapsRule only names the sections this run actually offers', () => {
+    const caps = { entities: 10, relations: 7, items: 5 };
+    const noRelations = makeContext({ effectiveSchema: schemaFor(['core']) });
+    const rule = rowCapsRule(noRelations, caps);
+
+    // 'core' alone still offers entity types and item (fact) types.
+    expect(rule).toContain('entities');
+    expect(rule).toContain('facts');
+    // Whatever is offered is joined with "and", never a lone trailing comma.
+    expect(rule).not.toContain(', and');
+  });
+
+  it('rowCapsRule joins two or more offered sections with a final "and", never an Oxford comma before it', () => {
+    const caps = { entities: 10, relations: 7, items: 5 };
+    const rule = rowCapsRule(makeContext(), caps);
+    expect(rule).toBe(
+      'Propose at most 10 entities, 7 relations and 5 facts. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.',
+    );
   });
 });

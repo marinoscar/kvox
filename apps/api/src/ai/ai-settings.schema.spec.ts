@@ -274,3 +274,62 @@ describe('systemAiSchema / systemAiPatchSchema carry both #360 fields', () => {
     expect(proof).toBe(true);
   });
 });
+
+// =============================================================================
+// maxInputTokens / maxOutputTokens become number | null, defaulting to null
+// (issue #436)
+// =============================================================================
+
+describe('systemAiSchema — maxInputTokens/maxOutputTokens are nullable (#436)', () => {
+  it('DEFAULT_SYSTEM_SETTINGS.ai defaults both to null', () => {
+    expect(DEFAULT_SYSTEM_SETTINGS.ai.maxInputTokens).toBeNull();
+    expect(DEFAULT_SYSTEM_SETTINGS.ai.maxOutputTokens).toBeNull();
+  });
+
+  it('the value schema parses null for both fields', () => {
+    const parsed = systemAiSchema.parse({
+      ...DEFAULT_SYSTEM_SETTINGS.ai,
+      maxInputTokens: null,
+      maxOutputTokens: null,
+    });
+    expect(parsed.maxInputTokens).toBeNull();
+    expect(parsed.maxOutputTokens).toBeNull();
+  });
+
+  it('the value schema still parses a legacy stored NUMBER for both fields', () => {
+    const parsed = systemAiSchema.parse({
+      ...DEFAULT_SYSTEM_SETTINGS.ai,
+      maxInputTokens: 100_000,
+      maxOutputTokens: 16_384,
+    });
+    expect(parsed.maxInputTokens).toBe(100_000);
+    expect(parsed.maxOutputTokens).toBe(16_384);
+  });
+
+  it('the value schema rejects undefined — a value row must state one or the other explicitly', () => {
+    const { maxInputTokens: _in, ...withoutInput } = DEFAULT_SYSTEM_SETTINGS.ai;
+    expect(systemAiSchema.safeParse(withoutInput).success).toBe(false);
+  });
+
+  it('the patch schema accepts null for both fields (an explicit "clear the cap")', () => {
+    const parsed = systemAiPatchSchema.parse({ maxInputTokens: null, maxOutputTokens: null });
+    expect(parsed).toEqual({ maxInputTokens: null, maxOutputTokens: null });
+  });
+
+  it('the patch schema accepts a typed number for both fields', () => {
+    const parsed = systemAiPatchSchema.parse({ maxInputTokens: 50_000, maxOutputTokens: 8_000 });
+    expect(parsed).toEqual({ maxInputTokens: 50_000, maxOutputTokens: 8_000 });
+  });
+
+  it('the patch schema leaves both fields OUT entirely when the patch omits them — the "leave alone" case, distinct from null', () => {
+    const parsed = systemAiPatchSchema.parse({ reasoningEffort: 'high' });
+    expect(parsed).not.toHaveProperty('maxInputTokens');
+    expect(parsed).not.toHaveProperty('maxOutputTokens');
+  });
+
+  it('the patch schema still enforces the numeric bounds when a number is given', () => {
+    expect(systemAiPatchSchema.safeParse({ maxInputTokens: 100 }).success).toBe(false); // < 256
+    expect(systemAiPatchSchema.safeParse({ maxOutputTokens: 10 }).success).toBe(false); // < 64
+    expect(systemAiPatchSchema.safeParse({ maxOutputTokens: 300_000 }).success).toBe(false); // > 200,000
+  });
+});
