@@ -24,6 +24,13 @@ vi.mock('../../../hooks/usePermissions', () => ({
 
 import { usePermissions } from '../../../hooks/usePermissions';
 
+// The `knowledge` tab is gated on connected knowledge being ON (#438). The
+// suites below run with it on unless they say otherwise.
+let graphEnabled = true;
+vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
+  useNavigationFeatures: () => ({ features: { graph: graphEnabled }, refresh: vi.fn() }),
+}));
+
 const mockUsePermissions = vi.mocked(usePermissions);
 
 function setPermissions(granted: string[], isAdmin = false) {
@@ -52,6 +59,7 @@ const ADMIN_PERMISSIONS = [
   'system_settings:read',
   'transcripts:read',
   'notes:read',
+  'graph:read',
 ];
 const PHONE = 375;
 
@@ -69,6 +77,7 @@ describe('BottomNav', () => {
     vi.clearAllMocks();
     setPermissions(ADMIN_PERMISSIONS, true);
     setViewportWidth(PHONE);
+    graphEnabled = true;
   });
 
   describe('Self-gating', () => {
@@ -100,7 +109,7 @@ describe('BottomNav', () => {
   });
 
   describe('Destinations', () => {
-    it('renders exactly Home, Transcripts, Notes and User Settings for an admin (#106)', () => {
+    it('renders exactly Home, Transcripts, Notes and Knowledge for an admin (#106, #438)', () => {
       // FOUR, and these four. The bar's ceiling is four labelled tabs at 360px
       // and #106 reaches it BY DESIGN: `BOTTOM_BAR_DESTINATIONS` is every
       // NON-PINNED destination, and there are exactly four.
@@ -114,8 +123,19 @@ describe('BottomNav', () => {
       expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Transcripts' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Notes' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Knowledge' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Console' })).not.toBeInTheDocument();
+      // Settings is pinned since #438 — a mode, like Console.
+      expect(screen.queryByRole('button', { name: 'User Settings' })).not.toBeInTheDocument();
+    });
+
+    it('renders Home, Transcripts, Notes only when connected knowledge is off (#438)', () => {
+      graphEnabled = false;
+      renderPhone();
+
+      expect(
+        screen.getAllByRole('button').map((tab) => tab.getAttribute('aria-label')),
+      ).toEqual(['Home', 'Transcripts', 'Notes']);
     });
 
     it('renders the four tabs in declaration order (#106)', () => {
@@ -127,7 +147,7 @@ describe('BottomNav', () => {
 
       expect(
         screen.getAllByRole('button').map((tab) => tab.getAttribute('aria-label')),
-      ).toEqual(['Home', 'Transcripts', 'Notes', 'User Settings']);
+      ).toEqual(['Home', 'Transcripts', 'Notes', 'Knowledge']);
     });
 
     it('shows Transcripts to a user holding transcripts:read and nothing else', () => {
@@ -166,8 +186,8 @@ describe('BottomNav', () => {
       // 0.75rem (`theme/components.ts`).
       renderPhone();
 
-      expect(screen.getByText('Settings')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'User Settings' })).toBeInTheDocument();
+      expect(screen.getByText('Knowledge')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Knowledge' })).toBeInTheDocument();
       expect(screen.getByText('Transcripts')).toBeInTheDocument();
       expect(screen.getByText('Notes')).toBeInTheDocument();
     });
@@ -183,9 +203,9 @@ describe('BottomNav', () => {
       setPermissions([]);
       renderPhone();
 
-      // Home and User Settings only: Transcripts and Notes are each gated, and
-      // Console is not on this bar at any permission level.
-      expect(screen.getAllByRole('button')).toHaveLength(2);
+      // Home only: Transcripts, Notes and Knowledge are each gated, and
+      // Settings and Console are not on this bar at any permission level.
+      expect(screen.getAllByRole('button')).toHaveLength(1);
       expect(screen.queryByRole('button', { name: 'Transcripts' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Notes' })).not.toBeInTheDocument();
     });
@@ -217,9 +237,9 @@ describe('BottomNav', () => {
 
   describe('Active state', () => {
     it('selects the destination that owns the route', () => {
-      renderPhone('/settings');
+      renderPhone('/graph/entities/abc-123');
 
-      expect(screen.getByRole('button', { name: 'User Settings' })).toHaveClass('Mui-selected');
+      expect(screen.getByRole('button', { name: 'Knowledge' })).toHaveClass('Mui-selected');
       expect(screen.getByRole('button', { name: 'Home' })).not.toHaveClass('Mui-selected');
     });
 
@@ -285,10 +305,10 @@ describe('BottomNav', () => {
       const user = userEvent.setup();
       renderPhone('/');
 
-      await user.click(screen.getByRole('button', { name: 'User Settings' }));
+      await user.click(screen.getByRole('button', { name: 'Knowledge' }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'User Settings' })).toHaveClass('Mui-selected');
+        expect(screen.getByRole('button', { name: 'Knowledge' })).toHaveClass('Mui-selected');
       });
     });
 
@@ -296,7 +316,7 @@ describe('BottomNav', () => {
       const user = userEvent.setup();
       renderPhone('/');
 
-      for (const name of ['User Settings', 'Transcripts', 'Notes', 'Home']) {
+      for (const name of ['Knowledge', 'Transcripts', 'Notes', 'Home']) {
         await user.click(screen.getByRole('button', { name }));
         await waitFor(() => {
           expect(screen.getByRole('button', { name })).toHaveClass('Mui-selected');

@@ -10,7 +10,7 @@
  * rendered inline with `source={{ proposalId }}` — the same rows, decisions and
  * "Send to graph" an extracted note gets, and the same states afterwards.
  *
- * OWNED BY `home` through the existing `/graph` prefix (config/destinations.ts),
+ * OWNED BY `knowledge` (#438) through the `/graph` prefix (config/destinations.ts),
  * gated on `graph:write` in `App.tsx` — importing is curating the graph (§12).
  */
 

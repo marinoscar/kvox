@@ -26,31 +26,34 @@
 
 ## 1. Navigation model
 
-Five destinations — `home`, `transcripts`, `notes`, `settings`, `console` —
-declared once in `apps/web/src/config/destinations.ts`'s `DESTINATIONS`
-array, which every navigation surface (the rail, the bottom bar, the user
-menu) reads instead of keeping its own list. `BOTTOM_BAR_DESTINATIONS` is
-**derived**, never a second hand-written array: it is every destination for
-which `pinned` is falsy, currently four (`home`, `transcripts`, `notes`,
-`settings`). That derivation is the whole point — the bar's ceiling and the
-model's promise are the same statement, not two statements a future edit
-could let drift apart.
+Six destinations — `home`, `transcripts`, `notes`, `knowledge`, `settings`,
+`console` — declared once in `apps/web/src/config/destinations.ts`'s
+`DESTINATIONS` array, which every navigation surface (the rail, the bottom
+bar, the user menu) reads instead of keeping its own list.
+`BOTTOM_BAR_DESTINATIONS` is **derived**, never a second hand-written array:
+it is every destination for which `pinned` is falsy, currently four
+(`home`, `transcripts`, `notes`, `knowledge`) — see "Knowledge becomes a
+destination (issue #438)" below for how `settings` left that set and
+`knowledge` joined it without breaching the ceiling. That derivation is the
+whole point — the bar's ceiling and the model's promise are the same
+statement, not two statements a future edit could let drift apart.
 
 ### `pinned` means a mode, not a peer
 
-`console` is the one destination with `pinned: true`, and the flag names a
-real distinction rather than a rendering quirk: Console is an operator
-**mode** a user switches into, not a fifth thing this application is for in
-the way Home, Transcripts, Notes and Settings are. Each surface draws a mode
-differently because each surface has a different place to put one:
+`console` and, since issue #438, `settings` are the destinations with
+`pinned: true`, and the flag names a real distinction rather than a
+rendering quirk: each is an operator or account **mode** a user switches
+into, not one of the primary nouns this application is for in the way Home,
+Transcripts, Notes and Knowledge are. Each surface draws a mode differently
+because each surface has a different place to put one:
 
 - The **rail** relocates it to its own foot, below a divider (issue #105).
 - The **user menu** lists it inline with the rest, because a flat menu has no
   foot to pin to and no room to invent a second group for one row.
 - The **bottom bar omits it entirely.** A bar has no foot either — it *is*
   the foot — so there is nowhere to put a pinned row that would not read as a
-  fifth peer destination. Console stays reachable below `sm` through the
-  avatar menu, the same place a phone user reaches every other
+  fifth peer destination. Console and Settings stay reachable below `sm`
+  through the avatar menu, the same place a phone user reaches every other
   non-destination control.
 
 ### Why the collapsed rail is 72px, not 56px
@@ -136,6 +139,53 @@ bottom bar's arithmetic changed.
   which are nonsense ("in the bar but not the menu") and nothing would
   reject them. `pinned` names the one real distinction — mode versus peer —
   and lets each surface decide what that means for itself.
+
+### Knowledge becomes a destination (issue #438)
+
+The connected-knowledge graph and Ask (§13, §21.5 of
+`docs/specs/ontology.md`) shipped under issue #373 reached through `home`'s
+own `DESTINATION_ROUTES` — a deliberate choice at the time, made when the
+bar was already at its four-tab ceiling and the graph was an unproven
+feature nobody had asked to promote. Issue #438 promotes it: a new
+`knowledge` destination, path `/graph`, owning the route prefixes
+`['/graph', '/ask']`, with `home` cut back to owning only `['/']`. The
+bottom bar becomes Home · Transcripts · Notes · Knowledge (three when the
+graph is off or the caller lacks `graph:read`), because `settings` moves to
+`pinned: true` in the same change — the identical move issue #106 made for
+Console — freeing the fourth slot `knowledge` now occupies rather than
+adding a fifth. The five breakpoint gates (CLAUDE.md, Settings UI Pattern
+rule 5) are unchanged; nothing about `pinned`'s rendering contract above
+needed to change to add a second pinned destination, which is exactly the
+point of deriving `BOTTOM_BAR_DESTINATIONS` rather than hand-listing it.
+
+`knowledge` is also the **first destination gated on a runtime feature flag
+rather than only a permission**: it requires both `graph:read` and `GET
+/api/ai/config`'s `graphEnabled` (the admin's `ai.graphEnabled` switch).
+Every other destination's gate resolves the instant the JWT is decoded; this
+one depends on a network response that has not necessarily returned yet, so
+the destination is **hidden** while that config is unknown or still
+loading — never shown provisionally and then pulled away — so it never
+flashes into the bar and back out from under a tapping thumb.
+
+**Rejected alternatives:**
+
+- **A fifth bottom-bar tab for Knowledge, leaving `settings` unpinned.**
+  Rejected for the reason #106 already established for Console: issue #106
+  showed five labelled actions don't fit a 360px phone without an overflow
+  menu or unlabelled icons, and either of those is a redesign of the bar,
+  not an addition to it (see "Rejected alternatives" above). Pinning
+  `settings` is the same move at the same cost Console already paid.
+- **Leaving the graph and Ask under `home`.** Rejected because a feature an
+  administrator has switched on for the whole deployment stays invisible as
+  a primary feature if it is only ever a section scrolled past on Home — the
+  same "worth a destination of its own" reasoning that separated
+  Transcripts and Notes out of the merged `library` row above.
+- **Demoting Transcripts or Notes to a pinned mode instead of Settings.**
+  Rejected: Settings is the account/administration mode every other
+  application in this shape already treats as secondary chrome, while
+  Transcripts and Notes are this app's two primary nouns — recording and
+  what the AI wrote about it — and neither is dispensable from the bar a
+  user opens the app to reach in the first place.
 
 ## 2. Home composition
 
