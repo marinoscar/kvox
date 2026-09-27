@@ -33,6 +33,8 @@ import {
 } from './ai-task-models';
 import type { AiModelLimitSource } from './ai-model-resolution';
 import type { AiConfigModel } from './dto/ai-config.dto';
+import type { AiEffectiveLimit } from './dto/ai-settings.dto';
+import { computeTokenBudget } from '../notes/generation/token-budget';
 import type { AiProviderDescription } from './providers/ai-provider.interface';
 import { OPENAI_FETCH, type FetchLike } from './providers/openai.provider';
 
@@ -122,6 +124,13 @@ export interface AiSettingsAdminView {
    * switching the feature on.
    */
   taskModelStatus: AiTaskModelStatus[];
+  /**
+   * What each resolvable permitted model of the active provider actually gets
+   * under the SAVED policy (#436), computed with the same
+   * `computeTokenBudget` every request runs, at the deployment-wide reasoning
+   * effort. The admin Limits card renders this rather than recomputing it.
+   */
+  effectiveLimits: AiEffectiveLimit[];
   /** Bumped on every write of the `global` row. The `If-Match` token. */
   version: number;
   updatedAt: Date | null;
@@ -228,6 +237,7 @@ export class AiSettingsService {
         source: model.source,
       })),
       taskModelStatus: this.describeTaskModels(settings, resolved),
+      effectiveLimits: this.describeEffectiveLimits(settings, resolved),
       version: row?.version ?? 0,
       updatedAt: row?.updatedAt ?? null,
       updatedBy: row?.updatedByUser ?? null,
@@ -589,6 +599,44 @@ export class AiSettingsService {
     return settings.providers[providerId].allowedModels
       .map((entry) => resolveAllowedModel(entry, knowledge))
       .filter((model): model is NonNullable<typeof model> => model !== null);
+  }
+
+  /**
+   * `effectiveLimits` (#436): each resolved model's OWN numbers (the resolver
+   * has not narrowed them — only `GET /api/ai/config` does) run through the
+   * budget every request computes, for the saved policy.
+   *
+   * A `default` source is surfaced, not refused (#436 Q1): the provider's
+   * conservative floor is kept, never guessed upward, and the card says to type
+   * the model's real numbers on its permitted-models entry.
+   */
+  private describeEffectiveLimits(
+    settings: SystemAiValue,
+    models: AiConfigModel[],
+  ): AiEffectiveLimit[] {
+    return models.map((model) => {
+      const budget = computeTokenBudget({
+        contextWindowTokens: model.contextWindowTokens,
+        modelMaxOutputTokens: model.maxOutputTokens,
+        policyMaxInputTokens: settings.maxInputTokens,
+        policyMaxOutputTokens: settings.maxOutputTokens,
+        reasoningEffort: settings.reasoningEffort,
+      });
+
+      return {
+        modelId: model.id,
+        label: model.label,
+        source: model.source,
+        derivedFrom: model.derivedFrom,
+        modelContextWindowTokens: model.contextWindowTokens,
+        modelMaxOutputTokens: model.maxOutputTokens,
+        maxInputTokens: budget.availableInputTokens,
+        maxOutputTokens: budget.maxOutputTokens,
+        inputSource: budget.inputSource,
+        // No task clamp is passed here, so `'task'` cannot occur.
+        outputSource: budget.outputSource === 'model' ? 'model' : 'policy',
+      };
+    });
   }
 
   /** `taskModelStatus`: `chooseTaskModel` for every task, ungated. */

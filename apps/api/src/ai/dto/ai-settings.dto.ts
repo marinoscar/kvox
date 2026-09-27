@@ -243,6 +243,40 @@ export const aiTaskModelStatusSchema = z.object({
 });
 
 /**
+ * One permitted model's effective token limits under the saved policy
+ * (issue #436) — what the admin Limits card renders.
+ */
+export const aiEffectiveLimitSchema = z.object({
+  modelId: z.string().describe("The provider's own model id."),
+  label: z.string().describe('Human name for the model.'),
+  source: z
+    .enum(['explicit', 'catalogue', 'derived', 'default'])
+    .describe(
+      'How the model\'s own numbers were learnt (issue #97). `default` means the provider\'s conservative floor — never guessed upward; type the model\'s real numbers on its permitted-models entry to lift it.',
+    ),
+  derivedFrom: z
+    .string()
+    .nullable()
+    .describe('The known model the numbers were derived from, when `source` is `derived`.'),
+  modelContextWindowTokens: z.number().describe("The model's own context window."),
+  modelMaxOutputTokens: z.number().describe("The model's own output ceiling."),
+  maxInputTokens: z
+    .number()
+    .describe('Tokens one assembled prompt may use, after the policy and the output reserve.'),
+  maxOutputTokens: z
+    .number()
+    .describe('The completion ceiling a request is given (before shrinking to fit a large prompt).'),
+  inputSource: z
+    .enum(['policy', 'model'])
+    .describe('`policy` when a typed `maxInputTokens` is the binding bound, `model` when the model\'s window is.'),
+  outputSource: z
+    .enum(['policy', 'model'])
+    .describe('`policy` when a typed `maxOutputTokens` (plus reasoning headroom) is the binding bound, `model` when the model\'s own ceiling is.'),
+});
+
+export type AiEffectiveLimit = z.infer<typeof aiEffectiveLimitSchema>;
+
+/**
  * `GET`/`PUT /api/ai-settings` — the response.
  *
  * ⚠ NO FIELD HERE CAN HOLD AN API KEY, and there is no masked key-status array
@@ -274,17 +308,23 @@ export const aiSettingsResponseSchema = z.object({
       }),
       maxInputTokens: z
         .number()
-        .describe('Ceiling on the assembled prompt, in tokens.'),
+        .nullable()
+        .describe(
+          'An optional spend cap on the assembled prompt, in tokens. `null` (the default since issue #436) means the selected model\'s own context window governs. See `effectiveLimits` for what each permitted model actually gets.',
+        ),
       maxOutputTokens: z
         .number()
-        .describe('Ceiling on one generation, in tokens.'),
+        .nullable()
+        .describe(
+          'An optional spend cap on one answer, in tokens. `null` (the default since issue #436) means the selected model\'s own output ceiling. A typed cap bounds the answer; the reasoning effort\'s headroom is added on top of it, bounded by the model\'s own maximum.',
+        ),
       requestTimeoutMs: z
         .number()
         .describe('How long one provider request may take, in milliseconds.'),
       reasoningEffort: z
         .enum(AI_REASONING_EFFORTS)
         .describe(
-          'How hard a reasoning model may think before it answers. `none` is the default and the vendor\'s own: the parameter is not sent at all, so a deployment that never sets this puts exactly the bytes on the wire it always did — which matters because `baseUrl` may point at an OpenAI-compatible gateway that has never heard of the parameter. ⚠ **Reasoning tokens are billed and counted as output tokens**, drawn from the same ceiling the visible answer uses (`maxOutputTokens`, capped by the model\'s own). At `high`, against the default `maxOutputTokens` of 16,384, a generation can spend most of its budget thinking and return a truncated note or almost nothing — arriving as a `length` finish reason, **not** as an error. Raising this does not raise `maxOutputTokens`, deliberately: that ceiling bounds what one generation may cost on the user\'s own account, and widening it is a separate decision an administrator takes on purpose.',
+          'How hard a reasoning model may think before it answers. `none` is the default and the vendor\'s own: the parameter is not sent at all, so a deployment that never sets this puts exactly the bytes on the wire it always did — which matters because `baseUrl` may point at an OpenAI-compatible gateway that has never heard of the parameter. ⚠ **Reasoning tokens are billed and counted as output tokens**, drawn from the same ceiling the visible answer uses. Since issue #436 the budget accounts for that: with no `maxOutputTokens` cap the model\'s own output ceiling already covers the thinking, and with a typed cap this effort\'s reasoning headroom is added on top of it (bounded by the model\'s own maximum), so raising this no longer silently eats the answer\'s share. A model that still spends everything thinking arrives as a `length` finish reason, **not** as an error.',
         ),
       maxDocumentBytes: z
         .number()
@@ -340,6 +380,11 @@ export const aiSettingsResponseSchema = z.object({
     .array(aiTaskModelStatusSchema)
     .describe(
       'What each task would run on right now (issue #360), computed exactly as the run-time resolver chooses but **without** the `graphEnabled` gate, so tasks can be configured before the feature is switched on.',
+    ),
+  effectiveLimits: z
+    .array(aiEffectiveLimitSchema)
+    .describe(
+      'What each resolvable permitted model of the active provider actually gets under the SAVED policy (issue #436), computed with the same budget function every request uses, at the deployment-wide `reasoningEffort`. Empty when no provider is active. Render this rather than recomputing it.',
     ),
   version: z
     .number()

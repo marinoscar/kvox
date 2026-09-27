@@ -110,7 +110,10 @@ export class AiSettingsController {
       'their behalf.\n\n' +
       '`unknownModels` lists model ids the policy permits that no registered provider ' +
       'declares. Such a model cannot be budgeted, so it is never offered to a user — this is ' +
-      'where a mistyped model id becomes visible.',
+      'where a mistyped model id becomes visible.\n\n' +
+      '`effectiveLimits` (issue #436) is what each permitted model actually gets under the ' +
+      'saved policy: `maxInputTokens`/`maxOutputTokens` are optional spend caps, `null` by ' +
+      'default, meaning each model\'s own capacity governs.',
   })
   @ApiResponse({
     status: 200,
