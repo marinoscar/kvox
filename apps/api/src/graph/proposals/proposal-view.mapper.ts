@@ -230,7 +230,7 @@ export function displayOf(
       const props = asObject(effective.props);
       return {
         title: `${from} → ${label.toLowerCase()} → ${to}`,
-        subtitle: joinParts([label, str(props.title), formatPeriod(effective.validFrom, effective.validTo, effective.precision)]),
+        subtitle: joinParts([label, str(props.title), str(props.businessUnit), formatPeriod(effective.validFrom, effective.validTo, effective.precision)]),
       };
     }
     case 'item': {
