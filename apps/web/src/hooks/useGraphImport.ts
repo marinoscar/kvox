@@ -84,7 +84,7 @@ export function useRecentGraphImports(enabled: boolean): { imports: ProposalSumm
     Promise.all(
       RECENT_IMPORT_STATUSES.map((status) =>
         listProposals({ kind: 'import', status, limit: RECENT_IMPORTS_LIMIT }).then(
-          (page) => page.items,
+          (page) => (Array.isArray(page?.items) ? page.items : []),
           () => [] as ProposalSummary[],
         ),
       ),
@@ -93,7 +93,7 @@ export function useRecentGraphImports(enabled: boolean): { imports: ProposalSumm
       const seen = new Set<string>();
       const merged = pages
         .flat()
-        .filter((p) => p.kind === 'import' && !seen.has(p.id) && Boolean(seen.add(p.id)))
+        .filter((p) => p?.kind === 'import' && !seen.has(p.id) && Boolean(seen.add(p.id)))
         .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
         .slice(0, RECENT_IMPORTS_LIMIT);
       setImports(merged);

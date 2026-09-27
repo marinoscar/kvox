@@ -244,6 +244,14 @@ describe('GraphIndexPage', () => {
     expect(await screen.findByRole('dialog', { name: 'Import graph' })).toBeInTheDocument();
   });
 
+  it('shows no imports section when there are none, or the answer is unreadable', async () => {
+    server.use(http.get('*/api/graph/proposals', () => HttpResponse.json({ data: {} })));
+    renderIndex('/graph', graphWriter);
+    await screen.findByRole('link', { name: /Joe Rivera/ });
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Recent imports' })).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { level: 1, name: 'Knowledge' })).toBeInTheDocument();
+  });
+
   it('has no "Import graph…" and no imports section for a reader', async () => {
     const user = userEvent.setup();
     renderIndex();
