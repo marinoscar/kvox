@@ -387,11 +387,16 @@ export class AskRespondHandler implements JobHandler, OnModuleInit {
     //    question alone does not fit (Notes rule 4).
     const definitions = this.toolset.definitions();
     const toolDefinitionTokens = resolution.countTokens(JSON.stringify(definitions));
+    // #436: the model's own limits, the deployment's optional caps, Ask's own
+    // answer clamp as a TASK bound (headroom for the effort this turn sends is
+    // added on top of it, bounded by the model's maximum).
     const budget = computeTokenBudget({
-      contextWindowTokens: resolution.descriptor.contextWindowTokens,
-      modelMaxOutputTokens: resolution.descriptor.maxOutputTokens,
-      policyMaxOutputTokens: Math.min(resolution.policy.maxOutputTokens, ASK_MAX_OUTPUT_TOKENS),
+      contextWindowTokens: resolution.modelLimits.contextWindowTokens,
+      modelMaxOutputTokens: resolution.modelLimits.maxOutputTokens,
+      policyMaxOutputTokens: resolution.policy.maxOutputTokens,
       policyMaxInputTokens: resolution.policy.maxInputTokens,
+      taskMaxOutputTokens: ASK_MAX_OUTPUT_TOKENS,
+      reasoningEffort: resolution.reasoningEffort,
     });
     const { question, history } = await this.loadHistory(row);
     const fit = fitToBudget({

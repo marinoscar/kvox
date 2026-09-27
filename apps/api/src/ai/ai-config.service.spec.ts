@@ -494,3 +494,80 @@ describe('AiConfigService — connected-knowledge task models (#360)', () => {
     }
   });
 });
+
+// =============================================================================
+// Effective numbers with null (default) deployment caps — issue #436
+// =============================================================================
+
+describe('AiConfigService — null deployment caps report the MODEL\'s own numbers (#436)', () => {
+  it('top-level maxInputTokens/maxOutputTokens pass the null policy through unchanged', async () => {
+    const service = new AiConfigService(
+      settingsStub(policy({ provider: 'openai', maxInputTokens: null, maxOutputTokens: null })),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+
+    const config = await service.getConfig('user-1');
+
+    expect(config.maxInputTokens).toBeNull();
+    expect(config.maxOutputTokens).toBeNull();
+  });
+
+  it('a permitted model\'s effective maxOutputTokens is its OWN ceiling when no deployment cap is typed', async () => {
+    const service = new AiConfigService(
+      settingsStub(policy({ provider: 'openai', maxInputTokens: null, maxOutputTokens: null })),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+
+    const config = await service.getConfig('user-1');
+
+    expect(config.models).toHaveLength(1);
+    // stubOpenAi's gpt-4o: 128,000 window / 16,384 output.
+    expect(config.models[0]).toEqual(
+      expect.objectContaining({ id: 'gpt-4o', contextWindowTokens: 128_000, maxOutputTokens: 16_384 }),
+    );
+  });
+
+  it('a typed deployment cap still narrows the effective numbers a model reports', async () => {
+    const service = new AiConfigService(
+      settingsStub(policy({ provider: 'openai', maxInputTokens: 50_000, maxOutputTokens: 4_000 })),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+
+    const config = await service.getConfig('user-1');
+
+    expect(config.models[0].maxOutputTokens).toBe(4_000);
+    // contextWindowTokens is capped when the input source is 'policy':
+    // min(modelWindow, availableInput + maxOutput).
+    expect(config.models[0].contextWindowTokens).toBe(50_000 + 4_000);
+  });
+
+  it('null caps do not defeat the "usable" filter — a model whose own window leaves no room is still excluded', async () => {
+    const service = new AiConfigService(
+      settingsStub(
+        policy({
+          provider: 'openai',
+          maxInputTokens: null,
+          maxOutputTokens: null,
+          providers: {
+            openai: {
+              baseUrl: 'https://api.openai.com/v1',
+              // A window entirely consumed by its own (smaller) output reserve.
+              allowedModels: [{ id: 'tiny', contextWindowTokens: 500, maxOutputTokens: 400 }],
+              defaultModel: 'tiny',
+            },
+          },
+        }),
+      ),
+      registryStub(stubOpenAi()),
+      credentialsStub(true),
+    );
+
+    const config = await service.getConfig('user-1');
+
+    expect(config.models).toEqual([]);
+    expect(config.defaultModel).toBeNull();
+  });
+});

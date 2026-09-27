@@ -419,6 +419,113 @@ describe('AiSettingsPage', () => {
   });
 
   // ==========================================================================
+  // #436: the two token ceilings are optional spend caps, and the page shows
+  // the API's own effectiveLimits per permitted model
+  // ==========================================================================
+
+  describe('#436: optional token caps and effective limits', () => {
+    const viewWithNullCaps: AiSettingsAdminView = {
+      ...baseView,
+      settings: {
+        ...baseView.settings,
+        maxInputTokens: null,
+        maxOutputTokens: null,
+      },
+      effectiveLimits: [
+        {
+          modelId: 'gpt-4o',
+          label: 'GPT-4o',
+          source: 'catalogue',
+          derivedFrom: null,
+          modelContextWindowTokens: 128_000,
+          modelMaxOutputTokens: 16_384,
+          maxInputTokens: 128_000,
+          maxOutputTokens: 16_384,
+          inputSource: 'model',
+          outputSource: 'model',
+        },
+      ],
+    };
+
+    it('loads null caps as blank fields showing the "Model maximum" placeholder', async () => {
+      mockGet.mockResolvedValue(viewWithNullCaps);
+      await renderPage();
+
+      const inputField = await screen.findByLabelText(/max input tokens/i);
+      const outputField = screen.getByLabelText(/max output tokens/i);
+      expect(inputField).toHaveValue(null);
+      expect(outputField).toHaveValue(null);
+      expect(inputField).toHaveAttribute('placeholder', 'Model maximum');
+      expect(outputField).toHaveAttribute('placeholder', 'Model maximum');
+    });
+
+    it('saves blank fields as maxInputTokens: null, maxOutputTokens: null', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(viewWithNullCaps);
+      await renderPage();
+
+      await screen.findByLabelText(/max input tokens/i);
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      const [body] = mockUpdate.mock.calls[0];
+      expect(body.maxInputTokens).toBeNull();
+      expect(body.maxOutputTokens).toBeNull();
+    });
+
+    it('sends a typed number as a number, not a string', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(viewWithNullCaps);
+      await renderPage();
+
+      const inputField = await screen.findByLabelText(/max input tokens/i);
+      await user.type(inputField, '75000');
+      const outputField = screen.getByLabelText(/max output tokens/i);
+      await user.type(outputField, '8192');
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      const [body] = mockUpdate.mock.calls[0];
+      expect(body.maxInputTokens).toBe(75_000);
+      expect(body.maxOutputTokens).toBe(8_192);
+    });
+
+    it('blocks save on an out-of-range typed value even though blank is valid', async () => {
+      const user = userEvent.setup();
+      mockGet.mockResolvedValue(viewWithNullCaps);
+      await renderPage();
+
+      const outputField = await screen.findByLabelText(/max output tokens/i);
+      await user.type(outputField, '1');
+
+      expect(
+        await screen.findByText(/must be a whole number between 64 and 200,000 tokens/i),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it('renders the "What each model gets" section from the API-provided effectiveLimits', async () => {
+      mockGet.mockResolvedValue(viewWithNullCaps);
+      await renderPage();
+
+      expect(await screen.findByText('What each model gets')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Input 128,000 tokens \(model maximum\) · Output 16,384 tokens \(model maximum\)/),
+      ).toBeInTheDocument();
+    });
+
+    it('renders an empty list note when the API sends no effectiveLimits', async () => {
+      // baseView omits `effectiveLimits` entirely — the optional-field case.
+      await renderPage();
+
+      expect(
+        await screen.findByText(/no permitted model of the active provider to show/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
   // #87: reasoning effort — a Limits-section control, not a provider knob
   // ==========================================================================
 
@@ -459,6 +566,18 @@ describe('AiSettingsPage', () => {
       expect(
         screen.getByRole('combobox', { name: /reasoning effort/i }),
       ).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    // #436: the API now sizes reasoning headroom automatically, so the old
+    // advice to raise the output ceiling by hand is gone.
+    it('no longer tells the admin to raise Max output tokens for reasoning', async () => {
+      const { container } = await renderPage();
+      // The helper text's `<strong>` splits it across elements, so match on
+      // the whole container's text content rather than a single text node.
+      const bodyText = container.textContent ?? '';
+
+      expect(bodyText).not.toMatch(/raise\s*max output tokens/i);
+      expect(bodyText).toMatch(/you do not need to adjust\s*max output tokens/i);
     });
   });
 

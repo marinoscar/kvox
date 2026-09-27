@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 
 import { AiConfigService } from './ai-config.service';
+import { modelKnowledgeOf, resolveAllowedModel } from './ai-model-resolution';
 import { AiProviderRegistry } from './ai-provider.registry';
 import type {
   AiReasoningEffort,
@@ -77,8 +78,21 @@ export interface AiModelResolution {
   reasoningEffort: AiReasoningEffort;
   /** `provider.countTokens(text, model)`, bound to this resolution's model. */
   countTokens: (text: string) => number;
-  /** The chosen model as `GET /api/ai/config` publishes it, with its flags. */
+  /**
+   * The chosen model as `GET /api/ai/config` publishes it, with its flags.
+   * ⚠ Its two token numbers are ALREADY BUDGETED at the deployment-wide
+   * reasoning effort (#436) — feed {@link modelLimits} to
+   * `computeTokenBudget`, never these, or a task's own effort loses its
+   * headroom.
+   */
   descriptor: AiConfigModel;
+  /**
+   * The model's OWN context window and output ceiling (#97's resolution
+   * chain, before any policy), which is what `computeTokenBudget` takes
+   * (#436). Falls back to `descriptor`'s numbers only if the entry cannot be
+   * re-resolved, which `GET /api/ai/config` already ruled out.
+   */
+  modelLimits: { contextWindowTokens: number; maxOutputTokens: number };
   policy: SystemAiValue;
   source: 'requested' | 'task' | 'default';
   /**
@@ -277,6 +291,14 @@ export class AiTaskModelResolver {
     // Present by construction: both callers only reach here with a model id
     // taken from, or checked against, `config.models`.
     const descriptor = config.models.find((entry) => entry.id === model)!;
+    const entry = policy.provider
+      ? policy.providers[policy.provider].allowedModels.find(
+          (candidate) => candidate.id === model,
+        )
+      : undefined;
+    const own = entry
+      ? resolveAllowedModel(entry, modelKnowledgeOf(provider))
+      : null;
 
     return {
       keyConfigured: config.keyConfigured,
@@ -286,6 +308,11 @@ export class AiTaskModelResolver {
       reasoningEffort,
       countTokens: (text: string) => provider.countTokens(text, model),
       descriptor,
+      modelLimits: {
+        contextWindowTokens:
+          own?.contextWindowTokens ?? descriptor.contextWindowTokens,
+        maxOutputTokens: own?.maxOutputTokens ?? descriptor.maxOutputTokens,
+      },
       policy,
       source,
     };

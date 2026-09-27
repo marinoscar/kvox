@@ -110,6 +110,7 @@ function setup(opts: SetupOptions = {}) {
         reasoningEffort: 'low',
         countTokens: (t: string) => Math.ceil(t.length / 4),
         descriptor: { id: 'gpt-test', contextWindowTokens: opts.contextWindowTokens ?? 128_000, maxOutputTokens: 16_000 },
+        modelLimits: { contextWindowTokens: opts.contextWindowTokens ?? 128_000, maxOutputTokens: 16_000 },
         policy: { providers: {}, maxInputTokens: 100_000, maxOutputTokens: 16_000, requestTimeoutMs: 120_000 },
         source: 'task',
         keyConfigured: true,
@@ -380,7 +381,9 @@ describe('AskRespondHandler (#378)', () => {
 
     it('forces an answer with token_cap when the input budget leaves no room for another step', async () => {
       // A context window just big enough for the prompt, not for a tool step.
-      const t = setup({ contextWindowTokens: 2_000 + 1_000 + 900, scripts: [[text(LONG), done()]] });
+      // (#436: the answer's reserve is Ask's 2,000 plus 'low' effort's 4,096
+      // reasoning headroom.)
+      const t = setup({ contextWindowTokens: 2_000 + 4_096 + 1_000 + 900, scripts: [[text(LONG), done()]] });
       await t.handler.process(job());
       expect(t.requests[0].toolChoice).toBe('none');
       expect(t.final()).toMatchObject({ status: 'complete', finishReason: 'token_cap' });

@@ -1758,4 +1758,85 @@ describe('SystemSettingsService', () => {
       expect(DEFAULT_SYSTEM_SETTINGS.ai.graphEnabled).toBe(false);
     });
   });
+
+  // ===========================================================================
+  // ai.maxInputTokens / ai.maxOutputTokens: number | null (#436)
+  //
+  // The merge MUST test `!== undefined` rather than `??`, because `null` is a
+  // real, settable VALUE here ("clear the deployment cap; the model's own
+  // maximum governs") and `??` would silently treat a caller's explicit
+  // `null` as "leave it alone" — the exact trap `ai.provider` and
+  // `maintenance.startedAt` already document.
+  // ===========================================================================
+  describe('ai.maxInputTokens / ai.maxOutputTokens are nullable and settable (#436)', () => {
+    function storeAi(ai: unknown) {
+      mockPrisma.systemSettings.findUnique.mockResolvedValue({
+        ...mockSystemSettings,
+        value: { ...DEFAULT_SYSTEM_SETTINGS, ai } as any,
+      } as any);
+      mockPrisma.systemSettings.update.mockImplementation(((args: any) =>
+        Promise.resolve({
+          ...mockSystemSettings,
+          value: args.data.value,
+          version: 2,
+        })) as any);
+      mockPrisma.auditEvent.create.mockResolvedValue({} as any);
+    }
+
+    it('a PATCH of explicit null CLEARS a previously typed cap on both fields', async () => {
+      storeAi({ ...DEFAULT_SYSTEM_SETTINGS.ai, maxInputTokens: 100_000, maxOutputTokens: 16_384 });
+
+      await service.patchSettings({ ai: { maxInputTokens: null, maxOutputTokens: null } }, mockUserId);
+
+      const updateArgs = mockPrisma.systemSettings.update.mock.calls[0][0] as any;
+      expect(updateArgs.data.value.ai.maxInputTokens).toBeNull();
+      expect(updateArgs.data.value.ai.maxOutputTokens).toBeNull();
+    });
+
+    it('a PATCH that OMITS both fields keeps a previously stored null exactly as null (never resurrected to a number)', async () => {
+      storeAi({ ...DEFAULT_SYSTEM_SETTINGS.ai, maxInputTokens: null, maxOutputTokens: null });
+
+      await service.patchSettings({ ai: { reasoningEffort: 'high' } }, mockUserId);
+
+      const updateArgs = mockPrisma.systemSettings.update.mock.calls[0][0] as any;
+      expect(updateArgs.data.value.ai.maxInputTokens).toBeNull();
+      expect(updateArgs.data.value.ai.maxOutputTokens).toBeNull();
+      expect(updateArgs.data.value.ai.reasoningEffort).toBe('high');
+    });
+
+    it('a PATCH that OMITS both fields keeps a previously stored NUMBER exactly as that number', async () => {
+      storeAi({ ...DEFAULT_SYSTEM_SETTINGS.ai, maxInputTokens: 50_000, maxOutputTokens: 8_000 });
+
+      await service.patchSettings({ ai: { reasoningEffort: 'high' } }, mockUserId);
+
+      const updateArgs = mockPrisma.systemSettings.update.mock.calls[0][0] as any;
+      expect(updateArgs.data.value.ai.maxInputTokens).toBe(50_000);
+      expect(updateArgs.data.value.ai.maxOutputTokens).toBe(8_000);
+    });
+
+    it('a PATCH sets a fresh typed cap on a row that previously had null', async () => {
+      storeAi({ ...DEFAULT_SYSTEM_SETTINGS.ai, maxInputTokens: null, maxOutputTokens: null });
+
+      await service.patchSettings({ ai: { maxOutputTokens: 32_000 } }, mockUserId);
+
+      const updateArgs = mockPrisma.systemSettings.update.mock.calls[0][0] as any;
+      expect(updateArgs.data.value.ai.maxOutputTokens).toBe(32_000);
+      // The sibling field, untouched by this PATCH, stays null.
+      expect(updateArgs.data.value.ai.maxInputTokens).toBeNull();
+    });
+
+    it('a fresh deployment defaults both fields to null', () => {
+      expect(DEFAULT_SYSTEM_SETTINGS.ai.maxInputTokens).toBeNull();
+      expect(DEFAULT_SYSTEM_SETTINGS.ai.maxOutputTokens).toBeNull();
+    });
+
+    it('a row whose ai namespace predates #436 (a legacy stored number) reads back as that number, not null', async () => {
+      storeAi({ ...DEFAULT_SYSTEM_SETTINGS.ai, maxInputTokens: 100_000, maxOutputTokens: 16_384 });
+
+      const result = await service.getSettings();
+
+      expect(result.ai.maxInputTokens).toBe(100_000);
+      expect(result.ai.maxOutputTokens).toBe(16_384);
+    });
+  });
 });

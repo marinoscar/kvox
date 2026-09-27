@@ -109,8 +109,9 @@ export const systemSettingsResponseSchema = z.object({
         defaultModel: z.string(),
       }),
     }),
-    maxInputTokens: z.number(),
-    maxOutputTokens: z.number(),
+    // #436: `null` = "the selected model's own maximum".
+    maxInputTokens: z.number().nullable(),
+    maxOutputTokens: z.number().nullable(),
     requestTimeoutMs: z.number(),
     maxDocumentBytes: z.number(),
     // #360: per-task models (absent key = the provider's defaultModel) and the

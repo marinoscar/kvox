@@ -1044,10 +1044,11 @@ describe('AI settings and config integration', () => {
         // build catalogue nor a known family, so it falls through to
         // `OPENAI_DEFAULT_MODEL_LIMITS` (128k/16.4k) — narrowed by this
         // deployment's own ceilings exactly like every other model, the same
-        // way `gpt-4o-mini` above is.
+        // way `gpt-4o-mini` above is. Since #436 no input cap is typed by
+        // default, so the floor's whole 128k window is published.
         expect.objectContaining({
           id: 'gpt-9-imaginary',
-          contextWindowTokens: 100_000 + 4_096, // maxInputTokens + maxOutputTokens narrows the 128k floor
+          contextWindowTokens: 128_000,
           maxOutputTokens: 4_096,
           source: 'default',
           derivedFrom: null,

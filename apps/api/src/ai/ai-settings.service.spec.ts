@@ -365,3 +365,59 @@ describe('AiSettingsService.describeForAdmin — task-model additions (#360)', (
     );
   });
 });
+
+// =============================================================================
+// effectiveLimits (#436) — GET /api/ai-settings tells the admin what each
+// permitted model actually gets under the SAVED policy, via the same
+// computeTokenBudget every request runs.
+// =============================================================================
+
+describe('AiSettingsService.describeForAdmin — effectiveLimits (#436)', () => {
+  it('#435/#436 scenario: null policy caps report the MODEL\'s own numbers, source "model"', async () => {
+    const { service } = setup(policy({ maxInputTokens: null, maxOutputTokens: null }));
+
+    const view = await service.describeForAdmin();
+    const mini = view.effectiveLimits.find((m) => m.modelId === 'gpt-5.4-mini')!;
+
+    expect(mini.modelContextWindowTokens).toBe(400_000);
+    expect(mini.modelMaxOutputTokens).toBe(128_000);
+    expect(mini.maxOutputTokens).toBe(128_000);
+    expect(mini.outputSource).toBe('model');
+    expect(mini.inputSource).toBe('model');
+    // Only the reserve + safety margin held back, not the whole ceiling.
+    expect(mini.maxInputTokens).toBe(400_000 - 32_768 - 500);
+  });
+
+  it('a typed deployment cap narrower than the model max reports source "policy"', async () => {
+    const { service } = setup(policy({ maxInputTokens: 100_000, maxOutputTokens: 8_000 }));
+
+    const view = await service.describeForAdmin();
+    const primary = view.effectiveLimits.find((m) => m.modelId === 'gpt-5.4')!;
+
+    expect(primary.maxOutputTokens).toBe(8_000);
+    expect(primary.outputSource).toBe('policy');
+    expect(primary.maxInputTokens).toBe(100_000);
+    expect(primary.inputSource).toBe('policy');
+  });
+
+  it('an unplaceable permitted model keeps the provider floor, reported with source "default"', async () => {
+    const stored = policy({ maxInputTokens: null, maxOutputTokens: null });
+    stored.providers.openai.allowedModels.push({ id: 'mystery-model' });
+    const { service } = setup(stored);
+
+    const view = await service.describeForAdmin();
+    const mystery = view.effectiveLimits.find((m) => m.modelId === 'mystery-model')!;
+
+    expect(mystery).toBeDefined();
+    expect(mystery.source).toBe('default');
+    // The stub provider's defaultModelLimits floor.
+    expect(mystery.modelContextWindowTokens).toBe(128_000);
+    expect(mystery.modelMaxOutputTokens).toBe(16_000);
+  });
+
+  it('reports one entry per resolvable permitted model, in the policy\'s own order', async () => {
+    const { service } = setup(policy());
+    const view = await service.describeForAdmin();
+    expect(view.effectiveLimits.map((m) => m.modelId)).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'no-tools']);
+  });
+});

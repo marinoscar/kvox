@@ -2,13 +2,13 @@ import { ConflictException } from '@nestjs/common';
 import type { Job } from '@prisma/client';
 import { z } from 'zod';
 
-import { AiAuthError, AiRefusedError, AiStructuredOutputError } from '../../ai/ai-errors';
+import { AiAuthError, AiBudgetError, AiInputError, AiRefusedError, AiStructuredOutputError } from '../../ai/ai-errors';
 import { RateLimitError } from '../../jobs/rate-limit.error';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../preferences/graph-preferences.defaults';
 import { ProposalStageRegistry, type ProposalStage } from '../extraction/proposal-stage';
 import type { ProposedRow } from '../extraction/validate';
 import { IDS, goodAnswer, makeInput } from '../../../test/graph/extraction-fixtures';
-import { KgExtractHandler, readKgExtractPayload } from './kg-extract.handler';
+import { KgExtractHandler, classifyExtractionError, readKgExtractPayload, truncatedMessage } from './kg-extract.handler';
 
 const PROPOSAL = '1a000000-0000-4000-8000-000000000001';
 
@@ -112,7 +112,7 @@ describe('KgExtractHandler (#363)', () => {
   it('declares its profile, and is server-only', () => {
     const { handler } = harness();
     expect(handler.type).toBe('kg.extract');
-    expect(handler.profile).toEqual({ maxRuntimeMs: 600_000, maxAttempts: 1 });
+    expect(handler.profile).toEqual({ maxRuntimeMs: 1_200_000, maxAttempts: 1 });
     expect((handler as unknown as Record<string, unknown>).nodeResultSchema).toBeUndefined();
     expect((handler as unknown as Record<string, unknown>).persistNodeResult).toBeUndefined();
   });
@@ -170,7 +170,8 @@ describe('KgExtractHandler (#363)', () => {
     );
     expect(generateStructured).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ model: 'gpt-4o', schemaName: 'kg_extraction', maxOutputTokens: 8_000, timeoutMs: 60_000 }),
+      // #436: the 8,000 cap plus 'medium' effort's 16,384 reasoning headroom exceeds the model's own 16,000.
+      expect.objectContaining({ model: 'gpt-4o', schemaName: 'kg_extraction', maxOutputTokens: 16_000, timeoutMs: 60_000 }),
     );
   });
 
@@ -191,12 +192,105 @@ describe('KgExtractHandler (#363)', () => {
   it.each([
     ['auth', new AiAuthError('Your key was refused.', 'openai')],
     ['refusal', new AiRefusedError('Declined.', undefined, 'openai')],
-    ['invalid_output', new AiStructuredOutputError('Cut off.', 'truncated', 'openai')],
+    ['invalid_output', new AiStructuredOutputError('Not JSON.', 'invalid_json', 'openai')],
   ])('a terminal %s failure marks the proposal failed and returns', async (errorClass, error) => {
     const { handler, writer, generateStructured } = harness();
     generateStructured.mockRejectedValueOnce(error);
     await expect(handler.process(job())).resolves.toBeUndefined();
     expect(writer.markFailed).toHaveBeenCalledWith(PROPOSAL, expect.anything(), { errorClass, message: error.message });
+  });
+
+  it('a truncated answer is re-asked once; a second truncation is a terminal truncated failure (#435)', async () => {
+    const { handler, writer, generateStructured } = harness();
+    generateStructured
+      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'))
+      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
+    await expect(handler.process(job())).resolves.toBeUndefined();
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+    expect(writer.markFailed).toHaveBeenCalledWith(
+      PROPOSAL,
+      expect.objectContaining({ truncationRetry: true }),
+      expect.objectContaining({ errorClass: 'truncated' }),
+    );
+  });
+
+  /** The `At most N.` number a call's entities-array description names. */
+  function entitiesCapOf(call: unknown[]): number {
+    const request = call[1] as { schema: { properties: { entities: { description?: string } } } };
+    const description = request.schema.properties.entities.description ?? '';
+    const match = /At most (\d+)\./.exec(description);
+    if (!match) throw new Error(`no cap found in description: ${description}`);
+    return Number(match[1]);
+  }
+
+  it('a truncated first call, then success, finalizes the proposal with truncationRetry recorded, the second call sized from HALVED row caps, and usage summed across both calls (#435)', async () => {
+    const { handler, writer, generateStructured } = harness();
+    generateStructured.mockRejectedValueOnce(
+      new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 111, completionTokens: 222 }),
+    );
+    // The second (successful) call uses the harness default usage: { promptTokens: 1234, completionTokens: 321 }.
+
+    await expect(handler.process(job())).resolves.toBeUndefined();
+
+    expect(generateStructured).toHaveBeenCalledTimes(2);
+    const firstCap = entitiesCapOf(generateStructured.mock.calls[0]);
+    const secondCap = entitiesCapOf(generateStructured.mock.calls[1]);
+    // planExtraction sizes {entities:5, relations:5, items:5} from this
+    // harness's model/policy/effort combination (the floor); halving gives 2.
+    expect(firstCap).toBe(5);
+    expect(secondCap).toBe(2);
+    expect(secondCap).toBeLessThan(firstCap);
+
+    expect(writer.finalize).toHaveBeenCalled();
+    const [, , , finalStats] = writer.finalize.mock.calls[0] as unknown as [string, string, unknown, Record<string, unknown>];
+    expect(finalStats.truncationRetry).toBe(true);
+    expect(finalStats.usage).toEqual({ inputTokens: 111 + 1234, outputTokens: 222 + 321 });
+    expect(writer.markFailed).not.toHaveBeenCalled();
+  });
+
+  it("a truncated answer with no usage on the error still succeeds on retry and sums only the second call's usage", async () => {
+    const { handler, writer, generateStructured } = harness();
+    // No usage carried on this truncation (an older / bare construction).
+    generateStructured.mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai'));
+
+    await handler.process(job());
+
+    const [, , , finalStats] = writer.finalize.mock.calls[0] as unknown as [string, string, unknown, Record<string, unknown>];
+    expect(finalStats.usage).toEqual({ inputTokens: 1234, outputTokens: 321 });
+  });
+
+  it('a truncated answer twice is a terminal truncated failure carrying truncatedMessage, with usage recorded (non-zero) on the failure path (#435)', async () => {
+    const { handler, writer, generateStructured } = harness();
+    generateStructured
+      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 100, completionTokens: 50 }))
+      .mockRejectedValueOnce(new AiStructuredOutputError('Cut off.', 'truncated', 'openai', { promptTokens: 100, completionTokens: 25 }));
+
+    await handler.process(job());
+
+    expect(writer.markFailed).toHaveBeenCalledTimes(1);
+    const [, stats, failure] = writer.markFailed.mock.calls[0] as unknown as [string, Record<string, unknown>, { errorClass: string; message: string }];
+    expect(failure.errorClass).toBe('truncated');
+    // The exact sentence truncatedMessage produces, naming the 16,000-token
+    // ceiling this harness's model/policy/effort resolve to.
+    expect(failure.message).toContain('cut off at its 16,000-token output ceiling');
+    expect(failure.message).toContain('even after asking for a smaller answer');
+    expect(failure.message).toContain("choose a model with a larger output ceiling");
+    // Billed both times, never zero.
+    expect(stats.usage).toEqual({ inputTokens: 200, outputTokens: 75 });
+    expect(writer.writeItems).not.toHaveBeenCalled();
+    expect(writer.finalize).not.toHaveBeenCalled();
+  });
+
+  it("an invalid_json failure is 'invalid_output' with NO retry — the provider is called exactly once", async () => {
+    const { handler, writer, generateStructured } = harness();
+    generateStructured.mockRejectedValueOnce(new AiStructuredOutputError('Not JSON.', 'invalid_json', 'openai', { promptTokens: 10, completionTokens: 20 }));
+
+    await handler.process(job());
+
+    expect(generateStructured).toHaveBeenCalledTimes(1);
+    const [, stats, failure] = writer.markFailed.mock.calls[0] as unknown as [string, Record<string, unknown>, { errorClass: string }];
+    expect(failure.errorClass).toBe('invalid_output');
+    expect(stats.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
   });
 
   it('a malformed answer is invalid_output, returns, and writes no items', async () => {
@@ -310,5 +404,54 @@ describe('KgExtractHandler (#363)', () => {
     expect(readKgExtractPayload(payload)).toEqual(payload);
     expect(readKgExtractPayload({ ...payload, reason: 'cron' })).toBeNull();
     expect(readKgExtractPayload({ ...payload, noteVersion: 0 })).toBeNull();
+  });
+});
+
+describe('classifyExtractionError (#435)', () => {
+  it('maps AiAuthError to auth', () => {
+    expect(classifyExtractionError(new AiAuthError('nope', 'openai'))).toBe('auth');
+  });
+
+  it('maps AiBudgetError to budget', () => {
+    expect(classifyExtractionError(new AiBudgetError('too big', 10_000, 5_000, 'openai'))).toBe('budget');
+  });
+
+  it("maps AiStructuredOutputError('truncated') to truncated", () => {
+    expect(classifyExtractionError(new AiStructuredOutputError('cut off', 'truncated', 'openai'))).toBe('truncated');
+  });
+
+  it("maps AiStructuredOutputError('invalid_json') to invalid_output", () => {
+    expect(classifyExtractionError(new AiStructuredOutputError('not json', 'invalid_json', 'openai'))).toBe('invalid_output');
+  });
+
+  it('maps AiRefusedError and AiInputError to refusal', () => {
+    expect(classifyExtractionError(new AiRefusedError('declined', undefined, 'openai'))).toBe('refusal');
+    expect(classifyExtractionError(new AiInputError('bad input', undefined, 'openai'))).toBe('refusal');
+  });
+
+  it('maps anything else (a plain Error) to other', () => {
+    expect(classifyExtractionError(new Error('socket hang up'))).toBe('other');
+    expect(classifyExtractionError('not even an Error')).toBe('other');
+    expect(classifyExtractionError(undefined)).toBe('other');
+  });
+
+  it('is total and never throws', () => {
+    expect(() => classifyExtractionError(null)).not.toThrow();
+    expect(() => classifyExtractionError({})).not.toThrow();
+  });
+});
+
+describe('truncatedMessage (#435)', () => {
+  it('names the exact output ceiling, and never a hint of model output', () => {
+    const message = truncatedMessage(16_000);
+    expect(message).toContain('16,000-token output ceiling');
+    expect(message).toContain('even after asking for a smaller answer');
+    expect(message).toContain("choose a model with a larger output ceiling");
+    expect(message).toContain("clear or raise the deployment's Max output tokens");
+    expect(message).toContain('lower the reasoning effort');
+  });
+
+  it('formats the number with thousands separators', () => {
+    expect(truncatedMessage(128_000)).toContain('128,000-token');
   });
 });

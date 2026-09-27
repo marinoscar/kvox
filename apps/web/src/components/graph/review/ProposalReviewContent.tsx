@@ -5,7 +5,8 @@
  *   error       the fetch failed — Retry
  *   empty       nothing extracted from this note yet — Extract (graph:write)
  *   extracting  progress and the model; rows arrive when it settles
- *   failed      the recorded reason — Try again
+ *   failed      the recorded reason — Try again (a `truncated` failure, #435,
+ *               adds what to change: model, output cap, or reasoning effort)
  *   draft       groups of rows (+ a stale-version notice when the note moved on)
  *   committed   read-only rows, when they were sent, Revert… and Re-extract
  *   reverted / discarded — a notice and Re-extract
@@ -165,6 +166,13 @@ export function ProposalReviewContent({
         <Stack spacing={1.5} sx={{ alignItems: 'flex-start' }}>
           <Alert severity="error" sx={{ width: '100%' }}>
             {detail?.proposal.failure?.message ?? 'The extraction did not finish.'}
+            {detail?.proposal.failure?.errorClass === 'truncated' && (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                This note produces more than one answer can carry. Try a model with a larger
+                output ceiling, ask an administrator to clear or raise Max output tokens, or lower
+                the reasoning effort.
+              </Typography>
+            )}
           </Alert>
           {canWrite && fromNote && (
             <Button size="small" onClick={() => onRequestExtract('re-extract')}>

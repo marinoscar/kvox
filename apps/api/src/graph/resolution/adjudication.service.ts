@@ -203,7 +203,7 @@ export class AdjudicationService {
       resolution,
       provider,
       context: createProviderContext(apiKey, settings.data as never),
-      maxOutputTokens: Math.min(ADJUDICATION_MAX_OUTPUT_TOKENS, extractionBudget(resolution).maxOutputTokens),
+      maxOutputTokens: extractionBudget(resolution, ADJUDICATION_MAX_OUTPUT_TOKENS).maxOutputTokens,
     };
   }
 

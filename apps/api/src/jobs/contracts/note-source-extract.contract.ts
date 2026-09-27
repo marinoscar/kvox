@@ -70,7 +70,8 @@
 // then an unbounded row, then an unbounded prompt. The cap is generous — far
 // more than any document a prompt budget would accept anyway — precisely so it
 // is a STRUCTURAL bound rather than a policy knob: the real ceiling on what
-// reaches a model is `ai.maxInputTokens`, which #49's budget applies to this
+// reaches a model is #49's token budget (the model's own window, or a typed
+// `ai.maxInputTokens` spend cap when one is set — #436), which applies to this
 // text like any other source, and which refuses rather than truncates.
 // =============================================================================
 
