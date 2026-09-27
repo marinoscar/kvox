@@ -165,6 +165,16 @@ describe('proposal view mapper', () => {
       expect(evidenceViewOf({ ...note, noteVersion: 2 }, l).stale).toBe(true);
       expect(evidenceViewOf({ ...note, noteId: null }, l).stale).toBe(true);
     });
+
+    it('import (#387): cited to the file, never stale, carrying its object and IRI', () => {
+      const imported = { ...base, charStart: null, charEnd: null, quote: 'Imported from a.ttl', importObjectId: 'f1', sourceIri: 'https://s.example/joe' };
+      expect(evidenceViewOf(imported, lookups({}))).toEqual(
+        expect.objectContaining({ source: 'import', stale: false, importObjectId: 'f1', sourceIri: 'https://s.example/joe', speakerName: null }),
+      );
+      expect(evidenceViewOf(note, lookups({ noteVersions: new Map([['n', 3]]) }))).toEqual(
+        expect.objectContaining({ importObjectId: null, sourceIri: null }),
+      );
+    });
   });
 
   describe('items, ordering and counts', () => {
