@@ -37,6 +37,7 @@ import {
 import { EXTRACTION_SCHEMA_NAME, buildExtractionOutputSchema } from '../../../src/graph/extraction/output-schema';
 import { applyPrecheck, reviewOnlyTypes, type PrecheckItem } from '../../../src/graph/extraction/precheck';
 import { assembleExtractionPrompt } from '../../../src/graph/extraction/prompt';
+import { extractionRowCaps } from '../../../src/graph/extraction/row-caps';
 import { addDeterministicRows, validateExtraction, type EvidenceDraft, type ProposedRow } from '../../../src/graph/extraction/validate';
 import { GRAPH_PREFERENCE_DEFAULTS } from '../../../src/graph/preferences/graph-preferences.defaults';
 import type { EndpointRef } from '../../../src/graph/proposals/proposal-payload.schema';
@@ -181,8 +182,10 @@ export async function runExtraction(
     throw new Error(`Provider "${provider.id}" cannot return structured output`);
   }
   const ctx = buildExtractionContext(fixtureToInput(fixture));
-  const prompt = assembleExtractionPrompt(ctx);
-  const schema = buildExtractionOutputSchema(ctx);
+  // The row caps a production run at this ceiling would send (#435).
+  const caps = extractionRowCaps(EVAL_MAX_OUTPUT_TOKENS, 'none');
+  const prompt = assembleExtractionPrompt(ctx, caps);
+  const schema = buildExtractionOutputSchema(ctx, caps);
   // This build's default provider settings (the OpenAI API root), with the
   // model the run names permitted — nothing a deployment's settings add.
   const defaults = (DEFAULT_SYSTEM_SETTINGS.ai.providers as Record<string, Record<string, unknown>>)[provider.id] ?? {};

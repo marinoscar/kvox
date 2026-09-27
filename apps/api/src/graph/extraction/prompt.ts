@@ -19,6 +19,7 @@
 import type { EffectiveAttribute } from '@app/shared/ontology';
 
 import { NOTE_ALIAS, offeredAttributes, type ExtractionContext } from './extraction-context';
+import type { ExtractionRowCaps } from './row-caps';
 
 export const ROLE_LINE =
   'You propose a knowledge-graph update from one meeting. A person reviews every row before anything is saved. Precision matters more than completeness.';
@@ -62,7 +63,21 @@ function attributeLine(attr: EffectiveAttribute): string {
   return `- ${attr.key} (${kind}): ${description}${hint}`;
 }
 
-function rules(ctx: ExtractionContext): string[] {
+/**
+ * The row-cap rule (#435): how many rows one answer may carry, and what to do
+ * when the source holds more. Only the sections this run offers are named.
+ */
+export function rowCapsRule(ctx: ExtractionContext, caps: ExtractionRowCaps): string {
+  const parts: string[] = [];
+  if (ctx.offered.entityTypes.length > 0) parts.push(`${caps.entities} entities`);
+  if (ctx.offered.relationTypes.length > 0) parts.push(`${caps.relations} relations`);
+  if (ctx.offered.itemTypes.length > 0) parts.push(`${caps.items} facts`);
+  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : (parts[0] ?? '0 rows');
+  return `Propose at most ${list}. If the source holds more, keep the most significant and omit the rest — an answer that runs out of room is lost entirely.`;
+}
+
+function rules(ctx: ExtractionContext, caps?: ExtractionRowCaps): string[] {
+  const capped = caps ? [`10. ${rowCapsRule(ctx, caps)}`] : [];
   return [
     `1. Cite only ids you were given: \`s#\` for a transcript line, \`${NOTE_ALIAS}\` for the note. Each citation copies an exact quote of at most 200 characters from that line or from the note.`,
     '2. Never propose a row you cannot cite.',
@@ -73,6 +88,7 @@ function rules(ctx: ExtractionContext): string[] {
     `7. Resolve relative dates ("next Friday", "in Q2") against the meeting date ${ctx.meetingDate}. Dates are YYYY-MM-DD. When the source is not precise about a date, write \`precision: "unknown"\` (and null dates) rather than guessing.`,
     '8. Mark a person fact\'s `sensitivity` honestly: `sensitive` means health, legal, financial or similarly weighty personal information.',
     '9. A role, a team mentioned only in passing, or a recurring topic is not an entity. Follow each type\'s disambiguation lines below; put recurring topics in `meeting.topics` instead.',
+    ...capped,
   ];
 }
 
@@ -140,12 +156,16 @@ export function formatTimestamp(ms: number): string {
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
-export function assembleExtractionPrompt(ctx: ExtractionContext): ExtractionPrompt {
+/**
+ * `caps` (#435) adds the row-cap rule; the handler and the estimate always
+ * pass it, so what is recorded and counted is what is sent.
+ */
+export function assembleExtractionPrompt(ctx: ExtractionContext, caps?: ExtractionRowCaps): ExtractionPrompt {
   const system: string[] = [
     ROLE_LINE,
     '',
     HEADING_RULES,
-    ...rules(ctx),
+    ...rules(ctx, caps),
     '',
     ...entityTypesSection(ctx),
     '',

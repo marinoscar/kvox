@@ -234,9 +234,16 @@ export interface ExtractionStats {
   proposed: { entities: number; relations: number; items: number };
   dropped: { uncited: number; invalid: number; unknownType: number; dangling: number };
   quoteNotLocated: number;
+  /** Summed over every provider call the run made, failed calls included (#435). */
   usage: { inputTokens: number; outputTokens: number };
+  /** #435: the first answer was truncated and the run re-asked once with halved row caps. */
+  truncationRetry?: boolean;
   failure?: {
-    errorClass: 'auth' | 'refusal' | 'rate_limit' | 'budget' | 'invalid_output' | 'other';
+    /**
+     * `truncated` (#435): the answer hit its output ceiling even after the
+     * halved re-ask — distinct from `invalid_output` (a malformed answer).
+     */
+    errorClass: 'auth' | 'refusal' | 'rate_limit' | 'budget' | 'truncated' | 'invalid_output' | 'other';
     message: string;
   };
   discardReason?: 'superseded' | 'user';
