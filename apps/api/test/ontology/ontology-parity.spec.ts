@@ -10,8 +10,12 @@ import {
   DEFAULT_ENABLED_DOMAINS,
   RDF_PREFIXES,
   expandCurie,
+  ONTOLOGY_MIGRATIONS,
+  checkOntologyMigrations,
 } from '@app/shared/ontology';
-import type { EntityTypeSpec, RelationTypeSpec } from '@app/shared/ontology';
+import type { EntityTypeSpec, OntologyMigration, RelationTypeSpec } from '@app/shared/ontology';
+
+import { buildMigrationTestDefinition } from './fixtures/migration-fixtures';
 
 // =============================================================================
 // Ontology parity guard (issue #350, epic #344).
@@ -26,7 +30,13 @@ import type { EntityTypeSpec, RelationTypeSpec } from '@app/shared/ontology';
 // alone, without re-deriving which rule failed.
 //
 // The first ten rules are numbered exactly as `docs/specs/ontology.md` / issue #350
-// numbers them; rule 11 (alignment prefixes) is issue #385's. One `it` per rule.
+// numbers them; rule 11 (alignment prefixes) is issue #385's, rules 12–13 are
+// #383's, and rules 14–17 (ontology migrations) are #384's. One `it` per rule.
+//
+// Rules 14–17 live in `checkOntologyMigrations` (packages/shared/src/ontology/
+// migrations.ts) rather than inline, so each can ALSO be run against a
+// deliberately broken fixture below — proving the rule rejects something,
+// which the real (empty at 1.x) ONTOLOGY_MIGRATIONS never could.
 // =============================================================================
 
 const MIN_DESCRIPTION_LENGTH = 20;
@@ -401,6 +411,92 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
     }
 
     expect(failures).toEqual([]);
+  });
+
+  it('rules 14–17 (#384, §17.4): the shipped ONTOLOGY_MIGRATIONS are sound — every `to` in the CHANGELOG and ascending, retag/rename/drop sources retired and targets declared, retags only in a major bump, no user attribute keys', () => {
+    expect(
+      checkOntologyMigrations({ migrations: ONTOLOGY_MIGRATIONS, registry: ONTOLOGY, changelog: CHANGELOG, shippedKeys: SHIPPED_KEYS }),
+    ).toEqual([]);
+  });
+
+  describe('rules 14–17 reject broken migrations (fixture registry)', () => {
+    const def = buildMigrationTestDefinition();
+    const check = (migrations: OntologyMigration[]) =>
+      checkOntologyMigrations({ migrations, registry: def.registry, changelog: def.changelog, shippedKeys: def.shippedKeys });
+    const rules = (failures: string[]) => failures.map((f) => f.split(':')[0]);
+
+    it('accepts the acceptance fixture itself', () => {
+      expect(check(def.migrations)).toEqual([]);
+    });
+
+    it('rule 14: a migration `to` missing from the CHANGELOG', () => {
+      const failures = check([{ ...def.migrations[0], to: '1.2.0' }]);
+      expect(rules(failures)).toContain('rule 14');
+      expect(failures.join('\n')).toMatch(/1\.2\.0.*no CHANGELOG entry/);
+    });
+
+    it('rule 14: migrations out of order, and a pre-release version', () => {
+      expect(rules(check([def.migrations[1], def.migrations[0]]))).toContain('rule 14');
+      expect(rules(check([{ ...def.migrations[0], to: '1.1.0-rc.1' }]))).toContain('rule 14');
+    });
+
+    it('rule 15: a retag from a non-deprecated key', () => {
+      const failures = check([
+        { to: '2.0.0', description: 'bad', steps: [{ op: 'retag_entity_type', from: 'Project', to: 'NewType' }] },
+      ]);
+      expect(failures).toEqual([expect.stringMatching(/^rule 15: .*source 'Project' is not deprecated/)]);
+    });
+
+    it('rule 15: a rename/drop of a live attribute, a rename to an undeclared one, a coerce against the declared kind', () => {
+      const failures = check([
+        {
+          to: '1.1.0',
+          description: 'bad',
+          steps: [
+            { op: 'rename_attribute', typeKey: 'Project', from: 'endDate', to: 'finish' },
+            { op: 'drop_attribute', typeKey: 'Project', key: 'status' },
+            { op: 'coerce_attribute', typeKey: 'Project', key: 'status', to: 'text' },
+          ],
+        },
+      ]);
+      expect(failures).toEqual([
+        expect.stringMatching(/^rule 15: .*'Project\.endDate' is not deprecated/),
+        expect.stringMatching(/^rule 15: .*'Project\.finish' is not declared/),
+        expect.stringMatching(/^rule 15: .*'Project\.status' is not deprecated/),
+        expect.stringMatching(/^rule 15: .*declared 'select'/),
+      ]);
+    });
+
+    it('rule 15: a coerce map onto a value that is not a choice, and a status retag onto an undeclared status', () => {
+      const failures = check([
+        {
+          to: '1.1.0',
+          description: 'bad',
+          steps: [
+            { op: 'coerce_attribute', typeKey: 'Project', key: 'status', to: 'select', map: { Active: 'active', Paused: 'paused' } },
+            { op: 'retag_item_status', itemKind: 'commitment', from: 'open', to: 'pending' },
+          ],
+        },
+      ]);
+      expect(failures).toEqual([
+        expect.stringMatching(/^rule 15: .*maps to 'paused'/),
+        expect.stringMatching(/^rule 15: .*'pending' is not a status of 'Commitment'/),
+      ]);
+    });
+
+    it('rule 16: a type retag in a minor bump', () => {
+      const failures = check([
+        { to: '1.1.0', description: 'bad', steps: [{ op: 'retag_entity_type', from: 'OldType', to: 'NewType' }] },
+      ]);
+      expect(rules(failures)).toEqual(['rule 16']);
+    });
+
+    it('rule 17: a step on a u_* attribute', () => {
+      const failures = check([
+        { to: '1.1.0', description: 'bad', steps: [{ op: 'drop_attribute', typeKey: 'Project', key: 'u_abcdefghij' }] },
+      ]);
+      expect(rules(failures)).toEqual(['rule 17']);
+    });
   });
 
   // ---------------------------------------------------------------------------
