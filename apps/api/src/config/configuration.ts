@@ -254,6 +254,15 @@ export default () => {
     scheduleEnabled: process.env.DB_BACKUP_SCHEDULE_ENABLED !== 'false',
   },
 
+  // Knowledge graph migration scheduler (#384). Whether THIS process runs the
+  // hourly tick that enqueues `kg.migrate` for owners whose graph rows an
+  // ontology migration still has to reshape. The tick only enqueues; the
+  // reshape is a queue job. Same fail-open rule as the backup schedule: only
+  // the literal 'false' turns it off. See `graph/migrate/kg-migrate-scheduler.task.ts`.
+  kgMigrate: {
+    scheduleEnabled: process.env.KG_MIGRATE_SCHEDULE_ENABLED !== 'false',
+  },
+
   // Observability
   otel: {
     enabled: process.env.OTEL_ENABLED === 'true',

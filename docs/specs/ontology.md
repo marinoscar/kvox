@@ -1587,9 +1587,10 @@ Eleven types, all under `apps/api/src/graph/handlers/` (planned) except
 Ask is its own module (§21), reusing the graph's job-queue conventions
 rather than being folded into a handler directory it does not belong in.
 As built, `kg.purge` and `kg.speaker_link` do live under `graph/handlers/`;
-`kg.extract` lives under `graph/extraction/` (§6) and `kg.graph_layout`
-under `graph/layout/` (§22.3) — each grouped with the feature it belongs to
-rather than in one shared handler directory:
+`kg.extract` lives under `graph/extraction/` (§6), `kg.graph_layout`
+under `graph/layout/` (§22.3) and `kg.migrate` under `graph/migrate/` (§17.4) —
+each grouped with the feature it belongs to rather than in one shared handler
+directory:
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
@@ -1600,7 +1601,7 @@ rather than in one shared handler directory:
 | `kg.speaker_link` | `{ maxRuntimeMs: 2m, maxAttempts: 3 }` | **No** | §8's speaker-naming write, enqueued after any `TranscriptEditingService` save that changes a speaker's shown name — `identify()`, and since #405 a versioned rename/clear or a restore — rather than performed inline — writes directly to the owner's graph tables over the ordinary Prisma pool, no AI key involved and no artifact a node could fetch or produce; idempotent (re-linking the same speaker to the same `Person` a second time is a no-op), hence `maxAttempts: 3` rather than 1 |
 | `kg.graph_layout` | `{ maxRuntimeMs: 15m, maxAttempts: 2 }` | **No** | §22.3 — reads every relation and entity the owner's graph holds to compute clusters and a layout; no AI key involved, but no node-side artifact for a worker to fetch or produce the way `media.audio.transcode`'s single input file is either — the computation *is* reading the owner's whole graph over the Prisma pool. Deduplicated per owner, one pending layout job at a time |
 | `kg.purge` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | Server-only, destructive fan-out — the identical CLAUDE.md rule-2 reasoning `user.data.purge` states for itself: this job type holds the authority to delete a user's graph data across several tables, and there is no credential narrow enough for a `nodeSecretBroker` to hand a worker node instead. `maxAttempts: 1` (#357 corrects this table's earlier `3`), for the identical reason `user.data.purge` and `note.generate` carry it: a destructive fan-out that fails part-way must surface as a `failed` job a person looks at, never silently resume minutes later. The service is re-entrant — every step selects what is still there and deletes it — so the retry path is a person asking again ("Forget this person" a second time, or re-running the Danger Zone deletion), never an automatic one |
-| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped |
+| `kg.migrate` | `{ maxRuntimeMs: 60m, maxAttempts: 3 }` | **No** | §17.4 — reshapes one user's existing graph rows after an ontology bump (a deprecated type re-tagged, an attribute's `kind` corrected); server-only because it writes across several `kg_*` tables under the same authority `kg.purge` already needs, idempotent per row so a retry after a partial run never double-applies a reshape to a row already reshaped. **Built, issue #384** (`apps/api/src/graph/migrate/kg-migrate.handler.ts`): subject `user`/ownerId with ordinary dedup, payload `{ ownerId, targetVersion }`, no AI call; queued hourly by the enqueue-only `KgMigrateSchedulerTask` (minute 17, `KG_MIGRATE_SCHEDULE_ENABLED`) at `HOUSEKEEPING_PRIORITY`, and re-run for one owner by the admin job list's Retry |
 | `kg.export` | `{ maxRuntimeMs: 10m, maxAttempts: 3 }` | **No** | §18.2 — server-only for the identical "the renderers live in the API" reason `note.export` gives (`docs/specs/notes.md`): the RDF/JSON-LD serializers live in `apps/api`, and a second copy anywhere else would mean one export request producing byte-for-byte different files depending on which codebase rendered it |
 | `kg.import` | `{ maxRuntimeMs: 30m, maxAttempts: 1 }` | **No** | §18.3 — server-only, one attempt: a half-applied import must surface as a failed job a person looks at, never silently resume minutes later, the identical reasoning `user.data.purge` gives for its own `maxAttempts: 1` |
 | `ask.respond` | `{ maxRuntimeMs: 5m, maxAttempts: 1 }` | **No** | §21.3 — identical reasoning to `kg.extract`: the user's own AI key, `maxAttempts: 1` because a retried agent turn would silently re-spend the user's provider credit to produce a different, non-deterministic answer to a question the user already saw partway through. Throttled on `aiProviderThrottleKey(userId)` exactly like every other AI-calling type in this table. **Built, issue #378** (`apps/api/src/ask/handlers/ask-respond.handler.ts`), enqueued at priority −10 with the assistant message as its subject (`ask_message`) |
@@ -2320,6 +2321,47 @@ behalf, precisely the objection CLAUDE.md's `note.retitle` entry (⚠ "a job
 and deliberately not a migration") already raises for a different feature
 facing the identical shape of mistake.
 
+**The step vocabulary (issue #384).** A migration is declared, not
+scripted: `packages/shared/src/ontology/migrations.ts` holds
+`ONTOLOGY_MIGRATIONS`, ascending, each `{ to, description, steps }` with `to`
+equal to a CHANGELOG version. Six ops, each idempotent (applying one to its
+own output changes nothing) and each applied by the pure
+`applyMigrationSteps(row, migrationsBetween(row.ontologyVersion, target))`:
+
+| Op | Effect on a stored row | Parity rule it must satisfy |
+|---|---|---|
+| `retag_entity_type { from, to }` | `kg_entities.type` `from` → `to` | `from` deprecated (or shipped and absent), `to` a live entity-storage type; **major** bump only (rule 16) |
+| `retag_relation_type { from, to }` | `kg_relations.type` `from` → `to` | the same, for relations |
+| `rename_attribute { typeKey, from, to }` | moves a built-in attribute's value; an existing `to` value wins and the `from` value is dropped | `from` deprecated, `to` declared |
+| `coerce_attribute { typeKey, key, to, map? }` | converts the value to kind `to`; with a `map`, unmapped values are dropped (a value already equal to a map target is kept) | the attribute's declared kind is `to`; map targets are declared choices |
+| `drop_attribute { typeKey, key }` | removes the key | `key` deprecated |
+| `retag_item_status { itemKind, from, to }` | `kg_items.status` `from` → `to` | `to` a status of that item type |
+
+Parity rules 14–17 (`checkOntologyMigrations`, run by
+`ontology-parity.spec.ts` against the real definition and against broken
+fixtures): every `to` is strict semver (no pre-release tags — the job compares
+versions as `int[]`) and in the CHANGELOG, migrations strictly ascend, sources
+are retired and targets exist, retags ride a major bump, and no step names a
+user attribute key (`u_*`, §17.3). `ONTOLOGY_MIGRATIONS` is **empty** at 1.x:
+the first entry arrives with the first bump that renames or retags something.
+
+`kg.migrate` (§11) applies them per owner: entities → relations → items,
+keyset batches of 500 selected by a candidate predicate (below some migration's
+`to` **and** touched by one of its steps), validated with `validateProps`
+against the effective schema computed with **all** domains plus the owner's
+attribute defs, and written with the last applied migration's `to` as the new
+`ontology_version` in one `UPDATE … FROM (VALUES …)` per batch, guarded
+optimistically against a concurrent edit. A row failing validation is left
+untouched and counted `needsAttention` (ids logged, never props); a row no step
+touches keeps its version as provenance; a selected row whose steps turn out to
+be no-ops (a coerce of an already-correct value) is re-versioned with props
+untouched so it stops being a candidate. `draft` proposals created before the
+end of a **major** migration's CHANGELOG day get `stale_ontology` on every item.
+This is the one sanctioned writer of `kg_*` rows outside `GraphWriteService`: it
+changes only `type`/`props`/`status`/`ontology_version`, never evidence or
+`review_status`. Authoring and operating a migration:
+[`docs/runbooks/ontology-migration.md`](../runbooks/ontology-migration.md).
+
 **`GET /api/graph/ontology`** (§12) publishes the caller's own effective
 schema — `core` plus their enabled domains plus their own
 `kg_attribute_defs` rows — and every form this feature ships is generated
@@ -2593,7 +2635,8 @@ rule holding for an import exactly as it holds for extraction.
 **Version negotiation.** `owl:versionInfo` (§18.2) on the incoming
 ontology's own export makes this checkable rather than assumed: a `1.x`
 import into a `1.y` deployment applies directly; a `2.x` import against an
-older deployment requires `kg.migrate` (§17.4, §11) to run first, because a
+older deployment requires `kg.migrate` (§17.4, §11) to run first (the
+comparison is `compareOntologyVersions` from `@app/shared/ontology`, #384), because a
 major version means a type's *meaning* changed and importing straight past
 that would silently misinterpret the incoming data under the wrong
 definition.
