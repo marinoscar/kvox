@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event';
 // the same matcher via `queryByText`, so they still assert the wordmark is
 // absent and not merely that some looser pattern failed to match.
 import { APP_NAME } from '@app/shared';
-import { render, mockAdminUser } from '../../utils/test-utils';
+import { render, mockUser, mockAdminUser } from '../../utils/test-utils';
 import { setViewportWidth } from '../../setup';
 import { AppBar } from '../../../components/navigation/AppBar';
 import SettingsHubPage from '../../../pages/Admin/SettingsHubPage';
@@ -28,8 +28,24 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
+// The `knowledge` destination is gated on both `graph:read` (a real, unmocked
+// `usePermissions` reading the rendered user below) and the runtime `graph`
+// feature (#438), which has no user-facing knob — so it is the one thing
+// mocked here, per-test, rather than left to the real `NavigationFeaturesContext`
+// (which outside a provider always reads `false` — see that context's own
+// default, exercised by every OTHER test in this file that never touches this
+// flag).
+let graphFeatureEnabled = false;
+vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
+  useNavigationFeatures: () => ({ features: { graph: graphFeatureEnabled }, refresh: vi.fn() }),
+}));
+
+/** `mockUser` plus `graph:read` — the user the `knowledgeIsTab` suite renders. */
+const userWithGraphRead = { ...mockUser, permissions: [...mockUser.permissions, 'graph:read'] };
+
 beforeEach(() => {
   mockNavigate.mockClear();
+  graphFeatureEnabled = false;
 });
 
 describe('AppBar', () => {
@@ -643,6 +659,90 @@ describe('AppBar', () => {
       render(<AppBar />, { wrapperOptions: { route: '/admin/settings/users' } });
 
       expect(screen.getByText('Users & Allowlist')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The `knowledgeIsTab` branches (#438). `resolveDrillDown` treats `/graph`
+   * and `/ask` differently depending on whether the `knowledge` destination is
+   * actually drawn — both `graph:read` (a real permission, held or not by the
+   * rendered user) AND the runtime `graph` feature (mocked above) must agree
+   * before the tab exists.
+   */
+  describe('Knowledge tab drill-down (#438)', () => {
+    it('shows the wordmark on /graph when the tab is drawn', () => {
+      graphFeatureEnabled = true;
+      setViewportWidth(375);
+      render(<AppBar />, {
+        wrapperOptions: { route: '/graph', user: userWithGraphRead },
+      });
+
+      // `/graph` is the tab itself — wordmark, no back arrow, same as any
+      // other destination (`/transcripts`, `/notes`).
+      expect(screen.getByText(APP_NAME)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    });
+
+    it('shows Back + "Ask" on /ask, going up to /graph, when the tab is drawn', async () => {
+      const user = userEvent.setup();
+      graphFeatureEnabled = true;
+      setViewportWidth(375);
+      render(<AppBar />, {
+        wrapperOptions: { route: '/ask', user: userWithGraphRead },
+      });
+
+      expect(screen.getByText('Ask')).toBeInTheDocument();
+      expect(screen.queryByText(APP_NAME)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/graph');
+    });
+
+    it('falls back to the old behaviour on /graph when the feature is on but graph:read is not held', async () => {
+      const user = userEvent.setup();
+      graphFeatureEnabled = true;
+      setViewportWidth(375);
+      // `mockUser` (the default) holds no `graph:read`, so the tab is not
+      // drawn even though the runtime feature is on — the AND, not an OR.
+      render(<AppBar />, { wrapperOptions: { route: '/graph', user: mockUser } });
+
+      expect(screen.getByText('Knowledge')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
+    it('falls back to the old behaviour on /ask when the feature is on but graph:read is not held', async () => {
+      const user = userEvent.setup();
+      graphFeatureEnabled = true;
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/ask', user: mockUser } });
+
+      expect(screen.getByText('Ask')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
+    it('falls back to the old behaviour when graph:read is held but the feature is off', async () => {
+      const user = userEvent.setup();
+      graphFeatureEnabled = false;
+      setViewportWidth(375);
+      render(<AppBar />, { wrapperOptions: { route: '/graph', user: userWithGraphRead } });
+
+      expect(screen.getByText('Knowledge')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/');
+    });
+
+    it('still goes up to /graph from a deeper route (an entity page) when the tab is drawn', async () => {
+      const user = userEvent.setup();
+      graphFeatureEnabled = true;
+      setViewportWidth(375);
+      render(<AppBar />, {
+        wrapperOptions: { route: '/graph/entities/abc-123', user: userWithGraphRead },
+      });
+
+      expect(screen.getByText('Knowledge')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(mockNavigate).toHaveBeenCalledWith('/graph');
     });
   });
 

@@ -1519,39 +1519,44 @@ menu all read it, so none of the three can disagree about what exists or who
 may see it. Full design, with rejected alternatives, in
 [`docs/specs/ux-refresh.md`](docs/specs/ux-refresh.md) §1.
 
-**Five destinations** since epic #105: `home`, `transcripts`, `notes`,
-`settings`, `console`. Each gates on the exact permission its controller
-enforces (`transcripts:read`, `notes:read`, …), the same Settings UI Pattern
-rule 3 discipline the admin cards follow.
+**Six destinations** since issue #438: `home`, `transcripts`, `notes`,
+`knowledge`, `settings`, `console` — two of them (`settings`, `console`)
+`pinned`. Each non-pinned destination gates on the exact permission its
+controller enforces (`transcripts:read`, `notes:read`, …), the same Settings
+UI Pattern rule 3 discipline the admin cards follow. `knowledge` additionally
+gates on a **runtime feature flag** — the first destination to do so — see
+below.
 
-**`/graph` and `/graph/entities/:id` (issue #373, epic #347) are owned by
-`home`, not a destination of their own.** The knowledge graph does not get a
-sixth bottom-bar slot — `home`'s `DESTINATION_ROUTES` entry is
-`['/', '/graph']`, gated on `graph:read`, and the graph is reached from
-Home's "Knowledge" section, a named speaker's chip, and library search hits,
-never from its own tab. See `docs/specs/ontology.md` §13. `/graph/explore`
-(the sigma.js graph explorer, issue #374) is owned by the same `home` entry —
-its own prefix's `startsWith('/graph/')` match already covers it, so no
-`DESTINATION_ROUTES` change was needed to add it. **`/ask` and
-`/ask/:conversationId` (issue #380, epic #348) — Ask, the read-only agent over
-the graph — are owned by `home` too**: `DESTINATION_ROUTES.home` is
-`['/', '/graph', '/ask']`, the page is one optional-segment route
-(`/ask/:conversationId?`) gated on `graph:read`, reached from Home's Knowledge
-section, and hidden behind `ai.graphEnabled`. See `docs/specs/ontology.md` §21.5.
-`/graph/imports/:proposalId` (issue #387 — one RDF import, reviewed with the proposal sheet
-rendered inline) is owned by `home` through the same `/graph` prefix, gated on `graph:write`.
+**`knowledge` (path `/graph`, issue #438) is a destination of its own,
+gated on `graph:read` *and* `GET /api/ai/config`'s `graphEnabled`.** It
+owns `DESTINATION_ROUTES` prefixes `['/graph', '/ask']`, so `/graph`,
+`/graph/explore`, `/graph/overview`, `/graph/entities/:id`,
+`/graph/imports/:proposalId` (issue #387) and `/ask`/`/ask/:conversationId`
+(issue #380, epic #348) are all reached through it. `home` owns only `['/']`
+now. While `graphEnabled` is unknown or still loading, the item is hidden
+rather than shown-then-removed — a runtime flag is not a permission check
+that resolves instantly from the JWT already in hand, so a naive gate would
+flash the tab in and then pull it out from under a tapping thumb. Before
+issue #438 the graph and Ask were reached through `home`'s own `DESTINATION_ROUTES`
+entry instead (issue #373 for the graph, #380 for Ask) — see
+`docs/specs/ontology.md` §13 and §21.5 for that history and the reasoning
+behind promoting it to its own destination.
 
 **Four bottom-bar tabs, and that is the ceiling.** `BOTTOM_BAR_DESTINATIONS`
 is `DESTINATIONS.filter((d) => !d.pinned)`, so the bar's four-tab limit is now
 reached *by design* rather than by a coincidence of which permissions a user
 happens to hold. A fifth non-pinned destination is not an addition, it is a
-redesign of that bar.
+redesign of that bar — which is why issue #438 pins `settings` rather than
+adding `knowledge` as a fifth: the bar is `home`, `transcripts`, `notes`,
+`knowledge` (three when the graph is off or the caller lacks `graph:read`).
 
 ⚠ **`pinned` means a MODE, not a peer.** A pinned destination renders at the
 navigation rail's foot below a divider, appears in the avatar menu, and is
 **omitted from the bottom bar entirely** — the bar has no foot to pin to.
-`console` is the only one today. That is what makes the administrator's own
-phone show Home · Transcripts · Notes · Settings rather than spending a
+`console` was the only one before issue #438; `settings` joined it there, the
+same move #106 made for Console, freeing the fourth bar slot for `knowledge`
+without breaching the ceiling above. That is what makes the administrator's
+own phone show Home · Transcripts · Notes · Knowledge rather than spending a
 primary tab on an operational surface.
 
 ## Operations Admin Settings Group
@@ -2353,9 +2358,11 @@ routes (#366, `GraphProposalsModule`, `apps/api/src/graph/proposals/`) are built
 `/graph/entities/:id` (entity page — header, edit through #367's schema-driven
 `SchemaForm`, cited brief, connections, timeline, mentions), `EvidenceChip`,
 speaker-chip person links, entity hits above library search, and a Home
-"Knowledge" section, all owned by the `home` destination per the Navigation
-Destination Model above. It reads #370's read API and #372's brief — see
-`docs/specs/ontology.md` §13 for the up-to-date web-surfaces state.
+"Knowledge" section, all owned (since issue #438) by the `knowledge`
+destination per the Navigation Destination Model above — originally reached
+through `home`'s own routes under issue #373. It reads #370's read API and
+#372's brief — see `docs/specs/ontology.md` §13 for the up-to-date
+web-surfaces state.
 **So is the sigma.js graph explorer** (issue #374, epic #347): `/graph/explore`
 (bounded, interactive, expand-on-click, a hard 300-node cap) and the entity
 page's `NeighborhoodWidget` above its Connections list, both drawing through

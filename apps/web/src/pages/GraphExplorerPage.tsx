@@ -1,6 +1,6 @@
 /**
  * `/graph/explore` — the bounded, interactive graph explorer (#374, epic #347;
- * spec §22.2). Owned by `home` (`config/destinations.ts`), gated on
+ * spec §22.2). Owned by `knowledge` (#438, `config/destinations.ts`), gated on
  * `graph:read`, lazy.
  *
  * WHERE IT STARTS, in order:

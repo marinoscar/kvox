@@ -20,6 +20,16 @@ vi.mock('../../../hooks/useNavigationPrefs', () => ({
   useNavigationPrefs: vi.fn(),
 }));
 
+// The `knowledge` destination also requires the runtime `graph` feature
+// (#438), which has no counterpart in `usePermissions`. Off by default, like
+// every OTHER test in this file that never mentions it — those exercise
+// exactly the pre-#438 five-destination rail, since `knowledge` stays hidden
+// with the feature off regardless of `graph:read`.
+let graphFeatureEnabled = false;
+vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
+  useNavigationFeatures: () => ({ features: { graph: graphFeatureEnabled }, refresh: vi.fn() }),
+}));
+
 import { usePermissions } from '../../../hooks/usePermissions';
 import { useNavigationPrefs } from '../../../hooks/useNavigationPrefs';
 
@@ -69,6 +79,7 @@ describe('NavigationRail', () => {
     vi.clearAllMocks();
     setPermissions([]);
     setPrefs(false);
+    graphFeatureEnabled = false;
   });
 
   describe('Destinations', () => {
@@ -618,15 +629,16 @@ describe('NavigationRail', () => {
       expect(links).not.toContain('/admin/settings');
     });
 
-    it('adds no orphan divider for a user holding neither system_settings:read nor users:read', () => {
+    it('pins only Settings, under one divider, for a user holding neither system_settings:read nor users:read (#438)', () => {
       setPermissions([], false);
       render(<NavigationRail />);
 
       const nav = screen.getByRole('navigation', { name: /main navigation/i });
-      // Only the collapse toggle's own divider remains — no pinned foot
-      // section, so no divider hanging above an empty list. This is the edge
-      // the `pinnedDestinations.length > 0` guard exists for.
-      expect(within(nav).getAllByRole('separator')).toHaveLength(1);
+      // Settings is pinned since #438, so a non-admin's foot is Settings alone:
+      // its divider plus the collapse toggle's. Console is absent, and no
+      // second divider is drawn for it.
+      expect(within(nav).getAllByRole('separator')).toHaveLength(2);
+      expect(screen.getByRole('link', { name: 'User Settings' })).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Console' })).not.toBeInTheDocument();
     });
 
@@ -644,6 +656,75 @@ describe('NavigationRail', () => {
       expect(screen.getByRole('link', { name: 'Console' })).toHaveAttribute(
         'aria-current',
         'page',
+      );
+    });
+  });
+
+  describe('Knowledge destination (#438)', () => {
+    it('lists Knowledge among the content rows when the graph feature is on', () => {
+      graphFeatureEnabled = true;
+      setPermissions(['transcripts:read', 'notes:read', 'graph:read']);
+
+      render(<NavigationRail />);
+
+      const nav = screen.getByRole('navigation', { name: /main navigation/i });
+      // A peer of the other content rows, in the content list — NOT the pinned
+      // foot, which is Settings' (and, for an admin, Console's) alone.
+      expect(within(nav).getByRole('link', { name: 'Knowledge' })).toHaveAttribute(
+        'href',
+        '/graph',
+      );
+      expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+        '/',
+        '/transcripts',
+        '/notes',
+        '/graph',
+        '/settings',
+      ]);
+    });
+
+    it('hides Knowledge when the graph feature is off, even with graph:read', () => {
+      graphFeatureEnabled = false;
+      setPermissions(['graph:read']);
+
+      render(<NavigationRail />);
+
+      expect(screen.queryByRole('link', { name: 'Knowledge' })).not.toBeInTheDocument();
+    });
+
+    it('hides Knowledge without graph:read, even with the feature on', () => {
+      graphFeatureEnabled = true;
+      setPermissions([]);
+
+      render(<NavigationRail />);
+
+      expect(screen.queryByRole('link', { name: 'Knowledge' })).not.toBeInTheDocument();
+    });
+
+    it('keeps Settings pinned at the foot BEFORE Console for an admin, with Knowledge still a peer', () => {
+      graphFeatureEnabled = true;
+      setPermissions(['graph:read', 'users:read'], true);
+
+      render(<NavigationRail />, { wrapperOptions: { user: mockAdminUser } });
+
+      const nav = screen.getByRole('navigation', { name: /main navigation/i });
+      const consoleLink = within(nav).getByRole('link', { name: 'Console' });
+      const footList = consoleLink.closest('ul');
+      expect(footList).not.toBeNull();
+
+      const footLinks = within(footList as HTMLElement)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href'));
+      // Settings before Console in the SAME pinned list — the declared order
+      // in `DESTINATIONS` (`config/destinations.ts`), not the DOM order of two
+      // separate lists.
+      expect(footLinks).toEqual(['/settings', '/admin/settings']);
+
+      // And Knowledge is not in that list — it stays a content-row peer.
+      expect(within(footList as HTMLElement).queryByRole('link', { name: 'Knowledge' })).toBeNull();
+      expect(within(nav).getByRole('link', { name: 'Knowledge' })).toHaveAttribute(
+        'href',
+        '/graph',
       );
     });
   });

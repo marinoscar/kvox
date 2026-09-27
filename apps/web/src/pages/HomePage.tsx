@@ -369,8 +369,8 @@ export default function HomePage() {
                 isLoading={notes.isLoading}
               />
             )}
-            {/* Knowledge (#373, spec §13) — the graph's entry point, since it
-                has no bottom-bar tab. Renders nothing without `graph:read` or
+            {/* Knowledge (#373, spec §13) — recent entities, a shortcut into
+                the graph beside its own Knowledge tab (#438). Renders nothing without `graph:read` or
                 an entity to show, and never an error box. */}
             <KnowledgeSection />
             <SharedWithMe items={sharedWithMe} />

@@ -253,6 +253,7 @@ import {
   type PermittedModelDraft,
 } from '../../components/admin/AiPermittedModels';
 import { AiEffectiveLimits } from '../../components/admin/AiEffectiveLimits';
+import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import { AI_ALLOWED_MODELS_MAX } from '../../services/ai';
 import type {
   AiProviderId,
@@ -350,6 +351,9 @@ export default function AiSettingsPage() {
     discoverModels,
     clearDiscoverResult,
   } = useAiSettings();
+  // The Knowledge destination is gated on `graphEnabled` (#438); re-read it
+  // after a save so the tab follows the switch without a reload.
+  const { refresh: refreshNavigationFeatures } = useNavigationFeatures();
 
   // Draft state, seeded from the server's response after every load AND every
   // write — the response is the new baseline, which is how the form resyncs
@@ -588,7 +592,10 @@ export default function AiSettingsPage() {
     };
 
     const ok = await save(input);
-    if (ok) setSavedMessage('AI settings saved');
+    if (ok) {
+      setSavedMessage('AI settings saved');
+      void refreshNavigationFeatures();
+    }
   };
 
   // The DRAFT base URL, which need not have been saved — the same "test what
