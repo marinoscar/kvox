@@ -2,7 +2,7 @@ import * as jsonld from 'jsonld';
 import { Parser, type Quad } from 'n3';
 import { ONTOLOGY } from '@app/shared/ontology';
 
-import { FIXTURE_NS as NS, esmImport, userDef } from '../../../test/graph/rdf/rdf-fixtures';
+import { FIXTURE_NS as NS, userDef, validateShacl } from '../../../test/graph/rdf/rdf-fixtures';
 import { generateShacl } from '../rdf/shacl-generator';
 import { buildJsonLdContext } from './jsonld-context';
 import { GraphRdfDatasetBuilder, type RdfSubjectBlock } from './rdf-dataset-builder';
@@ -198,25 +198,12 @@ describe('serializeGraph', () => {
 });
 
 describe('the fixture export conforms to the generated SHACL shapes', () => {
-  interface ValidationReport {
-    conforms: boolean;
-    results: Array<{ focusNode: { value: string } | null; path: { value: string } | null; message: Array<{ value: string }> }>;
-  }
-  let validate: (quads: Quad[]) => Promise<ValidationReport>;
-
-  beforeAll(async () => {
-    const { default: SHACLValidator } = await esmImport<{
-      default: new (shapes: unknown) => { validate(data: unknown): Promise<ValidationReport> };
-    }>('rdf-validate-shacl');
-    const { default: rdf } = await esmImport<{ default: { dataset(quads?: Iterable<Quad>): unknown } }>('rdf-ext');
-    const shapes = rdf.dataset(new Parser().parse(generateShacl(ONTOLOGY, [TIER], NS)));
-    validate = (quads) => new SHACLValidator(shapes).validate(rdf.dataset(quads));
-  });
+  const shapes = () => new Parser().parse(generateShacl(ONTOLOGY, [TIER], NS));
 
   it.each(['turtle', 'jsonld'] as const)('%s', async (format) => {
     const text = await render(format);
     const quads = format === 'turtle' ? new Parser().parse(text) : await jsonLdQuads(text);
-    const report = await validate(quads);
+    const report = await validateShacl(shapes(), quads);
     expect(report.results.map((r) => [r.focusNode?.value, r.path?.value, r.message[0]?.value])).toEqual([]);
     expect(report.conforms).toBe(true);
   });
