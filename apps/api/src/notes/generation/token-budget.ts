@@ -24,8 +24,31 @@
 // That is why `AiBudgetError` takes the two counts as CONSTRUCTOR ARGUMENTS
 // rather than optional extras, and why this module's job is to produce the
 // sentence rather than a boolean.
+//
+// -----------------------------------------------------------------------------
+// THE SPLIT IS DEMAND-DRIVEN, NOT A FIXED RESERVATION (issue #436)
+// -----------------------------------------------------------------------------
+//
+// Before #436 the whole output ceiling was subtracted from the context window
+// up front, and both ceilings were administrator-typed numbers every request
+// was governed by. With `ai.maxOutputTokens` now `null` by default ("the
+// model's own maximum"), that arithmetic would hand a 128,000-token output
+// ceiling's worth of window to an answer that is rarely a tenth of that, and
+// refuse a long source to pay for it. So the budget now holds back only a
+// RESERVE (`OUTPUT_RESERVE_TOKENS`, or the ceiling when smaller) when sizing
+// the input, and the output actually REQUESTED for one call shrinks to what
+// the window has left once THIS prompt is known — `outputTokensForPrompt`. A
+// call site whose prompt can be large must send that, never
+// `budget.maxOutputTokens` as it stands.
+//
+// A typed `ai.maxOutputTokens` is a SPEND CAP on the answer. Reasoning tokens
+// are output tokens drawn from the same `max_completion_tokens`, so the
+// headroom the call's reasoning effort needs (`REASONING_HEADROOM_TOKENS`) is
+// added ON TOP of that cap — bounded by the model's own maximum — rather than
+// letting a raised effort silently eat the answer's share.
 // =============================================================================
 
+import type { AiReasoningEffort } from '../../ai/ai-settings.schema';
 import { AiBudgetError } from '../../ai/ai-errors';
 
 /**
@@ -40,53 +63,128 @@ import { AiBudgetError } from '../../ai/ai-errors';
  */
 export const SAFETY_MARGIN_TOKENS = 500;
 
-/** The numbers a budget is computed from. All four are already policy-narrowed. */
+/**
+ * Extra output tokens a call at each reasoning effort may spend thinking,
+ * added on top of a finite answer ceiling (issue #436). `none` sends no
+ * `reasoning_effort` at all, so it needs none.
+ */
+export const REASONING_HEADROOM_TOKENS: Readonly<Record<AiReasoningEffort, number>> = {
+  none: 0,
+  low: 4_096,
+  medium: 16_384,
+  high: 32_768,
+  xhigh: 65_536,
+};
+
+/**
+ * The most of the context window held back for the answer when sizing the
+ * INPUT allowance (issue #436). The completion actually requested for a given
+ * prompt is then whatever the window has left — see {@link outputTokensForPrompt}.
+ */
+export const OUTPUT_RESERVE_TOKENS = 32_768;
+
+/** The numbers a budget is computed from. */
 export interface BudgetInput {
   /** `AiModelDescriptor.contextWindowTokens` for the model being used. */
   contextWindowTokens: number;
   /** `AiModelDescriptor.maxOutputTokens` for that model. */
   modelMaxOutputTokens: number;
-  /** `ai.maxOutputTokens` — the deployment's ceiling on one completion. */
-  policyMaxOutputTokens: number;
-  /** `ai.maxInputTokens` — the deployment's ceiling on one assembled prompt. */
-  policyMaxInputTokens: number;
+  /**
+   * `ai.maxOutputTokens` — the deployment's spend cap on one answer, or `null`
+   * for "no deployment cap: the model's own maximum".
+   */
+  policyMaxOutputTokens: number | null;
+  /**
+   * `ai.maxInputTokens` — the deployment's spend cap on one assembled prompt,
+   * or `null` for "the model's own window".
+   */
+  policyMaxInputTokens: number | null;
+  /** A per-task clamp on the answer (e.g. `ASK_MAX_OUTPUT_TOKENS`). */
+  taskMaxOutputTokens?: number;
+  /** The reasoning effort THIS call will actually send. */
+  reasoningEffort?: AiReasoningEffort | null;
 }
 
 /** What a budget computation answers. */
 export interface TokenBudget {
   /** Tokens available for the assembled prompt. Never negative. */
   availableInputTokens: number;
-  /** Tokens the completion may use — what `AiGenerateRequest` is given. */
+  /**
+   * The completion ceiling for this model under this policy. A call whose
+   * prompt can be large sends {@link outputTokensForPrompt} instead.
+   */
   maxOutputTokens: number;
+  /** The model's context window the budget was computed against. */
+  contextWindowTokens: number;
+  /** Which bound decided `maxOutputTokens`. */
+  outputSource: 'policy' | 'task' | 'model';
+  /** Which bound decided `availableInputTokens`. */
+  inputSource: 'policy' | 'model';
 }
 
 /**
  * How many tokens the prompt may use, and how many the completion may.
  *
- * ⚠ THE SMALLER OF THE TWO CEILINGS, ALWAYS. `ai.maxInputTokens` is a
- * DEPLOYMENT ceiling that sits under the model's own context window, never over
- * it — it exists because the user pays for input tokens on their own account
- * and an operator should be able to bound a 200,000-token transcript costing
- * them several dollars per regeneration. Taking the model's window when the
- * policy is lower would silently discard that lever; taking the policy when the
- * model is smaller would produce a prompt the vendor rejects.
+ * ⚠ A TYPED CEILING NARROWS, NEVER WIDENS. `ai.maxInputTokens` sits UNDER the
+ * model's own window: it exists because the user pays for input tokens on
+ * their own account and an operator should be able to bound a 200,000-token
+ * transcript costing them several dollars per regeneration. `null` (the
+ * default since #436) means the model's own capacity governs.
  */
 export function computeTokenBudget(input: BudgetInput): TokenBudget {
-  const maxOutputTokens = Math.max(
-    0,
-    Math.min(input.modelMaxOutputTokens, input.policyMaxOutputTokens),
-  );
+  const policyOut = input.policyMaxOutputTokens ?? Infinity;
+  const taskOut = input.taskMaxOutputTokens ?? Infinity;
+  const answerCeiling = Math.min(policyOut, taskOut);
 
+  let outputCeiling: number;
+  let outputSource: TokenBudget['outputSource'];
+  if (Number.isFinite(answerCeiling)) {
+    const withHeadroom =
+      answerCeiling + REASONING_HEADROOM_TOKENS[input.reasoningEffort ?? 'none'];
+    if (withHeadroom < input.modelMaxOutputTokens) {
+      outputCeiling = withHeadroom;
+      outputSource = taskOut <= policyOut ? 'task' : 'policy';
+    } else {
+      outputCeiling = input.modelMaxOutputTokens;
+      outputSource = 'model';
+    }
+  } else {
+    outputCeiling = input.modelMaxOutputTokens;
+    outputSource = 'model';
+  }
+
+  const outputReserve = Math.min(outputCeiling, OUTPUT_RESERVE_TOKENS);
   const fromModel =
-    input.contextWindowTokens - maxOutputTokens - SAFETY_MARGIN_TOKENS;
+    input.contextWindowTokens - outputReserve - SAFETY_MARGIN_TOKENS;
+  const policyIn = input.policyMaxInputTokens ?? Infinity;
+  const inputSource: TokenBudget['inputSource'] =
+    policyIn < fromModel ? 'policy' : 'model';
 
   return {
-    availableInputTokens: Math.max(
-      0,
-      Math.min(fromModel, input.policyMaxInputTokens),
-    ),
-    maxOutputTokens,
+    availableInputTokens: Math.max(0, Math.min(fromModel, policyIn)),
+    maxOutputTokens: Math.max(0, outputCeiling),
+    contextWindowTokens: input.contextWindowTokens,
+    outputSource,
+    inputSource,
   };
+}
+
+/**
+ * The completion to request for a prompt of `promptTokens`: the budget's
+ * ceiling, shrunk to what the context window has left once the prompt is in
+ * it (issue #436). Never negative.
+ */
+export function outputTokensForPrompt(
+  budget: TokenBudget,
+  promptTokens: number,
+): number {
+  return Math.max(
+    0,
+    Math.min(
+      budget.maxOutputTokens,
+      budget.contextWindowTokens - promptTokens - SAFETY_MARGIN_TOKENS,
+    ),
+  );
 }
 
 /**

@@ -79,6 +79,7 @@ describeWithDb('ask.respond (real Postgres)', () => {
       reasoningEffort: 'low',
       countTokens: (t: string) => Math.ceil(t.length / 4),
       descriptor: { id: 'gpt-test', contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
+      modelLimits: { contextWindowTokens: 128_000, maxOutputTokens: 16_000 },
       policy: { providers: {}, maxInputTokens: 100_000, maxOutputTokens: 16_000, requestTimeoutMs: 120_000 },
       source: 'task',
       keyConfigured: true,
