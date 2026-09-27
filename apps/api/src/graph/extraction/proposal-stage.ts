@@ -16,6 +16,9 @@
 // stage. A stage writes ONLY `kg_proposal_items` rows of `ctx.proposalId` and
 // their `kg_evidence` rows — never the graph itself (§8: nothing enters the
 // graph except through a reviewed commit).
+//
+// #387: `kg.import` runs the same stages over an `import` proposal, with
+// `noteId: null` — a stage that keys on the note must skip that part.
 // =============================================================================
 
 import { Injectable, Logger } from '@nestjs/common';
@@ -30,7 +33,8 @@ export type ResolvedTaskModel = AiModelResolution;
 export interface ProposalStageContext {
   proposalId: string;
   userId: string;
-  noteId: string;
+  /** The extracted note; null for an import proposal (#387), which has none. */
+  noteId: string | null;
   /** #369 — thresholds, resolution mode, adjudication switch. */
   preferences: GraphPreferences;
   /** Resolver result for `graph.adjudicate`; null — a stage resolves lazily. */
