@@ -61,6 +61,17 @@ describe('ProposalItemEditor', () => {
     });
   });
 
+  it('clears a retired value by removing it from the saved payload (#442)', async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor(item(ITEM.sarah));
+    const dialog = screen.getByRole('dialog', { name: 'Edit Sarah Chen' });
+    await user.click(within(dialog).getByRole('button', { name: 'Clear retired value: Job title' }));
+    expect(within(dialog).queryByRole('textbox', { name: 'Job title' })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ ref: 'e1', props: {} }));
+    expect(onSave.mock.lastCall?.[0].props).not.toHaveProperty('title');
+  });
+
   it('renders a type added to the ontology with no component change', () => {
     const ontology = mockGraphOntology();
     const person = ontology.entityTypes.find((type) => type.key === 'Person')!;

@@ -169,6 +169,28 @@ describe('GraphEntityPage — edit', () => {
     expect(briefReads.at(-1)?.url.searchParams.get('markViewed')).toBe('false');
   });
 
+  it('clears a retired value and sends it as null (#442)', async () => {
+    const user = userEvent.setup();
+    let body: unknown = null;
+    server.use(
+      http.patch('*/api/graph/entities/:id', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({ data: { id: JOE_ID } });
+      }),
+    );
+    renderEntity();
+    await pageReady();
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog', { name: /Edit Joe Rivera/ });
+    await user.click(within(dialog).getByRole('button', { name: 'Clear retired value: Job title' }));
+    expect(within(dialog).queryByRole('textbox', { name: 'Job title' })).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(body).toEqual({ props: { title: null } });
+  });
+
   it('shows a save error inline and keeps the dialog open', async () => {
     const user = userEvent.setup();
     server.use(
