@@ -28,6 +28,8 @@ import { GraphPreferencesService } from './preferences/graph-preferences.service
 import { GraphRdfController } from './rdf/graph-rdf.controller';
 import { GraphRdfService } from './rdf/graph-rdf.service';
 import { KgPurgeService } from './purge/kg-purge.service';
+import { KgMigrateHandler } from './migrate/kg-migrate.handler';
+import { KgMigrateRepository } from './migrate/kg-migrate.repository';
 import { GraphEvidenceService } from './read/graph-evidence.service';
 import { GraphNeighborhoodService } from './read/graph-neighborhood.service';
 import { GraphReadController } from './read/graph-read.controller';
@@ -101,6 +103,11 @@ import { GraphWriteService } from './write/graph-write.service';
     EntityBriefService,
     // #385 — the generated OWL/RDFS and SHACL artefacts (ETag + LRU).
     GraphRdfService,
+    // #384 — `kg.migrate`: per-user reshaping of rows on an ontology bump.
+    // `KG_MIGRATE_DEFINITION` is deliberately NOT provided: the handler falls
+    // back to the shipped definition, and only a test injects a fixture one.
+    KgMigrateRepository,
+    KgMigrateHandler,
   ],
   controllers: [
     GraphController,
