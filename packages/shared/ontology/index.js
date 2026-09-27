@@ -8,7 +8,7 @@
 // fails when the committed output is stale.
 // =============================================================================
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ONTOLOGY = exports.extractableRelationTypes = exports.extractableEntityTypes = exports.buildPropsJsonSchema = exports.validateProps = exports.buildPropsSchema = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.kvNamespace = exports.expandCurie = exports.RDF_PREFIXES = exports.KV_PREFIX = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
+exports.ONTOLOGY = exports.extractableRelationTypes = exports.extractableEntityTypes = exports.buildPropsJsonSchema = exports.parseOntologyVersion = exports.migrationsBetween = exports.isOntologyVersion = exports.isMajorOntologyVersion = exports.compareOntologyVersions = exports.checkOntologyMigrations = exports.applyMigrationSteps = exports.ONTOLOGY_MIGRATIONS = exports.validateProps = exports.buildPropsSchema = exports.toEffectiveSchemaPayload = exports.buildOntologyRegistry = exports.SHIPPED_KEYS = exports.kvNamespace = exports.expandCurie = exports.RDF_PREFIXES = exports.KV_PREFIX = exports.ONTOLOGY_VERSION = exports.CHANGELOG = exports.OntologyDefinitionError = exports.defineRelationType = exports.defineEntityType = exports.defineDomain = exports.VALID_PRECISIONS = exports.USER_ATTRIBUTE_KEY_PREFIX = exports.SENSITIVITIES = exports.PSEUDO_TYPES = exports.ITEM_KINDS = exports.DOMAIN_KEYS = exports.DEFAULT_ENABLED_DOMAINS = exports.ATTRIBUTE_KINDS = void 0;
 exports.computeEffectiveSchema = computeEffectiveSchema;
 var constants_js_1 = require("./constants.js");
 Object.defineProperty(exports, "ATTRIBUTE_KINDS", { enumerable: true, get: function () { return constants_js_1.ATTRIBUTE_KINDS; } });
@@ -41,6 +41,15 @@ Object.defineProperty(exports, "toEffectiveSchemaPayload", { enumerable: true, g
 var props_schema_js_1 = require("./props-schema.js");
 Object.defineProperty(exports, "buildPropsSchema", { enumerable: true, get: function () { return props_schema_js_1.buildPropsSchema; } });
 Object.defineProperty(exports, "validateProps", { enumerable: true, get: function () { return props_schema_js_1.validateProps; } });
+var migrations_js_1 = require("./migrations.js");
+Object.defineProperty(exports, "ONTOLOGY_MIGRATIONS", { enumerable: true, get: function () { return migrations_js_1.ONTOLOGY_MIGRATIONS; } });
+Object.defineProperty(exports, "applyMigrationSteps", { enumerable: true, get: function () { return migrations_js_1.applyMigrationSteps; } });
+Object.defineProperty(exports, "checkOntologyMigrations", { enumerable: true, get: function () { return migrations_js_1.checkOntologyMigrations; } });
+Object.defineProperty(exports, "compareOntologyVersions", { enumerable: true, get: function () { return migrations_js_1.compareOntologyVersions; } });
+Object.defineProperty(exports, "isMajorOntologyVersion", { enumerable: true, get: function () { return migrations_js_1.isMajorOntologyVersion; } });
+Object.defineProperty(exports, "isOntologyVersion", { enumerable: true, get: function () { return migrations_js_1.isOntologyVersion; } });
+Object.defineProperty(exports, "migrationsBetween", { enumerable: true, get: function () { return migrations_js_1.migrationsBetween; } });
+Object.defineProperty(exports, "parseOntologyVersion", { enumerable: true, get: function () { return migrations_js_1.parseOntologyVersion; } });
 var json_schema_js_1 = require("./json-schema.js");
 Object.defineProperty(exports, "buildPropsJsonSchema", { enumerable: true, get: function () { return json_schema_js_1.buildPropsJsonSchema; } });
 Object.defineProperty(exports, "extractableEntityTypes", { enumerable: true, get: function () { return json_schema_js_1.extractableEntityTypes; } });
