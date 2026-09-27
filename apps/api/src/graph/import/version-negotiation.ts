@@ -39,8 +39,8 @@ import {
   type OntologyRegistry,
 } from '@app/shared/ontology';
 
-import { OWL, RDF, attributeIri, classIri, itemStatusIri, relationIri } from '../rdf/iris';
-import { kindDatatype } from '../rdf/ontology-rdf-model';
+import { OWL, RDF, attributeIri, classIri, itemStatusIri, relationIri, relationPropIri } from '../rdf/iris';
+import { kindDatatype, typeAttributes } from '../rdf/ontology-rdf-model';
 import type { ImportQuad, ImportTerm } from './import-dataset';
 
 const RDF_TYPE = `${RDF}type`;
@@ -118,6 +118,18 @@ export function migrateQuads(
 ): ImportQuad[] {
   let out: ImportQuad[] = quads.slice();
   const typeIri = (key: string) => safe(() => classIri(ns, key));
+  // An attribute's IRI is its alignment when it declares one (`schema:jobTitle`),
+  // exactly as the export writes it — for an entity/item type or a relation prop.
+  const attrIri = (typeKey: string, key: string): string | undefined => {
+    const type = registry.entityType(typeKey);
+    if (type) {
+      const spec = typeAttributes(registry, type).find((a) => a.key === key)?.spec;
+      return safe(() => attributeIri(ns, typeKey, key, spec?.alignment));
+    }
+    const relation = registry.relationType(typeKey);
+    if (relation) return safe(() => relationPropIri(ns, typeKey, key, relation.props[key]?.alignment));
+    return safe(() => attributeIri(ns, typeKey, key));
+  };
   for (const migration of migrations) {
     for (const step of migration.steps) {
       switch (step.op) {
@@ -151,14 +163,14 @@ export function migrateQuads(
           break;
         }
         case 'rename_attribute': {
-          const from = safe(() => attributeIri(ns, step.typeKey, step.from));
-          const to = safe(() => attributeIri(ns, step.typeKey, step.to));
+          const from = attrIri(step.typeKey, step.from);
+          const to = attrIri(step.typeKey, step.to);
           if (!from || !to) break;
           out = out.map((q) => (q.p === from ? { s: q.s, p: to, o: q.o } : q));
           break;
         }
         case 'drop_attribute': {
-          const iri = safe(() => attributeIri(ns, step.typeKey, step.key));
+          const iri = attrIri(step.typeKey, step.key);
           if (iri) out = out.filter((q) => q.p !== iri);
           break;
         }
@@ -176,7 +188,7 @@ export function migrateQuads(
           break;
         }
         case 'coerce_attribute': {
-          const iri = safe(() => attributeIri(ns, step.typeKey, step.key));
+          const iri = attrIri(step.typeKey, step.key);
           if (!iri) break;
           const one: OntologyMigration = { ...migration, steps: [step] };
           const datatype = kindDatatype(step.to) ?? 'http://www.w3.org/2001/XMLSchema#string';
