@@ -44,12 +44,12 @@ export const aiConfigModelSchema = z.object({
   contextWindowTokens: z
     .number()
     .describe(
-      "The EFFECTIVE context window: the model's own, already narrowed by this deployment's token policy. A client never has to compute the minimum itself.",
+      "The EFFECTIVE context window: the model's own, narrowed by this deployment's token policy (the same budget every request computes, issue #436). A client never has to compute it itself.",
     ),
   maxOutputTokens: z
     .number()
     .describe(
-      "The EFFECTIVE output ceiling: the model's own, already narrowed by this deployment's policy.",
+      "The EFFECTIVE output ceiling: the model's own, or this deployment's typed cap plus the reasoning effort's headroom when that is smaller (issue #436). A request with a large prompt is given less — whatever the window has left.",
     ),
   structuredOutput: z
     .boolean()
@@ -140,10 +140,16 @@ export const aiConfigSchema = z.object({
     ),
   maxInputTokens: z
     .number()
-    .describe("This deployment's ceiling on the assembled prompt, in tokens."),
+    .nullable()
+    .describe(
+      "This deployment's optional spend cap on the assembled prompt, in tokens, or `null` (the default since issue #436) when each model's own context window governs. Read each model's effective numbers rather than this.",
+    ),
   maxOutputTokens: z
     .number()
-    .describe("This deployment's ceiling on one generation, in tokens."),
+    .nullable()
+    .describe(
+      "This deployment's optional spend cap on one answer, in tokens, or `null` (the default since issue #436) when each model's own output ceiling governs. Read each model's effective `maxOutputTokens` rather than this.",
+    ),
   keyConfigured: z
     .boolean()
     .describe(
