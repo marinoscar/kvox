@@ -65,7 +65,13 @@ describe('relation rules come from the effective schema, not a list', () => {
   it('WORKS_FOR/HAS_ROLE/REPORTS_TO are exclusive temporal; ATTENDED is not', () => {
     expect(['WORKS_FOR', 'HAS_ROLE', 'REPORTS_TO'].map((t) => isExclusiveTemporal(rule(t)))).toEqual([true, true, true]);
     expect(isExclusiveTemporal(rule('ATTENDED'))).toBe(false);
-    expect(rule('HAS_ROLE')).toEqual({ temporal: true, exclusive: 'soft', exclusiveScope: 'from_to', identityProps: ['title'] });
+    expect(rule('HAS_ROLE')).toEqual({
+      temporal: true,
+      exclusive: 'soft',
+      exclusiveScope: 'from_to',
+      identityProps: ['title'],
+      optionalIdentityProps: ['businessUnit'],
+    });
   });
 
   it('a fake type declared exclusive is treated as one', () => {
@@ -77,6 +83,22 @@ describe('relation rules come from the effective schema, not a list', () => {
     });
     expect(isExclusiveTemporal(fake)).toBe(true);
     expect(fake.identityProps).toEqual(['seat']);
+    expect(fake.optionalIdentityProps).toBeUndefined();
+  });
+
+  it('identity: true props become optionalIdentityProps; a required one stays strict (#440)', () => {
+    const fake = ruleForEffectiveRelation({
+      temporal: true,
+      exclusive: 'soft',
+      exclusiveScope: 'from_to',
+      props: [
+        { key: 'title', required: true } as never,
+        { key: 'unit', required: false, identity: true } as never,
+        { key: 'note', required: false } as never,
+      ],
+    });
+    expect(fake.identityProps).toEqual(['title']);
+    expect(fake.optionalIdentityProps).toEqual(['unit']);
   });
 });
 
@@ -128,6 +150,29 @@ describe('relationKnown (§8 known, §5.4 out-of-order)', () => {
     const engineer = edge('h1', '2019', null, 'year', 'HAS_ROLE', { title: 'Engineer' });
     const p = rel({ type: 'HAS_ROLE', props: { title: 'Staff Engineer' }, validFrom: '2026-03-01', precision: 'month' });
     expect(relationKnown([engineer], p, JOE, ACME, rule('HAS_ROLE')).known).toBe(false);
+  });
+
+  describe('HAS_ROLE business unit (#440)', () => {
+    const role = (props: Record<string, unknown>) => edge('h1', '2019', null, 'year', 'HAS_ROLE', props);
+    const later = (props: Record<string, unknown>) =>
+      rel({ type: 'HAS_ROLE', props, validFrom: '2026-03-01', precision: 'month' });
+    const restated = (props: Record<string, unknown>) => rel({ type: 'HAS_ROLE', props });
+
+    it('a move to another unit under the same title is a different fact', () => {
+      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], later({ title: 'VP', businessUnit: 'Finance' }), JOE, ACME, rule('HAS_ROLE')).known).toBe(false);
+    });
+
+    it('a statement adding a unit the stored role lacks is known (evidence attaches)', () => {
+      expect(relationKnown([role({ title: 'VP' })], restated({ title: 'VP', businessUnit: 'Supply Chain' }), JOE, ACME, rule('HAS_ROLE'))).toEqual({ known: true, edgeId: 'h1' });
+    });
+
+    it('a statement omitting the stored unit is known', () => {
+      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], restated({ title: 'VP' }), JOE, ACME, rule('HAS_ROLE'))).toEqual({ known: true, edgeId: 'h1' });
+    });
+
+    it('a title change under the same unit is still a different fact', () => {
+      expect(relationKnown([role({ title: 'VP', businessUnit: 'Supply Chain' })], later({ title: 'SVP', businessUnit: 'Supply Chain' }), JOE, ACME, rule('HAS_ROLE')).known).toBe(false);
+    });
   });
 });
 

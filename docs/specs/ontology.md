@@ -450,7 +450,7 @@ than no relation at all.
 |---|---|---|
 | `ATTENDED` | Person → Meeting | |
 | `WORKS_FOR` | Person → Organization | Temporal (§5.4); normally exclusive (soft) |
-| `HAS_ROLE` | Person → Organization | Props: `{ title, businessUnit? }` (`businessUnit` optional, #440 / ontology 1.2.0); temporal (§5.4), one edge per role period; normally exclusive (soft). Identity is `title` only — a move to another business unit under the same title restates the open edge rather than superseding it |
+| `HAS_ROLE` | Person → Organization | Props: `{ title, businessUnit? }` (`businessUnit` optional, #440 / ontology 1.2.0); temporal (§5.4), one edge per role period; normally exclusive (soft). Identity is `title` plus `businessUnit`, the latter declared `identity: true` (#440): a relation prop with that flag takes part in identity like a `required` one, except a null/absent value on either side matches anything — so `{VP, Supply Chain}` → `{VP, Finance}` is a new role that closes the old one, while `{VP}` and `{VP, Supply Chain}` are one fact (the evidence attaches; a unit the stored edge lacks is not written onto it) |
 | `REPORTS_TO` | Person → Person | Temporal (§5.4); normally exclusive (soft) |
 | `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
 | `DISCUSSED` | Meeting → Project | |
@@ -2181,6 +2181,10 @@ defineRelationType({
   // sensitivityDefault?: ...   // #383, default 'business' — the instances'
   //                            // sensitivity (every personal relation)
 });
+// A relation prop's `required: true` makes it part of the relation's
+// identity (§5.4: two edges differing in it are two facts). `identity: true`
+// (#440, relation props only, never with `required`/a list) adds a prop to
+// identity where null/absent matches anything — HAS_ROLE.businessUnit.
 ```
 
 **Closed by default.** A `props` object may carry only keys declared by the

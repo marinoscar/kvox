@@ -12,6 +12,9 @@ import {
   expandCurie,
   ONTOLOGY_MIGRATIONS,
   checkOntologyMigrations,
+  OntologyDefinitionError,
+  defineEntityType,
+  defineRelationType,
 } from '@app/shared/ontology';
 import type { EntityTypeSpec, OntologyMigration, RelationTypeSpec } from '@app/shared/ontology';
 
@@ -388,6 +391,73 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
     expect(relationTypes.filter((r) => r.symmetric === true).map((r) => r.key)).toEqual(['SPOUSE_OF', 'FRIEND_OF']);
 
     expect(failures).toEqual([]);
+  });
+
+  describe('rule 18 (#440): an `identity` prop flag is only on a relation prop, never required, never a list', () => {
+    it('holds for every shipped declaration, and HAS_ROLE.businessUnit is the one identity prop', () => {
+      const failures: string[] = [];
+      const identityProps: string[] = [];
+      for (const r of relationTypes) {
+        for (const [key, spec] of Object.entries(r.props)) {
+          if (spec.identity !== true) continue;
+          identityProps.push(`${r.key}.${key}`);
+          if (spec.required) failures.push(`rule 18: ${r.key}.${key} is required and also identity: true`);
+          if (spec.list || spec.kind === 'multi_select') failures.push(`rule 18: ${r.key}.${key} is a list and identity: true`);
+        }
+      }
+      for (const t of entityTypes) {
+        for (const [key, spec] of Object.entries(t.attributes)) {
+          if (spec.identity !== undefined) failures.push(`rule 18: entity attribute ${t.key}.${key} declares identity`);
+        }
+      }
+      for (const d of ONTOLOGY.domains()) {
+        for (const mixin of d.mixins) {
+          for (const [key, spec] of Object.entries(mixin.attributes)) {
+            if (spec.identity !== undefined) failures.push(`rule 18: mixin attribute ${mixin.entityType}.${key} declares identity`);
+          }
+        }
+      }
+      expect(failures).toEqual([]);
+      expect(identityProps).toEqual(['HAS_ROLE.businessUnit']);
+    });
+
+    const base: RelationTypeSpec = {
+      key: 'TEST_REL',
+      domain: 'work',
+      label: 'Test',
+      description: 'A relation declared only by this test.',
+      from: ['Person'],
+      to: ['Organization'],
+      temporal: false,
+      exclusive: 'none',
+      props: {},
+      representation: { kind: 'edge' },
+      extractable: true,
+    };
+    const prop = { kind: 'text' as const, label: 'Unit', description: 'A unit.' };
+
+    it('accepts identity: true on an optional single-valued relation prop', () => {
+      expect(defineRelationType({ ...base, props: { unit: { ...prop, identity: true } } }).props.unit.identity).toBe(true);
+    });
+
+    it.each<[string, RelationTypeSpec['props']]>([
+      ['a required prop', { unit: { ...prop, identity: true, required: true } }],
+      ['a list prop', { unit: { ...prop, identity: true, list: true } }],
+      ['a non-boolean value', { unit: { ...prop, identity: 'yes' as unknown as boolean } }],
+    ])('refuses identity on %s', (_label, props) => {
+      expect(() => defineRelationType({ ...base, props })).toThrow(OntologyDefinitionError);
+    });
+
+    it('refuses identity on an entity attribute', () => {
+      const person = ONTOLOGY.entityType('Person')! as EntityTypeSpec;
+      expect(() =>
+        defineEntityType({
+          ...JSON.parse(JSON.stringify(person)),
+          key: 'TestThing',
+          attributes: { unit: { ...prop, identity: true } },
+        }),
+      ).toThrow(OntologyDefinitionError);
+    });
   });
 
   it('rule 13 (#383, §17.2): every personal-domain type and relation defaults to "personal" sensitivity, and the domain is off by default', () => {

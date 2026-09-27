@@ -140,6 +140,7 @@ exports.workDomain = (0, define_js_1.defineDomain)({
                     label: 'Business unit',
                     description: 'The business unit, division, practice or department within the organization this role sits in, e.g. "Supply Chain", only if the source states it.',
                     extractable: true,
+                    identity: true,
                 },
             },
             representation: { kind: 'edge' },

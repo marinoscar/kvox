@@ -304,6 +304,40 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     expect(still.upper_inf).toBe(true);
   });
 
+  it('HAS_ROLE business unit (#440): a unit move under the same title closes the old role; a statement adding the unit is known', async () => {
+    const user = await createUser();
+    const note = await createNote(user.id);
+    const joe = await entity(user.id, 'Person', 'Joe');
+    const microsoft = await entity(user.id, 'Organization', 'Microsoft');
+    const supplyChain = await relation(user.id, 'HAS_ROLE', joe, microsoft, '[2019-01-01,)', 'year', { title: 'VP', businessUnit: 'Supply Chain' });
+
+    // A move to Finance, same title: a new fact that closes the Supply Chain role.
+    const move = await proposal(user.id, note.id);
+    await row(move.id, user.id, 'entity', entityPayload('e1', 'Person', 'Joe'), { resolution: linked(joe) });
+    await row(move.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Microsoft'), { resolution: linked(microsoft) });
+    await row(move.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Finance' }, validFrom: '2026-03-01', precision: 'month' }));
+    await runAll(ctx(move.id, user.id, note.id));
+    const moved = await rows(move.id);
+    expect(moved.find((i) => i.kind === 'relation')!.payload).toMatchObject({ dedup: { verdict: 'new' } });
+    const closings = moved.filter((i) => i.kind === 'closing');
+    expect(closings).toHaveLength(1);
+    expect(closings[0].payload).toMatchObject({ relationId: supplyChain, roleTitle: 'VP', roleBusinessUnit: 'Supply Chain', closeAt: '2026-03-01' });
+
+    // A title-only role, restated with a unit: the same fact — known, evidence attaches, nothing closes.
+    const annie = await entity(user.id, 'Person', 'Annie');
+    const vp = await relation(user.id, 'HAS_ROLE', annie, microsoft, '[2019-01-01,)', 'year', { title: 'VP' });
+    const note2 = await createNote(user.id);
+    const restate = await proposal(user.id, note2.id);
+    await row(restate.id, user.id, 'entity', entityPayload('e1', 'Person', 'Annie'), { resolution: linked(annie) });
+    await row(restate.id, user.id, 'entity', entityPayload('e2', 'Organization', 'Microsoft'), { resolution: linked(microsoft) });
+    await row(restate.id, user.id, 'relation', relPayload({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Supply Chain' } }));
+    await runAll(ctx(restate.id, user.id, note2.id));
+    const restated = await rows(restate.id);
+    const rel = restated.find((i) => i.kind === 'relation')!;
+    expect(rel.payload).toMatchObject({ dedup: { verdict: 'known', targetRelationId: vp } });
+    expect(restated.some((i) => i.kind === 'closing')).toBe(false);
+  });
+
   it('a 2020 fact inside an accepted [2019, 2026) WORKS_FOR is known, never a closing', async () => {
     const user = await createUser();
     const note = await createNote(user.id);

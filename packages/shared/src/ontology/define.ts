@@ -86,7 +86,12 @@ export function checkAttributeOptions(where: string, kind: string, options: Attr
   }
 }
 
-function checkAttributes(owner: string, attributes: Record<string, AttributeSpec> | undefined, field: string): void {
+function checkAttributes(
+  owner: string,
+  attributes: Record<string, AttributeSpec> | undefined,
+  field: string,
+  relationProps = false,
+): void {
   if (attributes === null || typeof attributes !== 'object' || Array.isArray(attributes)) {
     fail(owner, `${field} must be an object (use {} for none)`);
   }
@@ -109,6 +114,16 @@ function checkAttributes(owner: string, attributes: Record<string, AttributeSpec
       fail(where, 'multi_select is already a list; do not also set list: true');
     }
     checkAttributeOptions(where, spec.kind, spec.options);
+    if (spec.identity !== undefined) {
+      if (typeof spec.identity !== 'boolean') fail(where, 'identity, when given, must be a boolean');
+      if (spec.identity && !relationProps) fail(where, 'identity is only valid on a relation prop');
+      if (spec.identity && spec.required) {
+        fail(where, 'a required prop is already part of the identity; do not also set identity: true');
+      }
+      if (spec.identity && (spec.list || spec.kind === 'multi_select')) {
+        fail(where, 'an identity prop must be a single value (not a list or multi_select)');
+      }
+    }
     if (spec.deprecated !== undefined) checkDeprecation(where, spec.deprecated);
   }
 }
@@ -236,7 +251,7 @@ export function defineRelationType(spec: RelationTypeSpec): Readonly<RelationTyp
   }
   if (typeof spec.extractable !== 'boolean') fail(where, 'extractable must be a boolean');
   if (spec.extractable && rep.kind !== 'edge') fail(where, "only an 'edge' relation can be extractable");
-  checkAttributes(where, spec.props, 'props');
+  checkAttributes(where, spec.props, 'props', true);
   if (spec.deprecated !== undefined) checkDeprecation(where, spec.deprecated);
 
   return deepFreeze(clone(spec));

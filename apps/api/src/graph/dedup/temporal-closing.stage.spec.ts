@@ -114,6 +114,27 @@ describe('temporal-closing stage', () => {
     expect(ctx.stats).toMatchObject({ closings: 1, overlaps: 0 });
   });
 
+  it('a business-unit move under the same title closes the old role and names its unit (#440)', async () => {
+    const { db, stage } = build([edge({ type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Supply Chain' } })]);
+    db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: ACME }, props: { title: 'VP', businessUnit: 'Finance' } }));
+    await stage.run(db.ctx());
+    const closings = db.closings();
+    expect(closings).toHaveLength(1);
+    expect(closings[0].payload).toMatchObject({ relationId: EDGE, roleTitle: 'VP', roleBusinessUnit: 'Supply Chain', closeAt: '2026-03-01' });
+  });
+
+  it('a HAS_ROLE restatement that only omits (or adds) the unit closes nothing (#440)', async () => {
+    for (const [stored, stated] of [
+      [{ title: 'VP', businessUnit: 'Supply Chain' }, { title: 'VP' }],
+      [{ title: 'VP' }, { title: 'VP', businessUnit: 'Supply Chain' }],
+    ]) {
+      const { db, stage } = build([edge({ type: 'HAS_ROLE', props: stored })]);
+      db.add('relation', rel({ type: 'HAS_ROLE', to: { entityId: ACME }, props: stated }));
+      await stage.run(db.ctx());
+      expect(db.closings()).toHaveLength(0);
+    }
+  });
+
   it('a manager change closes the old REPORTS_TO edge', async () => {
     const { db, stage } = build([edge({ type: 'REPORTS_TO', toId: JANE, from: '2020' })]);
     db.add('relation', rel({ type: 'REPORTS_TO', to: { entityId: WILL } }));

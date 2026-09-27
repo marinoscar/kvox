@@ -36,6 +36,7 @@ exports.CHANGELOG = Object.freeze([
         date: '2026-09-27',
         changes: Object.freeze([
             'work: HAS_ROLE gains optional businessUnit; WORKS_FOR is the employer, HAS_ROLE the role/unit; Person.title deprecated in their favour (#440)',
+            'relation prop `identity` flag: HAS_ROLE.businessUnit takes part in the role\'s identity (a unit change is a new role; an omitted unit matches any) (#440)',
         ]),
     }),
 ]);

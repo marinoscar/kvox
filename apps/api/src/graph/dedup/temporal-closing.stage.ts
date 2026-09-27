@@ -146,12 +146,14 @@ export class TemporalClosingStage implements ProposalStage, OnModuleInit {
 
         const labels = await this.graph.entityLabels(userId, [edge.fromId, edge.toId]);
         const title = edge.props.title;
+        const unit = edge.props.businessUnit;
         const payload: ClosingPayload = {
           relationId: edge.id,
           relationType: edge.type,
           fromLabel: labels.get(edge.fromId)?.label ?? '',
           toLabel: labels.get(edge.toId)?.label ?? '',
           roleTitle: typeof title === 'string' && title.trim() ? title.trim() : null,
+          ...(typeof unit === 'string' && unit.trim() ? { roleBusinessUnit: unit.trim() } : {}),
           previousValid: {
             from: edge.valid?.from ? isoDay(edge.valid.from) : null,
             to: edge.valid?.to ? isoDay(edge.valid.to) : null,
