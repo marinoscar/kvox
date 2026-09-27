@@ -87,12 +87,13 @@ describe('AddToGraphDialog — entity', () => {
 
     await user.clear(screen.getByRole('textbox', { name: 'Name' }));
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Sarah Chen');
-    await user.type(screen.getByRole('textbox', { name: 'Role' }), 'CTO');
+    // Person's `title` is retired (1.2.0, #440): a new Person offers no field for it.
+    expect(screen.queryByRole('textbox', { name: 'Job title' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(lastAddBody()).toEqual({
       kind: 'entity',
-      payload: { type: 'Person', label: 'Sarah Chen', aliases: [], props: { title: 'CTO' }, occurredAt: null },
+      payload: { type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, occurredAt: null },
       evidence: [{ source: 'note', noteVersion: 3, charStart: 9, charEnd: 21, quote: 'Sarah** Chen' }],
     });
     expect(onAdded.mock.calls[0][0].item.origin).toBe('user');

@@ -37,7 +37,7 @@ const EMAIL_PREFIX = 'kg-extract-test';
 const ANSWER = {
   meeting: { topics: ['throughput'] },
   entities: [
-    { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: { title: 'VP of Operations' }, evidence: [{ source: 's1', quote: "I'm Sarah Chen" }] },
+    { ref: 'e1', type: 'Person', label: 'Sarah Chen', aliases: [], props: {}, evidence: [{ source: 's1', quote: "I'm Sarah Chen" }] },
     { ref: 'e2', type: 'Organization', label: 'Northwind Robotics', aliases: ['NWR'], props: { website: null }, evidence: [{ source: 's1', quote: 'Northwind Robotics' }] },
     { ref: 'e3', type: 'Project', label: 'Invented', aliases: [], props: {}, evidence: [{ source: 's42', quote: 'never handed out' }] },
   ],

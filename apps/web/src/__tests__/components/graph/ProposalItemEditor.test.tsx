@@ -40,9 +40,11 @@ describe('ProposalItemEditor', () => {
     const user = userEvent.setup();
     const { onSave, baseElement } = renderEditor(item(ITEM.sarah));
     const dialog = screen.getByRole('dialog', { name: 'Edit Sarah Chen' });
-    // `Role` (key `title`) is the `work` domain's mixin on Person — never hand-coded.
-    const jobTitle = within(dialog).getByRole('textbox', { name: 'Role' });
+    // `Job title` (key `title`) is the `work` domain's mixin on Person — never hand-coded.
+    // Retired in 1.2.0 (#440): a stored value is still shown, read-only, and kept on save.
+    const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
     expect(jobTitle).toHaveValue('Head of Platform');
+    expect(jobTitle).toBeDisabled();
     expect(await axe(baseElement, AXE_OPTIONS)).toHaveNoViolations();
 
     const name = within(dialog).getByRole('textbox', { name: 'Name' });
@@ -68,9 +70,10 @@ describe('ProposalItemEditor', () => {
       label: 'Vessel',
       pluralLabel: 'Vessels',
       attributes: [
-        { ...person.attributes[0], key: 'hullNumber', label: 'Hull number', kind: 'text' },
+        { ...person.attributes[0], deprecated: false, key: 'hullNumber', label: 'Hull number', kind: 'text' },
         {
           ...person.attributes[0],
+          deprecated: false,
           key: 'flag',
           label: 'Flag state',
           kind: 'select',
@@ -94,7 +97,7 @@ describe('ProposalItemEditor', () => {
     const dialog = screen.getByRole('dialog', { name: 'Change type of Sarah Chen' });
     await user.click(within(dialog).getByRole('combobox', { name: 'Type' }));
     await user.click(await screen.findByRole('option', { name: 'Organization' }));
-    expect(within(dialog).getByText('These fields will be dropped: Role')).toBeInTheDocument();
+    expect(within(dialog).getByText('These fields will be dropped: Job title')).toBeInTheDocument();
     expect(within(dialog).getByRole('textbox', { name: 'Website' })).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ type: 'Organization', props: {} }));

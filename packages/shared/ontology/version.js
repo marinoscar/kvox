@@ -35,7 +35,7 @@ exports.CHANGELOG = Object.freeze([
         version: '1.2.0',
         date: '2026-09-27',
         changes: Object.freeze([
-            'work: Person.company and Person.businessUnit attributes; Person.title relabelled "Role" (#440)',
+            'work: HAS_ROLE gains optional businessUnit; WORKS_FOR is the employer, HAS_ROLE the role/unit; Person.title deprecated in their favour (#440)',
         ]),
     }),
 ]);

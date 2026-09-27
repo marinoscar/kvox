@@ -103,7 +103,7 @@ export function goodAnswer(): RawAnswer {
         type: 'Person',
         label: 'Sarah Chen',
         aliases: ['Sarah'],
-        props: { title: 'VP of Operations' },
+        props: {},
         evidence: [{ source: 's1', quote: "I'm Sarah Chen, VP of Operations" }],
       },
       {

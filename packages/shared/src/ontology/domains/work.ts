@@ -111,7 +111,8 @@ export const workDomain = defineDomain({
       key: 'WORKS_FOR',
       domain: 'work',
       label: 'Works for',
-      description: 'A person is employed by, or works on behalf of, an organization.',
+      description:
+        'A person is employed by, or works on behalf of, an organization — the one way a person\'s employer is recorded: "Joe works for Microsoft" is Joe WORKS_FOR Microsoft (an Organization); his role and business unit there are a HAS_ROLE to the same Organization.',
       from: ['Person'],
       to: ['Organization'],
       temporal: true,
@@ -126,7 +127,8 @@ export const workDomain = defineDomain({
       key: 'HAS_ROLE',
       domain: 'work',
       label: 'Has role',
-      description: 'A person holds a titled role at an organization for a period of time.',
+      description:
+        'A person holds a titled role, optionally within a business unit, at an organization for a period of time: "Joe, VP of Supply Chain at Microsoft" is Joe HAS_ROLE Microsoft {title: "VP", businessUnit: "Supply Chain"}.',
       from: ['Person'],
       to: ['Organization'],
       temporal: true,
@@ -135,9 +137,16 @@ export const workDomain = defineDomain({
       props: {
         title: {
           kind: 'text',
-          label: 'Title',
+          label: 'Role',
           description: 'The job title the person holds in this role, e.g. "Staff Engineer".',
           required: true,
+          extractable: true,
+        },
+        businessUnit: {
+          kind: 'text',
+          label: 'Business unit',
+          description:
+            'The business unit, division, practice or department within the organization this role sits in, e.g. "Supply Chain", only if the source states it.',
           extractable: true,
         },
       },
@@ -260,30 +269,17 @@ export const workDomain = defineDomain({
     {
       entityType: 'Person',
       attributes: {
-        company: {
-          kind: 'text',
-          label: 'Company',
-          description:
-            'The name of the company or organization this person works for, exactly as the source states it (e.g. "EY"). Only if stated. When set, also propose a WORKS_FOR relation to that Organization.',
-          extractable: true,
-          sensitivity: 'business',
-        },
-        businessUnit: {
-          kind: 'text',
-          label: 'Business unit',
-          description:
-            'The business unit, division, practice or department the person belongs to within their company (e.g. "Consulting"), only if the source states it.',
-          extractable: true,
-          sensitivity: 'business',
-        },
         title: {
           kind: 'text',
-          label: 'Role',
-          description:
-            'The person\'s role or job title, e.g. "Managing Director", only if the source states it.',
-          extractable: true,
+          label: 'Job title',
+          description: "The person's job title, only if the source states it.",
+          extractable: false,
           sensitivity: 'business',
           alignment: 'schema:jobTitle',
+          deprecated: {
+            since: '1.2.0',
+            reason: 'A role belongs to the employment, not the person: it is recorded as HAS_ROLE.title (with HAS_ROLE.businessUnit) to the Organization (#440).',
+          },
         },
       },
     },
