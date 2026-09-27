@@ -87,7 +87,7 @@ describe('AddToGraphDialog — entity', () => {
 
     await user.clear(screen.getByRole('textbox', { name: 'Name' }));
     await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Sarah Chen');
-    await user.type(screen.getByRole('textbox', { name: 'Job title' }), 'CTO');
+    await user.type(screen.getByRole('textbox', { name: 'Role' }), 'CTO');
     await user.click(screen.getByRole('button', { name: 'Add to draft' }));
     await waitFor(() => expect(onAdded).toHaveBeenCalled());
     expect(lastAddBody()).toEqual({

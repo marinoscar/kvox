@@ -144,8 +144,8 @@ describe('GraphEntityPage — edit', () => {
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog', { name: /Edit Joe Rivera/ });
 
-    // "Job title" is Person's attribute in the shipped ontology — no per-type code.
-    const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
+    // "Role" (key `title`) is Person's attribute in the shipped ontology — no per-type code.
+    const jobTitle = within(dialog).getByRole('textbox', { name: 'Role' });
     expect(jobTitle).toHaveValue('VP Engineering');
 
     const name = within(dialog).getByRole('textbox', { name: /Name/ });
@@ -181,7 +181,7 @@ describe('GraphEntityPage — edit', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    const jobTitle = within(dialog).getByRole('textbox', { name: 'Job title' });
+    const jobTitle = within(dialog).getByRole('textbox', { name: 'Role' });
     await user.type(jobTitle, '!');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 

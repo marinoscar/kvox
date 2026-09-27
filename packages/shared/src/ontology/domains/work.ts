@@ -260,10 +260,27 @@ export const workDomain = defineDomain({
     {
       entityType: 'Person',
       attributes: {
+        company: {
+          kind: 'text',
+          label: 'Company',
+          description:
+            'The name of the company or organization this person works for, exactly as the source states it (e.g. "EY"). Only if stated. When set, also propose a WORKS_FOR relation to that Organization.',
+          extractable: true,
+          sensitivity: 'business',
+        },
+        businessUnit: {
+          kind: 'text',
+          label: 'Business unit',
+          description:
+            'The business unit, division, practice or department the person belongs to within their company (e.g. "Consulting"), only if the source states it.',
+          extractable: true,
+          sensitivity: 'business',
+        },
         title: {
           kind: 'text',
-          label: 'Job title',
-          description: "The person's job title, only if the source states it.",
+          label: 'Role',
+          description:
+            'The person\'s role or job title, e.g. "Managing Director", only if the source states it.',
           extractable: true,
           sensitivity: 'business',
           alignment: 'schema:jobTitle',

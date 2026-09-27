@@ -430,9 +430,10 @@ describe('ontology parity across the rules docs/specs/ontology.md §17 requires'
     });
 
     it('rule 14: a migration `to` missing from the CHANGELOG', () => {
-      const failures = check([{ ...def.migrations[0], to: '1.2.0' }]);
+      // A version no real or fixture CHANGELOG entry carries (1.2.0 shipped in #440).
+      const failures = check([{ ...def.migrations[0], to: '1.9.0' }]);
       expect(rules(failures)).toContain('rule 14');
-      expect(failures.join('\n')).toMatch(/1\.2\.0.*no CHANGELOG entry/);
+      expect(failures.join('\n')).toMatch(/1\.9\.0.*no CHANGELOG entry/);
     });
 
     it('rule 14: migrations out of order, and a pre-release version', () => {

@@ -16,7 +16,7 @@ exports[`generateOwl parses with n3 and matches the snapshot 1`] = `
 kv:
     a owl:Ontology ;
     rdfs:label "<APP_NAME> ontology" ;
-    owl:versionInfo "1.1.0" .
+    owl:versionInfo "1.2.0" .
 
 kv:ABOUT
     a owl:ObjectProperty ;
@@ -265,6 +265,20 @@ kv:Person
     rdfs:label "Person" ;
     rdfs:subClassOf schema:Person .
 
+kv:Person.businessUnit
+    a owl:DatatypeProperty ;
+    rdfs:comment "The business unit, division, practice or department the person belongs to within their company (e.g. \\"Consulting\\"), only if the source states it." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Business unit" ;
+    rdfs:range xsd:string .
+
+kv:Person.company
+    a owl:DatatypeProperty ;
+    rdfs:comment "The name of the company or organization this person works for, exactly as the source states it (e.g. \\"EY\\"). Only if stated. When set, also propose a WORKS_FOR relation to that Organization." ;
+    rdfs:domain kv:Person ;
+    rdfs:label "Company" ;
+    rdfs:range xsd:string .
+
 kv:PersonFact
     a owl:Class ;
     rdfs:comment "A statement about a Person as an individual rather than about their work: an interest, a preference, a personal-life detail, or their communication style." ;
@@ -437,8 +451,8 @@ kv:validPrecision
 
 schema:jobTitle
     a owl:DatatypeProperty ;
-    rdfs:comment "The person's job title, only if the source states it." ;
-    rdfs:label "Job title" ;
+    rdfs:comment "The person's role or job title, e.g. \\"Managing Director\\", only if the source states it." ;
+    rdfs:label "Role" ;
     schema:domainIncludes kv:Person ;
     schema:rangeIncludes xsd:string .
 
