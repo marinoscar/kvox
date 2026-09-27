@@ -41,10 +41,16 @@ const ttl = () => new File(['@prefix kv: <https://x.app/ns#> .'], 'contacts.ttl'
 
 describe('ImportGraphDialog', () => {
   it('explains that an import becomes a proposal, and uploads the chosen file', async () => {
-    let received: FormData | null = null;
+    let contentType: string | null = null;
+    let rawBody = '';
     server.use(
       http.post(`${API}/graph/imports`, async ({ request }) => {
-        received = await request.formData();
+        contentType = request.headers.get('Content-Type');
+        // Not `await request.formData()`: on Node 24 undici's multipart parser
+        // rejects a jsdom-realm `File` and MSW answers 500 — see the
+        // `postFormData` test in services/api.test.ts. Assert on the
+        // realm-independent parts instead: the header and the part name.
+        rawBody = await request.text();
         return HttpResponse.json({ data: { proposalId: PROPOSAL, jobId: 'b0000000-0000-4000-8000-0000000000bb' } }, { status: 202 });
       }),
     );
@@ -65,7 +71,8 @@ describe('ImportGraphDialog', () => {
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`/graph/imports/${PROPOSAL}`));
     expect(onClose).toHaveBeenCalled();
     // jsdom's File crosses into the fetch realm; that a `file` part arrived is what matters here.
-    expect((received as FormData | null)?.has('file')).toBe(true);
+    expect(contentType).toMatch(/^multipart\/form-data; boundary=/);
+    expect(rawBody).toContain('name="file"');
   });
 
   it('says so when another import is still being checked', async () => {
