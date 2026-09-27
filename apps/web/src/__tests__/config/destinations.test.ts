@@ -8,6 +8,7 @@ import {
   DESTINATIONS,
   DESTINATION_ROUTES,
   UNOWNED_ROUTES,
+  NO_DESTINATION_FEATURES,
   isDestinationVisible,
   owns,
   resolveActiveDestination,
@@ -142,20 +143,19 @@ describe('destinations — route ownership', () => {
   });
 });
 
-describe('destinations — the knowledge graph (#373)', () => {
-  it('lets `home` own every /graph route, with no bottom-bar tab of its own', () => {
-    expect(resolveActiveDestination('/graph')).toBe('home');
-    expect(resolveActiveDestination('/graph/entities/abc')).toBe('home');
-    expect(resolveActiveDestination('/graph/explore')).toBe('home');
-    expect(resolveActiveDestination('/graph/overview')).toBe('home');
-    expect(resolveActiveDestination('/graph/imports/abc')).toBe('home');
+describe('destinations — the knowledge graph (#373, #438)', () => {
+  it('lets `knowledge` own every /graph and /ask route, as a bottom-bar tab', () => {
+    expect(resolveActiveDestination('/graph')).toBe('knowledge');
+    expect(resolveActiveDestination('/graph/entities/abc')).toBe('knowledge');
+    expect(resolveActiveDestination('/graph/explore')).toBe('knowledge');
+    expect(resolveActiveDestination('/graph/overview')).toBe('knowledge');
+    expect(resolveActiveDestination('/graph/imports/abc')).toBe('knowledge');
     expect(resolveActiveDestination('/graphs')).toBeNull();
-    // #380 — Ask is owned by `home` too, and is no tab of its own.
-    expect(resolveActiveDestination('/ask')).toBe('home');
-    expect(resolveActiveDestination('/ask/abc-123')).toBe('home');
+    expect(resolveActiveDestination('/ask')).toBe('knowledge');
+    expect(resolveActiveDestination('/ask/abc-123')).toBe('knowledge');
     expect(resolveActiveDestination('/asking')).toBeNull();
-    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).not.toContain('/ask');
-    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).not.toContain('/graph');
+    expect(DESTINATION_ROUTES.home).toEqual(['/']);
+    expect(BOTTOM_BAR_DESTINATIONS.map((d) => d.path)).toContain('/graph');
   });
 });
 
@@ -224,7 +224,7 @@ describe('destinations — reachability regression', () => {
     }
   });
 
-  it('offers five destinations: Home, Transcripts, Notes, Settings and the merged Console', () => {
+  it('offers six destinations: Home, Transcripts, Notes, Knowledge, Settings and the merged Console', () => {
     // Three after #92 merged the two admin rows; four once #30 added a library
     // row; FIVE since #106 split that row into Transcripts and Notes. The
     // count grew and the BAR did not — Console is `pinned`, so it is the fifth
@@ -235,13 +235,14 @@ describe('destinations — reachability regression', () => {
     expect(DESTINATIONS.map((destination) => destination.path).sort()).toEqual([
       '/',
       '/admin/settings',
+      '/graph',
       '/notes',
       '/settings',
       '/transcripts',
     ]);
   });
 
-  it('keeps Home, Transcripts, Notes, Settings, Console as the declared ORDER', () => {
+  it('keeps Home, Transcripts, Notes, Knowledge, Settings, Console as the declared ORDER', () => {
     // Declaration order IS navigation order on the bottom bar and in the user
     // menu (the rail only lifts `pinned` rows to its foot). Sorting the array
     // above proves membership and says nothing about sequence, so the two
@@ -250,6 +251,7 @@ describe('destinations — reachability regression', () => {
       'home',
       'transcripts',
       'notes',
+      'knowledge',
       'settings',
       'console',
     ]);
@@ -279,13 +281,13 @@ describe('destinations — the table itself', () => {
     const holding = (granted: string[]) => (permission: string) =>
       granted.includes(permission);
 
-    expect(isDestinationVisible(consoleDestination, holding(['users:read']))).toBe(true);
+    expect(isDestinationVisible(consoleDestination, holding(['users:read']), NO_DESTINATION_FEATURES)).toBe(true);
     expect(
-      isDestinationVisible(consoleDestination, holding(['system_settings:read'])),
+      isDestinationVisible(consoleDestination, holding(['system_settings:read']), NO_DESTINATION_FEATURES),
     ).toBe(true);
-    expect(isDestinationVisible(consoleDestination, holding([]))).toBe(false);
+    expect(isDestinationVisible(consoleDestination, holding([]), NO_DESTINATION_FEATURES)).toBe(false);
     // The admin ROLE grants nothing here; only permissions do.
-    expect(isDestinationVisible(consoleDestination, holding(['rbac:manage']))).toBe(false);
+    expect(isDestinationVisible(consoleDestination, holding(['rbac:manage']), NO_DESTINATION_FEATURES)).toBe(false);
 
     // The two fields AND together when both are set — stated in the type's
     // comment, asserted here so the rule is not just prose.
@@ -294,9 +296,9 @@ describe('destinations — the table itself', () => {
       permission: 'users:write',
       anyPermission: ['users:read'],
     };
-    expect(isDestinationVisible(both, holding(['users:read']))).toBe(false);
-    expect(isDestinationVisible(both, holding(['users:write']))).toBe(false);
-    expect(isDestinationVisible(both, holding(['users:write', 'users:read']))).toBe(true);
+    expect(isDestinationVisible(both, holding(['users:read']), NO_DESTINATION_FEATURES)).toBe(false);
+    expect(isDestinationVisible(both, holding(['users:write']), NO_DESTINATION_FEATURES)).toBe(false);
+    expect(isDestinationVisible(both, holding(['users:write', 'users:read']), NO_DESTINATION_FEATURES)).toBe(true);
   });
 
   it('leaves Home and User Settings open to any authenticated user', () => {
@@ -322,11 +324,11 @@ describe('destinations — the table itself', () => {
 
     const holding = (granted: string[]) => (permission: string) =>
       granted.includes(permission);
-    expect(isDestinationVisible(byKey.transcripts, holding(['transcripts:read']))).toBe(true);
-    expect(isDestinationVisible(byKey.transcripts, holding(['notes:read']))).toBe(false);
-    expect(isDestinationVisible(byKey.transcripts, holding([]))).toBe(false);
+    expect(isDestinationVisible(byKey.transcripts, holding(['transcripts:read']), NO_DESTINATION_FEATURES)).toBe(true);
+    expect(isDestinationVisible(byKey.transcripts, holding(['notes:read']), NO_DESTINATION_FEATURES)).toBe(false);
+    expect(isDestinationVisible(byKey.transcripts, holding([]), NO_DESTINATION_FEATURES)).toBe(false);
     // The admin ROLE grants nothing here, exactly as for Console.
-    expect(isDestinationVisible(byKey.transcripts, holding(['rbac:manage']))).toBe(false);
+    expect(isDestinationVisible(byKey.transcripts, holding(['rbac:manage']), NO_DESTINATION_FEATURES)).toBe(false);
   });
 
   it('gates Notes on the ONE permission its controller enforces (#106)', () => {
@@ -340,10 +342,10 @@ describe('destinations — the table itself', () => {
 
     const holding = (granted: string[]) => (permission: string) =>
       granted.includes(permission);
-    expect(isDestinationVisible(byKey.notes, holding(['notes:read']))).toBe(true);
-    expect(isDestinationVisible(byKey.notes, holding(['transcripts:read']))).toBe(false);
-    expect(isDestinationVisible(byKey.notes, holding([]))).toBe(false);
-    expect(isDestinationVisible(byKey.notes, holding(['rbac:manage']))).toBe(false);
+    expect(isDestinationVisible(byKey.notes, holding(['notes:read']), NO_DESTINATION_FEATURES)).toBe(true);
+    expect(isDestinationVisible(byKey.notes, holding(['transcripts:read']), NO_DESTINATION_FEATURES)).toBe(false);
+    expect(isDestinationVisible(byKey.notes, holding([]), NO_DESTINATION_FEATURES)).toBe(false);
+    expect(isDestinationVisible(byKey.notes, holding(['rbac:manage']), NO_DESTINATION_FEATURES)).toBe(false);
   });
 
   it('labels the two content rows by what they front (#106)', () => {
@@ -397,10 +399,10 @@ describe('destinations — the table itself', () => {
     expect(DESTINATIONS.map((d) => d.key)).toContain('transcripts');
     expect(DESTINATIONS.map((d) => d.key)).not.toContain('library');
     expect(Object.keys(DESTINATION_ROUTES)).not.toContain('library');
-    expect(DESTINATIONS).toHaveLength(5);
+    expect(DESTINATIONS).toHaveLength(6);
   });
 
-  it('marks Console pinned and leaves the four content rows ordinary (#105, #106)', () => {
+  it('marks Settings and Console pinned and leaves the four content rows ordinary (#105, #106, #438)', () => {
     // The rail's foot section is driven entirely by this flag — see
     // `NavigationRail`'s `listDestinations`/`pinnedDestinations` split — and
     // since #106 so is the bottom bar's whole membership
@@ -413,7 +415,8 @@ describe('destinations — the table itself', () => {
     expect(byKey.home.pinned).toBeFalsy();
     expect(byKey.transcripts.pinned).toBeFalsy();
     expect(byKey.notes.pinned).toBeFalsy();
-    expect(byKey.settings.pinned).toBeFalsy();
+    expect(byKey.knowledge.pinned).toBeFalsy();
+    expect(byKey.settings.pinned).toBe(true);
   });
 
   it('declares Icon as a component, never as a rendered element', () => {
@@ -464,7 +467,7 @@ describe('destinations — the table itself', () => {
       'home',
       'transcripts',
       'notes',
-      'settings',
+      'knowledge',
     ]);
     // …and it is a SUBSET of the table, in the table's own order — the bar
     // never invents a destination or reorders one.

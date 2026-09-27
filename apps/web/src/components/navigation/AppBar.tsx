@@ -13,6 +13,9 @@ import {
   Brightness7 as LightModeIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
+import { usePermissions } from '../../hooks/usePermissions';
+import { DESTINATIONS, isDestinationVisible } from '../../config/destinations';
 import { APP_NAME } from '@app/shared';
 import { useThemeContext } from '../../contexts/ThemeContext';
 import { BrandMark } from '../common/BrandMark';
@@ -149,7 +152,9 @@ const DRILL_DOWN_ROUTES: {
   },
   // Knowledge graph (#373). MOST SPECIFIC FIRST. The title stays static, like
   // `Transcript` — the page's own <h1> names the entity. Up from the index is
-  // Home, because `home` owns `/graph` (config/destinations.ts).
+  // Home — but only while connected knowledge is OFF: when the `knowledge`
+  // destination is drawn (#438), `/graph` is a tab and keeps the wordmark, and
+  // `/ask` goes up to it. See `resolveDrillDown`'s `knowledgeIsTab`.
   {
     pattern: /^\/graph\/entities\/([^/]+)\/?$/,
     title: 'Knowledge',
@@ -179,7 +184,7 @@ const DRILL_DOWN_ROUTES: {
     upPath: () => '/',
   },
   // Ask (#380). A conversation goes up to the conversation list; `/ask`
-  // itself goes up to Home, which owns it (config/destinations.ts).
+  // itself goes up to Home when there is no Knowledge tab to go up to (#438).
   {
     pattern: /^\/ask\/([^/]+)\/?$/,
     title: 'Ask',
@@ -233,7 +238,7 @@ interface DrillDown {
  * guard has already had its say. Naming a page the user is looking at leaks
  * nothing the page itself does not.
  */
-function resolveDrillDown(pathname: string): DrillDown | null {
+function resolveDrillDown(pathname: string, knowledgeIsTab: boolean): DrillDown | null {
   for (const surface of SETTINGS_SURFACES) {
     const title = settingsPageTitle(
       surface.sections,
@@ -249,6 +254,16 @@ function resolveDrillDown(pathname: string): DrillDown | null {
       title,
       upPath: pathname === surface.hubPath ? '/' : surface.hubPath,
     };
+  }
+
+  // The Knowledge destination (#438). While it is DRAWN, `/graph` is a
+  // destination like `/transcripts` — wordmark, no back arrow, because the bar
+  // is already answering "where am I" — and `/ask` is a level below it. While
+  // it is hidden (connected knowledge off), neither is a tab, and the table
+  // below sends both up to Home as before.
+  if (knowledgeIsTab) {
+    if (/^\/graph\/?$/.test(pathname)) return null;
+    if (/^\/ask\/?$/.test(pathname)) return { title: 'Ask', upPath: '/graph' };
   }
 
   // Non-settings drill-downs (#30). Consulted AFTER the registries, so nothing
@@ -308,7 +323,12 @@ export function AppBar() {
   // a pure string lookup over a few dozen registry entries, and hoisting it out
   // of the branch keeps the two treatments a single render decision rather than
   // two code paths that can drift.
-  const drillDown = isCompactWindow ? resolveDrillDown(pathname) : null;
+  const { hasPermission } = usePermissions();
+  const { features } = useNavigationFeatures();
+  const knowledge = DESTINATIONS.find((d) => d.key === 'knowledge');
+  const knowledgeIsTab =
+    knowledge !== undefined && isDestinationVisible(knowledge, hasPermission, features);
+  const drillDown = isCompactWindow ? resolveDrillDown(pathname, knowledgeIsTab) : null;
 
   return (
     <MuiAppBar

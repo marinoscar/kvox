@@ -14,12 +14,14 @@ import { Logout as LogoutIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import { DESTINATIONS, isDestinationVisible } from '../../config/destinations';
 
 export function UserMenu() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const { user, logout } = useAuth();
   const { hasPermission } = usePermissions();
+  const { features } = useNavigationFeatures();
   const navigate = useNavigate();
 
   const open = Boolean(anchorEl);
@@ -60,10 +62,12 @@ export function UserMenu() {
   // below `sm`, since #106 took it off the bottom bar: a phone user reaches the
   // admin surface here, exactly as they reach sign-out here. Filtering pinned
   // rows out of this list — the "obvious" symmetry with `BottomNav` — would
-  // make Console unreachable on a phone altogether.
+  // make Console unreachable on a phone altogether — and, since #438 pinned
+  // Settings too, the user's own settings with it. Settings appears here ONCE,
+  // from this table; the menu has no hard-coded Settings row of its own.
   const menuDestinations = DESTINATIONS.filter(
     (destination) =>
-      destination.key !== 'home' && isDestinationVisible(destination, hasPermission),
+      destination.key !== 'home' && isDestinationVisible(destination, hasPermission, features),
   );
 
   const initials = user.displayName

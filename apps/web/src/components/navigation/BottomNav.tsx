@@ -10,7 +10,8 @@
  * it BY DESIGN rather than by coincidence: the bar draws
  * `BOTTOM_BAR_DESTINATIONS` — every destination the model does NOT mark
  * `pinned` — and there are exactly four of them (Home, Transcripts, Notes,
- * Settings). `showLabels` stays on only because of that; five labelled tabs do
+ * Knowledge; Settings became pinned in #438 to make room for Knowledge, on
+ * the Console precedent below). `showLabels` stays on only because of that; five labelled tabs do
  * not fit at 360px, so a fifth NON-PINNED destination is not an addition but a
  * redesign (an overflow tab, or labels off). A pinned one costs this bar
  * nothing, because the bar never draws pinned destinations at all.
@@ -26,7 +27,9 @@
  *
  * The tabs each user actually sees is still permission-dependent: `transcripts`
  * and `notes` are each gated on the one permission their controller enforces,
- * so a user holding neither sees two.
+ * and `knowledge` additionally on connected knowledge being switched on
+ * (`ai.graphEnabled`, #438) — so a deployment with it off draws three tabs,
+ * which `BottomNavigation` spreads across the width like four.
  *
  * ACTIVE STATE COMES FROM THE DESTINATION MODEL, NOT A PATH PREFIX
  * (`config/destinations.ts`). The `startsWith` chain this replaces would have
@@ -42,6 +45,7 @@ import {
 } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useNavigationFeatures } from '../../contexts/NavigationFeaturesContext';
 import {
   BOTTOM_BAR_DESTINATIONS,
   DESTINATIONS,
@@ -60,6 +64,7 @@ export function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { hasPermission } = usePermissions();
+  const { features } = useNavigationFeatures();
 
   if (!isCompactWindow) return null;
 
@@ -68,7 +73,7 @@ export function BottomNav() {
   // through `isDestinationVisible` rather than an inline `destination.permission`
   // test, because that is the one function that also knows about `anyPermission`.
   const visibleDestinations = BOTTOM_BAR_DESTINATIONS.filter((destination) =>
-    isDestinationVisible(destination, hasPermission),
+    isDestinationVisible(destination, hasPermission, features),
   );
 
   const resolved = resolveActiveDestination(location.pathname);

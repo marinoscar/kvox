@@ -12,6 +12,12 @@ vi.mock('../../../hooks/usePermissions', () => ({
 
 import { usePermissions } from '../../../hooks/usePermissions';
 
+// Connected knowledge ON, so the feature-gated `knowledge` row is listed
+// (#438) and the derived expectation below covers the whole table.
+vi.mock('../../../contexts/NavigationFeaturesContext', () => ({
+  useNavigationFeatures: () => ({ features: { graph: true }, refresh: vi.fn() }),
+}));
+
 const mockUsePermissions = vi.mocked(usePermissions);
 
 describe('UserMenu', () => {
@@ -496,7 +502,7 @@ describe('UserMenu', () => {
       // Console below `sm`. Deriving `expected` from the full table is what
       // makes this test fail if someone "aligns" the menu with the bar.
       setPermissions(
-        ['users:read', 'system_settings:read', 'transcripts:read', 'notes:read'],
+        ['users:read', 'system_settings:read', 'transcripts:read', 'notes:read', 'graph:read'],
         true,
       );
 
@@ -513,7 +519,8 @@ describe('UserMenu', () => {
       }
       // Stated literally as well as derived: a table that silently lost a row
       // would make the derived loop pass over whatever is left.
-      expect(expected).toEqual(['Transcripts', 'Notes', 'User Settings', 'Console']);
+      // Settings exactly once (#438 pinned it; the menu has no second row).
+      expect(expected).toEqual(['Transcripts', 'Notes', 'Knowledge', 'User Settings', 'Console']);
       // The destinations plus Logout, and nothing invented locally.
       expect(screen.getAllByRole('menuitem')).toHaveLength(expected.length + 1);
     });
