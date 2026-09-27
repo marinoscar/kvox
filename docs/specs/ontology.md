@@ -1836,8 +1836,11 @@ already accepted or rejected); an import also answers `graph_disabled`, and
 person…", the cited brief card, the connections list, the timeline with its
 sensitive-facts toggle, and mentions), `EvidenceChip`, speaker-chip person
 links, entity hits above library search results, and the Home "Knowledge"
-section — all described below, and all owned by the `home` destination as
-this section already specified. It was built against the **contracts** of
+section — all described below. **Since issue #438 these routes are owned by
+their own `knowledge` bottom-bar destination**, not by `home` as this
+section originally specified when issue #373 shipped — see
+`docs/specs/ux-refresh.md` §1 ("Knowledge becomes a destination"). It was
+built against the **contracts** of
 the read API (#370) and the entity brief (#372) with MSW, ahead of those
 routes landing on the API — the sections below describe the shipped design,
 not a plan. **The neighbourhood-canvas explorer (§22) is built too (issue
@@ -1878,29 +1881,38 @@ and `cytoscape` as rejected, once this document actually had to build the
 whole-graph overview (§22) and could no longer leave the neighbourhood
 widget's own library unstated without also leaving the overview's unstated.
 
-**Route ownership.** None of this needs a new bottom-bar destination (below),
-but every route this epic adds is still a route, and `apps/web/src/config/
-destinations.ts`'s own route-ownership test (verified above) fails an
-unowned one — so `/graph`, `/graph/entities/:id`, `/graph/explore`,
-`/graph/overview`, `/graph/imports/:proposalId` (#387, §18.3), `/ask`, and
-`/ask/:conversationId` (§21.5, §22) are all
-declared under the **`home`** destination's `DESTINATION_ROUTES` prefix: none
-of them is a natural extension of `transcripts`, `notes`, or `settings`, and
-`home` is already where a user arrives from before reaching any of the entry
-points below. `/settings/knowledge-graph` (below) is the one exception — a
-settings-card route, owned through `USER_SETTINGS_SECTIONS` the way every
-other settings route already is, not through `DESTINATION_ROUTES`.
+**Route ownership.** Every route this epic adds is still a route, and
+`apps/web/src/config/destinations.ts`'s own route-ownership test (verified
+above) fails an unowned one — so `/graph`, `/graph/entities/:id`,
+`/graph/explore`, `/graph/overview`, `/graph/imports/:proposalId` (#387,
+§18.3), `/ask`, and `/ask/:conversationId` (§21.5, §22) are all declared
+under a `DESTINATION_ROUTES` prefix. **Since issue #438** that prefix is the
+**`knowledge`** destination's own (`['/graph', '/ask']`); at the time issue
+#373 shipped, and until #438, they were declared under `home`'s prefix
+instead, because `home` was already where a user arrived from before
+reaching any of the entry points below and this feature did not yet warrant
+a bottom-bar slot of its own. `/settings/knowledge-graph` (below) remains
+the one exception — a settings-card route, owned through
+`USER_SETTINGS_SECTIONS` the way every other settings route already is, not
+through `DESTINATION_ROUTES`.
 
-**No new bottom-bar destination.** `apps/web/src/config/destinations.ts`
-(verified above) is at its four-tab ceiling by design — `home`,
-`transcripts`, `notes`, `settings`, with `console` pinned rather than
-occupying a fifth slot — and this document does not ask for a sixth. The
-graph and Ask are reached from within existing surfaces instead: a new
-**Knowledge** section on `HomePage.tsx` (verified above) surfacing recent
-entities, the "Waiting for review" card (§19.5), and an Ask entry point; the
-proposal panel on a note (§8, §19); an entity chip added to a transcript's
-speaker list (linking a named speaker to their `Person` page); and from
-search results that resolve to a graph entity.
+**A dedicated bottom-bar destination, since issue #438.**
+`apps/web/src/config/destinations.ts` (verified above) held to its
+four-tab ceiling by design at the time this section was first written —
+`home`, `transcripts`, `notes`, `settings`, with `console` pinned rather
+than occupying a fifth slot — and the graph and Ask were reached from
+within existing surfaces instead: the **Knowledge** section on
+`HomePage.tsx` (verified above) surfacing recent entities, the "Waiting for
+review" card (§19.5), and an Ask entry point; the proposal panel on a note
+(§8, §19); an entity chip added to a transcript's speaker list (linking a
+named speaker to their `Person` page); and search results that resolve to
+a graph entity. Issue #438 changes only *which* registry entry these
+surfaces route through — `knowledge` rather than `home` — and adds the
+bottom-bar tab itself, by pinning `settings` instead (the same move #106
+made for Console) rather than by breaching the four-tab ceiling; see
+`docs/specs/ux-refresh.md` §1. All of the entry points in this paragraph
+still exist unchanged — a user reaches the same graph either way, now
+through a labelled tab as well.
 
 **A user-settings card, `Knowledge graph`** (automatic extraction,
 thresholds, resolution mode, domain toggles, a user-defined-attribute browser,
@@ -2799,7 +2811,8 @@ server-only, `{ 30 min, 1 attempt }`):
 
 The web side is `ImportGraphDialog` ("Import graph…" in `/graph`'s overflow
 menu, `graph:write` only) and `/graph/imports/:proposalId`
-(`GraphImportPage`, owned by `home`, gated `graph:write`): "Checking your
+(`GraphImportPage`, owned by `knowledge` since issue #438, `home` before it,
+gated `graph:write`): "Checking your
 file…" while `extracting`, the failure copy (and for `shacl_violations` a
 table of the first 200 problems), and for a draft the **Unknown properties**
 panel above #367's `ProposalReviewSheet` rendered **inline**
@@ -3290,9 +3303,10 @@ from, and a model picker honouring §20.3's override) and, on the entity page
 (§13), an **Ask panel** pre-scoped to that entity (`scope_entity_id`, §21.2)
 for "what does the graph know about Joe, and can I ask it something" without
 leaving the page. Both routes — `/ask` and `/ask/:conversationId` — are
-owned by the `home` destination exactly as §13 states for the rest of this
-epic's routes; there is no new bottom-bar tab for Ask any more than there is
-one for the graph itself.
+owned by the `knowledge` destination, exactly as §13 now states for the rest
+of this epic's routes (issue #438); at the time issues #380/#381 shipped
+they were owned by `home`, with no bottom-bar tab of its own for either Ask
+or the graph — see `docs/specs/ux-refresh.md` §1 for how #438 changed that.
 
 **The `/ask` page is built** (issue #380), against the contracts of #376
 (conversation CRUD, the `AskMessage` wire schema), #378 (`POST …/messages`
@@ -3300,8 +3314,12 @@ and its 409 reasons) and #379 (the stream) with MSW, ahead of those routes
 landing. What it does, and the decisions a neighbouring change could undo:
 
 - **One route, `/ask/:conversationId?`**, `graph:read`-gated, owned by
-  `home` (the prefix `/ask`), titled "Ask" in the AppBar (a conversation's
-  up arrow goes to `/ask`, `/ask`'s to Home). One optional-segment route
+  `home` (the prefix `/ask`) as shipped with issue #380 — since issue #438
+  the owning destination is `knowledge` instead, per §13 and
+  `docs/specs/ux-refresh.md` §1; the AppBar up-arrow routing this bullet
+  describes is otherwise unchanged. Titled "Ask" in the AppBar (a
+  conversation's up arrow goes to `/ask`, `/ask`'s to Home). One
+  optional-segment route
   rather than two so that `/ask` → `/ask/:id` after the first question keeps
   the page mounted. The page is behind `GET /api/ai/config`'s `graphEnabled`:
   an explicit `false` shows "Ask is turned off for this deployment" and no
@@ -3659,7 +3677,8 @@ it" is one click, sharing the same graphology graph object (§22.1) rather
 than a second fetch.
 
 **As built (issue #375).** `/graph/overview` (`apps/web/src/pages/GraphOverviewPage.tsx`,
-owned by `home` through the `/graph` prefix, gated on `graph:read`) draws the stored snapshot
+owned by `knowledge` through the `/graph` prefix since issue #438 (`home` before it), gated
+on `graph:read`) draws the stored snapshot
 through the explorer's own `GraphCanvas` with `layout="static"` — it never moves a node. The
 pure model is `apps/web/src/components/graph/overview/overviewModel.ts`: a **clusters** layer
 (one node per cluster at its centroid, sized by radius, labelled `Label (size)`, plus the
@@ -3784,11 +3803,17 @@ printed in a brief).
   up" without committing to a taxonomy this document has no evidence users
   need yet; promoting it to a graph node is a natural, low-risk v2 addition
   once real usage shows which topics recur enough to be worth linking.
-- **A new bottom-bar destination for the graph.** Rejected per §13 and
-  `apps/web/src/config/destinations.ts`'s own stated ceiling: the bar is at
-  exactly four non-pinned destinations by design, and a fifth is "not an
-  addition, it is a redesign" (the file's own words, verified above). The
-  graph is reached from within existing surfaces instead.
+- **A new bottom-bar destination for the graph, at the time this document
+  was written.** Rejected per §13 and `apps/web/src/config/destinations.ts`'s
+  own stated ceiling: the bar was at exactly four non-pinned destinations by
+  design, and a fifth would have been "not an addition, it is a redesign"
+  (the file's own words, verified above). The graph was reached from within
+  existing surfaces instead. **Issue #438 later revisits this call** and
+  promotes the graph and Ask to their own `knowledge` destination without
+  breaching the four-tab ceiling, by pinning `settings` the way `console`
+  already was — see §13 and `docs/specs/ux-refresh.md` §1. This bullet
+  records why the original design did not, not a claim that still holds
+  today.
 - **Editing an edge in place when a newer note contradicts it.** Rejected
   per §5.4's "state is derived from dated facts" rule: overwriting a
   `WORKS_FOR` edge's `valid` range in place the moment a newer note
