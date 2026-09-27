@@ -450,7 +450,7 @@ than no relation at all.
 |---|---|---|
 | `ATTENDED` | Person → Meeting | |
 | `WORKS_FOR` | Person → Organization | Temporal (§5.4); normally exclusive (soft) |
-| `HAS_ROLE` | Person → Organization | Props: `{ title }`; temporal (§5.4), one edge per role period; normally exclusive (soft) |
+| `HAS_ROLE` | Person → Organization | Props: `{ title, businessUnit? }` (`businessUnit` optional, #440 / ontology 1.2.0); temporal (§5.4), one edge per role period; normally exclusive (soft). Identity is `title` only — a move to another business unit under the same title restates the open edge rather than superseding it |
 | `REPORTS_TO` | Person → Person | Temporal (§5.4); normally exclusive (soft) |
 | `IDENTIFIED_AS` | Speaker → Person | The one relation whose source is not a `kg_entities` row at all — see §5.1 |
 | `DISCUSSED` | Meeting → Project | |
@@ -813,9 +813,10 @@ about that specific pattern does not apply to this job type at all).
   note author's authoritative background, and citable as `C` (#440) when
   non-blank; a `C` citation is stored as note evidence with `char_start`/
   `char_end` both `NULL` (§5.3). The model is instructed to read it first and
-  to fill a Person's `company`/`businessUnit`/`title` (labelled "Role") and
-  propose `WORKS_FOR` to the Organization whenever the Context, note or
-  transcript states them.
+  to record each person's employer as `WORKS_FOR` to that company's
+  Organization, and their role and business unit there as `HAS_ROLE` to the
+  same Organization (`title`, `businessUnit`), whenever the Context, note or
+  transcript states them. None of the three is ever a Person attribute.
 - **The caller's effective schema** — core plus their enabled domains plus
   their own attribute definitions (§17) — which entity types, relation
   types, and attributes this run is allowed to propose at all. A type or
@@ -2235,10 +2236,12 @@ without the runtime self-registration mechanism those use:
   plus the evidence/review/temporal machinery (§5.3–§5.5) every other domain
   depends on. **Always on**, for every user, unconditionally.
 - **`work.ts`** — `Project`, `Commitment`, `Decision`, and the relation types
-  `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.** Its
-  `Person` mixin also carries `company` and `businessUnit` (text, business
-  sensitivity) ahead of `title` (permanent key, labelled "Role"); `#440`,
-  ontology 1.2.0.
+  `WORKS_FOR`, `HAS_ROLE`, `REPORTS_TO`, `ATTENDED`. **On by default.**
+  Employment is relations only (#440, ontology 1.2.0): the employer is
+  `WORKS_FOR`, the role and business unit are `HAS_ROLE { title,
+  businessUnit? }` to the same Organization. The `Person` mixin's `title`
+  (shipped 1.0.0) is therefore **deprecated** and not extractable — a stored
+  value stays readable (shown read-only in forms), no new one is proposed.
 - **`personal.ts`** (label *Personal life*) — `Interest`, `Trip`,
   `Milestone`, and `SPOUSE_OF`, `PARENT_OF`, `FRIEND_OF`, plus
   `INTERESTED_IN` (Person → Interest), `TRAVELED_ON` (Person → Trip) and
