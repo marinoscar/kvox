@@ -90,6 +90,8 @@ export interface RelationOpts {
   reviewStatus?: ReviewStatus;
   confidence?: number | null;
   fromSpeakerId?: string;
+  /** `kg_relations.props`; omitted = `{}`. */
+  props?: Record<string, unknown>;
 }
 
 export interface ItemOpts {
@@ -168,6 +170,7 @@ export class GraphFixture {
           toId,
           reviewStatus: status,
           confidence: opts.confidence ?? null,
+          ...(opts.props !== undefined ? { props: opts.props as Prisma.InputJsonValue } : {}),
           ontologyVersion: '1.0.0',
         },
       });
