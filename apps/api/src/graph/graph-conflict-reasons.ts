@@ -14,6 +14,7 @@
 //   - `note_not_ready` (#363)
 //   - `proposal_not_committed`, `stale_segment_rev` (#366)
 //   - `graph_empty` (#386)
+//   - `offer_decided` (#387)
 //
 // The four AI reasons (`graph_disabled`, `ai_not_configured`, `ai_key_missing`,
 // `model_lacks_capability`) are owned by #360's `AI_CONFLICT_REASONS` and
@@ -46,6 +47,8 @@ export const GRAPH_CONFLICT_REASONS = {
   STALE_SEGMENT_REV: 'stale_segment_rev',
   /** An export of a graph with nothing readable in it — #386. */
   GRAPH_EMPTY: 'graph_empty',
+  /** An import's attribute offer that was already accepted or rejected — #387. */
+  OFFER_DECIDED: 'offer_decided',
 } as const;
 
 export type GraphConflictReason =

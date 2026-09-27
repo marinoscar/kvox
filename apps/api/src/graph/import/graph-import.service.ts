@@ -321,7 +321,7 @@ export class GraphImportService {
     if (!offer) throw notFound();
     if (proposal.status !== 'draft') throw notDraft(proposal.status);
     if (offer.status !== 'offered') {
-      throw new ConflictException({ message: `This property was already ${offer.status}.`, details: { reason: 'offer_decided', status: offer.status } });
+      throw new ConflictException({ message: `This property was already ${offer.status}.`, details: { reason: GRAPH_CONFLICT_REASONS.OFFER_DECIDED, status: offer.status } });
     }
     const pending = (asObject(stats[IMPORT_PENDING_STATS_KEY]) as ImportPendingStats)[offerId] ?? [];
     return { offer, pending };
