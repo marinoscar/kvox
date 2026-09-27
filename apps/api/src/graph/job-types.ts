@@ -30,3 +30,4 @@ export const KG_RESOLVE_JOB_TYPE = 'kg.resolve';
 export const KG_EMBED_JOB_TYPE = 'kg.embed';
 export const KG_ENTITY_DIGEST_JOB_TYPE = 'kg.entity_digest';
 export const KG_GRAPH_LAYOUT_JOB_TYPE = 'kg.graph_layout';
+export const KG_MIGRATE_JOB_TYPE = 'kg.migrate';
