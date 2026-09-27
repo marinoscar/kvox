@@ -50,7 +50,7 @@ import type { PrismaService } from '../../../src/prisma/prisma.service';
 import { TranscriptAccessService } from '../../../src/transcripts/transcript-access.service';
 import { resolveDbSuite } from '../../jobs/db-test-support';
 import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from '../graph-read.fixtures';
-import { esmImport } from './rdf-fixtures';
+import { validateShacl } from './rdf-fixtures';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('export-conforms.db.spec');
 
@@ -58,16 +58,10 @@ const EMAIL_PREFIX = 'graph-export-test';
 const NS = kvNamespace(APP_SLUG);
 const PROV = 'http://www.w3.org/ns/prov#';
 
-interface ValidationReport {
-  conforms: boolean;
-  results: Array<{ focusNode: { value: string } | null; path: { value: string } | null; message: Array<{ value: string }> }>;
-}
-
 describeWithDb('kg.export — a fixture export conforms to the generated shapes (real Postgres)', () => {
   let prisma: PrismaClient;
   let source: GraphExportSource;
   let ontology: GraphOntologyService;
-  let validator: (shapes: Quad[], data: Quad[]) => Promise<ValidationReport>;
   const uploads = new Map<string, string>();
 
   /** Captures the bytes; records a real, managed `storage_objects` row. */
@@ -117,11 +111,6 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
     const p = prisma as unknown as PrismaService;
     ontology = new GraphOntologyService(p, new GraphPreferencesService(p));
     source = new GraphExportSource(p, ontology, new TranscriptAccessService(p), new NoteAccessService(p));
-    const { default: SHACLValidator } = await esmImport<{
-      default: new (shapes: unknown) => { validate(data: unknown): Promise<ValidationReport> };
-    }>('rdf-validate-shacl');
-    const { default: rdf } = await esmImport<{ default: { dataset(quads?: Iterable<Quad>): unknown } }>('rdf-ext');
-    validator = (shapes, data) => new SHACLValidator(rdf.dataset(shapes)).validate(rdf.dataset(data));
   });
 
   afterAll(async () => {
@@ -291,7 +280,7 @@ describeWithDb('kg.export — a fixture export conforms to the generated shapes 
       expect(quads.length).toBeGreaterThan(100);
 
       if (format !== 'nquads') {
-        const report = await validator(shapes, quads);
+        const report = await validateShacl(shapes, quads);
         expect(report.results.map((r) => [r.focusNode?.value, r.path?.value, r.message[0]?.value])).toEqual([]);
         expect(report.conforms).toBe(true);
       }
