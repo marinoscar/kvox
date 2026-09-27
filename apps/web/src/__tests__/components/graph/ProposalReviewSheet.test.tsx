@@ -176,7 +176,32 @@ describe('ProposalReviewSheet — states', () => {
     const user = userEvent.setup();
     const { container } = renderSheet({ onRequestExtract });
     expect(await screen.findByText('The model returned something unreadable.')).toBeInTheDocument();
+    // Not a 'truncated' failure, so the extra guidance is absent.
+    expect(screen.queryByText(/produces more than one answer can carry/i)).not.toBeInTheDocument();
     expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onRequestExtract).toHaveBeenCalledWith('re-extract');
+  });
+
+  it('failed with errorClass "truncated" (#435): the extra guidance and Try again', async () => {
+    const detail = mockProposalDetail('failed');
+    detail.proposal.failure = {
+      errorClass: 'truncated',
+      message: 'The model ran out of room to answer.',
+    };
+    proposalMock.reset(detail);
+    const onRequestExtract = vi.fn();
+    const user = userEvent.setup();
+    const { container } = renderSheet({ onRequestExtract });
+
+    expect(await screen.findByText('The model ran out of room to answer.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /this note produces more than one answer can carry\. try a model with a larger output ceiling, ask an administrator to clear or raise max output tokens, or lower the reasoning effort\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(await axe(container, AXE_OPTIONS)).toHaveNoViolations();
+
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     expect(onRequestExtract).toHaveBeenCalledWith('re-extract');
   });
