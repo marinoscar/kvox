@@ -134,8 +134,13 @@ export interface AiConfig {
   providerLabel: string | null;
   models: AiConfigModel[];
   defaultModel: string | null;
-  maxInputTokens: number;
-  maxOutputTokens: number;
+  /**
+   * The deployment's optional spend caps (#436). `null` means no cap: each
+   * model's own maximum governs, and `models[].contextWindowTokens` /
+   * `maxOutputTokens` already carry what a request actually gets.
+   */
+  maxInputTokens: number | null;
+  maxOutputTokens: number | null;
   /** Whether **the calling user** has saved a key for the active provider. */
   keyConfigured: boolean;
   /**
@@ -391,13 +396,15 @@ export const AI_ALLOWED_MODELS_MAX = 50;
  * nothing" already has a spelling, and two ways to say it is how one of them
  * stops being handled.
  *
- * ⚠ THE COST OF RAISING THIS LANDS ON `maxOutputTokens`, NOT ON A BUDGET OF ITS
- * OWN. Reasoning tokens are billed and counted as OUTPUT tokens, drawn from the
+ * ⚠ REASONING TOKENS ARE BILLED AND COUNTED AS OUTPUT TOKENS, drawn from the
  * same completion ceiling the visible answer is drawn from — which is why the
  * admin control for this field sits in the Limits section beside
- * {@link AiSettings.maxOutputTokens} rather than beside the provider choice, and
- * why its helper text names that field explicitly. A generation that spends its
- * whole ceiling thinking comes back truncated, not as an error.
+ * {@link AiSettings.maxOutputTokens}. Since #436 the API sizes for it: with no
+ * output cap the model's own ceiling already covers the thinking, and with a
+ * typed cap this effort's reasoning headroom is added on top automatically,
+ * bounded by the model's maximum — so raising this no longer silently eats the
+ * answer's share. A model that still spends everything thinking comes back
+ * truncated, not as an error.
  */
 export type AiReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
@@ -429,8 +436,17 @@ export interface AiSettings {
       defaultModel: string;
     };
   };
-  maxInputTokens: number;
-  maxOutputTokens: number;
+  /**
+   * Optional spend cap on one assembled prompt (#436). `null` — the default —
+   * means the selected model's own context window governs.
+   */
+  maxInputTokens: number | null;
+  /**
+   * Optional spend cap on one answer (#436). `null` — the default — means the
+   * selected model's own output ceiling governs. A typed cap gets the reasoning
+   * effort's headroom added on top of it automatically, bounded by the model.
+   */
+  maxOutputTokens: number | null;
   requestTimeoutMs: number;
   /** Ceiling on one uploaded note source document, in bytes. An AI policy, not a storage one. */
   maxDocumentBytes: number;
@@ -510,6 +526,32 @@ export interface AiTaskModelStatus {
   problem: null | 'not_permitted' | 'lacks_capability' | 'no_model';
 }
 
+/**
+ * One permitted model's effective token limits under the SAVED policy (#436),
+ * computed by the API with the same budget function every request uses.
+ *
+ * `source` is how the model's own numbers were learnt (#97): `'explicit'` when
+ * the administrator typed them on the permitted-models entry, `'default'` when
+ * the provider's conservative floor applies because the real capacity is
+ * unknown — never guessed upward.
+ */
+export interface AiEffectiveLimit {
+  modelId: string;
+  label: string;
+  source: 'explicit' | 'catalogue' | 'derived' | 'default';
+  derivedFrom: string | null;
+  modelContextWindowTokens: number;
+  modelMaxOutputTokens: number;
+  /** Tokens one assembled prompt may use, after the policy and the output reserve. */
+  maxInputTokens: number;
+  /** The completion ceiling a request is given (before shrinking to fit a large prompt). */
+  maxOutputTokens: number;
+  /** `'policy'` when a typed cap binds, `'model'` when the model's own window does. */
+  inputSource: 'policy' | 'model';
+  /** `'policy'` when a typed cap (plus reasoning headroom) binds, `'model'` otherwise. */
+  outputSource: 'policy' | 'model';
+}
+
 /** `GET /api/ai-settings`, and the body every write returns. */
 export interface AiSettingsAdminView {
   settings: AiSettings;
@@ -541,6 +583,12 @@ export interface AiSettingsAdminView {
   modelCapabilities: AiModelCapabilities[];
   /** How the saved `taskModels` resolves, one entry per task (#360). */
   taskModelStatus: AiTaskModelStatus[];
+  /**
+   * What each resolvable permitted model of the active provider actually gets
+   * under the SAVED policy (#436). Optional because older fixtures omit it;
+   * absent renders as an empty list. Render it — never recompute it here.
+   */
+  effectiveLimits?: AiEffectiveLimit[];
   /** Bumped on every write. Pass back as `If-Match` on the next PUT. */
   version: number;
   updatedAt: string | null;
@@ -576,8 +624,10 @@ export interface UpdateAiSettingsInput {
       defaultModel?: string;
     };
   };
-  maxInputTokens?: number;
-  maxOutputTokens?: number;
+  /** `null` clears the cap, so the model's own maximum governs (#436). */
+  maxInputTokens?: number | null;
+  /** `null` clears the cap, so the model's own maximum governs (#436). */
+  maxOutputTokens?: number | null;
   requestTimeoutMs?: number;
   maxDocumentBytes?: number;
   reasoningEffort?: AiReasoningEffort;
