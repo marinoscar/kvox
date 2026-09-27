@@ -28,6 +28,7 @@ import { WorkItemDedupStage } from '../../src/graph/dedup/work-item-dedup.stage'
 import { GRAPH_PREFERENCE_DEFAULTS } from '../../src/graph/preferences/graph-preferences.defaults';
 import type { ProposalResolution } from '../../src/graph/proposals/proposal-payload.schema';
 import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
+import { NO_EXPORT_FILES } from './graph-read.fixtures';
 import { statementHash } from '../../src/graph/write/normalize';
 import { resolveDbSuite } from '../jobs/db-test-support';
 
@@ -62,7 +63,7 @@ describeWithDb('work-item dedup and temporal closing (real Postgres)', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(buildDatabaseUrl(env)) });
     await prisma.$connect();
     db = prisma as unknown as PrismaService;
-    purge = new KgPurgeService(db);
+    purge = new KgPurgeService(db, NO_EXPORT_FILES);
     const registry = new ProposalStageRegistry();
     const ontology = { effectiveSchemaFor: async () => SCHEMA };
     const candidates = new ItemCandidateService(db);

@@ -34,7 +34,7 @@ import { GraphOverviewService } from '../../src/graph/layout/graph-overview.serv
 import { KgPurgeService } from '../../src/graph/purge/kg-purge.service';
 import type { PrismaService } from '../../src/prisma/prisma.service';
 import { resolveDbSuite } from '../jobs/db-test-support';
-import { GraphFixture, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
+import { GraphFixture, NO_EXPORT_FILES, cleanupGraphFixtures, connectTestPrisma, createUser } from './graph-read.fixtures';
 
 const { describeWithDb, dbReachable } = resolveDbSuite('graph-overview.db.spec');
 
@@ -58,7 +58,7 @@ describeWithDb('kg.graph_layout and GET /api/graph/overview (real Postgres)', ()
     enqueuer = new GraphLayoutEnqueuer(new JobsService(p), p);
     overview = new GraphOverviewService(p, enqueuer);
     listener = new GraphLayoutListener(p, enqueuer);
-    purge = new KgPurgeService(p);
+    purge = new KgPurgeService(p, NO_EXPORT_FILES);
   });
 
   afterAll(async () => {
