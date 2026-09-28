@@ -113,6 +113,26 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
     expect(two.nodes.find((n) => n.id === acme)?.degree).toBe(2);
   });
 
+  it("carries a relation's declared props on its edge, and {} on one without (#440)", async () => {
+    const { user, g } = await owner();
+    const oscar = await g.entity('Person', 'Oscar');
+    const ey = await g.entity('Organization', 'EY');
+    const role = await g.relation('HAS_ROLE', oscar, ey, {
+      valid: '[2020-01-01,)',
+      precision: 'year',
+      // An undeclared key is never passed through, even if a row carries one.
+      props: { title: 'Managing Director', businessUnit: 'Consulting', stray: 'x' },
+    });
+    const works = await g.relation('WORKS_FOR', oscar, ey, { valid: '[2020-01-01,)', precision: 'year' });
+
+    const slice = await nbhd(user.id, oscar);
+    expect(slice.edges.find((e) => e.id === role)?.props).toEqual({ title: 'Managing Director', businessUnit: 'Consulting' });
+    expect(slice.edges.find((e) => e.id === works)?.props).toEqual({});
+
+    const expanded = await svc.expand({ id: user.id }, { nodeIds: [oscar], cap: 100 } as never);
+    expect(expanded.edges.find((e) => e.id === role)?.props).toEqual({ title: 'Managing Director', businessUnit: 'Consulting' });
+  });
+
   it('terminates on a cycle A→B→C→A with every node once', async () => {
     const { user, g } = await owner();
     const a = await g.entity('Person', 'A');
@@ -196,6 +216,7 @@ describeWithDb('GraphNeighborhoodService (real Postgres)', () => {
         target: sarah,
         virtual: true,
         valid: null,
+        props: {},
       }),
     ]);
 

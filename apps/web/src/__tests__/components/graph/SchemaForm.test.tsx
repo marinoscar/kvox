@@ -92,6 +92,29 @@ describe('SchemaForm', () => {
     expect(screen.getByText('Retired field — shown because it has a value')).toBeInTheDocument();
   });
 
+  it('clears a retired value from the form value, announcing it (#442)', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const retired = attr('desk', 'text', { deprecated: true });
+    render(<Harness attributes={[attr('nickname', 'text'), retired]} initial={{ nickname: 'Sam', desk: '4B' }} onChange={onChange} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear retired value: Desk' }));
+
+    expect(onChange).toHaveBeenLastCalledWith({ nickname: 'Sam' });
+    expect(screen.queryByRole('textbox', { name: 'Desk' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Desk cleared. It will be removed when you save.');
+    expect(screen.getByRole('textbox', { name: 'Nickname' })).toBeInTheDocument();
+  });
+
+  it('offers no clear action on a live field, or when the form is read-only', () => {
+    const retired = attr('desk', 'text', { deprecated: true });
+    const { unmount } = render(<Harness attributes={[attr('nickname', 'text')]} initial={{ nickname: 'Sam' }} />);
+    expect(screen.queryByRole('button', { name: /Clear retired value/ })).not.toBeInTheDocument();
+    unmount();
+    render(<SchemaForm attributes={[retired]} value={{ desk: '4B' }} onChange={() => {}} readOnly />);
+    expect(screen.queryByRole('button', { name: /Clear retired value/ })).not.toBeInTheDocument();
+  });
+
   it('renders a list attribute as free entry chips', () => {
     render(<Harness attributes={[attr('tags', 'text', { list: true })]} initial={{ tags: ['a', 'b'] }} />);
     expect(screen.getByRole('combobox', { name: 'Tags' })).toBeInTheDocument();

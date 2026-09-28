@@ -161,12 +161,18 @@ export function isoDay(d: Date): string {
 
 /**
  * The planner's rule for a relation type as the caller's effective schema
- * declares it. `identityProps` are the type's REQUIRED props, sorted — the
- * same derivation as #353's `temporalRuleFor` (HAS_ROLE → `['title']`).
+ * declares it. `identityProps` are the type's REQUIRED props, sorted, and
+ * `optionalIdentityProps` its `identity: true` props (#440) — the same
+ * derivation as #353's `temporalRuleFor` (HAS_ROLE → `['title']` and
+ * `['businessUnit']`).
  */
 export function ruleForEffectiveRelation(
   relation: Pick<EffectiveRelationType, 'temporal' | 'exclusive' | 'exclusiveScope' | 'props' | 'symmetric'>,
 ): TemporalRule {
+  const optional = relation.props
+    .filter((p) => p.identity === true && !p.required)
+    .map((p) => p.key)
+    .sort();
   return {
     // #383: the planner compares a symmetric relation in both directions.
     ...(relation.symmetric === true ? { symmetric: true } : {}),
@@ -177,6 +183,7 @@ export function ruleForEffectiveRelation(
       .filter((p) => p.required)
       .map((p) => p.key)
       .sort(),
+    ...(optional.length > 0 ? { optionalIdentityProps: optional } : {}),
   };
 }
 

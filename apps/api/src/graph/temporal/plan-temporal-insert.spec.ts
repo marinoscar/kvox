@@ -91,7 +91,13 @@ describe('temporalRuleFor', () => {
     ['WORKS_FOR', { temporal: true, exclusive: 'soft', exclusiveScope: 'from', identityProps: [] }],
     [
       'HAS_ROLE',
-      { temporal: true, exclusive: 'soft', exclusiveScope: 'from_to', identityProps: ['title'] },
+      {
+        temporal: true,
+        exclusive: 'soft',
+        exclusiveScope: 'from_to',
+        identityProps: ['title'],
+        optionalIdentityProps: ['businessUnit'],
+      },
     ],
     [
       'REPORTS_TO',
@@ -119,6 +125,101 @@ describe('temporalRuleFor', () => {
       exclusiveScope: 'from',
       identityProps: ['alpha', 'zeta'],
     });
+  });
+
+  it('collects identity: true props, sorted, as optionalIdentityProps (#440)', () => {
+    expect(
+      temporalRuleFor({
+        temporal: true,
+        exclusive: 'soft',
+        props: {
+          title: { kind: 'text', label: 'T', description: 't', required: true },
+          unit: { kind: 'text', label: 'U', description: 'u', identity: true },
+          band: { kind: 'text', label: 'B', description: 'b', identity: true },
+          note: { kind: 'text', label: 'N', description: 'n' },
+        },
+      })
+    ).toEqual({
+      temporal: true,
+      exclusive: 'soft',
+      exclusiveScope: 'from',
+      identityProps: ['title'],
+      optionalIdentityProps: ['band', 'unit'],
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #440: HAS_ROLE.businessUnit — an optional identity prop
+// ---------------------------------------------------------------------------
+
+describe('planTemporalInsert — HAS_ROLE business unit identity (#440)', () => {
+  const role = (id: string, props: Record<string, unknown>, from = '2019-01-01') =>
+    edge({ id, type: 'HAS_ROLE', toId: 'microsoft', props, valid: r(from, null) });
+  const next = (props: Record<string, unknown>, from = '2026-03-01') =>
+    cand({ type: 'HAS_ROLE', toId: 'microsoft', props, valid: r(from, null) });
+
+  it('{VP, Supply Chain} then {VP, Finance} is a new role: closes and supersedes the old one', () => {
+    expect(
+      planTemporalInsert([role('sc', { title: 'VP', businessUnit: 'Supply Chain' })], next({ title: 'VP', businessUnit: 'Finance' }), HAS_ROLE)
+    ).toEqual(created({ closes: [close('sc', '2026-03-01')], supersedes: 'sc' }));
+  });
+
+  it('{VP, null} restated as {VP, Supply Chain} is the same fact', () => {
+    expect(
+      planTemporalInsert([role('vp', { title: 'VP' })], next({ title: 'VP', businessUnit: 'Supply Chain' }, '2019-01-01'), HAS_ROLE)
+    ).toEqual({ action: 'attach_evidence', edgeId: 'vp', reason: 'restated' });
+  });
+
+  it('{VP, Supply Chain} restated as {VP} (unit omitted, or null) is the same fact', () => {
+    const existing = [role('sc', { title: 'VP', businessUnit: 'Supply Chain' })];
+    for (const props of [{ title: 'VP' }, { title: 'VP', businessUnit: null }]) {
+      expect(planTemporalInsert(existing, next(props, '2019-01-01'), HAS_ROLE)).toEqual({
+        action: 'attach_evidence',
+        edgeId: 'sc',
+        reason: 'restated',
+      });
+    }
+  });
+
+  it('an undated {VP} statement never closes the {VP, Supply Chain} role', () => {
+    const existing = [role('sc', { title: 'VP', businessUnit: 'Supply Chain' })];
+    expect(
+      planTemporalInsert(existing, cand({ type: 'HAS_ROLE', toId: 'microsoft', props: { title: 'VP' }, valid: null }), HAS_ROLE)
+    ).toEqual({ action: 'attach_evidence', edgeId: 'sc', reason: 'restated' });
+  });
+
+  it('unit comparison is case- and whitespace-insensitive, like title', () => {
+    expect(
+      planTemporalInsert(
+        [role('sc', { title: 'VP', businessUnit: 'Supply Chain' })],
+        next({ title: 'vp', businessUnit: '  supply CHAIN ' }, '2019-01-01'),
+        HAS_ROLE
+      )
+    ).toEqual({ action: 'attach_evidence', edgeId: 'sc', reason: 'restated' });
+  });
+
+  it('a title change is still a new role, with or without a unit on either side', () => {
+    for (const [before, after] of [
+      [{ title: 'VP', businessUnit: 'Supply Chain' }, { title: 'SVP', businessUnit: 'Supply Chain' }],
+      [{ title: 'VP' }, { title: 'SVP', businessUnit: 'Supply Chain' }],
+      [{ title: 'VP', businessUnit: 'Supply Chain' }, { title: 'SVP' }],
+    ]) {
+      expect(planTemporalInsert([role('old', before)], next(after), HAS_ROLE)).toEqual(
+        created({ closes: [close('old', '2026-03-01')], supersedes: 'old' })
+      );
+    }
+  });
+
+  it('a rule without optionalIdentityProps ignores the unit (the pre-#440 behaviour)', () => {
+    const titleOnly: TemporalRule = { ...HAS_ROLE, optionalIdentityProps: undefined };
+    expect(
+      planTemporalInsert(
+        [role('sc', { title: 'VP', businessUnit: 'Supply Chain' })],
+        next({ title: 'VP', businessUnit: 'Finance' }, '2019-01-01'),
+        titleOnly
+      )
+    ).toEqual({ action: 'attach_evidence', edgeId: 'sc', reason: 'restated' });
   });
 });
 

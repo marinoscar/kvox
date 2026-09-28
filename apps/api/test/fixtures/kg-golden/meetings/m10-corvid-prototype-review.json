@@ -256,9 +256,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -279,9 +277,7 @@
       "aliases": [
         "Elif"
       ],
-      "props": {
-        "title": "Product Owner"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m04"
       ]
@@ -293,9 +289,7 @@
       "aliases": [
         "Nadia"
       ],
-      "props": {
-        "title": "Product Designer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m03",
         "m04"
@@ -309,9 +303,7 @@
         "Dr. Haddad",
         "Samir"
       ],
-      "props": {
-        "title": "Clinical Lead"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {

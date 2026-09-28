@@ -266,9 +266,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -283,9 +281,7 @@
       "aliases": [
         "Elif"
       ],
-      "props": {
-        "title": "Product Owner"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -295,9 +291,7 @@
       "aliases": [
         "Nadia"
       ],
-      "props": {
-        "title": "Product Designer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m03"
       ]
@@ -529,6 +523,24 @@
         "validTo": null,
         "precision": "unknown",
         "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m04-s004",
+            "quote": "Nadia Brooks, I'm the designer from Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "nadia",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Designer"
+        },
         "evidence": [
           {
             "source": "segment",

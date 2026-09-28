@@ -37,8 +37,17 @@ export interface TemporalRule {
   temporal: boolean;
   exclusive: 'soft' | 'none';
   exclusiveScope: 'from' | 'from_to';
-  /** Props that make two edges "the same fact" (HAS_ROLE: `['title']`). */
+  /**
+   * Props that make two edges "the same fact", compared strictly — null only
+   * equals null (the relation's `required` props; HAS_ROLE: `['title']`).
+   */
   identityProps: readonly string[];
+  /**
+   * #440: props that also take part in identity, except that a null/absent
+   * value on EITHER side matches anything (the relation's `identity: true`
+   * props; HAS_ROLE: `['businessUnit']`). Absent = none.
+   */
+  optionalIdentityProps?: readonly string[];
   /**
    * #383: `(a, b)` and `(b, a)` are the same fact (SPOUSE_OF, FRIEND_OF). The
    * planner then reads an existing edge `(b, a)` as `(a, b)`, so dedup,
@@ -61,7 +70,7 @@ export interface TemporalEdge {
   type: string;
   fromId: string;
   toId: string;
-  /** Compared by `TemporalRule.identityProps` (e.g. HAS_ROLE.title). */
+  /** Compared by `TemporalRule.identityProps`/`optionalIdentityProps` (HAS_ROLE.title/businessUnit). */
   props: Record<string, unknown>;
   valid: ValidRange | null;
   precision: ValidPrecision | null;

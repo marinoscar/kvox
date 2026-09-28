@@ -28,6 +28,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import type { GraphValidRange } from '../../../services/graph';
 import { formatPrecisionDate } from '../../../utils/graphDisplay';
+import type { RelationPropDisplay } from '../../../utils/graphDisplay';
 
 export const CAP_TOOLTIP = 'Node limit reached — hide some nodes first';
 
@@ -56,6 +57,8 @@ export interface EdgeSelection {
   valid: GraphValidRange | null;
   confidence: number | null;
   virtual: boolean;
+  /** The relation's own props, labelled from the ontology (#442). Optional: `[]` when absent. */
+  props?: RelationPropDisplay[];
 }
 
 export type ExplorerSelection = NodeSelection | EdgeSelection;
@@ -246,6 +249,20 @@ function EdgeBody({ selection }: { selection: EdgeSelection }) {
       <Typography variant="body2" sx={{ mb: 1 }}>
         {selection.fromLabel} → {selection.toLabel}
       </Typography>
+      {selection.props && selection.props.length > 0 && (
+        <Box component="dl" sx={{ m: 0, mb: 1 }}>
+          {selection.props.map((prop) => (
+            <Box key={prop.key} sx={{ display: 'flex', gap: 1 }}>
+              <Typography component="dt" variant="body2" color="text.secondary">
+                {prop.label}
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0, wordBreak: 'break-word' }}>
+                {prop.value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
       <Typography variant="body2" color="text.secondary">
         {validity ?? 'No dates recorded'}
       </Typography>

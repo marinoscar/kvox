@@ -13,7 +13,8 @@
 //  1. Non-temporal: same from/to/identity → attach (restated), else create.
 //  2. Scope: live (accepted|edited) edges of the type from the same `fromId`,
 //     plus the same `toId` when `exclusiveScope === 'from_to'`.
-//  3. Same fact (same `toId` + identity props, trimmed and case-folded):
+//  3. Same fact (same `toId` + identity props, trimmed and case-folded; an
+//     optional identity prop null on either side matches anything, #440):
 //     an unknown or contained candidate range attaches evidence; a range
 //     reaching outside it is a different period and continues below.
 //  4. Closing: every open, different-fact edge starting before the candidate
@@ -73,7 +74,14 @@ function sameIdentity(
   b: Record<string, unknown>,
   rule: TemporalRule
 ): boolean {
-  return rule.identityProps.every((k) => identityKey(a[k]) === identityKey(b[k]));
+  if (!rule.identityProps.every((k) => identityKey(a[k]) === identityKey(b[k]))) return false;
+  // #440: an optional identity prop only distinguishes two facts when BOTH
+  // state it — `{VP, null}` restates `{VP, "Supply Chain"}`, never contradicts it.
+  return (rule.optionalIdentityProps ?? []).every((k) => {
+    const x = identityKey(a[k]);
+    const y = identityKey(b[k]);
+    return x === 'null' || y === 'null' || x === y;
+  });
 }
 
 function isSameFact(edge: TemporalEdge, candidate: CandidateEdge, rule: TemporalRule): boolean {

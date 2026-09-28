@@ -256,9 +256,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -285,9 +283,7 @@
       "aliases": [
         "Hana"
       ],
-      "props": {
-        "title": "Account Director"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m03"
       ]
