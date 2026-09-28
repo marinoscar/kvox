@@ -140,7 +140,7 @@ export type ItemPayload = z.infer<typeof itemPayloadSchema>;
  * #365 — a `kind: 'closing'` row: §5.4's closing rule as a reviewable proposal
  * row ("Closes: Joe works for Acme, 2019 → Feb 2026"), never a side effect.
  * Never pre-checked. UI copy (#367):
- *   `Closes: {fromLabel} {relationType label} {toLabel}{, as roleTitle},
+ *   `Closes: {fromLabel} {relationType label} {toLabel}{, as roleTitle}{, roleBusinessUnit},
  *    {previousValid.from at its precision} → {closeAt at its precision}`
  * Commit (#366): the target's `valid` becomes `[lower(valid), closeAt)` and its
  * `superseded_by_id` the committed id of `closedByRef`; skipped when that row
@@ -155,6 +155,12 @@ export const closingPayloadSchema = z.object({
   toLabel: z.string(),
   /** HAS_ROLE `props.title` of the edge being closed, when present. */
   roleTitle: z.string().nullable(),
+  /**
+   * #440: HAS_ROLE `props.businessUnit` of the edge being closed — present only
+   * when it has one, so a unit move reads "as VP, Supply Chain" rather than
+   * the same title twice. Absent on every other closing.
+   */
+  roleBusinessUnit: z.string().optional(),
   previousValid: z.object({
     from: isoDate.nullable(),
     to: isoDate.nullable(),

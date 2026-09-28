@@ -76,7 +76,7 @@ import { GRAPH_NOT_FOUND_MESSAGE } from '../hooks/graphHookUtils';
 import { useGraphOntology } from '../hooks/useGraphAttributeDefs';
 import { useGraphExplorer } from '../hooks/useGraphExplorer';
 import { getGraphEntity, listGraphEntities } from '../services/graph';
-import { relationTypeLabel } from '../utils/graphDisplay';
+import { relationPropsDisplay, relationTypeLabel } from '../utils/graphDisplay';
 
 const GraphCanvas = lazy(() => import('../components/graph/explorer/GraphCanvas'));
 
@@ -294,6 +294,7 @@ export default function GraphExplorerPage() {
       valid: attrs.valid,
       confidence: attrs.confidence,
       virtual: attrs.virtual,
+      props: relationPropsDisplay(attrs.relationType, attrs.props, ontology),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, graph, version, ontology, typeLabel, state]);

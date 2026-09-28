@@ -229,9 +229,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -271,9 +269,7 @@
         "JJ",
         "Jonah Jimenez"
       ],
-      "props": {
-        "title": "Senior Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m05",
@@ -292,9 +288,7 @@
       "aliases": [
         "Marcus"
       ],
-      "props": {
-        "title": "CIO"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m13",
@@ -309,9 +303,7 @@
       "aliases": [
         "Ravi"
       ],
-      "props": {
-        "title": "Integration Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m08",
@@ -329,9 +321,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "VP of Operations"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m06",
@@ -348,9 +338,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "Procurement Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m02",
         "m08",

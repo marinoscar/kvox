@@ -297,9 +297,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m22"
@@ -313,9 +311,7 @@
         "JJ",
         "Jonah Jimenez"
       ],
-      "props": {
-        "title": "Senior Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -325,9 +321,7 @@
       "aliases": [
         "Marcus"
       ],
-      "props": {
-        "title": "CIO"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m22"
       ]
@@ -339,9 +333,7 @@
       "aliases": [
         "Ravi"
       ],
-      "props": {
-        "title": "Integration Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m22"
       ]
@@ -353,9 +345,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "VP of Operations"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01"
       ]
@@ -367,9 +357,7 @@
       "aliases": [
         "Sarah"
       ],
-      "props": {
-        "title": "Procurement Lead"
-      },
+      "props": {},
       "attendedFixtureIds": []
     },
     {
@@ -664,6 +652,21 @@
             "source": "segment",
             "segmentId": "m02-s004",
             "quote": "Ravi Menon, integration lead."
+          }
+        ]
+      },
+      {
+        "type": "WORKS_FOR",
+        "from": "jj",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {},
+        "evidence": [
+          {
+            "source": "note",
+            "quote": "JJ (Larkspur Labs)"
           }
         ]
       },

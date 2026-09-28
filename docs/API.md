@@ -5545,6 +5545,12 @@ declares one (every `personal`-domain relation: `"personal"`; absent =
 `INTERESTED_IN`, `TRAVELED_ON` and `HAS_MILESTONE`, every one
 `sensitivityDefault: "personal"` — never pre-checked in review.
 
+A relation prop may carry `identity: true`, **only when set** (#440): the
+prop takes part in the relation's identity alongside its `required` props,
+a null/absent value matching anything. Today only `HAS_ROLE.businessUnit`:
+a unit change under the same title is a new role, an omitted unit restates
+the known one.
+
 **Errors:** `401` unauthenticated · `403` without `graph:read`.
 
 #### GET /graph/ontology.ttl and GET /graph/ontology.shacl.ttl
@@ -6713,6 +6719,12 @@ facts about them) and every edge between them.
 - At most `limit` nodes (≤ 300, default 150); `truncated` says more were
   reachable — the closest and best-connected nodes are kept.
 - `sensitive` person facts are never part of a slice, at any `as_of`.
+- Every edge carries `props` (#440): the relation's own attribute values,
+  keyed by prop key — HAS_ROLE's `{ "title": "Managing Director",
+  "businessUnit": "Consulting" }`. Only props the relation type declares in
+  your effective ontology, never a deprecated or `sensitive` one, never a
+  null value; `{}` for a `virtual` edge or a relation with none. Labels for
+  the keys are the relation type's `props` in `GET /graph/ontology`.
 
 Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
 `limit` (1–300, default 150).
@@ -6728,8 +6740,9 @@ Query: `hops` (1 or 2, default 1), `types`, `relationTypes`, `as_of`,
       { "id": "9a2e…", "nodeKind": "item", "type": "commitment", "label": "Ship the Q3 pricing memo", "depth": 1, "degree": 1, "status": "open", "occurredAt": "2026-09-01T00:00:00.000Z" }
     ],
     "edges": [
-      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true },
-      { "id": "3c1f…", "type": "WORKS_FOR", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.92, "virtual": false }
+      { "id": "virt:9a2e…:ASSIGNED_TO", "type": "ASSIGNED_TO", "source": "9a2e…", "target": "0b6f…", "valid": null, "confidence": null, "virtual": true, "props": {} },
+      { "id": "3c1f…", "type": "WORKS_FOR", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.92, "virtual": false, "props": {} },
+      { "id": "5d27…", "type": "HAS_ROLE", "source": "0b6f…", "target": "7e4d…", "valid": { "from": "2024-01-15T00:00:00.000Z", "to": null, "precision": "day" }, "confidence": 0.9, "virtual": false, "props": { "title": "Director", "businessUnit": "Pricing" } }
     ],
     "truncated": false,
     "cap": 150

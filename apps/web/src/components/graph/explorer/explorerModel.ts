@@ -56,6 +56,8 @@ export interface ExplorerEdgeAttributes {
   valid: GraphValidRange | null;
   confidence: number | null;
   virtual: boolean;
+  /** The relation's own props (#442), `{}` when none or from an older API. */
+  props: Record<string, unknown>;
   size: number;
   color: string;
 }
@@ -326,6 +328,7 @@ function edgeData(
     valid: edge.valid,
     confidence: edge.confidence,
     virtual: edge.virtual,
+    props: edge.props ?? {},
     size: style.size,
     color: style.color,
   };

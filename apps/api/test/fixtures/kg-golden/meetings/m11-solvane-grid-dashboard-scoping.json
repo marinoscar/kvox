@@ -263,9 +263,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",
@@ -287,9 +285,7 @@
       "aliases": [
         "Kwame"
       ],
-      "props": {
-        "title": "Data Engineer"
-      },
+      "props": {},
       "attendedFixtureIds": []
     }
   ],
@@ -518,6 +514,24 @@
         "validTo": null,
         "precision": "unknown",
         "props": {},
+        "evidence": [
+          {
+            "source": "segment",
+            "segmentId": "m11-s004",
+            "quote": "Kwame Mensah, data engineer at Larkspur."
+          }
+        ]
+      },
+      {
+        "type": "HAS_ROLE",
+        "from": "kwame",
+        "to": "g-org-larkspur-labs",
+        "validFrom": null,
+        "validTo": null,
+        "precision": "unknown",
+        "props": {
+          "title": "Data Engineer"
+        },
         "evidence": [
           {
             "source": "segment",

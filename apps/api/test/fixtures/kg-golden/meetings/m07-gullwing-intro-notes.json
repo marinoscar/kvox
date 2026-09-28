@@ -33,9 +33,7 @@
       "aliases": [
         "Alex"
       ],
-      "props": {
-        "title": "Delivery Lead"
-      },
+      "props": {},
       "attendedFixtureIds": [
         "m01",
         "m02",

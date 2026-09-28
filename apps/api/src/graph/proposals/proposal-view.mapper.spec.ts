@@ -150,6 +150,26 @@ describe('proposal view mapper', () => {
         subtitle: 'Affects 1 open commitment',
       });
     });
+
+    it('closing: a HAS_ROLE business unit follows the title (#440)', () => {
+      const d = displayOf(
+        'closing',
+        {
+          relationType: 'HAS_ROLE',
+          fromLabel: 'Joe',
+          toLabel: 'Org Beta',
+          roleTitle: 'VP',
+          roleBusinessUnit: 'Supply Chain',
+          previousValid: { from: '2019-01-01', to: null, precision: 'year' },
+          closeAt: '2026-03-01',
+          precision: 'month',
+          affectedCommitments: [],
+        },
+        refs,
+        lookups(),
+      );
+      expect(d.title).toBe('Closes: Joe has role Org Beta, as VP, Supply Chain, 2019 → Mar 2026');
+    });
   });
 
   describe('evidence stale rules', () => {

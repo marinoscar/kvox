@@ -41,6 +41,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { trace } from '@opentelemetry/api';
 import { Prisma } from '@prisma/client';
+import type { EffectiveRelationType, EffectiveSchema } from '@app/shared/ontology';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_NOT_FOUND_MESSAGES, GraphAccessService } from '../access/graph-access.service';
@@ -78,6 +79,11 @@ export interface WalkOptions {
   relationTypes?: string[];
   asOf: Date;
   cap: number;
+  /**
+   * The owner's effective schema, when the caller already has it; decides
+   * which relation props an edge carries (#440). Fetched when absent.
+   */
+  schema?: EffectiveSchema;
 }
 
 interface WalkRow {
@@ -97,6 +103,8 @@ export interface EdgeRow {
   precision: string | null;
   confidence: number | null;
   virtual: boolean;
+  /** `kg_relations.props` for a stored edge; absent/null for a derived one. */
+  props?: unknown;
 }
 
 type Tx = Prisma.TransactionClient;
@@ -121,6 +129,7 @@ export class GraphNeighborhoodService {
     await this.access.require(user.id, 'entity', entityId, 'view');
     const schema = await this.ontology.effectiveSchemaFor(user.id);
     return this.walk(user.id, [entityId], {
+      schema,
       hops: query.hops as 1 | 2,
       types: resolveNodeTypes(schema, query.types, 'types'),
       relationTypes: resolveRelationTypes(schema, query.relationTypes, 'relationTypes'),
@@ -141,7 +150,7 @@ export class GraphNeighborhoodService {
     const relationTypes = resolveRelationTypes(schema, body.relationTypes, 'relationTypes');
     const asOf = asOfOr400(body.as_of);
     await this.assertReadableNodes(user.id, seeds);
-    return this.walk(user.id, seeds, { hops: 1, types, relationTypes, asOf, cap: body.cap });
+    return this.walk(user.id, seeds, { schema, hops: 1, types, relationTypes, asOf, cap: body.cap });
   }
 
   /**
@@ -177,6 +186,7 @@ export class GraphNeighborhoodService {
     const seeds = [...new Set(seedIds)];
     const virtualEdges = this.virtualEdgesFor(opts.relationTypes);
     const rowCap = opts.cap * WALK_ROW_FACTOR;
+    const schema = opts.schema ?? (await this.ontology.effectiveSchemaFor(ownerId));
 
     const slice = await withGraphStatementTimeout(
       this.prisma,
@@ -201,7 +211,7 @@ export class GraphNeighborhoodService {
 
         const truncated = sorted.length > opts.cap || walkRows > rowCap;
         const nodes: GraphNode[] = sorted.slice(0, opts.cap);
-        const edges = await this.inducedEdges(tx, ownerId, nodes.map((n) => n.id), opts, virtualEdges);
+        const edges = await this.inducedEdges(tx, ownerId, nodes.map((n) => n.id), opts, virtualEdges, schema);
 
         return {
           seedIds: seeds,
@@ -385,6 +395,7 @@ export class GraphNeighborhoodService {
     ids: string[],
     opts: WalkOptions,
     virtualEdges: ItemColumnEdge[],
+    schema: EffectiveSchema,
   ): Promise<GraphEdge[]> {
     if (ids.length === 0) return [];
     const owner = Prisma.sql`${ownerId}::uuid`;
@@ -392,7 +403,7 @@ export class GraphNeighborhoodService {
     const parts: Prisma.Sql[] = [
       Prisma.sql`SELECT r.id::text AS id, r.type, r.from_id::text AS source, r.to_id::text AS target,
           lower(r.valid) AS vfrom, upper(r.valid) AS vto, (r.valid IS NULL) AS vnull,
-          r.valid_precision::text AS precision, r.confidence, false AS virtual
+          r.valid_precision::text AS precision, r.confidence, false AS virtual, r.props
         FROM kg_relations r
         WHERE r.owner_id = ${owner} AND r.from_id = ANY(${idArr}) AND r.to_id = ANY(${idArr})
           AND ${asOfRelationSql('r')} AND ${relationValidAtSql('r', opts.asOf)}
@@ -401,13 +412,13 @@ export class GraphNeighborhoodService {
     for (const v of virtualEdges) {
       const col = ident(v.column);
       parts.push(Prisma.sql`SELECT 'virt:' || i.id::text || ':' || ${v.type}::text, ${v.type}::text, i.id::text, i.${col}::text,
-          NULL::timestamptz, NULL::timestamptz, true, NULL::text, NULL::float8, true
+          NULL::timestamptz, NULL::timestamptz, true, NULL::text, NULL::float8, true, NULL::jsonb
         FROM kg_items i
         WHERE i.owner_id = ${owner} AND i.id = ANY(${idArr}) AND i.${col} = ANY(${idArr})
           AND i.kind IN ${literalList(v.kinds)} AND ${this.itemOk('i', opts.asOf)}`);
     }
     const rows = await tx.$queryRaw<EdgeRow[]>`${Prisma.join(parts, ' UNION ALL ')}`;
-    return mergeEdgeRows(rows);
+    return mergeEdgeRows(rows, (type) => schema.relationType(type));
   }
 }
 
@@ -416,10 +427,37 @@ export class GraphNeighborhoodService {
 // ---------------------------------------------------------------------------
 
 /**
- * Edge rows → wire edges: a stored relation with the same `(type, from, to)`
- * as a derived one wins, every id appears once, sorted by id.
+ * #440: the props an edge shows — only those its relation type declares in
+ * the owner's effective schema, never a deprecated or `sensitive` one, and
+ * never a null value; in declaration order. `{}` for a derived edge, an
+ * unknown/disabled relation type, or a relation with no props.
  */
-export function mergeEdgeRows(rows: readonly EdgeRow[]): GraphEdge[] {
+export function visibleRelationProps(
+  raw: unknown,
+  relationType: EffectiveRelationType | undefined,
+): Record<string, unknown> {
+  if (!relationType || raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const values = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const prop of relationType.props) {
+    if (prop.deprecated || prop.sensitivity === 'sensitive') continue;
+    const value = values[prop.key];
+    if (value === undefined || value === null) continue;
+    out[prop.key] = value;
+  }
+  return out;
+}
+
+/**
+ * Edge rows → wire edges: a stored relation with the same `(type, from, to)`
+ * as a derived one wins, every id appears once, sorted by id. `relationType`
+ * resolves a type key against the owner's effective schema, for the edge's
+ * `props` (#440); without it every edge carries `{}`.
+ */
+export function mergeEdgeRows(
+  rows: readonly EdgeRow[],
+  relationType: (type: string) => EffectiveRelationType | undefined = () => undefined,
+): GraphEdge[] {
   const stored = new Set(rows.filter((r) => !r.virtual).map((r) => `${r.type}|${r.source}|${r.target}`));
   const seen = new Set<string>();
   const edges: GraphEdge[] = [];
@@ -436,6 +474,7 @@ export function mergeEdgeRows(rows: readonly EdgeRow[]): GraphEdge[] {
       valid: edgeValid(r),
       confidence: r.confidence === null ? null : Number(r.confidence),
       virtual: r.virtual,
+      props: r.virtual ? {} : visibleRelationProps(r.props, relationType(r.type)),
     });
   }
   return edges.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
