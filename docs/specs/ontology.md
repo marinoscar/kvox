@@ -1091,6 +1091,22 @@ payload — the pre-merge state of the redundant entity and every row that was
 reassigned — so `POST /api/graph/merges/:id/reverse` (§12) can restore
 exactly what a merge undid, not an approximation of it.
 
+**Folding re-pointed relations (#445).** After the re-point, two relations
+are folded into one (evidence moved onto the kept row, the other `merged`)
+only when they are the **same fact**: same type, same endpoints, same
+`valid`, **and** the same identity props under the one rule the temporal
+planner and dedup use (`sameIdentityProps`, `graph/temporal/identity.ts`) —
+required props equal after trimming and case-folding, an `identity: true`
+prop equal or null/absent on either side. `Joe HAS_ROLE Microsoft {VP}` and
+`{SVP}` over the same period are two roles and both stay, simply re-pointed;
+`{VP}` and `{VP, businessUnit: "Consulting"}` are one role. On a fold, every
+declared, non-deprecated prop the kept row lacks and the folded row states is
+copied onto it — never overwriting a value — and recorded as `filledProps` in
+the reversal; a reverse removes each copied value still unchanged and reports
+one edited since as `skipped` `changed_since`. A relation type this build does
+not know folds only on identical props. Self-loop retirement is unchanged
+(`graph/resolution/merge-fold.ts`).
+
 **Work-item dedup — Commitments, Decisions, and Claims are deduplicated
 too, not just Person/Organization/Project.** A newly proposed item is
 matched against open or otherwise-live items sharing the same `subject` and
