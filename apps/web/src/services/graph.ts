@@ -969,6 +969,12 @@ export interface ProposalItem {
   prechecked: boolean;
   evidence: ProposalEvidence[];
   committedRefId: string | null;
+  /**
+   * #444, a `known` relation row only: the props committing it adds to the
+   * live relation it matched (already spelled out in `display.subtitle`).
+   * Optional so older payloads and fixtures still type-check.
+   */
+  fills?: Record<string, unknown> | null;
 }
 
 export interface ProposalDetail {
@@ -1036,12 +1042,14 @@ export interface CommitResult {
   aliasesAdded: number;
   distinctPairsRecorded: number;
   skippedPending: number;
+  /** #444: props `known` relation rows added to the live relations they matched. */
+  propsFilled?: number;
 }
 
 export type RevertKeptWhy = 'edited_since' | 'referenced_since' | 'merged_since' | 'evidence_since';
 
 export interface RevertKept {
-  kind: 'entity' | 'relation' | 'item' | 'closing' | 'alias' | 'item_change';
+  kind: 'entity' | 'relation' | 'item' | 'closing' | 'alias' | 'item_change' | 'relation_fill';
   id: string;
   label: string;
   why: RevertKeptWhy;

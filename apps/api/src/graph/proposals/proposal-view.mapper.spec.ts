@@ -254,6 +254,51 @@ describe('proposal view mapper', () => {
       );
       expect(view.resolution?.refLabel).toBe('Sarah Chen');
     });
+
+    describe('a known relation that adds props (#444)', () => {
+      const LIVE_ROLE = '0f000000-0000-4000-8000-000000000031';
+      const ACME = '0f000000-0000-4000-8000-000000000002';
+      const knownRole = (props: Record<string, unknown>, verdict = 'known') =>
+        row({
+          kind: 'relation',
+          flags: ['known'],
+          payload: {
+            ref: 'r1',
+            type: 'HAS_ROLE',
+            from: { entityId: SARAH },
+            to: { entityId: ACME },
+            props,
+            validFrom: null,
+            validTo: null,
+            precision: 'unknown',
+            dedup: { verdict, targetRelationId: verdict === 'known' ? LIVE_ROLE : null, candidateTo: null },
+          },
+        });
+      const withStored = (props: Record<string, unknown>) =>
+        lookups({ knownRelations: new Map([[LIVE_ROLE, { type: 'HAS_ROLE', props }]]) });
+
+      it('exposes the pending fill and names it in the subtitle', () => {
+        const view = itemViewOf(knownRole({ title: 'VP', businessUnit: 'Consulting' }), [], new Map(), withStored({ title: 'VP' }));
+        expect(view.fills).toEqual({ businessUnit: 'Consulting' });
+        expect(view.display.subtitle).toBe('Has role · VP · Consulting · adds Business unit: Consulting');
+      });
+
+      it('no fill when the stored edge already holds a value — never an overwrite', () => {
+        const view = itemViewOf(
+          knownRole({ title: 'VP', businessUnit: 'Consulting' }),
+          [],
+          new Map(),
+          withStored({ title: 'VP', businessUnit: 'Advisory' }),
+        );
+        expect(view.fills).toBeNull();
+        expect(view.display.subtitle).toBe('Has role · VP · Consulting');
+      });
+
+      it('no fill for a new relation, or when the stored edge is not loaded', () => {
+        expect(itemViewOf(knownRole({ title: 'VP', businessUnit: 'X' }, 'new'), [], new Map(), withStored({ title: 'VP' })).fills).toBeNull();
+        expect(itemViewOf(knownRole({ title: 'VP', businessUnit: 'X' }), [], new Map(), lookups()).fills).toBeNull();
+      });
+    });
   });
 
   it('summary: failure, guidance, prechecked hidden from stats', () => {

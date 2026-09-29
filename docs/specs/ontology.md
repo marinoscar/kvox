@@ -1209,6 +1209,30 @@ appended to the existing row's evidence set even though nothing new is
 created: a second meeting restating "Sarah owns the vendor migration" is
 additional support for a fact the graph already has, not a second fact.
 
+**A `known` relation fills what it adds (#444).** A restatement can carry
+*more* than the stored row: the graph holds `Sarah —HAS_ROLE {title: VP}→
+Acme` and a later note says she is VP of Consulting there. #440's identity
+rule calls that `known` (an absent `businessUnit` matches anything), so
+before #444 the commit appended the citation and silently dropped the unit.
+Now the commit also **fills**, through `GraphWriteService.fillRelationProps`
+in the same Serializable transaction, every prop that is declared and not
+deprecated on the relation type in the owner's effective schema, present in
+the proposal, and absent (null/missing/blank) on the stored row. It **never
+overwrites**: a differing non-null stored value stays as stored, with no
+conflict raised (a differing *identity* prop cannot get here — it is a
+different fact). The review status is untouched, as for every other change a
+reviewed commit applies (only a manual edit turns `accepted` into `edited`);
+the merged props are validated closed like any write. Each fill is recorded
+in `commit_log.relationFills` and counted in the commit result's
+`propsFilled`; a revert removes exactly the filled keys — only while they
+still hold the value the commit wrote, else the fill is a `relation_fill`
+revert conflict (`edited_since`). The review view shows the pending fill as
+the row's `fills` and a subtitle suffix (`adds Business unit: Consulting`),
+and the web lists such a row with the reviewed rows rather than folding it
+under "Already in your graph". One pure function
+(`graph/proposals/relation-fills.ts`) computes the fill for both the view and
+the commit, so the two cannot disagree.
+
 **Commit semantics.** `POST /api/graph/proposals/:id/commit` (§12) applies
 every `accept | edit | merge_into` item **in one transaction**: entities,
 relations, items, and evidence are upserted, aliases and distinct pairs are

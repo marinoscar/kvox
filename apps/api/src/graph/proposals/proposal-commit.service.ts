@@ -13,7 +13,9 @@
 //      nothing written
 //   3. entities: link (`resolution.ref` / `merge_into`: evidence + a learned
 //      alias on the existing entity) or create; build `ref → entityId`
-//   4. relations (`known` → evidence on the target), then items per #365's
+//   4. relations (`known` → evidence on the target, plus #444's fill: props
+//      the new statement adds that the stored edge lacks — never an
+//      overwrite), then items per #365's
 //      commit-semantics table (`known` / `same` append evidence, `same` on a
 //      commitment applies its status/due changes, `supersedes` inserts and
 //      retires the target, `new` inserts; a live duplicate by statement hash
@@ -103,6 +105,7 @@ import {
   type ProposalItemRowInput,
 } from './proposal-view.mapper';
 import { KG_PROPOSAL_TARGET_TYPE, lockProposal, notDraft, ProposalsService } from './proposals.service';
+import { relationFills } from './relation-fills';
 
 type Tx = Prisma.TransactionClient;
 type Json = Record<string, unknown>;
@@ -195,6 +198,13 @@ export interface CommitLog {
   merges: string[];
   itemChanges: Array<{ itemId: string; before: ItemState; after: ItemState }>;
   closings: Array<{ relationId: string; before: RelationState; after: RelationState }>;
+  /**
+   * #444: props a `known` relation row added to the live relation it matched —
+   * only keys the stored row did not hold, with the values written. The
+   * revert removes exactly these keys, and only while they still hold these
+   * values.
+   */
+  relationFills: Array<{ relationId: string; fills: Record<string, unknown> }>;
 }
 
 export function emptyCommitLog(): CommitLog {
@@ -208,6 +218,7 @@ export function emptyCommitLog(): CommitLog {
     merges: [],
     itemChanges: [],
     closings: [],
+    relationFills: [],
   };
 }
 
@@ -222,6 +233,7 @@ export function emptyCommitResult(): CommitResult {
     aliasesAdded: 0,
     distinctPairsRecorded: 0,
     skippedPending: 0,
+    propsFilled: 0,
   };
 }
 
@@ -751,10 +763,21 @@ class CommitRun {
     if (dedup?.verdict === 'known' && dedup.targetRelationId) {
       const target = await this.tx.kgRelation.findFirst({
         where: { id: dedup.targetRelationId, ownerId: this.ownerId, reviewStatus: { in: [...LIVE] } },
-        select: { id: true },
+        select: { id: true, type: true, props: true },
       });
       if (target) {
         await this.appendEvidence('relation', target.id, evidence);
+        // #444: what the new statement adds that the stored edge lacks — never an overwrite.
+        const fills = relationFills(this.schema, target.type, asObject(payload.props), asObject(target.props));
+        if (Object.keys(fills).length > 0) {
+          const { applied } = await this.guard(row, () =>
+            this.deps.write.fillRelationProps(this.tx, this.ownerId, target.id, fills, this.schema),
+          );
+          if (Object.keys(applied).length > 0) {
+            this.log.relationFills.push({ relationId: target.id, fills: applied });
+            this.result.propsFilled += Object.keys(applied).length;
+          }
+        }
         this.relationByRef.set(payload.ref, target.id);
         this.committedRefs.set(row.id, target.id);
         return;

@@ -63,6 +63,10 @@ function setup(rows: Row[], opts: { kind?: string; liveEntities?: Row[] } = {}) 
     closeRelation: jest.fn(async (_t: unknown, _o: string, relId: string) => { calls.push(`close:${relId}`); }),
     addEvidence: jest.fn(async (_t: unknown, _o: string, kind: string, subjectId: string, ev: unknown[]) => { calls.push(`evidence:${kind}:${subjectId}`); return ev.map((_, i) => ({ id: `ev${i}` })); }),
     updateItemState: jest.fn(),
+    fillRelationProps: jest.fn(async (_t: unknown, _o: string, relId: string, fills: Row) => {
+      calls.push(`fill:${relId}:${Object.keys(fills).join(',')}`);
+      return { applied: fills };
+    }),
   };
   const aliases = { recordLink: jest.fn(async () => 'alias-1') };
   const distinct = { record: jest.fn(async (_t: unknown, _o: string, a: string, b: string) => ({ aId: a, bId: b, created: true })) };
@@ -174,6 +178,64 @@ describe('ProposalCommitService', () => {
     expect(distinct.record).toHaveBeenCalledWith(tx, OWNER, X1, X2);
     expect(outcome.log.merges).toHaveLength(2);
     expect(outcome.result.linked).toBe(2);
+  });
+
+  describe('a known relation (#444)', () => {
+    const LIVE_ROLE = '0f000000-0000-4000-8000-000000000031';
+    const SARAH = '0f000000-0000-4000-8000-000000000032';
+    const known = (props: Row): Row[] => {
+      const base = { origin: 'ai', editedPayload: null, resolution: null, mergeIntoId: null, distinctFrom: [], flags: ['known'], committedRefId: null };
+      return [
+        {
+          ...base,
+          id: id(7),
+          kind: 'relation',
+          decision: 'accept',
+          sortOrder: 0,
+          payload: {
+            ref: 'r9',
+            type: 'HAS_ROLE',
+            from: { entityId: SARAH },
+            to: { entityId: ACME },
+            props,
+            ...temporalNone,
+            dedup: { verdict: 'known', targetRelationId: LIVE_ROLE, candidateTo: null },
+          },
+        },
+      ];
+    };
+    const liveEntities = [{ id: ACME, type: 'Organization' }, { id: SARAH, type: 'Person' }];
+
+    it('fills a prop the stored edge lacks, and logs exactly that fill', async () => {
+      const { service, tx, write, calls } = setup(known({ title: 'VP', businessUnit: 'Consulting' }), { liveEntities });
+      tx.kgRelation.findFirst.mockResolvedValue({ id: LIVE_ROLE, type: 'HAS_ROLE', props: { title: 'VP' } });
+      const outcome = await service.commitIn(tx as never, OWNER, P, schema);
+
+      expect(calls).toEqual([`evidence:relation:${LIVE_ROLE}`, `fill:${LIVE_ROLE}:businessUnit`]);
+      expect(write.fillRelationProps).toHaveBeenCalledWith(tx, OWNER, LIVE_ROLE, { businessUnit: 'Consulting' }, schema);
+      expect(write.createRelation).not.toHaveBeenCalled();
+      expect(outcome.log.relationFills).toEqual([{ relationId: LIVE_ROLE, fills: { businessUnit: 'Consulting' } }]);
+      expect(outcome.result.propsFilled).toBe(1);
+      expect(tx.kgProposal.update.mock.calls[0][0].data.commitLog.relationFills).toHaveLength(1);
+    });
+
+    it('never overwrites a stored value — a differing business unit is left as stored', async () => {
+      const { service, tx, write } = setup(known({ title: 'VP', businessUnit: 'Consulting' }), { liveEntities });
+      tx.kgRelation.findFirst.mockResolvedValue({ id: LIVE_ROLE, type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Advisory' } });
+      const outcome = await service.commitIn(tx as never, OWNER, P, schema);
+
+      expect(write.fillRelationProps).not.toHaveBeenCalled();
+      expect(write.addEvidence).toHaveBeenCalledWith(tx, OWNER, 'relation', LIVE_ROLE, expect.any(Array));
+      expect(outcome.log.relationFills).toEqual([]);
+      expect(outcome.result.propsFilled).toBe(0);
+    });
+
+    it('adds nothing when the statement brings nothing new', async () => {
+      const { service, tx, write } = setup(known({ title: 'VP' }), { liveEntities });
+      tx.kgRelation.findFirst.mockResolvedValue({ id: LIVE_ROLE, type: 'HAS_ROLE', props: { title: 'VP', businessUnit: 'Consulting' } });
+      await service.commitIn(tx as never, OWNER, P, schema);
+      expect(write.fillRelationProps).not.toHaveBeenCalled();
+    });
   });
 
   it('recognises a serialization failure in the shapes the driver reports', () => {
