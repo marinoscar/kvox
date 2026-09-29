@@ -546,6 +546,47 @@ describe('GraphWriteService', () => {
   });
 
   // ===========================================================================
+  // Fill a known relation's props (#444)
+  // ===========================================================================
+
+  describe('fillRelationProps', () => {
+    const role = { id: OLDER, type: 'HAS_ROLE', props: { title: 'VP' } };
+
+    it('fills an absent key, keeps the stored ones, and leaves the review status alone', async () => {
+      const { service, tx, asTx } = setup();
+      tx.kgRelation.findFirst.mockResolvedValue(role);
+      const result = await service.fillRelationProps(asTx, OWNER, OLDER, { businessUnit: 'Consulting' }, schema);
+      expect(result.applied).toEqual({ businessUnit: 'Consulting' });
+      expect(tx.kgRelation.update).toHaveBeenCalledWith({
+        where: { id: OLDER },
+        data: { props: { title: 'VP', businessUnit: 'Consulting' } },
+      });
+    });
+
+    it('never overwrites a stored value, and writes nothing when nothing is left to fill', async () => {
+      const { service, tx, asTx } = setup();
+      tx.kgRelation.findFirst.mockResolvedValue({ ...role, props: { title: 'VP', businessUnit: 'Advisory' } });
+      const result = await service.fillRelationProps(asTx, OWNER, OLDER, { title: 'CEO', businessUnit: 'Consulting' }, schema);
+      expect(result.applied).toEqual({});
+      expect(tx.kgRelation.update).not.toHaveBeenCalled();
+    });
+
+    it('validates the merged props closed against the relation type', async () => {
+      const { service, tx, asTx } = setup();
+      tx.kgRelation.findFirst.mockResolvedValue(role);
+      const err = await caught(service.fillRelationProps(asTx, OWNER, OLDER, { salary: 1 }, schema));
+      expect(err).toBeInstanceOf(GraphValidationError);
+      expect(tx.kgRelation.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses a relation that is not a live relation of the owner', async () => {
+      const { service, tx, asTx } = setup();
+      tx.kgRelation.findFirst.mockResolvedValue(null);
+      await expect(service.fillRelationProps(asTx, OWNER, OLDER, { businessUnit: 'X' }, schema)).rejects.toBeInstanceOf(GraphValidationError);
+    });
+  });
+
+  // ===========================================================================
   // Manual edit
   // ===========================================================================
 
