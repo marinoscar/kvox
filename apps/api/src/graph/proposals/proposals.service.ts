@@ -81,6 +81,7 @@ import {
   type ViewLookups,
 } from './proposal-view.mapper';
 import { SpanValidator } from './span-validator';
+import { knownRelationTargetOf } from './relation-fills';
 
 type Tx = Prisma.TransactionClient;
 type Json = Record<string, unknown>;
@@ -712,7 +713,17 @@ export class ProposalsService {
     const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const ids = [...entityIds].filter((id) => UUID.test(id));
 
-    const [entities, segments, notes] = await Promise.all([
+    const knownRelationIds = [
+      ...new Set(
+        rows.flatMap((row) => {
+          if (row.kind !== 'relation') return [];
+          const id = knownRelationTargetOf(effectivePayloadOf(row));
+          return id && UUID.test(id) ? [id] : [];
+        }),
+      ),
+    ];
+
+    const [entities, segments, notes, knownRelations] = await Promise.all([
       ids.length === 0 ? Promise.resolve([] as Array<{ id: string; label: string }>)
         : this.prisma.kgEntity.findMany({ where: { id: { in: ids }, ownerId: proposal.ownerId }, select: { id: true, label: true } }),
       segmentIds.length === 0 ? Promise.resolve([] as Array<{ id: string; rev: number; speaker: { displayName: string } | null }>)
@@ -722,6 +733,11 @@ export class ProposalsService {
           }),
       noteIds.length === 0 ? Promise.resolve([] as Array<{ id: string; currentVersion: number }>)
         : this.prisma.note.findMany({ where: { id: { in: noteIds } }, select: { id: true, currentVersion: true } }),
+      knownRelationIds.length === 0 ? Promise.resolve([] as Array<{ id: string; type: string; props: unknown }>)
+        : this.prisma.kgRelation.findMany({
+            where: { id: { in: knownRelationIds }, ownerId: proposal.ownerId, reviewStatus: { in: ['accepted', 'edited'] } },
+            select: { id: true, type: true, props: true },
+          }),
     ]);
 
     return {
@@ -730,6 +746,7 @@ export class ProposalsService {
       segments: new Map(segments.map((s) => [s.id, { rev: s.rev, speakerName: s.speaker?.displayName ?? null }])),
       noteVersions: new Map(notes.map((n) => [n.id, n.currentVersion])),
       prechecked: precheckedOf(proposal.stats),
+      knownRelations: new Map(knownRelations.map((r) => [r.id, { type: r.type, props: asObject(r.props) }])),
     };
   }
 
