@@ -645,6 +645,57 @@ export class GraphWriteService {
   }
 
   /**
+   * Fill props a live relation does not carry yet (#444 — a `known` relation
+   * row whose statement adds, e.g., a HAS_ROLE's business unit; applied by the
+   * proposal commit #366). FILL-ONLY: a key the stored row already holds a
+   * value for is skipped, never overwritten, so the method is safe to call
+   * with a stale view of the row. The merged props are validated closed
+   * against the relation type, exactly as a create's are.
+   *
+   * The review status is untouched — the same convention `closeRelation` and
+   * `updateItemState` follow for a change a reviewed commit applies (only a
+   * MANUAL edit turns `accepted` into `edited`). Evidence is added separately.
+   *
+   * Returns the keys actually written with their stored (validated) values —
+   * `{}` when there was nothing left to fill.
+   */
+  async fillRelationProps(
+    tx: Tx,
+    ownerId: string,
+    relationId: string,
+    fills: Record<string, unknown>,
+    schema: EffectiveSchema,
+  ): Promise<{ applied: Record<string, unknown> }> {
+    const relation = await tx.kgRelation.findFirst({
+      where: { id: relationId, ownerId, reviewStatus: { in: LIVE_STATUSES } },
+      select: { id: true, type: true, props: true },
+    });
+    if (!relation) throw invalid('The relation to enrich is not in your graph.', 'relationId');
+
+    const current = (relation.props ?? {}) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...current };
+    const keys: string[] = [];
+    for (const [key, value] of Object.entries(fills)) {
+      if (value === null || value === undefined) continue;
+      const stored = current[key];
+      const storedAbsent =
+        stored === null || stored === undefined || (typeof stored === 'string' && stored.trim() === '') ||
+        (Array.isArray(stored) && stored.length === 0);
+      if (!storedAbsent) continue;
+      merged[key] = value;
+      keys.push(key);
+    }
+    if (keys.length === 0) return { applied: {} };
+
+    const next = withoutNulls(this.validatedProps(schema, relation.type, merged, true));
+    await tx.kgRelation.update({
+      where: { id: relationId },
+      data: { props: next as Prisma.InputJsonObject },
+    });
+    return { applied: Object.fromEntries(keys.filter((k) => k in next).map((k) => [k, next[k]])) };
+  }
+
+  /**
    * A restated commitment's changes (#365's `same` verdict, applied by the
    * proposal commit #366): status and/or due date, validated against the
    * item type's own statuses. Evidence is added separately.

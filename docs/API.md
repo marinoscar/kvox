@@ -6194,7 +6194,11 @@ present: `Person`, `Organization`, `Project`, `Meeting`, `Decision`,
 origin (ai|user), groupKey, decision (pending|accept|edit|reject|merge_into),
 payload, editedPayload, effectivePayload (editedPayload ?? payload), display:
 { title, subtitle }, resolution (+ refLabel) | null, mergeIntoId, distinctFrom,
-flags, prechecked, evidence[], committedRefId }`. `display` is rendered by the
+flags, prechecked, evidence[], committedRefId, fills }`. `fills` (issue #444)
+is set only on a `known` relation row whose props would add to the stored
+relation it matched — e.g. `{ "businessUnit": "Consulting" }`, also spelled
+into `display.subtitle` as `adds Business unit: Consulting` — and is `null`
+otherwise. `display` is rendered by the
 server — `"Sarah Chen → works for → Northwind Robotics"`, `"Commitment · Sarah
 Chen · due Mar 10, 2026"`, `"Closes: Sarah Chen works for OldCo, 2019 → Mar
 2026"` — so a client never re-derives it. Each `evidence` entry is `{ id,
@@ -6319,7 +6323,11 @@ counts }`. **Errors:** `400` payload (`details.issues`), `span_mismatch`,
    citations to the existing row (`same` on a commitment also applies its
    status / due-date change); `supersedes` inserts and retires the old row;
    anything else inserts — and a fact already in your graph verbatim is
-   "known, skipped", its citations attached there. A start-only
+   "known, skipped", its citations attached there. A `known` relation also
+   **fills** the props it adds that the stored relation lacks (issue #444 —
+   `{VP}` stored, `{VP, Consulting}` restated → the stored row gains
+   `businessUnit`): declared, non-deprecated props only, and **never** an
+   overwrite of a value already there. A start-only
    `WORKS_FOR`/`HAS_ROLE`/`REPORTS_TO` is a continuing state (`[from, )`);
 4. closings: the old open relation's validity ends at `closeAt` and it points
    at the relation that closed it — skipped when that relation was not
@@ -6338,7 +6346,8 @@ only while connected knowledge is enabled. Audited `graph.proposal_committed`
 
 **Response:** `200` `{ proposal: Summary, result: { created: { entities,
 relations, items }, linked, evidenceAdded, closingsApplied, closingsSkipped,
-superseded, aliasesAdded, distinctPairsRecorded, skippedPending } }`.
+superseded, aliasesAdded, distinctPairsRecorded, skippedPending, propsFilled } }`
+(`propsFilled` — the props `known` relations added, issue #444).
 **Errors:** `400` as above · `404` · `409` `proposal_not_draft` · `500`
 no-orphans violation.
 
@@ -6354,10 +6363,12 @@ Body `{}`. A `draft` or `failed` proposal becomes `discarded`. Audited
 touched since. A created entity, relation or fact is reverted when it was not
 edited since, has no citations beyond the commit's own, is not named by
 anything created later, and was not merged since; a changed fact or closed
-relation is restored when it still holds exactly what the commit wrote;
+relation is restored when it still holds exactly what the commit wrote, and
+a `known` relation's filled props (issue #444) are removed again when every
+filled key still holds the value the commit wrote;
 citations, learned aliases, mentions and distinct pairs are always removed;
 merges are reversed. Everything else is **kept** and listed as `{ kind:
-entity|relation|item|closing|alias|item_change, id, label, why:
+entity|relation|item|closing|alias|item_change|relation_fill, id, label, why:
 edited_since|referenced_since|merged_since|evidence_since }` (an entity a kept
 row still names is kept too, `referenced_since`).
 

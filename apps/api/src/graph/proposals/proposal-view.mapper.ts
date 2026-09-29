@@ -16,6 +16,7 @@ import type { EffectiveSchema } from '@app/shared/ontology';
 
 import { userGuidanceSchema } from '../extraction/dto/extraction.dto';
 import type { ProposalResolution } from './proposal-payload.schema';
+import { describeFills, knownRelationTargetOf, relationFills } from './relation-fills';
 import {
   GROUP_KEYS,
   type EvidenceView,
@@ -91,6 +92,12 @@ export interface ViewLookups {
   noteVersions: ReadonlyMap<string, number>;
   /** Item ids the extraction pre-check ticked. */
   prechecked: ReadonlySet<string>;
+  /**
+   * #444: the live relations `known` relation rows matched (`dedup.targetRelationId`
+   * → its type and stored props), so a row can show what committing it would add.
+   * Absent or missing an id → no fill shown.
+   */
+  knownRelations?: ReadonlyMap<string, { type: string; props: Record<string, unknown> }>;
 }
 
 type Json = Record<string, unknown>;
@@ -349,6 +356,20 @@ function resolutionView(
   };
 }
 
+/**
+ * #444: what committing a `known` relation row would add to the live relation
+ * it matched, or null (not a known relation, target not loaded, nothing to add).
+ */
+export function pendingFillsOf(row: Pick<ProposalItemRowInput, 'kind' | 'payload' | 'editedPayload'>, lookups: ViewLookups): Json | null {
+  if (row.kind !== 'relation' || !lookups.schema) return null;
+  const effective = effectivePayloadOf(row);
+  const targetId = knownRelationTargetOf(effective);
+  const stored = targetId ? lookups.knownRelations?.get(targetId) : undefined;
+  if (!stored) return null;
+  const fills = relationFills(lookups.schema, stored.type, asObject(effective.props), stored.props);
+  return Object.keys(fills).length > 0 ? fills : null;
+}
+
 export function itemViewOf(
   row: ProposalItemRowInput,
   evidence: readonly EvidenceRowInput[],
@@ -357,6 +378,9 @@ export function itemViewOf(
 ): ProposalItemView {
   const effective = effectivePayloadOf(row);
   const edited = row.editedPayload;
+  const fills = pendingFillsOf(row, lookups);
+  const display = displayOf(row.kind, effective, refLabels, lookups);
+  const fillText = fills ? describeFills(lookups.schema, String(effective.type ?? ''), fills) : null;
   return {
     id: row.id,
     kind: row.kind,
@@ -366,7 +390,7 @@ export function itemViewOf(
     payload: asObject(row.payload),
     editedPayload: edited !== null && edited !== undefined && typeof edited === 'object' ? asObject(edited) : null,
     effectivePayload: effective,
-    display: displayOf(row.kind, effective, refLabels, lookups),
+    display: fillText ? { title: display.title, subtitle: joinParts([display.subtitle, fillText]) } : display,
     resolution: resolutionView(row, lookups),
     mergeIntoId: row.mergeIntoId,
     distinctFrom: [...row.distinctFrom],
@@ -374,6 +398,7 @@ export function itemViewOf(
     prechecked: lookups.prechecked.has(row.id),
     evidence: evidence.map((e) => evidenceViewOf(e, lookups)),
     committedRefId: row.committedRefId,
+    fills,
   };
 }
 

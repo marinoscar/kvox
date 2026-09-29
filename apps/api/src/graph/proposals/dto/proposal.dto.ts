@@ -121,6 +121,12 @@ export const proposalItemViewSchema = z.object({
   prechecked: z.boolean().describe('Whether the extraction pre-check ticked this row.'),
   evidence: z.array(evidenceViewSchema),
   committedRefId: z.guid().nullable(),
+  fills: z
+    .record(z.string(), z.unknown())
+    .nullable()
+    .describe(
+      'A `known` relation row only (#444): the props committing it would ADD to the live relation it matched — keys that relation does not hold yet. Null for every other row, or when there is nothing to add.',
+    ),
 });
 export type ProposalItemView = z.infer<typeof proposalItemViewSchema>;
 
@@ -286,6 +292,10 @@ export const commitResultSchema = z.object({
   aliasesAdded: z.number().int(),
   distinctPairsRecorded: z.number().int(),
   skippedPending: z.number().int().describe('Rows still `pending`: not committed and not remembered as rejected.'),
+  propsFilled: z
+    .number()
+    .int()
+    .describe('Props a `known` relation row added to the live relation it matched (#444) — only keys that relation did not hold; never an overwrite.'),
 });
 export type CommitResult = z.infer<typeof commitResultSchema>;
 
@@ -308,7 +318,7 @@ export const revertBodySchema = z
 export type RevertBody = z.infer<typeof revertBodySchema>;
 export class RevertBodyDto extends createZodDto(revertBodySchema) {}
 
-export const REVERT_KEPT_KINDS = ['entity', 'relation', 'item', 'closing', 'alias', 'item_change'] as const;
+export const REVERT_KEPT_KINDS = ['entity', 'relation', 'item', 'closing', 'alias', 'item_change', 'relation_fill'] as const;
 export const REVERT_KEPT_WHY = ['edited_since', 'referenced_since', 'merged_since', 'evidence_since'] as const;
 
 export const revertKeptSchema = z.object({

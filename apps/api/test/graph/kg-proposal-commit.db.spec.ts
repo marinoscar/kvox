@@ -59,6 +59,8 @@ describeWithDb('graph proposal commit (real Postgres)', () => {
       aliasesAdded: 1,
       distinctPairsRecorded: 0,
       skippedPending: 1,
+      // #444: this proposal restates nothing with a prop the stored row lacks.
+      propsFilled: 0,
     });
     // 4 created rows' own citations + e1's link + the known claim + the same commitment.
     expect(result.evidenceAdded).toBe(7);

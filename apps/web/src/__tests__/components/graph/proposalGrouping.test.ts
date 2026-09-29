@@ -41,6 +41,22 @@ describe('groupProposalItems', () => {
     expect(people?.rows.map((item) => item.id)).toEqual([ITEM.sarah, ITEM.tom]);
   });
 
+  it('keeps a known relation that adds props in the reviewed rows, not the disclosure (#444)', () => {
+    const plain = proposalItem({ id: 'k-plain', kind: 'relation', groupKey: 'relations', flags: ['known'] });
+    const filling = proposalItem({
+      id: 'k-fills',
+      kind: 'relation',
+      groupKey: 'relations',
+      flags: ['known'],
+      fills: { businessUnit: 'Consulting' },
+      display: { title: 'Ana → has role → Acme', subtitle: 'Has role · VP · adds Business unit: Consulting' },
+    });
+    const empty = proposalItem({ id: 'k-empty', kind: 'relation', groupKey: 'relations', flags: ['known'], fills: {} });
+    const relations = groupProposalItems([plain, filling, empty]).find((group) => group.key === 'relations');
+    expect(relations?.known.map((item) => item.id)).toEqual(['k-plain', 'k-empty']);
+    expect(relations?.rows.map((item) => item.id)).toEqual(['k-fills']);
+  });
+
   it('puts an unknown group key under Other', () => {
     const odd = proposalItem({ id: 'odd', groupKey: 'Somewhere' as never });
     expect(groupProposalItems([odd])[0].key).toBe('Other');
