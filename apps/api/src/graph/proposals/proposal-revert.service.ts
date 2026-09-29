@@ -23,6 +23,11 @@
 //                                 wrote — else `edited_since` (or
 //                                 `referenced_since` when the row that
 //                                 superseded it is itself kept)
+//   relation fills (#444)         every filled key still holds exactly
+//                                 the value this commit wrote — else the
+//                                 whole fill is kept as `edited_since`
+//                                 (kind `relation_fill`); a relation gone
+//                                 since has nothing left to restore
 //   merges                        reversed through `MergeService.reverse`
 //                                 inside a SAVEPOINT; a `revert_conflict` from
 //                                 it becomes `merged_since`
@@ -31,8 +36,8 @@
 // them and the revertible count; NOTHING is written (the transaction rolls
 // back). Otherwise, in one Serializable transaction: evidence first, then
 // created items → relations → entities (their evidence deleted explicitly —
-// evidence is polymorphic, never FK-cascaded), then item changes and closings
-// restored, then aliases / mentions / distinct pairs; the proposal becomes
+// evidence is polymorphic, never FK-cascaded), then item changes, closings
+// and relation fills restored (a fill's keys removed again), then aliases / mentions / distinct pairs; the proposal becomes
 // `reverted`. Its items keep their decisions — a reverted proposal is a
 // read-only record.
 //
@@ -87,6 +92,7 @@ export function readCommitLog(raw: unknown): CommitLog {
     merges: arr(log.merges),
     itemChanges: arr(log.itemChanges),
     closings: arr(log.closings),
+    relationFills: arr(log.relationFills),
   };
 }
 
@@ -294,6 +300,24 @@ export class ProposalRevertService {
       else revertibleClosings.push(closing);
     }
 
+    const filledRelations = log.relationFills.length === 0 ? [] : await tx.kgRelation.findMany({
+      where: { id: { in: log.relationFills.map((f) => f.relationId) }, ownerId },
+      select: { id: true, type: true, fromId: true, toId: true, props: true },
+    });
+    const fillLabels = await this.labels(tx, ownerId, filledRelations.flatMap((r) => [r.fromId, r.toId].filter((v): v is string => !!v)));
+    const revertibleFills: CommitLog['relationFills'] = [];
+    for (const fill of log.relationFills) {
+      const row = filledRelations.find((r) => r.id.toLowerCase() === fill.relationId.toLowerCase());
+      if (!row) continue; // gone since: nothing left to restore
+      const props = asObject(row.props);
+      const untouched = Object.entries(fill.fills).every(([key, value]) => JSON.stringify(props[key]) === JSON.stringify(value));
+      if (untouched) revertibleFills.push(fill);
+      else {
+        const label = `${(row.fromId && fillLabels.get(row.fromId)) ?? '?'} → ${row.type} → ${fillLabels.get(row.toId) ?? '?'}`;
+        keep({ kind: 'relation_fill', id: row.id, label, why: 'edited_since' });
+      }
+    }
+
     // --- the tally, before anything is written ---------------------------------
     const finalKept = keptIds();
     const revertEntities = entities.filter((e) => !finalKept.has(e.id.toLowerCase()));
@@ -306,7 +330,7 @@ export class ProposalRevertService {
     const revertible =
       revertEntities.length + revertRelations.length + revertItems.length +
       log.evidenceAdded.length + log.aliasesAdded.length + log.mentions.length + log.distinctPairs.length +
-      revertibleChanges.length + revertibleClosings.length + unreversedMerges.length;
+      revertibleChanges.length + revertibleClosings.length + revertibleFills.length + unreversedMerges.length;
 
     const conflict = () =>
       new ConflictException({
@@ -388,6 +412,15 @@ export class ProposalRevertService {
                superseded_by_id = ${b.supersededById}::uuid,
                updated_at = now()
          WHERE id = ${closing.relationId}::uuid`;
+      reverted += 1;
+    }
+
+    // Relation fills (#444): the filled keys go back to absent; every other key stays as it is now.
+    for (const fill of revertibleFills) {
+      const row = filledRelations.find((r) => r.id.toLowerCase() === fill.relationId.toLowerCase())!;
+      const props = { ...asObject(row.props) };
+      for (const key of Object.keys(fill.fills)) delete props[key];
+      await tx.kgRelation.update({ where: { id: row.id }, data: { props: props as Prisma.InputJsonObject } });
       reverted += 1;
     }
 
