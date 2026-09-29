@@ -46,8 +46,13 @@ export interface ProposalGroupView {
   rejectedBefore: ProposalItem[];
 }
 
+/**
+ * A `known` row only cites what the graph already holds, so it waits collapsed
+ * under "Already in your graph" — unless it also ADDS props to that relation
+ * (#444, `fills`): then it changes the graph and is reviewed with the rest.
+ */
 export function isKnownRow(item: ProposalItem): boolean {
-  return item.flags.includes('known');
+  return item.flags.includes('known') && !(item.fills && Object.keys(item.fills).length > 0);
 }
 
 export function groupProposalItems(items: readonly ProposalItem[]): ProposalGroupView[] {
