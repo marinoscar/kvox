@@ -13,8 +13,9 @@
 //  1. Non-temporal: same from/to/identity → attach (restated), else create.
 //  2. Scope: live (accepted|edited) edges of the type from the same `fromId`,
 //     plus the same `toId` when `exclusiveScope === 'from_to'`.
-//  3. Same fact (same `toId` + identity props, trimmed and case-folded; an
-//     optional identity prop null on either side matches anything, #440):
+//  3. Same fact (same `toId` + `sameIdentityProps` — identity props trimmed
+//     and case-folded; an optional identity prop null on either side matches
+//     anything, #440; shared with the merge fold, #445):
 //     an unknown or contained candidate range attaches evidence; a range
 //     reaching outside it is a different period and continues below.
 //  4. Closing: every open, different-fact edge starting before the candidate
@@ -42,6 +43,7 @@ import type {
   TemporalRule,
   ValidRange,
 } from './types';
+import { sameIdentityProps } from './identity';
 import { rangeContainsRange, rangesEqual, rangesOverlap } from './valid-range';
 
 /** Statuses the planner compares against. Everything else is invisible to it. */
@@ -50,42 +52,8 @@ export const LIVE_STATUSES: ReadonlySet<TemporalReviewStatus> = new Set<Temporal
   'edited',
 ]);
 
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  if (value !== null && typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
-    return `{${Object.keys(obj)
-      .sort()
-      .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value) ?? 'null';
-}
-
-/** Identity comparison key: strings trimmed and case-folded; absent ≡ null. */
-function identityKey(value: unknown): string {
-  if (value === undefined || value === null) return 'null';
-  if (typeof value === 'string') return `s:${value.trim().toLowerCase()}`;
-  return `j:${stableStringify(value)}`;
-}
-
-function sameIdentity(
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-  rule: TemporalRule
-): boolean {
-  if (!rule.identityProps.every((k) => identityKey(a[k]) === identityKey(b[k]))) return false;
-  // #440: an optional identity prop only distinguishes two facts when BOTH
-  // state it — `{VP, null}` restates `{VP, "Supply Chain"}`, never contradicts it.
-  return (rule.optionalIdentityProps ?? []).every((k) => {
-    const x = identityKey(a[k]);
-    const y = identityKey(b[k]);
-    return x === 'null' || y === 'null' || x === y;
-  });
-}
-
 function isSameFact(edge: TemporalEdge, candidate: CandidateEdge, rule: TemporalRule): boolean {
-  return edge.toId === candidate.toId && sameIdentity(edge.props, candidate.props, rule);
+  return edge.toId === candidate.toId && sameIdentityProps(edge.props, candidate.props, rule);
 }
 
 const byId = (a: { id: string }, b: { id: string }): number =>

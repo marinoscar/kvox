@@ -132,9 +132,9 @@ describeWithDb('entity resolution (real Postgres)', () => {
     return id;
   }
 
-  async function relation(ownerId: string, type: string, fromId: string, toId: string, id = randomUUID()) {
+  async function relation(ownerId: string, type: string, fromId: string, toId: string, id = randomUUID(), props: Prisma.InputJsonObject = {}) {
     await prisma.$transaction(async (tx) => {
-      await tx.kgRelation.create({ data: { id, ownerId, type, fromId, toId, ontologyVersion: V } });
+      await tx.kgRelation.create({ data: { id, ownerId, type, fromId, toId, props, ontologyVersion: V } });
       await cite(tx, ownerId, 'relation', id);
     });
     return id;
@@ -240,7 +240,7 @@ describeWithDb('entity resolution (real Postgres)', () => {
     return {
       entities: strip(await prisma.kgEntity.findMany({ where: { ownerId }, select: { id: true, label: true, props: true, reviewStatus: true, mergedIntoId: true, updatedAt: true } })),
       aliases: strip(await prisma.kgEntityAlias.findMany({ where: { ownerId }, select: { id: true, entityId: true, normalized: true } })),
-      relations: strip(await prisma.kgRelation.findMany({ where: { ownerId }, select: { id: true, fromId: true, toId: true, reviewStatus: true, updatedAt: true } })),
+      relations: strip(await prisma.kgRelation.findMany({ where: { ownerId }, select: { id: true, fromId: true, toId: true, props: true, reviewStatus: true, updatedAt: true } })),
       items: strip(await prisma.kgItem.findMany({ where: { ownerId }, select: { id: true, subjectId: true, ownerPersonId: true, counterpartyId: true, meetingId: true, reviewStatus: true, updatedAt: true } })),
       evidence: strip(await prisma.kgEvidence.findMany({ where: { ownerId }, select: { id: true, subjectKind: true, subjectId: true } })),
       mentions: strip(await prisma.kgMention.findMany({ where: { ownerId }, select: { id: true, entityId: true } })),
@@ -315,6 +315,55 @@ describeWithDb('entity resolution (real Postgres)', () => {
     expect(await snapshot(f.user.id)).toEqual(before);
 
     await expect(merges.reverse({ ownerId: f.user.id, mergeId: merged.merge.id, actorId: f.user.id })).rejects.toMatchObject({ status: 404 });
+  });
+
+  // #445: a fold is the SAME FACT — identity props included, not just type,
+  // endpoints and `valid` — and the survivor inherits what it lacked.
+  async function roleFixture() {
+    const user = await createUser();
+    const s = await entity(user.id, 'Person', 'Joe Doe');
+    const m = await entity(user.id, 'Person', 'J. Doe');
+    const org = await entity(user.id, 'Organization', 'Microsoft');
+    const ids = {
+      sVP: await relation(user.id, 'HAS_ROLE', s, org, randomUUID(), { title: 'VP' }),
+      mSVP: await relation(user.id, 'HAS_ROLE', m, org, randomUUID(), { title: 'SVP' }), // a different role → kept
+      mVP: await relation(user.id, 'HAS_ROLE', m, org, randomUUID(), { title: 'vp' }), // the same role → folded
+      mVPc: await relation(user.id, 'HAS_ROLE', m, org, randomUUID(), { title: 'VP', businessUnit: 'Consulting' }), // folded, fills
+    };
+    return { user, s, m, org, ids };
+  }
+
+  it('folds HAS_ROLE only on the same identity props, fills the survivor, and reverses exactly', async () => {
+    const f = await roleFixture();
+    const before = await snapshot(f.user.id);
+
+    const merged = await merges.merge({ ownerId: f.user.id, mergedId: f.m, survivorId: f.s, actorId: f.user.id, source: 'manual' });
+    const mid = await snapshot(f.user.id);
+    const rel = (id: string) => mid.relations.find((r) => r.id === id)!;
+    expect(rel(f.ids.mSVP)).toMatchObject({ fromId: f.s, reviewStatus: 'accepted', props: { title: 'SVP' } }); // {VP} vs {SVP}: both kept
+    expect(rel(f.ids.mVP)).toMatchObject({ reviewStatus: 'merged' });
+    expect(rel(f.ids.mVPc)).toMatchObject({ reviewStatus: 'merged' });
+    expect(rel(f.ids.sVP)).toMatchObject({ reviewStatus: 'accepted', props: { title: 'VP', businessUnit: 'Consulting' } });
+    expect(mid.evidence.filter((e) => e.subjectId === f.ids.sVP)).toHaveLength(3);
+
+    const row = await prisma.kgMerge.findUniqueOrThrow({ where: { id: merged.merge.id } });
+    const collapsed = (row.reversal as unknown as { collapsed: Array<{ relationId: string; filledProps?: unknown }> }).collapsed;
+    expect(collapsed.find((c) => c.relationId === f.ids.mVPc)?.filledProps).toEqual({ businessUnit: 'Consulting' });
+
+    const reversed = await merges.reverse({ ownerId: f.user.id, mergeId: merged.merge.id, actorId: f.user.id });
+    expect(reversed.skipped).toEqual([]);
+    expect(await snapshot(f.user.id)).toEqual(before);
+  });
+
+  it('keeps a filled prop edited since the merge, reporting it changed_since', async () => {
+    const f = await roleFixture();
+    const merged = await merges.merge({ ownerId: f.user.id, mergedId: f.m, survivorId: f.s, actorId: f.user.id, source: 'manual' });
+    await prisma.kgRelation.update({ where: { id: f.ids.sVP }, data: { props: { title: 'VP', businessUnit: 'Strategy' } } });
+
+    const reversed = await merges.reverse({ ownerId: f.user.id, mergeId: merged.merge.id, actorId: f.user.id });
+    expect(reversed.skipped).toEqual([{ kind: 'relation', id: f.ids.sVP, why: 'changed_since' }]);
+    const kept = await prisma.kgRelation.findUniqueOrThrow({ where: { id: f.ids.sVP } });
+    expect(kept.props).toEqual({ title: 'VP', businessUnit: 'Strategy' });
   });
 
   it('reports rows deleted since instead of failing the reverse', async () => {
