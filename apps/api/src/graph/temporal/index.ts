@@ -12,6 +12,7 @@
 
 export * from './types';
 export * from './valid-range';
+export * from './identity';
 export * from './as-of';
 export * from './plan-temporal-insert';
 export * from './commitments-to-review';
