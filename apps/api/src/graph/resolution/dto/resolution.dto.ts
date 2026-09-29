@@ -54,10 +54,10 @@ export const reverseMergeResponseSchema = z
         z.object({
           kind: z.enum(['relation', 'item', 'evidence', 'mention', 'alias']),
           id: z.guid(),
-          why: z.enum(['deleted_since', 'moved_since']),
+          why: z.enum(['deleted_since', 'moved_since', 'changed_since']),
         }),
       )
-      .describe('Rows the merge moved that could not be given back: deleted since, or moved elsewhere since.'),
+      .describe('Rows the merge moved that could not be given back: deleted since, or moved elsewhere since — or (`changed_since`, #445) a kept relation whose prop the merge filled in was edited since, so that value stays.'),
   })
   .describe('The reversed merge and the entity it restored.');
 export type ReverseMergeResponse = z.infer<typeof reverseMergeResponseSchema>;
