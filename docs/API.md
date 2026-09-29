@@ -6104,9 +6104,12 @@ same `404`).
 Merges `:id` **into** `intoId` (the survivor). `:id` becomes a tombstone
 (`reviewStatus: "merged"`, `mergedIntoId` set); every relation, fact,
 citation, mention and alias that named it now names the survivor, and its
-label becomes one of the survivor's aliases. Relations that became exact
-duplicates (same type, endpoints and validity) fold into one — citations
-kept — and a relation that would point at itself is retired. Every change is
+label becomes one of the survivor's aliases. Relations that became the same
+fact (same type, endpoints and validity **and** the same identity props —
+HAS_ROLE `{VP}` and `{SVP}` stay two roles, `{VP}` and `{VP, Consulting}`
+fold, #445) fold into one — citations kept, and any declared prop the kept
+relation lacked copied onto it — and a relation that would point at itself
+is retired. Every change is
 recorded for the reverse. Audited `graph.entity_merged`
 (`{ mergeId, mergedId, source }`).
 
@@ -6129,8 +6132,10 @@ types (`details.reason: "type_mismatch"`) · `401` · `403` without
 
 Undoes one merge exactly: the tombstone is restored and every moved row is
 given back. A row deleted or moved elsewhere since is listed in `skipped`
-(`{ kind: relation|item|evidence|mention|alias, id, why: deleted_since|moved_since }`)
-instead of failing the reverse. Afterwards both entities are re-embedded and
+(`{ kind: relation|item|evidence|mention|alias, id, why: deleted_since|moved_since|changed_since }`)
+instead of failing the reverse. A prop the merge copied onto a kept relation
+is removed again only while it still holds the copied value; one edited since
+stays and is reported `changed_since` (#445). Afterwards both entities are re-embedded and
 the restored one is re-checked (`kg.resolve`, `reason: "merge_reversed"`).
 Audited `graph.merge_reversed` (`{ mergeId, skipped }`). Body: `{}`.
 
