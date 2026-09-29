@@ -13,8 +13,11 @@
 //           mentions and aliases (an alias the survivor already has, by its
 //           normalized form, stays on the tombstone) → add the merged label as
 //           an alias → collapse relations that became duplicates (same type,
-//           endpoints and `valid`: evidence moved onto the kept row, the
-//           duplicate `merged`) and items that became duplicates (same kind,
+//           endpoints and `valid` AND the same identity props under the
+//           planner's shared `sameIdentityProps` rule, #445 — HAS_ROLE {VP}
+//           and {SVP} are two roles and both stay: evidence moved onto the
+//           kept row, the duplicate `merged`, and any declared prop the kept
+//           row lacks copied onto it — `merge-fold.ts`) and items that became duplicates (same kind,
 //           statement hash and subject — `kg_items_live_statement_uniq_idx`
 //           would otherwise refuse the re-point) → self-loops `merged` →
 //           distinct pairs rewritten onto the survivor → the tombstone.
@@ -54,6 +57,8 @@ import { KG_RESOLVE_JOB_TYPE, KG_SUBJECT_ENTITY, KG_SUBJECT_USER } from '../job-
 import { GraphValidationError } from '../write/graph-write.errors';
 import { GraphWriteService } from '../write/graph-write.service';
 import { orderPair } from './distinct-pair.service';
+import { asProps, planRelationFolds, type FoldGroup } from './merge-fold';
+import { stableStringify } from '../temporal';
 
 type Tx = Prisma.TransactionClient;
 
@@ -81,7 +86,18 @@ export interface MergeReversal {
     aliases: string[];
   };
   aliasAdded: string | null;
-  collapsed: Array<{ relationId: string; keptId: string; movedEvidence: string[]; previousStatus: string }>;
+  /**
+   * `filledProps` (#445, absent when nothing was copied): the props the fold
+   * copied onto the kept row because it lacked them; a reverse removes each
+   * one that still holds exactly that value.
+   */
+  collapsed: Array<{
+    relationId: string;
+    keptId: string;
+    movedEvidence: string[];
+    previousStatus: string;
+    filledProps?: Record<string, unknown>;
+  }>;
   /** Additive to the issue's shape: item duplicates collapsed by the live-statement index. */
   collapsedItems: Array<{ itemId: string; keptId: string; movedEvidence: string[]; previousStatus: string }>;
   selfLoops: Array<{ relationId: string; previousStatus: string }>;
@@ -111,7 +127,8 @@ export interface ReverseInput {
 export interface ReverseResult {
   merge: { id: string; survivorId: string; mergedId: string; reversedAt: string };
   restored: { id: string; type: string; label: string };
-  skipped: Array<{ kind: SkippedKind; id: string; why: 'deleted_since' | 'moved_since' }>;
+  /** `changed_since` (#445): a prop a fold copied onto a kept relation was edited since, so it stays. */
+  skipped: Array<{ kind: SkippedKind; id: string; why: 'deleted_since' | 'moved_since' | 'changed_since' }>;
 }
 
 interface LockedEntity {
@@ -284,25 +301,47 @@ export class MergeService {
         await t.$executeRaw`UPDATE kg_relations SET review_status = 'merged', updated_at = now() WHERE id = ${loop.id}::uuid`;
         reversal.selfLoops.push({ relationId: loop.id, previousStatus: loop.status });
       }
-      for (const relationId of [...touchedRelations].sort()) {
-        const [dupe] = await t.$queryRaw<Array<{ kept_id: string; status: string }>>`
-          SELECT k.id::text AS kept_id, r.review_status::text AS status
-            FROM kg_relations r
-            JOIN kg_relations k ON k.owner_id = r.owner_id AND k.type = r.type AND k.id <> r.id
-                               AND k.from_id IS NOT DISTINCT FROM r.from_id
-                               AND k.from_speaker_id IS NOT DISTINCT FROM r.from_speaker_id
-                               AND k.to_id = r.to_id
-                               AND k.valid IS NOT DISTINCT FROM r.valid
-                               AND k.review_status IN ('accepted', 'edited')
-           WHERE r.id = ${relationId}::uuid AND r.review_status IN ('accepted', 'edited')
-           ORDER BY (k.id = ANY(${touchedRelations}::uuid[])), k.created_at, k.id
-           LIMIT 1`;
-        if (!dupe) continue;
+      // #445: fetch every live same-type/endpoints/`valid` row once, in
+      // preference order, and let the pure planner decide which are the same
+      // fact by identity props — never type + endpoints + `valid` alone.
+      const rows = await t.$queryRaw<Array<{ id: string; type: string; props: unknown; status: string; kept_id: string; kept_props: unknown }>>`
+        SELECT r.id::text AS id, r.type, r.props, r.review_status::text AS status,
+               k.id::text AS kept_id, k.props AS kept_props
+          FROM kg_relations r
+          JOIN kg_relations k ON k.owner_id = r.owner_id AND k.type = r.type AND k.id <> r.id
+                             AND k.from_id IS NOT DISTINCT FROM r.from_id
+                             AND k.from_speaker_id IS NOT DISTINCT FROM r.from_speaker_id
+                             AND k.to_id = r.to_id
+                             AND k.valid IS NOT DISTINCT FROM r.valid
+                             AND k.review_status IN ('accepted', 'edited')
+         WHERE r.id = ANY(${touchedRelations}::uuid[]) AND r.review_status IN ('accepted', 'edited')
+         ORDER BY r.id, (k.id = ANY(${touchedRelations}::uuid[])), k.created_at, k.id`;
+      const groups = new Map<string, FoldGroup>();
+      for (const row of rows) {
+        let g = groups.get(row.id);
+        if (!g) {
+          g = { relation: { id: row.id, type: row.type, props: asProps(row.props), status: row.status }, candidates: [] };
+          groups.set(row.id, g);
+        }
+        g.candidates.push({ id: row.kept_id, props: asProps(row.kept_props) });
+      }
+      for (const fold of planRelationFolds([...groups.values()])) {
         const moved = await t.$queryRaw<Array<{ id: string }>>`
-          UPDATE kg_evidence SET subject_id = ${dupe.kept_id}::uuid
-           WHERE subject_kind = 'relation' AND subject_id = ${relationId}::uuid RETURNING id::text AS id`;
-        await t.$executeRaw`UPDATE kg_relations SET review_status = 'merged', updated_at = now() WHERE id = ${relationId}::uuid`;
-        reversal.collapsed.push({ relationId, keptId: dupe.kept_id, movedEvidence: ids(moved), previousStatus: dupe.status });
+          UPDATE kg_evidence SET subject_id = ${fold.keptId}::uuid
+           WHERE subject_kind = 'relation' AND subject_id = ${fold.relationId}::uuid RETURNING id::text AS id`;
+        await t.$executeRaw`UPDATE kg_relations SET review_status = 'merged', updated_at = now() WHERE id = ${fold.relationId}::uuid`;
+        const filled = Object.keys(fold.filledProps).length > 0;
+        if (filled) {
+          await t.$executeRaw`UPDATE kg_relations SET props = props || ${JSON.stringify(fold.filledProps)}::jsonb, updated_at = now()
+                               WHERE id = ${fold.keptId}::uuid`;
+        }
+        reversal.collapsed.push({
+          relationId: fold.relationId,
+          keptId: fold.keptId,
+          movedEvidence: ids(moved),
+          previousStatus: fold.previousStatus,
+          ...(filled ? { filledProps: fold.filledProps } : {}),
+        });
       }
     }
 
@@ -433,6 +472,9 @@ export class MergeService {
       }
       await t.$executeRaw`UPDATE kg_relations SET review_status = ${c.previousStatus}::kg_review_status, updated_at = now()
                            WHERE id = ${c.relationId}::uuid AND review_status = 'merged'`;
+      if (c.filledProps && Object.keys(c.filledProps).length > 0) {
+        await this.unfillProps(t, c.keptId, c.filledProps, skipped);
+      }
     }
     for (const c of r.collapsedItems ?? []) {
       if (c.movedEvidence.length > 0) {
@@ -553,6 +595,26 @@ export class MergeService {
       case 'meeting_id':
         return t.$executeRaw`UPDATE kg_items SET meeting_id = ${m}::uuid, updated_at = now() WHERE id = ${id}::uuid AND meeting_id = ${s}::uuid`;
     }
+  }
+
+  /**
+   * #445: take the props a fold copied onto a kept relation back off — each
+   * only while it still holds exactly the copied value. One edited since stays
+   * and is reported `changed_since`; a kept row deleted since, `deleted_since`.
+   */
+  private async unfillProps(t: Tx, keptId: string, filled: Record<string, unknown>, skipped: ReverseResult['skipped']): Promise<void> {
+    const [row] = await t.$queryRaw<Array<{ props: unknown }>>`SELECT props FROM kg_relations WHERE id = ${keptId}::uuid FOR UPDATE`;
+    if (!row) {
+      skipped.push({ kind: 'relation', id: keptId, why: 'deleted_since' });
+      return;
+    }
+    const current = asProps(row.props);
+    const keys = Object.keys(filled).sort();
+    const unchanged = keys.filter((k) => k in current && stableStringify(current[k]) === stableStringify(filled[k]));
+    if (unchanged.length > 0) {
+      await t.$executeRaw`UPDATE kg_relations SET props = props - ${unchanged}::text[], updated_at = now() WHERE id = ${keptId}::uuid`;
+    }
+    if (unchanged.length < keys.length) skipped.push({ kind: 'relation', id: keptId, why: 'changed_since' });
   }
 
   /** Move a set back in one statement; report each row that did not move. */

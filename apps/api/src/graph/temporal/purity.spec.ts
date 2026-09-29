@@ -31,6 +31,7 @@ describe('temporal engine purity', () => {
       expect.arrayContaining([
         'as-of.ts',
         'commitments-to-review.ts',
+        'identity.ts',
         'index.ts',
         'plan-temporal-insert.ts',
         'types.ts',
