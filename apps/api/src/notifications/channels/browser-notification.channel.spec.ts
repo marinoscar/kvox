@@ -4,6 +4,7 @@ import {
   sanitizeLink,
 } from './browser-notification.channel';
 import { NOTIFICATION_EVENTS } from '../notification-events';
+import type { NotificationChannel } from '../notification-events';
 import type {
   NotificationDispatchContext,
   NotificationRecipient,
@@ -91,12 +92,18 @@ const SAMPLE_PAYLOADS: Record<string, unknown> = {
   },
 };
 
-function contextFor(eventKey: string, data: unknown = {}): NotificationDispatchContext {
+function contextFor(
+  eventKey: string,
+  data: unknown = {},
+  channels?: readonly NotificationChannel[],
+): NotificationDispatchContext {
   const event = NOTIFICATION_EVENTS.find((e) => e.key === eventKey);
   if (!event) {
     throw new Error(`Test fixture error: no such event '${eventKey}' in the registry.`);
   }
-  return { event, recipient, data };
+  // Defaults to the channels the registry declares, which is what the
+  // dispatcher passes when no preference, policy or narrowing removed one.
+  return { event, recipient, data, channels: channels ?? event.channels };
 }
 
 describe('BrowserNotificationChannel', () => {
@@ -261,6 +268,81 @@ describe('BrowserNotificationChannel', () => {
 
       expect(mockStream.publish.mock.calls[0]![1].toast).toBe(false);
       expect(mockStream.publish.mock.calls[1]![1].toast).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // The `pushed` flag (#451): is Web Push part of this same dispatch?
+  // ==========================================================================
+
+  describe('the published event carries a `pushed` flag read from the dispatch channels', () => {
+    beforeEach(() => {
+      mockPrisma.notification.create.mockResolvedValue({
+        id: 'notif-pushed',
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+      mockStream.publish.mockReturnValue(1);
+    });
+
+    it('is true when the dispatch channels include push', async () => {
+      await channel.deliver(
+        contextFor('admin.broadcast', SAMPLE_PAYLOADS['admin.broadcast'], ['email', 'browser', 'push']),
+        'user-1',
+      );
+
+      expect(mockStream.publish).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ eventKey: 'admin.broadcast', pushed: true }),
+      );
+    });
+
+    it('is false when the dispatch channels do not include push, even for an event that declares it', async () => {
+      // `admin.broadcast` declares push; the dispatcher narrowed it away
+      // (a user preference, the admin policy or `NotifyOptions.channels`).
+      await channel.deliver(
+        contextFor('admin.broadcast', SAMPLE_PAYLOADS['admin.broadcast'], ['email', 'browser']),
+        'user-1',
+      );
+
+      expect(mockStream.publish).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ pushed: false }),
+      );
+    });
+
+    it('is false for an event with no push channel at all', async () => {
+      await channel.deliver(
+        contextFor(
+          'security.role_changed',
+          SAMPLE_PAYLOADS['security.role_changed'],
+        ),
+        'user-1',
+      );
+
+      expect(mockStream.publish.mock.calls[0]![1].pushed).toBe(false);
+    });
+
+    it('follows the list for a mandatory event too, and leaves `toast` alone', async () => {
+      await channel.deliver(
+        {
+          ...contextFor('admin.broadcast_critical', SAMPLE_PAYLOADS['admin.broadcast_critical'], ['browser', 'push']),
+          policy: { browserEnabled: false, disabledEvents: [] },
+        },
+        'user-1',
+      );
+      await channel.deliver(
+        contextFor('admin.broadcast_critical', SAMPLE_PAYLOADS['admin.broadcast_critical'], ['browser']),
+        'user-1',
+      );
+
+      expect(mockStream.publish.mock.calls[0]![1]).toMatchObject({
+        pushed: true,
+        toast: false,
+      });
+      expect(mockStream.publish.mock.calls[1]![1]).toMatchObject({
+        pushed: false,
+        toast: true,
+      });
     });
   });
 

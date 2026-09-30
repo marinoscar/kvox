@@ -101,6 +101,7 @@ describe('EmailNotificationChannel', () => {
       event: unregistered,
       recipient,
       data: {},
+      channels: ['email'],
     };
 
     it('records a failed result with a clear reason, rather than throwing', async () => {
