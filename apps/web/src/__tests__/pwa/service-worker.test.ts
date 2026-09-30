@@ -620,6 +620,99 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
   // push: malformed / missing payload — THE central acceptance criterion
   // ==========================================================================
 
+  // ==========================================================================
+  // push: admin test push (issue #449)
+  // ==========================================================================
+
+  describe('push: test payload (test: true)', () => {
+    const TEST_PAYLOAD = {
+      id: 'push-test-1',
+      eventKey: 'push.test',
+      title: 'Test push',
+      body: 'It works',
+      link: '/admin/settings/push',
+      test: true,
+    };
+
+    function windowClient(visible: boolean, focused: boolean) {
+      return {
+        visibilityState: visible ? 'visible' : 'hidden',
+        focused,
+        postMessage: vi.fn(),
+      };
+    }
+
+    it('shows the notification EVEN WITH a visible, focused client, then acks every window client', async () => {
+      const focused = windowClient(true, true);
+      const background = windowClient(false, false);
+      clientsMatchAll.mockResolvedValue([focused, background]);
+
+      await firePush({ json: () => TEST_PAYLOAD });
+
+      expect(clientsMatchAll).toHaveBeenCalledWith({ type: 'window', includeUncontrolled: true });
+      expect(showNotification).toHaveBeenCalledWith('Test push', {
+        body: 'It works',
+        tag: 'push-test-1',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/badge-96.png',
+        data: { id: '', link: '/admin/settings/push', test: true },
+      });
+      for (const client of [focused, background]) {
+        expect(client.postMessage).toHaveBeenCalledWith({
+          type: 'push-test-received',
+          id: 'push-test-1',
+          receivedAt: expect.any(Number),
+          shown: true,
+          hadFocusedClient: true,
+        });
+      }
+      // Never the ordinary in-page delivery message.
+      expect(focused.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'push-notification' }),
+      );
+    });
+
+    it('acks with shown:false and the error when showNotification throws, without rejecting', async () => {
+      const client = windowClient(false, false);
+      clientsMatchAll.mockResolvedValue([client]);
+      const error = new Error('no permission');
+      error.name = 'TypeError';
+      showNotification.mockRejectedValue(error);
+
+      const settled = firePush({ json: () => TEST_PAYLOAD });
+      await expect(settled).resolves.toBeUndefined();
+
+      expect(client.postMessage).toHaveBeenCalledWith({
+        type: 'push-test-received',
+        id: 'push-test-1',
+        receivedAt: expect.any(Number),
+        shown: false,
+        hadFocusedClient: false,
+        error: 'TypeError: no permission',
+      });
+    });
+
+    it('still shows the notification when no window is open at all', async () => {
+      clientsMatchAll.mockResolvedValue([]);
+
+      await firePush({ json: () => TEST_PAYLOAD });
+
+      expect(showNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not change a non-test payload with a visible, focused client', async () => {
+      const focused = windowClient(true, true);
+      clientsMatchAll.mockResolvedValue([focused]);
+
+      await firePush({ json: () => ({ ...TEST_PAYLOAD, test: false, id: 'n-1' }) });
+
+      expect(showNotification).not.toHaveBeenCalled();
+      expect(focused.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'push-notification', id: 'n-1' }),
+      );
+    });
+  });
+
   describe('push: malformed or missing payload — never silently skipped', () => {
     it('shows the generic fallback notification when event.data.json() throws', async () => {
       await firePush({

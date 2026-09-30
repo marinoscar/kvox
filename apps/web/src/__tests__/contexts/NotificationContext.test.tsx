@@ -784,6 +784,21 @@ describe('NotificationContext', () => {
       expect(navigateMock).not.toHaveBeenCalled();
     });
 
+    it('navigates but does not mark read for an empty id (a test push, issue #449)', async () => {
+      const sw = setServiceWorker();
+
+      const { result } = renderHook(() => useNotifications(), { wrapper: createWrapper() });
+      await waitFor(() => expect(result.current?.isLoading).toBe(false));
+
+      await act(async () => {
+        sw.dispatch('message', { type: 'notification-click', id: '', link: '/admin/settings/push' });
+        await Promise.resolve();
+      });
+
+      expect(markNotificationReadMock).not.toHaveBeenCalled();
+      expect(navigateMock).toHaveBeenCalledWith('/admin/settings/push');
+    });
+
     it('ignores a message of a different type', async () => {
       const sw = setServiceWorker();
 

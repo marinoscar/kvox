@@ -589,7 +589,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // first (the click itself is the "seen" signal), then navigate only if
       // the link is a validated in-app destination.
       const link = typeof data.link === 'string' ? data.link : null;
-      if (typeof data.id === 'string') void markRead(data.id);
+      // An empty id is a test push (issue #449): no row exists to mark read.
+      if (typeof data.id === 'string' && data.id) void markRead(data.id);
       if (isInternalLink(link)) navigate(link);
     };
 

@@ -291,6 +291,11 @@ interface PushNotificationPayload {
   title: string;
   body: string;
   link: string;
+  /**
+   * Set only by the admin "Send test push" action (`POST
+   * /api/admin/push-config/test`, issue #449). See `handleTestPush`.
+   */
+  test?: boolean;
 }
 
 const PUSH_ICON = '/icons/icon-192.png';
@@ -328,6 +333,11 @@ async function handlePush(event: PushEvent): Promise<void> {
       badge: PUSH_BADGE,
       tag: 'push-fallback',
     });
+    return;
+  }
+
+  if (payload.test === true) {
+    await handleTestPush(payload);
     return;
   }
 
@@ -379,6 +389,62 @@ async function handlePush(event: PushEvent): Promise<void> {
     // not this one's.
     data: { id: payload.id, link: payload.link },
   });
+}
+
+/**
+ * A TEST PUSH from `/admin/settings/push` (issue #449).
+ *
+ * Differs from a real push in two deliberate ways:
+ *
+ *   1. It is ALWAYS shown as an OS notification, even when a visible, focused
+ *      tab exists. The admin presses "Send test push" FROM an open tab, so the
+ *      normal "a focused tab already has it over SSE" branch would swallow
+ *      every test — which is exactly what made working pushes look broken.
+ *   2. It then acks to EVERY window client (`push-test-received`), so the
+ *      diagnostics panel can prove end-to-end delivery and measure latency.
+ *
+ * `data.id` is `''` on purpose: the test id names no notification row, and
+ * `notificationclick` / `NotificationContext` skip mark-read for an empty id.
+ *
+ * Still obeys the critical rule above: `showNotification` is attempted first,
+ * and if it throws the ack `postMessage` stands in for it.
+ */
+async function handleTestPush(payload: PushNotificationPayload): Promise<void> {
+  const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const hadFocusedClient = windowClients.some(
+    (client) => client.visibilityState === 'visible' && client.focused,
+  );
+
+  let shown = false;
+  let error: string | undefined;
+  try {
+    await self.registration.showNotification(payload.title, {
+      body: payload.body,
+      tag: payload.id,
+      icon: PUSH_ICON,
+      badge: PUSH_BADGE,
+      data: { id: '', link: payload.link, test: true },
+    });
+    shown = true;
+  } catch (err) {
+    error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  }
+
+  const ack = {
+    type: 'push-test-received',
+    id: payload.id,
+    receivedAt: Date.now(),
+    shown,
+    hadFocusedClient,
+    ...(error ? { error } : {}),
+  };
+  for (const client of windowClients) {
+    try {
+      client.postMessage(ack);
+    } catch {
+      // One client refusing the message must not stop the others hearing it.
+    }
+  }
 }
 
 self.addEventListener('push', (event) => {
