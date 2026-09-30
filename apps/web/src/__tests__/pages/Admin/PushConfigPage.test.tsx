@@ -207,6 +207,63 @@ describe('PushConfigPage', () => {
   });
 
   // ==========================================================================
+  // Card order (issue #452): primary control, status, verification, danger
+  // ==========================================================================
+
+  describe('card order', () => {
+    /** True when `a` comes before `b` in document order. */
+    const precedes = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    it('configured: Enable web push, then Status, then Test & diagnostics, then Danger zone', () => {
+      setHook({ config: configuredEnabled });
+
+      renderAsAdmin();
+
+      const enableSwitch = screen.getByLabelText(/enable web push for this deployment/i);
+      const enableHeading = screen.getByRole('heading', { name: 'Enable web push' });
+      const statusHeading = screen.getByRole('heading', { name: 'Status' });
+      const testPanel = screen.getByTestId('push-test-panel');
+      const dangerHeading = screen.getByRole('heading', { name: 'Danger zone' });
+
+      expect(precedes(enableHeading, enableSwitch)).toBe(true);
+      expect(precedes(enableSwitch, statusHeading)).toBe(true);
+      expect(precedes(statusHeading, testPanel)).toBe(true);
+      expect(precedes(testPanel, dangerHeading)).toBe(true);
+    });
+
+    it('configured: each card is its own labelled region, and the destructive actions live only in Danger zone', () => {
+      setHook({ config: configuredEnabled });
+
+      renderAsAdmin();
+
+      const enableCard = screen.getByRole('region', { name: 'Enable web push' });
+      const dangerCard = screen.getByRole('region', { name: 'Danger zone' });
+      screen.getByRole('region', { name: 'Status' });
+
+      expect(within(enableCard).getByRole('button', { name: /save changes/i })).toBeInTheDocument();
+      expect(within(enableCard).queryByRole('button', { name: /rotate keys/i })).not.toBeInTheDocument();
+      expect(within(dangerCard).getByRole('button', { name: /rotate keys/i })).toBeInTheDocument();
+      expect(within(dangerCard).getByRole('button', { name: /remove configuration/i })).toBeInTheDocument();
+      expect(within(dangerCard).queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument();
+    });
+
+    it('not configured: Generate comes before Status, with no diagnostics or danger zone', () => {
+      setHook({ config: unconfigured });
+
+      renderAsAdmin();
+
+      const generateHeading = screen.getByRole('heading', { name: 'Generate a key pair' });
+      const statusHeading = screen.getByRole('heading', { name: 'Status' });
+
+      expect(precedes(generateHeading, statusHeading)).toBe(true);
+      expect(screen.queryByTestId('push-test-panel')).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Danger zone' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Enable web push' })).not.toBeInTheDocument();
+    });
+  });
+
+  // ==========================================================================
   // Public key renders in full; private key never appears anywhere
   // ==========================================================================
 
