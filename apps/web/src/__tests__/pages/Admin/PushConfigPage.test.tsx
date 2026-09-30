@@ -25,6 +25,14 @@ vi.mock('../../../hooks/usePermissions', () => ({
   usePermissions: vi.fn(),
 }));
 
+// The diagnostics section has its own suite (`PushTestPanel.test.tsx`); here
+// it is a marker so the page's placement/gating of it can be asserted.
+vi.mock('../../../components/admin/PushTestPanel', () => ({
+  PushTestPanel: ({ canWrite }: { canWrite: boolean }) => (
+    <div data-testid="push-test-panel" data-can-write={String(canWrite)} />
+  ),
+}));
+
 import { usePushConfig } from '../../../hooks/usePushConfig';
 import { usePermissions } from '../../../hooks/usePermissions';
 import PushConfigPage from '../../../pages/Admin/PushConfigPage';
@@ -77,7 +85,7 @@ const configuredEnabled: PushConfigAdminView = {
   settingsError: null,
   version: 3,
   updatedAt: '2026-01-01T00:00:00.000Z',
-  updatedBy: 'admin@example.com',
+  updatedBy: { id: 'admin-user-id', email: 'admin@example.com' },
 };
 
 const configuredDisabled: PushConfigAdminView = {
@@ -150,6 +158,51 @@ describe('PushConfigPage', () => {
       renderAsAdmin();
 
       expect(screen.getByText('Disabled')).toBeInTheDocument();
+    });
+
+    it("renders the last editor's EMAIL, never [object Object] (issue #449)", () => {
+      setHook({ config: configuredEnabled });
+
+      const { container } = renderAsAdmin();
+
+      expect(screen.getByText(/last updated .* by admin@example\.com/i)).toBeInTheDocument();
+      expect(container.innerHTML).not.toContain('[object Object]');
+    });
+
+    it('omits the "by" clause when updatedBy is null', () => {
+      setHook({ config: { ...configuredEnabled, updatedBy: null } });
+
+      renderAsAdmin();
+
+      const line = screen.getByText(/last updated/i);
+      expect(line.textContent).not.toMatch(/ by /);
+    });
+  });
+
+  describe('test & diagnostics section', () => {
+    it('is rendered once a key pair is configured, with write access passed through', () => {
+      setHook({ config: configuredEnabled });
+
+      renderAsAdmin();
+
+      expect(screen.getByTestId('push-test-panel')).toHaveAttribute('data-can-write', 'true');
+    });
+
+    it('receives canWrite=false for a read-only admin', () => {
+      setPermissions(READ_ONLY_PERMISSIONS);
+      setHook({ config: configuredEnabled });
+
+      renderAsAdmin();
+
+      expect(screen.getByTestId('push-test-panel')).toHaveAttribute('data-can-write', 'false');
+    });
+
+    it('is not rendered while nothing is configured', () => {
+      setHook({ config: unconfigured });
+
+      renderAsAdmin();
+
+      expect(screen.queryByTestId('push-test-panel')).not.toBeInTheDocument();
     });
   });
 

@@ -72,6 +72,7 @@ import {
   PushConfigConfirmDialog,
   type PushConfigDialogAction,
 } from '../../components/admin/PushConfigConfirmDialog';
+import { PushTestPanel } from '../../components/admin/PushTestPanel';
 
 /** A `mailto:` or `https:` address — the VAPID subject/contact, exactly what `web-push` requires. */
 function validateSubject(raw: string): string | null {
@@ -315,10 +316,14 @@ export default function PushConfigPage() {
           {config.updatedAt && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
               Last updated {new Date(config.updatedAt).toLocaleString()}
-              {config.updatedBy ? ` by ${config.updatedBy}` : ''}
+              {config.updatedBy?.email ? ` by ${config.updatedBy.email}` : ''}
             </Typography>
           )}
         </Paper>
+
+        {/* TEST & DIAGNOSTICS (issue #449) — a section of this page, not a
+            tab or a route. Only meaningful once a key pair exists. */}
+        {config.configured && <PushTestPanel config={config} canWrite={canWrite} />}
 
         {/* ==================================================================
             EMPTY STATE — nothing configured yet.
