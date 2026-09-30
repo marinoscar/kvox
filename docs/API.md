@@ -1190,6 +1190,17 @@ only when no VAPID configuration is active, not unconditionally.
 `disabledEvents` is deliberately not exposed here — per-event suppression
 travels with each event as the stream's `toast` flag instead.
 
+The notification stream (`GET /notifications/stream`, SSE) sends each new
+inbox row as a `notification` frame carrying two server-computed booleans:
+`toast` (whether the page may raise an OS toast, from the browser-channel
+policy) and `pushed` (issue #451: `true` when the dispatch's final resolved
+channel list includes `push`, meaning a Web Push will be attempted; it does not
+prove delivery or that this browser is subscribed, and a missing field reads
+as `false`). The page uses `pushed` to skip its own OS toast for a
+backgrounded tab when an active push subscription will show it; see
+[`docs/specs/browser-notifications.md`](specs/browser-notifications.md)
+Section 7.
+
 ---
 
 #### PUT /system-settings
@@ -2866,6 +2877,74 @@ overwrite unconditionally.
 **Error Cases:**
 - 400 Bad Request - Validation error (e.g. `subject` is not a `mailto:`/`http(s)://` value)
 - 409 Conflict - Version mismatch (`If-Match` didn't match the stored version), or `enabled: true` was requested with no key pair generated yet
+
+---
+
+#### POST /admin/push-config/test
+Sends a real, signed test Web Push to **the calling admin's own** push
+subscriptions (never anyone else's) and reports, link by link, what it found:
+config integrity, whether this browser's subscription matches the active key,
+the push service's result per device, and plain-English `hints`. Issue #449.
+
+**Requires:** `push:write`
+
+**Request Body** (all fields optional; unknown fields are rejected):
+```json
+{ "endpoint": "https://fcm.googleapis.com/fcm/send/...", "applicationServerKey": "BF3z..." }
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `endpoint` | URL string (max 2048) | This browser's `PushSubscription.endpoint`; marks which listed subscription is "this browser". Never echoed back in full. |
+| `applicationServerKey` | base64url string (max 200) | The key this browser's subscription was created with; compared against the active public key. |
+
+**Response:**
+```json
+{
+  "data": {
+    "ranAt": "2024-01-01T00:00:00.000Z",
+    "durationMs": 412,
+    "overall": "sent",
+    "testId": "push-test-uuid",
+    "config": {
+      "source": "admin", "enabled": true, "active": true,
+      "publicKey": "BF3z...", "publicKeyValid": true,
+      "privateKeyMatchesPublicKey": true,
+      "subject": "mailto:admin@example.com", "subjectValid": true,
+      "problems": []
+    },
+    "browser": { "endpointProvided": true, "endpointRegistered": true, "keyMatchesServer": true },
+    "events": [
+      { "eventKey": "admin.broadcast", "label": "Announcements", "mandatory": false,
+        "policyAllows": true, "preferenceAllows": true }
+    ],
+    "subscriptions": [
+      {
+        "id": "uuid", "pushService": "fcm.googleapis.com",
+        "endpointPreview": "fcm.googleapis.com/...a1b2c3d4",
+        "isThisBrowser": true, "userAgent": "Mozilla/5.0 ...",
+        "createdAt": "2024-01-01T00:00:00.000Z", "lastSuccessAt": null, "failureCount": 0,
+        "result": { "status": "sent", "statusCode": 201, "message": null, "responseBody": null, "durationMs": 180 }
+      }
+    ],
+    "hints": []
+  }
+}
+```
+
+`overall` is one of `sent`, `partial`, `failed`, `not_configured`,
+`no_subscriptions`; `config.source` is `admin`, `env` or `none`; each
+subscription `result.status` is `sent`, `failed`, `pruned` or `skipped`.
+
+**Behavior:** always `200` — a failed send is the diagnostic, reported in
+`overall` and per subscription. A `404`/`410` from the push service prunes
+that subscription, as a real delivery does. No `notifications` or
+`notification_deliveries` row is written. Each send has a 10 s timeout. Audited
+as `push_config:test`. The VAPID private key, a subscription's `p256dh`/`auth`
+and any full endpoint are never returned.
+
+**Error Cases:**
+- 400 Bad Request - Validation error (unknown field, non-URL `endpoint`, non-base64url `applicationServerKey`)
 
 ---
 
