@@ -190,6 +190,22 @@ export interface NotificationDispatchContext {
    * `DEFAULT_NOTIFICATION_POLICY`. The real dispatcher always sets it.
    */
   policy?: NotificationPolicy;
+
+  /**
+   * The FINAL channel list this dispatch fans out over for this recipient
+   * (#451): `resolveChannels` (admin policy, preferences, `mandatory`) and then
+   * the `NotifyOptions.channels` intersection — exactly the list the
+   * dispatcher's loop iterates.
+   *
+   * READ-ONLY INFORMATION, NOT A COORDINATION CHANNEL. A channel may consult
+   * it to describe the dispatch it is part of — the browser channel stamps
+   * `pushed` on its stream frame so a tab can skip its own OS toast when the
+   * service worker's Web Push will show one — but nothing threads one
+   * channel's RESULT into another. Membership here means "this dispatch will
+   * attempt that channel", not "that channel succeeded"; channels stay
+   * independent and are attempted in isolation.
+   */
+  readonly channels: readonly NotificationChannel[];
 }
 
 /**
