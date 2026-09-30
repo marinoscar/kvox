@@ -55,7 +55,7 @@ vi.mock('../../contexts/AuthContext', () => ({
 }));
 
 interface CapturedHandlers {
-  onNotification: (notification: AppNotification, toast: boolean) => void;
+  onNotification: (notification: AppNotification, toast: boolean, pushed?: boolean) => void;
   onOpen: () => void;
   onStateChange?: (state: string) => void;
 }
@@ -76,6 +76,13 @@ vi.mock('../../services/browserNotifications', () => ({
   showAppNotification: (...args: unknown[]) => showAppNotificationMock(...args),
 }));
 
+/** #451: does this browser hold a push subscription the SW push will land on? */
+const hasActivePushSubscriptionMock = vi.fn<(key: string | null) => Promise<boolean>>();
+vi.mock('../../services/pushSubscription', () => ({
+  hasActivePushSubscription: (key: string | null) => hasActivePushSubscriptionMock(key),
+}));
+
+const getNotificationConfigMock = vi.fn();
 const getNotificationsMock = vi.fn();
 const getUnreadNotificationCountMock = vi.fn();
 const markNotificationReadMock = vi.fn();
@@ -88,6 +95,7 @@ vi.mock('../../services/api', async () => {
   return {
     ...actual,
     getNotifications: (...args: unknown[]) => getNotificationsMock(...args),
+    getNotificationConfig: (...args: unknown[]) => getNotificationConfigMock(...args),
     getUnreadNotificationCount: (...args: unknown[]) =>
       getUnreadNotificationCountMock(...args),
     markNotificationRead: (...args: unknown[]) => markNotificationReadMock(...args),
@@ -218,6 +226,12 @@ describe('NotificationContext', () => {
     markNotificationReadMock.mockResolvedValue(makeUnreadResponse(0));
     markAllNotificationsReadMock.mockResolvedValue(makeUnreadResponse(0));
     resetServiceWorkerToSafeDefault();
+    getNotificationConfigMock.mockResolvedValue({
+      browserEnabled: true,
+      pushEnabled: true,
+      vapidPublicKey: 'VAPID-KEY',
+    });
+    hasActivePushSubscriptionMock.mockResolvedValue(false);
   });
 
   describe('mount behaviour', () => {
@@ -599,6 +613,184 @@ describe('NotificationContext', () => {
       });
 
       expect(showAppNotificationMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('push dedupe: the service worker shows a pushed notification (#451)', () => {
+    const originalVisibilityState = Object.getOwnPropertyDescriptor(
+      Document.prototype,
+      'visibilityState',
+    );
+    const originalHasFocus = document.hasFocus;
+
+    function setTab(visibility: 'visible' | 'hidden', focused: boolean) {
+      Object.defineProperty(document, 'visibilityState', { value: visibility, configurable: true });
+      vi.spyOn(document, 'hasFocus').mockReturnValue(focused);
+    }
+
+    afterEach(() => {
+      // The instance-level override set by `setTab` shadows the prototype
+      // getter; removing it restores the real one.
+      delete (document as unknown as Record<string, unknown>).visibilityState;
+      if (originalVisibilityState) {
+        Object.defineProperty(Document.prototype, 'visibilityState', originalVisibilityState);
+      }
+      document.hasFocus = originalHasFocus;
+    });
+
+    async function renderReady() {
+      const rendered = renderHook(() => useNotifications(), { wrapper: createWrapper() });
+      await waitFor(() => expect(rendered.result.current?.isLoading).toBe(false));
+      return rendered;
+    }
+
+    /** Let the pushed path's config read and subscription check settle. */
+    async function settle() {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    it('hidden tab + pushed: true + an active subscription raises no page toast, but still updates the bell', async () => {
+      setTab('hidden', false);
+      hasActivePushSubscriptionMock.mockResolvedValue(true);
+      const { result } = await renderReady();
+
+      const notification = makeAppNotification({ id: 'pushed-active' });
+      act(() => {
+        capturedHandlers!.onNotification(notification, true, true);
+      });
+      // The centre updates synchronously, before any push check.
+      expect(result.current?.notifications[0]).toEqual(notification);
+      expect(result.current?.unreadCount).toBe(1);
+
+      await settle();
+
+      expect(hasActivePushSubscriptionMock).toHaveBeenCalledWith('VAPID-KEY');
+      expect(showAppNotificationMock).not.toHaveBeenCalled();
+    });
+
+    it('hidden tab + pushed: true + no subscription raises the page toast', async () => {
+      setTab('hidden', false);
+      hasActivePushSubscriptionMock.mockResolvedValue(false);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'pushed-nosub' }), true, true);
+      });
+      await settle();
+
+      await waitFor(() => expect(showAppNotificationMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('hidden tab + pushed: false raises the page toast without checking the subscription', async () => {
+      setTab('hidden', false);
+      hasActivePushSubscriptionMock.mockResolvedValue(true);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'not-pushed' }), true, false);
+      });
+
+      expect(showAppNotificationMock).toHaveBeenCalledTimes(1);
+      expect(hasActivePushSubscriptionMock).not.toHaveBeenCalled();
+      expect(getNotificationConfigMock).not.toHaveBeenCalled();
+    });
+
+    it('hidden tab + a missing pushed (older server) raises the page toast', async () => {
+      setTab('hidden', false);
+      hasActivePushSubscriptionMock.mockResolvedValue(true);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'no-pushed-field' }), true);
+      });
+
+      expect(showAppNotificationMock).toHaveBeenCalledTimes(1);
+      expect(hasActivePushSubscriptionMock).not.toHaveBeenCalled();
+    });
+
+    it('a focused, visible tab still raises no page toast, and does not consult push', async () => {
+      setTab('visible', true);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'pushed-focused' }), true, true);
+      });
+      await settle();
+
+      expect(showAppNotificationMock).not.toHaveBeenCalled();
+      expect(hasActivePushSubscriptionMock).not.toHaveBeenCalled();
+    });
+
+    it('pushed: true with toast: false raises no toast and does not consult push', async () => {
+      setTab('hidden', false);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'pushed-muted' }), false, true);
+      });
+      await settle();
+
+      expect(showAppNotificationMock).not.toHaveBeenCalled();
+      expect(hasActivePushSubscriptionMock).not.toHaveBeenCalled();
+    });
+
+    it('raises the page toast when the deployment has push disabled', async () => {
+      setTab('hidden', false);
+      getNotificationConfigMock.mockResolvedValue({
+        browserEnabled: true,
+        pushEnabled: false,
+        vapidPublicKey: null,
+      });
+      hasActivePushSubscriptionMock.mockResolvedValue(true);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'push-off' }), true, true);
+      });
+
+      await waitFor(() => expect(showAppNotificationMock).toHaveBeenCalledTimes(1));
+      expect(hasActivePushSubscriptionMock).not.toHaveBeenCalled();
+    });
+
+    it('raises the page toast when the config cannot be read, and retries the read next time', async () => {
+      setTab('hidden', false);
+      getNotificationConfigMock.mockRejectedValueOnce(new Error('offline'));
+      hasActivePushSubscriptionMock.mockResolvedValue(true);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'cfg-fail' }), true, true);
+      });
+      await waitFor(() => expect(showAppNotificationMock).toHaveBeenCalledTimes(1));
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'cfg-retry' }), true, true);
+      });
+      await settle();
+
+      expect(getNotificationConfigMock).toHaveBeenCalledTimes(2);
+      expect(showAppNotificationMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads the config once and reuses it for later pushed frames', async () => {
+      setTab('hidden', false);
+      hasActivePushSubscriptionMock.mockResolvedValue(true);
+      await renderReady();
+
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'reuse-1' }), true, true);
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'reuse-2' }), true, true);
+      });
+      await settle();
+      act(() => {
+        capturedHandlers!.onNotification(makeAppNotification({ id: 'reuse-3' }), true, true);
+      });
+      await settle();
+
+      expect(getNotificationConfigMock).toHaveBeenCalledTimes(1);
+      expect(showAppNotificationMock).not.toHaveBeenCalled();
     });
   });
 

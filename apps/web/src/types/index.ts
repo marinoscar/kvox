@@ -333,6 +333,20 @@ export type NotificationStreamEvent = Omit<AppNotification, 'readAt'> & {
    * cannot see when it finally needs it.
    */
   toast: boolean;
+  /**
+   * Is this same notification ALSO being delivered to this user over Web Push?
+   * (#451) SERVER-COMPUTED at publish time: `true` when the event declares the
+   * push channel and the user has push subscriptions it will be sent to.
+   *
+   * Lets a tab with a live push subscription leave the OS bubble to the service
+   * worker instead of raising a second one of its own (see `handleNotification`
+   * in `contexts/NotificationContext.tsx`). It is a hint about delivery, never
+   * about the row, and it never affects the bell or the unread count.
+   *
+   * OPTIONAL, and a missing value means `false`: an older server does not send
+   * it, and "not pushed" is the safe reading — the page keeps its own toast.
+   */
+  pushed?: boolean;
 };
 
 /**
