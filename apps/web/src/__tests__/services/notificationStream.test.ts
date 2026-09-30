@@ -58,13 +58,30 @@ describe('parseNotificationEvent', () => {
 
   it('parses a well-formed payload', () => {
     const result = parseNotificationEvent(JSON.stringify(valid));
-    expect(result).toEqual(valid);
+    expect(result).toEqual({ ...valid, pushed: false });
   });
 
   it('accepts link: null explicitly', () => {
     const payload = { ...valid, link: null };
     const result = parseNotificationEvent(JSON.stringify(payload));
-    expect(result).toEqual(payload);
+    expect(result).toEqual({ ...payload, pushed: false });
+  });
+
+  // #451: `pushed` is optional. An older server omits it, and anything but a
+  // literal `true` reads as "not pushed" so the page keeps its own toast.
+  it('parses pushed: true', () => {
+    const payload = { ...valid, pushed: true };
+    expect(parseNotificationEvent(JSON.stringify(payload))).toEqual(payload);
+  });
+
+  it('reads a missing pushed as false rather than rejecting the frame', () => {
+    expect(parseNotificationEvent(JSON.stringify(valid))?.pushed).toBe(false);
+  });
+
+  it('reads a pushed of the wrong type as false', () => {
+    expect(
+      parseNotificationEvent(JSON.stringify({ ...valid, pushed: 'yes' }))?.pushed,
+    ).toBe(false);
   });
 
   it('returns null, never throws, on invalid JSON', () => {
@@ -108,7 +125,7 @@ describe('parseNotificationEvent', () => {
 
   it('parses toast: false — the administrator has muted the bubble', () => {
     const payload = { ...valid, toast: false };
-    expect(parseNotificationEvent(JSON.stringify(payload))).toEqual(payload);
+    expect(parseNotificationEvent(JSON.stringify(payload))).toEqual({ ...payload, pushed: false });
   });
 
   it('rejects a missing toast rather than guessing a default', () => {
@@ -150,6 +167,12 @@ describe('streamEventToNotification', () => {
     expect(
       streamEventToNotification({ ...event, toast: false }),
     ).not.toHaveProperty('toast');
+  });
+
+  it('drops `pushed` too (#451) — also a live-delivery hint', () => {
+    expect(
+      streamEventToNotification({ ...event, pushed: true }),
+    ).not.toHaveProperty('pushed');
   });
 });
 
@@ -241,7 +264,7 @@ describe('connectNotificationStream', () => {
     const { toast: _toast, ...row } = payload;
 
     expect(onNotification).toHaveBeenCalledTimes(1);
-    expect(onNotification).toHaveBeenCalledWith({ ...row, readAt: null }, true);
+    expect(onNotification).toHaveBeenCalledWith({ ...row, readAt: null }, true, false);
   });
 
   // #227: `toast` is the live-delivery instruction, and it must reach
@@ -273,7 +296,30 @@ describe('connectNotificationStream', () => {
     const { toast: _toast, ...row } = payload;
 
     expect(onNotification).toHaveBeenCalledTimes(1);
-    expect(onNotification).toHaveBeenCalledWith({ ...row, readAt: null }, false);
+    expect(onNotification).toHaveBeenCalledWith({ ...row, readAt: null }, false, false);
+  });
+
+  it('onFrame passes pushed: true through as the third argument, and strips it from the row (#451)', () => {
+    const onNotification = vi.fn();
+    connectNotificationStream({ onNotification, onOpen: vi.fn() });
+
+    const options = connectSseMock.mock.calls[0][0] as SseOptions;
+    const payload = {
+      id: 'n3',
+      eventKey: 'admin.broadcast',
+      title: 'Title',
+      body: 'Body',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      link: null,
+      toast: true,
+      pushed: true,
+    };
+    options.onFrame({ event: NOTIFICATION_SSE_EVENT, data: JSON.stringify(payload), id: null });
+
+    const { toast: _toast, pushed: _pushed, ...row } = payload;
+
+    expect(onNotification).toHaveBeenCalledTimes(1);
+    expect(onNotification).toHaveBeenCalledWith({ ...row, readAt: null }, true, true);
   });
 
   it('onFrame silently drops a notification-event frame with malformed JSON - no throw, onNotification not called', () => {

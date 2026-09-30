@@ -64,6 +64,7 @@ import { useAuth } from './AuthContext';
 import { useIsMounted } from '../hooks/useIsMounted';
 import {
   ApiError,
+  getNotificationConfig,
   getNotifications,
   getUnreadNotificationCount,
   markAllNotificationsRead,
@@ -71,8 +72,9 @@ import {
 } from '../services/api';
 import { connectNotificationStream, type SseState } from '../services/notificationStream';
 import { showAppNotification } from '../services/browserNotifications';
+import { hasActivePushSubscription } from '../services/pushSubscription';
 import { isInternalLink } from '../utils/internalLink';
-import type { AppNotification } from '../types';
+import type { AppNotification, NotificationConfigResponse } from '../types';
 
 /**
  * How many notifications the centre holds.
@@ -211,6 +213,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
    */
   const seenNotificationIds = useRef<Set<string>>(new Set());
 
+  /**
+   * #451: `GET /api/notifications/config`, fetched LAZILY — only the first
+   * time a frame arrives with `pushed: true` — and reused for the rest of the
+   * session. Only the push dedupe below reads it, so a tab that never sees a
+   * pushed frame never pays for it. A failed read is not cached (the next
+   * pushed frame retries) and resolves to `null`, which means "show the
+   * page's toast". Cleared on logout with the rest of the session state.
+   */
+  const notificationConfig = useRef<Promise<NotificationConfigResponse | null> | null>(null);
+
+  const loadNotificationConfig = useCallback((): Promise<NotificationConfigResponse | null> => {
+    if (!notificationConfig.current) {
+      const pending = getNotificationConfig().catch(() => {
+        if (notificationConfig.current === pending) notificationConfig.current = null;
+        return null;
+      });
+      notificationConfig.current = pending;
+    }
+    return notificationConfig.current;
+  }, []);
+
   const refresh = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current;
 
@@ -316,7 +339,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
    * on render is a connection that reconnects constantly.
    */
   const handleNotification = useCallback(
-    (notification: AppNotification, toast: boolean) => {
+    (notification: AppNotification, toast: boolean, pushed = false) => {
       if (!isMounted()) return;
 
       // =======================================================================
@@ -459,6 +482,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // works by reading what the browser has already displayed; this one
       // works by reading what the user is currently looking at. Neither
       // subsumes the other.
+      //
+      // This return governs the PAGE's toast only. When the user also has the
+      // push channel on, the service worker's `push` handler (`sw.ts`, issue
+      // #450) shows its OS notification regardless of focus — precisely
+      // because this return means the page never shows one for a focused tab.
       if (document.visibilityState === 'visible' && document.hasFocus()) return;
 
       // THIRD IN THE ORDERING, and deliberately last: the centre is already
@@ -466,14 +494,60 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // and forgotten — `showAppNotification` resolves with which path (if
       // any) raised the toast, purely for tests/diagnostics, and nothing here
       // is waiting on that answer.
-      void showAppNotification(notification, (clicked) => {
-        // Marking read on activation matches clicking the row in the bell —
-        // the user has demonstrably seen it.
-        void markRead(clicked.id);
-        if (isInternalLink(clicked.link)) navigate(clicked.link);
-      });
+      const raiseToast = () =>
+        void showAppNotification(notification, (clicked) => {
+          // Marking read on activation matches clicking the row in the bell —
+          // the user has demonstrably seen it.
+          void markRead(clicked.id);
+          if (isInternalLink(clicked.link)) navigate(clicked.link);
+        });
+
+      // =======================================================================
+      // ⚠️ #451: LEAVE THE OS BUBBLE TO THE SERVICE WORKER WHEN IT WILL SHOW IT
+      // =======================================================================
+      //
+      // An event that declares both the browser and the push channel (an admin
+      // broadcast) reaches a backgrounded tab twice: this SSE frame, and a Web
+      // Push the service worker shows (`sw.ts`). The two have different tags,
+      // so the registration-wide `getNotifications({ tag })` guard in
+      // `showAppNotification` cannot collapse them, and the user saw TWO OS
+      // notifications. `pushed` is the server telling us the push is going
+      // out to this user; `hasActivePushSubscription` is this browser
+      // confirming it holds a subscription (for the current VAPID key) that
+      // the push will land on. Only when BOTH hold does the page step aside.
+      //
+      // THE TRADE-OFF, accepted knowingly: if the push service drops or delays
+      // that message, this tab raises no OS bubble for it. The row has
+      // already arrived — the bell, the badge and the centre updated above —
+      // so what is lost is the interruption, never the notification. Every
+      // uncertain answer (older server without `pushed`, config unavailable,
+      // no subscription, any error) falls back to the page's own toast: a
+      // possible duplicate is preferred over a possible silence.
+      //
+      // ASYNC ONLY ON THIS PATH, and only for the toast: every state update
+      // above has already run synchronously, and a frame without `pushed`
+      // keeps raising its toast synchronously exactly as before.
+      if (!pushed) {
+        raiseToast();
+        return;
+      }
+
+      void (async () => {
+        let serviceWorkerWillShowIt = false;
+        try {
+          const config = await loadNotificationConfig();
+          if (config?.pushEnabled && config.vapidPublicKey) {
+            serviceWorkerWillShowIt = await hasActivePushSubscription(config.vapidPublicKey);
+          }
+        } catch {
+          serviceWorkerWillShowIt = false;
+        }
+        // Logged out or unmounted while we were checking: nothing to show.
+        if (!isMounted()) return;
+        if (!serviceWorkerWillShowIt) raiseToast();
+      })();
     },
-    [isMounted, navigate, markRead],
+    [isMounted, navigate, markRead, loadNotificationConfig],
   );
 
   /**
@@ -514,6 +588,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // stale set would let the next user's first arrivals be mistaken for
       // duplicates on an id collision and silently not counted.
       seenNotificationIds.current.clear();
+      // #451: the next session re-reads the push config on its first pushed frame.
+      notificationConfig.current = null;
       return;
     }
 
@@ -539,8 +615,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const connection = connectNotificationStream({
       // Indirected through the ref so this effect never re-runs for a changed
       // callback identity.
-      onNotification: (notification, toast) =>
-        handlersRef.current.handleNotification(notification, toast),
+      onNotification: (notification, toast, pushed) =>
+        handlersRef.current.handleNotification(notification, toast, pushed),
       onOpen: () => handlersRef.current.handleStreamOpen(),
       onStateChange: (state) => {
         if (isMounted()) setStreamState(state);
@@ -589,7 +665,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // first (the click itself is the "seen" signal), then navigate only if
       // the link is a validated in-app destination.
       const link = typeof data.link === 'string' ? data.link : null;
-      if (typeof data.id === 'string') void markRead(data.id);
+      // An empty id is a test push (issue #449): no row exists to mark read.
+      if (typeof data.id === 'string' && data.id) void markRead(data.id);
       if (isInternalLink(link)) navigate(link);
     };
 

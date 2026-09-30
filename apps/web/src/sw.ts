@@ -291,6 +291,11 @@ interface PushNotificationPayload {
   title: string;
   body: string;
   link: string;
+  /**
+   * Set only by the admin "Send test push" action (`POST
+   * /api/admin/push-config/test`, issue #449). See `handleTestPush`.
+   */
+  test?: boolean;
 }
 
 const PUSH_ICON = '/icons/icon-192.png';
@@ -305,9 +310,9 @@ const PUSH_BADGE = '/icons/badge-96.png';
  * has been updated in the background" notification — worse than anything this
  * handler could show on purpose, and confusing to a user who has no idea what
  * it means. So every code path below — including the JSON-parse-failure path
- * — ends in exactly one of two actions: an awaited `showNotification`, or the
- * `postMessage` branch (which substitutes for it deliberately; see below).
- * There must be no third path that just returns.
+ * — ends in an awaited `showNotification` (a test push's ack `postMessage`
+ * stands in only if that call throws; see `handleTestPush`). There must be no
+ * path that just returns.
  */
 async function handlePush(event: PushEvent): Promise<void> {
   let payload: PushNotificationPayload;
@@ -315,13 +320,12 @@ async function handlePush(event: PushEvent): Promise<void> {
     if (!event.data) throw new Error('push event carried no data');
     payload = event.data.json() as PushNotificationPayload;
   } catch {
-    // Malformed or missing payload: there is no title/body/link to work with,
-    // and no `id` to key a client `postMessage` on. Per the critical rule
-    // above, doing nothing here is strictly worse than showing something —
-    // it would surface Chrome's own generic substitute instead, which looks
-    // identical to the user but tells them nothing this app can control. A
-    // plain, generic notification is the more honest failure mode, so show
-    // one rather than silently no-op.
+    // Malformed or missing payload: there is no title/body/link/id to work
+    // with. Per the critical rule above, doing nothing here is strictly worse
+    // than showing something — it would surface Chrome's own generic
+    // substitute instead, which looks identical to the user but tells them
+    // nothing this app can control. A plain, generic notification is the more
+    // honest failure mode, so show one rather than silently no-op.
     await self.registration.showNotification('New notification', {
       body: 'You have a new notification',
       icon: PUSH_ICON,
@@ -331,39 +335,25 @@ async function handlePush(event: PushEvent): Promise<void> {
     return;
   }
 
-  // `Clients.matchAll<T extends ClientQueryOptions>` infers `WindowClient[]`
-  // from the literal `type: 'window'` in the options object itself — passing
-  // an explicit `<WindowClient>` type argument instead breaks that inference
-  // (it makes `T` the `WindowClient` type, so the options parameter would
-  // have to satisfy `WindowClient`, not `ClientQueryOptions`) and fails to
-  // compile. Let TS infer it.
-  const windowClients = await self.clients.matchAll({ type: 'window' });
-  const visibleFocusedClient = windowClients.find(
-    (client) => client.visibilityState === 'visible' && client.focused,
-  );
-
-  if (visibleFocusedClient) {
-    // A visible, focused tab has already received this event over SSE and run
-    // it through `NotificationContext` (table update, unread count, its own
-    // native-toast de-dup) by the time a push physically arrives — see
-    // `notify()`'s dispatch order in the root CLAUDE.md. Calling
-    // `showNotification` here would just be a redundant OS-level toast on top
-    // of what the page already showed, so this branch informs the page
-    // instead of the OS. `postMessage` itself satisfies the critical rule in
-    // place of `showNotification`.
-    visibleFocusedClient.postMessage({
-      type: 'push-notification',
-      id: payload.id,
-      eventKey: payload.eventKey,
-      title: payload.title,
-      body: payload.body,
-      link: payload.link,
-    });
+  if (payload.test === true) {
+    await handleTestPush(payload);
     return;
   }
 
-  // No visible+focused tab — including the app being fully closed. This is
-  // the only way the user finds out at all, so show the real OS notification.
+  // Every real push is shown as an OS notification — including when a
+  // visible, focused tab exists. That tab has already received this event
+  // over SSE and run it through `NotificationContext` (table update, unread
+  // count), but its SSE handler deliberately raises NO OS toast while the tab
+  // is focused (the `visibilityState === 'visible' && hasFocus()` early
+  // return). So if this worker also stayed quiet for a focused tab — as it
+  // once did, posting the payload to the page instead — a focused user got no
+  // visible alert at all. Showing it here therefore adds no duplicate: the
+  // page and the worker never both toast for a focused tab.
+  //
+  // Known pre-existing edge, unchanged by this rule: a backgrounded-but-alive
+  // tab can raise its own SSE toast (tagged with the browser-channel row's id)
+  // alongside this one (tagged with the push-channel row's id). The two rows
+  // have different ids, so the `tag` de-dup below cannot collapse them.
   await self.registration.showNotification(payload.title, {
     body: payload.body,
     // Keyed by the notification's own id, mirroring the `tag` de-dup
@@ -379,6 +369,62 @@ async function handlePush(event: PushEvent): Promise<void> {
     // not this one's.
     data: { id: payload.id, link: payload.link },
   });
+}
+
+/**
+ * A TEST PUSH from `/admin/settings/push` (issue #449).
+ *
+ * Like a real push, it is ALWAYS shown as an OS notification, even when a
+ * visible, focused tab exists (the admin presses "Send test push" FROM an open
+ * tab). It differs in two deliberate ways:
+ *
+ *   1. It has no SSE twin and writes no notification row, so there is nothing
+ *      for the page to have shown already.
+ *   2. It then acks to EVERY window client (`push-test-received`), so the
+ *      diagnostics panel can prove end-to-end delivery and measure latency.
+ *
+ * `data.id` is `''` on purpose: the test id names no notification row, and
+ * `notificationclick` / `NotificationContext` skip mark-read for an empty id.
+ *
+ * Still obeys the critical rule above: `showNotification` is attempted first,
+ * and if it throws the ack `postMessage` stands in for it.
+ */
+async function handleTestPush(payload: PushNotificationPayload): Promise<void> {
+  const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const hadFocusedClient = windowClients.some(
+    (client) => client.visibilityState === 'visible' && client.focused,
+  );
+
+  let shown = false;
+  let error: string | undefined;
+  try {
+    await self.registration.showNotification(payload.title, {
+      body: payload.body,
+      tag: payload.id,
+      icon: PUSH_ICON,
+      badge: PUSH_BADGE,
+      data: { id: '', link: payload.link, test: true },
+    });
+    shown = true;
+  } catch (err) {
+    error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+  }
+
+  const ack = {
+    type: 'push-test-received',
+    id: payload.id,
+    receivedAt: Date.now(),
+    shown,
+    hadFocusedClient,
+    ...(error ? { error } : {}),
+  };
+  for (const client of windowClients) {
+    try {
+      client.postMessage(ack);
+    } catch {
+      // One client refusing the message must not stop the others hearing it.
+    }
+  }
 }
 
 self.addEventListener('push', (event) => {

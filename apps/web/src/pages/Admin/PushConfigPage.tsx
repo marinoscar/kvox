@@ -21,21 +21,36 @@
  * `DbBackupRestoreDialog`'s `CopyableBlock` gives a paste-ready command.
  *
  * =============================================================================
- * THREE PANELS, NOT ONE FORM
+ * FOUR CARDS, IN THE ORDER AN ADMIN USES THEM (issue #452)
  * =============================================================================
  *
- *   1. STATUS — always shown once loaded. Read-only.
- *   2. EMPTY STATE (`configured: false`) — a single "Generate & enable"
- *      action, with an optional subject field. `POST /generate`.
- *   3. CONFIGURED STATE — the enable/disable switch and subject, saved
- *      through `PUT` (non-destructive, keys retained either way), plus the
- *      two destructive actions (Rotate, Remove) behind
+ * Each card is its own `Paper`, `mt: 3` apart, `p: { xs: 2, sm: 3 }` inside.
+ *
+ * CONFIGURED (`configured: true`):
+ *
+ *   1. ENABLE WEB PUSH — the enable/disable switch and subject, saved
+ *      through `PUT` (non-destructive, keys retained either way). The
+ *      control an admin comes here to change most often, so it is first.
+ *   2. STATUS — read-only: the VAPID public key, subject, private-key
+ *      provenance, last update. Reference material, so it follows the
+ *      primary control rather than pushing it below the fold on a phone.
+ *   3. TEST & DIAGNOSTICS — `PushTestPanel` (issue #449): verification,
+ *      meaningful only once a key pair exists.
+ *   4. DANGER ZONE — the two destructive actions (Rotate, Remove) behind
  *      `PushConfigConfirmDialog` and its two DIFFERENT typed literals
  *      (`ROTATE` / `REMOVE`), so a confirmation typed for one can never
- *      satisfy the other — see that component's header.
+ *      satisfy the other — see that component's header. Last, and in a card
+ *      of its own with an error-coloured outline, so it is never mistaken for
+ *      part of the everyday form above it.
  *
- * Only one of (2)/(3) is ever mounted, gated on `config.configured` — unlike
- * `EmailSettingsPage`'s provider-specific fields, which stay mounted so
+ * NOT CONFIGURED (`configured: false`):
+ *
+ *   1. GENERATE & ENABLE — a single action, with an optional subject field.
+ *      `POST /generate`.
+ *   2. STATUS — as above, stating that no key pair exists yet.
+ *
+ * Only one of the two sets is ever mounted, gated on `config.configured` —
+ * unlike `EmailSettingsPage`'s provider-specific fields, which stay mounted so
  * switching between them loses nothing. There is no equivalent "switch back"
  * gesture here: once a key pair exists, going back to unconfigured is what
  * the Remove dialog is for, not a form control.
@@ -62,6 +77,8 @@ import {
   Typography,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
+import NotificationsActiveOutlinedIcon from '@mui/icons-material/NotificationsActiveOutlined';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import VpnKeyOutlinedIcon from '@mui/icons-material/VpnKeyOutlined';
 import { Navigate } from 'react-router-dom';
@@ -72,6 +89,7 @@ import {
   PushConfigConfirmDialog,
   type PushConfigDialogAction,
 } from '../../components/admin/PushConfigConfirmDialog';
+import { PushTestPanel } from '../../components/admin/PushTestPanel';
 
 /** A `mailto:` or `https:` address — the VAPID subject/contact, exactly what `web-push` requires. */
 function validateSubject(raw: string): string | null {
@@ -278,99 +296,21 @@ export default function PushConfigPage() {
         )}
 
         {/* ==================================================================
-            STATUS PANEL — always shown, read-only.
-            =============================================================== */}
-        <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
-            <VpnKeyOutlinedIcon color="action" />
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              Status
-            </Typography>
-            {!config.configured ? (
-              <Chip label="Not configured" color="default" size="small" />
-            ) : config.enabled ? (
-              <Chip label="Enabled" color="success" size="small" />
-            ) : (
-              <Chip label="Disabled" color="warning" size="small" />
-            )}
-          </Stack>
-
-          {config.configured && config.publicKey ? (
-            <Stack spacing={2}>
-              <CopyableField label="Public key" value={config.publicKey} />
-              <Typography variant="body2" color="text.secondary">
-                Subject: {config.subject || 'not set'}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {privateKeyProvenance(config.privateKeyStatus)}
-              </Typography>
-            </Stack>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              No key pair has been generated yet. Web push is unavailable to every user until one
-              is.
-            </Typography>
-          )}
-
-          {config.updatedAt && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Last updated {new Date(config.updatedAt).toLocaleString()}
-              {config.updatedBy ? ` by ${config.updatedBy}` : ''}
-            </Typography>
-          )}
-        </Paper>
-
-        {/* ==================================================================
-            EMPTY STATE — nothing configured yet.
-            =============================================================== */}
-        {!config.configured && (
-          <Paper sx={{ mt: 3, p: { xs: 2, sm: 3 } }}>
-            <Box component="form" onSubmit={handleGenerate} noValidate>
-              <Typography variant="h6" gutterBottom>
-                Generate a key pair
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Creates a new VAPID key pair and switches web push on immediately. This is a
-                one-time action for a fresh deployment — once a key pair exists, use Rotate to
-                replace it.
-              </Typography>
-              <TextField
-                fullWidth
-                label="Subject (contact address)"
-                placeholder="mailto:admin@example.com"
-                value={generateSubject}
-                onChange={(e) => setGenerateSubject(e.target.value)}
-                disabled={!canWrite || isActing}
-                error={!!generateSubjectError}
-                helperText={
-                  generateSubjectError ??
-                  'A mailto: address or an https: URL push services may contact if something goes wrong. Optional — leave blank for the deployment default.'
-                }
-                sx={{ mb: 2 }}
-              />
-              {actionError && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={clearActionError}>
-                  {actionError}
-                </Alert>
-              )}
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={!canWrite || isActing || !!generateSubjectError}
-              >
-                {isActing ? 'Generating…' : 'Generate & enable'}
-              </Button>
-            </Box>
-          </Paper>
-        )}
-
-        {/* ==================================================================
-            CONFIGURED STATE — enable/disable, subject, and the two
-            destructive actions.
+            CONFIGURED — 1. ENABLE WEB PUSH: the everyday control, first.
             =============================================================== */}
         {config.configured && (
-          <Paper sx={{ mt: 3, p: { xs: 2, sm: 3 } }}>
+          <Paper
+            component="section"
+            aria-labelledby="push-enable-heading"
+            sx={{ p: { xs: 2, sm: 3 } }}
+          >
             <Box component="form" onSubmit={handleSave} noValidate>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
+                <NotificationsActiveOutlinedIcon color="action" />
+                <Typography variant="h6" id="push-enable-heading">
+                  Enable web push
+                </Typography>
+              </Stack>
               <FormControlLabel
                 control={
                   <Switch
@@ -430,18 +370,132 @@ export default function PushConfigPage() {
                 </Button>
               </Box>
             </Box>
+          </Paper>
+        )}
 
-            <Divider sx={{ my: 3 }} />
+        {/* ==================================================================
+            NOT CONFIGURED — 1. GENERATE & ENABLE.
+            =============================================================== */}
+        {!config.configured && (
+          <Paper
+            component="section"
+            aria-labelledby="push-generate-heading"
+            sx={{ p: { xs: 2, sm: 3 } }}
+          >
+            <Box component="form" onSubmit={handleGenerate} noValidate>
+              <Typography variant="h6" id="push-generate-heading" gutterBottom>
+                Generate a key pair
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Creates a new VAPID key pair and switches web push on immediately. This is a
+                one-time action for a fresh deployment — once a key pair exists, use Rotate to
+                replace it.
+              </Typography>
+              <TextField
+                fullWidth
+                label="Subject (contact address)"
+                placeholder="mailto:admin@example.com"
+                value={generateSubject}
+                onChange={(e) => setGenerateSubject(e.target.value)}
+                disabled={!canWrite || isActing}
+                error={!!generateSubjectError}
+                helperText={
+                  generateSubjectError ??
+                  'A mailto: address or an https: URL push services may contact if something goes wrong. Optional — leave blank for the deployment default.'
+                }
+                sx={{ mb: 2 }}
+              />
+              {actionError && (
+                <Alert severity="error" sx={{ mb: 2 }} onClose={clearActionError}>
+                  {actionError}
+                </Alert>
+              )}
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={!canWrite || isActing || !!generateSubjectError}
+              >
+                {isActing ? 'Generating…' : 'Generate & enable'}
+              </Button>
+            </Box>
+          </Paper>
+        )}
 
+        {/* ==================================================================
+            STATUS — always shown, read-only, always the second card.
+            =============================================================== */}
+        <Paper
+          component="section"
+          aria-labelledby="push-status-heading"
+          sx={{ mt: 3, p: { xs: 2, sm: 3 } }}
+        >
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
+            <VpnKeyOutlinedIcon color="action" />
+            <Typography variant="h6" id="push-status-heading" sx={{ flexGrow: 1 }}>
+              Status
+            </Typography>
+            {!config.configured ? (
+              <Chip label="Not configured" color="default" size="small" />
+            ) : config.enabled ? (
+              <Chip label="Enabled" color="success" size="small" />
+            ) : (
+              <Chip label="Disabled" color="warning" size="small" />
+            )}
+          </Stack>
+
+          {config.configured && config.publicKey ? (
+            <Stack spacing={2}>
+              <CopyableField label="Public key" value={config.publicKey} />
+              <Typography variant="body2" color="text.secondary">
+                Subject: {config.subject || 'not set'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {privateKeyProvenance(config.privateKeyStatus)}
+              </Typography>
+            </Stack>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No key pair has been generated yet. Web push is unavailable to every user until one
+              is.
+            </Typography>
+          )}
+
+          {config.updatedAt && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Last updated {new Date(config.updatedAt).toLocaleString()}
+              {config.updatedBy?.email ? ` by ${config.updatedBy.email}` : ''}
+            </Typography>
+          )}
+        </Paper>
+
+        {/* TEST & DIAGNOSTICS (issue #449) — a section of this page, not a
+            tab or a route. Only meaningful once a key pair exists. Carries
+            its own `mt: 3` Paper. */}
+        {config.configured && <PushTestPanel config={config} canWrite={canWrite} />}
+
+        {/* ==================================================================
+            CONFIGURED — 4. DANGER ZONE: destructive, last, isolated in its
+            own error-outlined card.
+            =============================================================== */}
+        {config.configured && (
+          <Paper
+            component="section"
+            variant="outlined"
+            aria-labelledby="push-danger-heading"
+            sx={{ mt: 3, p: { xs: 2, sm: 3 }, borderColor: 'error.main' }}
+          >
             {/* THE DESTRUCTIVE ACTIONS. Both take every existing push
                 subscriber offline (see `PushConfigConfirmDialog`'s copy for
                 the precise, verified recovery mechanic) — kept visually
                 distinct with the error palette and a shared warning line,
                 but gated for real by the typed-confirmation dialog, not by
                 this button alone. */}
-            <Typography variant="h6" gutterBottom color="error">
-              Danger zone
-            </Typography>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+              <WarningAmberOutlinedIcon color="error" />
+              <Typography variant="h6" id="push-danger-heading" color="error">
+                Danger zone
+              </Typography>
+            </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Both actions below take every existing push subscriber offline until it
               re-subscribes. Neither can be undone.

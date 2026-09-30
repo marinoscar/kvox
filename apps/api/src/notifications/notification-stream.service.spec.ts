@@ -33,6 +33,7 @@ function makeEvent(overrides: Partial<NotificationStreamEvent> = {}): Notificati
     // the browser channel computed — so the default here is simply the ordinary
     // case, and a test that cares passes an override.
     toast: true,
+    pushed: false,
     ...overrides,
   };
 }

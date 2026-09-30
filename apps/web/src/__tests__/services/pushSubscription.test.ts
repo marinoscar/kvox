@@ -5,6 +5,8 @@ import {
   requestPermissionAndSyncPush,
   removePushSubscription,
   claimAutoPermissionPrompt,
+  hasActivePushSubscription,
+  ACTIVE_PUSH_SUBSCRIPTION_CACHE_MS,
   resetPushSubscriptionStateForTests,
 } from '../../services/pushSubscription';
 import { subscribePushNotifications, unsubscribePushNotifications } from '../../services/api';
@@ -551,5 +553,144 @@ describe('claimAutoPermissionPrompt', () => {
     resetPushSubscriptionStateForTests();
 
     expect(claimAutoPermissionPrompt()).toBe(true);
+  });
+});
+
+describe('hasActivePushSubscription (#451)', () => {
+  const keyBytes = () => urlBase64ToUint8Array(VAPID_KEY);
+
+  /** Push supported, permission granted, a registration with `pushManager`. */
+  function setUpActive(subscription: unknown = makeSubscription({ keyBytes: keyBytes() })) {
+    setPushManagerGlobal(true);
+    setPermission('granted');
+    const pushManager = makePushManager({
+      getSubscription: vi.fn().mockResolvedValue(subscription),
+    });
+    const getRegistration = vi.fn().mockResolvedValue({ pushManager });
+    setServiceWorker({ getRegistration });
+    return { pushManager, getRegistration };
+  }
+
+  it('is true when permission is granted and a subscription for this key exists', async () => {
+    setUpActive();
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(true);
+  });
+
+  it('uses getRegistration, never waits on .ready', async () => {
+    // `setServiceWorker`'s default `ready` never settles; resolving at all
+    // proves it was not awaited.
+    const { getRegistration } = setUpActive();
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(true);
+    expect(getRegistration).toHaveBeenCalled();
+  });
+
+  it('treats a subscription that hides its applicationServerKey as a match', async () => {
+    setUpActive(makeSubscription({ keyBytes: null }));
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(true);
+  });
+
+  it('is false with no key', async () => {
+    setUpActive();
+    await expect(hasActivePushSubscription(null)).resolves.toBe(false);
+  });
+
+  it('is false without push support', async () => {
+    setUpActive();
+    setPushManagerGlobal(false);
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it.each(['default', 'denied'] as const)('is false when permission is %s', async (permission) => {
+    setUpActive();
+    setPermission(permission);
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it('is false with no service worker registration', async () => {
+    setPushManagerGlobal(true);
+    setPermission('granted');
+    setServiceWorker({ getRegistration: vi.fn().mockResolvedValue(undefined) });
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it('is false with no subscription', async () => {
+    setUpActive(null);
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it('is false when the subscription was made with a different key', async () => {
+    const other = new Uint8Array(keyBytes().length).fill(7);
+    setUpActive(makeSubscription({ keyBytes: other }));
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it('never throws: a rejecting getRegistration is false', async () => {
+    setPushManagerGlobal(true);
+    setPermission('granted');
+    setServiceWorker({ getRegistration: vi.fn().mockRejectedValue(new Error('boom')) });
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it('never throws: a rejecting getSubscription is false', async () => {
+    const { pushManager } = setUpActive();
+    pushManager.getSubscription.mockRejectedValue(new Error('boom'));
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+  });
+
+  it('caches the answer for the same key, and expires it after the cache window', async () => {
+    vi.useFakeTimers();
+    const { pushManager } = setUpActive();
+
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(true);
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(true);
+    expect(pushManager.getSubscription).toHaveBeenCalledTimes(1);
+
+    // Within the window the cached `true` holds even though the browser changed.
+    pushManager.getSubscription.mockResolvedValue(null);
+    vi.advanceTimersByTime(ACTIVE_PUSH_SUBSCRIPTION_CACHE_MS - 1);
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(true);
+
+    vi.advanceTimersByTime(2);
+    await expect(hasActivePushSubscription(VAPID_KEY)).resolves.toBe(false);
+    expect(pushManager.getSubscription).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reuse an answer cached for a different key', async () => {
+    const { pushManager } = setUpActive();
+    await hasActivePushSubscription(VAPID_KEY);
+    await hasActivePushSubscription(null);
+    await hasActivePushSubscription(VAPID_KEY);
+    // null short-circuits before the lookup; the switch back re-queries.
+    expect(pushManager.getSubscription).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncPushSubscription invalidates the cache', async () => {
+    const subscription = makeSubscription({ keyBytes: keyBytes() });
+    const { pushManager } = setUpActive(subscription);
+    // `syncPushSubscription` waits on `.ready`.
+    setServiceWorker({
+      ready: Promise.resolve({ pushManager }),
+      getRegistration: vi.fn().mockResolvedValue({ pushManager }),
+    });
+
+    await hasActivePushSubscription(VAPID_KEY);
+    expect(pushManager.getSubscription).toHaveBeenCalledTimes(1);
+
+    await syncPushSubscription(VAPID_KEY);
+    const callsAfterSync = pushManager.getSubscription.mock.calls.length;
+
+    await hasActivePushSubscription(VAPID_KEY);
+    expect(pushManager.getSubscription).toHaveBeenCalledTimes(callsAfterSync + 1);
+  });
+
+  it('removePushSubscription invalidates the cache', async () => {
+    const { pushManager } = setUpActive();
+
+    await hasActivePushSubscription(VAPID_KEY);
+    await removePushSubscription();
+    const callsAfterRemove = pushManager.getSubscription.mock.calls.length;
+
+    await hasActivePushSubscription(VAPID_KEY);
+    expect(pushManager.getSubscription).toHaveBeenCalledTimes(callsAfterRemove + 1);
   });
 });

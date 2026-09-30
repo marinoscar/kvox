@@ -369,6 +369,23 @@ documentation, UI copy, or code comments claiming "reopening the app
 without the granted-permission qualifier — that is the detail most likely to
 get silently dropped when this file is next revised.
 
+## Verify push works and troubleshoot
+
+Open `/admin/settings/push` and use **Test & diagnostics** (needs `push:write`).
+It checks the browser, sends a test push to your own devices and reports each
+step. Design: [browser-notifications spec, Section 9](../specs/browser-notifications.md).
+
+| Symptom in the panel | Cause | Fix |
+|---|---|---|
+| Permission denied | The browser blocked notifications for this site | Allow notifications in the browser's site settings, then rerun |
+| Key mismatch | The browser subscription was created under a previous key pair | Reload the app so it re-subscribes, then rerun |
+| `403` from the push service | The push service rejects the VAPID signature or subject | Check the key pair and set a valid `mailto:` or `https:` subject (Section 2.3) |
+| `404`/`410` from the push service | The subscription expired; the server pruned it | Reload the app to re-subscribe |
+| Sent, but no acknowledgement in the panel | The device did not receive it in time | Check OS and battery settings for the browser, or an outdated service worker (reload to update) |
+| Notification shows the browser's icon (for example the Chrome logo) instead of the app icon | Android attributes a notification to the app that posts it; from a browser tab that is the browser. The app `icon` is still the large image on the right; the `badge` is the status-bar glyph. The report shows `isStandalone: false` | Install the PWA (Chrome menu, **Install app**) so Chrome creates a WebAPK. "Add to Home screen" as a plain shortcut does not change attribution |
+| Status bar shows a blank square instead of a glyph | The `badge` image is not a white and transparent silhouette | Use a monochrome white-on-transparent badge image |
+| Service worker `scriptURL` in the report is `dev-sw.js?dev-sw` | The deployment runs the Vite dev server, not the production build. Push works, but Chrome's **Install app** (WebAPK) can be less reliable | Deploy with `prod.compose.yml` for production-like behaviour |
+
 ## 5. Summary checklist
 
 **Admin UI path (recommended):**

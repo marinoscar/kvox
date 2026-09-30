@@ -17,6 +17,7 @@ import { JobFailureNotifier } from './ops/job-failure-notifier';
 import { PushConfigController } from './push-config.controller';
 import { PushConfigService } from './push-config.service';
 import { PushSubscriptionService } from './push-subscription.service';
+import { PushTestService } from './push-test.service';
 import {
   NOTIFICATION_CHANNEL_SENDERS,
   type NotificationChannelSender,
@@ -169,6 +170,11 @@ import {
     // case a future feature outside this module (an ops dashboard, a health
     // check) needs to read the same "is push actually active" answer.
     PushConfigService,
+    // `POST /api/admin/push-config/test` (#449): a diagnostic send to the
+    // calling admin's own subscriptions. NOT EXPORTED — it is the backing of
+    // one admin route, and it deliberately bypasses `notify()` (a test is not
+    // a notification; see its header), so no other feature should reach it.
+    PushTestService,
     EmailNotificationChannel,
     BrowserNotificationChannel,
     // #288's queue listener (epic #254). A PROVIDER AND NOT AN EXPORT, and it

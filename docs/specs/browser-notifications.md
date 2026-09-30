@@ -518,20 +518,38 @@ alternative — see [Rejected alternatives](#rejected-alternatives) — reading
 the registration's own list needs no coordination protocol at all, because
 the browser already maintains exactly one shared list per registration.
 
-The Web Push path has its own version of the first check, done at the server
-side of the same event, in the service worker's `push` handler
-(`sw.ts:307-336`): if a client is both `visible` and `focused` when the push
-arrives, that tab has *already* received the same event over SSE and shown
-its own toast by the time the push physically lands, so `handlePush`
-`postMessage`s the page instead of calling `showNotification` a second time.
-This satisfies "the critical rule" `sw.ts:272-284` states in block capitals:
-**every** code path through a `push` event must end in an awaited
-`showNotification` or an equivalent substitute, because a `push` handler
-that resolves without calling `showNotification` makes Chrome show its own
-generic "This site has been updated in the background" notification instead
-— worse than anything this app could show on purpose, so `postMessage`
-deliberately counts as satisfying that rule rather than being a third,
-silent path.
+The Web Push path does **not** share the first check. Since issue #450 the
+service worker's `push` handler shows a real (non-test) push as an OS
+notification whether or not a client is visible and focused. The page's SSE
+toast is suppressed for a focused tab (above), so the push is the only visible
+alert a focused user gets, not a duplicate. This satisfies "the critical
+rule" `sw.ts` states in block capitals: **every** code path through a `push`
+event must end in an awaited `showNotification`, because a `push` handler that
+resolves without calling it makes Chrome show its own generic "This site has
+been updated in the background" notification instead. A malformed payload gets
+a generic fallback notification; only a test push whose `showNotification`
+throws falls back to its `push-test-received` ack as the substitute.
+
+**Push-covered suppression (issue #451).** A backgrounded but still open tab
+used to raise its own SSE toast (tagged with the browser-channel row id) next
+to the push (tagged with the push-channel row id). The SSE `notification`
+frame now carries `pushed: boolean` next to `toast`. It is `true` when the
+final resolved channel list for that dispatch (admin policy, user preference,
+mandatory override, `NotifyOptions.channels` narrowing) includes `push`; the
+browser channel only reads that list. `pushed` means a push will be attempted,
+not that it succeeded or that this browser is subscribed; a missing field
+(older server) reads as `false`. In `NotificationContext.tsx`, a tab that is
+not visible and focused, and whose `toast` allows it, skips its own OS toast
+only when all of these hold: `pushed` is `true`, the notification config has
+`pushEnabled` and a `vapidPublicKey`, and `hasActivePushSubscription(key)`
+(`services/pushSubscription.ts`) is `true`. That helper uses
+`getRegistration`, never `.ready`, requires the subscription key to match,
+caches for 30 s, and is invalidated by sync and remove. Every uncertain case
+(no subscription, config read failure, `pushed` false or missing) shows the
+page toast. Bell, unread count and row updates are unaffected. Trade-off: if
+the push service drops the message, a backgrounded tab shows no OS toast,
+though the inbox row still arrived over SSE. A VAPID rotation mid-session can
+at worst produce a duplicate, never a missing toast.
 
 ## 8. Why this epic doesn't touch `script-src`
 
@@ -620,6 +638,50 @@ in what it gates: whether a browser may *subscribe* at all
 (`POST /notifications/push/subscriptions` still 409s with no active VAPID
 config) — only the question of whether unconfigured deliveries are visible or
 silently absent has changed.
+
+**Testing and diagnostics (issue #449).** `POST /api/admin/push-config/test`
+(`push:write`) sends a real, signed test push to the caller's own
+subscriptions only, never anyone else's. `push-test.service.ts`
+(`PushTestService`) builds the answer:
+
+- Config integrity: source (`admin`, `env` or `none`), whether the public and
+  private keys form a pair, whether the subject is valid.
+- Whether the browser's subscription key matches the server key (the request
+  may carry this browser's `endpoint` and `applicationServerKey`).
+- Per-subscription push-service results: status code, response body, duration.
+- Push-event policy and preference state, plus plain-English `hints`.
+
+The route always answers `200`; a failed send is the diagnostic. A 404/410
+prunes that subscription, as a real delivery does. No `notifications` or
+`notification_deliveries` row is written, and the audit action is
+`push_config:test`. The private key, `p256dh`/`auth` and full endpoints never
+appear in the response (a compile-time proof in `push-test.dto.ts` refuses a
+secret-named field).
+
+It is a bounded synchronous request, not a queue job: it touches only the
+caller's own handful of devices, sends in parallel under a 10 s per-send
+timeout, and the admin needs the result inline. Nothing outlives the request,
+so the queue rule is not engaged.
+
+**Service worker and test pushes.** A payload with `test: true` is always
+shown, and every window client gets a `push-test-received` message so the page
+can confirm end-to-end delivery. Clicking it navigates without marking a
+notification read.
+
+**Icon attribution.** Android attributes a notification to the app that posts
+it. From a browser tab that is the browser (for example Chrome), which a site
+cannot override. The payload `icon` still appears as the large image and the
+`badge` is the status-bar glyph; the badge must be a white and transparent
+silhouette, or Android draws a blank square. An installed PWA (a WebAPK) is
+attributed to the app with its own icon; "Add to Home screen" as a plain
+shortcut is not. The diagnostics report's `isStandalone: false` marks a
+browser tab.
+
+**UI.** The **Test & diagnostics** section on `/admin/settings/push`
+(`PushTestPanel.tsx`, `services/pushDiagnostics.ts`): permission check and
+request, browser checklist, stepwise test with a step log and device receipt
+(waits 20 s for the ack), local notification test, and copy diagnostics. The
+page lays out Enable, Status, Diagnostics, then the Danger zone (issue #452).
 
 ## 10. Operational events: an audience that is a permission, not a user
 
@@ -848,7 +910,7 @@ pair, if any, is active right now." Four cases, in order:
    logged loudly. Never silently reverts to env — that would mask a real data
    problem as ordinary "not configured".
 
-### 11.3 The five endpoints
+### 11.3 The six endpoints
 
 All under `/api/admin/push-config`, a controller of its own — same reasoning
 as `EmailSettingsController` staying apart from `SystemSettingsController`:
@@ -862,6 +924,7 @@ this surface writes a settings row and a credential the rest of
 | POST | `/api/admin/push-config/generate` | `push:write` | First-time key generation; sets `enabled: true` |
 | POST | `/api/admin/push-config/rotate` | `push:write` | Replace the key pair; `enabled` unchanged |
 | DELETE | `/api/admin/push-config` | `push:write` | Delete both the credential and the settings row |
+| POST | `/api/admin/push-config/test` | `push:write` | Test push to the caller's own devices, with diagnostics (Section 9) |
 
 Full request/response shapes: [`docs/API.md`](../API.md#push-configuration-admin-only).
 

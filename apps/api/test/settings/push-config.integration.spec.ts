@@ -138,6 +138,7 @@ describe('Push Configuration Integration', () => {
       ['generate', 'push:write'],
       ['rotate', 'push:write'],
       ['remove', 'push:write'],
+      ['sendTest', 'push:write'],
     ] as Array<[keyof PushConfigController, string]>)(
       '%s requires exactly %s',
       (handler, permission) => {
@@ -158,6 +159,7 @@ describe('Push Configuration Integration', () => {
       ['POST', `${BASE}/generate`, {}],
       ['POST', `${BASE}/rotate`, { confirmation: 'ROTATE' }],
       ['DELETE', BASE, { confirmation: 'REMOVE' }],
+      ['POST', `${BASE}/test`, {}],
     ] as Array<['GET' | 'PUT' | 'POST' | 'DELETE', string, Record<string, unknown>]>)(
       '%s %s: a viewer (no push permission at all) gets 403',
       async (method, path, body) => {
@@ -176,6 +178,7 @@ describe('Push Configuration Integration', () => {
       ['POST', `${BASE}/generate`, {}],
       ['POST', `${BASE}/rotate`, { confirmation: 'ROTATE' }],
       ['DELETE', BASE, { confirmation: 'REMOVE' }],
+      ['POST', `${BASE}/test`, {}],
     ] as Array<['PUT' | 'POST' | 'DELETE', string, Record<string, unknown>]>)(
       '%s %s: an admin holding ONLY push:read gets 403 — push:read does not imply push:write',
       async (method, path, body) => {
@@ -205,6 +208,7 @@ describe('Push Configuration Integration', () => {
       await request(server).post(`${BASE}/generate`).send({}).expect(401);
       await request(server).post(`${BASE}/rotate`).send({ confirmation: 'ROTATE' }).expect(401);
       await request(server).delete(BASE).send({ confirmation: 'REMOVE' }).expect(401);
+      await request(server).post(`${BASE}/test`).send({}).expect(401);
     });
   });
 

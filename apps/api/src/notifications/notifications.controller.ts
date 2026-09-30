@@ -303,7 +303,7 @@ export class NotificationsController {
       'A `text/event-stream` carrying **only the authenticated caller’s** notifications. ' +
       'There is no parameter that selects a user; the recipient is the bearer of the token.\n\n' +
       '**Frames.** `event: notification` with a JSON `data` payload matching `Notification` ' +
-      '(without `readAt`, plus `toast`), plus `: heartbeat` comment lines roughly every 25 ' +
+      '(without `readAt`, plus `toast` and `pushed`), plus `: heartbeat` comment lines roughly every 25 ' +
       'seconds so proxies do not reap an idle connection.\n\n' +
       '**`toast`** is the server’s answer to “may this client raise an OS notification for ' +
       'this event?”, computed from the administrator’s policy at publish time. `false` means ' +
@@ -311,6 +311,9 @@ export class NotificationsController {
       'still sent, so the bell and the unread count are unaffected. Because it travels with ' +
       'each event, a tab holding a stale copy of `GET /api/notifications/config` still ' +
       'honours the current policy.\n\n' +
+      '**`pushed`** is `true` when this notification is also being delivered over Web Push to ' +
+      'this user; a client holding an active push subscription may skip its own OS toast ' +
+      'because the service worker will show one. It is independent of `toast`.\n\n' +
       '**This is not a delivery guarantee.** Events published while the connection is down are ' +
       'lost — there is no replay and no `Last-Event-ID` support. `EventSource` reconnects by ' +
       'itself; the client must then refetch `GET /api/notifications/unread-count` and ' +
@@ -328,7 +331,8 @@ export class NotificationsController {
           type: 'string',
           example:
             ': connected\n\nevent: notification\ndata: {"id":"…","eventKey":"security.role_changed",' +
-            '"title":"Your roles changed","body":"…","link":"/settings","createdAt":"…","toast":true}' +
+            '"title":"Your roles changed","body":"…","link":"/settings","createdAt":"…","toast":true,' +
+            '"pushed":false}' +
             '\n\n: heartbeat\n\n',
         },
       },

@@ -626,6 +626,79 @@ describe('NotificationsService', () => {
   });
 
   // ==========================================================================
+  // NotificationDispatchContext.channels (#451)
+  // ==========================================================================
+  //
+  // The context carries the FINAL list the loop dispatches over — after the
+  // admin policy, the user's preferences and the `NotifyOptions.channels`
+  // intersection — so the browser channel can stamp `pushed` on its frame.
+  // Asserted on the context the (fake) browser sender receives.
+  // ==========================================================================
+
+  describe('the dispatch context carries the resolved channel list', () => {
+    function browserContextChannels(): readonly string[] {
+      expect(browserSender.deliver).toHaveBeenCalledTimes(1);
+      const [context] = browserSender.deliver.mock.calls[0]! as [
+        NotificationDispatchContext,
+        string,
+      ];
+      return context.channels;
+    }
+
+    it('is every declared channel when nothing narrows it', async () => {
+      await service.notify('admin.broadcast', USER_ID, {});
+      await service.flush();
+
+      expect(browserContextChannels()).toEqual(['email', 'browser', 'push']);
+      // Every sender sees the same list.
+      expect(emailSender.deliver.mock.calls[0]![0].channels).toEqual([
+        'email',
+        'browser',
+        'push',
+      ]);
+    });
+
+    it('drops push when the user muted push for the event', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(
+        userRow({
+          userSettingsValue: {
+            notifications: { push: { 'admin.broadcast': false } },
+          },
+        }) as never,
+      );
+
+      await service.notify('admin.broadcast', USER_ID, {});
+      await service.flush();
+
+      expect(browserContextChannels()).toEqual(['email', 'browser']);
+    });
+
+    it('reflects the NotifyOptions.channels intersection', async () => {
+      await service.notify('admin.broadcast', USER_ID, {}, {
+        channels: ['browser'],
+      });
+      await service.flush();
+
+      expect(browserContextChannels()).toEqual(['browser']);
+    });
+
+    it('keeps push for a mandatory event whatever the stored preference', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(
+        userRow({
+          userSettingsValue: {
+            notifications: { push: { 'admin.broadcast_critical': false } },
+          },
+        }) as never,
+      );
+
+      await service.notify('admin.broadcast_critical', USER_ID, {});
+      await service.flush();
+
+      expect(browserContextChannels()).toEqual(['email', 'browser', 'push']);
+    });
+  });
+
+  // ==========================================================================
   // notifyNow() — the awaited sibling (issue #321, epic #319)
   // ==========================================================================
   //
