@@ -514,6 +514,15 @@ export class BrowserNotificationChannel implements NotificationChannelSender {
       // the policy. Absent policy resolves to the permissive default; see
       // notification-policy.ts.
       toast: isBrowserToastAllowed(eventKey, context.policy),
+      // IS WEB PUSH PART OF THIS SAME DISPATCH? (#451)
+      //
+      // Read from the dispatcher's final channel list — policy, preferences
+      // and any per-dispatch narrowing already applied — so it describes THIS
+      // dispatch, mandatory events included. It says the push channel will be
+      // attempted, not that it succeeded or that this browser holds a
+      // subscription; the client combines it with its own subscription state
+      // to avoid a duplicate OS toast. Independent of `toast`.
+      pushed: context.channels.includes('push'),
     });
 
     // Event key and connection count only — no title, no body, no link. The

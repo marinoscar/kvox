@@ -689,6 +689,7 @@ and [`docs/runbooks/vapid-keys.md`](docs/runbooks/vapid-keys.md).
 - `POST /api/admin/push-config/generate` - First-time key generation, sets `enabled: true` (409 if already configured) (`push:write`)
 - `POST /api/admin/push-config/rotate` - Replace the key pair (body `{"confirmation":"ROTATE"}`; 400 if nothing configured yet) (`push:write`)
 - `DELETE /api/admin/push-config` - Delete both the credential and the settings row (body `{"confirmation":"REMOVE"}`) (`push:write`)
+- `POST /api/admin/push-config/test` - Send a real test push to the **caller's own** subscriptions and return diagnostics (config integrity, browser key match, per-device push-service result, `hints`) (issue #449). ⚠ Always **200** — a failed send is the diagnostic. Prunes 404/410 subscriptions; writes no `notifications`/`notification_deliveries` row (`push:write`)
 
 ### Transcripts
 Audio in, a diarized and timestamped transcript out, and the corrections that

@@ -13,27 +13,34 @@ import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Auth } from '../auth/decorators/auth.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { ApiDataResponse } from '../common/decorators/api-data-response.decorator';
 import { PERMISSIONS } from '../common/constants/roles.constants';
 import { PushConfigService } from './push-config.service';
+import { PushTestService } from './push-test.service';
 import { GeneratePushConfigDto } from './dto/generate-push-config.dto';
 import { PushConfigResponseDto } from './dto/push-config-response.dto';
 import {
   RemovePushConfigDto,
   RotatePushConfigDto,
 } from './dto/push-config-confirmation.dto';
+import { PushTestRequestDto, PushTestResponseDto } from './dto/push-test.dto';
 import { UpdatePushConfigDto } from './dto/update-push-config.dto';
 
 // =============================================================================
 // PushConfigController (issue #355)
 // =============================================================================
 //
-// The HTTP surface behind `/admin/settings/push`. Five operations:
+// The HTTP surface behind `/admin/settings/push`. Six operations:
 //
 //   GET    /api/admin/push-config           push:read
 //   PUT    /api/admin/push-config           push:write
 //   POST   /api/admin/push-config/generate  push:write
 //   POST   /api/admin/push-config/rotate    push:write
 //   DELETE /api/admin/push-config           push:write
+//   POST   /api/admin/push-config/test      push:write  (#449)
+//
+// `test` is `push:write`, not `push:read`: it performs a real signed send and
+// can prune the caller's own dead subscription rows — an action, not a read.
 //
 // `push:read`/`push:write` RATHER THAN `system_settings:*`, deliberately —
 // see `roles.constants.ts` for the full reasoning (generating/rotating key
@@ -53,7 +60,10 @@ import { UpdatePushConfigDto } from './dto/update-push-config.dto';
 @ApiTags('Push Configuration')
 @Controller('admin/push-config')
 export class PushConfigController {
-  constructor(private readonly pushConfig: PushConfigService) {}
+  constructor(
+    private readonly pushConfig: PushConfigService,
+    private readonly pushTest: PushTestService,
+  ) {}
 
   @Get()
   @Auth({ permissions: [PERMISSIONS.PUSH_READ] })
@@ -208,5 +218,37 @@ export class PushConfigController {
     @CurrentUser('id') userId: string,
   ) {
     return this.pushConfig.remove(dto, userId);
+  }
+
+  @Post('test')
+  @Auth({ permissions: [PERMISSIONS.PUSH_WRITE] })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Send a test Web Push to the caller's own devices, with diagnostics (Admin only)",
+    description:
+      "Sends a real, signed test push to **the calling admin's own** push subscriptions " +
+      '(never anyone else\'s) and returns, link by link, what was found: whether a VAPID ' +
+      'key pair is active and where it comes from, whether the public key is a valid P-256 ' +
+      'point and matches the stored private key, whether the subject is acceptable, whether ' +
+      "this browser's subscription is registered and was created with the active key, " +
+      'whether policy and preferences keep push open for each push-capable event, and the ' +
+      "push service's status and response body per device — plus plain-English `hints`.\n\n" +
+      'Optionally pass this browser\'s current `endpoint` and the `applicationServerKey` its ' +
+      'subscription was created with. **Always `200`**: a failed send is the diagnostic, ' +
+      'reported in `overall` and per subscription. No `notifications` or ' +
+      '`notification_deliveries` row is written. A `404`/`410` from the push service ' +
+      'prunes that subscription, as a real delivery would.\n\n' +
+      'Never returns the VAPID private key, a subscription\'s `p256dh`/`auth`, or a full ' +
+      'endpoint (only `endpointPreview`).',
+  })
+  @ApiDataResponse(PushTestResponseDto, {
+    description: 'Diagnostics and per-subscription send results',
+  })
+  @ApiResponse({ status: 400, description: 'Validation error' })
+  async sendTest(
+    @Body() dto: PushTestRequestDto,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.pushTest.runTest(userId, dto);
   }
 }

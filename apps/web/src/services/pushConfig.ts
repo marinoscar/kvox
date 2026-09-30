@@ -69,7 +69,18 @@ export interface PushConfigAdminView {
   /** Bumped on every write. Pass back as `If-Match` on the next `PUT`. */
   version: number;
   updatedAt: string | null;
-  updatedBy?: string | null;
+  /**
+   * Who last wrote the settings row — an object, NOT a string (issue #449:
+   * the page used to interpolate it and print `[object Object]`). `null` when
+   * nobody has, or that user was deleted.
+   */
+  updatedBy?: PushConfigUpdatedBy | null;
+}
+
+/** The user who last wrote the push settings row. */
+export interface PushConfigUpdatedBy {
+  id: string;
+  email: string;
 }
 
 /** `PUT /api/admin/push-config` — non-destructive; keys are retained either way. */
@@ -147,4 +158,86 @@ export async function removePushConfig(): Promise<PushConfigAdminView> {
   return api.delete<PushConfigAdminView>(BASE, {
     body: JSON.stringify({ confirmation: REMOVE_CONFIRMATION }),
   });
+}
+
+// =============================================================================
+// Test & diagnostics — issue #449
+// =============================================================================
+
+/** `POST /admin/push-config/test` body. Both fields optional. */
+export interface PushTestInput {
+  /** This browser's subscription endpoint, so the server can flag "this browser". */
+  endpoint?: string;
+  /** base64url (no padding) of the subscription's `options.applicationServerKey`. */
+  applicationServerKey?: string;
+}
+
+export type PushTestOverall = 'sent' | 'partial' | 'failed' | 'not_configured' | 'no_subscriptions';
+
+export type PushTestSubscriptionStatus = 'sent' | 'failed' | 'pruned' | 'skipped';
+
+export interface PushTestConfigCheck {
+  source: 'admin' | 'env' | 'none';
+  enabled: boolean | null;
+  active: boolean;
+  publicKey: string | null;
+  publicKeyValid: boolean;
+  privateKeyMatchesPublicKey: boolean | null;
+  subject: string | null;
+  subjectValid: boolean;
+  problems: string[];
+}
+
+export interface PushTestBrowserCheck {
+  endpointProvided: boolean;
+  endpointRegistered: boolean | null;
+  keyMatchesServer: boolean | null;
+}
+
+export interface PushTestEventCheck {
+  eventKey: string;
+  label: string;
+  mandatory: boolean;
+  policyAllows: boolean;
+  preferenceAllows: boolean;
+}
+
+export interface PushTestSubscriptionResult {
+  id: string;
+  pushService: string;
+  endpointPreview: string;
+  isThisBrowser: boolean;
+  userAgent: string | null;
+  createdAt: string;
+  lastSuccessAt: string | null;
+  failureCount: number;
+  result: {
+    status: PushTestSubscriptionStatus;
+    statusCode: number | null;
+    message: string | null;
+    responseBody: string | null;
+    durationMs: number;
+  };
+}
+
+/** `POST /admin/push-config/test` response. */
+export interface PushTestResult {
+  ranAt: string;
+  durationMs: number;
+  overall: PushTestOverall;
+  /** `push-test-<uuid>` — also the `id` of the push payload the worker receives. */
+  testId: string;
+  config: PushTestConfigCheck;
+  browser: PushTestBrowserCheck;
+  events: PushTestEventCheck[];
+  subscriptions: PushTestSubscriptionResult[];
+  hints: string[];
+}
+
+/**
+ * `POST /test` — `push:write`. Sends a test push to every subscription the
+ * CALLER holds and reports, per subscription, what the push service said.
+ */
+export async function sendPushTest(input: PushTestInput = {}): Promise<PushTestResult> {
+  return api.post<PushTestResult>(`${BASE}/test`, input);
 }

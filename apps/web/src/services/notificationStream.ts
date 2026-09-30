@@ -121,6 +121,10 @@ export function parseNotificationEvent(data: string): NotificationStreamEvent | 
     link: value.link,
     createdAt: value.createdAt,
     toast: value.toast,
+    // #451: optional and NOT validated like `toast`. An older server omits it,
+    // and anything but a literal `true` reads as "not pushed", which keeps the
+    // page's own toast — the fail-safe direction.
+    pushed: value.pushed === true,
   };
 }
 
@@ -136,14 +140,15 @@ export function parseNotificationEvent(data: string): NotificationStreamEvent | 
  *
  * Keeping it would make a streamed notification and a fetched one two subtly
  * different objects in the same list — precisely the divergence the API avoided
- * by giving the stream the row's shape in the first place. A caller that needs
- * the flag reads it off the stream event, before this conversion; `onFrame`
+ * by giving the stream the row's shape in the first place. `pushed` (#451) is
+ * dropped for the same reason. A caller that needs
+ * the flags reads them off the stream event, before this conversion; `onFrame`
  * below holds both.
  */
 export function streamEventToNotification(
   event: NotificationStreamEvent,
 ): AppNotification {
-  const { toast: _toast, ...notification } = event;
+  const { toast: _toast, pushed: _pushed, ...notification } = event;
 
   return { ...notification, readAt: null };
 }
@@ -166,8 +171,12 @@ export interface NotificationStreamHandlers {
    * or compares `notification` objects must never see a field that varies by
    * delivery), while the LIVE delivery decision — may the OS bubble fire for
    * THIS arrival? — still needs the flag. Two arguments keep both true at once.
+   *
+   * `pushed` (#451) is the third argument for the same reason: whether this
+   * arrival is also going out over Web Push to this user. `false` when the
+   * server did not say.
    */
-  onNotification: (notification: AppNotification, toast: boolean) => void;
+  onNotification: (notification: AppNotification, toast: boolean, pushed: boolean) => void;
   /**
    * ⚠️ THE REFETCH SIGNAL. Fires on the first connect and on EVERY reconnect.
    *
@@ -223,7 +232,11 @@ export function connectNotificationStream(
       // more.
       if (!event) return;
 
-      handlers.onNotification(streamEventToNotification(event), event.toast);
+      handlers.onNotification(
+        streamEventToNotification(event),
+        event.toast,
+        event.pushed === true,
+      );
     },
   });
 }

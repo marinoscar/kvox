@@ -79,7 +79,7 @@ function contextFor(eventKey: string, data: unknown = {}): NotificationDispatchC
   if (!event) {
     throw new Error(`Test fixture error: no such event '${eventKey}' in the registry.`);
   }
-  return { event, recipient, data };
+  return { event, recipient, data, channels: event.channels };
 }
 
 /** A `push_subscriptions` row shape, as `prisma.pushSubscription.findMany` would return it. */

@@ -254,7 +254,7 @@ export function resolveNotificationCapability(
  * `Notification` constructor also has this flag, so an environment that lacks
  * it falls through to `unsupported` a line later, which is the honest answer.
  */
-function readIsSecureContext(): boolean {
+export function readIsSecureContext(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     return window.isSecureContext !== false;
@@ -264,7 +264,7 @@ function readIsSecureContext(): boolean {
 }
 
 /** Is there a `Notification` constructor, and is touching it safe? */
-function readHasNotificationApi(): boolean {
+export function readHasNotificationApi(): boolean {
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
   try {
     // THE ACCESS IS THE TEST, not the presence of the key — some embedded and
@@ -278,7 +278,7 @@ function readHasNotificationApi(): boolean {
 }
 
 /** Is there a `navigator.serviceWorker`? */
-function readHasServiceWorkerApi(): boolean {
+export function readHasServiceWorkerApi(): boolean {
   try {
     return typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
   } catch {
@@ -313,7 +313,7 @@ function readHasServiceWorkerApi(): boolean {
  * are read, so a UA-spoofing extension that changes one of them still lands on
  * the right answer as long as the other is intact.
  */
-function readIsIos(): boolean {
+export function readIsIos(): boolean {
   try {
     if (typeof navigator === 'undefined') return false;
 
@@ -343,7 +343,7 @@ function readIsIos(): boolean {
  * is Safari's own non-standard flag and is the ONLY one older iOS answers — and
  * iOS is the entire reason this function exists.
  */
-function readIsStandalone(): boolean {
+export function readIsStandalone(): boolean {
   if (typeof window === 'undefined') return false;
 
   try {

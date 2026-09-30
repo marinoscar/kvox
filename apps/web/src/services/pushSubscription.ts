@@ -93,6 +93,10 @@ function subscriptionUsesKey(subscription: PushSubscription, key: Uint8Array): b
 let inFlightSync: Promise<void> | null = null;
 
 async function runSync(vapidPublicKey: string): Promise<void> {
+  // Whatever this sync does (subscribe, re-subscribe after a key rotation, or
+  // fail half way), the cached "is there an active subscription?" answer may
+  // no longer hold.
+  invalidateActivePushSubscriptionCache();
   if (!hasPushSupport()) return;
   if (window.Notification?.permission !== 'granted') return;
 
@@ -141,6 +145,7 @@ export function syncPushSubscription(vapidPublicKey: string): Promise<void> {
     })
     .finally(() => {
       inFlightSync = null;
+      invalidateActivePushSubscriptionCache();
     });
 
   return inFlightSync;
@@ -175,6 +180,7 @@ export async function requestPermissionAndSyncPush(
  * once instead of waiting out a timeout.
  */
 export async function removePushSubscription(): Promise<void> {
+  invalidateActivePushSubscriptionCache();
   if (!hasPushSupport()) return;
 
   const work = (async () => {
@@ -189,7 +195,80 @@ export async function removePushSubscription(): Promise<void> {
   } catch (error) {
     // A 404 (never registered, or already removed) lands here too; nothing to do.
     console.warn('Removing the push subscription on logout failed.', error);
+  } finally {
+    invalidateActivePushSubscriptionCache();
   }
+}
+
+// =============================================================================
+// "Will the service worker's push show this?" — issue #451
+// =============================================================================
+
+/**
+ * How long a `hasActivePushSubscription` answer is reused. Long enough that a
+ * burst of stream frames (a broadcast storm, a reconnect) costs one lookup,
+ * short enough that a permission revoked in browser settings is noticed soon.
+ * `syncPushSubscription` and `removePushSubscription` drop it immediately.
+ */
+export const ACTIVE_PUSH_SUBSCRIPTION_CACHE_MS = 30_000;
+
+let activeSubscriptionCache: {
+  key: string | null;
+  expiresAt: number;
+  result: Promise<boolean>;
+} | null = null;
+
+function invalidateActivePushSubscriptionCache(): void {
+  activeSubscriptionCache = null;
+}
+
+async function lookupActivePushSubscription(vapidPublicKey: string | null): Promise<boolean> {
+  try {
+    if (!vapidPublicKey) return false;
+    if (!hasPushSupport()) return false;
+    if (window.Notification?.permission !== 'granted') return false;
+
+    // `getRegistration()`, NOT `.ready`: `.ready` never settles on a page with
+    // no worker, and this answer sits in front of a toast.
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration?.pushManager) return false;
+
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return false;
+
+    return subscriptionUsesKey(subscription, urlBase64ToUint8Array(vapidPublicKey));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Does this browser hold a live Web Push subscription for `vapidPublicKey`,
+ * i.e. will the service worker be woken to show a push sent to this user?
+ *
+ * True only when push is supported, notification permission is `granted`, a
+ * service worker is registered, it has a subscription, and that subscription
+ * was made with this key (a browser that hides the subscription's key counts
+ * as a match, as in the sync above). NEVER THROWS: any failure is `false`,
+ * which callers treat as "the page must show its own toast". Cached for
+ * `ACTIVE_PUSH_SUBSCRIPTION_CACHE_MS` per key.
+ */
+export function hasActivePushSubscription(vapidPublicKey: string | null): Promise<boolean> {
+  const now = Date.now();
+  if (
+    activeSubscriptionCache &&
+    activeSubscriptionCache.key === vapidPublicKey &&
+    activeSubscriptionCache.expiresAt > now
+  ) {
+    return activeSubscriptionCache.result;
+  }
+  const result = lookupActivePushSubscription(vapidPublicKey);
+  activeSubscriptionCache = {
+    key: vapidPublicKey,
+    expiresAt: now + ACTIVE_PUSH_SUBSCRIPTION_CACHE_MS,
+    result,
+  };
+  return result;
 }
 
 // =============================================================================
@@ -213,4 +292,5 @@ export function claimAutoPermissionPrompt(): boolean {
 export function resetPushSubscriptionStateForTests(): void {
   autoPromptClaimed = false;
   inFlightSync = null;
+  activeSubscriptionCache = null;
 }

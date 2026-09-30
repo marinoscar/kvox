@@ -126,6 +126,21 @@ export interface NotificationStreamEvent {
    * the harmless direction.
    */
   toast: boolean;
+
+  /**
+   * IS THIS NOTIFICATION ALSO GOING OUT OVER WEB PUSH TO THIS USER? (#451)
+   *
+   * True when this notification is also being delivered over Web Push to this
+   * user; a client holding an active push subscription may skip its own OS
+   * toast because the service worker will show one.
+   *
+   * Derived from the dispatcher's final channel list for this recipient (admin
+   * policy, preferences and per-dispatch narrowing applied). It means the push
+   * channel is part of this dispatch, not that a push was delivered to THIS
+   * browser — hence "a client holding an active push subscription". It does not
+   * change what `toast` means.
+   */
+  pushed: boolean;
 }
 
 /**

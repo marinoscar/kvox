@@ -1038,6 +1038,10 @@ export class NotificationsService implements OnModuleDestroy {
       recipient,
       data,
       policy,
+      // The narrowed list, exactly what the loop below dispatches over (#451).
+      // Channels only READ it (the browser frame's `pushed`); no channel's
+      // result is threaded into another's.
+      channels,
     };
 
     // SEQUENTIAL, not `Promise.all`. Two channels at most today, so there is
