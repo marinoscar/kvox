@@ -459,6 +459,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       // works by reading what the browser has already displayed; this one
       // works by reading what the user is currently looking at. Neither
       // subsumes the other.
+      //
+      // This return governs the PAGE's toast only. When the user also has the
+      // push channel on, the service worker's `push` handler (`sw.ts`, issue
+      // #450) shows its OS notification regardless of focus — precisely
+      // because this return means the page never shows one for a focused tab.
       if (document.visibilityState === 'visible' && document.hasFocus()) return;
 
       // THIRD IN THE ORDERING, and deliberately last: the centre is already

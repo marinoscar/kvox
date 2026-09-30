@@ -549,59 +549,37 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
   // ==========================================================================
 
   describe('push: well-formed JSON payload', () => {
-    it('shows a notification with the right title/body/tag/icon/badge/data when no window client is visible+focused', async () => {
+    const EXPECTED_OPTIONS = {
+      body: 'World',
+      tag: 'notif-1',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-96.png',
+      data: { id: 'notif-1', link: '/settings' },
+    };
+
+    it('shows a notification with the right title/body/tag/icon/badge/data when no window client is open', async () => {
       clientsMatchAll.mockResolvedValue([]);
 
       await firePush({ json: () => PAYLOAD });
 
-      expect(clientsMatchAll).toHaveBeenCalledWith({ type: 'window' });
-      expect(showNotification).toHaveBeenCalledWith('Hello', {
-        body: 'World',
-        tag: 'notif-1',
-        icon: '/icons/icon-192.png',
-        badge: '/icons/badge-96.png',
-        data: { id: 'notif-1', link: '/settings' },
-      });
+      expect(showNotification).toHaveBeenCalledTimes(1);
+      expect(showNotification).toHaveBeenCalledWith('Hello', EXPECTED_OPTIONS);
     });
 
-    it('postMessages a visible AND focused client instead of showing a notification', async () => {
+    it('STILL shows the notification with a visible AND focused client, and postMessages nothing (issue #450)', async () => {
+      // The page's SSE handler raises no OS toast for a focused tab, so the
+      // worker is the only visible alert that user gets.
       const client = { visibilityState: 'visible', focused: true, postMessage: vi.fn() };
       clientsMatchAll.mockResolvedValue([client]);
 
       await firePush({ json: () => PAYLOAD });
 
-      expect(client.postMessage).toHaveBeenCalledWith({
-        type: 'push-notification',
-        id: 'notif-1',
-        eventKey: 'user.welcome',
-        title: 'Hello',
-        body: 'World',
-        link: '/settings',
-      });
-      expect(showNotification).not.toHaveBeenCalled();
-    });
-
-    it('falls through to showNotification for a client that is visible but NOT focused', async () => {
-      const client = { visibilityState: 'visible', focused: false, postMessage: vi.fn() };
-      clientsMatchAll.mockResolvedValue([client]);
-
-      await firePush({ json: () => PAYLOAD });
-
-      expect(client.postMessage).not.toHaveBeenCalled();
       expect(showNotification).toHaveBeenCalledTimes(1);
-    });
-
-    it('falls through to showNotification for a client that is focused but NOT visible — both conditions must hold', async () => {
-      const client = { visibilityState: 'hidden', focused: true, postMessage: vi.fn() };
-      clientsMatchAll.mockResolvedValue([client]);
-
-      await firePush({ json: () => PAYLOAD });
-
+      expect(showNotification).toHaveBeenCalledWith('Hello', EXPECTED_OPTIONS);
       expect(client.postMessage).not.toHaveBeenCalled();
-      expect(showNotification).toHaveBeenCalledTimes(1);
     });
 
-    it('picks a visible+focused client among several, ignoring ones that only satisfy one condition', async () => {
+    it('shows the notification and postMessages no client, whatever mix of clients is open', async () => {
       const visibleOnly = { visibilityState: 'visible', focused: false, postMessage: vi.fn() };
       const focusedOnly = { visibilityState: 'hidden', focused: true, postMessage: vi.fn() };
       const both = { visibilityState: 'visible', focused: true, postMessage: vi.fn() };
@@ -609,10 +587,10 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
 
       await firePush({ json: () => PAYLOAD });
 
-      expect(both.postMessage).toHaveBeenCalledTimes(1);
-      expect(visibleOnly.postMessage).not.toHaveBeenCalled();
-      expect(focusedOnly.postMessage).not.toHaveBeenCalled();
-      expect(showNotification).not.toHaveBeenCalled();
+      expect(showNotification).toHaveBeenCalledTimes(1);
+      for (const client of [visibleOnly, focusedOnly, both]) {
+        expect(client.postMessage).not.toHaveBeenCalled();
+      }
     });
   });
 
@@ -666,10 +644,8 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
           hadFocusedClient: true,
         });
       }
-      // Never the ordinary in-page delivery message.
-      expect(focused.postMessage).not.toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'push-notification' }),
-      );
+      // The ack is the only message a test push sends.
+      expect(focused.postMessage).toHaveBeenCalledTimes(1);
     });
 
     it('acks with shown:false and the error when showNotification throws, without rejecting', async () => {
@@ -700,16 +676,20 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
       expect(showNotification).toHaveBeenCalledTimes(1);
     });
 
-    it('does not change a non-test payload with a visible, focused client', async () => {
+    it('treats a non-test payload as a real push: shown with its own id as data, no ack', async () => {
       const focused = windowClient(true, true);
       clientsMatchAll.mockResolvedValue([focused]);
 
       await firePush({ json: () => ({ ...TEST_PAYLOAD, test: false, id: 'n-1' }) });
 
-      expect(showNotification).not.toHaveBeenCalled();
-      expect(focused.postMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'push-notification', id: 'n-1' }),
-      );
+      expect(showNotification).toHaveBeenCalledWith('Test push', {
+        body: 'It works',
+        tag: 'n-1',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/badge-96.png',
+        data: { id: 'n-1', link: '/admin/settings/push' },
+      });
+      expect(focused.postMessage).not.toHaveBeenCalled();
     });
   });
 
@@ -727,8 +707,8 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
         badge: '/icons/badge-96.png',
         tag: 'push-fallback',
       });
-      // No id to key a client postMessage on, so the client list is never
-      // even consulted for this path.
+      // Nothing to deliver to a page, so the client list is never even
+      // consulted for this path.
       expect(clientsMatchAll).not.toHaveBeenCalled();
     });
 
@@ -743,9 +723,9 @@ describe('sw.ts message handlers (notificationclick, push, pushsubscriptionchang
       });
     });
 
-    it('never resolves without calling showNotification or postMessage — the critical rule', async () => {
+    it('never resolves without calling showNotification — the critical rule', async () => {
       // Belt-and-braces on the rule stated in `sw.ts`'s own header: leaving
-      // `waitUntil`'s promise to resolve without EITHER action is what makes
+      // `waitUntil`'s promise to resolve without it is what makes
       // Chrome substitute its own generic "site updated in background"
       // notification.
       await firePush({
