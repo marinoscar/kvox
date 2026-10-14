@@ -1,3 +1,8 @@
+// Registers the settings namespaces that the composed settings schemas, DTOs and
+// `DEFAULT_SYSTEM_SETTINGS` are built from (issue #459). `setupFilesAfterEnv`
+// runs before each test file's own imports, so this must come first.
+import '../src/kvox.manifest';
+
 import { config } from 'dotenv';
 import { resolve } from 'path';
 
