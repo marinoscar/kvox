@@ -17,7 +17,18 @@
     "api:test": "npm -w apps/api test",
     "web:test": "npm -w apps/web test",
     "openapi:dump": "npm run openapi:dump --workspace=api -- ../../openapi.json",
-    "openapi:lint": "spectral lint openapi.json --ruleset .spectral.yaml --fail-severity=error"
+    "openapi:lint": "spectral lint openapi.json --ruleset .spectral.yaml --fail-severity=error",
+    "build:packages": "node scripts/run-kvox-packages.mjs build",
+    "typecheck:packages": "node scripts/run-kvox-packages.mjs typecheck",
+    "test:packages": "node scripts/run-kvox-packages.mjs test:run",
+    "lint:packages": "eslint --max-warnings=0 --no-error-on-unmatched-pattern \"packages/kvox-*/src/**/*.{ts,tsx}\"",
+    "docs:packages": "node scripts/run-kvox-packages.mjs docs",
+    "check:single-instance": "node scripts/check-single-instance.mjs",
+    "check:platform-pin": "node scripts/check-platform-pin.mjs",
+    "check:platform-imports": "eslint --max-warnings=0 \"apps/{api,web,cli}/src/**/*.{ts,tsx}\"",
+    "changeset": "changeset",
+    "version-packages": "changeset version && npm install --package-lock-only",
+    "release": "npm run build:packages && changeset publish"
   },
   "overrides": {
     "@nestjs/common": "^11.1.12",
@@ -27,6 +38,13 @@
     "magic-string": "^1.2.0"
   },
   "devDependencies": {
-    "@stoplight/spectral-cli": "^6.16.3"
+    "@changesets/cli": "^2.31.1",
+    "@stoplight/spectral-cli": "^6.16.3",
+    "eslint": "^10.12.0",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.2.0",
+    "eslint-plugin-tsdoc": "^0.5.4",
+    "typedoc": "^0.28.20",
+    "typescript-eslint": "^8.71.2"
   }
 }

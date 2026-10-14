@@ -102,6 +102,33 @@ jobs:
       # leaves the `bin` path dangling. (issue #140, epic #110)
       - run: npm run build --workspace=cli
 
+  # Repository tooling for the platform adoption (epic #457, issue #461): the
+  # pinned @marinoscar/platform-* packages, one copy of every singleton, no
+  # app code reaching into a package's src/dist, and the (currently empty)
+  # @marinoscar/kvox-* package pipeline. No `needs:` — runs concurrently.
+  tooling:
+    name: Repository tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run check:platform-pin
+      - run: node scripts/check-platform-pin.mjs --self-test
+      - run: npm run check:single-instance
+      - run: npm run check:platform-imports
+      - run: npm run lint:packages
+      - run: npm run build:packages
+      - run: npm run typecheck:packages
+      - run: npm run test:packages
+      - run: npx changeset status
+
   web-test:
     name: Web Tests (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
