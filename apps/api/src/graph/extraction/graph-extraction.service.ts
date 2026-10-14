@@ -39,7 +39,7 @@ import {
   computeTokenBudget,
   outputTokensForPrompt,
   type TokenBudget,
-} from '../../notes/generation/token-budget';
+} from '../../ai/ai-token-budget';
 import { PrismaService } from '../../prisma/prisma.service';
 import { GRAPH_CONFLICT_REASONS } from '../graph-conflict-reasons';
 import { KG_EXTRACT_JOB_TYPE, KG_SUBJECT_NOTE } from '../job-types';

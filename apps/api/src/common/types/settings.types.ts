@@ -375,7 +375,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettingsValue = {
     // that has never heard of `reasoning_effort` keeps working untouched.
     // Raising it spends output tokens on thinking; since #436 the budget adds
     // that effort's headroom on top of any typed `maxOutputTokens` cap — see
-    // `ai-settings.schema.ts` and `notes/generation/token-budget.ts`.
+    // `ai-settings.schema.ts` and `ai/ai-token-budget.ts`.
     reasoningEffort: 'none',
     // 25 MB (#51). Comfortably above any ordinary proposal, contract or brief,
     // and far below anything whose extracted text a token budget would let

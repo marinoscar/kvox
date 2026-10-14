@@ -1089,7 +1089,7 @@ that fixed order**:
 
 ### 3.3 The token budget, and refusing early with a number
 
-`apps/api/src/notes/generation/token-budget.ts`. `computeTokenBudget` is pure
+`apps/api/src/ai/ai-token-budget.ts`. `computeTokenBudget` is pure
 and takes the model's own `contextWindowTokens`/`maxOutputTokens`
 (`resolveAllowedModel`'s output, §2.5 — since #78 a permitted model may carry
 its own numbers on its `allowedModels` entry, and every caller resolves
@@ -2722,7 +2722,7 @@ the list this spec was designed against — the same purpose
 | `notes.housekeeping`'s `@Cron` only enqueues | `apps/api/test/jobs/cron-enqueue-only.spec.ts`, extended — the existing test this document's job additions must not break |
 | The error taxonomy: `AiAuthError`/`AiRefusalError` set `failed` without spending the job's attempt; the default class spends it; `RateLimitError` defers without changing `notes.status` | `apps/api/src/notes/handlers/note-generate.handler.spec.ts`, against a fake `AiProvider` |
 | The rate-limit throttle key is `ai-provider:<userId>`, distinct per user | A test asserting `registerProviderKey` is called with a key that varies by the generation's `userId`, unlike transcription's single shared key |
-| `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `token-budget.spec.ts`, including a property test over the two call sites |
+| `assemblePrompt` and the token budget check are the same function called at request time and at job time, and produce identical results for identical inputs | `apps/api/src/notes/prompt/prompt-assembly.spec.ts` and `ai-token-budget.spec.ts`, including a property test over the two call sites |
 | An over-budget `POST /api/notes` is refused with a 400 naming both the estimated and the allowed token counts, and creates no note, no generation row, and enqueues no job | `apps/api/test/notes/notes-create.e2e.spec.ts` |
 | `notes.status` and `note_generations.status` follow exactly the transitions §1's tables state, including `deleting` being refused with 409 while `status = 'generating'` | `apps/api/src/notes/notes.service.spec.ts` and an e2e state-machine walk |
 | `notes.body`/`provider`/`model` are updated only by `note.generate`'s completion transaction or an explicit `PATCH`, and always equal `note_versions.body` at `current_version` after either | `apps/api/src/notes/notes.service.spec.ts`, asserting the invariant after a generate, a regenerate, and a manual edit |
