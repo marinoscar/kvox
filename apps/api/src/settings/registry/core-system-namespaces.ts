@@ -9,14 +9,12 @@
 // `ai/ai.system-settings.ts`; `kvox.manifest.ts` registers them all, in the
 // order that is the stored JSON's key order.
 //
-// STORED and PATCH shapes are the schemas that already exist in
-// `common/schemas/settings.schema.ts`. The PUT and PATCH request-body branches
-// and the response branches are the ones `settings/dto/*.dto.ts` write out by
-// hand today (cut from `update-system-settings.dto.ts` and
-// `system-settings-response.dto.ts`); the DTOs keep their copies until the
-// composed schemas replace them, and `registry/composed-equivalence.spec.ts`
-// proves the two stay identical meanwhile. The defaults are the ones in
-// `common/types/settings.types.ts` (`DEFAULT_SYSTEM_SETTINGS`).
+// STORED and PATCH shapes are the schemas in
+// `common/schemas/system-namespaces.schema.ts`. The PUT and PATCH request-body
+// branches and the response branches below are the ones the request/response
+// DTOs used to write out by hand; the DTOs now compose them from the registry.
+// The defaults are the ones `common/types/settings.types.ts` used to hold in
+// `DEFAULT_SYSTEM_SETTINGS`, which is now composed from them too.
 //
 // NO `.default()` ANYWHERE: every default lives in the `defaults` of the
 // declaration below and nowhere else, so "what does a fresh deployment do?" is
@@ -43,7 +41,7 @@ import {
   type SystemMaintenanceValue,
   type SystemNodesValue,
   type SystemNotificationsValue,
-} from '../../common/schemas/settings.schema';
+} from '../../common/schemas/system-namespaces.schema';
 import { notificationEventKeySchema } from '../../common/schemas/user-settings-namespaces.schema';
 import type { SystemSettingsNamespace } from './system-settings-namespace';
 

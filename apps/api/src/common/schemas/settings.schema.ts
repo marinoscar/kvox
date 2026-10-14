@@ -1,39 +1,54 @@
-import { z } from 'zod';
+import type { z } from 'zod';
 
 import {
-  systemTranscriptionSchema as transcriptionSchema,
-  systemTranscriptionPatchSchema as transcriptionPatchSchema,
-} from '../../transcription/transcription-settings.schema';
-import {
-  systemAiSchema as aiSchema,
-  systemAiPatchSchema as aiPatchSchema,
-} from '../../ai/ai-settings.schema';
-import {
-  dataTablesSchema,
-  dataTablesPatchSchema,
-  navigationSchema,
-  navigationPatchSchema,
-  notificationsSchema,
-  notificationsPatchSchema,
-  notificationEventKeySchema,
-  onboardingSchema,
-  onboardingPatchSchema,
-  NOTIFICATION_MAX_EVENTS_PER_CHANNEL,
-} from './user-settings-namespaces.schema';
-import {
-  graphPreferencesSchema,
-  graphPreferencesPatchSchema,
-} from '../../graph/preferences/graph-preferences.schema';
+  composeSystemSettingsPatchSchema,
+  composeSystemSettingsSchema,
+  composeUserSettingsPatchSchema,
+  composeUserSettingsSchema,
+  type ComposedObjectSchema,
+} from '../../settings/registry/compose';
 import {
   PROFILE_IMAGE_SOURCES,
   profileImageSourceSchema,
   userProfileSettingsSchema,
   userProfileSettingsPatchSchema,
 } from '../../settings/registry/core-user-fields';
+import type {
+  SystemSettingsValue,
+  UserSettingsValue,
+} from '../types/settings.types';
 
 // =============================================================================
-// User Settings Schema
+// Settings schemas (issue #459)
 // =============================================================================
+//
+// WHAT LIVES HERE NOW. The four top-level schemas this file used to write out by
+// hand (`userSettingsSchema`, `userSettingsPatchSchema`, `systemSettingsSchema`,
+// `systemSettingsPatchSchema`) are COMPOSED from the settings namespace
+// registries (`settings/registry/`), which `apps/api/src/kvox.manifest.ts`
+// fills. Their names, and everything else this file exported, are unchanged:
+//
+//   * the core system namespaces' own schemas moved verbatim to
+//     `system-namespaces.schema.ts` and are re-exported below;
+//   * `theme` and `profile` live in `settings/registry/core-user-fields.ts`
+//     and are re-exported below;
+//   * the `ai` schemas are re-exported from `ai/ai-settings.schema.ts`;
+//   * `transcription` and `graph` are declared in their own modules and reach
+//     these composites through the registry, so nothing here imports them.
+//
+// ⚠ THIS FILE MAY ONLY BE EVALUATED AFTER `kvox.manifest` HAS RUN. The
+// composers throw ("Settings namespaces are not registered: import
+// apps/api/src/kvox.manifest first") on an empty registry, so an entry point
+// that forgot the manifest fails on start instead of composing a schema with
+// no namespaces in it, which would silently strip every namespace from every
+// write. The registry declarations themselves must therefore import the
+// namespace schemas from `system-namespaces.schema.ts` and
+// `user-settings-namespaces.schema.ts` — never from this file.
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// User settings
+// -----------------------------------------------------------------------------
 
 // `theme` and `profile` are the core fields of the user document. They are
 // defined in `settings/registry/core-user-fields.ts` (so the registry composers
@@ -52,362 +67,52 @@ export type {
   UserProfileSettingsPatchValue,
 } from '../../settings/registry/core-user-fields';
 
-export const userSettingsSchema = z.object({
-  theme: z.enum(['light', 'dark', 'system']),
-  profile: userProfileSettingsSchema,
-  // Optional namespaces. Absent means "use built-in defaults" — see
-  // user-settings-namespaces.schema.ts for why these must never get `.default()`.
-  dataTables: dataTablesSchema.optional(),
-  navigation: navigationSchema.optional(),
-  // `notifications` (#126) is optional for the reason the other two are, only
-  // more so: absent means "use each event's registry default", and every
-  // existing account is absent. Making it required — or defaulting it — would
-  // materialise a preference blob for the whole user base at the first PUT
-  // and freeze them at today's defaults. See notification-preferences.ts.
-  notifications: notificationsSchema.optional(),
-  // `onboarding` (#272, epic #271) is optional for the strongest version of the
-  // same reason: absent means "this user has never been onboarded", which is
-  // the fact the welcome dialog, the checklist and the admin banner all read.
-  // A default here would tell every account it had already been through an
-  // experience it has never seen. See user-settings-namespaces.schema.ts.
-  onboarding: onboardingSchema.optional(),
-  // `graph` (#369, epic #346): connected-knowledge preferences. Absent means
-  // every default in `GRAPH_PREFERENCE_DEFAULTS` — see graph-preferences.service.ts.
-  graph: graphPreferencesSchema.optional(),
-});
-
-export type UserSettingsDto = z.infer<typeof userSettingsSchema>;
-
-// Partial schema for PATCH operations (zod v4: deepPartial removed, use manual deep partial)
-export const userSettingsPatchSchema = z.object({
-  theme: z.enum(['light', 'dark', 'system']).optional(),
-  profile: userProfileSettingsPatchSchema.optional(),
-  // The outer `.nullable()` is what lets `{ "dataTables": null }` clear the
-  // whole namespace; the inner nullability (in dataTablesPatchSchema) is what
-  // lets `{ "dataTables": { "jobs": null } }` delete a single entry.
-  dataTables: dataTablesPatchSchema.nullable().optional(),
-  navigation: navigationPatchSchema.nullable().optional(),
-  // Three nullable levels, three different deletes: the namespace, one
-  // channel, one event key. See notificationsPatchSchema.
-  notifications: notificationsPatchSchema.nullable().optional(),
-  // `{ onboarding: null }` clears the namespace (a full "show me all of this
-  // again"); `{ onboarding: { dismissedAt: null } }` un-dismisses just the
-  // checklist, leaving the welcome and the admin banner alone.
-  onboarding: onboardingPatchSchema.nullable().optional(),
-  // `{ graph: null }` resets every graph preference; `{ graph: { resolution:
-  // null } }` resets just that sub-object. See graphPreferencesPatchSchema.
-  graph: graphPreferencesPatchSchema.nullable().optional(),
-});
-
-// =============================================================================
-// System Settings Schema
-// =============================================================================
+/**
+ * A composed object schema whose `parse`/`safeParse` are typed to the value the
+ * registry's augmentation maps describe. The composers return a schema over
+ * `Record<string, ZodType>` (the key set is only known at run time); the cast
+ * restores the static type without touching the schema.
+ */
+export type TypedObjectSchema<V> = Omit<ComposedObjectSchema, 'parse' | 'safeParse'> & {
+  parse(data: unknown): V;
+  safeParse(data: unknown): z.ZodSafeParseResult<V>;
+};
 
 /**
- * Upper bound on `notifications.disabledEvents` (#225, epic #215).
- *
- * Reuses the user-preferences bound rather than inventing a second number:
- * both lists are indexed by the SAME registry (`NOTIFICATION_EVENTS`), so
- * whatever count is considered a sane ceiling for one event-keyed collection is
- * the ceiling for the other. A cap is required at all because this array is
- * caller-supplied and lands in JSONB — unbounded growth in a row every request
- * reads is the failure `notificationChannelPreferencesSchema` already bounds on
- * its own axis.
+ * The stored shape of a user's settings: `theme`, `profile` and every
+ * registered namespace, each namespace optional ("absent means built-in
+ * defaults", see `user-settings-namespaces.schema.ts` for why none may ever get
+ * a `.default()`).
  */
-export const MAX_DISABLED_NOTIFICATION_EVENTS =
-  NOTIFICATION_MAX_EVENTS_PER_CHANNEL;
+export const userSettingsSchema = composeUserSettingsSchema() as unknown as TypedObjectSchema<UserSettingsValue>;
+
+export type UserSettingsDto = UserSettingsValue;
 
 /**
- * Deployment-wide browser-notification policy.
- *
- * WHY THIS IS A MODELLED BLOCK (#225). This gate is framework-level and
- * security-adjacent (an operator turning off a delivery channel for everyone,
- * or silencing one noisy event), so it gets a real type, a real default, and
- * somewhere for its semantics to live — not an untyped flag in an open map.
- *
- * WHAT ENFORCES IT (#226). Three consumers, all reading through
- * `notifications/notification-policy.ts`, which is the only place these two
- * fields are interpreted:
- *
- *   * `resolveChannels` — the dispatcher's gate. A `browser` channel this
- *     policy disallows is not delivered over.
- *   * `GET /api/notifications/events` — the same filter, so the preferences
- *     matrix cannot offer a channel the dispatcher would refuse.
- *   * the SSE payload's `toast` flag, and `GET /api/notifications/config`,
- *     which is how a non-admin client learns the capability is off without
- *     being granted `system_settings:read`.
- *
- * WHAT IT DELIBERATELY DOES NOT SWITCH OFF: the `notifications` row itself for
- * a `mandatory` event. Muting a toast must not mute an audit-relevant inbox
- * entry — see notification-policy.ts, which carries the full argument.
- *
- * Web Push (#229/#230) will read the same block when it lands.
- *
- * `disabledEvents` holds `NOTIFICATION_EVENTS` keys and is validated with
- * `notificationEventKeySchema` — the same syntactic bound the per-user
- * preference keys use. A second, hand-rolled pattern here would be a second
- * place for the `<area>.<event>` convention to be wrong, and the wrong direction
- * is an event key an operator cannot suppress because the admin page 400s.
- * It is a syntactic bound, NOT a registry check: an entry naming an event this
- * build does not declare is stored and simply never matches, which is what keeps
- * a rollback across the addition of an event uneventful.
+ * Partial schema for PATCH operations (zod v4: deepPartial removed). The outer
+ * `.nullable()` on every namespace is what lets `{ "dataTables": null }` clear
+ * the whole namespace; the inner nullability (in each namespace's patch schema)
+ * is what lets `{ "dataTables": { "jobs": null } }` delete a single entry.
  */
-export const systemNotificationsSchema = z.object({
-  browserEnabled: z.boolean(),
-  disabledEvents: z
-    .array(notificationEventKeySchema)
-    .max(MAX_DISABLED_NOTIFICATION_EVENTS),
-});
+export const userSettingsPatchSchema = composeUserSettingsPatchSchema();
 
-export type SystemNotificationsValue = z.infer<typeof systemNotificationsSchema>;
+// -----------------------------------------------------------------------------
+// System settings
+// -----------------------------------------------------------------------------
 
-// =============================================================================
-// Operations namespaces (epic #254, issue #256)
-// =============================================================================
-//
-// Four blocks — the job queue, the worker fleet, database backup/restore and
-// the maintenance window — declared here BEFORE the code that reads them
-// exists. Every consumer arrives in a later issue of the epic; today nothing
-// in this build looks at a single one of these values.
-//
-// WHY DECLARE THEM FIRST, WHICH LOOKS LIKE DEAD CODE. A namespace on this row
-// has to be written down in SIX places that nothing links together:
-//
-//   1. `systemSettingsSchema`            (this file)
-//   2. `systemSettingsPatchSchema`       (this file)
-//   3. `updateSystemSettingsSchema`      (settings/dto/update-system-settings.dto.ts)
-//   4. `patchSystemSettingsSchema`       (same file — the WIRE bodies)
-//   5. `SystemSettingsValue` + `DEFAULT_SYSTEM_SETTINGS`
-//                                        (common/types/settings.types.ts)
-//   6. the hand-written merge in settings/system-settings/system-settings.service.ts
-//
-// Miss 3 or 4 and the namespace validates perfectly in every unit test in this
-// file while every real PATCH silently no-ops: the request body is parsed by
-// the wire DTO first, zod strips the key it does not know, and the service is
-// handed a body with the caller's change already deleted. No error, no log
-// line, no audit entry — the same class of silent loss #130 fixed one layer
-// down. Adding all four namespaces in one pass, with one test that fails when
-// the six drift (`common/schemas/settings-parity.spec.ts`), is what keeps the
-// later issues from each rediscovering that trap under time pressure.
-//
-// REQUIRED HERE, OPTIONAL ON THE WIRE — and that asymmetry is deliberate; see
-// `updateSystemSettingsSchema` for the argument. In short: this schema
-// describes the STORED value, which is always complete because
-// `readKnownSettings` fills every block from `DEFAULT_SYSTEM_SETTINGS`; the
-// PUT body is what an existing client sends, and no existing client knows
-// these blocks exist yet.
-//
-// NO `.default()` ANYWHERE IN THIS SECTION, on purpose. A `.default()` here
-// would make `systemSettingsSchema.parse()` mint values silently, which moves
-// the defaults out of `DEFAULT_SYSTEM_SETTINGS` (where they are visible,
-// documented and seeded) and into whichever parse happened to run first. Every
-// default below lives in `settings.types.ts` and nowhere else.
-// =============================================================================
-
-/**
- * Job-queue policy (`jobs`).
- *
- * `history` is nested rather than flattened to `historyRetentionDays` because
- * retention and the purge switch are one decision — an operator who turns the
- * purge off does not care what the retention number says — and grouping them
- * is what lets a later UI render them as one control without inventing a
- * grouping the API does not have.
- *
- * `stuckThresholdMinutes` is how long a claimed job may go without progress
- * before the queue treats it as abandoned. Bounded at a week: a threshold
- * longer than that is indistinguishable from "never reap", which is what
- * disabling the reaper is for.
- */
-export const systemJobsSchema = z.object({
-  history: z.object({
-    retentionDays: z.number().int().min(1).max(3650),
-    purgeEnabled: z.boolean(),
-  }),
-  stuckThresholdMinutes: z.number().int().min(1).max(10080),
-});
-
-export type SystemJobsValue = z.infer<typeof systemJobsSchema>;
-
-/**
- * Worker-fleet policy (`nodes`).
- *
- * `staleHeartbeatSeconds` is when a node stops counting as healthy;
- * `offlineStaleMultiplier` is how many stale intervals it takes before it is
- * declared offline rather than merely late (a multiplier, not a second
- * duration, so the two cannot be configured into contradicting each other);
- * `offlineRetentionDays` is how long an offline node's record is kept before
- * it is forgotten.
- *
- * `jobSecretBrokerEnabled` (#349, epic #345) is the trust-boundary switch: may
- * a node in this deployment be handed a short-lived credential for the job it
- * is running? DEFAULT FALSE, and it is a SYSTEM SETTING rather than an
- * environment variable on purpose — whether a machine the deployment may not
- * own may hold a credential to this deployment's database is a decision an
- * administrator makes on the page where the fleet is managed, not one that
- * hides in a container's env file where nobody reviewing the fleet can see it.
- * Off means the endpoint refuses with a named reason AND every type carrying a
- * broker is filtered out of the node claim, so a node never sees the job.
- */
-export const systemNodesSchema = z.object({
-  staleHeartbeatSeconds: z.number().int().min(5).max(86400),
-  offlineStaleMultiplier: z.number().int().min(1).max(100),
-  offlineRetentionDays: z.number().int().min(1).max(3650),
-  jobSecretBrokerEnabled: z.boolean(),
-});
-
-export type SystemNodesValue = z.infer<typeof systemNodesSchema>;
-
-/**
- * `databaseBackup.timeOfDay`: 24-hour `HH:MM`, zero-padded.
- *
- * A string rather than two numbers because it is one field on one form and one
- * value in one cron-ish schedule; the regex is what stops `"2:00"`, `"25:00"`
- * and `"02:60"` from reaching a scheduler that would have to guess.
- */
-export const BACKUP_TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-/**
- * Database backup and restore policy (`databaseBackup`).
- *
- * `dayOfWeek` and `dayOfMonth` are BOTH always present and both always valid,
- * whatever `frequency` says. The alternative — a discriminated union keyed on
- * `frequency` — would mean switching a schedule from weekly to monthly and
- * back loses the day the operator had chosen, and would make a PATCH that
- * changes only `frequency` invalid unless it also carried the other field.
- * Storing an inert-but-remembered value is the cheaper mistake.
- *
- * `dayOfMonth` stops at 28 rather than 31 so that "monthly" means every month:
- * a schedule pinned to the 30th silently skips February.
- *
- * `restoreRollbackMode` decides what happens to the database a restore
- * displaced — `retain_database` keeps it (renamed, reachable, deleted later by
- * `oldDatabaseRetentionHours`), `drop_database` does not. The default is to
- * retain, because the failure mode of retaining is disk and the failure mode
- * of dropping is a restore from the wrong dump with nothing to go back to.
- *
- * `nodeOffloadEnabled` (#352, epic #345) decides whether `db.backup.run` may be
- * claimed by a WORKER NODE at all. DEFAULT FALSE, and it is deliberately a
- * SECOND switch rather than a reuse of `nodes.jobSecretBrokerEnabled`, because
- * the two answer different questions and a deployment can genuinely want one
- * without the other:
- *
- *   - `nodes.jobSecretBrokerEnabled` — MAY THE BROKER ISSUE ANYTHING AT ALL?
- *     A statement about the fleet: are these machines inside the trust
- *     boundary for short-lived credentials of any kind?
- *   - `databaseBackup.nodeOffloadEnabled` — MAY *THIS* TYPE LEAVE THE SERVER?
- *     A statement about one workload: is dumping the whole database on a
- *     machine that is not the API server what this deployment wants, given
- *     that the node needs a network route to PostgreSQL and the archive's
- *     bytes will cross whatever network sits between them?
- *
- * Collapsing them would mean enabling brokering for any future type — a
- * fork's own `nodeSecretBroker` — silently enables shipping the database
- * dump off-box too, which is not a decision anybody made. Both must be true,
- * AND the broker must report itself usable, before the type is offered to a
- * node; see `NodesService.nodeEligibleTypes`. Off (either one) means the type
- * is withheld from the claim and the in-process worker takes the backup, which
- * is exactly what happened before node offload existed.
- */
-export const systemDatabaseBackupSchema = z.object({
-  enabled: z.boolean(),
-  frequency: z.enum(['daily', 'weekly', 'monthly']),
-  dayOfWeek: z.number().int().min(0).max(6),
-  dayOfMonth: z.number().int().min(1).max(28),
-  timeOfDay: z
-    .string()
-    .regex(BACKUP_TIME_OF_DAY_PATTERN, 'Expected a 24-hour HH:MM time'),
-  timezone: z.string().min(1).max(64),
-  retentionCount: z.number().int().min(1).max(365),
-  storageProvider: z.string().min(1).max(64),
-  runStaleMinutes: z.number().int().min(1).max(10080),
-  compressionLevel: z.number().int().min(0).max(9),
-  restoreRollbackMode: z.enum(['retain_database', 'drop_database']),
-  oldDatabaseRetentionHours: z.number().int().min(1).max(8760),
-  nodeOffloadEnabled: z.boolean(),
-});
-
-export type SystemDatabaseBackupValue = z.infer<
-  typeof systemDatabaseBackupSchema
->;
-
-/**
- * The maintenance banner's default text.
- *
- * Deliberately names no product, no company and no repository: this is a
- * template repo, and a hard-coded name here would be a string a fork has to
- * find and change in a place nobody thinks to look. Anything that genuinely
- * needs the application's name reads `APP_NAME` from `@app/shared`; this copy
- * does not need it, so it does not take the dependency.
- */
-export const DEFAULT_MAINTENANCE_MESSAGE =
-  'This service is temporarily unavailable for scheduled maintenance. Please try again shortly.';
-
-/**
- * Maintenance-window state (`maintenance`).
- *
- * Half policy, half live state, in one block on purpose: `enabled` +
- * `message` + `allowAdmins` are what an operator sets, and `startedAt` +
- * `startedById` are what the act of enabling records. Splitting them across
- * two rows would let the flag and the provenance of the flag disagree.
- *
- * `startedAt`/`startedById` are NULLABLE rather than absent when no window is
- * open, so the key set of this namespace is the same whether maintenance is on
- * or off — a shape that changes with the value is a shape every consumer has
- * to special-case, and it is what `settings-parity.spec.ts` would have no way
- * to check.
- *
- * `allowAdmins` defaults to true because the person most likely to need the
- * application during maintenance is the person who turned maintenance on.
- */
-export const systemMaintenanceSchema = z.object({
-  enabled: z.boolean(),
-  message: z.string().min(1).max(1000),
-  allowAdmins: z.boolean(),
-  startedAt: z.iso.datetime().nullable(),
-  startedById: z.string().uuid().nullable(),
-});
-
-export type SystemMaintenanceValue = z.infer<typeof systemMaintenanceSchema>;
-
-/**
- * Transcription policy (`transcription`) — issue #23, epic #19.
- *
- * DEFINED IN `transcription/transcription-settings.schema.ts` AND RE-EXPORTED
- * HERE, rather than written out inline like the four namespaces above. The
- * shape is large (two nested blocks, a provider enum, a region enum) and it
- * carries a COMPILE-TIME PROOF that no secret-bearing field exists — the same
- * technique `email/email-settings.schema.ts` uses, and one that has to live
- * next to the schema it proves something about. That file imports nothing but
- * zod, so it is a leaf and this import cannot cycle.
- *
- * The provider API KEY is not in it, and must never be: it lives in the
- * encrypted credential store at `(purpose 'transcription', name '<providerId>')`.
- * See that file's header for why a secret in a settings blob is one careless
- * response away from exposure.
- */
-export {
-  systemTranscriptionSchema,
-  systemTranscriptionPatchSchema,
-  TRANSCRIPTION_PROVIDER_IDS,
-  ASSEMBLYAI_REGIONS,
-  AUDIO_DELIVERY_MODES,
-} from '../../transcription/transcription-settings.schema';
-
-export type {
-  SystemTranscriptionValue,
-  TranscriptionProviderId,
-  AssemblyAiRegion,
-  AudioDeliveryMode,
-} from '../../transcription/transcription-settings.schema';
+// The core namespaces' schemas (notifications, jobs, nodes, databaseBackup,
+// maintenance), moved verbatim to a leaf so the registry declarations can use
+// them without importing this file.
+export * from './system-namespaces.schema';
 
 /**
  * AI policy (`ai`) — issue #47, epic #45.
  *
- * DEFINED IN `ai/ai-settings.schema.ts` AND RE-EXPORTED HERE, for the identical
- * reason `transcription` is: the shape has a nested per-provider block and it
- * carries a COMPILE-TIME PROOF that no secret-bearing field exists, and a proof
- * has to live next to the thing it proves something about. That file imports
- * nothing but zod, so it is a leaf and this import cannot cycle.
+ * DEFINED IN `ai/ai-settings.schema.ts` AND RE-EXPORTED HERE: the shape has a
+ * nested per-provider block and it carries a COMPILE-TIME PROOF that no
+ * secret-bearing field exists, and a proof has to live next to the thing it
+ * proves something about. That file imports nothing but zod, so it is a leaf
+ * and this import cannot cycle.
  *
  * ⚠ THERE IS NO AI KEY ANYWHERE IN THIS ROW, AND UNLIKE `transcription` THERE
  * IS NOT ONE IN THE SHARED `credentials` TABLE EITHER. Epic #45 is strict BYO:
@@ -428,111 +133,20 @@ export type {
   AiProviderId,
 } from '../../ai/ai-settings.schema';
 
-// -----------------------------------------------------------------------------
-// PATCH (deep-partial) counterparts
-// -----------------------------------------------------------------------------
-//
-// Hand-written, one level deep, exactly like `systemSettingsPatchSchema` above
-// them: zod v4 removed `deepPartial`, and a generated partial would in any case
-// get `maintenance.startedAt` wrong — `.nullable().optional()` there means two
-// different things (`null` clears the window's start, absent leaves it alone)
-// and the service's merge distinguishes them with `!== undefined`, never `??`.
+/**
+ * The stored shape of the 'global' system settings row: every registered
+ * namespace's `storedSchema`, required, in registration order. REQUIRED
+ * because this schema describes the value as STORED and the stored value is
+ * always complete: every write path runs the row through `readKnownSettings`,
+ * which fills any missing block from the composed defaults. What a CLIENT may
+ * omit is a separate question, answered by the PUT body.
+ */
+export const systemSettingsSchema = composeSystemSettingsSchema() as unknown as TypedObjectSchema<SystemSettingsValue>;
 
-export const systemJobsPatchSchema = z.object({
-  history: z
-    .object({
-      retentionDays: z.number().int().min(1).max(3650).optional(),
-      purgeEnabled: z.boolean().optional(),
-    })
-    .optional(),
-  stuckThresholdMinutes: z.number().int().min(1).max(10080).optional(),
-});
+export type SystemSettingsDto = SystemSettingsValue;
 
-export const systemNodesPatchSchema = z.object({
-  staleHeartbeatSeconds: z.number().int().min(5).max(86400).optional(),
-  offlineStaleMultiplier: z.number().int().min(1).max(100).optional(),
-  offlineRetentionDays: z.number().int().min(1).max(3650).optional(),
-  jobSecretBrokerEnabled: z.boolean().optional(),
-});
-
-export const systemDatabaseBackupPatchSchema = z.object({
-  enabled: z.boolean().optional(),
-  frequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
-  dayOfWeek: z.number().int().min(0).max(6).optional(),
-  dayOfMonth: z.number().int().min(1).max(28).optional(),
-  timeOfDay: z
-    .string()
-    .regex(BACKUP_TIME_OF_DAY_PATTERN, 'Expected a 24-hour HH:MM time')
-    .optional(),
-  timezone: z.string().min(1).max(64).optional(),
-  retentionCount: z.number().int().min(1).max(365).optional(),
-  storageProvider: z.string().min(1).max(64).optional(),
-  runStaleMinutes: z.number().int().min(1).max(10080).optional(),
-  compressionLevel: z.number().int().min(0).max(9).optional(),
-  restoreRollbackMode: z
-    .enum(['retain_database', 'drop_database'])
-    .optional(),
-  oldDatabaseRetentionHours: z.number().int().min(1).max(8760).optional(),
-  nodeOffloadEnabled: z.boolean().optional(),
-});
-
-export const systemMaintenancePatchSchema = z.object({
-  enabled: z.boolean().optional(),
-  message: z.string().min(1).max(1000).optional(),
-  allowAdmins: z.boolean().optional(),
-  startedAt: z.iso.datetime().nullable().optional(),
-  startedById: z.string().uuid().nullable().optional(),
-});
-
-export const systemSettingsSchema = z.object({
-  notifications: systemNotificationsSchema,
-  // Operations namespaces (#256, epic #254). REQUIRED, because this schema
-  // describes the value as STORED and the stored value is always complete:
-  // every write path runs the row through `readKnownSettings`, which fills any
-  // missing block from `DEFAULT_SYSTEM_SETTINGS`. What a CLIENT may omit is a
-  // separate question, answered by `updateSystemSettingsSchema`.
-  jobs: systemJobsSchema,
-  nodes: systemNodesSchema,
-  databaseBackup: systemDatabaseBackupSchema,
-  maintenance: systemMaintenanceSchema,
-  // Transcription (#23, epic #19). Declared in its own leaf file and
-  // re-exported above; required here for the same reason every other
-  // namespace is — this schema describes the value as STORED, and
-  // `readKnownSettings` fills it from `DEFAULT_SYSTEM_SETTINGS` when storage
-  // has nothing.
-  transcription: transcriptionSchema,
-  // AI policy (#47, epic #45). Declared in its own leaf file and re-exported
-  // above; required here for the same reason every other namespace is — this
-  // schema describes the value as STORED, and `readKnownSettings` fills it
-  // from `DEFAULT_SYSTEM_SETTINGS` when storage has nothing.
-  ai: aiSchema,
-});
-
-export type SystemSettingsDto = z.infer<typeof systemSettingsSchema>;
-
-// Partial schema for PATCH operations (zod v4: deepPartial removed, use manual deep partial)
-export const systemSettingsPatchSchema = z.object({
-  // `disabledEvents` REPLACES wholesale rather than merging, which is both RFC
-  // 7396's rule for arrays and the only sane one here: a merge has no way to
-  // express "re-enable this event", so a patch that could only ever add would
-  // make the admin page's uncheck a no-op.
-  notifications: z
-    .object({
-      browserEnabled: z.boolean().optional(),
-      disabledEvents: z
-        .array(notificationEventKeySchema)
-        .max(MAX_DISABLED_NOTIFICATION_EVENTS)
-        .optional(),
-    })
-    .optional(),
-  // Operations namespaces (#256, epic #254). Optional at the namespace level
-  // like every other branch of a PATCH, and optional field by field inside —
-  // `{ "databaseBackup": { "enabled": true } }` must be a legal body, or the
-  // admin page has to send twelve fields to change one.
-  jobs: systemJobsPatchSchema.optional(),
-  nodes: systemNodesPatchSchema.optional(),
-  databaseBackup: systemDatabaseBackupPatchSchema.optional(),
-  maintenance: systemMaintenancePatchSchema.optional(),
-  transcription: transcriptionPatchSchema.optional(),
-  ai: aiPatchSchema.optional(),
-});
+/**
+ * Partial schema for PATCH operations (zod v4: deepPartial removed): every
+ * registered namespace's canonical partial, optional.
+ */
+export const systemSettingsPatchSchema = composeSystemSettingsPatchSchema();

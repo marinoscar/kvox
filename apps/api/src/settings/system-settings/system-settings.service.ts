@@ -14,22 +14,23 @@ import {
 import {
   SystemSettingsDto,
   systemSettingsSchema,
-  systemNotificationsSchema,
-  systemJobsSchema,
-  systemNodesSchema,
-  systemDatabaseBackupSchema,
-  systemMaintenanceSchema,
-  systemTranscriptionSchema,
-  systemAiSchema,
   MAX_DISABLED_NOTIFICATION_EVENTS,
   type SystemNotificationsValue,
   type SystemMaintenanceValue,
   type SystemJobsValue,
   type SystemNodesValue,
   type SystemDatabaseBackupValue,
-  type SystemTranscriptionValue,
   type SystemAiValue,
 } from '../../common/schemas/settings.schema';
+import { systemSettingsNamespaceRegistry } from '../registry';
+
+/**
+ * The transcription policy's type, taken from the registry's augmentation map:
+ * `transcription` is declared by its own module
+ * (`transcription/transcription.system-settings.ts`), which this module does
+ * not import.
+ */
+type SystemTranscriptionValue = SystemSettingsValue['transcription'];
 
 const SETTINGS_KEY = 'global';
 
@@ -309,57 +310,45 @@ export class SystemSettingsService {
    */
   private readKnownSettings(stored: unknown): SystemSettingsValue {
     const root = this.asPlainObject(stored);
-    const storedNotifications = this.asPlainObject(root?.notifications);
+    const defaults = DEFAULT_SYSTEM_SETTINGS as unknown as Record<
+      string,
+      Record<string, unknown>
+    >;
 
-    return {
-      notifications: {
-        browserEnabled:
-          typeof storedNotifications?.browserEnabled === 'boolean'
-            ? storedNotifications.browserEnabled
-            : DEFAULT_SYSTEM_SETTINGS.notifications.browserEnabled,
-        disabledEvents: this.readDisabledEvents(
-          storedNotifications?.disabledEvents,
-        ),
-      },
-      // Operations namespaces (#256). Same contract as everything above —
-      // whatever is on disk, what comes back validates — but read through one
-      // helper instead of four more hand-written ladders. See
+    // One entry per REGISTERED namespace, in registration order (which is the
+    // order `GET /api/system-settings` has always listed them in). A namespace
+    // a module declares (`transcription`, `ai`, ...) is read here without this
+    // file knowing it exists.
+    const value: Record<string, unknown> = {};
+    for (const ns of systemSettingsNamespaceRegistry.list()) {
+      if (ns.key === 'notifications') {
+        // Read by hand because it is two fields, one of which needs its own
+        // salvage rule (`readDisabledEvents`).
+        const storedNotifications = this.asPlainObject(root?.notifications);
+        value.notifications = {
+          browserEnabled:
+            typeof storedNotifications?.browserEnabled === 'boolean'
+              ? storedNotifications.browserEnabled
+              : DEFAULT_SYSTEM_SETTINGS.notifications.browserEnabled,
+          disabledEvents: this.readDisabledEvents(
+            storedNotifications?.disabledEvents,
+          ),
+        };
+        continue;
+      }
+
+      // Every other namespace (operations #256, transcription #23, AI #47, ...):
+      // same contract, whatever is on disk, what comes back validates, read
+      // through one helper instead of one hand-written ladder each. See
       // `readNamespace`.
-      jobs: this.readNamespace(
-        root?.jobs,
-        systemJobsSchema,
-        DEFAULT_SYSTEM_SETTINGS.jobs,
-      ),
-      nodes: this.readNamespace(
-        root?.nodes,
-        systemNodesSchema,
-        DEFAULT_SYSTEM_SETTINGS.nodes,
-      ),
-      databaseBackup: this.readNamespace(
-        root?.databaseBackup,
-        systemDatabaseBackupSchema,
-        DEFAULT_SYSTEM_SETTINGS.databaseBackup,
-      ),
-      maintenance: this.readNamespace(
-        root?.maintenance,
-        systemMaintenanceSchema,
-        DEFAULT_SYSTEM_SETTINGS.maintenance,
-      ),
-      // Transcription (#23, epic #19). Same helper, same contract: whatever is
-      // on disk, what comes back validates.
-      transcription: this.readNamespace(
-        root?.transcription,
-        systemTranscriptionSchema,
-        DEFAULT_SYSTEM_SETTINGS.transcription,
-      ),
-      // AI policy (#47, epic #45). Same helper, same contract: whatever is on
-      // disk, what comes back validates.
-      ai: this.readNamespace(
-        root?.ai,
-        systemAiSchema,
-        DEFAULT_SYSTEM_SETTINGS.ai,
-      ),
-    };
+      value[ns.key] = this.readNamespace(
+        root?.[ns.key],
+        ns.storedSchema as unknown as z.ZodObject<z.ZodRawShape>,
+        defaults[ns.key],
+      );
+    }
+
+    return value as unknown as SystemSettingsValue;
   }
 
   /**
@@ -609,19 +598,14 @@ export class SystemSettingsService {
     const value = this.readKnownSettings(row.value);
 
     return {
-      notifications: value.notifications,
-      // #256. Part of the represented resource from the day the namespaces
-      // exist, not from the day a UI reads them: a block a client cannot GET is
-      // a block it cannot echo back in a PUT, and `replaceSettings` would then
-      // be carrying it forward blind forever. Publishing it is what makes the
-      // PUT round-trip honest, and what lets the integration test prove a PATCH
-      // was actually stored rather than merely accepted.
-      jobs: value.jobs,
-      nodes: value.nodes,
-      databaseBackup: value.databaseBackup,
-      maintenance: value.maintenance,
-      transcription: value.transcription,
-      ai: value.ai,
+      // Every registered namespace, in registration order. Part of the
+      // represented resource from the day the namespace exists, not from the day
+      // a UI reads it (#256): a block a client cannot GET is a block it cannot
+      // echo back in a PUT, and `replaceSettings` would then be carrying it
+      // forward blind forever. Publishing it is what makes the PUT round-trip
+      // honest, and what lets the integration test prove a PATCH was actually
+      // stored rather than merely accepted.
+      ...value,
       security: this.readSecurityPolicy(),
       updatedAt: row.updatedAt,
       updatedBy: row.updatedByUser,
