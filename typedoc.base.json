@@ -2,11 +2,13 @@
   // Shared TypeDoc options for the @marinoscar/kvox-* packages (Epic 5).
   // Each package's typedoc.json extends this file and sets its own tsconfig,
   // entry points and output (paths in an options file resolve against that
-  // file, so they cannot live here). `npm run docs:packages` runs every @marinoscar/kvox-* package.
+  // file, so they cannot live here). `npm run docs:packages` runs every
+  // @marinoscar/kvox-* package.
   //
   // The API reference itself (docs-api/) is generated, never committed; the
-  // JSON half (docs-api/api.json) is what scripts/check-package-docs.mjs (added by issue 5.1)
-  // reads. The authoring rules follow the platform packages' (docs/PACKAGES.md in EAB).
+  // JSON half (docs-api/api.json) is what scripts/check-package-docs.mjs
+  // (added by issue 5.1) reads. The authoring rules follow the platform
+  // packages' (docs/PACKAGES.md in the EAB repository).
   "$schema": "https://typedoc.org/schema.json",
   "excludePrivate": true,
   "excludeInternal": true,
