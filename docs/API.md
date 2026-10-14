@@ -1776,6 +1776,53 @@ row and losing the only record of the upload to abort.
 
 ---
 
+### Personal Access Tokens
+
+Long-lived, user-created bearer tokens (`pat_…`) for non-browser clients such as the CLI or CI. Three routes, all `@Auth()` with **no permission string** — deliberately: the resource is the caller's own token, scoped by `userId` in the query itself, the same ownership-scoped posture `/api/user-settings`, `/api/ai-credentials` and `/api/user-data` take. A PAT presents as `Authorization: Bearer pat_…` and carries the permissions of the user who minted it. Only a SHA-256 hash of the token is stored.
+
+#### POST /pat
+Create a new personal access token.
+
+**Request Body:**
+```json
+{ "name": "ci-deploy", "durationValue": 90, "durationUnit": "days" }
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | 1–100 characters (trimmed) |
+| `durationValue` | integer | Yes | 1–999 |
+| `durationUnit` | `minutes` \| `days` \| `months` | Yes | Unit for `durationValue`; `expiresAt` is computed from them at creation |
+
+**Response:** HTTP 201. The raw token is **shown exactly once** — store it securely; it cannot be retrieved again.
+```json
+{
+  "data": {
+    "token": "pat_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+    "id": "uuid",
+    "name": "ci-deploy",
+    "tokenPrefix": "pat_1a2b",
+    "expiresAt": "2024-04-01T00:00:00.000Z",
+    "createdAt": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+#### GET /pat
+List the current user's tokens. The raw token is never returned — only `tokenPrefix` for identification.
+
+**Response:** an array of `{ id, name, tokenPrefix, durationValue, durationUnit, expiresAt, lastUsedAt (null if never used), createdAt, revokedAt (null if active) }`.
+
+#### DELETE /pat/:id
+Revoke a token.
+
+**Response:** HTTP 204 No Content.
+
+**Error Cases:**
+- 404 Not Found - Token not found, not yours, or already revoked
+
+---
+
 ### Jobs (Background Queue)
 
 **All routes require Admin role, split `jobs:read` (the four reads below) / `jobs:write` (the four writes)** — see [`docs/specs/job-queue.md`](specs/job-queue.md) for the queue's design (the atomic `FOR UPDATE SKIP LOCKED` claim, retry/rate-limit budgets, the lease reaper) and rejected alternatives; this section documents only the request/response contract.
@@ -3380,7 +3427,8 @@ recording, not a correction of it, so it is written straight to the live
 speaker and to `speakerIdentities`, without bumping `currentVersion`, `rev`,
 or the version history. The response's `version` equals the transcript's
 **current** version, unchanged, and `summary` reads `"Named Speaker A as
-Oscar"` (joined with `; ` for more than one) or `"No changes"`. Renaming an
+Oscar"` (joined with `; ` for more than one) or `"No changes"`. Such a batch is
+still audited, as `transcript.speaker_identified`. Renaming an
 already-identified speaker ("Oscar" → "Joe") is an ordinary correction and
 stays versioned as before, and any batch mixing an identification with
 another op — including a text edit — is one version, exactly like any other
@@ -4850,7 +4898,10 @@ administrator. There is deliberately no deployment-wide fallback key — a
 user with no key has no AI features. **`GET /ai-settings/models` below is the
 one exception to "no credential is touched here" in spirit, not in storage**:
 it spends the *calling administrator's own* saved key to ask the provider a
-question, but never accepts, stores or returns one.
+question, but never accepts, stores or returns one. The absence of a key field
+is enforced at compile time: `ai-settings.schema.ts` carries a type-level proof
+that no key-shaped property exists on the settings schema, which since #78 also
+covers the per-model `allowedModels` entry type.
 
 #### GET /ai-settings
 The deployment AI policy and the provider catalogue (models and form fields)
@@ -5682,6 +5733,12 @@ kv:Person
     rdfs:subClassOf schema:Person .
 ```
 
+**Implementation.** The Turtle is written by the hand-written
+`graph/rdf/turtle-writer.ts` — no RDF library is in the request path (spec
+§18.4) — and every IRI comes from `graph/rdf/iris.ts`, the same module the
+data export (#386) uses, so the two cannot disagree. Rendered documents are
+held in a 500-entry LRU keyed by the ETag below.
+
 **Caching.** Both carry a weak `ETag` —
 `W/"sha256(<ontology version>:<fingerprint of your attribute definitions>)"` —
 so it changes exactly when the ontology version changes or you add, rename or
@@ -5943,6 +6000,9 @@ An `accepted` entity becomes `edited` once anything changes (an `edited` one
 stays `edited`). Its evidence is untouched — an edit is curation of a fact
 that already has citations. The edit is audited as `graph.entity_edited`
 with the changed attribute keys and alias counts, never the values.
+Afterwards (never failing the response) `kg.embed` and `kg.entity_digest` are
+enqueued for the entity — each only while its handler is registered, the
+digest also only while `ai.graphEnabled` is on.
 
 **Response:** `200`
 ```json
@@ -6417,7 +6477,8 @@ counts }`. **Errors:** `400` payload (`details.issues`), `span_mismatch`,
 6. distinct pairs and note mentions are recorded; a `resolution` proposal's
    accepted suggestions become merges and its rejections distinct pairs.
 
-Rows still `pending` are not sent and not remembered as rejected. Afterwards
+The commit also writes an internal `commit_log` — the undo record `revert`
+reads, never serialized to clients. Rows still `pending` are not sent and not remembered as rejected. Afterwards
 (never failing the response) `kg.embed` and `kg.entity_digest` are queued for
 what changed — each only while its handler is registered, the digest also
 only while connected knowledge is enabled. Audited `graph.proposal_committed`
