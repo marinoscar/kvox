@@ -953,7 +953,7 @@ runs a registered `KgEvalRunner` (`extract`, issue #363, below),
 `--real-dir`/`--export-note` are the local, opt-in real-data mode, which
 refuses any path inside the git work tree.
 
-**As built (issue #363).** `apps/api/src/graph/extraction/` holds the pure
+**As built (issue #363).** `GraphExtractionModule` is imported by `NotesModule` for the auto-extract hook, one way only: it provides the two note services it needs itself, so the graph never imports back into notes. `apps/api/src/graph/extraction/` holds the pure
 core — `buildExtractionContext` (short aliases: segments `s1…sN` in ordinal
 order, known entities `k1…kM`, the note `N`; the offered schema; the
 known-entities list, max 60: pinned → speakers' identified Persons → their

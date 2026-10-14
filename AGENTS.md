@@ -73,6 +73,7 @@ Assume the branch already exists and is checked out; do not create branches. Eve
 - **Green first, merge second.** Never disable, skip or quarantine a check to merge. If a check is red for a reason this diff did not cause, say so on the PR.
 - **A merged PR is finished.** Follow-up work is a fresh branch off updated `main` and a new PR; never push onto a merged branch.
 - **Commit early, commit often**: small, coherent, one intent per commit. No unrelated refactors, repo-wide formatting or dependency upgrades. If the diff feels big, you waited too long.
+- **Include** the code and tests of one feature area, the minimal config to run/build/test, and small related refactors. **Mixed changes**: revert accidental unrelated edits before committing, or split them into their own commit.
 - **A behaviour change carries its tests** in the same commit or the next one.
 - **Format** (Conventional Commits): `<type>(<scope>): <short imperative summary>`.
 - Types: `feat`, `fix`, `refactor` (no behaviour change), `test`, `docs`, `chore`.
