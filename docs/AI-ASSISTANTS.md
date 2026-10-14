@@ -202,7 +202,7 @@ Guards:
 - `apps/api/test/docs-links.spec.ts` checks relative links in the docs, and also in `AGENTS.md` files, `.opencode/agents/*.md` and `.claude/skills`. It ignores anchors, so check `AGENTS.md#...` slugs by hand.
 
 ```bash
-cd apps/api && npm test -- test/ai-assistant-config test/docs-links
+cd apps/api && node scripts/jest.js --config ./test/jest.config.js --runTestsByPath test/ai-assistant-config.spec.ts test/docs-links.spec.ts
 wc -c AGENTS.md CLAUDE.md apps/*/AGENTS.md .opencode/agents/*.md .claude/skills/*/SKILL.md
 diff <(ls .claude/agents) <(ls .opencode/agents) && echo parity-ok
 ```
