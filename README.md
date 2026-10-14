@@ -204,4 +204,5 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full testing strategy.
 - [`docs/runbooks/`](docs/runbooks/) — operator procedures
 - [`docs/deployment/`](docs/deployment/) — deployment guides (VPS, worker nodes)
 - [`docs/RENAMING.md`](docs/RENAMING.md) — rebranding this template for a new product
+- [`docs/platform-adoption/`](docs/platform-adoption/README.md) — platform drift baseline and module classification (EnterpriseAppBase retrofit)
 - [`apps/cli/README.md`](apps/cli/README.md) — CLI usage, install and CI setup
