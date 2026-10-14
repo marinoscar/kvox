@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, existsSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve, relative } from 'node:path';
 
 // =============================================================================
@@ -18,6 +19,15 @@ import { dirname, join, resolve, relative } from 'node:path';
 // under `.claude/agents/` (cheap to include, and it is a real source of
 // prose — see docs-dev.md, the docs subagent's own instructions, which is
 // exactly where the fourth `System_Specification_Document.md` reference hid).
+// It also scans the package READMEs: `packages/*/README.md` and every
+// `README.md` under `packages/*/src/`, skipping `node_modules/`, `dist/` and
+// the generated `docs-api/`.
+//
+// Since #456 it also scans the AI-assistant instruction files that two tools
+// load: the root `AGENTS.md`, every nested `AGENTS.md` / `CLAUDE.md` under
+// `apps/*` and `packages/*`, `.opencode/agents/*.md` and every `.md` under
+// `.claude/skills/`. A broken link there costs a small-context model a wasted
+// read, so it is checked too.
 //
 // WHAT THIS DOES NOT DO: fetch a URL, or understand Markdown beyond fenced
 // code blocks and link syntax. A relative link is resolved against the
@@ -31,11 +41,10 @@ import { dirname, join, resolve, relative } from 'node:path';
 //
 // FENCED CODE BLOCKS ARE STRIPPED FIRST, line-for-line (blanked, not
 // deleted, so line numbers in a failure message still point at the right
-// line of the original file) — `.claude/agents/docs-dev.md` contains a whole
-// EXAMPLE README.md, fenced, with its own `docs/SECURITY.md` and
-// `docs/OBSERVABILITY.md` links that describe a generic project structure
-// and were never meant to resolve against this repository. Scanning the
-// fence would make this test permanently red over documentation ABOUT
+// line of the original file) — a fenced example (a sample command, a sample
+// link in a "how to write docs" snippet; `.claude/agents/docs-dev.md` carries
+// a whole example README.md) describes a generic project and was never meant
+// to resolve against this repository. Scanning the fence would make this test permanently red over documentation ABOUT
 // documentation, which is a worse failure mode than the bug it exists to
 // catch.
 // =============================================================================
@@ -59,16 +68,19 @@ function markdownFilesIn(dir: string): string[] {
     .map((entry) => join(dir, entry.name));
 }
 
-/** Every `.md` file under `dir`, recursively. */
-function markdownFilesUnder(dir: string): string[] {
+/** Directories never descended into: dependencies, build output, generated API reference. */
+const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'docs-api']);
+
+/** Every `.md` file under `dir` (or only those named `onlyName`), recursively. */
+function markdownFilesUnder(dir: string, onlyName?: string): string[] {
   if (!existsSync(dir)) return [];
   const found: string[] = [];
 
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) {
-      found.push(...markdownFilesUnder(full));
-    } else if (entry.name.endsWith('.md')) {
+      if (!SKIPPED_DIRS.has(entry.name)) found.push(...markdownFilesUnder(full, onlyName));
+    } else if (onlyName ? entry.name === onlyName : entry.name.endsWith('.md')) {
       found.push(full);
     }
   }
@@ -76,19 +88,65 @@ function markdownFilesUnder(dir: string): string[] {
   return found;
 }
 
+/** `packages/*\/README.md` and every `README.md` under `packages/*\/src/`. */
+function packageReadmes(root: string): string[] {
+  const packagesDir = join(root, 'packages');
+  if (!existsSync(packagesDir)) return [];
+  const found: string[] = [];
+
+  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const readme = join(packagesDir, entry.name, 'README.md');
+    if (existsSync(readme)) found.push(readme);
+    found.push(...markdownFilesUnder(join(packagesDir, entry.name, 'src'), 'README.md'));
+  }
+
+  return found;
+}
+
+/** Nested `AGENTS.md` / `CLAUDE.md` directly inside each `apps/*` and `packages/*` directory. */
+function nestedAssistantFiles(root: string): string[] {
+  const found: string[] = [];
+  for (const group of ['apps', 'packages']) {
+    const groupDir = join(root, group);
+    if (!existsSync(groupDir)) continue;
+    for (const entry of readdirSync(groupDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || SKIPPED_DIRS.has(entry.name)) continue;
+      for (const name of ['AGENTS.md', 'CLAUDE.md']) {
+        const path = join(groupDir, entry.name, name);
+        if (existsSync(path)) found.push(path);
+      }
+    }
+  }
+  return found;
+}
+
+/** AI-assistant instruction files (#456): AGENTS.md files, OpenCode agents, Claude skills. */
+function assistantConfigFiles(root: string): string[] {
+  const files: string[] = [];
+  const rootAgents = join(root, 'AGENTS.md');
+  if (existsSync(rootAgents)) files.push(rootAgents);
+  files.push(...nestedAssistantFiles(root));
+  files.push(...markdownFilesIn(join(root, '.opencode', 'agents')));
+  files.push(...markdownFilesUnder(join(root, '.claude', 'skills')));
+  return files;
+}
+
 /** The full set of files this guard scans, repo-root-relative order-independent. */
-function scannedFiles(): string[] {
+function scannedFiles(root: string = REPO_ROOT): string[] {
   const files: string[] = [];
 
   for (const name of ['README.md', 'CLAUDE.md', 'CHANGELOG.md']) {
-    const path = join(REPO_ROOT, name);
+    const path = join(root, name);
     if (existsSync(path)) files.push(path);
   }
 
-  files.push(...markdownFilesUnder(join(REPO_ROOT, 'docs')));
+  files.push(...markdownFilesUnder(join(root, 'docs')));
   // Non-recursive: only the agent definitions themselves, not some future
   // nested directory of unrelated material under .claude/agents/.
-  files.push(...markdownFilesIn(join(REPO_ROOT, '.claude', 'agents')));
+  files.push(...markdownFilesIn(join(root, '.claude', 'agents')));
+  files.push(...packageReadmes(root));
+  files.push(...assistantConfigFiles(root));
 
   return files;
 }
@@ -118,10 +176,10 @@ function stripFences(text: string): string {
 /** `[text](target)` links found on each line, in order. Reference-style links and bare autolinks are out of scope — none are used in this documentation set. */
 const LINK_PATTERN = /\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 
-function extractLinks(file: string): DocLink[] {
+function extractLinks(file: string, root: string = REPO_ROOT): DocLink[] {
   const raw = readFileSync(file, 'utf8');
   const stripped = stripFences(raw);
-  const relFile = relative(REPO_ROOT, file);
+  const relFile = relative(root, file);
   const links: DocLink[] = [];
 
   stripped.split('\n').forEach((lineText, index) => {
@@ -140,9 +198,9 @@ function isOutOfScope(target: string): boolean {
 }
 
 /** Strip a trailing `#anchor`, then resolve against the containing file's own directory. */
-function resolveTarget(containingFile: string, target: string): string {
+function resolveTarget(containingFile: string, target: string, root: string = REPO_ROOT): string {
   const withoutAnchor = target.split('#')[0];
-  return resolve(dirname(join(REPO_ROOT, containingFile)), withoutAnchor);
+  return resolve(dirname(join(root, containingFile)), withoutAnchor);
 }
 
 function targetExists(resolved: string): boolean {
@@ -155,9 +213,22 @@ function targetExists(resolved: string): boolean {
   }
 }
 
+/** `file:line -> "target"` for every relative link under `root` that resolves to nothing. */
+function brokenLinks(root: string = REPO_ROOT): string[] {
+  return scannedFiles(root)
+    .flatMap((file) => extractLinks(file, root))
+    .filter((link) => !isOutOfScope(link.target))
+    .map((link) => ({ link, resolved: resolveTarget(link.file, link.target, root) }))
+    .filter(({ resolved }) => !targetExists(resolved))
+    .map(
+      ({ link, resolved }) =>
+        `${link.file}:${link.line} -> "${link.target}" (resolved: ${relative(root, resolved)})`,
+    );
+}
+
 describe('repo-level documentation links resolve (#335)', () => {
   const files = scannedFiles();
-  const allLinks = files.flatMap(extractLinks);
+  const allLinks = files.flatMap((file) => extractLinks(file));
   const relativeLinks = allLinks.filter((link) => !isOutOfScope(link.target));
 
   it('scanned a non-trivial set of files', () => {
@@ -181,15 +252,61 @@ describe('repo-level documentation links resolve (#335)', () => {
   });
 
   it('resolves every relative link to a real file or directory', () => {
-    const broken = relativeLinks
-      .map((link) => ({ link, resolved: resolveTarget(link.file, link.target) }))
-      .filter(({ resolved }) => !targetExists(resolved));
+    expect(brokenLinks()).toEqual([]);
+  });
 
-    const offenders = broken.map(
-      ({ link, resolved }) =>
-        `${link.file}:${link.line} -> "${link.target}" (resolved: ${relative(REPO_ROOT, resolved)})`,
-    );
+  it('scans the AI-assistant instruction files (#456)', () => {
+    const scanned = files.map((file) => relative(REPO_ROOT, file).split('\\').join('/'));
+    for (const expected of ['AGENTS.md', 'apps/api/AGENTS.md', '.opencode/agents/backend-dev.md', '.claude/skills/new-project/SKILL.md']) {
+      expect(scanned).toContain(expected);
+    }
+  });
 
-    expect(offenders).toEqual([]);
+  it('fails on a broken link in AGENTS.md, a nested CLAUDE.md, an OpenCode agent or a skill (#456)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'docs-links-'));
+    try {
+      const write = (path: string, text: string) => {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), text);
+      };
+      write('docs/real.md', '# Real\n');
+      write('AGENTS.md', '[ok](docs/real.md)\n[gone](docs/gone.md)\n');
+      write('apps/x/CLAUDE.md', '[gone](../../docs/gone2.md)\n');
+      write('apps/x/node_modules/AGENTS.md', '[skipped](nowhere.md)\n');
+      write('.opencode/agents/a.md', '```\n[fenced](nowhere.md)\n```\n[gone](../../docs/gone3.md)\n');
+      write('.claude/skills/s/SKILL.md', '[gone](../../../docs/gone4.md)\n');
+
+      expect(brokenLinks(root)).toEqual([
+        'AGENTS.md:2 -> "docs/gone.md" (resolved: docs/gone.md)',
+        'apps/x/CLAUDE.md:1 -> "../../docs/gone2.md" (resolved: docs/gone2.md)',
+        '.opencode/agents/a.md:4 -> "../../docs/gone3.md" (resolved: docs/gone3.md)',
+        '.claude/skills/s/SKILL.md:1 -> "../../../docs/gone4.md" (resolved: docs/gone4.md)',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails on a broken link in a package or slice README, but not in node_modules, dist or docs-api', () => {
+    const root = mkdtempSync(join(tmpdir(), 'docs-links-'));
+    try {
+      const write = (path: string, text: string) => {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), text);
+      };
+      write('docs/real.md', '# Real\n');
+      write('packages/x/README.md', '# X\n\n[ok](../../docs/real.md)\n[gone](../../docs/gone.md)\n');
+      write('packages/x/src/slice/README.md', '# Slice\n\n```md\n[fenced](nowhere.md)\n```\n[gone](../../../../docs/missing.md#anchor)\n');
+      write('packages/x/node_modules/dep/README.md', '[skipped](nowhere.md)\n');
+      write('packages/x/dist/README.md', '[skipped](nowhere.md)\n');
+      write('packages/x/src/slice/docs-api/README.md', '[skipped](nowhere.md)\n');
+
+      expect(brokenLinks(root)).toEqual([
+        'packages/x/README.md:4 -> "../../docs/gone.md" (resolved: docs/gone.md)',
+        'packages/x/src/slice/README.md:6 -> "../../../../docs/missing.md#anchor" (resolved: docs/missing.md)',
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
