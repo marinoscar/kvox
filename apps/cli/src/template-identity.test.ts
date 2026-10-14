@@ -308,7 +308,8 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   //
   // WHAT THIS COSTS, STATED PLAINLY: `findOffenders` below skips an
   // allowlisted file ENTIRELY — for all four patterns at once, not just
-  // `repoName`. So these 17 files are not merely exempt from matching
+  // `repoName`. So these 17 files (and the 8 added with issue #456 directly
+  // below them) are not merely exempt from matching
   // `kvox`; `productName` (`KVox`), `repoSlug` (`marinoscar/kvox`) and
   // `owner` (`marinoscar`) are unguarded in them too, and nothing here would
   // catch any of the four going stale. If a future fork renames the product
@@ -350,6 +351,29 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/specs/vps-deploy.md',
   'docs/specs/worker-nodes.md',
   'packages/shared/README.md',
+
+  // ---------------------------------------------------------------------
+  // Added with issue #456 (AI assistant instruction files and docs index).
+  //
+  // Same standing as `CLAUDE.md` and `docs/ARCHITECTURE.md` directly above:
+  // Markdown prose showing `kvox <subcommand>` invocations, which cannot
+  // import from `@app/shared`. Two groups:
+  //   - Assistant instruction files and agent definitions (`AGENTS.md`,
+  //     `apps/cli/AGENTS.md`, `.claude/agents/*`, `.opencode/agents/*`) name
+  //     the `kvox` CLI and its repository when telling an assistant how to
+  //     work in this codebase.
+  //   - The docs index and guides (`docs/AI-ASSISTANTS.md`,
+  //     `docs/DEVELOPMENT.md`, `docs/README.md`) name the `kvox` CLI in
+  //     their prose and command examples.
+  // ---------------------------------------------------------------------
+  '.claude/agents/docs-dev.md',
+  '.claude/agents/testing-dev.md',
+  '.opencode/agents/docs-dev.md',
+  'AGENTS.md',
+  'apps/cli/AGENTS.md',
+  'docs/AI-ASSISTANTS.md',
+  'docs/DEVELOPMENT.md',
+  'docs/README.md',
 
   // ---------------------------------------------------------------------
   // Added by issue #130 (epic #168), the VPS bootstrap script.
