@@ -350,6 +350,17 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   'docs/specs/vps-deploy.md',
   'docs/specs/worker-nodes.md',
   'packages/shared/README.md',
+  // Platform-adoption baseline (issue #458): generated drift reports and the
+  // hand-written module classification describe this repository by name (they
+  // compare `kvox` against EnterpriseAppBase) and are frozen data, not rebrand
+  // targets.
+  'docs/platform-adoption/README.md',
+  'docs/platform-adoption/drift-baseline-slices.json',
+  'docs/platform-adoption/drift-baseline-slices.md',
+  'docs/platform-adoption/drift-baseline.json',
+  'docs/platform-adoption/drift-baseline.md',
+  'docs/platform-adoption/module-classification.md',
+  'scripts/platform-adoption/make-slice-view.sh',
 
   // ---------------------------------------------------------------------
   // Added by issue #130 (epic #168), the VPS bootstrap script.
