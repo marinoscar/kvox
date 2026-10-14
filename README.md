@@ -192,7 +192,7 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the full testing strategy.
 
 ## Documentation
 
-- [`CLAUDE.md`](CLAUDE.md) — architecture rules and conventions for contributors
+- [`AGENTS.md`](AGENTS.md) — shared rules and conventions for contributors and AI assistants (`CLAUDE.md` imports it)
 - [`VISION.md`](VISION.md) — product principle and direction
 - [`CHANGELOG.md`](CHANGELOG.md) — released changes
 - [`docs/API.md`](docs/API.md) — API reference

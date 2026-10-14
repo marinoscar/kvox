@@ -11,6 +11,7 @@ This document provides essential information for developers working on this proj
 5. [Common Pitfalls and Solutions](#common-pitfalls-and-solutions)
 6. [Testing Guidelines](#testing-guidelines)
 7. [Debugging Tips](#debugging-tips)
+8. [Environment variables](#environment-variables)
 
 ---
 
@@ -694,6 +695,71 @@ const response = await request(app.getHttpServer())
    ```
 
 3. **Index frequently queried fields** - Already done in schema for email, provider combinations
+
+---
+
+## Environment variables
+
+Key variables (see `infra/compose/.env.example` for the full list; paths such as `docs/...` below are relative to the repository root):
+
+**Application:**
+- `NODE_ENV` - Environment (development/production)
+- `PORT` - API port (default: 3000)
+- `APP_URL` - Base URL (default: http://localhost:3535)
+- `DEPLOY_INFO_PATH` - Where `GET /api/admin/about` reads the CLI's `deploy-info/info.json` from (default: `/app/deploy-info/info.json`, the read-only bind mount `kvox deploy` sets up). Read on every request, so a rewrite needs no restart; a missing file is `deployInfoStatus: "absent"`, never an error
+
+**Database (individual connection parameters):**
+- `POSTGRES_HOST` - Database hostname (default: localhost)
+- `POSTGRES_PORT` - Database port (default: 5432)
+- `POSTGRES_USER` - Database user (default: postgres)
+- `POSTGRES_PASSWORD` - Database password (default: postgres)
+- `POSTGRES_DB` - Database name (default: appdb)
+- `POSTGRES_SSL` - Enable SSL connection (default: false)
+
+Note: `DATABASE_URL` is constructed automatically from these variables at runtime.
+
+**Authentication:**
+- `JWT_SECRET` - JWT signing secret (min 32 chars)
+- `JWT_ACCESS_TTL_MINUTES` - Access token TTL (default: 15)
+- `JWT_REFRESH_TTL_DAYS` - Refresh token TTL (default: 14)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - Google OAuth credentials
+- `INITIAL_ADMIN_EMAIL` - First user with this email becomes Admin
+- `DEVICE_CODE_EXPIRY_MINUTES` - Device code lifetime (default: 15)
+- `DEVICE_CODE_POLL_INTERVAL` - Device polling interval in seconds (default: 5)
+- `DEVICE_TOKEN_EXPIRY_DAYS` - Token lifetime for device sessions in days (default: 7)
+- `DEVICE_PAT_EXPIRY_DAYS` - Lifetime of the PAT minted when a device (e.g. the CLI) requests `clientInfo.tokenType: "pat"`, in days; clamped to 1-999 (default: 90)
+- `SECRETS_ENCRYPTION_KEY` - Base64-encoded 32-byte AES-256 key (generate with `openssl rand -base64 32`) that encrypts runtime-configured credentials (e.g. an SMTP password an admin enters through the app) before they are stored in the `credentials` table. Optional until a credential is stored; see `docs/runbooks/rotate-secrets-encryption-key.md`. Note: credentials configured at runtime through the UI/API live encrypted in the database, not in the environment — unlike every other secret in this section.
+
+**Background Job Queue** (all bare/unprefixed, like `POSTGRES_*` — API-side vars never take
+the CLI's `KVOX_` prefix; see `infra/compose/.env.example` for the full comments):
+- `JOBS_MAX_ATTEMPTS` - Attempts before a job is permanently `failed`, charged at claim time (default: 3)
+- `JOBS_RETRY_BASE_MS` / `JOBS_RETRY_MAX_MS` - Retry backoff bounds, doubling with jitter (default: 2000 / 60000)
+- `JOBS_RATELIMIT_MAX_HITS` - Times a job may be provider-rate-limited before giving up — a budget separate from `JOBS_MAX_ATTEMPTS` (default: 10)
+- `JOBS_RATELIMIT_BASE_MS` / `JOBS_RATELIMIT_MAX_MS` - Rate-limit deferral backoff bounds (default: 30000 / 900000)
+- `JOBS_WORKER_CONCURRENCY` - Jobs this process runs at once; fixed at startup (default: 2)
+- `JOBS_POLL_MS` - Idle poll interval before asking for work again (default: 5000)
+- `JOBS_WORKER_MODE` - `all` (every type — the default), `system` (only types no node may claim **in this deployment right now** — the complement of `NodeOffloadService.offeredTypes()`, so a node-eligible type whose gates are closed is still claimed here), or `off` (enqueue only); an unrecognised value warns and behaves as `all`
+- `JOBS_JOB_TIMEOUT_MS` - Per-job timeout before the slot is freed and the job retries/fails (0 disables; default: 600000)
+- `JOBS_SYSTEM_MODE_EXTRA_TYPES` - Comma-separated types the `system` worker mode should claim **in addition** to its complement — for running a type the fleet is also allowed to run (a small or paused fleet). Never needed to keep a type running at all: a node-eligible type this deployment does not offer to nodes is already in the complement. Unset by default
+- `JOBS_REAPER_ENABLED` - Whether this process reclaims jobs abandoned by a dead executor; independent of `JOBS_WORKER_MODE`. Only the literal `false` turns it off (default: on)
+
+**Worker Node Fleet:**
+- `NODE_STALE_OFFLINE_ENABLED` - Whether this process marks a node offline once its heartbeat is older than `nodes.staleHeartbeatSeconds × nodes.offlineStaleMultiplier`. Only the literal `false` turns it off (default: on)
+- `NODE_OFFLINE_PRUNE_ENABLED` - Whether this process forgets offline nodes past `nodes.offlineRetentionDays` (their jobs are unclaimed, not deleted). Depends on the sweep above being on. Only the literal `false` turns it off (default: on)
+- `NODE_SECRET_SWEEP_ENABLED` - Whether this process runs the ten-minute cron that revokes expired or orphaned per-job credentials brokered to worker nodes (epic #345, issue #349) — the third permanent job-queue exemption (see the MANDATORY job-queue rules in [`AGENTS.md`](../AGENTS.md)). Only the literal `false` turns it off (default: on). Independent of `JOBS_WORKER_MODE`, like the lease reaper, and for the same reason: a credential brokered to a node in a fleet this process does not execute jobs for still needs revoking. Whether a credential is ever brokered **at all** is the separate `nodes.jobSecretBrokerEnabled` system setting, default off — see [`docs/runbooks/node-job-secrets.md`](runbooks/node-job-secrets.md)
+
+**Maintenance Mode:**
+- `MAINTENANCE_MODE` - Environment override that outranks the persisted setting. Set to `true` to force the window open even if the app cannot start (a pre-migration deploy), or to `false` to force it shut (recovery from a window opened with `allowAdmins` false). Only the literal strings `'true'`/`'false'` count; anything else (including unset) means "no override, use the stored setting". Requires an application restart to take effect. See `docs/runbooks/maintenance-mode.md`. ⚠️ Document a value for this variable as prose ("set to `true`"), never as an inline `# MAINTENANCE_MODE=true` example — `apps/cli`'s `parseEnvExample` reads *any* commented `# KEY=value` line in `infra/compose/.env.example` as declaring an optional variable, so an illustrative assignment inside prose registers as a second declaration and fails the CLI's env-spec test. `infra/compose/.env.example` already carries exactly one commented default (`# MAINTENANCE_MODE=false`) and a comment stating this rule — do not add a second commented line for this key.
+
+**Database Backup:**
+- `DB_BACKUP_SCHEDULE_ENABLED` - Whether this process runs the backup scheduler: a ten-minute cron that enqueues the housekeeping sweep, starts a backup (by enqueuing `db.backup.run`) when the configured schedule has come due, and enqueues the retained-database drop. Defaults to on; only the literal `false` turns it off, and it is deliberately independent of `JOBS_WORKER_MODE` — the *tick* is not itself queue work (it only decides whether to enqueue), so an API running as a pure control plane must still queue its own backups even though `JOBS_WORKER_MODE=off` means nothing on this process will execute them. Everything about the schedule itself (enabled, frequency, time of day, timezone, retention count, stale window) is a `databaseBackup` system setting, not an environment variable — as is `nodeOffloadEnabled` (default **false**), which decides whether a worker node may take the dump at all. See `docs/specs/database-backup.md`.
+
+**Knowledge graph:**
+- `KG_MIGRATE_SCHEDULE_ENABLED` - Whether this process runs the hourly (minute 17) tick that enqueues `kg.migrate` for owners whose graph rows a declared ontology migration still has to reshape (#384). The tick only enqueues, and returns at once while `ONTOLOGY_MIGRATIONS` is empty. Only the literal `false` turns it off (default: on), the `DB_BACKUP_SCHEDULE_ENABLED` convention; an admin can still re-run one owner's migration with Retry in the job list. See `docs/runbooks/ontology-migration.md`
+
+**Observability:**
+- `OTEL_ENABLED` - Enable OpenTelemetry (default: true)
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTEL Collector endpoint
 
 ---
 
