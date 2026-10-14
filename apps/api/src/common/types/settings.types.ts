@@ -3,8 +3,8 @@ import type {
   NavigationValue,
   NotificationsValue,
   OnboardingValue,
-  GraphPreferencesValue,
 } from '../schemas/user-settings-namespaces.schema';
+import type { GraphPreferencesValue } from '../../graph/preferences/graph-preferences.schema';
 import {
   DEFAULT_MAINTENANCE_MESSAGE,
   type UserProfileSettingsValue,

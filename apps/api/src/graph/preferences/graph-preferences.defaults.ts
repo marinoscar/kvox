@@ -16,7 +16,7 @@
 
 import type { DomainKey } from '@app/shared/ontology';
 
-import type { GraphPreferencesValue } from '../../common/schemas/user-settings-namespaces.schema';
+import type { GraphPreferencesValue } from './graph-preferences.schema';
 
 export type GraphResolutionMode = 'precheck_confident' | 'review_all';
 export type GraphAdjudication = 'llm' | 'off';

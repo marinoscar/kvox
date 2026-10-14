@@ -5,8 +5,8 @@ import {
   navigationSchema,
   notificationsSchema,
   onboardingSchema,
-  graphPreferencesSchema,
 } from '../../common/schemas/user-settings-namespaces.schema';
+import { graphPreferencesSchema } from '../../graph/preferences/graph-preferences.schema';
 import { profileImageSourceSchema } from '../../common/schemas/settings.schema';
 
 export const userSettingsResponseSchema = z.object({

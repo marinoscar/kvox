@@ -9,9 +9,11 @@ import {
   notificationsPatchSchema,
   onboardingSchema,
   onboardingPatchSchema,
+} from '../../common/schemas/user-settings-namespaces.schema';
+import {
   graphPreferencesSchema,
   graphPreferencesPatchSchema,
-} from '../../common/schemas/user-settings-namespaces.schema';
+} from '../../graph/preferences/graph-preferences.schema';
 import {
   userProfileSettingsSchema,
   userProfileSettingsPatchSchema,

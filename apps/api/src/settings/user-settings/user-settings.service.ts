@@ -26,11 +26,13 @@ import {
   NotificationsValue,
   OnboardingPatchValue,
   OnboardingValue,
+} from '../../common/schemas/user-settings-namespaces.schema';
+import {
   GraphPreferencesPatchValue,
   GraphPreferencesValue,
   GRAPH_THRESHOLD_ORDER_MESSAGE,
   graphThresholdsAreOrdered,
-} from '../../common/schemas/user-settings-namespaces.schema';
+} from '../../graph/preferences/graph-preferences.schema';
 import {
   changedGraphSections,
   GRAPH_PREFERENCE_DEFAULTS,
