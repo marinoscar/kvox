@@ -12,7 +12,7 @@
 > `apps/web/src/components/notes/`, `apps/web/src/theme/tokens.ts`,
 > `apps/web/src/utils/transcriptDisplay.ts`, and
 > `apps/web/scripts/generate-icons.py` plus the two hand-written brand SVGs.
-> Issue #113 — this document — is the epic's last, per CLAUDE.md's
+> Issue #113 — this document — is the epic's last, per AGENTS.md's
 > Issue-Driven Development rule that documentation lands after the code it
 > describes, the same position `docs/specs/notes.md`'s own issue #60 occupies
 > for epic #45.
@@ -111,7 +111,7 @@ enforces (`transcripts:read`, `notes:read`) rather than sharing an
 outcome the merged row's "or" gate could only fake with one row that stayed
 visible either way.
 
-**This is not a violation of `CLAUDE.md`'s Settings UI Pattern rule 2** ("a
+**This is not a violation of `AGENTS.md`'s Settings UI Pattern rule 2** ("a
 settings page must not be added as a new tab on an existing settings page").
 That rule permits tabs for genuinely parallel content — it never *requires*
 a tab strip merely because two things are related. #57 chose tabs because
@@ -153,7 +153,7 @@ bottom bar becomes Home · Transcripts · Notes · Knowledge (three when the
 graph is off or the caller lacks `graph:read`), because `settings` moves to
 `pinned: true` in the same change — the identical move issue #106 made for
 Console — freeing the fourth slot `knowledge` now occupies rather than
-adding a fifth. The five breakpoint gates (CLAUDE.md, Settings UI Pattern
+adding a fifth. The five breakpoint gates (AGENTS.md, Settings UI Pattern
 rule 5) are unchanged; nothing about `pinned`'s rendering contract above
 needed to change to add a second pinned destination, which is exactly the
 point of deriving `BOTTOM_BAR_DESTINATIONS` rather than hand-listing it.

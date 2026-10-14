@@ -3,7 +3,7 @@
 > Epic #19 (issues #20–#32): upload, diarized transcription, corrections,
 > versions, sharing, export, and the redesigned signed-in home page. This
 > document **is** issue #20 — the architecture spec the epic requires before
-> any of the issues it blocks (#21, #23, #24) starts, per CLAUDE.md's
+> any of the issues it blocks (#21, #23, #24) starts, per AGENTS.md's
 > Issue-Driven Development rule and the settings/job-queue precedent of
 > writing the *why* down before the code. Nothing described below is merged
 > yet. Every file path named in this document is where the implementing issue
@@ -46,7 +46,7 @@ application of a rule this repository already has rather than a new one
 invented for this epic:
 
 1. **The pipeline is queue jobs, not a detached promise, not webhooks.**
-   CLAUDE.md's "Every Long-Running Activity Is a Queue Job" rule 1 was written
+   AGENTS.md's "Every Long-Running Activity Is a Queue Job" rule 1 was written
    for exactly this shape of problem — work that outlives the request that
    started it — and a provider transcription of a multi-hour recording can
    take minutes to hours. §1 is that rule applied end to end: upload → submit
@@ -57,7 +57,7 @@ invented for this epic:
    backup's fix — a lease derived from a declared runtime ceiling — is reused
    here rather than re-invented).
 2. **Node eligibility is the default, and every exception is named against a
-   CLAUDE.md rule 2 exemption, not asserted.** `media.audio.transcode` is
+   AGENTS.md rule 2 exemption, not asserted.** `media.audio.transcode` is
    CPU-bound and secret-free, which is precisely what rule 2 means by
    "node-eligible by default" — so it carries `nodeResultSchema` and
    `persistNodeResult` from day one, following the `example.checksum`
@@ -211,7 +211,7 @@ Eight job types, all under `apps/api/src/transcripts/` except the provider
 calls themselves, which live behind `apps/api/src/transcription/`'s registry
 and are called *from* the job handlers rather than duplicated into them.
 
-| Job type | Profile | Node-eligible? | CLAUDE.md rule cited |
+| Job type | Profile | Node-eligible? | AGENTS.md rule cited |
 |---|---|---|---|
 | `media.audio.transcode` | `{ maxRuntimeMs: 3h, maxAttempts: 3 }` | **Yes** | Rule 2 — CPU-bound, secret-free work is node-eligible *by default* |
 | `transcription.submit` | `{ maxRuntimeMs: 2h, maxAttempts: 3 }` | No | Rule 3 — needs the provider API key, a long-lived secret no per-job broker can narrow |
@@ -224,7 +224,7 @@ and are called *from* the job handlers rather than duplicated into them.
 
 Every server-only row above is server-only **because a specific rule 2
 exemption or rule 3 constraint applies to it**, never because it was
-convenient — CLAUDE.md rule 2 states node-eligibility as the default posture
+convenient — AGENTS.md rule 2 states node-eligibility as the default posture
 precisely so that a spec cannot wave a type to "server-only" without saying
 why, and the table above is that accounting made explicit for all eight
 types at once.
@@ -393,7 +393,10 @@ re-enqueues itself, and everything about it follows from that:
   stuck in `submitted` forever with no error anywhere. `skipDedup: true`
   leaves `dedup_key` `NULL`, and `docs/specs/job-queue.md` §4.2 already
   establishes that a `NULL` key never collides with anything — the new row is
-  inserted unconditionally, exactly as intended.
+  inserted unconditionally, exactly as intended. A regression here has no
+  other symptom. The re-enqueue lives in one place —
+  `TranscriptPipelineService.enqueuePoll` — and
+  `transcript-pipeline.service.spec.ts` pins it.
 - **Not one job holding a slot in a loop.** §11 covers this as a rejected
   alternative in detail; the summary is that a single long-lived polling job
   holds a worker slot for the recording's entire transcription time and
@@ -462,7 +465,7 @@ handed with no database access at all, and its computation (render Markdown,
 render a PDF with pdfkit) is exactly the kind of CPU-bound, secret-free work
 rule 2 says should default to node-eligible.
 
-It stays server-only anyway, for a reason CLAUDE.md's rule 2 does not
+It stays server-only anyway, for a reason AGENTS.md's rule 2 does not
 enumerate because it is not about privilege or database access at all: **the
 renderers live in the API**, and a second, independently-maintained copy in
 `apps/cli`'s node executors would mean the *same* export request could
@@ -550,6 +553,57 @@ things:
    `storage.object.upload_aborted` (§9.3).
 3. **Expires exports.** Deletes `transcript_exports` rows and their storage
    objects past their `expires_at` (§8.4).
+
+#### 1.5.9 Pipeline notes a neighbouring file can break
+
+Turning an uploaded recording into a saved transcript is issue #25 of epic
+#19, and it is several job types, not one — because a provider takes minutes
+to hours and rule 1 says nothing that outlives its request may be a detached
+promise. Four things are easy to break from a neighbouring file:
+
+1. **`transcription.poll` re-enqueues itself with `skipDedup: true`, and that
+   is required for correctness** (§1.5.3). The job calling `enqueue()` is itself
+   a `running` `transcription.poll` row for the same subject, so without
+   `skipDedup` the enqueue silently returns the row that is running right now,
+   its `scheduledFor` unchanged; the transcript sits in `submitted` **forever
+   with no error anywhere**. It lives in one place —
+   `TranscriptPipelineService.enqueuePoll` — and
+   `transcript-pipeline.service.spec.ts` pins it.
+2. **The three provider-facing types are server-only under rule 3, and the
+   reason is specific**: the provider API key is long-lived and account-level,
+   and unlike `db.backup.run`'s PostgreSQL role there is no vendor API for
+   minting a job-scoped sub-key, so there is nothing a `nodeSecretBroker` could
+   broker. `media.audio.transcode` (#26) is node-eligible; nothing else in the
+   pipeline is.
+3. **Domain failures do not spend a job attempt.** `ProviderAuthError`,
+   `ProviderInputError` and the provider's own terminal error set
+   `failure_reason` + `status: failed` and the job **returns normally** — it
+   succeeded at determining a permanent outcome, and retrying would re-ask a
+   question whose answer cannot change. A `429` throws `RateLimitError` and is
+   deferred through one shared `'transcription-provider'` throttle key across
+   submit, poll and ingest, because all three share one vendor account and one
+   rate-limit budget (§1.6).
+4. **Two enqueues are guarded on the registry**, because
+   `media.audio.transcode` (#26) and `transcript.snapshot` (#27) are registered
+   by later issues: without the guard they would create `pending` rows no
+   worker can ever claim, which sit in the admin job list as a permanent
+   backlog of one.
+
+Job types, all labelled in `job-type-labels.ts`: `media.audio.transcode`,
+`transcription.submit`, `transcription.poll`, `transcription.ingest`,
+`transcript.snapshot`, `transcript.export`, `transcript.purge`,
+`transcripts.housekeeping` — the last enqueued by a ten-minute `@Cron` that
+only enqueues, like every other one. `transcript.export` runs at priority
+**−10**, the opposite end of the spectrum from `HOUSEKEEPING_PRIORITY = 100`:
+it is the one type in this epic where somebody is watching a spinner.
+
+A ninth type, `transcript.name_check` (issues #328/#330, epic #326), is
+server-only permanently for the same reason `note.generate` is: every request
+runs on the requesting user's own AI provider key, and no vendor here offers
+a job-scoped sub-key a `nodeSecretBroker` could mint instead. `profile:
+{ maxRuntimeMs: 20 min, maxAttempts: 1 }` — one attempt, deliberately, so a
+retry never re-runs and double-charges a click; see
+[`transcript-name-correction.md`](transcript-name-correction.md) §6.
 
 ### 1.6 Domain failures, retryable failures, and `RateLimitError`
 
@@ -1160,6 +1214,28 @@ or `"No changes"`, and is recorded to the audit log as
 that leaves no `transcript_versions` row, so the audit entry is the only
 place "who decided that voice was Oscar" is answered at all.
 
+### 4.7 Three correction rules that are easy to break from a neighbouring file
+
+1. **Everything in `apps/api/src/transcripts/editing/` is pure and must stay
+   that way.** No `PrismaService`, no `@Injectable`, no `randomUUID()` inside a
+   reducer. `materialize()` replays a version log through *the same functions*
+   the live edit path calls, which is what makes `materialize(currentVersion)
+   == the live tables` true **by construction** (spec §4.4) rather than by two
+   implementations being kept in step. A reducer that could read a row is a
+   reducer the replay path could not call.
+2. **`transcript.find_replace` is expanded into concrete `segment.update_text`
+   ops before anything is recorded** (spec §4.2), and every server-chosen value
+   — a split's `newSegmentId` and resolved `atWordIndex`, a `speaker.create`'s
+   `speakerId` and `colorIndex` — is chosen at the same moment. A recorded
+   find & replace would replay through a *future* matcher; a `randomUUID()` in
+   a reducer would give every replay different ids. Both are the same bug.
+3. **A snapshot is a compaction of replay work, never a second source of
+   truth.** `transcript.snapshot` reads `current_version` and the state together
+   under `REPEATABLE READ` and links the snapshot to the version that read
+   actually saw — never to the one its payload named. Version 1 is the one
+   version no sequence of ops can rebuild, which is why it is snapshotted
+   unconditionally.
+
 ## 5. Concurrency
 
 Optimistic, using a **per-entity `rev`** (one on `transcript_speakers`, one
@@ -1556,6 +1632,27 @@ with computed talk-time percentages, segments optionally carrying words),
 so the three renderers cannot disagree about what the transcript *says*,
 only about how they *format* it.
 
+Two export rules, in the same spirit as §4.7:
+
+1. **Adding an export format must cost one class.** An exporter declares
+   `format`, `label`, `mimeType`, `extension`, an `options` field list and a
+   `render(doc, options, out: Writable)`, and registers itself with
+   `TranscriptExporterRegistry` from `onModuleInit` — the same self-registration
+   shape job handlers use. `GET /api/transcripts/exporters` publishes the
+   registry, the export dialog renders whatever it returns, and the Zod schema
+   that validates a request is **derived** from the `options` field list rather
+   than written beside it. Nothing in the controller, the job handler or
+   `apps/web` may branch on a format string; `apps/api/src/transcripts/export/`
+   is the whole surface.
+2. **`transcript.export` is server-only in v1, and not for one of rule 2's
+   reasons** — see §1.5.6. Its input is a materialized snapshot, pure data a
+   node could be handed with no database access; it stays server-only because
+   **the renderers live in the API**, and a second copy in `apps/cli` would
+   produce byte-for-byte different PDFs depending on which codebase claimed the
+   job. That is a deliberate scope line, not a structural limit: nothing about
+   this section would have to change to add `nodeResultSchema` +
+   `persistNodeResult` once the renderers are a package both can import.
+
 ### 8.2 `kvox.transcript/v1`: a public, versioned JSON schema
 
 Published as
@@ -1916,7 +2013,7 @@ authority as reading what flows through it.
 
 Three events, added to `NOTIFICATION_EVENTS`
 (`apps/api/src/notifications/notification-events.ts`) following the exact
-three-step recipe CLAUDE.md's "Adding a Notification" section already
+three-step recipe `apps/api/src/notifications/README.md` already
 documents — a registry entry, template(s), and a `notify()` call after the
 triggering write commits, outside any transaction:
 

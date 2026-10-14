@@ -5,7 +5,7 @@
 > `note_exports` data model, note generation and its resumable stream,
 > document sources, note export, and the web surfaces that reach all of it.
 > This document **is** issue #46 — the architecture spec the epic requires
-> before any of the fourteen issues it blocks starts, per CLAUDE.md's
+> before any of the fourteen issues it blocks starts, per AGENTS.md's
 > Issue-Driven Development rule and the precedent `docs/specs/transcription.md`
 > set for issue #20. Nothing described below is merged yet. Every file path
 > named in this document is where the implementing issue commits to putting
@@ -75,7 +75,7 @@ the primary content**, not merely transcribing it, and four decisions carry
 almost the whole weight of that:
 
 1. **The stream is a durable-state projection, never a push channel.** Epic
-   #345's rule 1 (CLAUDE.md, "Every Long-Running Activity Is a Queue Job")
+   #345's rule 1 (AGENTS.md, "Every Long-Running Activity Is a Queue Job")
    already settled that `note.generate` must be a queue job, not a detached
    promise held open for the length of a completion. What is new here is that
    a **client** also needs to watch that job's progress live, and the obvious
@@ -97,7 +97,7 @@ almost the whole weight of that:
    **account-level** and long-lived (transcription.md §1.5.2–4). Here the key
    belongs to **the individual calling user**, and there is no OpenAI API for
    minting a job-scoped sub-key the way `db.backup.run`'s broker mints a
-   PostgreSQL role (`docs/specs/database-backup.md` §16) — so CLAUDE.md rule 3
+   PostgreSQL role (`docs/specs/database-backup.md` §16) — so AGENTS.md rule 3
    (`nodeSecretBroker`) has nothing to broker, for a reason distinct from rule
    3's other server-only cases in this codebase: it is not that the secret is
    too powerful to hand to a node, it is that **no mechanism to narrow it
@@ -425,8 +425,8 @@ literal is gone** — `AiConfigService`, `AiSettingsService`,
 `this.registry.get(policy.provider)`. Adding a second OpenAI-API-compatible
 vendor now costs one id in `AI_PROVIDER_IDS`, one block in
 `aiProvidersSchema`, and one provider class — no consumer edit, in the same
-"one registry entry" shape CLAUDE.md's "Adding a Job Type" and "Adding a
-Notification" recipes already establish elsewhere in this codebase.
+"one registry entry" shape `apps/api/src/jobs/handlers/README.md`'s "Creating a Handler" and
+`apps/api/src/notifications/README.md`'s "Adding a notification" recipes already establish elsewhere in this codebase.
 
 It is **nullable, not optional**, field for field with
 `ai-settings.schema.ts`'s own reasoning and `systemTranscriptionSchema
@@ -1199,6 +1199,14 @@ from it, the same "one function, two callers" discipline
 length. Choose a shorter source, a shorter template, or a model with a larger
 context window."* — a number the user can act on, not a generic "too large."
 
+The refusal is `assertWithinBudget`/`AiBudgetError` (`ai-errors.ts`,
+`generation/token-budget.ts`), and `AiBudgetError` takes the required and
+available token counts as constructor arguments: an `AiBudgetError` that could
+only say "too large" would satisfy the type and defeat the requirement.
+Truncating instead would be the worst available failure — the user is billed
+for a request that quietly generated a note from *part* of their source, with
+nothing telling them a paragraph vanished into the cut.
+
 **Rejected: silent truncation.** Cutting the source down to whatever fits and
 generating anyway was the obvious alternative, and it is the one this section
 exists specifically to forbid: a note confidently summarising the first third
@@ -1299,7 +1307,7 @@ job per note, running the **same** three ranks through the same
 existing row" is a data migration, and it is the wrong one here: rank 1 spends
 the note owner's own vendor key on their own account (§9), and `migrate
 deploy` must never bill a user's account on their behalf — least of all as an
-invisible side effect of an operator shipping a release. CLAUDE.md's standing
+invisible side effect of an operator shipping a release. AGENTS.md's standing
 rule settles it independently: a pass over a whole library outlives the
 request that asked for it. Being a job is also what makes the sweep operable —
 each note is one row in `GET /api/admin/jobs`, independently retryable, and a
@@ -1785,6 +1793,15 @@ by one for whatever text accumulated since the previous flush. Both the
 append and the `last_event_id` increment happen in the same `UPDATE`, so the
 id sequence is gapless and stable by construction — there is no separate
 counter that could disagree with what actually landed in `content`.
+
+**The stream is a view over durable state, never the delivery mechanism.**
+`GET /api/notes/:id/stream` and `GET /api/note-generations/:id/stream`
+(`generation/note-stream.ts`) only read this column. A note completes
+identically whether or not anybody is connected, and closing the tab loses
+nothing. Anything that makes correctness depend on an open SSE connection —
+buffering a result in memory instead of writing it, gating the note's own
+commit on a client being attached — is a regression, and it will pass every
+test that runs in one process because the test harness never disconnects.
 
 **Rejected: a separate `note_generation_chunks` table, one row per delta.**
 Resume (§5.3) only ever needs a **suffix** of one string — "give me
@@ -2296,7 +2313,7 @@ Six job types, all under `apps/api/src/notes/handlers/` except
 
 | Job type | Profile | Node-eligible? | Reasoning |
 |---|---|---|---|
-| `note.generate` | `{ maxRuntimeMs: 10m, maxAttempts: 1 }` | **No** | CLAUDE.md rule 3, per-user reason (§ "Why this shape" decision 2); `maxAttempts: 1` per decision 3 |
+| `note.generate` | `{ maxRuntimeMs: 10m, maxAttempts: 1 }` | **No** | AGENTS.md rule 3, per-user reason (§ "Why this shape" decision 2); `maxAttempts: 1` per decision 3 |
 | `note.source.extract` | `{ maxRuntimeMs: 5m, maxAttempts: 3 }` | **Yes** | Rule 2's default posture — CPU-bound, secret-free, exactly `media.audio.transcode`'s shape |
 | `note.export` | `{ maxRuntimeMs: 5m, maxAttempts: 2 }`, priority **−10** | No, in v1 | The identical "renderers live in the API" reasoning `docs/specs/transcription.md` §1.5.6 states for `transcript.export`, cited by number rather than re-argued; priority −10 for the same "someone is watching a spinner" reason |
 | `note.purge` | Deployment default | No | Rule 2's "deletes rows/objects across several tables as it goes," mirroring `transcript.purge` (transcription.md §1.5.7) |
@@ -2563,7 +2580,7 @@ version were always going to render in that version's one format.
 
 Three events, added to `NOTIFICATION_EVENTS`
 (`apps/api/src/notifications/notification-events.ts`) via the exact
-three-step recipe CLAUDE.md's "Adding a Notification" section documents —
+three-step recipe `apps/api/src/notifications/README.md` documents —
 mirroring the three transcript events `docs/specs/transcription.md`'s own
 "Notifying somebody about a transcript" section states, with the same
 addressed-to-a-user posture (none of these is a job-queue operational event
@@ -2672,7 +2689,7 @@ requested work, not a security-relevant change to their account.
   need real, deep-linkable sub-routes. The two pages now share
   `LibraryPageFrame.tsx` — a title, a create action, and the breakpoint-aware
   placement of that action — rather than a tab strip.
-- **Synchronous generation inside the request.** Rejected per CLAUDE.md
+- **Synchronous generation inside the request.** Rejected per AGENTS.md
   rule 1: a chat completion can legitimately take from several seconds to a
   few minutes, well past what an HTTP request should hold open, and it needs
   every property §5 gives a queue job for free — durability if the

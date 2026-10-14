@@ -133,6 +133,16 @@ not should not depend on a successful configuration load, and should not have a
 second, cached copy of its answer that can disagree with the environment the
 operator actually edited.
 
+It requires an application restart to take effect (it is an environment
+variable). ⚠ Document a value for this variable as prose ("set to `true`"),
+never as an inline `# MAINTENANCE_MODE=true` example: `apps/cli`'s
+`parseEnvExample` reads *any* commented `# KEY=value` line in
+`infra/compose/.env.example` as declaring an optional variable, so an
+illustrative assignment inside prose registers as a second declaration and
+fails the CLI's env-spec test. `infra/compose/.env.example` already carries
+exactly one commented default (`# MAINTENANCE_MODE=false`) and a comment stating
+this rule — do not add a second commented line for this key.
+
 ### 1.4 `??`, never `||`
 
 `false` is a meaningful value at the first two layers. `||` would silently

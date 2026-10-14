@@ -928,6 +928,15 @@ this surface writes a settings row and a credential the rest of
 
 Full request/response shapes: [`docs/API.md`](../API.md#push-configuration-admin-only).
 
+Status-code and confirmation contract: `PUT` is **409** when enabling with no
+keys generated; `generate` is **409** if already configured; `rotate` takes
+body `{"confirmation":"ROTATE"}` and is **400** if nothing is configured yet;
+`DELETE` takes body `{"confirmation":"REMOVE"}` and removes both the credential
+and the settings row; `test` always answers **200** — a failed send is the
+diagnostic — prunes 404/410 subscriptions and writes no
+`notifications`/`notification_deliveries` row. The private key is never
+returned (`privateKeyStatus` is masked).
+
 `push:read`/`push:write` is a permission pair of its own, **not** a reuse of
 `system_settings:*` — generating or rotating key material has a real,
 described blast radius (every existing subscriber goes dark until it

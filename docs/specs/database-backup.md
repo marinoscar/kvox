@@ -1334,3 +1334,22 @@ because it is not the one taking backups. There is deliberately no tunnelling:
 see [`worker-nodes.md`](worker-nodes.md) — a node needs a real network route,
 which for most deployments means sitting inside the same private network.
 
+### 16.8 The brokered database role (`PgJobRoleBroker`)
+
+Running the dump on a worker node needs a database connection, and no amount of
+presigning produces one. `db-backup/pg-job-role.broker.ts` is the first
+`JobSecretBroker` in this repository (epic #345): per job it mints a
+`appjob_<job>_<random>` login role holding `CONNECT` + `USAGE` + `SELECT` and
+nothing else, `VALID UNTIL` the job's lease + 60s, through `withAdminConnection`
+outside the Prisma pool. `pg_dump` **does not need `SUPERUSER`** — `--no-owner
+--no-acl` keeps ownership and grants out of the archive, so a SELECT-only role
+produces the same bytes. Three layers bound a grant: the settle listener, the
+sweeper, and `VALID UNTIL`, which PostgreSQL enforces itself and which no
+switched-off cron can miss. A role without `CREATEROLE` is the **ordinary**
+managed-PostgreSQL case and answers `guided` with paste-ready SQL, never a 4xx.
+A node also needs a **network route** to PostgreSQL; there is deliberately no
+tunnelling, because that would put the API in the data path the presigned-URL
+data plane exists to keep it out of. Operator guide:
+[`docs/runbooks/node-job-secrets.md`](../runbooks/node-job-secrets.md).
+
+`GET /api/admin/db-backup/node-credential-preflight` (`db_backup:read`) reports whether a worker node can be handed such a credential. It carries two independent facts: `outcome` is the **capability** (a live `CREATEROLE` probe), `brokerEnabled` is the **policy** (`nodes.jobSecretBrokerEnabled`). `outcome: "guided"` is a **200** carrying paste-ready SQL, never a 4xx — managed PostgreSQL denying `CREATEROLE` is the ordinary case.

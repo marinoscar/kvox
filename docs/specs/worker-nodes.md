@@ -218,7 +218,7 @@ authenticate to this deployment.
 The listing is `nodes:read` and **not** a bare `@Auth()`, which is what the
 equivalent PAT listing uses. Two reasons:
 
-* The Settings UI Pattern (CLAUDE.md rule 3) requires a settings card's
+* The Settings UI Pattern (AGENTS.md rule 3) requires a settings card's
   `permission` to be the exact string the controller enforces. A Workers
   surface is gated on `nodes:read`/`nodes:write` — `src/openapi/tags.ts`
   already publishes that claim. An ungated listing would make the hub and the
@@ -352,6 +352,8 @@ So the node plane's own logic is: *who is asking*, *what may they have*, and
 Find → reattach if present, else create; on a `P2002` from a concurrent
 replica, re-read and reattach. Reattach refreshes hostname, platform, CLI
 version, eligible types and concurrency, and brings the node back `online`.
+
+A reattach answers **200, not 201** — the response's `reattached` field says which happened, for a client that cannot see the status line.
 
 **The failure this prevents is invisible while it happens.** Without
 idempotence, every restart of a worker container — a deploy, an OOM kill, a
@@ -494,8 +496,19 @@ path unused would have been the expensive-to-carry code this section warned
 about — but "a node never persists a job-scoped credential" was never really
 optional once a job type needed one at all, so when #351/#352 made
 `db.backup.run` a queue job, brokering stopped being deferred and became
-[MANDATORY rule 3](../../CLAUDE.md#mandatory-every-long-running-activity-is-a-queue-job)
-in `CLAUDE.md`.
+[MANDATORY rule 3](../../AGENTS.md#mandatory-every-long-running-activity-is-a-queue-job)
+in `AGENTS.md`.
+
+**The third cron: `NODE_SECRET_SWEEP_ENABLED`.** `nodes/tasks/node-secret-sweep.task.ts`
+runs every ten minutes and revokes expired or orphaned per-job credentials
+brokered to worker nodes (epic #345, issue #349) — the third permanent
+job-queue exemption (`job-queue.md` §7.10). Only the literal `false` turns it
+off (default: on). It is independent of `JOBS_WORKER_MODE`, like the lease
+reaper, and for the same reason: a credential brokered to a node in a fleet
+this process does not execute jobs for still needs revoking. Whether a
+credential is ever brokered **at all** is the separate
+`nodes.jobSecretBrokerEnabled` system setting, default off — see
+[`docs/runbooks/node-job-secrets.md`](../runbooks/node-job-secrets.md).
 
 The presigned data-plane IO — how a node reads an input object and writes an
 output object with no storage credentials of its own — is **#269**, and it is

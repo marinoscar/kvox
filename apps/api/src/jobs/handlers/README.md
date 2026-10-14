@@ -403,6 +403,41 @@ settle path cannot. **Nothing it returns may be persisted except the handle**
 for the worked example, including the two separate opt-in settings that gate
 whether this ever reaches a node at all.
 
+### A runtime offload gate (`nodeOffloadEnabled`, optional)
+
+`nodeOffloadEnabled?(): Promise<boolean>` is a **runtime policy read**, not a
+static flag: it lets a deployment say "not this workload" about a type that is
+structurally node-eligible. It is a method rather than a `readonly` boolean
+because the answer is something an administrator changes at runtime
+(`db-backup-run.handler.ts` reads its own `databaseBackup.nodeOffloadEnabled`
+system setting), and a field would be read once at registration and be wrong
+from then on. `NodesService.nodeEligibleTypes` awaits it at **claim time**, so a
+switch flipped in the admin UI takes effect on the next claim. Omitting it is the
+normal answer — a node-eligible type with no gate is offered to nodes.
+
+It never changes eligibility: that stays derived from `nodeResultSchema` +
+`persistNodeResult`, and a `false` here does not change what
+`serverOnlyTypes()` reports. It decides only what this deployment *offers*
+today. Do not throw to say "no" — a throw fails the whole claim; report a failing
+settings read as `false`. See the member's doc comment in
+`../job-handler.interface.ts` for the rejected alternative.
+
+### The four optional members at a glance
+
+All four follow the same "presence is the declaration" rule as the
+`nodeResultSchema` + `persistNodeResult` pair — implement one only when the
+default is genuinely wrong for this type:
+
+| Member | Overrides / declares |
+|---|---|
+| `profile` | The deployment-wide `JOBS_JOB_TIMEOUT_MS` / `JOBS_MAX_ATTEMPTS` for this type alone (lease and renewal are derived from `maxRuntimeMs`) |
+| `deriveOutputKey(job)` | The node data plane's default upload key (`node-outputs/<jobId>/<uuid>`); must be idempotent per job |
+| `nodeOffloadEnabled()` | A runtime "not this workload" gate read at claim time; never changes eligibility |
+| `nodeSecretBroker` | That a remote executor needs a job-scoped credential, and how to mint/revoke it |
+
+`db-backup/handlers/db-backup-run.handler.ts` (`db.backup.run`, epic #345) is the
+worked example that uses all four.
+
 ## Example Handlers
 
 See `example-echo.handler.ts` — a server-only handler that logs its payload

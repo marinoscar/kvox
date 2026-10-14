@@ -323,14 +323,14 @@ actual numbers (`docs/specs/notes.md`'s rule 4: never truncate silently).
 ## 6. Job-queue rules compliance
 
 `transcript.name_check` (`TranscriptNameCheckHandler`) is a `JobHandler`
-under CLAUDE.md's "Every Long-Running Activity Is a Queue Job" rule, enqueued
+under AGENTS.md's "Every Long-Running Activity Is a Queue Job" rule, enqueued
 by `TranscriptNameCheckService.create` and never run inline — a two-hour
 transcript's `thorough` run can need dozens of sequential model calls, each
 taking seconds, which is squarely the "outlives the HTTP request" case that
 rule exists for.
 
 - **`profile: { maxRuntimeMs: 20 * 60_000, maxAttempts: 1 }`** — exactly the
-  two numbers CLAUDE.md's rule 4 permits, and **deliberately one attempt**,
+  two numbers AGENTS.md's rule 4 permits, and **deliberately one attempt**,
   for the identical reason `note.generate` carries `maxAttempts: 1`
   (`docs/specs/notes.md` rule 2): every request here is billed to the
   requesting user's *own* key, so an automatic retry would silently re-run
