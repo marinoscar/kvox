@@ -41,8 +41,8 @@
 > streaming generation view (#57); `apps/web/src/pages/NotePage.tsx`,
 > `NoteHistoryPage.tsx` and `apps/web/src/components/notes/` (#58); and the
 > extension to the existing `apps/web/src/pages/TranscriptPage.tsx` (#59).
-> Documentation lands last: `docs/API.md`'s `### Notes` group, CLAUDE.md's own
-> Notes section, a runbook, and the changelog entry (#60).
+> Documentation lands last: `docs/API.md`'s `### Notes` group, the Notes
+> rules in `apps/api/AGENTS.md`, a runbook, and the changelog entry (#60).
 >
 > **Issue #334**, after the epic closed, adds `bodyFormat` (`markdown` |
 > `plain_text`) as a second axis beside `outputFormat`, reworks the note
@@ -149,7 +149,7 @@ Two further postures run through every section below, worth stating once:
   FK-direction discipline `transcripts` established; the export registry (§8)
   is *literally* extracted and reused, not re-implemented; and the built-in
   template convention (§7) reuses the same null-owner seeding
-  `docs/specs/settings-ui.md` and CLAUDE.md's allowlist section already
+  `docs/specs/settings-ui.md` and the allowlist section of [`ARCHITECTURE.md`](../ARCHITECTURE.md) §7.5 already
   establish for "exists for everyone, owned by nobody." An epic that
   introduces a genuinely new capability (AI generation, a live stream) still
   owes this codebase the discipline of reusing every pattern that already
@@ -932,7 +932,7 @@ existing `ai` namespace, and `ai.graphEnabled: boolean` (default `false`) is
 the deployment switch that keeps a fresh install from spending anybody's key
 on automatic extraction before an administrator turns it on. Both fields
 follow the identical six-place settings-parity discipline §2.5 already
-establishes for `allowedModels` (CLAUDE.md's "Database Tables" section).
+establishes for `allowedModels` (the `system_settings` entry in the Table inventory, [`ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4).
 
 **`chooseTaskModel` is the one pure function three surfaces call**, so they
 can never disagree about which model a task would run on: the run-time
@@ -1980,7 +1980,7 @@ kind of mistake.
 `notes:read`/`notes:write` and `note_templates:read`/`note_templates:write`
 are seeded to **all three roles** — Admin, Contributor, and **Viewer**
 (`apps/api/prisma/seed-data.ts` `ROLE_PERMISSIONS`) — mirroring
-`transcripts:read`/`write` exactly (CLAUDE.md's "Key Permissions" section),
+`transcripts:read`/`write` exactly ([`ARCHITECTURE.md`](../ARCHITECTURE.md) §7.3),
 because producing a note is the core action this epic exists to enable and a
 fresh account's default role is Viewer. There is deliberately **no
 `notes:read_any`**, for the identical reason there is no
@@ -2008,8 +2008,8 @@ The `ai` system-settings namespace (enabled providers, permitted models,
 token ceilings, request timeout) is gated on `system_settings:read`/`write`,
 **not** a new `ai:*` permission pair — the same SMTP-password-precedent
 reasoning `docs/specs/transcription.md` §6.4 applies to the AssemblyAI
-settings card, checked against the same four-way test CLAUDE.md's "Key
-Permissions" section states for why `push:*`/`nodes:*`/`broadcasts:*`/
+settings card, checked against the same four-way test the permission catalog
+in [`ARCHITECTURE.md`](../ARCHITECTURE.md) §7.3 states for why `push:*`/`nodes:*`/`broadcasts:*`/
 `db_backup:*` earned their own permissions: rotating a *policy* value here
 disrupts nothing already in flight (unlike `push:*`), names no
 fleet-versus-queue distinction (unlike `nodes:*`), sends nothing to anyone
@@ -2023,7 +2023,7 @@ and is gated by ordinary self-service ownership, the same split
 
 `GET /api/ai/config` is the one non-admin endpoint in this group, gated on
 `notes:read` following `GET /api/transcription/config`'s exact precedent
-(§6.4 of transcription.md, and CLAUDE.md's Browser Notifications section
+(§6.4 of transcription.md, and [browser-notifications.md](browser-notifications.md) §6
 before it): a regular user needs to know which providers/models this
 deployment permits, and which provider their content would go to, without
 needing `system_settings:read` to ask.
@@ -2161,7 +2161,7 @@ and no shared column.
   foreign key to `note_templates` in either direction — nothing catches a
   hidden id that outlives the template it named, filtering "is this template
   hidden" becomes a JSONB containment check instead of an indexed join, and
-  the six-file settings-parity discipline this codebase's `CLAUDE.md`
+  the six-file settings-parity discipline this codebase's [`AGENTS.md`](../../AGENTS.md)
   documents for a `system_settings` namespace (and its five-file counterpart
   for `user_settings`) buys nothing here that a plain table with two foreign
   keys does not already get for free. A join table gives real FK integrity
@@ -2279,8 +2279,8 @@ Three real differences, not merely a smaller document:
    not to produce. `markdown.exporter.ts` needs no such branch — its render
    is a passthrough of the stored string either way.
 3. **Word (`.docx`) export.** `docx` export was explicitly deferred out of
-   epic #19's scope (`docs/specs/transcription.md` §8's own scope line,
-   restated in CLAUDE.md) and has never been built anywhere in this
+   epic #19's scope (`docs/specs/transcription.md` §8's own scope line)
+   and has never been built anywhere in this
    codebase. #54 is where the **first** `docx` exporter actually lands, built
    for notes rather than retrofitted onto transcripts, because VISION.md's
    "Information Should Be Portable" section names Word explicitly and a page

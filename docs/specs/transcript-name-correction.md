@@ -390,7 +390,7 @@ on its own would be a second write path the version log does not know about,
 and `materialize()` — which replays the version log through the *same*
 reducer functions the live edit path calls (`docs/specs/transcription.md`
 §4.4) — could no longer be guaranteed to rebuild what the user actually sees.
-This is exactly the shape rule 1 in CLAUDE.md's transcript-correction section
+This is exactly the shape rule 1 in [`transcription.md`](transcription.md) §4.7
 protects: nothing outside `apps/api/src/transcripts/editing/` may write a
 segment's text.
 

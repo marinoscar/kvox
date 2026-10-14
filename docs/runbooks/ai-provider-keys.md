@@ -196,8 +196,8 @@ whether the deployment is broken.
 
 ## 6. Diagnosing a failed generation
 
-`note.generate` is `maxAttempts: 1` **by design** (see `CLAUDE.md`'s
-"Notes, Note Templates and the AI Layer" section) — nothing about this job
+`note.generate` is `maxAttempts: 1` **by design** (see [`apps/api/AGENTS.md`](../../apps/api/AGENTS.md)
+and [`docs/specs/notes.md`](../specs/notes.md)) — nothing about this job
 type auto-retries, ever, because a second attempt would call the provider
 with the user's own key a second time and, completions being
 non-deterministic, show them different text than the partial stream they

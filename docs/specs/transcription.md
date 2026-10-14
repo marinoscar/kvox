@@ -914,8 +914,8 @@ but a user-created speaker legitimately has none, and two user-created
 speakers with no label must not collide on `NULL = NULL` under the naive
 reading of a non-partial unique index. This migration therefore hand-writes
 that index in `migration.sql`, exactly as the two precedents do, and is the
-same kind of intentional schema drift CLAUDE.md's own "Database Tables"
-section already documents for `jobs`.
+same kind of intentional schema drift the Table inventory in
+[`ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4 already documents for `jobs`.
 
 ### 3.3 `transcript_segments`
 
@@ -1446,8 +1446,8 @@ The Transcription settings card (`/admin/settings/transcription`, issue #23)
 is gated on `system_settings:read`/`write`, **not** a new
 `transcription:*` permission pair — deliberately following the SMTP-password
 precedent rather than the `push:*`/`nodes:*`/`broadcasts:*`/`db_backup:*`
-precedent for splitting a permission out. CLAUDE.md's own "Key Permissions"
-section states the test each of those four splits passed to earn its own
+precedent for splitting a permission out. The permission catalog in
+[`ARCHITECTURE.md`](../ARCHITECTURE.md) §7.3 states the test each of those four splits passed to earn its own
 permission, and the AssemblyAI API key fails all four of them:
 
 | Split permission | Why it exists | Does the transcription key share that property? |
@@ -1470,7 +1470,7 @@ a shared permission does not already check.
 
 `GET /api/transcription/config` is the one **non-admin** endpoint in this
 group (`transcripts:read`), following the `/api/notifications/config`
-pattern CLAUDE.md's Browser Notifications section already establishes: a
+pattern [`browser-notifications.md`](browser-notifications.md) §6 already establishes: a
 regular user needs to know *whether* transcription is available, the upload
 limits, and the provider's name for the privacy notice (§10), without
 needing `system_settings:read` to ask.

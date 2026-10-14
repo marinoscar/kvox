@@ -1768,8 +1768,8 @@ server, for a deployment with no nodes — while its `nodeResultSchema` +
 and posted back for the server to persist. **There is no `if (isNode)`
 branch anywhere in a handler or in the claim path** — a node is an option a
 deployment can add, never a requirement any handler must plan around. See
-`CLAUDE.md`'s "Adding a Job Type" recipe and
-`apps/api/src/jobs/handlers/README.md` for what that split looks like in a
+the recipe in
+[`apps/api/src/jobs/handlers/README.md`](../apps/api/src/jobs/handlers/README.md) for what that split looks like in a
 real handler (`example-checksum.handler.ts`).
 
 The node's data plane is a second, deliberate asymmetry: a node fetches and

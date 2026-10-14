@@ -19,8 +19,8 @@
 >
 > This document explains **why** each of the six pieces below is shaped the
 > way it is, and names the alternatives that were tried or considered and
-> rejected. It is not a restatement of `CLAUDE.md`'s "Navigation destination
-> model" subsection, which states the rule; this is the rationale that
+> rejected. It is not a restatement of [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) §9.6's "Navigation
+> destinations" subsection, which states the rule; this is the rationale that
 > subsection defers to, the same relationship `docs/specs/settings-ui.md` has
 > to the "MANDATORY: Settings UI Pattern" section.
 

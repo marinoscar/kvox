@@ -14,9 +14,8 @@
 > `apps/web/src/hooks/useUserData.ts` and `apps/web/src/services/userData.ts`
 > on the web side, plus a `Danger Zone` group in
 > `apps/web/src/config/userSettingsSections.tsx`. The wire contract is
-> `docs/API.md`'s `### User Data` section; CLAUDE.md's own `### User Data`
-> endpoint group and `### Deleting Your Own Data` subsection point here
-> rather than restating it. Neither document repeats what the implementation
+> `docs/API.md`'s `### User Data` section; `apps/api/AGENTS.md`'s
+> `user.data.purge` rule points here rather than restating it. Neither document repeats what the implementation
 > files' own header comments already argue in full — this document is the
 > one place that argument is assembled end to end.
 
@@ -277,8 +276,8 @@ anything had gone wrong with a deletion the user is entitled to know the
 outcome of.
 
 This is the identical relationship `note.generate` has with
-`POST /api/notes/{id}/regenerate` (`docs/specs/notes.md`, CLAUDE.md's own
-notes on that module): the retry of an irreversible, user-visible action
+`POST /api/notes/{id}/regenerate` (`docs/specs/notes.md`, `apps/api/AGENTS.md`'s
+rule on that job): the retry of an irreversible, user-visible action
 belongs to the user, as an explicit second request with its own fresh
 one-attempt budget, never to the queue's own retry loop. `POST
 /api/user-data/deletions` is that button here — pressing it again after a

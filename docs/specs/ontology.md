@@ -2183,7 +2183,7 @@ that package for exactly this reason: the API to validate and extract
 against, the web app to render a form from, one declaration shared rather
 than two hand-copied ones.
 Zod is not a new dependency reached for here — it is already this codebase's
-single source of truth for settings (CLAUDE.md's Adding a Setting rule, and
+single source of truth for settings (the Adding a setting rule in [`apps/api/AGENTS.md`](../../apps/api/AGENTS.md), and
 the six-file settings-parity discipline `settings-parity.spec.ts` enforces),
 and the same argument that makes it right for a system-settings namespace
 makes it right here: one declaration yields runtime validation of a `props`
@@ -2272,7 +2272,7 @@ protected field names, and the operating principle "add attributes without
 breaking existing nodes; a genuinely new type needs re-ingestion" that
 directly motivates §17.4's versioning rules. **LinkML itself is not
 adopted as a dependency** — it is a Python toolchain, and this codebase is
-TypeScript end to end (CLAUDE.md's Technology Stack); the ideas worth taking
+TypeScript end to end ([`AGENTS.md`](../../AGENTS.md) Project overview); the ideas worth taking
 (closed classes, slots, mixins) cost nothing to reimplement in Zod, while the
 toolchain itself would be a second language's build step wired into a
 Node/TypeScript monorepo for no capability this document's design actually
@@ -2461,7 +2461,7 @@ is permanent once rows exist (§17.1); deprecate before delete, always.
 
 **Maintenance discipline.** A `CHANGELOG` lives in the definition file
 itself, and a parity test in the style of `settings-parity.spec.ts`
-(CLAUDE.md's Database Tables section) checks the properties that keep the
+(the Table inventory in [`ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4) checks the properties that keep the
 file internally honest: every type has a description, every relation
 declares its endpoint types, every attribute declares a `kind`, and no key
 that ever shipped is ever removed from the file (only deprecated).
@@ -2479,7 +2479,7 @@ definition file, not a database migration at all. Treating an ontology bump
 as a Prisma migration would be modelling application-level, per-user data as
 if it were the physical schema, and would additionally spend the *user's*
 own AI provider key inside a `migrate deploy` step run on the operator's
-behalf, precisely the objection CLAUDE.md's `note.retitle` entry (⚠ "a job
+behalf, precisely the objection [`notes.md`](notes.md) §3.4.1's `note.retitle` entry (⚠ "a job
 and deliberately not a migration") already raises for a different feature
 facing the identical shape of mistake.
 
@@ -3052,7 +3052,7 @@ phone it takes the bottom-sheet-or-full-screen shape `NameSuggestionsPanel.tsx`
 `Drawer` from the bottom for a short list of pending rows, promoted to a
 full-screen route when a proposal is large enough that a partial-height
 sheet would make scanning it worse than not showing it at all. This is the
-page-level `down('sm')` read `LibraryPageFrame.tsx` already takes (CLAUDE.md's
+page-level `down('sm')` read `LibraryPageFrame.tsx` already takes ([`AGENTS.md`](../../AGENTS.md)'s
 Settings UI Pattern rule 5's own footnote) — a layout choice inside one page,
 never a sixth breakpoint gate on app chrome.
 
@@ -3075,7 +3075,7 @@ already have from each other.
 
 `ai.taskModels: Partial<Record<TaskKey, { model: string; reasoningEffort?:
 'low'|'medium'|'high' }>>` — a new field on the existing `ai` system-settings
-namespace (CLAUDE.md's Database Tables section), following the identical
+namespace (the `system_settings` entry in the Table inventory, [`ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4), following the identical
 six-place settings-parity discipline every other `ai` field already follows
 (verified above). `TaskKey` is `'graph.extract' | 'graph.adjudicate' |
 'graph.digest' | 'graph.agent'` — one key per AI-calling *shape* this
@@ -3091,7 +3091,7 @@ A second new field, `ai.graphEnabled: boolean`, default **`false`** —
 connected knowledge is off for a fresh deployment until an administrator
 turns it on, the identical "off by default until configured" posture
 `nodes.jobSecretBrokerEnabled` and `databaseBackup.nodeOffloadEnabled`
-(CLAUDE.md's Environment Variables section) already establish for a feature
+([`DEVELOPMENT.md`](../DEVELOPMENT.md#environment-variables)) already establish for a feature
 with a real blast radius: turning this on is the moment every eligible note
 starts spending the *owning user's own* AI provider credit on an extraction
 they did not explicitly request per-note. `kg.extract` is never enqueued
@@ -3115,8 +3115,8 @@ delta/tool-call/done events for the agent loop. Every model descriptor a
 provider reports (`AiProvider.listModels`/`deriveModelDescriptor`, verified
 above) carries two new boolean flags, `structuredOutput` and `toolCalling`,
 alongside its existing context-window/output-ceiling numbers
-(`ai-model-resolution.ts`'s five-rank chain, CLAUDE.md's `ai` namespace
-entry) — a model with `structuredOutput: false` is not offered for
+(`ai-model-resolution.ts`'s five-rank chain, the `ai` namespace
+entry in [`ARCHITECTURE.md`](../ARCHITECTURE.md) §6.4) — a model with `structuredOutput: false` is not offered for
 `graph.extract`/`graph.adjudicate`/`graph.digest`, and one with
 `toolCalling: false` is not offered for `graph.agent`, at both save time
 (§20.4) and resolution time (§20.3), so an unusable pairing is
@@ -3241,7 +3241,7 @@ exactly as §20.3 describes), reading prior turns in the conversation as the
 message history, calling tools as needed, and writing every delta into
 `ask_messages.content` on the way past — **the identical durable-buffer-not-
 delivery-mechanism discipline** `note_generations` already establishes
-(CLAUDE.md's Notes rule 1): a turn completes identically whether or not the
+([`notes.md`](notes.md) §5.1): a turn completes identically whether or not the
 SSE stream below is open, and closing the tab loses nothing.
 
 **Caps.** A hard **step cap** (a fixed number of tool calls per turn) and a
@@ -3373,7 +3373,7 @@ and `resolveStreamOffset` (the header-over-query rule, moved into
   refetches. Tuning is the `ASK_STREAM_TUNING` DI token, `{}` in `AskModule`.
 - Access is `graph:read` + `AskAccessService.requireMessage` **before** the
   stream opens; a foreign, missing or `role: 'user'` message is the same JSON
-  404. The stream writes nothing (CLAUDE.md, Notes rule 1).
+  404. The stream writes nothing ([`notes.md`](notes.md) §5.1).
 
 ### 21.5 Web surfaces
 
@@ -3908,7 +3908,7 @@ printed in a brief).
 - **Storing anything user-owned in the existing `credentials` table.**
   Not directly applicable to this graph's own data, but named here because
   the same reasoning `docs/specs/notes.md`'s "Rejected alternatives" gives
-  for `user_ai_credentials` (CLAUDE.md's Notes rule 5, the cascade argument) generalizes to
+  for `user_ai_credentials` ([`notes.md`](notes.md) §4.2, the cascade argument) generalizes to
   every table this document defines: `credentials` has no foreign key to
   `users` and cannot grow one without complicating a table that exists to
   hold infrastructure secrets outliving whichever administrator configured
@@ -3953,7 +3953,7 @@ printed in a brief).
   a migration or an extractor could get backwards.
 - **LinkML/YAML as the definition format**, rather than TypeScript + Zod.
   Rejected per §17.1: LinkML is a Python toolchain, and this codebase is
-  TypeScript end to end (CLAUDE.md's Technology Stack) — adopting it would
+  TypeScript end to end ([`AGENTS.md`](../../AGENTS.md) Project overview) — adopting it would
   mean a second language's build step wired into a Node/TypeScript monorepo,
   for capabilities (closed classes, slots, mixins) this design gets for free
   by reimplementing the *ideas* in Zod, the tool this codebase already uses
@@ -3988,7 +3988,7 @@ printed in a brief).
   user's own domain toggle, an ontology bump requiring row reshaping) as a
   `prisma migrate` step run by an operator would additionally spend a user's
   own AI provider key inside a deploy step performed on their behalf,
-  exactly the mistake CLAUDE.md's `note.retitle` entry already documents
+  exactly the mistake [`notes.md`](notes.md) §3.4.1 (`note.retitle`) already documents
   and rejects for a different feature facing the identical shape of problem.
   `kg.migrate` (§11), a per-user, per-row, resumable job, is the actual
   mechanism.

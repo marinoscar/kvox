@@ -317,8 +317,8 @@ rejected alternatives:
 
 **A successful `install` does not create an admin user, or any user at
 all.** The seed (`apps/api/prisma/seed.ts`) writes an **allowlist row** for
-`INITIAL_ADMIN_EMAIL` — the same mechanism the "Access Control: Email
-Allowlist" section of the root `CLAUDE.md` describes for local development —
+`INITIAL_ADMIN_EMAIL` — the same mechanism the Email Allowlist
+section of [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) (§7.5) describes for local development —
 and nothing more. Nobody is an admin, and nobody has an account, until that
 exact email address completes Google OAuth login at `https://<domain>`.
 
