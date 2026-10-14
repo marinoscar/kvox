@@ -308,7 +308,7 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   //
   // WHAT THIS COSTS, STATED PLAINLY: `findOffenders` below skips an
   // allowlisted file ENTIRELY — for all four patterns at once, not just
-  // `repoName`. So these 17 files are not merely exempt from matching
+  // `repoName`. So these 23 files are not merely exempt from matching
   // `kvox`; `productName` (`KVox`), `repoSlug` (`marinoscar/kvox`) and
   // `owner` (`marinoscar`) are unguarded in them too, and nothing here would
   // catch any of the four going stale. If a future fork renames the product
@@ -328,13 +328,21 @@ const ALLOWLIST: ReadonlySet<string> = new Set([
   // the same reason `apps/cli/src/tui/tty.ts` is allowlisted above: it would
   // make the documentation worse, not the code safer.
   // ---------------------------------------------------------------------
+  '.claude/skills/add-job-type/SKILL.md',
+  '.claude/skills/add-settings-page/SKILL.md',
   '.claude/skills/rename-app/SKILL.md',
   '.claude/skills/rename-app/references/do-not-rename.md',
   '.github/workflows/ci.yml',
+  // Assistant instructions (issue #456): they name the `kvox` binary and the
+  // product the same way CLAUDE.md always did, and are its direct successors.
+  'AGENTS.md',
   'CLAUDE.md',
+  'apps/cli/AGENTS.md',
   'apps/api/src/jobs/contracts/README.md',
   'docs/ARCHITECTURE.md',
+  'docs/DEVELOPMENT.md',
   'docs/DEVICE-AUTH.md',
+  'docs/README.md',
   'docs/RENAMING.md',
   'docs/deployment/vps.md',
   'docs/deployment/worker-nodes.md',
