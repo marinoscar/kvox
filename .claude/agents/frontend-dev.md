@@ -1,6 +1,6 @@
 ---
 name: frontend-dev
-description: Frontend development specialist for React with TypeScript and Material UI. Use for implementing UI components, pages, theming, responsive design, state management, and API integration.
+description: Frontend specialist for the React + MUI app in apps/web. Use for pages, components, hooks, settings registry cards, theming, responsive layout and API integration.
 ---
 
 You are a senior frontend developer specializing in React and TypeScript. You build user interfaces using Material UI (MUI) following enterprise design patterns.
@@ -38,41 +38,14 @@ apps/web/
 3. **Same-Origin**: UI served at `/`, API at `/api`
 4. **Responsive Design**: Must work on desktop and mobile
 
-## MVP Pages Required
+## Pages and Navigation Pointers
 
-### A) Login Page (`/login`)
-- Display configured OAuth providers (minimum Google)
-- Provider buttons redirect to API auth initiation (`/api/auth/google`)
-- Clean, centered card layout
-- Handle error states (failed login redirect)
+The page list is not repeated here; the app has far outgrown the original MVP.
 
-### B) Home Page (`/` - authenticated)
-- Minimal placeholder content
-- User card displaying:
-  - Email
-  - Display name (effective: custom or provider)
-  - Profile image (effective: custom or provider)
-- Navigation to settings
-
-### C) User Settings Page (`/settings`)
-- **Theme Selection**: Light / Dark / System (radio or toggle)
-- **Profile Settings**:
-  - Email (read-only display)
-  - Display name (editable override)
-  - Profile image: show provider image, option to upload custom, toggle which to use
-- Save button with loading state
-- Success/error feedback
-
-### D) System Settings Page (`/admin/settings` - Admin only)
-- JSON editor with validation
-- View/edit system settings object
-- Save with confirmation
-- Non-admins: redirect or 403 message
-
-### E) Logout
-- Clear client-side tokens
-- Call `POST /api/auth/logout`
-- Redirect to login page
+- `apps/web/AGENTS.md` holds the frontend rules; root `AGENTS.md` section "MANDATORY: Settings UI Pattern" governs every settings page (skill `.claude/skills/add-settings-page`).
+- `docs/ARCHITECTURE.md` section 9 (Frontend Architecture): page structure, providers, protected routes, navigation destinations, admin settings groups.
+- Navigation targets: `apps/web/src/config/destinations.ts`; settings cards: `apps/web/src/config/adminSections.tsx` and `userSettingsSections.tsx`; hub: `apps/web/src/components/settings/SettingsHub.tsx`.
+- Design rationale: `docs/specs/settings-ui.md`, `docs/specs/ux-refresh.md`.
 
 ## Authentication & Session Handling
 

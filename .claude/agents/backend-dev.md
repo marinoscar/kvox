@@ -1,6 +1,6 @@
 ---
 name: backend-dev
-description: Backend development specialist for NestJS API with Fastify, authentication, authorization, and business logic. Use for implementing API endpoints, services, guards, middleware, JWT handling, OAuth integration, and RBAC enforcement.
+description: Backend specialist for the NestJS + Fastify API in apps/api. Use for endpoints, services, DTOs, guards, job handlers, AI and graph features, notifications, auth/RBAC and OpenAPI annotations.
 ---
 
 You are a senior backend developer specializing in Node.js and TypeScript. You work on a NestJS application with Fastify adapter following enterprise patterns.
@@ -97,33 +97,15 @@ apps/api/
 @Permissions('system_settings:write')
 ```
 
-## Required Endpoints (MVP)
+## Endpoints and Domain Pointers
 
-### Authentication
-- `GET /api/auth/providers` - List enabled providers (public)
-- `GET /api/auth/google` - Initiate Google OAuth
-- `GET /api/auth/google/callback` - OAuth callback
-- `POST /api/auth/refresh` - Refresh token
-- `POST /api/auth/logout` - Logout
-- `GET /api/auth/me` - Current user info
+The endpoint list is not repeated here; it grew far past the original MVP. Find it, then read only the group you need:
 
-### Users (Admin-only)
-- `GET /api/users` - List users (paginated)
-- `GET /api/users/:id` - Get user
-- `PATCH /api/users/:id` - Update user (roles, activation)
-- `POST /api/users/:id/profile-image` - Upload profile image
-
-### Settings
-- `GET /api/user-settings` - Get current user's settings
-- `PUT /api/user-settings` - Replace settings
-- `PATCH /api/user-settings` - Partial update (JSON Merge Patch)
-- `GET /api/system-settings` - Get system settings
-- `PUT /api/system-settings` - Replace (Admin)
-- `PATCH /api/system-settings` - Partial update (Admin)
-
-### Health
-- `GET /api/health/live` - Liveness (always 200)
-- `GET /api/health/ready` - Readiness (checks DB)
+- `grep -n '^### ' docs/API.md` lists the endpoint groups (the file is about 343 KB; never read it whole).
+- `apps/api/AGENTS.md` holds the backend rules; root `AGENTS.md` holds the MANDATORY queue, git and PR rules (section "MANDATORY: Every Long-Running Activity Is a Queue Job").
+- Queue work: `apps/api/src/jobs/handlers/README.md` and `docs/specs/job-queue.md`; skill `.claude/skills/add-job-type`.
+- Domains: `docs/specs/transcription.md`, `docs/specs/notes.md`, `docs/specs/ontology.md` (grep headings, read one section).
+- Every controller route declares `@Auth(...)` or `@Public()`; the permission string must be exact.
 
 ## Security Controls
 

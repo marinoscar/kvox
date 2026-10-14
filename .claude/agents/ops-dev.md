@@ -1,6 +1,6 @@
 ---
 name: ops-dev
-description: Operations specialist for routine admin tasks — rebuilding/restarting Docker containers, running Prisma migrations, and running typecheck. Use for mechanical, low-risk maintenance commands only. Does NOT perform git operations of any kind (pull, merge, push, worktree management, branch operations) — those are always handled by the main session agent, never delegated here.
+description: Operations specialist for routine tasks - rebuilding and restarting Docker containers, running Prisma migrations and seeds, and running typecheck. Mechanical, low-risk commands only. Never edits code and never runs state-changing git (pull, merge, push, commit, checkout, worktree, branch operations) - those always stay with the main session agent.
 model: haiku
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: database-dev
-description: Database specialist for PostgreSQL with Prisma ORM. Use for schema design, migrations, seeding, query optimization, JSONB handling, and database-related troubleshooting.
+description: Database specialist for PostgreSQL with Prisma. Use for schema.prisma, migrations, seeds, the permissions seed, system_settings namespaces, hand-written indexes, JSONB handling and query performance.
 model: sonnet
 ---
 
@@ -179,37 +179,12 @@ model AuditEvent {
 
 ## JSONB Settings Schemas
 
-### User Settings Shape
-```json
-{
-  "theme": "light | dark | system",
-  "profile": {
-    "displayName": "string | null",
-    "useProviderImage": true,
-    "customImageUrl": "string | null"
-  }
-}
-```
+The user-settings and system-settings JSONB shapes and their defaults live in `docs/ARCHITECTURE.md` section 6.2; the wire schemas are in `apps/api/src/common/schemas/settings.schema.ts`. Do not copy them here.
 
-### System Settings Shape
-The stored `system_settings.value` JSONB holds `notifications`, `jobs`,
-`nodes`, `databaseBackup` and `maintenance` (the earlier `ui`/`features`
-namespaces were removed as unused by issue #366). `security` is NOT stored —
-it's computed on read from `JWT_ACCESS_TTL_MINUTES`/`JWT_REFRESH_TTL_DAYS`
-and added only to the API response. See
-`apps/api/src/common/schemas/settings.schema.ts` for the full shape.
-```json
-{
-  "notifications": {
-    "browserEnabled": true,
-    "disabledEvents": []
-  },
-  "jobs": {
-    "history": { "retentionDays": 30, "purgeEnabled": true },
-    "stuckThresholdMinutes": 30
-  }
-}
-```
+- `system_settings.value` (row `key: 'global'`) holds exactly these namespaces: `notifications`, `jobs`, `nodes`, `databaseBackup`, `maintenance`, `transcription`, `ai`. (`ui` and `features` were removed; `security` is computed on read from `JWT_*` env vars and never stored.)
+- Adding a namespace costs **six edits**. Read the header of `apps/api/src/common/schemas/settings-parity.spec.ts` first: missing the wire DTOs makes every PATCH a silent no-op that returns 200. User settings have the twin `user-settings-parity.spec.ts`.
+- No migration is needed to add a settings key; the JSONB is validated by Zod.
+- Table inventory with the reasoning for each FK, cascade and hand-written index: `docs/ARCHITECTURE.md` section 6.4.
 
 ## Migration Commands
 
@@ -238,54 +213,9 @@ cd apps/api && npm run prisma -- <command> [args]
 - npm scripts use `scripts/prisma-env.js` to do the same for CLI commands
 - See `apps/api/scripts/README.md` for detailed documentation
 
-## Seeding Requirements
+## Seeding
 
-The seed script must create:
-
-### 1. Roles
-```typescript
-const roles = [
-  { name: 'Admin', description: 'Full system access' },
-  { name: 'Contributor', description: 'Standard user capabilities' },
-  { name: 'Viewer', description: 'Read-only access (default role)' },
-];
-```
-
-### 2. Permissions
-```typescript
-const permissions = [
-  { name: 'system_settings:read', description: 'Read system settings' },
-  { name: 'system_settings:write', description: 'Modify system settings' },
-  { name: 'user_settings:read', description: 'Read user settings' },
-  { name: 'user_settings:write', description: 'Modify user settings' },
-  { name: 'users:read', description: 'View users' },
-  { name: 'users:write', description: 'Modify users' },
-  { name: 'rbac:manage', description: 'Manage roles and permissions' },
-];
-```
-
-### 3. Role-Permission Mappings
-- **Admin**: All permissions
-- **Contributor**: `user_settings:*`
-- **Viewer**: `user_settings:read`
-
-### 4. Default System Settings
-```typescript
-await prisma.systemSettings.upsert({
-  where: { key: 'global' },
-  create: {
-    key: 'global',
-    value: {
-      notifications: { browserEnabled: true, disabledEvents: [] },
-      jobs: { history: { retentionDays: 30, purgeEnabled: true }, stuckThresholdMinutes: 30 },
-      nodes: { staleHeartbeatSeconds: 90, offlineStaleMultiplier: 4, offlineRetentionDays: 30, jobSecretBrokerEnabled: false },
-      databaseBackup: { enabled: false, frequency: 'daily', dayOfWeek: 0, dayOfMonth: 1, timeOfDay: '02:00', timezone: 'UTC', retentionCount: 7, storageProvider: 's3', runStaleMinutes: 120, compressionLevel: 6, restoreRollbackMode: 'retain_database', oldDatabaseRetentionHours: 48, nodeOffloadEnabled: false },
-      maintenance: { enabled: false, message: 'This service is temporarily unavailable for scheduled maintenance. Please try again shortly.', allowAdmins: true, startedAt: null, startedById: null },
-    },
-  },
-  update: {},
-});
-```
+Seeds are idempotent upserts in `apps/api/prisma/seed.ts` and `apps/api/prisma/seed-data.ts` (roles, the permission catalog, role-permission mappings, the default `system_settings` row `key: 'global'`, built-in note templates). A new permission is added to the seed, never to a migration. The permission catalog and role matrix are in `docs/ARCHITECTURE.md` section 7.3; the default system-settings values are in section 6.2 (`grep -n 'System Settings Shape' docs/ARCHITECTURE.md`).
 
 ## Query Patterns
 
@@ -360,6 +290,8 @@ Add indexes for:
 3. **Test migrations**: Run on fresh DB before committing
 4. **Never edit applied migrations**: Create new migration to fix issues
 5. **Seed data separately**: Don't mix DDL and DML in migrations
+6. **Partial and expression indexes live in `migration.sql` only** (`jobs_active_dedup_uniq_idx`, `database_backup_runs_active_uniq_idx`, generated `search_vector` columns, `kg_*` GiST/HNSW/trigram indexes). This schema drift is intentional: never add a `@@unique` for them and never replace them with a `findFirst` pre-check.
+7. `schema.prisma` is one hand-edited file; use `npm run prisma:*` only, never bare `npx prisma`.
 
 ## Initial Admin Bootstrap
 
