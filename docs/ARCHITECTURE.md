@@ -1980,6 +1980,7 @@ alternatives, and (where relevant) an operator runbook it defers to:
 | [browser-notifications.md](specs/browser-notifications.md) | OS-level browser notifications and Web Push — the service worker, the notification capability model, the admin kill switch |
 | [notification-broadcasts.md](specs/notification-broadcasts.md) | Admin notification broadcasts — composing and sending an announcement to every user, the fan-out job types |
 | [vps-deploy.md](specs/vps-deploy.md) | `kvox deploy` — VPS installation and update design, why it runs on the VPS with no SSH client in the CLI |
+| [platform-retrofit.md](specs/platform-retrofit.md) | The platform retrofit and domain packaging roadmap — decisions, target packages and ports, workarounds, data migrations, the phase/epic/issue map, rollback |
 
 ---
 
