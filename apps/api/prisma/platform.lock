@@ -33,13 +33,6 @@
     },
     {
       "expectDiff": [
-        "ALTER TABLE \"allowed_emails\" ADD COLUMN \"last_reminder_at\" TIMESTAMPTZ(6), ADD COLUMN \"reminder_count\" INTEGER NOT NULL DEFAULT 0;"
-      ],
-      "id": "kvox:allowlist-reminders",
-      "reason": "KVox-only columns allowed_emails.reminder_count and allowed_emails.last_reminder_at (migration 20260918120000_add_allowlist_reminder_tracking). Temporary: #465 moves them to kvox_allowlist_reminders."
-    },
-    {
-      "expectDiff": [
         "CREATE TYPE \"AskErrorClass\" AS ENUM ('auth', 'refusal', 'rate_limit', 'budget', 'timeout', 'other');",
         "CREATE TYPE \"AskFinishReason\" AS ENUM ('stop', 'step_cap', 'token_cap', 'time_cap');",
         "CREATE TYPE \"AskMessageRole\" AS ENUM ('user', 'assistant');",
